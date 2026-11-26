@@ -1,7 +1,7 @@
 <#
   Run-RealClient.ps1
 
-      pwsh scripts\dev\Run-RealClient.ps1 [-Root <install>] [-Steps tests\real-client\dev-release.json] [-InstallPlugin] [-Publish]
+      pwsh scripts\dev\Run-RealClient.ps1 [-Root <install>] [-Steps tests\real-client\dev-release.json] [-Publish]
 
   Starts the real launcher and the real game on this PC, presses Play the way
   a person does, and walks the game through a list of steps with the test
@@ -49,9 +49,6 @@ param(
     [string]$Out = '',
     [int]$Minutes = 20,
     [int]$PlayMinutes = 15,
-    # Copy this repository's thornswood-test.js into the game first, for a
-    # build released before the plugin was in a pack.
-    [switch]$InstallPlugin,
     [switch]$Publish,
     [string]$Repo = 'ThornswoodRP/Thornswood'
 )
@@ -190,14 +187,27 @@ if ($running.Count -gt 0) {
     throw ('Already running, so this run would take over somebody''s session: ' + (($running | ForEach-Object { $_.ProcessName + ' ' + $_.Id }) -join ', '))
 }
 
-if ($InstallPlugin) {
-    $src = Join-Path $repoRoot 'game\plugins\thornswood-test.js'
-    Copy-Item -LiteralPath $src -Destination (Join-Path $platform 'Plugins\thornswood-test.js') -Force
-    Say 'Copied this repository''s thornswood-test.js into the game.'
-}
+# The plugin the game runs is the build's own: the launcher keeps its
+# build's Data\Platform files and puts them back before every Play, so a copy
+# laid in by hand never reaches the game (26 Nov: the run's own copy was
+# put back before Play, and the run took that for a failure of its steps).
+# The steps are this checkout's, so the run says when the two differ.
 if (-not (Test-Path -LiteralPath (Join-Path $platform 'Plugins\thornswood-test.js'))) {
-    throw 'The game has no Data\Platform\Plugins\thornswood-test.js: the build predates it. Run with -InstallPlugin.'
+    throw 'The game has no Data\Platform\Plugins\thornswood-test.js: the build in place predates it.'
 }
+function Get-PluginMismatch {
+    $inGame = Join-Path $platform 'Plugins\thornswood-test.js'
+    $ours = Join-Path $repoRoot 'game\plugins\thornswood-test.js'
+    $a = (Get-FileHash -LiteralPath $inGame -Algorithm SHA256).Hash.ToLowerInvariant()
+    $b = (Get-FileHash -LiteralPath $ours -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($a -eq $b) { return '' }
+    $sq = Join-Path (Split-Path $launcherExe) 'sq.version'
+    $ver = ''
+    if (Test-Path -LiteralPath $sq) { $m = [regex]::Match([IO.File]::ReadAllText($sq), '<version>\s*([^<\s]+)\s*</version>'); if ($m.Success) { $ver = $m.Groups[1].Value } }
+    'the game runs the thornswood-test.js of the build in place' + $(if ($ver) { " ($ver)" } else { '' }) + ', ' + $a.Substring(0, 12) +
+        ', not this checkout''s, ' + $b.Substring(0, 12) + ': run from the commit of that build, so its steps are the ones its plugin knows'
+}
+$pluginOff = ''
 
 # ---------------------------------------------------------------- Windows --
 Add-Type -AssemblyName System.Drawing
@@ -226,6 +236,33 @@ namespace ThornswoodRealClient {
     [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr h, ref POINT p);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n);
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, uint flags, System.Text.StringBuilder s, ref uint n);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+    // Which window is in front, for a key step that could not get the game
+    // window there: its process, its id and its title (26 Nov: Windows
+    // refused the focus at step 20 and the run could not say what had it).
+    public static string ForegroundWho() {
+      IntPtr h = GetForegroundWindow();
+      if (h == IntPtr.Zero) return "no window";
+      uint pid; GetWindowThreadProcessId(h, out pid);
+      System.Text.StringBuilder t = new System.Text.StringBuilder(256);
+      GetWindowText(h, t, t.Capacity);
+      // The process by its file, asked with the least access there is
+      // (PROCESS_QUERY_LIMITED_INFORMATION), which an elevated one allows too.
+      string name = "an unknown process";
+      IntPtr p = OpenProcess(0x1000, false, pid);
+      if (p != IntPtr.Zero) {
+        System.Text.StringBuilder f = new System.Text.StringBuilder(1024);
+        uint n = (uint)f.Capacity;
+        if (QueryFullProcessImageName(p, 0, f, ref n)) { string full = f.ToString(); name = full.Substring(full.LastIndexOf('\\') + 1); }
+        CloseHandle(p);
+      }
+      return name + " " + pid + " \"" + t.ToString() + "\"";
+    }
     [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [StructLayout(LayoutKind.Sequential)] struct KEYBDINPUT { public ushort wVk, wScan; public uint dwFlags, time; public IntPtr dwExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] struct MOUSEINPUT { public int dx, dy; public uint mouseData, dwFlags, time; public IntPtr dwExtraInfo; }
@@ -297,13 +334,13 @@ function Invoke-GameKey([IntPtr]$handle, $code) {
     if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         if (-not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
-            return @{ ok = $false; note = 'Windows refused to give the game window the keyboard' }
+            return @{ ok = $false; note = 'Windows refused to give the game window the keyboard; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho() }
         }
     }
     # Check before SendInput: acknowledging a key after noticing another
     # foreground window counted undelivered keys as passed steps.
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
-        return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent' }
+        return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho() }
     }
     $why = ''
     try {
@@ -316,7 +353,7 @@ function Invoke-GameKey([IntPtr]$handle, $code) {
             # native buffered menus saw it (b0b869cb, main.cpp MyInputListener).
             Start-Sleep -Milliseconds 120
             if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
-                $why = 'the game window lost the keyboard during input'
+                $why = 'the game window lost the keyboard during input; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho()
             }
         }
     } catch { $why = 'the key press failed: ' + $_.Exception.Message }
@@ -345,6 +382,61 @@ Say "Run $runId, $($stepsJson.steps.Count) steps from $Steps, into $Out"
 
 $launcherLog = Join-Path $Root 'Profile\launcher.log'
 $launcherLogStart = if (Test-Path -LiteralPath $launcherLog) { (Get-Item -LiteralPath $launcherLog).Length } else { 0 }
+$script:launcherLogReadAt = $launcherLogStart
+
+# What the launcher writes to launcher.log from where the run began: whole
+# lines only, sharing the file as the launcher writes it, each line read once.
+function Read-LauncherLines {
+    if (-not (Test-Path -LiteralPath $launcherLog)) { return @() }
+    $fs = [IO.File]::Open($launcherLog, 'Open', 'Read', 'ReadWrite, Delete')
+    try {
+        # The launcher starts the log afresh past its size limit.
+        if ($fs.Length -lt $script:launcherLogReadAt) { $script:launcherLogReadAt = 0 }
+        $have = $fs.Length - $script:launcherLogReadAt
+        if ($have -le 0) { return @() }
+        [void]$fs.Seek($script:launcherLogReadAt, 'Begin')
+        $buf = New-Object byte[] $have
+        $n = 0
+        while ($n -lt $buf.Length) {
+            $got = $fs.Read($buf, $n, $buf.Length - $n)
+            if ($got -le 0) { break }
+            $n += $got
+        }
+        if ($n -le 0) { return @() }
+        $end = [Array]::LastIndexOf($buf, [byte]10, $n - 1)
+        if ($end -lt 0) { return @() }
+        $script:launcherLogReadAt += $end + 1
+        return @([Text.Encoding]::UTF8.GetString($buf, 0, $end + 1) -split "`n" | ForEach-Object { $_.TrimEnd("`r") })
+    } finally { $fs.Dispose() }
+}
+$launcherStamp = '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ  '
+
+# The launcher's own word that Play went wrong. A Play that fails writes
+# "Failed to start: <why>" to launcher.log and leaves the launcher open with
+# no game, and the run waited the whole -Minutes for a game that was never
+# coming, with the launcher sitting there (26 Nov, 10:59 AM: "Could not
+# redirect ... Skyrim Special Edition"). A reason of several lines comes in
+# one write, so its lines that carry no time stamp are its own.
+function Read-LauncherFailure {
+    $why = $null
+    foreach ($l in @(Read-LauncherLines)) {
+        if ($null -eq $why) {
+            if ($l -match ($launcherStamp + 'Failed to start: (.*)$')) { $why = $Matches[1] }
+        } elseif ($l -match $launcherStamp) { break }
+        elseif ($l.Trim()) { $why += ' ' + $l.Trim() }
+    }
+    if ($null -eq $why) { return '' }
+    return $why.Trim()
+}
+
+# Windows' two Skyrim folders, and whether either still points at this build.
+function Get-StillRedirected {
+    $docs = [Environment]::GetFolderPath('MyDocuments')
+    @((Join-Path $docs 'My Games\Skyrim Special Edition'), (Join-Path $env:LOCALAPPDATA 'Skyrim Special Edition')) | Where-Object {
+        $i = Get-Item -LiteralPath $_ -Force -ErrorAction SilentlyContinue
+        $i -and ($i.Attributes -band [IO.FileAttributes]::ReparsePoint)
+    }
+}
 
 $launcher = $null
 $switched = $false
@@ -371,8 +463,40 @@ try {
     $toldWaiting = $false
     $toldChannel = ''
     $launcherGoneSince = $null
+    $sawPlay = ''
+    # What the loop saw, said each time it changes: the window it looks in and
+    # Play in it (26 Nov: launcher 1.3.125 was Ready with a clean scan, and
+    # for 15 minutes Play was never pressable, with nothing to say whether
+    # the window, the button or its enabled state was missing).
+    function Get-PlayState($h, $btn) {
+        if ($h -eq [IntPtr]::Zero) { return 'no main window' }
+        $title = ''
+        try { $title = $ae::FromHandle($h).Current.Name } catch { $title = '(unreadable)' }
+        $w = 'window ' + $h + ' "' + $title + '"'
+        if (-not $btn) { return $w + ', no BtnPlay in it' }
+        $w + ', BtnPlay "' + $btn.Current.Name + '" ' + $(if ($btn.Current.IsEnabled) { 'enabled' } else { 'disabled' }) +
+            $(if ($btn.Current.IsOffscreen) { ', off screen' } else { '' })
+    }
+    # The launcher's top-level windows, for when Play never came.
+    function Get-LauncherWindows($procId) {
+        $byProc = New-Object System.Windows.Automation.PropertyCondition ($ae::ProcessIdProperty, [int]$procId)
+        @($ae::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $byProc) | ForEach-Object {
+            '"' + $_.Current.Name + '" (' + $_.Current.ClassName + ', ' + $_.Current.NativeWindowHandle + ')'
+        }) -join '; '
+    }
     while (-not $pressed) {
         if ((Get-Date) -gt $deadline) {
+            # A fresh read of the process, not a refresh of the one followed:
+            # tests\test-real-client-restart-grace.ps1 runs this loop's start,
+            # up to its first refresh, against doubles.
+            $now = Get-Process -Id $launcher.Id -ErrorAction SilentlyContinue
+            if ($now) {
+                Say ('At the end, the launcher''s windows: ' + (Get-LauncherWindows $now.Id))
+                if ($now.MainWindowHandle -ne [IntPtr]::Zero) {
+                    $how = [ThornswoodRealClient.Win]::Shot($now.MainWindowHandle, (Join-Path $Out 'launcher-no-play.png'))
+                    Say "shot launcher-no-play ($how)"
+                }
+            }
             $ch = Get-InstalledChannel
             if ($ch -and $ch -ne 'dev') { throw "The launcher was still $ch's after $PlayMinutes minutes, so it never took dev's package: is Settings, Updates, automatic updates off?" }
             throw "Play was not there to press in $PlayMinutes minutes"
@@ -399,9 +523,14 @@ try {
             Start-Sleep -Milliseconds 500
             continue
         }
+        $btn = $null
         if ($h -ne [IntPtr]::Zero) {
             $win = $ae::FromHandle($h)
             $btn = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+        }
+        $state = Get-PlayState $h $btn
+        if ($state -ne $sawPlay) { Say ('Launcher ' + $launcher.Id + ': ' + $state); $sawPlay = $state }
+        if ($h -ne [IntPtr]::Zero) {
             if ($btn -and $btn.Current.IsEnabled) {
                 $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
                 $pressed = $true
@@ -420,7 +549,18 @@ try {
     while ($true) {
         if ((Get-Date) -gt $deadline) { $result = 'timeout'; $note = "no end in $Minutes minutes"; break }
         $proc = Get-GameProcess
-        if ($proc) { if (-not $sawGame) { Say "The game is up, process $($proc.Id)" }; $sawGame = $true }
+        if (-not $proc -and -not $sawGame) {
+            $failed = Read-LauncherFailure
+            if ($failed) { throw "The launcher could not start the game: $failed" }
+        }
+        if ($proc) {
+            if (-not $sawGame) {
+                Say "The game is up, process $($proc.Id)"
+                $pluginOff = Get-PluginMismatch
+                if ($pluginOff) { Say ('Note: ' + $pluginOff + '.') }
+            }
+            $sawGame = $true
+        }
         elseif ($sawGame) { $result = 'crashed'; $note = 'the game closed before the run ended'; break }
 
         $lines = @(Read-NewResultLines)
@@ -460,10 +600,50 @@ try {
     $note = $_.Exception.Message
     Say "Stopped: $note"
 } finally {
-    $proc = Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue
-    if ($proc) { $proc | Stop-Process -Force; Say 'Closed the game.' }
+    # The launcher points Windows' Skyrim folders at this build for the game
+    # and puts them back when it sees the game close, or when its window is
+    # closed. Ending both by force skipped that, and after every run the two
+    # folders were left pointing into Profile with the person's own moved
+    # aside, until the next launcher start cleaned up "a redirect left behind
+    # by a crash" (26 Nov, 12:42 PM on One). So the steps go in order: the
+    # game closes, the launcher says it has put the folders back, and then its
+    # window is closed as a person closes it.
     $ours = @(Get-Process -Name Thornswood -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [string]::Equals($_.Path, $launcherExe, [StringComparison]::OrdinalIgnoreCase) })
-    if ($ours.Count) { $ours | Stop-Process -Force; Say 'Closed the launcher.' }
+    $proc = Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue
+    if ($proc) {
+        $proc | Stop-Process -Force
+        Say 'Closed the game.'
+        if ($ours.Count) {
+            # The launcher looks for the game every two seconds.
+            $until = (Get-Date).AddSeconds(60)
+            $back = $false
+            while (-not $back -and (Get-Date) -lt $until) {
+                foreach ($l in @(Read-LauncherLines)) { if ($l -match ($launcherStamp + 'Game closed after ')) { $back = $true } }
+                if (-not $back) { Start-Sleep -Milliseconds 500 }
+            }
+            if ($back) { Say 'The launcher saw the game close and put the Skyrim folders back.' }
+            else { Say 'The launcher did not say in 60 s that it saw the game close.' }
+        }
+    }
+    foreach ($lp in $ours) {
+        if ($lp.HasExited) { continue }
+        [void]$lp.CloseMainWindow()
+        if ($lp.WaitForExit(30000)) { Say "Closed the launcher, process $($lp.Id)." }
+        else {
+            # Its window did not close: a dialog or a wait in it. It is ended
+            # rather than left open on somebody's PC, and the folders it held
+            # are named below.
+            $lp | Stop-Process -Force
+            Say "The launcher, process $($lp.Id), did not close its window in 30 s, so it was ended."
+        }
+    }
+    $left = @(Get-StillRedirected)
+    if ($left.Count) {
+        $leftNote = 'Windows'' Skyrim folders still point at this build after the run: ' + ($left -join '; ') + '. The next launcher start puts them back.'
+        Say $leftNote
+        $note = ($note + ' ' + $leftNote).Trim()
+        if ($result -eq 'passed') { $result = 'failed' }
+    }
     if (Test-Path -LiteralPath $runFile) { Remove-Item -LiteralPath $runFile -Force; Say 'The plugin never took the run file; removed it so the next Play does not run it.' }
     if ($switched) {
         Set-RunChannel $leftOn
@@ -482,6 +662,7 @@ if (Test-Path -LiteralPath $launcherLog) {
     } finally { $fs.Dispose() }
 }
 
+if ($pluginOff) { $note = ($note + ' (' + $pluginOff + ')').Trim() }
 $summary = @(
     "# Real game run $runId",
     '',

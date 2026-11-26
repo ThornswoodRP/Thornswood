@@ -127,9 +127,25 @@ function Read-ThornswoodReleaseList([string]$File) {
   $p = ConvertTo-ThornswoodIds $v.profiles 9007199254740991
   $a = ConvertTo-ThornswoodIds $acts 4294967295
   if ($null -eq $p -or $null -eq $a) { return @{ ok = $false } }
+  $wipeIds = @()
+  if ($null -ne $v.clearFreezes -and -not ($v.clearFreezes -is [bool])) { return @{ ok = $false } }
+  if ($null -ne $v.freezeWipeIds) {
+    if (-not ($v.freezeWipeIds -is [Array])) { return @{ ok = $false } }
+    foreach ($wipeId in $v.freezeWipeIds) {
+      if (-not ($wipeId -is [string]) -or $wipeId -cnotmatch '^[0-9a-f]{32}$') { return @{ ok = $false } }
+      $wipeIds += $wipeId
+    }
+    if (@($wipeIds | Sort-Object -Unique).Count -ne $wipeIds.Count) { return @{ ok = $false } }
+  }
+  if (($v.clearFreezes -eq $true) -ne ($wipeIds.Count -gt 0)) { return @{ ok = $false } }
+  if ($null -ne $v.done.restraints) {
+    $ack = ConvertTo-ThornswoodIds @($v.done.restraints) 9007199254740991
+    if ($null -eq $ack) { return @{ ok = $false } }
+    $wipeIds = @()
+  }
   # Every actor a runtime form id; a local id is the old shape (#2870).
   if (@($a | Where-Object { $_ -le 4278190080 }).Count) { return @{ ok = $false; old = (@($a | Where-Object { $_ -le 16777215 }).Count -gt 0) } }
-  return @{ ok = $true; missing = $false; profiles = $p; actors = $a }
+  return @{ ok = $true; missing = $false; profiles = $p; actors = $a; freezeWipeIds = $wipeIds }
 }
 # The characters' change forms in a changeForms folder (#5168), read the way
 # Restore-Server.ps1, the nightly backup and scripts\bot\character.js read a
@@ -183,7 +199,7 @@ function Get-ThornswoodCharacterIds($Files) {
   return @{ ids = @($ids | Sort-Object -Unique); notes = $notes }
 }
 function Write-ThornswoodReleaseList {
-  param([string]$Root, $Actors = @(), [string[]]$Carry = @(), [string[]]$Done = @())
+  param([string]$Root, $Actors = @(), [string[]]$Carry = @(), [string[]]$Done = @(), [switch]$ClearFreezes)
   $file = Get-ThornswoodReleaseListPath $Root
   if (-not $file) { 'RELEASEBAD|' + (Join-Path $Root 'server-settings.json') + ' will not parse, so the server''s private folder is not known and no list was written'; return }
   $now = Read-ThornswoodReleaseList $file
@@ -191,21 +207,25 @@ function Write-ThornswoodReleaseList {
   if (-not $now.ok) { 'RELEASEBAD|' + $file + ' is not a list of deleted characters, so no list was written and it is left as it is'; return }
   $P = @($now.profiles)
   $A = @($now.actors) + @($Actors)
+  $wipeIds = @($now.freezeWipeIds | Where-Object { $_ })
+  if ($ClearFreezes) { $wipeIds += [Guid]::NewGuid().ToString('N') }
   # Each list set aside is carried (Wipe-Saves.ps1): the requests and, since
   # #4920, the list the server took and had not finished. One not there is none.
   foreach ($c in @($Carry | Where-Object { $_ })) {
     $old = Read-ThornswoodReleaseList $c
     if (-not $old.ok) { 'RELEASENOTE|' + $c + ' is not a list of deleted characters, so nothing was carried from it; it is left as it is' }
-    elseif (-not $old.missing) { $P += @($old.profiles); $A += @($old.actors) }
+    elseif (-not $old.missing) { $P += @($old.profiles); $A += @($old.actors); $wipeIds += @($old.freezeWipeIds | Where-Object { $_ }) }
   }
   $P = @($P | Where-Object { $null -ne $_ } | ForEach-Object { [long]$_ } | Where-Object { $_ -gt 0 } | Sort-Object -Unique)
   $A = @($A | Where-Object { $null -ne $_ } | ForEach-Object { [long]$_ } | Where-Object { $_ -gt 4278190080 -and $_ -le 4294967295 } | Sort-Object -Unique)
-  if (-not $P.Count -and -not $A.Count) { 'RELEASE|none'; return }
+  $wipeIds = @($wipeIds | Sort-Object -Unique)
+  if (-not $P.Count -and -not $A.Count -and -not $wipeIds.Count) { 'RELEASE|none'; return }
   # 'saves' acts only on profiles, and no server on this machine runs it (above).
   if (-not $P.Count) { $Done = @($Done) + 'saves' }
   $parts = @($Done | Where-Object { $_ -match '^[a-z]+$' } | Sort-Object -Unique)
   $t = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
   $json = '{"profiles":[' + ($P -join ',') + '],"actors":[' + ($A -join ',') + ']'
+  if ($wipeIds.Count) { $json += ',"clearFreezes":true,"freezeWipeIds":[' + (($wipeIds | ForEach-Object { '"' + $_ + '"' }) -join ',') + ']' }
   if ($parts.Count) { $json += ',"done":{' + (($parts | ForEach-Object { '"' + $_ + '":' + $t }) -join ',') + '}' }
   $json += '}'
   try {

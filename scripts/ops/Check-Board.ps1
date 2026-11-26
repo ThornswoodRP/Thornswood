@@ -26,12 +26,20 @@
                   queue with an order: label.
     shared order  two open cards with the same Order, so neither is first.
     no status     an open card with no Status. The options are Todo, In
-                  Progress and Done.
+                  Progress, Merged and Done.
     closed open   a closed issue whose Status is not Done. The board's own
                   "Item closed" workflow sets Done; a closed card elsewhere
                   is one it missed.
-    statuses      the Status options are Todo, In Progress and Done, in that
-                  order ("never add one through the API").
+    open done     an open issue whose Status is Done. Done is for closed
+                  issues only: GitHub keeps an issue's own status and a board
+                  Status of the same name together, so an open issue put in
+                  Done is closed a second later (#6878). A fix merged with
+                  its test task waits in Merged.
+    statuses      the Status options are Todo, In Progress, Merged and Done,
+                  in that order. Merged was added on 26 Nov 2026 (#6878,
+                  Patrick's A) with every old option's id given back, which
+                  keeps each card's Status; an option added without them
+                  clears every card's.
     workflows     Auto-close issue off, since a Done issue still waits on its
                   test (#3076). Every issue gets its card from board.yml
                   (#5185), so Auto-add to project is neither needed nor
@@ -69,7 +77,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$StatusOptions = @('Todo', 'In Progress', 'Done')
+$StatusOptions = @('Todo', 'In Progress', 'Merged', 'Done')
 
 function Get-Prop($o, [string]$name) {
     if ($null -eq $o) { return $null }
@@ -91,7 +99,7 @@ function Get-CardName($c) {
 # open issues, or $null when they were not read.
 function Find-BoardDrift($board, [string]$repo, $open) {
     $out = [ordered]@{}
-    foreach ($k in 'no order', 'shared order', 'no status', 'closed open', 'statuses', 'workflows', 'no card') { $out[$k] = New-Object System.Collections.Generic.List[string] }
+    foreach ($k in 'no order', 'shared order', 'no status', 'closed open', 'open done', 'statuses', 'workflows', 'no card') { $out[$k] = New-Object System.Collections.Generic.List[string] }
 
     $statuses = @(Get-Prop $board 'statuses')
     if (($statuses -join '|') -ne ($StatusOptions -join '|')) {
@@ -111,6 +119,7 @@ function Find-BoardDrift($board, [string]$repo, $open) {
     foreach ($c in @($liveOpen | Sort-Object { [int](Get-Prop $_ 'number') })) {
         if ((Get-Prop $c 'kind') -eq 'Issue' -and $null -eq (Get-Prop $c 'order')) { $out['no order'].Add((Get-CardName $c)) }
         if (-not (Get-Prop $c 'status')) { $out['no status'].Add((Get-CardName $c)) }
+        if ((Get-Prop $c 'kind') -eq 'Issue' -and (Get-Prop $c 'status') -eq 'Done') { $out['open done'].Add((Get-CardName $c)) }
     }
     foreach ($g in @($liveOpen | Where-Object { $null -ne (Get-Prop $_ 'order') } | Group-Object { [double](Get-Prop $_ 'order') } | Where-Object { $_.Count -gt 1 } | Sort-Object { [double]$_.Name })) {
         $out['shared order'].Add(('Order {0}: {1}' -f $g.Name, (@($g.Group | ForEach-Object { '#' + (Get-Prop $_ 'number') }) -join ', ')))

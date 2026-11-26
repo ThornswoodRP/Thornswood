@@ -55,7 +55,7 @@ try {
     # ---- 1. when a release from the feed moves the revision -----------------
     Write-Host 'when the feed moves'
     $rec = Join-Path $T 'records\collection-plugins.json'
-    Put $rec '{"version":1,"collection":"7essxf","revision":6,"plugins":[]}'
+    Put $rec ('{"version":1,"collection":"7essxf","revision":6,"plugins":[{"name":"Old.esp","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     Put (Join-Path $T 'game\data\last-plugin.recipe') 'recipe'
     Put (Join-Path $T 'game\data\last-plugin.json') '{"loadOrder":["Skyrim.esm"]}'
     Yes 'a feed on revision 2 with the record on 6 moves to 6' ((Get-ShipFeedMoveRevision $T 2) -eq 6)

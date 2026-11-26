@@ -1,6 +1,8 @@
 <#
-  PluginRuleLoops.ps1
+.SYNOPSIS
+  The plugin rules of a collection that LOOT can never keep, because they go against an order the game itself sets.
 
+.DESCRIPTION
   The plugin rules of a collection that LOOT can never keep, because they go
   against an order the game itself sets. Dot-sourced by
   Install-NexusRevision.ps1 (which stops a revision on one) and by

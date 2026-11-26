@@ -115,7 +115,8 @@ const mp = {
 };
 const box = {
   console: { log: function () { } },
-  require: require, mp: mp, Date: FakeDate,
+  // A post takes out of the pack through packFirst, with receipts (#4901).
+  require: require, mp: require('./fixtures/pack-first').receipts(mp), Date: FakeDate,
   BUILDING_BY_DOOR: {}, BUILDING_NAME: {}, WAY_OUT: {}, BENCH_BY_BASE: {},
   idOf: function (d) { const m = /^([0-9a-f]+):Skyrim\.esm$/i.exec(String(d || '')); return m ? parseInt(m[1], 16) : 0; },
   notify: function (a, m) { toasts.push([a, m]); }, say: function () { },
@@ -128,6 +129,7 @@ const box = {
     return { jarl: [], court: [], steward: [], guard: pid === GUARD.pid ? ['whiterun'] : [] };
   }
 };
+box.__thornswoodMerchantTrade = { withQuestInventoryMutation: box.mp.admitPackDebit };
 box.globalThis = box;
 inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js property' }); });
 const W = box.__thornswoodProperty;
@@ -139,7 +141,11 @@ function say(p, line) {
   const parts = String(line).trim().split(/\s+/);
   const by = {};
   inDir(function () {
-    W.command(parts[0].toLowerCase(), parts, p.a, p.pid, function (pid, m) { (by[pid] = by[pid] || []).push(m); });
+    const tell=function (pid,m){(by[pid]=by[pid]||[]).push(m);};
+    if (line.startsWith('/board-post-v1 ')) {
+      const payload=JSON.parse(line.slice('/board-post-v1 '.length));
+      W.postExact(payload[0],payload[1],payload[2],payload[3],payload[4],p.a,p.pid,tell);
+    } else W.command(parts[0].toLowerCase(), parts, p.a, p.pid, tell);
   });
   return { mine: (by[p.pid] || []).join(' '), by: by };
 }
@@ -148,9 +154,16 @@ function list() { return W.notices().whiterun || []; }
 function ledger() { return Number(W.funds().whiterun) || 0; }
 function panel(p) { let v = null; inDir(function () { v = W.boardPanel(p.a, p.pid); }); return v; }
 
-/* ----------------------------------------------- the page's own two encoders */
-const slashBody = new Function(slice(page, '  function slashBody(s) {', '\n  }\n') + '\nreturn slashBody;')();
-const slashTitle = new Function(slice(page, '  function slashTitle(s) {', '\n  }\n') + '\nreturn slashTitle;')();
+/* The actual page's encoder. The full dispatcher/schema crossing is additionally
+   exercised by test-4771-exact-board-text.js over the whole gamemode. */
+function encodedPost(kind,reward,title,text) {
+  const p=standIn();p.board.setData({board:panel(ALICE)});p.board.open();p.root().querySelector('.make').click();
+  if(kind==='job')p.find('[data-kind="job"]')[0].click();
+  for(const [id,value]of[['title',title],['text',text],['reward',String(reward)]]){
+    const field=p.byId('ts-board-'+id);field.value=value;field.fire('input');
+  }
+  p.find('[data-do="send"]')[0].click();return p.sent[p.sent.length-1];
+}
 
 // -------------------------------------------------------------- the lengths
 attempt('the lengths', function () {
@@ -188,11 +201,14 @@ attempt('the lengths', function () {
 
   // At the limits exactly, and a body whose newlines are counted as one each.
   const body600 = ('y'.repeat(99) + '\n').repeat(6);
-  r = say(ALICE, '/notice ' + slashTitle('T'.repeat(60)) + ' :: ' + slashBody(body600.slice(0, 600)));
+  r = say(ALICE, encodedPost('notice',0,'T'.repeat(60),body600.slice(0,600)));
   yes('L5 a 60 character title and a 600 character body with newlines in it go up: "' + r.mine + '"',
       r.mine === 'Your notice is on the board in whiterun. That cost 20 gold.' && list().length === 1 &&
-      list()[0].title === 'T'.repeat(60) && list()[0].text === body600.slice(0, 600).trim() &&
+      list()[0].title === 'T'.repeat(60) && list()[0].text === body600.slice(0, 600) &&
       gold(ALICE) === g0 - 20 && ledger() === f0 + 20);
+  const legacyWords=new Function(slice(gm,'  function postWords(line) {','\n  }\n')+'\nreturn postWords;')();
+  yes('L5 legacy typed posts retain their original trimmed boundary',
+      legacyWords('Title :: '+('y'.repeat(99)+'\\n').repeat(6)).body===body600.trim());
 });
 
 // ------------------------------------------------------- what goes over the line
@@ -200,8 +216,8 @@ attempt('the line', function () {
   /*
     What somebody writes, sent the way the page sends it and read the way the
     server reads it, comes back as they wrote it: colons, a :: in the title,
-    backslashes, a typed \n, and newlines. Runs of spaces are the one thing
-    every line loses (dispatch splits on them), so these have single spaces.
+    backslashes, a typed \n, and newlines. The versioned exact path preserves
+    spacing too; legacy typed commands retain their old boundary separately.
   */
   const cases = [
     ['Wanted: the man who stole my goat', 'He is tall.\nHe smells of goat.'],
@@ -212,7 +228,7 @@ attempt('the line', function () {
   ];
   cases.forEach(function (c, i) {
     const before = list().length;
-    const r = say(ALICE, '/notice ' + slashTitle(c[0]) + ' :: ' + slashBody(c[1]));
+    const r = say(ALICE, encodedPost('notice',0,c[0],c[1]));
     const n = list()[list().length - 1];
     yes('W' + (i + 1) + ' "' + c[0] + '" and its body come back as written',
         /Your notice is on the board/.test(r.mine) && list().length === before + 1 &&
@@ -413,7 +429,9 @@ function standIn() {
       return hit;
     }
   };
+  const windowEvents = {};
   const win = { skyrimPlatform: { sendMessage: function () { } },
+                addEventListener: function (name, fn) { (windowEvents[name] || (windowEvents[name] = [])).push(fn); },
                 thornswoodNet: { say: function (line) { sent.push(line); return true; } } };
   vm.runInNewContext(page, { window: win, document: doc, console: console, isFinite: isFinite, JSON: JSON, Date: FakeDate });
   return { win: win, doc: doc, sent: sent, board: win.thornswoodBoard,
@@ -456,8 +474,10 @@ attempt('the page', function () {
 
   // Make a post sits in the foot, apart from the list.
   const make = p.root().querySelector('.make');
+  const foot = /<div class="foot">([\s\S]*?)<\/div>/.exec(p.root()._html);
   yes('P4 Make a post is in the foot, not in the list',
-      !!make && make.parent === p.root() && p.root()._html.indexOf('<div class="foot"><button class="go make" data-do="compose">Make a post</button>') > 0 &&
+      !!make && make.parent === p.root() && !!foot &&
+      foot[1].indexOf('<button class="go make" data-do="compose">Make a post</button>') >= 0 &&
       p.body().innerHTML.indexOf('Make a post') < 0);
   yes('P4 and the two one line boxes are gone', page.indexOf('placeholder="the notice"') < 0 && page.indexOf('placeholder="the job"') < 0);
   make.click();
@@ -489,7 +509,8 @@ attempt('the page', function () {
   p.find('[data-do="send"]')[0].click();
   const line = p.sent[p.sent.length - 1];
   yes('P10 Post it sends the job with its reward, title and body on one line',
-      p.sent.length === 2 && line.indexOf('/job 60 ') === 0 && line.indexOf('\n') < 0);
+      p.sent.length === 2 && line.indexOf('/board-post-v1 ') === 0 &&
+      JSON.parse(line.slice('/board-post-v1 '.length))[0]==='job'&&JSON.parse(line.slice('/board-post-v1 '.length))[1]===60&&line.indexOf('\n')<0);
   const g0 = gold(BOB);
   const r = say(BOB, line);
   const made = list()[list().length - 1];
@@ -517,7 +538,7 @@ attempt('J and the socket', function () {
       !!draw && /esc\(row\.title\)/.test(draw) && /gold reward/.test(draw) && /postedAt\(row\.at\)/.test(draw) &&
       /esc\(row\.text\)/.test(draw));
   const cap = Number((/const COMMAND_CHARS = (\d+);/.exec(voice) || [])[1]);
-  const longest = ('/job ' + Number.MAX_SAFE_INTEGER + ' ' + slashTitle(':'.repeat(60)) + ' :: ' + slashBody('\\'.repeat(600))).length;
+  const longest = encodedPost('job',Number.MAX_SAFE_INTEGER,':'.repeat(60),'\\'.repeat(600)).length;
   yes('S2 the longest post the page can send (' + longest + ') fits a command line on the chat socket (' + cap + ')',
       longest <= cap && /\.slice\(0, COMMAND_CHARS\)/.test(voice));
   yes('S3 and a line said to the room still keeps 400', /const SAID_CHARS = 400;/.test(voice) &&

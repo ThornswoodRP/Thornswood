@@ -133,13 +133,13 @@ function typed(N, word, actorId) {
   yes('B1 and the line names the Body page on K for what sets each one', /Body page on K/.test(first[0] || ''));
   yes('B1 /need is the same word', JSON.stringify(typed(N, '/need', A)) === JSON.stringify(first));
 
-  // 55 minutes on, with nothing eaten or drunk: thirst is bad (under 25 from
-  // just after 54 minutes), hunger is still fine. The same per cents the bars
+  // 70 minutes on, with nothing eaten or drunk: thirst is bad (under 25 from
+  // just after 67.5 minutes), hunger is still fine. The same per cents the bars
   // draw, rounded the same.
-  clock.t += 55 * MIN;
+  clock.t += 70 * MIN;
   const later = typed(N, '/needs', A)[0] || '';
   const v = N.view(A);
-  yes('B2 55 minutes later it says the same numbers the bars draw: "' + later.slice(0, 80) + '"',
+  yes('B2 70 minutes later it says the same numbers the bars draw: "' + later.slice(0, 80) + '"',
       later.indexOf('Hunger ' + v.food + '% (' + v.foodBand + '), Thirst ' + v.drink + '% (' + v.drinkBand +
                     '), Rest ' + v.rest + '% (' + v.restBand + ')') === 0 &&
       v.drinkBand === 'bad' && v.foodBand === 'fine');

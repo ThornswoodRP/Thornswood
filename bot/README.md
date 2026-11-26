@@ -178,9 +178,9 @@ once in the log.
 - `#known-issues`, read only: one post per open issue labelled Dev Findings
   or Main Findings whose fix has not landed yet, tagged Dev or Main
   (Patrick, 22 Oct). Its fix has landed once the issue has a `Test task:`
-  comment or is in Done: done-on-merge.yml's comment on it, `Pull request #N
-  merged (...)` written by the workflow, which comes with the card's Done
-  (since #5185 nobody moves a card by hand, and no `board: Done` label goes
+  comment or is in Merged: done-on-merge.yml's comment on it, `Pull request #N
+  merged (...)` written by the workflow, which comes with the card's Merged
+  (since #5185 nobody moves a card by hand, and no `board:` label goes
   on). Then it is not a known issue and its post goes at once. A merged pull request alone does
   not take a post down (#3140): when any merged pull request that named the
   issue did, a measuring step on the scripts finding, partial fixes and a
@@ -213,8 +213,16 @@ once in the log.
   nothing after the colon, a known issue with nothing under its title, and
   a `#test-tasks` or `#known-issues` post over 2000 characters are refused
   like any other rule, and the issue is told why. A reopened issue loses its test task and comes
-  back to `#known-issues` if it is still a finding. Staff close a test task
-  in Discord once it is confirmed.
+  back to `#known-issues` if it is still a finding. The bot archives its
+  tracked post, preserving replies, when the issue closes as not planned,
+  a duplicate or another explicit non-completed reason. If the issue is
+  later marked completed, the bot can restore the same unchanged test task
+  it archived. Revised instructions pass the same Main task checks, then get
+  a new active post. Older instructions and replies stay archived. A revised
+  post carries an issue number and a unique receipt. If Discord does not
+  confirm creation, the bot keeps checking for that receipt before recording
+  the post. It does not send another copy while the outcome is uncertain.
+  Staff close a test task in Discord once it is confirmed.
 - `#dev-test-tasks`, in Staff and seen only by staff (Patrick, 12 Oct): one
   post per issue from its last `Test task:` comment that has `Server: Dev`
   straight under its first line, tagged Dev. That is a check only a dev can do: it
@@ -299,6 +307,14 @@ straight after each post, and a post is matched back by its title among the
 bot's own, so neither a restart nor a crash between a post and its save posts
 twice.
 
+If the GitHub token is unavailable or that saved index cannot be read, the
+existing watcher pauses and checks again at its usual interval. It logs the
+blocking reason and attempts one staff warning per episode. Repairing the
+prerequisite resumes forum and public-list updates without restarting the
+bot. Broken JSON and nonobject indexes are never treated as empty, and a
+readability probe never replaces unsaved live metadata. The local recovery
+checks are in `bot\tests\test-5514-forum-prerequisite-recovery.py`.
+
 **Report a problem** (Patrick, 21 Oct, #3155). Testers file a problem on the
 board themselves, from two places, and each one becomes an issue in
 `ThornswoodRP/Thornswood` labelled `Tester report` and `area: triage`
@@ -322,6 +338,10 @@ board themselves, from two places, and each one becomes an issue in
   playtesters (`TESTER_ROLES`, Playtester by default) and staff may use it,
   five an hour each. The bot files the issue at once and answers only them.
   The pin needs Manage Threads, which the bot has through Administrator.
+  If the forum requires a tag, the panel uses its first available tag. A
+  required-tag forum with no available tag gets a repair message in the log
+  and no post. `bot\tests\test-5241-problem-panel-tag.py` checks creation,
+  restart reuse, Discord refusals and the library's tag-ID serialization.
 
 The logs are never copied into the issue. They reach the site from the
 launcher when the game closes, as they always have, and the issue links the
@@ -404,6 +424,36 @@ whole file at once.
 
 ### Staff
 
+**Report and action copies.** The report and moderation watchers keep their
+confirmed message IDs in `data\report-posts.json` and
+`data\moderation-posts.json`. Unacknowledged input from while the bot was down
+is delivered on the next pass. A burst can share one summary message; its
+copy stays until the last retained source item expires.
+
+Before sending, each watcher saves a pending attempt with an opaque copy
+reference. That reference is the small footer on the staff message, without
+account or report IDs. A failed receipt save or an uncertain network answer
+is recovered by finding that exact bot-owned reference in its original
+channel. Empty, inaccessible or incomplete history never permits a blind
+resend. An unresolved attempt holds newer copies from that source and names
+the reference in the log for review. A final Discord refusal can follow a
+retry of an accepted send, so it leaves the attempt pending. Missing channel
+access detected before a send leaves the copy eligible for a later pass.
+Unreadable indexes expose counts only, and unreadable or incomplete source
+files cannot remove saved private copies. The local regression is
+`bot\tests\test-4247-staff-copy-receipts.py`.
+
+Failed-session alerts use that same delivery protocol in their existing
+`data\trouble-posts.json` store (#4943). A missing channel or permission found
+before sending can recover on a later pass. A source admission marker in the
+same store keeps newly observed alerts eligible across a restart without
+replaying historical startup rows; it is not proof of delivery. Uncertain sends remain pending
+for exact-reference reconciliation or manual review; they do not count as
+delivered and are not blindly resent. Existing startup backlog suppression,
+legacy confirmed receipts and cleanup when the source session expires stay
+in place. Malformed source data cannot prove expiry. The local watcher
+regression is `bot\tests\test-4943-trouble-receipts.py`.
+
 `#staff-news` (the staff `#news` until #3317, then staff-announcements
 until 15 Nov 2026; dev releases are posted here, the staff side of `#news`),
 `#council-decisions`, `#staff-updates` (dev server restarts, the staff side of
@@ -475,7 +525,7 @@ Trial Gamemaster and Loremaster.
 To the bot, staff is the `STAFF_ROLES` roles in `bot.env.json` (Owner,
 Co-Owner, Lead Dev, Lead Gamemaster, Lead Loremaster, Lead Moderator, Lead
 Content Creator, Lead Support, Gamemaster, Dev, Loremaster and Moderator by
-default), matched by id or name, and nothing else. Closing a ticket, with
+default), as set in `bot_core.py`, matched by id or name, and nothing else. Closing a ticket, with
 `/close` or the Close ticket button, and skipping the one open ticket rule
 and the cooldown take one of them. Trial Gamemaster, Support and Content
 Creator are not in it. Faction Leader tickets are pulled to the role IDs in
@@ -578,9 +628,30 @@ Then the person picks a hold.
 
 ## Changing the words later
 
-`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1`
-again, and the posts are rewritten in place. It deletes what the bot wrote last
-time rather than adding a second copy, so the rules never end up posted twice.
+`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1 -Posts`
+again, and the posts are rewritten in place. A plain run leaves the posts alone
+unless `-Posts` is given, so a routine run does not touch existing messages. To
+rewrite only some of them, pass `-Only <channels> -Posts` (such as `-Only
+lore,factions -Posts`, issue #3656). Each post is edited where it stands,
+and a post whose words have not changed is left alone, so a run shows new
+messages nowhere and moves nothing (26 Nov 2026: until then every run
+deleted all 15 posts and sent them again, and each went under what the bot
+keeps in its channel). Only a post that needs more messages than it has
+sends any. What the bot keeps in a doc channel goes under the words: the
+"started a thread" line of its Changelog thread is taken away, since the
+post's last line links the thread, and the ping buttons in `#welcome` are
+sent again under the words. The Member reaction message in `#rules` is
+the bot's own: when the rules' words are newer than it, the bot's next
+start sends it again under them and carries everybody who reacted to the
+old one in `rules-carried.json`, so nobody loses Member (Patrick's B on
+q-6891-rules-reaction-move). The run and the audit say where it sits until
+then.
+From a session with no box key, a cloud thread included, the deploy gate runs
+it on the box (#6874):
+
+```
+pwsh scripts/vps/Box-Run.ps1 -Line 'Setup-Discord -Posts'
+```
 
 `Setup-Discord.ps1` asks for the bot token at a hidden prompt. With `-OnBox`
 it asks for nothing: the build runs on the VPS with the token the running bot

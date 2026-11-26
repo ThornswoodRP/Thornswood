@@ -107,14 +107,18 @@ Yes 'any case' (Test-ShipNotOurs 'DATA\INTERFACE\RACESEX_MENU.SWF')
 
 # Ours. Each of these ships.
 $ours = @($ShipOursFiles) + @($ShipOwnArt) + @($ShipClientFiles) + @($ShipRequiredDataFiles) + @(
-    'Data\Platform\UI\index.html', 'Data\Platform\Plugins\thornswood-front.js', 'Data\Platform\Fonts\Tavern.ttf',
-    # Nemesis's output, generated from the collection's own patches.
+    'Data\Platform\UI\index.html', 'Data\Platform\Plugins\thornswood-front.js', 'Data\Platform\Fonts\Tavern.ttf')
+foreach ($rel in $ours) {
+    Yes "$rel is ours" ((Test-ShipOurs $rel) -and -not (Test-ShipNotOurs $rel))
+}
+# Built on each computer (#3715, #3919), so not ours to ship.
+$generated = @(
     'Data\meshes\animationdatasinglefile.txt', 'Data\meshes\animationsetdatasinglefile.txt',
     'Data\meshes\actors\character\behaviors\0_master.hkx', 'Data\meshes\actors\character\_1stperson\behaviors\mt_behavior.hkx',
     'Data\meshes\actors\character\characters\defaultmale.hkx', 'Data\meshes\actors\character\characters female\defaultfemale.hkx',
     'Data\Scripts\fnis.pex')
-foreach ($rel in $ours) {
-    Yes "$rel is ours" ((Test-ShipOurs $rel) -and -not (Test-ShipNotOurs $rel))
+foreach ($rel in $generated) {
+    Yes "$rel is generated on each computer and does not ship" (-not (Test-ShipOurs $rel) -and (Test-ShipNotOurs $rel))
 }
 Yes 'the client runtime is named by its record, all six' (@($ShipClientFiles).Count -eq 6)
 Yes 'our menu backdrop is the three files Go.ps1 writes' (@($ShipOwnArt).Count -eq 3)
@@ -243,7 +247,7 @@ try {
     }
     $clean = Join-Path $T 'clean'
     $dirty = Join-Path $T 'dirty'
-    foreach ($f in @('game\Data\Platform\UI\index.html', 'game\Data\Scripts\fnis.pex', 'game\Data\Interface\loadwaitspinner.swf')) {
+    foreach ($f in @('game\Data\Platform\UI\index.html', 'game\Data\Platform\Plugins\thornswood-front.js', 'game\Data\Interface\loadwaitspinner.swf')) {
         foreach ($d in $clean, $dirty) {
             $p = Join-Path $d $f; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null
             [IO.File]::WriteAllText($p, 'x')
@@ -275,12 +279,12 @@ try {
         function Say($m, $c) { }
         $curMap = @{ 'Data\Platform\UI\index.html' = '1:aa'; 'Data\Interface\racesex_menu.swf' = '2:bb'; ':gone:Data\meshes\LostArk\KamenSword.nif' = 'removed' }
         $tgtMap = @{ 'Data\Platform\UI\index.html' = '1:cc'; 'Data\Interface\racesex_menu.swf' = '2:dd'; 'Data\meshes\weapons\otherserver\otherserver_haybale.nif' = '3:ee';
-                     'Data\meshes\actors\character\behaviors\0_master.hkx' = '4:ff' }
+                     'Data\Platform\Plugins\thornswood-front.js' = '4:ff' }
         Invoke-Expression $filter
         Yes 'going back to an old record hands none of them out' (-not $tgtMap.ContainsKey('Data\Interface\racesex_menu.swf') -and -not $tgtMap.ContainsKey('Data\meshes\weapons\otherserver\otherserver_haybale.nif'))
         Yes '  nor lists them as gone going forward' (-not $curMap.ContainsKey('Data\Interface\racesex_menu.swf'))
         Yes '  while what an earlier release took out stays gone' ($curMap.ContainsKey(':gone:Data\meshes\LostArk\KamenSword.nif'))
-        Yes '  and ours stays, Nemesis''s output with it' ($tgtMap.ContainsKey('Data\Platform\UI\index.html') -and $tgtMap.ContainsKey('Data\meshes\actors\character\behaviors\0_master.hkx'))
+        Yes '  and ours stays' ($tgtMap.ContainsKey('Data\Platform\UI\index.html') -and $tgtMap.ContainsKey('Data\Platform\Plugins\thornswood-front.js'))
         Yes ('  and it says how many it left out ({0})' -f $notOurs) ($notOurs -eq 3)
     }
 } finally {
@@ -316,10 +320,12 @@ Write-Host ("      {0}: {1:n0} files would ship, {2:n0} of other people's loose 
 $strays = @($shipped | Where-Object { -not $_.Rel.StartsWith('Data\Platform\', 'OrdinalIgnoreCase') -and -not (Test-ShipOurs $_.Rel) -and -not (Test-ShipHeld $_.Rel 1) })
 Yes 'nothing outside Data\Platform would ship that is not ours or held' ($strays.Count -eq 0)
 foreach ($s in @($strays | Select-Object -First 10)) { Write-Host "      $($s.Rel)" }
-# Assigned, not wrapped in @(): the function hands back one array.
-$looseLeft = Get-ShipLooseArt @($shipped | Where-Object { -not (Test-ShipHeld $_.Rel 1) })
-Yes 'the loose art report has nothing left to name but what is held' ($looseLeft.Count -eq 0)
-foreach ($l in $looseLeft) { Write-Host ("      {0} {1} file(s)" -f $l.Folder, $l.Files) }
+if (Get-Command Get-ShipLooseArt -ErrorAction SilentlyContinue) {
+    # Assigned, not wrapped in @(): the function hands back one array.
+    $looseLeft = Get-ShipLooseArt @($shipped | Where-Object { -not (Test-ShipHeld $_.Rel 1) })
+    Yes 'the loose art report has nothing left to name but what is held' ($looseLeft.Count -eq 0)
+    foreach ($l in $looseLeft) { Write-Host ("      {0} {1} file(s)" -f $l.Folder, $l.Files) }
+}
 # 166 on 29 September, once the 140 BodySlide builds kept until #1259 and the
 # 102 held for revision 2 are counted apart.
 Yes ('the other people''s files the 29 September measurement found are left out (at least 160, {0} here)' -f $leftOut) ($leftOut -ge 160)

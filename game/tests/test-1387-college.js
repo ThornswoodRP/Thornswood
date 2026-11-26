@@ -18,8 +18,8 @@
 //   seconds, the fifth refused for 20 seconds at the weary cold recovery.
 //   Withered matches the page: five potions or ten restoration casts in an
 //   hour, 30 real minutes at 80% of max health and magicka, kept over a
-//   relog and a restart, and over when the 30 minutes are (the cooked meal
-//   that also clears it waits for #1382).
+//   relog and a restart, and over when the 30 minutes are. The cooked meal
+//   and bed recovery is exercised by test-6239-withered-meal-rest.js.
 //
 // Traps: the two-spell cap and the tome gates are the ones already there,
 // and there is no second spell list. The refusal of Dead Thrall is the
@@ -625,7 +625,7 @@ person(srv, OUT, 13, 'smith', 'platewright', function (s) {
       /stamina: \{ race: 44, npc: 6, floorAtZero: true \}/.test(src));
   yes('W5: the college gets the map so far, so withered is a share of it',
       /var add = co\.effects\(actorId, undefined, base\);/.test(CHARACTER));
-  yes('W6: the page says withered is in the server, and that the cooked meal clear waits for food',
+  yes('W6: the page says withered and the cooked meal recovery are in the server',
       /Withered is in the server/.test(page.potions) && /#1382|cooked meal/.test(page.potions.slice(page.potions.indexOf('## Where this is'))));
 }
 

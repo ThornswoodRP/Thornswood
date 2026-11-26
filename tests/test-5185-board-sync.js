@@ -5,9 +5,10 @@
 // the workflows read from their files. Nothing reaches GitHub.
 //
 // What is held here:
-//   1. the rules: which text names an issue, the Status order (closed or a
-//      merged test task is Done, an open pull request or a claim is In
-//      Progress, anything else Todo), the order: labels, the type an
+//   1. the rules: which text names an issue, the Status order (closed is
+//      Done, a merged test task on an open issue is Merged and never Done,
+//      since GitHub closes an open issue put in Done (#6878), an open pull
+//      request or a claim is In Progress, anything else Todo), the order: labels, the type an
 //      issue with none gets, and which timeline entries count;
 //   2. the script against a stand-in GitHub: one issue, a pull request's
 //      issues (with the issues it named before an edit, and itself read
@@ -57,8 +58,9 @@ yes('an open pull request naming it makes it In Progress', st({}, [pr(1)]) === '
 yes('  a draft one too', st({}, [pr(1, { draft: true })]) === 'In Progress');
 yes('  named in the title only, too', st({}, [pr(1, { title: 'Faster (Refs #10)', body: '' })]) === 'In Progress');
 yes('an open pull request that names another issue does not', st({}, [pr(1, { body: 'Refs #11' })]) === 'Todo');
-yes('a merged pull request with its test task makes it Done',
-    st({}, [pr(1, { state: 'closed', merged: true, body: 'Refs #10\n\nTest task for #10: Forge works\nServer: Main\n\n1. Open it' })]) === 'Done');
+yes('a merged pull request with its test task makes it Merged, never Done while it is open (#6878)',
+    st({}, [pr(1, { state: 'closed', merged: true, body: 'Refs #10\n\nTest task for #10: Forge works\nServer: Main\n\n1. Open it' })]) === 'Merged');
+yes('  and once the main release closes it, Done', st({ state: 'closed' }, [pr(1, { state: 'closed', merged: true, body: 'Test task for #10: Forge works' })]) === 'Done');
 yes('  but not while another pull request naming it is open',
     st({}, [pr(1, { state: 'closed', merged: true, body: 'Test task for #10: Forge works' }), pr(2)]) === 'In Progress');
 yes('a merged pull request that only Refs it leaves it where the rest says (part of the work)',
@@ -99,7 +101,7 @@ function github(o) {
   const writes = [];
   const reads = [];
   const fields = () => [
-    { id: 101, name: 'Status', data_type: 'single_select', options: (o.statuses || ['Todo', 'In Progress', 'Done']).map((n, i) => OPT('s' + i, n)) },
+    { id: 101, name: 'Status', data_type: 'single_select', options: (o.statuses || ['Todo', 'In Progress', 'Merged', 'Done']).map((n, i) => OPT('s' + i, n)) },
   ].concat(o.order === false ? [] : [{ id: 102, name: 'Order', data_type: 'number' }]);
   async function f(url, init) {
     const method = (init && init.method) || 'GET';
@@ -191,7 +193,7 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
       r.writes.some(x => x.method === 'PATCH' && x.path === 'repos/ThornswoodRP/Thornswood/issues/11' && x.body.type === 'Feature') &&
       w && JSON.stringify(w.body.fields) === JSON.stringify([{ id: 101, value: 's0' }, { id: 102, value: 10011 }]) && /Order 10011 \(it had none\)/.test(r.lines[0]));
   r = await go(['--issues', '12'], { issues: { 12: issue(12, { state: 'closed' }) } });
-  yes('a closed issue goes to Done, and its Order is not read or given', JSON.stringify(fieldWrite(r.writes, 12).body.fields) === JSON.stringify([{ id: 101, value: 's2' }]) &&
+  yes('a closed issue goes to Done, and its Order is not read or given', JSON.stringify(fieldWrite(r.writes, 12).body.fields) === JSON.stringify([{ id: 101, value: 's3' }]) &&
       !r.reads.some(p => /items\/9012\?/.test(p)));
   r = await go(['--issues', '14'], { issues: { 14: issue(14, { labels: [{ name: 'order: 52.5' }, { name: 'bug' }] }) }, cardOrder: { 14: 10014 } });
   w = fieldWrite(r.writes, 14);
@@ -220,13 +222,13 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
     pulls: { 56: { number: 56, state: 'closed', merged_at: '2026-11-01T20:00:00Z', title: 'x', body: 'Refs #10\n\nTest task for #10: Forge works\nServer: Main\n\n1. Open it' } },
     issues: { 10: issue(10) }, timelines: { 10: [xref(56)] },
   });
-  yes('a merged pull request with its test task: Done', fieldWrite(r.writes, 10).body.fields[0].value === 's2');
+  yes('a merged pull request with its test task: Merged', fieldWrite(r.writes, 10).body.fields[0].value === 's2');
 
   r = await go(['--all'], { open: [issue(1), issue(2, { pull_request: {} }), issue(3), issue(4), issue(5)], issues: { 1: issue(1), 3: issue(3), 4: issue(4), 5: issue(5, { state: 'closed' }) } });
   yes('every open issue, across pages, never a pull request: ' + r.lines[0], r.code === 0 && /^4 open issues$/.test(r.lines[0]) &&
       [1, 3, 4, 5].every(n => fieldWrite(r.writes, n)) && !fieldWrite(r.writes, 2) && !r.reads.some(p => /issues\/2$/.test(p)));
   yes('  each read again at its turn: one the list had open, closed since, goes to Done, not back to Todo',
-      [1, 3, 4, 5].every(n => r.reads.indexOf('repos/ThornswoodRP/Thornswood/issues/' + n) >= 0) && fieldWrite(r.writes, 5).body.fields[0].value === 's2');
+      [1, 3, 4, 5].every(n => r.reads.indexOf('repos/ThornswoodRP/Thornswood/issues/' + n) >= 0) && fieldWrite(r.writes, 5).body.fields[0].value === 's3');
 
   r = await go(['--issues', '10', '--dry-run'], { issues: { 10: issue(10, { type: null }) } });
   yes('a dry run reads and says, and writes nothing: ' + r.lines[0], r.code === 0 && r.writes.length === 0 && /nothing written/.test(r.lines[0]) && /type Task/.test(r.lines[0]));
@@ -236,7 +238,9 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
       r.code === 1 && /#10: not put right/.test(r.out) && fieldWrite(r.writes, 11) && /not put right: #10$/.test(r.lines[r.lines.length - 1]));
 
   r = await go(['--issues', '10'], { issues: { 10: issue(10) }, statuses: ['Todo', 'Doing', 'Done'] });
-  yes('a board whose Status lacks an option is refused, and none is added: ' + r.out.split('\n').pop(), r.code === 1 && /has no In Progress/.test(r.out) && r.writes.length === 0);
+  yes('a board whose Status lacks an option is refused, and none is added: ' + r.out.split('\n').pop(), r.code === 1 && /has no In Progress, Merged/.test(r.out) && r.writes.length === 0);
+  r = await go(['--issues', '10'], { issues: { 10: issue(10) }, statuses: ['Todo', 'In Progress', 'Done'] });
+  yes('  one without Merged too (#6878): ' + r.out.split('\n').pop(), r.code === 1 && /has no Merged;/.test(r.out) && r.writes.length === 0);
   r = await go(['--issues', '10'], { issues: { 10: issue(10, { labels: [{ name: 'order: 5' }] }) }, order: false });
   yes('with no Order field yet: Status is still set, the label stays, and it says so', r.code === 0 && /no Order field yet/.test(r.out) &&
       JSON.stringify(fieldWrite(r.writes, 10).body.fields) === JSON.stringify([{ id: 101, value: 's0' }]) && !r.writes.some(x => x.method === 'DELETE'));

@@ -351,9 +351,10 @@ Leave Vortex's own files alone. A Ship packs Thornswood's files. It leaves Vorte
 
 1. Install Vortex from the Nexus page below, and sign Vortex into a Nexus account.
 2. Point Vortex at Skyrim Special Edition.
-3. Add the Thornswood collection. Its address is https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf
-4. Use a profile named Thornswood. Deploy that profile so the mods land on the Steam copy.
-5. Open the Thornswood launcher. On the Play page, the server list at the lower right has Dev. The picture is in [H. Dev Build](#h-dev-build). Choose Dev, then let that install make its game folder. Settings, Maintenance has "Make it".
+3. In Vortex, turn on profile management: Settings, Interface, and switch "Enable Profile Management" on. (Profiles only appears in the sidebar once this is turned on.)
+4. Go to Profiles and create or select a profile named Thornswood before adding the collection.
+5. Add the Thornswood collection. Its address is https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf. When Vortex asks which profile to install into, choose the Thornswood profile. Deploy that profile so the mods land on the Steam copy.
+6. Open the Thornswood launcher. On the Play page, the server list at the lower right has Dev. The picture is in [H. Dev Build](#h-dev-build). Choose Dev, then let that install make its game folder. Settings, Maintenance has "Make it".
 
 Publishing a new revision of the collection is done from Patrick's Nexus account. Installing a revision that is already published is any developer's Nexus account. The history of this choice is [docs/COLLECTION-METHOD.md](../COLLECTION-METHOD.md).
 

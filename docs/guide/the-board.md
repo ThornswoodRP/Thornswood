@@ -83,34 +83,50 @@ How to use it:
   ("What this is" says how the Bots use them). Assign yourself when you start one. The stage is Order and
   Status: the `wave:` labels and `needs: the live server` were retired on
   22 Oct (#3192), because nothing read them and Order had replaced them.
-- Status: In Progress the moment work starts, Done when it is merged and only
-  needs testing (Patrick, 19 Oct). Nobody moves a card: the Status follows
+### Status, and how an issue finishes
+
+- Status: In Progress the moment work starts, Merged when its fix is merged
+  with its test task and only needs a main release (Patrick, 19 Oct; Merged
+  since his A on 26 Nov 2026, #6878), Done once the issue is closed. Nobody moves a card: the Status follows
   what GitHub knows (#5185, `.github\workflows\board.yml` and
   `scripts\ops\Sync-Board.js`). A closed issue is Done. An open one is In
   Progress while a pull request that names it (`Closes`, `Fixes`,
   `Resolves`, `Refs` or `Part of #N`, or its test task) is open, or while it
-  carries a `claimed:` label; Done once a merged pull request carries its
-  test task; Todo otherwise. So to move a card, change the fact: open the
+  carries a `claimed:` label; Merged once a merged pull request carries its
+  test task; Todo otherwise. Done is never put on an open issue: while the
+  board's issue status sync is on, GitHub keeps an issue's own status and a
+  board Status of the same name together, so an open issue put in Done is
+  closed a second later, as the board App, which sent testers to look for
+  fixes main did not have (#6878). The sync was turned off on 26 Nov 2026
+  at 10:48 AM MT; Merged is no issue status, so its issue stays open
+  whether the sync is on or off. So to move a card, change the fact: open the
   pull request, put the claim on, or close the issue, and the card follows
-  within a minute. The Status options are Todo, In Progress and Done; never
-  add one through the API, which rewrites every option and can clear the
-  Status on every card. The `board:` labels did this by hand until #5185 and
+  within a minute. The Status options are Todo, In Progress, Merged and
+  Done. GitHub's API replaces every option when one is added: an option
+  given without its old id is a new one, and every card's Status on it is
+  cleared. Merged went in that way on 26 Nov 2026 with each old option's
+  id, name, colour and description given back, and every card kept its
+  Status; `pwsh scripts/ops/Check-Board.ps1` says when the options differ. The `board:` labels did this by hand until #5185 and
   are gone. To see the cards, `pwsh scripts/ops/Read-Board.ps1` starts
   `.github\workflows\board-read.yml`, which reads every card's Status and
   Order and changes nothing, and writes them to board.json (#3192).
-- A pull request that finishes an issue says `Closes #N`, so merging closes
-  it and its card goes to Done. Say in the pull request which issues moved.
-- A fix people would notice is the exception: its pull request says `Refs #N`,
-  and the issue stays open until the fix reaches main (Patrick, 11 Oct: dev
+- A pull request that finishes an issue says one of two things, and which
+  one depends on whether anybody would notice the change. Only a change
+  nobody would notice in the game, the launcher, the site, Discord or the
+  staff tools (a test, a workflow, a doc, a script only the team runs) says
+  `Closes #N`, so merging closes it and its card goes to Done. Say in the
+  pull request which issues moved.
+- Every other fix says `Refs #N` and carries its test task, and the issue
+  stays open until the fix reaches main (Patrick, 11 Oct: dev
   is where the team checks that nothing breaks the game, and main is where
   testers test, since we are in alpha). The pull request carries the test
   task as `Test task for #N: <a title of at most 45 characters>`, then
   numbered steps in plain English and what should happen, with no issue
-  numbers, links or code. At the merge its card goes to Done by itself, and
+  numbers, links or code. At the merge its card goes to Merged by itself, and
   `.github\workflows\done-on-merge.yml` writes the test task on the issue. The main Ship that
   carries the merge closes it (#3279): after it tags the release,
   `scripts\release\Close-ShippedIssues.ps1` reads the board and closes every
-  open issue in Done whose done-on-merge comment names a merge the release was
+  open issue in Merged whose done-on-merge comment names a merge the release was
   built from, with a comment whose first line is `Test task: <title>` and the
   steps under it, and names the ones that stay open. Nobody closes these by
   hand. The bot turns that comment into a post in the #test-tasks forum the
@@ -120,16 +136,19 @@ How to use it:
   only a developer can make the check (Dev, below). To better the test task
   after the merge, write a newer `Test task:` comment of the same kind on
   the issue and leave it open: the Ship closes it with yours instead. A
-  Dev test task never keeps the issue open. Whoever moves an issue to Done
+  Dev test task never keeps the issue open. Whoever finishes an issue
   by hand (a fix spread over several pull requests, a pin, a change on the
   box) writes on it a comment whose first line is `Fixed by <merge commit,
   12 characters> (pull request #N).`, naming the last merge the fix needs,
-  then either its Main test task in a fenced block, or the line
+  as main has it: `git log origin/main --grep "(#N)"` finds it. A pull
+  request merged before main's history was rewritten (#3684) still names
+  its old merge on GitHub, which no release carries, and the Ship stops on
+  a line that names one (#4397's did, on 26 November 2026). Then either its Main test task in a fenced block, or the line
   `No test task: nobody would notice this fix.` The Ship reads that line as
   it reads done-on-merge's comment, from anybody, the newer of the two
   winning, and closes the issue when the release carries that merge (#3411).
   It finds the line by searching the open issues' comments, so the issue
-  closes whether or not the board had put its card in Done. A line with neither a test task nor the no-task line keeps the issue open,
+  closes whether or not the board had put its card in Merged. A line with neither a test task nor the no-task line keeps the issue open,
   and the Ship names it as trouble. To see what a main Ship
   would close, without closing anything:
   `.\scripts\release\Close-ShippedIssues.ps1 -Commit origin/main -Check`.
@@ -263,6 +282,17 @@ things that only devs can test and can still be there while on main; main
 is for just regular testing for our playtesters, only when it's on main",
 and known issues are what is on the board whose fix has not landed yet
 (Patrick, 26 Oct, #3140). Test tasks never go on the report page; they go in Discord.
+
+Use `/test-queue` in Discord for a private list of active Main tests.
+Choose Dev if you can read the staff test forum. Search by words in the title
+or choose a page and change the order. Each entry opens its forum post.
+Tests with no result or replies appear first on each page. Mark the opening
+post ✅ for a pass, ❌ for a failure, or 📌 when it partly works, and use the
+thread to say what you saw. A result with conflicting marks needs review.
+Read the replies before retiring a post, including one marked passed.
+Staff record the result and link any follow-up fix on GitHub before taking a
+finished or blocked task out of the queue. A new build carrying a follow-up
+fix gets a fresh test task.
 
 - **#test-tasks, Main test tasks.** An ordinary check any playtester can do
   with the normal game. If a playtester could do it once it is on main, it

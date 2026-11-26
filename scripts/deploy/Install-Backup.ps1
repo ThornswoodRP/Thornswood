@@ -111,8 +111,9 @@ function Remote($script) {
 }
 
 $script = Join-Path $Here '..\vps\vps-nightly-backup.ps1'
-$keyFile = Join-Path $Root 'key.txt'
-$runner = Join-Path $Root 'vps-nightly-backup.ps1'
+$rootClean = $Root.TrimEnd('\', '/')
+$keyFile = "$rootClean\key.txt"
+$runner = "$rootClean\vps-nightly-backup.ps1"
 
 # ------------------------------------------------------------------ status --
 if ($Status) {
@@ -208,7 +209,7 @@ $worldTmp = Join-Path ([IO.Path]::GetTempPath()) ('world-' + [Guid]::NewGuid().T
 try { Invoke-ThornswoodNative { & scp @ssh $worldTmp "${target}:$($Root.Replace('\','/'))/world.ps1" } }
 finally { Remove-Item -LiteralPath $worldTmp -Force -ErrorAction SilentlyContinue }
 if ($LASTEXITCODE -ne 0) { Die 'scp of world.ps1 failed.' }
-Say ("  " + (Join-Path $Root 'world.ps1')) 'Green'
+Say ("  $rootClean\world.ps1") 'Green'
 
 Head 'The passphrase'
 # A new box, and this machine already has the passphrase every backup so far

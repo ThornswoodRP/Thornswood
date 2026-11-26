@@ -357,9 +357,26 @@ function playChecks() {
   at += PAY_STEP_MS; b.advance(at);
   const gold = (x) => lines(x).find((t) => /^\/trade gold [1-5]$/.test(t));
   yes('each puts up 1 to 5 gold', !!gold(b) && !!gold(q));
+  const observedVersion = 'a'.repeat(48);
+  c.queue.push({ type: 'message', message: { t: 7, idx: 7, propName: 'thornswoodTrade',
+    dataDump: JSON.stringify({ open: true, offerVersion: observedVersion }) } });
+  b.pump();
+  const partnerViews = [{ type: 'message', message: { t: 7, idx: 8, propName: 'thornswoodTrade',
+    dataDump: JSON.stringify({ open: true, offerVersion: observedVersion }) } }];
+  q.client = { tick: () => partnerViews.splice(0) };
+  q.pump();
+  yes('both bots consume their actual owner offer views', b.tradeOfferVersion === observedVersion && q.tradeOfferVersion === observedVersion);
   at += PAY_STEP_MS; b.advance(at);
-  yes('both agree, then both walk on', lines(b).indexOf('/trade ok') >= 0 && lines(q).indexOf('/trade ok') >= 0 &&
+  yes('both agree to the received version, then both walk on', lines(b).indexOf('/trade agree ' + observedVersion) >= 0 && lines(q).indexOf('/trade agree ' + observedVersion) >= 0 &&
     !b.payAt && !q.payAt && b.played.payAgrees === 1 && b.nextPay > at + 30000);
+  c.queue.push({ type: 'message', message: { t: 7, idx: 99, propName: 'thornswoodTrade',
+    dataDump: JSON.stringify({ open: true, offerVersion: 'b'.repeat(48) }) } });b.pump();
+  yes('another actor\'s offer cannot replace the bot\'s own observed version', b.tradeOfferVersion === observedVersion);
+  c.queue.push({ type: 'message', message: { t: 7, idx: 7, propName: 'thornswoodTrade', dataDump: '{bad' } });b.pump();
+  yes('a malformed owner view removes any previous approval version', b.tradeOfferVersion === '');
+  b.payPhase = 'agree';b.payAt = [0,0,0];q.payAt = [80,0,0];const beforeUnseen = lines(b).length;
+  b.payStep(at + 1);
+  yes('a bot cancels an unseen offer instead of guessing or agreeing again', lines(b).slice(beforeUnseen).join() === '/trade cancel' && b.played.payNoCurrentOffer === 1 && b.played.payAgrees === 1 && !b.payAt && !q.payAt);
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Traded. You gave 3 gold and got 2 gold.' }));
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Asked Load 1900000501. They have 30 seconds.' }));
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You only have 2.' }));
@@ -452,10 +469,11 @@ function questChecks() {
   yes('then steps back and walks on', said[said.length - 1] === '/merchant close' && b.atPanel === null && b.questPhase === 'idle' && b.nextQuest === now + 30000);
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You take the work.' }));
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You leave the work without payment.' }));
+  b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'You give back what remains of the draw and leave the work.' }));
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'This trader does not handle that work.' }));
   b.heard(JSON.stringify({ t: 'chat', from: 0, text: 'Trading with Dagur in Winterhold. Purse 100.' }));
   yes('quest answers are counted as quest answers, and a trade answer as a trade answer',
-    b.played.questTaken === 1 && b.played.questLeft === 1 && b.played['questRefused:role'] === 1 && b.played.questRefused === 1 &&
+    b.played.questTaken === 1 && b.played.questLeft === 2 && b.played['questRefused:role'] === 1 && b.played.questRefused === 1 &&
     !b.played.tradeOtherAnswer && b.played.tradeOpened === 1);
   b.nextQuest = now; b.questPhase = 'idle'; b.atPanel = null; b.others.clear(); b.advance(now + 1);
   yes('with no NPC within reach it says so and asks nothing', b.played.questNoTraderNear === 1 && b.played.questPanelAsks === 2);

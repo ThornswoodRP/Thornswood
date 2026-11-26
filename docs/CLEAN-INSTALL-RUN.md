@@ -425,8 +425,9 @@ tester confused by a list that no longer matches.
 | 21 | `the collection installs this` | `launcher\app\InstallSteps.cs` |
 | 22 | `failed. Send staff a screenshot of this window in the Discord.` | `launcher\app\InstallSteps.cs` |
 | 22 | `Opening Thornswood now.` | `launcher\app\InstallSteps.cs` |
-| 22 | `Make a character named after yourself, save once, then connect.` | `launcher\app\InstallSteps.cs` |
-| 22 | `The launcher opens on the collection if your mods are not in yet.` | `launcher\app\InstallSteps.cs` |
+| 22 | `Next, in the launcher:` | `launcher\app\InstallSteps.cs` |
+| 22 | `. Press Downgrade on the front page. Skyrim is not build 1.6.1170, and Steam downloads that build under your account.` | `launcher\app\InstallSteps.cs` |
+| 22 | `. Install the collection in Vortex from the card the launcher shows, and switch to the profile it makes. The script extender and the address library come with it.` | `launcher\app\InstallSteps.cs` |
 | 23 | `DOWNGRADE FIRST` | `launcher\app\Shell.cs` |
 | 23 | `Skyrim is on the wrong build` | `launcher\app\Shell.cs` |
 | 23 | `Thornswood is sharing one Skyrim with every other server on this machine` | `launcher\app\ShellOwnGame.cs` |
@@ -496,17 +497,17 @@ right or wrong. To Do entries are named by title, because their numbers move.
   the first start and the own folder question both say Thornswood is sharing one Skyrim
   with other servers. On a clean machine there are none, and a stranger reads
   that as something they did wrong. No entry.
-- **Three different orders (rows 22, 23, 29 and 30).** The join page says
-  installer, collection, then Discord. The console says the launcher opens on
-  the collection. The launcher opens on Downgrade instead, keeps the collection
-  card hidden until the build is right, and then asks for Discord before it will
-  open the collection. No entry.
-- **The console's last word is out of date (rows 22 and 44).** When every check
-  passes it ends with "Make a character named after yourself, save once, then
-  connect." The join page says the game asks at its main menu which character
-  to be, and since 24 Sep the launcher's First time card asks for a name that
-  belongs in Skyrim and not your own, and says nothing about saving. So the
-  console now disagrees with the launcher it opens. No entry.
+- **Three different orders (rows 22, 23, 29 and 30).** The launcher opens on
+  Downgrade when the build is wrong and keeps the collection card hidden until
+  the build is right; Connect Discord comes after the collection. The console
+  gives that order since #4496. The join and Downloads pages and #start-here
+  still say installer, collection, then Discord, with Downgrade only in what
+  you need (#4496).
+- **The console's last words (rows 22 and 44).** Since #4496 they list the
+  launcher's own steps in its order: Downgrade first when the build is wrong,
+  then the collection, Connect Discord and Play. They no longer ask for a
+  character named after yourself or a save. Row 22 records whether the
+  window's last lines match the launcher's front page.
 - **The Address Library and Start On Save (rows 34 and 41).** The Address
   Library is expected missing unless the collection delivers it, owned by "The
   launcher never checks the Address Library, so a whole class of failure reads

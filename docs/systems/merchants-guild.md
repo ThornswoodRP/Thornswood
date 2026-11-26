@@ -22,6 +22,11 @@ post at the board or trade with an NPC. Notice and job fees stay 20 and
 30 gold for everybody. Two people still agree their own price when they
 [trade](trade.md).
 
+A dead or disabled guild trader cannot open trading or accept a purchase,
+sale, supply or quest action. An open panel closes when the trader becomes
+unavailable. The server checks their current state for each action; an
+unreadable state refuses the action without moving goods or gold.
+
 ## What the traders charge
 
 A guild trader buys and sells at the hold's price. The numbers come
@@ -64,6 +69,13 @@ run out. A guild commission does not either: its pay is new gold at
 the reward prices staff set, and the trader's purse is the same
 after it (#6180, [the quest catalogue](merchant-quest-catalogue.md#commission-pay)). A letter is not a quest of theirs. The sender pays the
 courier, on the notice board.
+
+The work menu shows offers the person can take now. Work whose rank or
+other requirements are not met, or whose cooldown is still running, stays
+out of the menu. If there is no new work, the trader says they have nothing
+for the person at the moment. Accepted work keeps its return and leave
+controls, including work that needs recovery. The server checks every
+request again; hiding an offer does not change who can accept it.
 
 ## Guild sites
 
@@ -122,6 +134,10 @@ trader's shelf. An empty purse refuses a buy. An empty shelf refuses a
 sale. A supply turn-in is five of an item at that same buy price, paid
 from the same purse. Each character waits six hours after its completed
 supply before that trader offers the same supply again.
+Woodworker collection supplies accept woodworking stock, such as firewood
+and the instruments their recipes use. Imported ingots, leather and other
+trades' materials remain available for ordinary buying and selling, but do
+not count as woodworking collection turn-ins.
 Scene quests and guild commissions are not paid from the purse.
 
 The person must be the authenticated character and within 400 of that

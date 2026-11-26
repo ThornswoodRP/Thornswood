@@ -36,13 +36,19 @@
   a physicker setting a bone. Yours from the inventory, somebody else's from
   the look prompt, both through one panel (game/ui/thornswood-treat.js).
 
-  GOING DOWN IS NOT HERE YET. The engine now asks mp.onDying before health
-  reaching zero kills, before anything is sent (#1626), so that is the moment
-  this file can say "down, not dead": refuse the death and keep them at a
-  health of its own. The rest of going down (the downed flag the clients are
-  sent, no fighting or casting while down, being stabilized, the wake) is
-  #2681. Until it is built a bleed that empties your health is a death with
-  no killer, the world's, and the temple keeps your wounds.
+  GOING DOWN (#4607, docs/systems/injury.md, "Down"). The engine asks
+  mp.onDying before health reaching zero kills, before anything is sent
+  (#1626, fork #101), and a refusal with dyingHealth keeps the person alive
+  at that share of their most: no death, no ragdoll, nothing undone. So a
+  person whose health would reach zero goes down here instead (goDown): kept
+  at DOWN.keep, held from fighting and casting on their own machine (the
+  thornswoodDown property's script), and able to talk. A bandage from
+  somebody else, a healing spell landing on them, or a healing potion
+  stands them up at a quarter of their health (standUp). Nobody does in
+  DOWN.minutes, and the tick lets the death through (wake): the ordinary
+  wake at the temple, with the wounds they had. Staff seeing who is down,
+  confirming the outcome and changing the minutes is #6409; a potion brewed
+  at a lab standing somebody up is #6407.
   ============================================================================
 */
 (function () {
@@ -201,6 +207,17 @@
   var MEAL_GUARD = { cooked: { mult: 0.5, min: 20 }, feast: { mult: 0.25, min: 10 } };
 
   /*
+    DOWN (#4607). injury.md: "The clock is 3 real minutes", and "Health
+    returns to 25% of its max, not to full". keep is the share of their most
+    a person is held at while down: the engine takes any share above nothing
+    (DyingHealthBinding), and 1% is the least a health bar still shows.
+  */
+  var DOWN = { minutes: 3, keep: 0.01, stable: 0.25 };
+  // The down person's own machine reads this (downScript, below), and so does
+  // anybody near them, for the look prompt.
+  var DOWN_PROPERTY = 'thornswoodDown';
+
+  /*
     BENCHES THAT TAKE BOTH HANDS, by the keyword a bench carries (BENCH_BY_BASE).
     A broken arm and a missing hand refuse these. The page does not list them,
     and Patrick's answer on #1383 (4 October) is these: the forges, the armour
@@ -226,7 +243,8 @@
   // ------------------------------------------------------------ the record --
 
   function fresh() {
-    return { wounds: [], ills: [], crooked: {}, agreed: {}, cold: 0, ground: 0, show: [], brews: [], guard: null };
+    return { wounds: [], ills: [], crooked: {}, agreed: {}, cold: 0, ground: 0, show: [], brews: [], guard: null,
+             down: null, wake: false };
   }
 
   /*
@@ -282,6 +300,11 @@
     if (gd && num(gd.until, 0) > 0 && num(gd.mult, 1) > 0 && num(gd.mult, 1) < 1) {
       out.guard = { until: num(gd.until, 0), mult: num(gd.mult, 1) };
     }
+    var dn = (v.down && typeof v.down === 'object') ? v.down : null;
+    if (dn && num(dn.at, 0) > 0 && num(dn.until, 0) > 0) {
+      out.down = { at: num(dn.at, 0), until: num(dn.until, 0), by: Math.max(0, num(dn.by, 0)) };
+    }
+    out.wake = v.wake === true;
     return out;
   }
 
@@ -449,6 +472,7 @@
      never shows". */
   function lines(rec, now) {
     var out = [];
+    if (rec.down) { out.push('Down'); }
     var bleeding = 0, slowed = true;
     for (var i = 0; i < rec.wounds.length; i++) {
       var w = rec.wounds[i];
@@ -544,7 +568,7 @@
       sitting, 20 an hour"), with no roof and not indoors. Or an hour at spent
       cold. Each clock starts again once it has caught.
     */
-    if (n && N) {
+    if (n && N && !(N.ignoresNeeds && N.ignoresNeeds(actorId))) {
       var open = n.resting === 'sit' && !n.roof && !!n.place && n.place !== 'indoors';
       if (open) {
         if (!rec.ground) { rec.ground = now; changed = true; }
@@ -562,6 +586,9 @@
           rec.cold = now; changed = true;
         }
       } else if (rec.cold) { rec.cold = 0; changed = true; }
+    } else if (n && N && N.ignoresNeeds && N.ignoresNeeds(actorId)) {
+      // God mode cannot accrue an hour of cold exposure for a later tick.
+      if (rec.ground || rec.cold) { rec.ground = 0; rec.cold = 0; changed = true; }
     }
 
     /*
@@ -668,6 +695,8 @@
       var who = online[i];
       try {
         var rec = read(who);
+        // Down past the clock, and nobody came (#4607).
+        if (rec.down && now >= rec.down.until) { wake(who); continue; }
         var was = rec.show.join('|');
         var r = step(who, rec, now);
         var shown = lines(rec, now).join('|');
@@ -706,7 +735,9 @@
       // The wounds first: most people are not bleeding, and asking everybody
       // whether they are dead before that was a second engine read a person
       // every second for nothing (#5431).
-      var rate = bleedRate(read(who));
+      var held = read(who);
+      // Somebody down is held at DOWN.keep, not bled further (#4607).
+      var rate = held.down ? 0 : bleedRate(held);
       if (!rate) { continue; }
       var dead = false;
       try { dead = !!mp.get(who, 'isDead'); } catch (e) { continue; }
@@ -753,6 +784,7 @@
   if (!g.__thornswoodHurtFires) { g.__thornswoodHurtFires = {}; }
   var fires = g.__thornswoodHurtFires;
   var FIRE_GAP_MS = 6000;  // the needs block lets go of a silent client after three of its beats
+  function clearFireExposure(actorId) { delete fires[actorId]; }
 
   /*
     A FIRE NOBODY PUT OUT STILL BURNT (#2260). The burn used to be written
@@ -762,6 +794,10 @@
     hurt tick for somebody who never came back to send one.
   */
   function burning(actorId, on, now) {
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.ignoresNeeds && needs.ignoresNeeds(actorId)) {
+      clearFireExposure(actorId); return '';
+    }
     now = now || Date.now();
     var f = has(fires, actorId) ? fires[actorId] : null;
     if (on) {
@@ -856,6 +892,8 @@
     var s = spellRank(source);
     if (!s || s.self || !personal(targetId)) { return; }
     tell(targetId, healed(targetId, s.rank));
+    // Any healing spell from somebody else stands them back up (#4607).
+    tell(targetId, standUp(targetId, 'a healing spell'));
   }
 
   // ----------------------------------------------- the blow that opens one --
@@ -1051,11 +1089,18 @@
   }
 
   /*
-    SOMETHING DRUNK FROM THE PACK (mp.onEatItem, below). A potion of cure
-    disease clears one ordinary disease. It is still the thirst sip, which the
-    needs block gives from the same event (eaten). Answers a line, or ''.
+    SOMETHING DRUNK FROM THE PACK (mp.onEatItem, below). A healing potion
+    stands somebody down back up (#4607). A potion of cure disease clears one
+    ordinary disease. Either is still the thirst sip, which the needs block
+    gives from the same event (eaten). Answers a line, or ''.
   */
   function swallowed(actorId, baseId) {
+    var up = healsHealth(baseId) ? standUp(actorId, 'a healing potion') : '';
+    var cured = cureSwallowed(actorId, baseId);
+    return [up, cured].filter(function (s) { return !!s; }).join(' ');
+  }
+
+  function cureSwallowed(actorId, baseId) {
     var cure = false;
     for (var i = 0; i < CURE_DISEASE.length; i++) {
       var id = 0;
@@ -1227,12 +1272,175 @@
   */
   function died(actorId) {
     delete fires[actorId];
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.clearBurning) { needs.clearBurning(actorId); }
     var rec = read(actorId);
     var any = false;
     for (var i = 0; i < rec.wounds.length; i++) {
       if (rec.wounds[i].bleed) { rec.wounds[i].bleed = false; any = true; }
     }
+    // Down ends with the death (#4607): the wake is the temple's. Their machine
+    // is told by what it was last sent, because the wake's own death has
+    // already taken the down off the record (wake, below).
+    var wasDown = !!rec.down || rec.wake;
+    if (wasDown) { rec.down = null; rec.wake = false; any = true; }
     if (any) { write(actorId, rec); }
+    var shown = null;
+    try { shown = mp.get(actorId, DOWN_PROPERTY); } catch (e) { shown = null; }
+    if (wasDown || (shown && shown.down)) { showDown(actorId, false); }
+  }
+
+  // -------------------------------------------------------- going down --
+
+  function profileOf(id) {
+    try { return Math.max(0, Number(mp.get(id, 'profileId')) || 0); } catch (e) { return 0; }
+  }
+
+  /*
+    WHAT THE DOWN PERSON'S MACHINE IS SENT, and anybody near them: whether
+    they are down. at moves on every change, so the script acts once a change.
+  */
+  function showDown(actorId, down) {
+    try { mp.set(actorId, DOWN_PROPERTY, { down: !!down, at: Date.now() }); return true; }
+    catch (e) { hlog('could not send down to', actorId.toString(16) + ':', e); return false; }
+  }
+
+  /*
+    ASKED BY mp.onDying (event-handlers.ts), after Cheat Death: this person's
+    health is about to reach nothing. Answers the share of their most the
+    engine keeps them at, or 0 to let the death through.
+
+      somebody who is not a person   0: an animal, a bandit or a guard dies.
+      wake set                       0, once: DOWN.minutes ran out (wake,
+                                     below), and this is that death.
+      already down                   DOWN.keep, and the clock is not moved: a
+                                     blow on somebody down does not kill them.
+                                     A death needs a yes (death.md).
+      anybody else                   down now, for DOWN.minutes.
+
+    by is the profile of whoever's blow it was, 0 for the world's (a fall, a
+    fire, a bleed): death.md asks the question only when it was a person.
+    A record that cannot be written lets the death through, because a down
+    nothing remembers could never end.
+  */
+  function goDown(actorId, killerId) {
+    if (!personal(actorId)) { return 0; }
+    var rec = read(actorId);
+    if (rec.wake) {
+      rec.wake = false;
+      write(actorId, rec);
+      hlog(actorId.toString(16), 'was not stood up in', DOWN.minutes, 'minutes, and wakes at the temple');
+      return 0;
+    }
+    if (rec.down) { return DOWN.keep; }
+    var now = Date.now();
+    var by = (killerId && killerId !== actorId) ? profileOf(killerId) : 0;
+    rec.down = { at: now, until: now + DOWN.minutes * MIN, by: by };
+    if (!write(actorId, rec)) { return 0; }
+    showDown(actorId, true);
+    redraw(actorId);
+    hlog(actorId.toString(16), 'went down', by ? ('to profile ' + by) : 'to the world');
+    tell(actorId, 'You are down. You can talk, but not fight or cast. A bandage, a healing spell or a ' +
+                  'healing potion gets you back up. If nobody comes in ' + DOWN.minutes +
+                  ' minutes, you wake at the temple.');
+    return DOWN.keep;
+  }
+
+  /*
+    BACK UP: the property says so, and health is a quarter of their most, or
+    what they have if that is more. The record is already written without
+    the down.
+  */
+  function rise(actorId, how) {
+    showDown(actorId, false);
+    var p = null;
+    try { p = mp.get(actorId, 'percentages'); } catch (e) { p = null; }
+    if (!p || typeof p !== 'object') {
+      hlog('could not read the health of', actorId.toString(16), 'to stand them up');
+    } else {
+      try {
+        mp.set(actorId, 'percentages', { health: Math.max(num(p.health, 0), DOWN.stable),
+                                         magicka: num(p.magicka, 0), stamina: num(p.stamina, 0) });
+      } catch (e) { hlog('could not stand', actorId.toString(16), 'up:', e); }
+    }
+    hlog(actorId.toString(16), 'is back up:', how);
+  }
+
+  /* Stood up by a healing spell or a potion. Answers the line to tell them, or ''. */
+  function standUp(actorId, how) {
+    var rec = read(actorId);
+    if (!rec.down) { return ''; }
+    rec.down = null;
+    if (!write(actorId, rec)) { return ''; }
+    redraw(actorId);
+    rise(actorId, how);
+    return 'You are back on your feet, still hurt.';
+  }
+
+  /*
+    THE CLOCK RAN OUT with nobody standing them up: the death goes through.
+    wake tells goDown to let the next one go, and health written to nothing
+    is that death, through the engine's own onDying and onDeath, so the wake
+    is the temple's with the wounds they had (died, above). A write the
+    engine refuses puts the down back, so the record never says less than
+    the truth.
+  */
+  function wake(actorId) {
+    var rec = read(actorId);
+    if (!rec.down) { return false; }
+    var p = null;
+    try { p = mp.get(actorId, 'percentages'); } catch (e) { p = null; }
+    if (!p || typeof p !== 'object') {
+      hlog('could not read the health of', actorId.toString(16), 'for the wake');
+      return false;
+    }
+    var down = rec.down;
+    rec.down = null;
+    rec.wake = true;
+    if (!write(actorId, rec)) { return false; }
+    try {
+      mp.set(actorId, 'percentages', { health: 0, magicka: num(p.magicka, 0), stamina: num(p.stamina, 0) });
+      return true;
+    } catch (e) {
+      hlog('could not let the death of', actorId.toString(16), 'through:', e);
+      rec.down = down;
+      rec.wake = false;
+      write(actorId, rec);
+      return false;
+    }
+  }
+
+  /*
+    WHETHER A DRINK HEALS: a potion record (ALCH without the food flag, ENIT's
+    second word, bit 2) with a restore health effect, the AlchRestoreHealth
+    family named by editor id the way Build-IngredientTable.js names them.
+    Asked once per record. A potion brewed at a lab has no record: #6407.
+  */
+  var healsSeen = {};
+  function healsHealth(baseId) {
+    baseId = Number(baseId) || 0;
+    if (!baseId) { return false; }
+    if (has(healsSeen, baseId)) { return healsSeen[baseId]; }
+    var heals = false;
+    var res = recordOf(baseId);
+    if (res && res.record && String(res.record.type || '') === 'ALCH') {
+      var enit = fieldOf(res, 'ENIT');
+      var flags = (enit && enit.length >= 8) ? (enit[4] | (enit[5] << 8) | (enit[6] << 16)) + enit[7] * 0x1000000 : 0;
+      var fields = res.record.fields || [];
+      for (var i = 0; !(flags & 2) && !heals && i < fields.length; i++) {
+        if (!fields[i] || String(fields[i].type) !== 'EFID') { continue; }
+        var d = fields[i].data || [];
+        if (d.length < 4) { continue; }
+        var local = (d[0] | (d[1] << 8) | (d[2] << 16)) + d[3] * 0x1000000;
+        var global = local;
+        try {
+          if (typeof res.toGlobalRecordId === 'function') { global = Number(res.toGlobalRecordId(local)) || local; }
+        } catch (e) { global = local; }
+        if (editorIdOf(recordOf(global)).indexOf('AlchRestoreHealth') === 0) { heals = true; }
+      }
+    }
+    healsSeen[baseId] = heals;
+    return heals;
   }
 
   /*
@@ -1320,6 +1528,8 @@
 
   /* Whether anybody could tend anything on this record. */
   function needsCare(rec) {
+    // Somebody down is the first thing anybody near could tend (#4607).
+    if (rec.down) { return true; }
     for (var i = 0; i < rec.wounds.length; i++) {
       var w = rec.wounds[i];
       if (bandageHelps(w) || poulticeHelps(w) || (w.k === 'break' && !w.set)) { return true; }
@@ -1397,15 +1607,29 @@
     }
     if (what === 'bandage') {
       var wb = firstWound(rec, bandageHelps, function (w) { return cutOrBite(w) && w.bleed; });
-      if (!wb) { return { why: 'There is no open wound a bandage would help.' }; }
+      // A bandage stands somebody down back up (#4607), wound or none. Somebody
+      // else's: injury.md, "if someone stabilizes you".
+      var downed = !!rec.down && !self;
+      if (!wb && !downed) {
+        return { why: (rec.down && self) ? 'You cannot get yourself back up. Somebody near you has to.'
+                                         : 'There is no open wound a bandage would help.' };
+      }
       if (carried(doerId, 'bandage') < 1) { return { why: 'You carry no bandage. ' + TREAT.bandage.maker }; }
       return { item: 'bandage', apply: function () {
+        if (!wb) {
+          rec.down = null;
+          return { line: 'You bandage ' + nameOf(targetId) + ' and help them back up.',
+                   them: by + ' bandages you and helps you back up.', up: true };
+        }
         var bled = cutOrBite(wb) && wb.bleed;
         wb.bandage = true;
         if (cutOrBite(wb)) { wb.bleed = false; }
         var after = bled ? ' The bleeding stops.' : '';
-        return { line: 'You bandage ' + your + ' ' + wordFor(wb) + '.' + after,
-                 them: by + ' bandages your ' + wordFor(wb) + '.' + after };
+        var up = downed ? ' You help them back up.' : '';
+        var upThem = downed ? ' You are back on your feet.' : '';
+        if (downed) { rec.down = null; }
+        return { line: 'You bandage ' + your + ' ' + wordFor(wb) + '.' + after + up,
+                 them: by + ' bandages your ' + wordFor(wb) + '.' + after + upThem, up: downed };
       } };
     }
     if (what === 'splint') {
@@ -1508,6 +1732,7 @@
     var said = p.apply();
     write(targetId, rec);
     redraw(targetId);
+    if (said.up) { rise(targetId, 'a bandage from ' + doerId.toString(16)); }
     hlog(doerId.toString(16), 'tended', targetId.toString(16) + ':', what);
     return { ok: true, line: said.line, them: self ? '' : said.them };
   }
@@ -1724,6 +1949,83 @@
   }
 
   /*
+    DOWN, ON THEIR OWN MACHINE (#4607). Once a change of the record: down
+    names fighting held for this reason, turns fighting off (in Skyrim that
+    is attacking and casting both), puts the weapon away and plays the
+    bleedout pose; up takes the reason off, gives fighting back only when no
+    other reason still holds it (the cuffs name theirs the same way), and
+    ends the pose. After that only the cell is read, so the pose a load
+    screen throws away is played once more. Talking and the menus stay
+    theirs. Only the server's record stands them up: the script never ends
+    the pose on its own.
+  */
+  function downScript() {
+    return [
+      '(function(){',
+      '  var sp = ctx.sp, st = ctx.state, v = ctx.value;',
+      '  if (!st) { return; }',
+      '  function step(what, f) {',
+      '    try { f(); } catch (e) {',
+      '      var seen = st.thornswoodDownReported || (st.thornswoodDownReported = {});',
+      '      if (seen[what]) { return; }',
+      '      seen[what] = true;',
+      '      sp.printConsole("[thornswood] down: could not " + what + ": " + e);',
+      '    }',
+      '  }',
+      '  function reasons() {',
+      '    var held = sp.storage.thornswoodControlsHeld || {};',
+      '    return String(held.fighting || "").split(",").filter(function (r) { return !!r; });',
+      '  }',
+      '  function name(list) {',
+      '    var held = sp.storage.thornswoodControlsHeld || {};',
+      '    if (list.length) { held.fighting = list.join(","); } else { delete held.fighting; }',
+      '    sp.storage.thornswoodControlsHeld = held;',
+      '  }',
+      '  var down = !!(v && v.down);',
+      '  var pc = sp.Game.getPlayer();',
+      '  if (!pc) { return; }',
+      '  var cell = pc.getParentCell();',
+      '  var where = cell ? cell.getFormID() : 0;',
+      '  var at = v ? v.at : 0;',
+      '  if (st.thornswoodDownAt !== at) {',
+      '    var was = !!st.thornswoodDown;',
+      '    st.thornswoodDownAt = at;',
+      '    st.thornswoodDown = down;',
+      '    st.thornswoodDownWhere = where;',
+      '    if (down) {',
+      '      step("name fighting held", function () { var r = reasons(); if (r.indexOf("down") < 0) { r.push("down"); } name(r); });',
+      '      step("turn fighting off", function () { sp.Game.disablePlayerControls(false, true, false, false, false, false, false, false, 0); });',
+      '      step("put the weapon away", function () { if (pc.isWeaponDrawn()) { pc.sheatheWeapon(); } });',
+      '      step("go down", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStart"); });',
+      '      return;',
+      '    }',
+      '    if (!was) { return; }',
+      '    var left = [];',
+      '    step("stop naming fighting held", function () { left = reasons().filter(function (r) { return r !== "down"; }); name(left); });',
+      '    step("give fighting back", function () { if (!left.length) { sp.Game.enablePlayerControls(false, true, false, false, false, false, false, false, 0); } });',
+      '    step("get up", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStop"); });',
+      '    return;',
+      '  }',
+      '  if (!down || !where || st.thornswoodDownWhere === where) { return; }',
+      '  st.thornswoodDownWhere = where;',
+      '  step("go down after a load", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStart"); });',
+      '})();'
+    ].join('\n');
+  }
+
+  try {
+    mp.makeProperty(DOWN_PROPERTY, {
+      // The owner's machine holds them; a neighbour sees the record, for the look prompt.
+      isVisibleByOwner: true,
+      isVisibleByNeighbors: true,
+      updateOwner: downScript(),
+      updateNeighbor: ''
+    });
+  } catch (e) {
+    // Already made by a previous load. The script cannot change until a restart, which a deploy is.
+  }
+
+  /*
     THE TREATMENT PANEL'S VIEW, seen by its owner only, handed to the page the
     way the repair panel's is; game/ui/thornswood-treat.js draws it, and a
     view with open set opens it. at moves on every send, so the key pressed
@@ -1839,8 +2141,11 @@
     read: read, write: write, step: step, tick: tick, bleedTick: bleedTick, bleedRate: bleedRate,
     stageOf: stageOf, lines: lines, chanceFor: chanceFor,
     forNeeds: forNeeds, burntWear: burntWear, wound: wound, burning: burning, settleQuietFires: settleQuietFires,
+    clearFireExposure: clearFireExposure,
     healed: healed, cast: cast, hit: hit, swallowed: swallowed, rite: rite,
     exposed: exposed, craftRefusal: craftRefusal, died: died, scarOf: scarOf, staff: staff,
+    DOWN: DOWN, DOWN_PROPERTY: DOWN_PROPERTY, goDown: goDown, standUp: standUp, wake: wake,
+    healsHealth: healsHealth, downScript: downScript,
     BITERS: BITERS, TREAT: TREAT, TREAT_REACH: TREAT_REACH,
     weaponKind: weaponKind, woundFrom: woundFrom, bitingRaces: bitingRaces, blow: blow, landed: landed,
     needsCare: needsCare, careOf: careOf, careChanged: careChanged, plan: plan, treat: treat, viewFor: viewFor, panel: panel

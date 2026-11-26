@@ -1299,6 +1299,7 @@
       character's there once the launcher has fetched it (passProfile).
   */
   function pickedAgain(id) {
+    if (T.localCritterGate) T.localCritterGate.selectProfile(id);
     T.js('try{window.thornswoodNet&&window.thornswoodNet.rejoinAs(' + id + ',"");}catch(e){}');
     let jp = null;
     try { jp = sp.storage.thornswoodJoinPass; } catch (e) { jp = null; }
@@ -2826,6 +2827,113 @@
     say('browser backend: could not ask (' + e + ')');
   }
 
+  // LOCAL TORCHBUG GATE BEGIN
+  // Skyrim.esm ACTI CritterFirefly: VMAD FireFly, lootable Torchbug Thorax.
+  // These insects are normally spawned locally, with no remote reference.
+  // This gate never reports a catch or asks the server to grant an item.
+  function createLocalTorchbugGate() {
+    let classKey = null, baseId = 0, resolved = false, profileId = null;
+    const tracked = new Map();
+    function matches(ref) {
+      if (!ref) return false;
+      if (!resolved) {
+        const form = sp.Game.getFormFromFile(0xc2d3f, 'Skyrim.esm');
+        baseId = form ? form.getFormID() : 0;
+        resolved = true;
+      }
+      const base = ref.getBaseObject();
+      return !!baseId && !!base && base.getFormID() === baseId;
+    }
+    function release(row) {
+      if (!row.owned) return;
+      if (row.ref.isActivationBlocked()) row.ref.blockActivation(false);
+      row.owned = row.ref.isActivationBlocked();
+      if (row.owned) say('torchbug gate: could not restore its activation block');
+    }
+    function eachOwned(action) {
+      tracked.forEach((row, id) => {
+        try {
+          const ref = sp.ObjectReference.from(sp.Game.getFormEx(id));
+          if (!ref || !matches(ref)) { tracked.delete(id); return; }
+          row.ref = ref;
+          action(row, id);
+        } catch (error) {
+          tracked.delete(id);
+          say('torchbug gate: discarded an unavailable local reference: ' + error);
+        }
+      });
+    }
+    function observe(ref) {
+      if (!matches(ref)) return false;
+      const id = ref.getFormID();
+      let row = tracked.get(id);
+      if (classKey === 'gatherer') {
+        if (row) { release(row); if (!row.owned) tracked.delete(id); }
+      }
+      else if (!ref.isActivationBlocked()) {
+        ref.blockActivation(true);
+        if (ref.isActivationBlocked()) tracked.set(id, { ref: ref, owned: true });
+        else say('torchbug gate: could not block the local insect');
+      }
+      return true;
+    }
+    function scan(cell) {
+      if (!cell) return;
+      // Unload events can arrive after a temporary form has disappeared.
+      // Keep only live references whose activation flag this gate owns.
+      eachOwned(() => {});
+      const n = cell.getNumRefs(24);
+      for (let i = 0; i < n; i++) observe(cell.getNthRef(i, 24));
+    }
+    function scanHere() {
+      const pc = sp.Game.getPlayer();
+      if (pc) scan(pc.getParentCell());
+    }
+    function setClass(value) {
+      const next = typeof value === 'string' ? value : null;
+      if (next === classKey) return;
+      classKey = next;
+      eachOwned(row => observe(row.ref));
+      scanHere();
+    }
+    function reset() { classKey = null; eachOwned(row => observe(row.ref)); scanHere(); }
+    function selectProfile(id) { if (profileId !== id) { profileId = id; reset(); } }
+    function beforeLoad() {
+      eachOwned(row => release(row));
+      tracked.clear(); classKey = null; baseId = 0; resolved = false;
+    }
+    function loaded() { tracked.clear(); classKey = null; baseId = 0; resolved = false; scanHere(); }
+    function unload(ref) {
+      if (!ref) return;
+      const row = tracked.get(ref.getFormID());
+      if (row) { release(row); tracked.delete(ref.getFormID()); }
+    }
+    function activate(ref) {
+      if (!observe(ref)) return false;
+      if (classKey !== 'gatherer') {
+        sp.Debug.notification(classKey ? 'Only a Gatherer can catch torchbugs.' : 'Your character is still loading. Wait before catching torchbugs.');
+      }
+      // A qualified insect runs its own original activation, once. It is not
+      // a lever needing the generic ACTI reactivation below.
+      return true;
+    }
+    return { setClass, reset, selectProfile, beforeLoad, loaded, unload, observe, scan, scanHere, activate };
+  }
+  const localTorchbugs = createLocalTorchbugGate();
+  T.localCritterGate = localTorchbugs;
+  T.localCritterClass = guard('torchbug class', value => localTorchbugs.setClass(value));
+  sp.on('objectLoaded', guard('torchbug loaded', e => {
+    if (!e || !e.object) return;
+    const ref = sp.ObjectReference.from(e.object);
+    if (e.isLoaded) localTorchbugs.observe(ref); else localTorchbugs.unload(ref);
+  }));
+  sp.on('cellFullyLoaded', guard('torchbug cell', e => { if (e && e.cell) localTorchbugs.scan(e.cell); }));
+  sp.once('update', guard('torchbug start', () => localTorchbugs.scanHere()));
+  sp.on('update', guard('torchbug target', () => localTorchbugs.observe(sp.Game.getCurrentCrosshairRef())));
+  sp.on('preLoadGame', guard('torchbug before load', () => localTorchbugs.beforeLoad()));
+  sp.on('loadGame', guard('torchbug after load', () => localTorchbugs.loaded()));
+  // LOCAL TORCHBUG GATE END
+
   /*
     Beds are sleepable for everybody (#839).
 
@@ -3099,6 +3207,9 @@
     if (type === 40) { return; }
 
     if (type !== 24) { return; }
+
+    const critters = globalThis.Thornswood && globalThis.Thornswood.localCritterGate;
+    if (critters && critters.activate(e.target)) { return; }
 
     // The server already answers for this one, and the client forwards the
     // re-activation too, so asking again is what made every press count twice.
@@ -4247,18 +4358,47 @@
 
   /**
    * One slice of a walk of `cell`. `w` is { t, i, n, walked, out } and holds
-   * where the walk has got to, between frames. Every lit reference whose base
+   * where the walk has got to, between frames; optional water holds numeric
+   * pending reference identity. Every lit reference whose base
    * is one of `want` goes into w.out as [x, y, z]; nothing in here moves, so
    * the finished list is kept by the caller. Stops once FIRE_SLICE_MS has
    * gone since `began`, the start of the slice, which the caller may already
    * have spent some of. Given no `began` it starts the clock itself and
    * takes at least one reference. True once the walk is finished.
    */
-  function walkCellSlice(cell, w, want, onThrew, began) {
+  function walkCellSlice(cell, w, want, onThrew, began, waters) {
     const from = began || sliceNow();
     // A slice of our own always gets something done; a shared one that is
     // already spent does nothing, and the next frame's slice is all walk.
     let took = began ? 1 : 0;
+    // Water needs four more native reads than a fire. Capture it separately
+    // from discovery so a late reference cannot overrun the shared slice.
+    // Only numeric identity/index crosses frames; every wrapper is reacquired.
+    if (w.water) {
+      // Leave room for this indivisible current-frame snapshot. A caller
+      // that used half the shared budget leaves water for the next slice.
+      if (began && sliceNow() - from >= FIRE_SLICE_MS / 2) { return false; }
+      const pending = w.water;
+      delete w.water;
+      try {
+        const r = cell.getNthRef(pending.i, CELL_TYPES[pending.t]);
+        const b = r ? r.getBaseObject() : null;
+        if (!r || r.getFormID() !== pending.ref || !b || b.getFormID() !== pending.base) {
+          throw new Error('placed water reference changed during its cell walk');
+        }
+        if (!r.isDisabled()) {
+          const point = [r.getPositionX(), r.getPositionY(), r.getPositionZ(), pending.base,
+                         r.getScale(), r.getAngleX(), r.getAngleY(), r.getAngleZ()];
+          if (!point.every(Number.isFinite) || point[4] <= 0) {
+            throw new Error('placed water has an invalid reference transform');
+          }
+          w.out.push(point);
+        }
+      } catch (e) {
+        if (onThrew) { onThrew(e); }
+      }
+      return false;
+    }
     while (w.t < CELL_TYPES.length) {
       if (took > 0 && sliceNow() - from >= FIRE_SLICE_MS) { return false; }
       if (w.n < 0) {
@@ -4278,7 +4418,16 @@
           const r = cell.getNthRef(i, CELL_TYPES[w.t]);
           if (!r) { continue; }
           const b = r.getBaseObject();
-          if (!b || !want[b.getFormID()]) { continue; }
+          const baseId = b ? b.getFormID() : 0;
+          if (!b || !want[baseId]) { continue; }
+          if (waters && waters[baseId]) {
+            const refId = r.getFormID();
+            if (!Number.isSafeInteger(refId) || refId <= 0) {
+              throw new Error('placed water has no readable reference identity');
+            }
+            w.water = { t: w.t, i: i, ref: refId, base: baseId };
+            return false;
+          }
           // A fire somebody has switched off is still a placed reference.
           // The toggled ones are the reason this asks rather than trusting
           // the base.
@@ -4549,8 +4698,8 @@
     [plugin, local id, x1, y1, x2, y2]: an ACTI with a WNAM and its OBND
     footprint, in the client table PLACED_WATERS, which
     scripts\dev\Build-WaterTable.js writes from the load order (clientTable,
-    below). The footprint is taken unrotated and
-    unscaled, which is exact for the square WaterNNN planes Bethesda places.
+    below). Bounds stay local to the base; each reference supplies its own
+    scale and Euler angles for the actual footprint and surface (#4604).
   */
   // FireFXShader, 0001b212 in Skyrim.esm, read out of the EFSH records. This
   // is the engine's own "this thing is burning", the one fire damage uses.
@@ -4611,7 +4760,7 @@
   /*
     The placed waters of PLACED_WATERS, by runtime id: id -> [x1, y1, x2, y2].
     Resolved once, the way the fire bases are, by the walk's own slice.
-    waterHere is the walk's list of them in this cell, [x, y, z, id] each.
+    waterHere keeps [x, y, z, id, scale, angleX, angleY, angleZ] numeric snapshots.
   */
   let waterBox = null;
   let waterHere = null;
@@ -4701,16 +4850,38 @@
    * its surface above the feet and under WADE_DEEP over them.
    */
   function placedWaterAt(px, py, pz, waters, deepest) {
+    if (![px, py, pz, deepest].every(Number.isFinite) || deepest <= 0) { return null; }
     let best = null;
     for (let i = 0; i < waters.length; i++) {
       const w = waters[i];
+      if (!Array.isArray(w) || w.length !== 8 || !w.every(Number.isFinite) || w[4] <= 0) { continue; }
       const box = waterBox && waterBox[w[3]];
-      if (!box) { continue; }
-      if (px < w[0] + box[0] || px > w[0] + box[2] ||
-          py < w[1] + box[1] || py > w[1] + box[3]) { continue; }
-      const deep = w[2] - pz;
+      if (!box || box.length !== 4 || !box.every(Number.isFinite) ||
+          box[0] >= box[2] || box[1] >= box[3]) { continue; }
+      // Pinned CommonLib b93280e8 NiMatrix3::SetEulerAnglesXYZ, row-dot
+      // multiplication. Papyrus supplies degrees; positive yaw turns +X to -Y.
+      const ax = (w[5] % 360) * Math.PI / 180;
+      const ay = (w[6] % 360) * Math.PI / 180;
+      const az = (w[7] % 360) * Math.PI / 180;
+      const sx = Math.sin(ax), cx = Math.cos(ax), sy = Math.sin(ay), cy = Math.cos(ay);
+      const sz = Math.sin(az), cz = Math.cos(az);
+      const ux = cy * cz, uy = sx * sy * cz - cx * sz, uz = cx * sy * cz + sx * sz;
+      const vx = cy * sz, vy = sx * sy * sz + cx * cz, vz = cx * sy * sz - sx * cz;
+      const nx = -sy, ny = sx * cy, nz = cx * cy;
+      // A near-vertical plane has no stable water height under these feet.
+      if (Math.abs(nz) < 0.000001) { continue; }
+      const dx = px - w[0], dy = py - w[1];
+      const dz = -(nx * dx + ny * dy) / nz;
+      const top = w[2] + dz;
+      const deep = top - pz;
+      // Intersect the vertical world line FIRST, then inverse-transform that
+      // surface point. Inverse-transforming feet would shift a tilted edge.
+      const x = (ux * dx + uy * dy + uz * dz) / w[4];
+      const y = (vx * dx + vy * dy + vz * dz) / w[4];
+      if (![top, deep, x, y].every(Number.isFinite) ||
+          x < box[0] || x > box[2] || y < box[1] || y > box[3]) { continue; }
       if (deep > 0 && deep < deepest && (!best || deep < best.deep)) {
-        best = { id: w[3], top: w[2], deep: deep };
+        best = { id: w[3], top: top, deep: deep };
       }
     }
     return best;
@@ -4866,7 +5037,7 @@
     const done = walkCellSlice(cell, w, walkWant, function (e) {
       fireThrew++;
       if (!fireWhy) { fireWhy = String((e && e.message) || e); }
-    }, began);
+    }, began, waterBox);
     fireWalked = w.walked;
     if (!done) { return; }
 
@@ -5351,7 +5522,7 @@
              '<span style="color:' + (on ? '#8fb85e' : '#efe4cc') + '">' + what + '</span></div>';
     };
     const html =
-      '<div style="font-size:26px;color:#efe4cc;margin-bottom:4px">' + row.n +
+      '<div style="font-size:26px;color:#efe4cc;margin-bottom:4px">' + escapeHtml(row.n) +
       (row.y ? '<span style="color:#8fb85e;font-size:18px"> &middot; your party</span>' : '') +
       '</div>' +
       /*

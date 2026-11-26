@@ -58,7 +58,7 @@ or the build check goes red.
 - [The Discord bot, on the VPS](#the-discord-bot-on-the-vps)
 - [Where the source is](#where-the-source-is)
 - [What is still missing](#what-is-still-missing)
-- Licence texts: [Concentus](#concentus-licence), [SharpSRTP](#sharpsrtp-licence), [BouncyCastle](#bouncycastle-licence), [NLayer](#nlayer-licence), [Chromium HRTF](#chromium-hrtf-licence), [IRCAM Listen HRTF](#ircam-listen-hrtf-terms), [.NET](#net-licence), [Avalonia](#avalonia-licence), [SkiaSharp and HarfBuzzSharp](#skiasharp-and-harfbuzzsharp-licence), [Skia](#skia-licence), [HarfBuzz](#harfbuzz-licence), [ANGLE](#angle-licence), [Velopack](#velopack-licence), [MicroCom](#microcom-licence)
+- Licence texts: [Concentus](#concentus-licence), [SharpSRTP](#sharpsrtp-licence), [SharpDTLS](#sharpdtls-licence), [BouncyCastle](#bouncycastle-licence), [NLayer](#nlayer-licence), [Chromium HRTF](#chromium-hrtf-licence), [IRCAM Listen HRTF](#ircam-listen-hrtf-terms), [.NET](#net-licence), [Avalonia](#avalonia-licence), [SkiaSharp and HarfBuzzSharp](#skiasharp-and-harfbuzzsharp-licence), [Skia](#skia-licence), [HarfBuzz](#harfbuzz-licence), [ANGLE](#angle-licence), [Velopack](#velopack-licence), [MicroCom](#microcom-licence)
 
 - [Pion native Windows relay, operator-only](#pion-native-windows-relay-operator-only)
 
@@ -139,35 +139,35 @@ names the ones in the first table, and the others come with them.
 
 | Package | Version | What the launcher uses it for | Licence | sha256 of the .nupkg |
 |---|---|---|---|---|
-| Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 | 10.0.14 | The .NET class libraries, compiled into the exe | MIT, the package's `LICENSE.TXT` | `76c0f133981113273a0e50dba97a6107eead821f707565443e787f0aa9f9fc69` |
-| runtime.win-x64.Microsoft.DotNet.ILCompiler | 10.0.14 | The Native AOT compiler and the runtime it links into the exe (the garbage collector, threads, exceptions) | MIT | `e4279d8ed9bcc01b1d8a3a9b2c7db16f3249e098dc3081e15c6d93ef462e1bce` |
+| Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 | 10.0.15 | The .NET class libraries, compiled into the exe | MIT, the package's `LICENSE.TXT` | `5766f5e49e1061c8eec9222ad09cd68be2794fd562a4b79663db6ae8751660a7` |
+| runtime.win-x64.Microsoft.DotNet.ILCompiler | 10.0.15 | The Native AOT compiler and the runtime it links into the exe (the garbage collector, threads, exceptions) | MIT | `bd00ed65980895f3503c7f21cd9aaa9d8412e195860a34800001fec2a7d25b04` |
 | System.Security.Cryptography.ProtectedData | 11.0.0 | DPAPI, for the keys the launcher keeps on the PC (Secrets.cs); part of the framework on .NET Framework | MIT | `2645d1106c62c9fb0147e8b9ec7472689aa7a804c5e6560d957dacf31f5bb37e` |
-| Avalonia | 12.1.6 | The window, its controls and the compiled markup | MIT | `3fc15f809786ee99791620c5d3c25452487cb70d5cd99393f853e4d241361255` |
-| Avalonia.Desktop | 12.1.6 | Picks the Windows platform at start | MIT | `01547a36484ebcd67cc68b9f83d23e1cf1e5dd0246132f6169ccc6cdfb45e7b7` |
-| Avalonia.Themes.Fluent | 12.1.6 | The controls' base look (App.axaml) | MIT | `af6c7a862a16ee35aac0922deaa939f65436fc2433dacfe460e975ebc646047c` |
+| Avalonia | 12.2.0 | The window, its controls and the compiled markup | MIT | `96fa028b631d1fc9f64933be2c1995ff0c2407ddffd0e115ab4e7760d9b377bf` |
+| Avalonia.Desktop | 12.2.0 | Picks the Windows platform at start | MIT | `381805cba27ff17fd0632f8f12e3628601cbe7696f614cc2be8af0433bf7f7fc` |
+| Avalonia.Themes.Fluent | 12.2.0 | The controls' base look (App.axaml) | MIT | `f4f2d7554ba3c45858d3a5d7ce1e3bcd1bf5820a475983b9b52f2fcf11c3aa15` |
 | Velopack | 1.2.161 | The install's hand over at the first start, the update check, download and apply (Velo*.cs) | MIT | `d57275692b299751a12ee3e18283b5f7fe3e55339f96b1623345da095dc484ed` |
 
 Brought in by those:
 
 | Package | Version | What it is | Licence | sha256 of the .nupkg |
 |---|---|---|---|---|
-| Avalonia.Win32 | 12.1.6 | Avalonia on Windows | MIT | `f7884291156695d01e3fdedf6ed385bbc02aa52c83d71b0c68905df18165cdae` |
-| Avalonia.Skia | 12.1.6 | Avalonia's drawing, on Skia | MIT | `5d767f1c7bc1603ec03fde2620fc1ac478f7fd5dc3e599cdcd1be2f6f7f5c68c` |
-| Avalonia.HarfBuzz | 12.1.6 | Avalonia's text shaping, on HarfBuzz | MIT | `0a14d3ad829dd9a705c3cf906101cbaa4d94a9fc26711959f7b0bf538a7556d2` |
-| Avalonia.Remote.Protocol | 12.1.6 | Avalonia's designer protocol, which Avalonia names; the launcher never opens it | MIT | `366925200bbc15d42fd151cb8b5a8f6869f143260c8cb02514225dd92ada86fb` |
-| Avalonia.FreeDesktop | 12.1.6 | Avalonia on Linux desktops, which Avalonia.Desktop names; the launcher runs on Windows only | MIT | `f254c3076e5176da0e4708dd114331e0558bee729f347fbae4b261db040432d6` |
-| Avalonia.FreeDesktop.AtSpi | 12.1.6 | Accessibility on Linux, the same | MIT | `660c5603f16f5037aceddfba3eb07c9cf70d8cad49323f6d8cc319052b739eec` |
-| Avalonia.X11 | 12.1.6 | Avalonia on X11, the same | MIT | `7c72bcea42345d7b7122e35a6cd41b89ab68d1c0eb0f7e46fb3719c8545f5c93` |
-| Avalonia.Native | 12.1.6 | Avalonia on macOS, the same | MIT | `080a0cb7555967509c51a946728a48b42334ab75af05898bea93dab3f0dca5fc` |
+| Avalonia.Win32 | 12.2.0 | Avalonia on Windows | MIT | `9a537aa56e12a33b794d8d90eac2e265b8a550e8a96db147370a8e59e035dc09` |
+| Avalonia.Skia | 12.2.0 | Avalonia's drawing, on Skia | MIT | `9504320faee2cb384ed9bd7829df266e2eda15f75d6b7f417c90cd40a54a308a` |
+| Avalonia.HarfBuzz | 12.2.0 | Avalonia's text shaping, on HarfBuzz | MIT | `e7bbe69d823cc810574ae696ff00cee5b2228109e8685f32627433783c7970fa` |
+| Avalonia.Remote.Protocol | 12.2.0 | Avalonia's designer protocol, which Avalonia names; the launcher never opens it | MIT | `75157323a54fba079474d4aac70e19f162f9c6020ea673e44fd7a7c68af22f53` |
+| Avalonia.FreeDesktop | 12.2.0 | Avalonia on Linux desktops, which Avalonia.Desktop names; the launcher runs on Windows only | MIT | `24a831bfe5595f152bbce01d490bd274dc1754df9e8c58a89cd10ce28e960b32` |
+| Avalonia.FreeDesktop.AtSpi | 12.2.0 | Accessibility on Linux, the same | MIT | `1ea8f162047ccc7222e73459dbdbaf493c743a7d6b0347d1df07151c3f96c118` |
+| Avalonia.X11 | 12.2.0 | Avalonia on X11, the same | MIT | `d4f5ea0f77ff7a2b1e5e25cc425052dc70782c4cff62b29706ab4fda3d47b9f4` |
+| Avalonia.Native | 12.2.0 | Avalonia on macOS, the same | MIT | `cde8dff7b0370af19a7f3232c7ba3e085487b977a97db952ff32dfb74259c8fe` |
 | Avalonia.Angle.Windows.Natives | 2.1.27548.20260419 | ANGLE, OpenGL ES on Direct3D, which Avalonia draws through on Windows (`av_libglesv2.dll`) | ANGLE's three-clause BSD licence, the package's `LICENSE` file | `76d67901097e9173d155efc4c2b7d2c8e3122f2c2e0415028eb0c88478a386f9` |
 | SkiaSharp | 3.119.4 | Skia for .NET: Avalonia's drawing, the header strip's WebP frames (Art.cs) and the gallery's smaller copies (Gallery.cs) | MIT | `e32a449d31945c0b9d169eb5bc676e1e3f589aab69888e49d703fdc1c384c176` |
 | SkiaSharp.NativeAssets.Win32 | 3.119.4 | Skia itself, built for Windows (`libSkiaSharp.dll`) | MIT, with Skia's three-clause BSD licence and the others in its `THIRD-PARTY-NOTICES.txt` | `5a5698b1b4e1fdc9ffe9868df6874db5fa69f21a4de76ba71a01a542e9b43391` |
 | HarfBuzzSharp | 8.3.1.3 | HarfBuzz for .NET | MIT | `ffe644863a4eb3c078b4c3f0def0f2b90a861991c9116bf2dd668a31a0f09ab5` |
 | HarfBuzzSharp.NativeAssets.Win32 | 8.3.1.3 | HarfBuzz itself, built for Windows (`libHarfBuzzSharp.dll`) | MIT, with HarfBuzz's "Old MIT" licence in its `THIRD-PARTY-NOTICES.txt` | `58d51098b595152c01293f71ed47614b3f53d8503bc226efc23b8f7b0ff7c943` |
-| MicroCom.Runtime | 0.11.6 | The COM calls Avalonia makes on Windows | MIT | `453af6d34477b19bb2c62d17436e68c76a75915b7947509b1ff601b36d7e78d8` |
+| MicroCom.Runtime | 0.11.7 | The COM calls Avalonia makes on Windows | MIT | `5b9c78efe19f4670c324e9df1201b6ef8dce34f30786f7d776578565b6b46ae4` |
 | Tmds.DBus.Protocol | 0.94.1 | D-Bus, for Avalonia on Linux; the launcher never calls it | MIT, its repository's `COPYING` | `4f71d06ac40e725ffbcf1b79853dd93218695a84f23d36fafc85f477a4c9580f` |
 
-Avalonia.BuildServices 11.3.2 and Microsoft.NET.ILLink.Tasks 10.0.14 run
+Avalonia.BuildServices 12.0.0 and Microsoft.NET.ILLink.Tasks 10.0.15 run
 during the build only; nothing of either goes into the exe.
 
 Three of these are native libraries that go beside `Thornswood.exe` as files
@@ -202,17 +202,16 @@ GPL-2.0 and is used under Apache-2.0. `fs_at` 0.2.1 and `intl_pluralrules`
 7.0.2 publish no licence file anywhere; their Cargo.toml says Apache-2.0,
 whose text the file carries.
 
-Downloaded from nuget.org and read on 1 November 2026. Their sources, as each
-nuspec names them:
+The sources from the packages’ nuspec files:
 
 - .NET (the runtime packages), by Microsoft and the .NET Foundation:
-  https://github.com/dotnet/dotnet at commit `0427b9ab` (in full,
-  `0427b9abbead3fa64c6655eb4290c537397131fa`). ProtectedData 11.0.0 is from
+  https://github.com/dotnet/dotnet at commit `8e0f8ed2` (in full,
+  `8e0f8ed2312954727f8919d7d1c2f78b483b4ee7`). ProtectedData 11.0.0 is from
   the same repository at commit `297acf93` (in full,
   `297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f`).
-- Avalonia (every Avalonia package at 12.1.6), by the AvaloniaUI project:
-  https://github.com/AvaloniaUI/Avalonia at commit `cf8e5646` (in full,
-  `cf8e564674700348947e93ab19105f27afe859a9`). Its ANGLE build:
+- Avalonia (every Avalonia package at 12.2.0), by the AvaloniaUI project:
+  https://github.com/AvaloniaUI/Avalonia at commit `5d9e6d1b` (in full,
+  `5d9e6d1b0e87337f74f233bead580db186412357`). Its ANGLE build:
   https://github.com/AvaloniaUI/angle at commit `1c898059` (in full,
   `1c89805903c1482166356d3b950d474973180e61`).
 - SkiaSharp 3.119.4, by Microsoft: https://github.com/mono/SkiaSharp at
@@ -225,7 +224,7 @@ nuspec names them:
   https://github.com/velopack/velopack at commit `92d6a1c9` (in full,
   `92d6a1c91716729d449034df5c50307dcce39493`).
 - MicroCom.Runtime, by Nikita Tsukanov: https://github.com/kekekeks/MicroCom
-  at commit `76785efc` (in full, `76785efcafd91b5902fd19dd11145f6dd655b7b4`).
+  at commit `cd2fa3c8` (in full, `cd2fa3c89525fbe7b46bd13f9ec8c77bd829e815`).
 - Tmds.DBus.Protocol, by Tom Deseyn: https://github.com/tmds/Tmds.DBus at
   commit `b4a7fed0` (in full, `b4a7fed0b878f74cb54f7cca84d2889af4e596ba`).
   Avalonia.FreeDesktop brings it in, and the win-x64 restore lists its
@@ -257,8 +256,9 @@ them.
 ## Concentus, SharpSRTP and BouncyCastle, inside the launcher
 
 Proximity voice runs in the launcher's own code since #4823 (`Voice*.cs`),
-with three libraries from nuget.org. `launcher\app\Thornswood.csproj` names
-them as package references, and Native AOT compiles their code into
+with four libraries from nuget.org. The launcher names Concentus, SharpSRTP
+and BouncyCastle directly. SharpSRTP depends on SharpDTLS. Native AOT
+compiles their code into
 `Thornswood.exe`, so none of them is a file of its own in the install folder.
 Before #4823 voice ran in a hidden WebView2 page and the launcher carried
 three files of Microsoft's WebView2 SDK; it carries none of them now, and
@@ -266,43 +266,42 @@ needs no WebView2 Runtime on the machine.
 
 | Package | Version | What voice uses it for | Licence | sha256 of the .nupkg |
 |---|---|---|---|---|
-| Concentus | 2.2.2 | Opus, the voice codec, written in C# | Opus's three-clause BSD licence, the package's `LICENSE` file | `f487f890bef65757af1cecf420e357f00488cbfac0b409ba461ccbceef81481f` |
-| SharpSRTP | 0.5.8 | DTLS-SRTP: the handshake that keys each call, and the SRTP that encrypts each packet | MIT | `260adb230cb403fac9b7d0aa2e68058916d709522b7690e1b655a016c6833697` |
+| Concentus | 2.2.3 | Opus, the voice codec, written in C# | Opus's three-clause BSD licence, the package's `LICENSE` file | `48a1a1201fac2d277c3bb7f2c1be360b4183b8cc02b9d0c99bda6a93b6492907` |
+| SharpSRTP | 0.6.0 | DTLS-SRTP: the handshake that keys each call, and the SRTP that encrypts each packet | MIT | `e90c6b2649ed71f6e0f09c6ee62bb7e4b9c260b187133af06a70f8bf5d42fc28` |
+| SharpDTLS | 0.0.2 | A DTLS dependency of SharpSRTP | MIT | `b257e9af8939e7ce7175b8aa2b79d564df28c4b2f78ec7fec87b49b24e867a68` |
 | BouncyCastle.Cryptography | 2.7.0 | The DTLS and cipher code SharpSRTP is built on | MIT | `f091ffccab4d03993e660bace277659a79dee0972f54d7f1f4bd46d680966241` |
 
 The build takes these assemblies out of them:
 
 | File | Where it sits in the package | sha256 |
 |---|---|---|
-| `Concentus.dll` | `lib\net8.0` | `3a1dcfcfaf86b90fc2fb6fd0baacdf0be70efef1c9fbb59683d3bf48949de1c9` |
-| `SharpSRTP.dll` | `lib\net10.0` | `98d093b597776ab3ac0c7a78bdf2dc41a855aa2c7a96ac6c162855153b00aa21` |
+| `Concentus.dll` | `lib\net8.0` | `67e934432758c6418de02463cd2a582f788efd460f2aaa60d5ee08c706fd7915` |
+| `SharpSRTP.dll` | `lib\net10.0` | `5bed555309453dccec0398b7499f3bc158001d2fe515d556ab06aa2ccfe040e5` |
+| `SharpDTLS.dll` | `lib\net10.0` | `8d93adf1c2d00d53b89a4c6b502ee8b309d283c4f31a955d9d2994f55e8bcb87` |
 | `BouncyCastle.Cryptography.dll` | `lib\net6.0` | `ef92fc661e8d7ba8ec4d39a7cdfcdba41f14cb327f0d24fe79d0b5bb428899b5` |
 
-Downloaded from nuget.org and read on 1 November 2026. Their sources, as each
-nuspec names them:
+The sources from the packages’ nuspec files:
 
 - Concentus, by Logan Stromberg, a C# translation of the Opus reference
   library by Xiph.Org and the Opus contributors:
-  https://github.com/lostromb/concentus at commit `6c2328dc` (in full,
-  `6c2328dc19044601e33a9c11628b8d60e1f3011c`). The package carries only the
+  https://github.com/lostromb/concentus at commit `9edc8dcd` (in full,
+  `9edc8dcd3ae9f3fa4793c03ff3caeaec1add42c5`). The package carries only the
   C# code; the native Opus builds its repository mentions are not in it, and
   `VoicePeer.cs` and `VoiceSession.cs` turn off Concentus's search for a
   native Opus on the machine, so the launcher runs no Opus but this one.
 - SharpSRTP, by Lukas Volf: https://github.com/jimm98y/SharpSRTP at commit
-  `ede1d045` (in full, `ede1d04552d4069ad3d28ac2e22b3c224ded97f8`).
+  `4a7015bc` (in full, `4a7015bc8b1fa198bf0f25a4f46651d0022af899`).
+- SharpDTLS, by Lukas Volf: https://github.com/jimm98y/SharpDTLS at commit
+  `2d9ce3c5` (in full, `2d9ce3c5a849f3d79fdce5545a31af9c6a996e58`).
 - BouncyCastle.Cryptography, by the Legion of the Bouncy Castle:
   https://github.com/bcgit/bc-csharp at commit `4007498b` (in full,
-  `4007498b13582d90ee1eda5d9920c324428b98b3`). SharpSRTP asks for 2.6.2 or
-  later; the launcher names 2.7.0, the newest, itself.
-
-Concentus also names `System.Memory` and `System.Numerics.Vectors` from
-nuget.org; both are part of .NET 10 itself, so nothing from those packages
-goes into the launcher.
+  `4007498b13582d90ee1eda5d9920c324428b98b3`). SharpSRTP and SharpDTLS require
+  2.7.0, which the launcher also references directly.
 
 Licences: Concentus's `LICENSE` is the Opus licence, three-clause BSD, and
 its second clause asks for the notice to go with every binary copy.
-SharpSRTP and BouncyCastle are MIT, which asks for the notice in all copies.
-So all three are reproduced in full at the end of this file and on the public
+SharpSRTP, SharpDTLS and BouncyCastle are MIT. Their notices and the
+Concentus licence are reproduced in full at the end of this file and on the public
 credits page, and the installer puts each beside `SOURCE CODE.txt`.
 
 ## NLayer, inside the launcher
@@ -431,10 +430,10 @@ file carries outside code and the file does not carry that project's notice.
 <!-- engine-pin:fork -->
 The six files recorded in `records\client-build.json` correspond to
 https://github.com/ThornswoodRP/skymp, branch `thornswood/engine-changes`,
-commit `d2995cc9` (in full, `d2995cc9ba8d6a959614acc2542ab6197e44e0f3`). That
+commit `3ae0435c` (in full, `3ae0435cd1e0ea971c46f70b964ab236feb97de0`). That
 is upstream skyrim-multiplayer/skymp at `2849e676` with Thornswood's changes on
 top, and every one of those changes is in
-https://github.com/ThornswoodRP/skymp/compare/2849e676...d2995cc9.
+https://github.com/ThornswoodRP/skymp/compare/2849e676...3ae0435c.
 <!-- /engine-pin:fork -->
 Check-Secrets.ps1 stops a release whose copy of any of the six is not the
 recorded sha256 (client-not-recorded-build), and Sync-Client.ps1 puts in the
@@ -703,7 +702,7 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,260 bytes, from commit
-`d2995cc9`, the commit the client record names.
+`3ae0435c`, the commit the client record names.
 <!-- /engine-pin:front -->
 Its build.js is 2,444,820
 bytes, sha256
@@ -800,7 +799,7 @@ full text.
 
 Thornswood publishes this itself, as its own mod: Nexus Mods mod 192762,
 https://www.nexusmods.com/skyrimspecialedition/mods/192762, by EvilPatrick06.
-Revision 11, the newest published revision of the collection (`7essxf`) and
+Revision 12, the newest published revision of the collection (`7essxf`) and
 the one `records\collection.json` follows, carries version 1.0.1, file
 823485, uploaded on 20 October, and it is not optional. Revision 3 was the
 first to carry that file, and none since has moved it
@@ -1495,15 +1494,15 @@ rewrite takes it out (#3684).
 <!-- engine-pin:servers -->
 - The game server's native module, `scam_native.node`, recorded in
   `records\server-build.json`, is AGPL-3.0. That record and the client record
-  name `d2995cc9ba8d6a959614acc2542ab6197e44e0f3` on the public fork. The
+  name `3ae0435cd1e0ea971c46f70b964ab236feb97de0` on the public fork. The
   server module and the six client files were built from that commit, which
   is upstream at `2849e676` with every change in
-  https://github.com/ThornswoodRP/skymp/compare/2849e676...d2995cc9. Each change
+  https://github.com/ThornswoodRP/skymp/compare/2849e676...3ae0435c. Each change
   is a merged pull request of the fork, and the pull request here that moved
   the pin lists the ones it brought in.
   The server module's SHA256
-  is `74cd1167c86ed30e30410b7c1a7592668ca1c0c4d3c63c39ed1af8c8494ab61c`, built
-  2026-11-18T14:57:14Z. This is the recorded next release, not a deployment
+  is `e3f69b9ad9ab99925a9637424f92e429747fa6d80896a890a808a21cfb2b4407`, built
+  2026-11-26T18:23:52Z. This is the recorded next release, not a deployment
   claim. Main remains on `0714e444047a994b1013dfe4cac187aef29ad65a` until this goes
   out.
   <!-- /engine-pin:servers -->
@@ -1540,7 +1539,7 @@ Corresponding Source is the fork at the commit each record names. The six
 client files and the game server module, at the one commit both records name:
 
 <!-- engine-pin:source -->
-https://github.com/ThornswoodRP/skymp/tree/d2995cc9ba8d6a959614acc2542ab6197e44e0f3
+https://github.com/ThornswoodRP/skymp/tree/3ae0435cd1e0ea971c46f70b964ab236feb97de0
 
 For the engine Main runs until then:
 
@@ -1691,8 +1690,8 @@ beside its `___systemPolyfill.js`.
 
 ## Concentus licence
 
-The text of `LICENSE` in Concentus 2.2.2, as the package carries it (the same
-file as in https://github.com/lostromb/concentus at commit `6c2328dc`).
+The text of `LICENSE` in Concentus 2.2.3, as the package carries it (the same
+file as in https://github.com/lostromb/concentus at commit `9edc8dcd`).
 
 ```
 Copyright (c) by various holding parties, including (but not limited to): 
@@ -1737,12 +1736,40 @@ redistributed to you under the same terms of the general Opus license dictated a
 ## SharpSRTP licence
 
 The text of `LICENSE` in https://github.com/jimm98y/SharpSRTP at commit
-`ede1d045`, the commit SharpSRTP 0.5.8's nuspec names.
+`4a7015bc`, the commit SharpSRTP 0.6.0's nuspec names.
 
 ```
 MIT License
 
 Copyright (c) 2025 Lukas Volf
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## SharpDTLS licence
+
+The MIT licence in the SharpDTLS source at commit `2d9ce3c5`.
+
+```text
+MIT License
+
+Copyright (c) 2026 Lukas Volf
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1935,7 +1962,7 @@ development."
 
 ## .NET licence
 
-The text of `LICENSE.TXT` in Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 10.0.14, as the package carries it; the other .NET packages above name the same licence.
+The text of `LICENSE.TXT` in Microsoft.NETCore.App.Runtime.NativeAOT.win-x64 10.0.15, as the package carries it; the other .NET packages above name the same licence.
 
 ```
 The MIT License (MIT)
@@ -1965,7 +1992,7 @@ SOFTWARE.
 
 ## Avalonia licence
 
-The text of `licence.md` in https://github.com/AvaloniaUI/Avalonia at commit `cf8e5646`, the commit every Avalonia 12.1.6 package names.
+The text of `licence.md` in https://github.com/AvaloniaUI/Avalonia at commit `5d9e6d1b`, the commit every Avalonia 12.2.0 package names.
 
 ```
 The MIT License (MIT)
@@ -2163,7 +2190,7 @@ DEALINGS IN THE SOFTWARE.
 
 ## MicroCom licence
 
-The text of `LICENSE` in https://github.com/kekekeks/MicroCom at commit `76785efc`, the commit MicroCom.Runtime 0.11.6's nuspec names.
+The text of `LICENSE` in https://github.com/kekekeks/MicroCom at commit `cd2fa3c8`, the commit MicroCom.Runtime 0.11.7's nuspec names.
 
 ```
 MIT License

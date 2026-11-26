@@ -213,6 +213,10 @@ function Start-AndWait([int]$Loaded) {
   catch { Clear-ThornswoodHold -Target $Task; return ('STOP|The task ' + $Task + ' would not start: ' + $_.Exception.Message) }
   $wait = Get-ThornswoodServerReadyWait
   $until = $from.AddSeconds($wait)
+  $freshLocal = $from.AddSeconds(-1)
+  $freshUtc = $from.ToUniversalTime().AddSeconds(-1)
+  $invariant = [Globalization.CultureInfo]::InvariantCulture
+  $utcStyle = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
   $up = $false; $why = ''; $said = ''
   $log = Join-Path $Root 'server.log'
   while ($true) {
@@ -227,9 +231,16 @@ function Start-AndWait([int]$Loaded) {
       }
     }
     if ($up -and $Loaded -gt 0 -and -not $said -and (Test-Path -LiteralPath $log)) {
-      # server-log.js stamps each line with the local time it wrote it.
+      # Accept server-log.js's UTC receipt stamp and logs left by older writers.
       foreach ($l in @(Get-Content -LiteralPath $log -Tail 4000 -EA SilentlyContinue)) {
-        if ($l -match '^\[?(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})' -and [datetime]::ParseExact($Matches[1], 'yyyy-MM-dd HH:mm:ss', $null) -ge $from.AddSeconds(-1) -and $l -match 'MongoDB: loaded (\d+) forms') { $said = $Matches[1] }
+        if ($l -notmatch '^\[?(\d{4}-\d\d-\d\d(?:T\d\d:\d\d:\d\d\.\d{3}Z| \d\d:\d\d:\d\d))') { continue }
+        $stamp = $Matches[1]
+        if ($l -notmatch 'MongoDB: loaded (\d+) forms') { continue }
+        $at = [DateTime]::MinValue
+        if ($stamp.EndsWith('Z')) {
+          if (-not [DateTime]::TryParseExact($stamp, "yyyy-MM-dd'T'HH:mm:ss.fff'Z'", $invariant, $utcStyle, [ref]$at) -or $at -lt $freshUtc) { continue }
+        } elseif (-not [DateTime]::TryParseExact($stamp, 'yyyy-MM-dd HH:mm:ss', $invariant, [Globalization.DateTimeStyles]::None, [ref]$at) -or $at -lt $freshLocal) { continue }
+        $said = $Matches[1]
       }
     }
     if (($up -and ($Loaded -le 0 -or $said)) -or (Get-Date) -gt $until) { break }

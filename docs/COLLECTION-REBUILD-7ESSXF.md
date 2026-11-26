@@ -105,8 +105,9 @@ is already collection-driven and self-correcting.
 
 ## What is deliberately kept
 
-- `launcher/app/Enforce.cs` rewrites `SkyrimSoulsRE.ini` and
-  `OpenAnimationReplacer.ini` on every Play. This is not made redundant by the
+- `launcher/app/Enforce.cs` rewrites
+  `OpenAnimationReplacer.ini` on every Play (its `SkyrimSoulsRE.ini` rules went
+  with #4691: Skyrim Souls RE left the collection in revision 2). This is not made redundant by the
   collection carrying those files: both mods rewrite their own ini on exit, so a
   value shipped in the collection does not survive a session. The class exists
   for exactly that reason and stays.

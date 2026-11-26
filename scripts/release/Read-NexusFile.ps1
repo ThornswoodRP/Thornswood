@@ -1,6 +1,8 @@
 <#
-  Read-NexusFile.ps1
+.SYNOPSIS
+  Reads one file of a Nexus mod with Patrick's Nexus API key and says what a change to records\collection.json needs from it (#5189).
 
+.DESCRIPTION
   Reads one file of a Nexus mod with Patrick's Nexus API key and says what a
   change to records\collection.json needs from it (#5189):
 

@@ -113,12 +113,17 @@ What changed.
 
 How you tested it.
 
-Closes #123
+Refs #123
+
+Test task for #123: Short title of the check
+Server: Main
+1. Plain steps.
+What should happen: what the tester sees.
 "@
 gh pr create --title "Short title" --body $body
 ```
 
-The title says what changed. The body says how you tested it. If the work finishes an issue and nobody would notice it in the game, put `Closes #123` in the body. A fix people would notice says `Refs #123` instead, with its test task under it as `Test task for #123: <title>`, because its issue is closed with that test task when a main Ship puts the fix on the main server, not when the pull request merges: the Ship closes it itself (`scripts\release\Close-ShippedIssues.ps1`, #3279) ([Everything we need to do goes on the board](the-board.md)). The pull request targets `main`.
+The title says what changed. The body says how you tested it. A fix that finishes an issue says `Refs #123`, with its test task under it as `Test task for #123: <title>`, because its issue is closed with that test task when a main Ship puts the fix on the main server, not when the pull request merges: the Ship closes it itself (`scripts\release\Close-ShippedIssues.ps1`, #3279) ([Everything we need to do goes on the board](the-board.md)). Only work nobody would notice in the game, the launcher, the site, Discord or the staff tools (a test, a workflow, a doc, a script only the team runs) puts `Closes #123` in the body instead, so the merge closes the issue. The pull request targets `main`.
 
 Run the test that covers your change before you open the pull request.
 
@@ -179,7 +184,7 @@ If the stop was a rebase rather than a merge, the last step is `git rebase --con
 
 ### Merge your own pull request
 
-Wait until the check named `Build check result` is green on the commit you are merging. It passes only when `Tree checks` and `Launcher builds` passed, and every `Gate harnesses (n of N)` and `Gate harnesses on Linux (n of N)` check passed or was skipped because the pick said the change gave it nothing to check. `Launcher builds` is never skipped for that: a change it cannot see runs it on Linux, where it passes and says why (#5292) (on a pull request the gate's names end in ", what the change reaches" when they ran only that). Main also requires `Test tasks in the pull request`, which holds the test tasks in the body to the bot's rules; when it is red, fix the body, and the edit runs it again. It also requires `Release note`, which holds the body's `Release note:` line to its rules, on the pull request and again in the merge queue, because a published Release's notes can't be changed afterwards; when it is red, fix that line the same way. Pending means it is still running. A red check means the branch is not ready. Fix it on the same branch and push again.
+Wait until the check named `Build check result` is green on the commit you are merging. It passes only when `Tree checks`, `Bot harnesses` and `Launcher builds` passed, and every `Gate harnesses (n of N)` and `Gate harnesses on Linux (n of N)` check passed or was skipped because the pick said the change gave it nothing to check. `Launcher builds` is never skipped for that: a change it cannot see runs it on Linux, where it passes and says why (#5292) (on a pull request the gate's names end in ", what the change reaches" when they ran only that). Main also requires `Test tasks in the pull request`, which holds the test tasks in the body to the bot's rules; when it is red, fix the body, and the edit runs it again. It also requires `Release note`, which holds the body's `Release note:` line to its rules, on the pull request and again in the merge queue, because a published Release's notes can't be changed afterwards; when it is red, fix that line the same way. Pending means it is still running. A red check means the branch is not ready. Fix it on the same branch and push again.
 
 ```powershell
 gh pr checks --watch

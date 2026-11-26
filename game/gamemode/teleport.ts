@@ -229,7 +229,7 @@
   /** Every line from the voice service, on its way to handle(). */
   function dispatch(cmd) {
     var profileId = Number(cmd && cmd.profileId) || 0;
-    var parts = String((cmd && cmd.text) || '').trim().split(/\s+/);
+    var parts = commandParts(cmd && cmd.text);
     var word = parts[0].toLowerCase();
     // The launcher's join pass, from the front plugin (#937). Needs no
     // character and answers nothing; see the join pass block.
@@ -813,6 +813,21 @@
   */
   var journalFullSaid = {};
   var FULL_SAY_MS = 10000;
+  // These payloads are JSON strings, never words to reconstruct with spaces.
+  function commandParts(text) {
+    var raw = String(text || '').trim();
+    var head = /^\S+/.exec(raw);
+    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1' || head[0] === '/board-unpin-v1' || head[0] === '/board-submit-v1')) return [head[0]];
+    return raw.split(/\s+/);
+  }
+
+  function savedTextPayload(text, word, maximum, fields) {
+    if (typeof text !== 'string' || text.length > maximum || text.indexOf(word + ' ') !== 0) return null;
+    var value;
+    try { value = JSON.parse(text.slice(word.length + 1)); } catch (e) { return null; }
+    if (!Array.isArray(value) || value.length !== fields) return null;
+    return value;
+  }
   function journalCommand(soc, actorId, profileId, parts, text) {
     var verb = String(parts[1] || '').toLowerCase();
     var s = soc.stateOf(actorId);
@@ -949,7 +964,7 @@
     var profileId = Number(cmd.profileId) || 0;
     if (!profileId) { return; }
 
-    var parts = String(cmd.text || '').trim().split(/\s+/);
+    var parts = commandParts(cmd.text);
     var word = parts[0].toLowerCase();
     var arg = (parts[1] || '').toLowerCase();
 
@@ -1020,6 +1035,97 @@
         'The server cannot find your character right now. Give it a moment and ' +
         'try again; if it keeps saying that, say so and what you were doing.');
       return false;
+    }
+
+    if (word === '/party-action-v1') {
+      if (!needCharacter()) return;
+      var partyApi = g.__thornswoodSocial;
+      var partyLine = typeof cmd.text === 'string' ? cmd.text : '';
+      var partyMatch = /^\/party-action-v1 (disband|kick) ([a-f0-9]{48}) ([a-f0-9]{48})(?: ([1-9][0-9]{0,15}))?$/.exec(partyLine);
+      var partyTarget = partyMatch && partyMatch[4] ? Number(partyMatch[4]) : 0;
+      var partyValid = partyMatch && partyMatch[0] === partyLine && (partyMatch[1] === 'kick'
+        ? Number.isSafeInteger(partyTarget) && partyTarget > 0 : !partyMatch[4]);
+      var partyAnswer = !partyValid ? 'That party request is invalid. Review the party and press again.'
+        : !partyApi ? 'Party actions are not available right now.'
+        : partyApi.confirmPartyAction(partyApi.profileOf(actorId), partyMatch[1], partyMatch[2], partyMatch[3], partyTarget);
+      toProfile(profileId, partyAnswer || (partyMatch[1] === 'kick' ? 'They left the party.' : 'The party is ended.'));
+      if (partyApi) partyApi.push(actorId, true);
+      return;
+    }
+
+    if (word === '/journal-write-v1') {
+      // Exact JSON strings, including leading/trailing whitespace and literal
+      // backslashes. Nothing here passes through the legacy title/body codec.
+      if (!needCharacter()) return;
+      var journalPayload = savedTextPayload(cmd.text, word, 25000, 4);
+      var journals = g.__thornswoodSocial;
+      if (!journalPayload || !journalPayload.every(function (x) { return typeof x === 'string'; }) ||
+          !/^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[0]) ||
+          !(journalPayload[1] === '' || /^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[1])) ||
+          journalPayload[2].length > 60 || journalPayload[3].length > 4000) {
+        toProfile(profileId, 'That page could not be saved: the request is invalid or too long. Your draft is still in J.');
+        return;
+      }
+      if (!journals || !journals.writePageExact) {
+        toProfile(profileId, 'Saving pages is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      var journalWhy = journals.writePageExact(actorId, journalPayload[0], journalPayload[1], journalPayload[2], journalPayload[3]);
+      if (journalWhy) toProfile(profileId, journalWhy);
+      journals.pushJournalSave(actorId);
+      return;
+    }
+
+    if (word === '/board-submit-v1') {
+      if (!needCharacter()) return;
+      var submitPayload = savedTextPayload(cmd.text, word, 8200, 6) || savedTextPayload(cmd.text, word, 8200, 7);
+      var submitProperty = g.__thornswoodProperty;
+      if (!submitPayload || !submitProperty || !submitProperty.submitBoard) {
+        toProfile(profileId, 'That board submission is invalid or unavailable. Keep your draft.'); return;
+      }
+      submitProperty.submitBoard(submitPayload, actorId, profileId, toProfile);
+      return;
+    }
+
+    if (word === '/board-post-v1') {
+      if (!needCharacter()) return;
+      var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
+      var propertyPosts = g.__thornswoodProperty;
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+          !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
+          (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
+          typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
+          postPayload[2].length > 60 || postPayload[3].length > 600 ||
+          typeof postPayload[4] !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(postPayload[4])) {
+        toProfile(profileId, 'That post request is invalid or too long. Nothing was posted or taken.');
+        return;
+      }
+      if (!propertyPosts || !propertyPosts.postExact) {
+        toProfile(profileId, 'Posting is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3],
+                              postPayload[4], actorId, profileId, toProfile);
+      return;
+    }
+
+    if (word === '/board-unpin-v1') {
+      if (!needCharacter()) return;
+      var unpinPayload = savedTextPayload(cmd.text, word, 8200, 3);
+      var unpinProperty = g.__thornswoodProperty;
+      if (!unpinPayload || typeof unpinPayload[0] !== 'string' ||
+          !Number.isSafeInteger(unpinPayload[1]) || unpinPayload[1] <= 0 ||
+          !Number.isSafeInteger(unpinPayload[2]) || unpinPayload[2] < 0) {
+        toProfile(profileId, 'That Take down request is invalid. Review the current board and press again.');
+        return;
+      }
+      if (!unpinProperty || !unpinProperty.unpin) {
+        toProfile(profileId, 'Taking posts down is unavailable right now. Review the board later.');
+        return;
+      }
+      unpinProperty.unpin(['/unpin', String(unpinPayload[1])], actorId, profileId, toProfile,
+                          { hold: unpinPayload[0], at: unpinPayload[2] });
+      return;
     }
 
     // A lockpick that broke in somebody's game.
@@ -1142,7 +1248,7 @@
     if (word === '/embassy' || word === '/remnant') {
       var accord = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodEmbassy;
       if (!accord) { toProfile(profileId, 'That is not running on this server.'); return true; }
-      try { accord.command(word, parts, actorId, profileId, toProfile); } catch (eAccord) {
+      try { accord.command(word, parts, actorId, profileId, toProfile, cmd); } catch (eAccord) {
         log(word + ' threw:', eAccord);
         toProfile(profileId, 'That did not work. Say so in the dev channel.');
       }
@@ -1196,7 +1302,7 @@
       var shipsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTradeShips;
       if (!shipsApi || !shipsApi.command) { toProfile(profileId, 'Trade ships are not running on this server.'); return true; }
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
-      var shipSaid = shipsApi.command(parts, actorId, profileId);
+      var shipSaid = shipsApi.command(parts, actorId, profileId, cmd);
       if (shipSaid) { toProfile(profileId, shipSaid); }
       return true;
     }
@@ -1498,24 +1604,28 @@
       /*
         A trade that is already open takes verbs rather than a name.
 
-        add, remove, gold, ok and cancel, and the panel sends exactly the same
-        lines, the same way the J panel sends /journal. One way in.
+        add, remove, gold, agree and cancel, and the panel sends exactly the
+        same lines. Agree names a version with a verb older servers never
+        interpret as an approval.
       */
       if (word === '/trade') {
         var tr2 = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTrade;
         if (!tr2) { toProfile(profileId, 'Trading is not running on this server.'); return true; }
-        if (String(parts[1] || '').toLowerCase() === 'refresh') {
+        var verb = String(parts[1] || '').toLowerCase();
+        if (verb === 'refresh' || verb === 'ok') {
           tr2.refresh(actorId);
+          if (verb === 'ok') {
+            toProfile(profileId, 'The trade window is out of date. Close the game, let the launcher update, then rejoin before trading.');
+          }
           return true;
         }
         var live = tr2.tradeOf(actorId);
-        var verb = String(parts[1] || '').toLowerCase();
-        if (live || verb === 'cancel' || verb === 'ok' || verb === 'add' ||
+        if (live || verb === 'cancel' || verb === 'agree' || verb === 'add' ||
             verb === 'remove' || verb === 'gold' || verb === 'pack' || verb === 'sale') {
           if (!live) { toProfile(profileId, 'You are not trading.'); return true; }
           var out = '';
           if (verb === 'cancel') { out = tr2.cancel(actorId); }
-          else if (verb === 'ok') { out = tr2.confirm(actorId); }
+          else if (verb === 'agree') { out = tr2.confirm(actorId, parts.length === 3 ? parts[2] : undefined); }
           else if (verb === 'gold') { out = tr2.gold(actorId, parts[2]); }
           // The panel's Buy for the company (#1393). Never typed.
           else if (verb === 'sale') { out = tr2.sale(actorId); }
@@ -1738,6 +1848,8 @@
       names no person goes on to the branches below, and /ooc or /roll from
       somebody staff silenced stops here.
     */
+    var commandTools = g.__thornswoodCommandTools;
+    if (commandTools && commandTools.command(cmd, word, parts, profileId, actorId)) { return; }
     var staffCmd = g.__thornswoodStaff;
     if (staffCmd) {
       try {
@@ -1794,6 +1906,11 @@
         log('/tp refused profile ' + profileId + ' (roster: ' + src + ', written: ' + written + ')');
         return;
       }
+      var staffLogTp = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogTp && typeof staffLogTp.unproven === 'function') {
+        var unpTp = staffLogTp.unproven(cmd, profileId);
+        if (unpTp) { toProfile(profileId, unpTp); return; }
+      }
       /*
         THE WHOLE REST OF THE LINE, because a place name has spaces in it.
 
@@ -1818,10 +1935,16 @@
       // The listing above answers whether or not the sweep found anybody. The
       // move is the part that needs a character to move.
       if (!needCharacter()) { return; }
+      if (staffLogTp && staffLogTp.state && staffLogTp.state.frozen[profileId]) {
+        toProfile(profileId, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+        return;
+      }
       try {
         mp.set(actorId, 'locationalData', {
           cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot
         });
+        var stuck = globalThis.__thornswoodStuck;
+        if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
       } catch (e) {
         toProfile(profileId, 'That did not work: ' + e);
         return;
@@ -1888,6 +2011,11 @@
       if (!isPlaytester(profileId)) {
         toProfile(profileId, word + ' is not yours to run. Ask Patrick to add profile ' + profileId + '.');
         return;
+      }
+      var staffLogGive = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogGive && typeof staffLogGive.unproven === 'function') {
+        var unpGive = staffLogGive.unproven(cmd, profileId);
+        if (unpGive) { toProfile(profileId, unpGive); return; }
       }
       if (!needCharacter()) { return; }
 
@@ -1994,6 +2122,8 @@
     // This is deliberately LOCAL. Out of character talk belongs to the scene
     // it interrupts, not to everybody in Skyrim, and a server wide one would
     // be a second general chat inside the game.
+    // The chat box handles both aliases in voice/headlines.js (#4238).
+    // Direct game-server calls still use this handler.
     if (word === '/ooc' || word === '/o') {
       var said = parts.slice(1).join(' ').trim();
       if (!said) {
@@ -2071,18 +2201,19 @@
       is no line a client can send that produces the same output, because the
       page's own /roll is gone rather than merely discouraged.
 
-      THE SPEC IS THE SAME ONE PEOPLE ALREADY TYPE, deliberately: the number
-      is the number of sides, 6x3 is three of them, and a leading d is
-      dropped because somebody who has rolled dice before types it on reflex.
-      Nobody has to learn anything new.
+      Existing notation stays: the number is the number of sides, 6x3 is
+      three of them, and a leading d is accepted. Count-d-sides notation,
+      such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
       part of a conversation and belongs in the room it happened in.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
-      var spec = parts.slice(1).join('').trim().toLowerCase();
-      spec = spec.replace(/\s+/g, '').replace(/(^|[x*])d/g, '$1');
+      var spec = parts.slice(1).join('').trim().toLowerCase().replace(/\s+/g, '');
+      var notation = /^(\d+)d(\d+)$/.exec(spec);
+      if (notation) { spec = notation[2] + 'x' + notation[1]; }
+      spec = spec.replace(/(^|[x*])d/g, '$1');
       if (!spec) { spec = String(ROLL_DEFAULT_SIDES); }
 
       var rm = /^(\d+)(?:[x*](\d+))?$/.exec(spec);
@@ -2091,7 +2222,7 @@
       if (!rm || !isFinite(rsides) || rsides < 1 || rsides > ROLL_MAX_SIDES ||
           !isFinite(rcount) || rcount < 1 || rcount > ROLL_MAX_DICE) {
         toProfile(profileId,
-          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 for three of them. ' +
+          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 (also /roll 3d6) for three of them. ' +
           'Whole numbers, 1 to ' + ROLL_MAX_SIDES + ', up to ' + ROLL_MAX_DICE + ' dice.');
         return;
       }
@@ -2444,6 +2575,7 @@
     here, so there is one staff test and not a second copy of it.
   */
   g.__thornswoodIsStaff = isStaff;
+  g.__thornswoodCommandRoles = {playtester:isPlaytester,staff:isStaff,admin:isAdmin};
 
   /*
     WHO MAY ADD keep TO /spawn (#2623). Djinn, 17 October: "testers and

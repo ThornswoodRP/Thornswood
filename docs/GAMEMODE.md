@@ -71,8 +71,9 @@ design, the loader's limits read from the fork and the stages still to come
 are [GAMEMODE-SOURCE.md](GAMEMODE-SOURCE.md) (#2181).
 
 A handler returns `false` to block an event and anything else to let it
-through. Every handler is wrapped in `guard()` (`gamemode.js:guard`), so a throw
-is logged and the event goes on. Form ids cross the boundary as descriptors,
+through. Most handlers are wrapped in `guard()` (`gamemode.js:guard`), so a throw
+is logged and the event goes on, though the login handler (`mp.onThornswoodLogin`)
+and the flora pick wrapper around `mp.onActivate` are not wrapped in `guard()`. Form ids cross the boundary as descriptors,
 `"<low 24 bits in hex>:<plugin>"`, never as load order positions.
 
 ## How the blocks find each other
@@ -100,7 +101,7 @@ In file order, top to bottom. Search for a name to find it; the sections have no
 | Class and profession gates | `classGate`, `halfGate`, `creditWork`, `rankStep`. |
 | Starting tools, mining, chopping, charcoal | `TOOLS` and tool wear; salt (`mineSalt`); the swing animation; ore deposits (`DEPOSIT_SIZE`); `mineOre`; chopping blocks (3342-3549, `chopWood`). The kiln is a bench since #2337, answered by nothing here. |
 | Character creation (chargen) | See "Character creation" below. |
-| Event handlers | `mp.onDeath`, `mp.onRespawn`. `ensureProperties()` and `startChargenTimer()` run at load here. |
+| Event handlers | `mp.onDying`, `mp.onDeath`, `mp.onRespawn`. `ensureProperties()` and `startChargenTimer()` run at load here. |
 | Scripted activators, harvesting, fishing, hunting | The generated `HARVESTS_BY_BASE`, `FISH_BY_BASE`, `GAME_BY_BASE`, `CROPS_BY_BASE`, `HUNTS_BY_BASE` blocks; `harvest`, `fish`, `game`, `loot` for carcasses, `farmActivate`; `mp.onActivate`, which routes every press; `publishServerBases`. |
 | Crafting | `RECIPES_BY_ID`, `isRecipe`, `professionName`. |
 | Property doors | `BUILDING_BY_DOOR`, `BUILDING_NAME`, `WAY_OUT`. |
@@ -108,9 +109,9 @@ In file order, top to bottom. Search for a name to find it; the sections have no
 | `mp.onCraft` | How long a craft takes at the bench (`CRAFT_WORK_MS`, `craftSize`, `mp.onCraftWork`, which the engine asks first and holds the craft for, #3161), key recipe, the handler, and the "gamemode loaded" line. |
 | Voice feed | Positions to the voice service; the `online.json` writer. |
 | Character roster | `private\characters.json`, sent to the site. |
-| The door | The allowed list. See "The door". |
+| The door | The allowed list, and `mp.onThornswoodLogin`. See "The door". |
 | Server manifest | `data\manifest.json`, `publish`. |
-| Progression | The rulebook: `RANKS`, `SPELL_IDS`, `TUNING`, state, rules, the spell book, `TABLE`, `canDo`. |
+| Progression | The rulebook: `RANKS`, `SPELL_IDS`, `TUNING`, state, rules, the spell book, `TABLE`, `canDo`, and `mp.onSpellCast`. |
 | Farming | Plots, rank and time, the land, claims in `private\farm-claims.json`, pressing, commands `/plant`, `/claim`, `/plot`. |
 | Property | See "Property, offices and rent". |
 | Spoils | Nothing the world placed is handed over: a container starts empty (`forbiddenBaseContainer` in the server settings, #3078) and nothing lies on the floor (Thornswood-Last.esp, #3077); where gold comes from (`purse`). |
@@ -225,8 +226,9 @@ The rules are in progression and the three blocks after the character block.
   rank of a school, two at Master). `pickSpell` (K panel, `/pick spell`) and
   `learnFromTome` (reading a tome) ask the same three things: a point, the
   rank in the spell's school, and a spell of that school one rank down.
-  Somebody a Master mage taught (`teach`) holds `LIMITS.outsiderSpells`
-  places instead of points, and their school never leaves Novice.
+  Somebody a Master mage taught (`teach`) needs both points (earned from College
+  semesters) and a free place under `LIMITS.outsiderSpells`, and their school
+  never leaves Novice.
 - **Spell tomes** (`thornswood spell tomes`). `mp.onReadBook` asks `read`,
   which resolves the tome's spell from the records and runs `learnFromTome`;
   answering false keeps the tome and takes the spell back.
@@ -391,7 +393,7 @@ because each reads the one before.
 | `ORES_BY_BASE` | `Build-OreTable.ps1` | `ores.json` | `Build-OreTable.ps1:Write-GamemodeTable 'ORES_BY_BASE'` |
 | `HARVESTS_BY_BASE`, `FISH_BY_BASE`, `GAME_BY_BASE`, `CROPS_BY_BASE` | `Build-HarvestTable.ps1` | `harvests.json` | `Build-HarvestTable.ps1:Write-GamemodeTable 'HARVESTS_BY_BASE'`, one file for each of the four |
 | `HUNTS_BY_BASE` | `Build-HuntTable.ps1` | `hunts.json` | `Build-HuntTable.ps1:Write-GamemodeTable 'HUNTS_BY_BASE'` |
-| `RECIPES_BY_ID` | `Build-RecipeTable.ps1`, which also reads `docs/systems/cut-items.json` for what leaves the open book | `recipes.json` | `Build-RecipeTable.ps1:Write-GamemodeTable 'RECIPES_BY_ID'` |
+| `RECIPES_BY_ID` | `Build-RecipeTable.ps1`, which also reads `game/data/cut-items.json` for what leaves the open book | `recipes.json` | `Build-RecipeTable.ps1:Write-GamemodeTable 'RECIPES_BY_ID'` |
 | `STAFF_SPELLS` (staff spells block) | `Build-RecipeTable.ps1`, with each spell's school and rank | none | `Build-RecipeTable.ps1:Write-GamemodeTable 'STAFF_SPELLS'` |
 | `BUILDING_BY_DOOR`, `BUILDING_NAME`, `WAY_OUT` | `Build-DoorTable.py` | `doors.json` | `Build-DoorTable.py:changed = gamemode_tables.write(name` |
 | `BENCH_BY_BASE`, `BENCH_ACCESS` | `Build-BenchTable.py`, from `recipes.json` | none | `Build-BenchTable.py:gamemode_tables.write('BENCH_BY_BASE'` |

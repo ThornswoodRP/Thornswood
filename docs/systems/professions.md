@@ -178,6 +178,11 @@ asks the same question the craft does, recipe by recipe, so a rank, a
 race's own gear and a roll all count. The menu then lists only what you
 may make.
 
+Before a recipe's work starts, the server checks who may make it:
+its race, profession, half, rank and any required roll. A refusal is
+said at once, with no wait or materials taken. The same check runs
+again when the work ends, in case something changed while waiting.
+
 It sorts that list by kind first, with material groups inside (#3133).
 Weapons, armour, and arrows and bolts each have a header of their own,
 beside clothing, jewellery and food, and under each header the pieces sit

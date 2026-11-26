@@ -1175,7 +1175,8 @@ try {
   $swapOut = @(Remote ($ownerVars + $vars + $siteHooks + $pick + $serviceSwapBlock) |
                ForEach-Object { Write-Host ('  ' + $_); "$_".Trim() })
 } finally { $ErrorActionPreference = $eap }
-if (-not (Show-SwapResult $swapOut "$rootWin\.prev-<stamp>")) { exit 1 }
+$prevWhere = if ($PutBack) { "$rootWin\.undone-<stamp>" } else { "$rootWin\.prev-<stamp>" }
+if (-not (Show-SwapResult $swapOut $prevWhere)) { exit 1 }
 
 # The site's files are in place and it answers: the box records that it runs
 # this artifact, read back at /api/deploys (Artifact.ps1), and the record it

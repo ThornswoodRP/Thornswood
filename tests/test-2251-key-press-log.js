@@ -92,7 +92,7 @@ yes('C1 the site hands via to the hub, and only the word press', /via: o\.via ==
 // D
 const ct = grab(HUB, 'chatText');
 yes('D0 chatText is in hub.js', ct.length > 0);
-const hbox = { Date }; vm.runInNewContext(ct + '\nthis.chatText = chatText;', hbox);
+const hbox = { Date }; vm.runInNewContext(grab(HUB, 'sessionTime') + '\n' + ct + '\nthis.chatText = chatText;', hbox);
 const out = hbox.chatText([
   { at: 0, kind: 'command', name: 'Aela', proven: true, text: '/tp riverwood' },
   { at: 0, kind: 'command', via: 'press', name: 'Aela', proven: true, text: '/lock 1a2b' }

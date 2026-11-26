@@ -29,7 +29,7 @@
 // The staff files under game/data the gamemode reads at run time (#2873),
 // carried here because the server runs this file from a temp folder with no
 // data beside it. Built by scripts\dev\Build-StaffData.js; do not hand edit.
-const STAFF_DATA = {"furniture.json":{"_about":["Placeable furniture in a held building (#2679). Staff data: every number here is meant to be changed.","limits.perBuilding is how many pieces one building takes; limits.buildings gives one building (its interior cell desc) another cap.","limits.reach is how far in front of you a piece is set, limits.pickReach how near a piece must be to move or pick it up, in units.","limits.carryMs is how long a piece stays in your hands after Move before it is let go where it stands.","limits.turnStep is the degrees one press of Turn turns a piece.","limits.types says which kinds of base may be placed. STAT is off until a dev check shows the server keeps a placed static.","pieces: item and recipe are the MISC and COBJ form ids in Thornswood-Content.esp (scripts/mods/Add-ContentRecords.py writes a row only while its type is on).","base is the vanilla record the piece stands as. A container base must not respawn and must carry no contents of its own.","inputs are what the woodworking bench takes; Build-RecipeTable.ps1 ranks the recipe by its dearest input, Woodwright's by the bench."],"limits":{"perBuilding":40,"buildings":{},"reach":120,"pickReach":400,"carryMs":60000,"turnStep":45,"types":{"FURN":true,"CONT":true,"STAT":false}},"pieces":[{"key":"stool","item":"16000","recipe":"16080","edid":"ThornswoodFurnitureStool","name":"Bar Stool","base":"74ec6:Skyrim.esm","type":"FURN","value":8,"weight":4,"inputs":[["6f993:Skyrim.esm",2]]},{"key":"chair","item":"16001","recipe":"16081","edid":"ThornswoodFurnitureChair","name":"Wooden Chair","base":"2ec1c:Skyrim.esm","type":"FURN","value":15,"weight":8,"inputs":[["6f993:Skyrim.esm",3],["800e4:Skyrim.esm",1]]},{"key":"bench","item":"16002","recipe":"16082","edid":"ThornswoodFurnitureBench","name":"Wooden Bench","base":"2e6cf:Skyrim.esm","type":"FURN","value":20,"weight":12,"inputs":[["6f993:Skyrim.esm",4],["800e4:Skyrim.esm",1]]},{"key":"finechair","item":"16003","recipe":"16083","edid":"ThornswoodFurnitureFineChair","name":"Fine Chair","base":"6b691:Skyrim.esm","type":"FURN","value":60,"weight":10,"inputs":[["6f993:Skyrim.esm",4],["800e4:Skyrim.esm",2],["5ace4:Skyrim.esm",1]]},{"key":"finebench","item":"16004","recipe":"16084","edid":"ThornswoodFurnitureFineBench","name":"Fine Bench","base":"6b57b:Skyrim.esm","type":"FURN","value":70,"weight":15,"inputs":[["6f993:Skyrim.esm",5],["800e4:Skyrim.esm",2],["5ace4:Skyrim.esm",1]]},{"key":"bedroll","item":"16005","recipe":"16085","edid":"ThornswoodFurnitureBedroll","name":"Bedroll","base":"36ed3:Skyrim.esm","type":"FURN","value":20,"weight":6,"inputs":[["800e4:Skyrim.esm",2],["3f7f8:Skyrim.esm",3]]},{"key":"bed","item":"16006","recipe":"16086","edid":"ThornswoodFurnitureBed","name":"Bed","base":"30091:Skyrim.esm","type":"FURN","value":50,"weight":30,"inputs":[["6f993:Skyrim.esm",6],["800e4:Skyrim.esm",2],["3f7f8:Skyrim.esm",4]]},{"key":"doublebed","item":"16007","recipe":"16087","edid":"ThornswoodFurnitureDoubleBed","name":"Double Bed","base":"3b6e8:Skyrim.esm","type":"FURN","value":90,"weight":45,"inputs":[["6f993:Skyrim.esm",8],["800e4:Skyrim.esm",3],["3f7f8:Skyrim.esm",6]]},{"key":"finedoublebed","item":"16008","recipe":"16088","edid":"ThornswoodFurnitureFineDoubleBed","name":"Fine Double Bed","base":"6b3d3:Skyrim.esm","type":"FURN","value":250,"weight":60,"inputs":[["6f993:Skyrim.esm",10],["800e4:Skyrim.esm",4],["3f7f8:Skyrim.esm",8],["5ace4:Skyrim.esm",2]]},{"key":"chest","item":"16009","recipe":"16089","edid":"ThornswoodFurnitureChest","name":"Chest","base":"f3923:Skyrim.esm","type":"CONT","value":40,"weight":20,"inputs":[["6f993:Skyrim.esm",4],["5ace4:Skyrim.esm",2]]},{"key":"largechest","item":"1600a","recipe":"1608a","edid":"ThornswoodFurnitureLargeChest","name":"Large Chest","base":"f8476:Skyrim.esm","type":"CONT","value":70,"weight":30,"inputs":[["6f993:Skyrim.esm",6],["5ace4:Skyrim.esm",3]]},{"key":"roundtable","item":"16040","recipe":"160c0","edid":"ThornswoodFurnitureRoundTable","name":"Round Table","base":"2ec1f:Skyrim.esm","type":"STAT","value":30,"weight":20,"inputs":[["6f993:Skyrim.esm",5]]},{"key":"squaretable","item":"16041","recipe":"160c1","edid":"ThornswoodFurnitureSquareTable","name":"Square Table","base":"2f239:Skyrim.esm","type":"STAT","value":30,"weight":20,"inputs":[["6f993:Skyrim.esm",5]]},{"key":"shelf","item":"16042","recipe":"160c2","edid":"ThornswoodFurnitureShelf","name":"Shelf","base":"2e6cd:Skyrim.esm","type":"STAT","value":25,"weight":15,"inputs":[["6f993:Skyrim.esm",4],["5ace4:Skyrim.esm",1]]},{"key":"fineroundtable","item":"16043","recipe":"160c3","edid":"ThornswoodFurnitureFineRoundTable","name":"Fine Round Table","base":"c29de:Skyrim.esm","type":"STAT","value":120,"weight":25,"inputs":[["6f993:Skyrim.esm",6],["5ace4:Skyrim.esm",1]]}]},"merchant-traders.json":{"version":1,"count":60,"byRef":{"13c008:Arena - Markarth Side.esp":{"name":"Tailor","role":"Tailor","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Markarth Side","cell":"f9a47:Arena - Markarth Side.esp","world":null,"pos":[-56,0,0]},"177da:Dragonborn.esm":{"name":"Enchanter","role":"Enchanter","hold":"Solstheim","bookHold":"ravenrock","locationName":"Tel Mithryn","cell":"17787:Dragonborn.esm","world":null,"pos":[102.66351318359375,1159.6314697265625,-8.091889381408691]},"1828f:Dragonborn.esm":{"name":"Smith","role":"Smith","hold":"Solstheim","bookHold":"ravenrock","locationName":"Raven Rock","cell":"17ec4:Dragonborn.esm","world":null,"pos":[-663.4784545898438,-301.1336669921875,0]},"18291:Dragonborn.esm":{"name":"Cook","role":"Cook","hold":"Solstheim","bookHold":"ravenrock","locationName":"Raven Rock","cell":"17ec0:Dragonborn.esm","world":null,"pos":[-39.04017639160156,-178.24331665039062,0]},"18293:Dragonborn.esm":{"name":"Woodworker","role":"Woodworker","hold":"Solstheim","bookHold":"ravenrock","locationName":"Raven Rock","cell":"17ebf:Dragonborn.esm","world":null,"pos":[-149.79263305664062,-146.8022918701172,0]},"182a2:Dragonborn.esm":{"name":"Alchemist","role":"Alchemist","hold":"Solstheim","bookHold":"ravenrock","locationName":"Raven Rock","cell":"18277:Dragonborn.esm","world":null,"pos":[-3.5353641510009766,232.098876953125,0]},"18fc0:Dragonborn.esm":{"name":"Tailor","role":"Tailor","hold":"Solstheim","bookHold":"ravenrock","locationName":"Skaal Village","cell":"18f4a:Dragonborn.esm","world":null,"pos":[-472.4573669433594,846.078857421875,40.82240295410156]},"1939ba:aaaGraniteHill.esp":{"name":"Tailor","role":"Tailor","hold":"Falkreath","bookHold":"falkreath","locationName":"Granite Hill","cell":"626a:aaaGraniteHill.esp","world":null,"pos":[-1024,0,512]},"1981e:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"Falkreath","bookHold":"falkreath","locationName":"Falkreath","cell":"13a76:Skyrim.esm","world":null,"pos":[-1219.1793212890625,-180.9888458251953,-0.1077728271484375]},"198a0:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a0e:Skyrim.esm","world":null,"pos":[-204.85626220703125,-453.2304382324219,0]},"198ac:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a0f:Skyrim.esm","world":null,"pos":[21.030447006225586,-535.8790283203125,0]},"198b1:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"169fe:Skyrim.esm","world":null,"pos":[-247.2842254638672,-1140.2867431640625,0.0000152587890625]},"198c5:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a04:Skyrim.esm","world":null,"pos":[-1115.4222412109375,1085.11181640625,576.4193725585938]},"198d2:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a11:Skyrim.esm","world":null,"pos":[21.52102279663086,-248.43890380859375,0]},"198d8:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a10:Skyrim.esm","world":null,"pos":[-277.358154296875,-1007.031494140625,0.000003814697265625]},"198ea:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16dff:Skyrim.esm","world":null,"pos":[439.7211608886719,2819.8076171875,0]},"198eb:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16dff:Skyrim.esm","world":null,"pos":[-351.8253479003906,2705.2294921875,2.836996078491211]},"198f7:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16df6:Skyrim.esm","world":null,"pos":[-166.40286254882812,1063.5419921875,-112]},"19906:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16df2:Skyrim.esm","world":null,"pos":[519.8775634765625,2151.841064453125,6911.1318359375]},"19908:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16df2:Skyrim.esm","world":null,"pos":[-5168.5185546875,-167.9541778564453,6635.326171875]},"1990a:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16df2:Skyrim.esm","world":null,"pos":[-4416,1952,6896]},"19dd0:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"16bd9:Skyrim.esm","world":null,"pos":[-42.64916229248047,-54.30506896972656,64]},"19df0:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"16bd2:Skyrim.esm","world":null,"pos":[-1226.40966796875,1024.047119140625,128]},"19df1:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"53081:Skyrim.esm","world":null,"pos":[-181.75938415527344,-184.0110321044922,64]},"19dfb:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"16bce:Skyrim.esm","world":null,"pos":[0,784,112]},"19e14:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"9ccde:Skyrim.esm","world":null,"pos":[2084.01806640625,2835.379638671875,176]},"1a66d:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"165b6:Skyrim.esm","world":null,"pos":[-520,-248,64]},"1a66e:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"1605e:Skyrim.esm","world":null,"pos":[336,-416,64]},"1a672:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"165b3:Skyrim.esm","world":null,"pos":[119.512451171875,-23.152530670166016,69.51840209960938]},"1a67c:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Whiterun","bookHold":"whiterun","locationName":"Warmaiden's","cell":"1db4e:Skyrim.esm","world":null,"pos":[-16,128,64]},"1a681:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"165b7:Skyrim.esm","world":null,"pos":[-16.498863220214844,-1200.2633056640625,80]},"1a684:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"165b2:Skyrim.esm","world":null,"pos":[-800,-320,320]},"1a6b5:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"13a86:Skyrim.esm","world":null,"pos":[1088.7137451171875,-91.87908172607422,2.565845489501953]},"1a6be:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"13a83:Skyrim.esm","world":null,"pos":[909.4266357421875,18.256004333496094,272]},"1a6bf:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"13a83:Skyrim.esm","world":null,"pos":[822.4622192382812,18.16551971435547,272]},"1a6c3:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"13a80:Skyrim.esm","world":null,"pos":[-776.2161865234375,1119.9918212890625,0]},"1aa5e:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Morthal","cell":"138d0:Skyrim.esm","world":null,"pos":[693.3634643554688,28.15774154663086,272.34967041015625]},"1aa61:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Morthal","cell":"138cf:Skyrim.esm","world":null,"pos":[860.4638671875,-160.4937744140625,272]},"1aa62:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Morthal","cell":"138ce:Skyrim.esm","world":null,"pos":[794.4549560546875,-143.3380584716797,10.95335578918457]},"1b115:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"1678c:Skyrim.esm","world":null,"pos":[1587.1324462890625,-4987.16552734375,72.77753448486328]},"1b11a:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"16789:Skyrim.esm","world":null,"pos":[-432,-3872,320]},"1b123:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"16782:Skyrim.esm","world":null,"pos":[-1072.8953857421875,-1134.9822998046875,-128]},"1b124:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"16781:Skyrim.esm","world":null,"pos":[-2954.65576171875,356.79949951171875,-448]},"1b132:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"1677c:Skyrim.esm","world":null,"pos":[-2832,-2752,64]},"1b135:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"7d033:Skyrim.esm","world":null,"pos":[1312.3782958984375,-5028.5703125,58.14128494262695]},"1c18c:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13813:Skyrim.esm","world":null,"pos":[-1035.252197265625,-131.28944396972656,10.275467872619629]},"1c18d:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13814:Skyrim.esm","world":null,"pos":[1470.461181640625,17.313034057617188,0.00006103515625]},"1c18e:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13814:Skyrim.esm","world":null,"pos":[1986.1158447265625,-209.83944702148438,0.000034332275390625]},"1c1aa:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold College","cell":"cab91:Skyrim.esm","world":null,"pos":[413.85235595703125,348.97003173828125,0.00002288818359375]},"1e7d6:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13814:Skyrim.esm","world":null,"pos":[1944.821533203125,696.4560546875,0.00000762939453125]},"31efc3:Riften Expansion.esp":{"name":"Tailor","role":"Tailor","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"cc3f6:Riften Expansion.esp","world":null,"pos":[-273.2473449707031,-81.94912719726562,63.99998474121094]},"33a2:JKs Skyrim.esp":{"name":"Woodworker","role":"Woodworker","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"32b8:JKs Skyrim.esp","world":null,"pos":[1486.3250732421875,1923.6727294921875,228.70834350585938]},"3a198:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Falkreath","bookHold":"falkreath","locationName":"Falkreath","cell":"3a184:Skyrim.esm","world":null,"pos":[-348.84991455078125,-99.87165832519531,0]},"3a19b:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Falkreath","bookHold":"falkreath","locationName":"Falkreath","cell":"3a183:Skyrim.esm","world":null,"pos":[-630.467041015625,23.01331329345703,0.5730171203613281]},"3a19f:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Falkreath","bookHold":"falkreath","locationName":"Falkreath","cell":"13a73:Skyrim.esm","world":null,"pos":[1587.974609375,132.00314331054688,240]},"3a22:JKs Skyrim.esp":{"name":"Cook","role":"Cook","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"32b8:JKs Skyrim.esp","world":null,"pos":[1204.6116943359375,1890.033203125,228.7083740234375]},"72c89:North Keep.esp":{"name":"Enchanter","role":"Enchanter","hold":"Falkreath","bookHold":"falkreath","locationName":"The Estates' Edge","cell":"3a988:North Keep.esp","world":null,"pos":[224.81382751464844,-550.4144287109375,15.826522827148438]},"b4a3:Populated Cities Towns Villages Legendary.esp":{"name":"Woodworker","role":"Woodworker","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13814:Skyrim.esm","world":null,"pos":[2143.7470703125,154.48138427734375,0.000091552734375]},"b818d:Arena - Markarth Side.esp":{"name":"Woodworker","role":"Woodworker","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Markarth Side","cell":"5c591:Arena - Markarth Side.esp","world":null,"pos":[-237.17320251464844,-167.08517456054688,261.5469055175781]},"e24:JKs Skyrim.esp":{"name":"Smith","role":"Smith","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Morthal","cell":"93be:Skyrim.esm","world":"3c:Skyrim.esm","pos":[-37173.703125,64145.35546875,-13940.6337890625]}}},"property-word.json":{"_about":"Word to a property holder when their door's lock is picked or their deed is presented (#2680). Staff data: change the numbers here, never in gamemode.js. Minutes and days are real time. A key that is missing or the wrong type keeps the default in the property block's WORD_DEFAULTS, and the server log says which.","pick":{"on":true,"delayMinutes":20,"describe":true,"samePickerMinutes":360},"deed":{"on":true,"delayMinutes":10,"describe":true},"bundle":true,"perHolderPerDay":6,"maxPending":20,"keepDays":14,"reach":400,"needLockpick":true,"everySeconds":30},"thalmor-patrols.json":{"version":1,"about":["Thalmor patrols (#1390, docs/systems/thalmor.md). Staff settings, naming nobody.","on: whether any patrol is out at all. Off until staff turn it on.","most: the most roads with a patrol in the province at once (the page says 3).","stageMost: a cap for a world stage, by its id in war-stages.json, e.g. {\"peace\": 1}. With no stage, or none for the current one, most holds.","returnMinutes: how long a dead member takes to come back at its point. leash: how far one strays from its point.","tier: the difficulty tier the members fight at, or null for none.","roads: one patrol each. A road is refused if it is not in Tamriel, has fewer than 2 or more than 4 points, or a point is near a walled town.","Each point is one member, made from the base at the same place in bases. A road may set its own returnMinutes and leash.","After a change, run node scripts/dev/Build-StaffData.js, which carries this file inside gamemode.js (the server has no game/data beside it, #2873), commit both and deploy the gamemode. It takes effect at the next start or gamemode reload. A road turned off loses its members then."],"on":false,"most":3,"stageMost":{},"returnMinutes":45,"leash":1536,"tier":null,"roads":[{"id":"pale","name":"the Pale road","on":true,"world":"3c:Skyrim.esm","from":"the cut Immersive Patrols II Justiciar placements in the Pale: 2422ce:Immersive Patrols II.esp, 2422d0:Immersive Patrols II.esp, 2422d1:Immersive Patrols II.esp, 2422cc:Immersive Patrols II.esp","bases":["23d1b6:Immersive Patrols II.esp","23d1b6:Immersive Patrols II.esp","23d1b6:Immersive Patrols II.esp","23d1b7:Immersive Patrols II.esp"],"points":[[42204.65,61535.45,-7697.89],[42792.77,58992.17,-7899.64],[42415.52,60846.96,-7642.09],[41325.44,59586.77,-7582.31]]},{"id":"haafingar","name":"the Haafingar road","on":true,"world":"3c:Skyrim.esm","from":"the cut Immersive Patrols II Justiciar placements in Haafingar: 274d83:Immersive Patrols II.esp, 274d84:Immersive Patrols II.esp, 274d85:Immersive Patrols II.esp, 274d86:Immersive Patrols II.esp","bases":["60f90:Immersive Patrols II.esp","60f91:Immersive Patrols II.esp","60f91:Immersive Patrols II.esp","60f91:Immersive Patrols II.esp"],"points":[[-96155.64,90703.16,-10613],[-96411.34,90665.63,-10628.01],[-96272.46,90564.34,-10628.63],[-96112.45,90458.13,-10628.67]]},{"id":"hjaalmarch","name":"the Hjaalmarch road","on":true,"world":"3c:Skyrim.esm","from":"the cut Immersive Patrols II Justiciar placements in Hjaalmarch: 274d87:Immersive Patrols II.esp, 274d88:Immersive Patrols II.esp, 274d89:Immersive Patrols II.esp, 274d8a:Immersive Patrols II.esp","bases":["60fa2:Immersive Patrols II.esp","60fa2:Immersive Patrols II.esp","60fa2:Immersive Patrols II.esp","60f9e:Immersive Patrols II.esp"],"points":[[-54940.8,60060.26,-13541.87],[-55096.18,60241.4,-13532.52],[-55182.89,60086.05,-13502.88],[-55383.89,60339.38,-13504.62]]}]}};
+const STAFF_DATA = {"furniture.json":{"_about":["Placeable furniture in a held building (#2679). Staff data: every number here is meant to be changed.","limits.perBuilding is how many pieces one building takes; limits.buildings gives one building (its interior cell desc) another cap.","limits.reach is how far in front of you a piece is set, limits.pickReach how near a piece must be to move or pick it up, in units.","limits.carryMs is how long a piece stays in your hands after Move before it is let go where it stands.","limits.turnStep is the degrees one press of Turn turns a piece.","limits.types says which kinds of base may be placed. STAT is off until a dev check shows the server keeps a placed static.","pieces: item and recipe are the MISC and COBJ form ids in Thornswood-Content.esp (scripts/mods/Add-ContentRecords.py writes a row only while its type is on).","base is the vanilla record the piece stands as. A container base must not respawn and must carry no contents of its own.","inputs are what the woodworking bench takes; Build-RecipeTable.ps1 ranks the recipe by its dearest input, Woodwright's by the bench."],"limits":{"perBuilding":40,"buildings":{},"reach":120,"pickReach":400,"carryMs":60000,"turnStep":45,"types":{"FURN":true,"CONT":true,"STAT":false}},"pieces":[{"key":"stool","item":"16000","recipe":"16080","edid":"ThornswoodFurnitureStool","name":"Bar Stool","base":"74ec6:Skyrim.esm","type":"FURN","value":8,"weight":4,"inputs":[["6f993:Skyrim.esm",2]]},{"key":"chair","item":"16001","recipe":"16081","edid":"ThornswoodFurnitureChair","name":"Wooden Chair","base":"2ec1c:Skyrim.esm","type":"FURN","value":15,"weight":8,"inputs":[["6f993:Skyrim.esm",3],["800e4:Skyrim.esm",1]]},{"key":"bench","item":"16002","recipe":"16082","edid":"ThornswoodFurnitureBench","name":"Wooden Bench","base":"2e6cf:Skyrim.esm","type":"FURN","value":20,"weight":12,"inputs":[["6f993:Skyrim.esm",4],["800e4:Skyrim.esm",1]]},{"key":"finechair","item":"16003","recipe":"16083","edid":"ThornswoodFurnitureFineChair","name":"Fine Chair","base":"6b691:Skyrim.esm","type":"FURN","value":60,"weight":10,"inputs":[["6f993:Skyrim.esm",4],["800e4:Skyrim.esm",2],["5ace4:Skyrim.esm",1]]},{"key":"finebench","item":"16004","recipe":"16084","edid":"ThornswoodFurnitureFineBench","name":"Fine Bench","base":"6b57b:Skyrim.esm","type":"FURN","value":70,"weight":15,"inputs":[["6f993:Skyrim.esm",5],["800e4:Skyrim.esm",2],["5ace4:Skyrim.esm",1]]},{"key":"bedroll","item":"16005","recipe":"16085","edid":"ThornswoodFurnitureBedroll","name":"Bedroll","base":"36ed3:Skyrim.esm","type":"FURN","value":20,"weight":6,"inputs":[["800e4:Skyrim.esm",2],["3f7f8:Skyrim.esm",3]]},{"key":"bed","item":"16006","recipe":"16086","edid":"ThornswoodFurnitureBed","name":"Bed","base":"30091:Skyrim.esm","type":"FURN","value":50,"weight":30,"inputs":[["6f993:Skyrim.esm",6],["800e4:Skyrim.esm",2],["3f7f8:Skyrim.esm",4]]},{"key":"doublebed","item":"16007","recipe":"16087","edid":"ThornswoodFurnitureDoubleBed","name":"Double Bed","base":"3b6e8:Skyrim.esm","type":"FURN","value":90,"weight":45,"inputs":[["6f993:Skyrim.esm",8],["800e4:Skyrim.esm",3],["3f7f8:Skyrim.esm",6]]},{"key":"finedoublebed","item":"16008","recipe":"16088","edid":"ThornswoodFurnitureFineDoubleBed","name":"Fine Double Bed","base":"6b3d3:Skyrim.esm","type":"FURN","value":250,"weight":60,"inputs":[["6f993:Skyrim.esm",10],["800e4:Skyrim.esm",4],["3f7f8:Skyrim.esm",8],["5ace4:Skyrim.esm",2]]},{"key":"chest","item":"16009","recipe":"16089","edid":"ThornswoodFurnitureChest","name":"Chest","base":"f3923:Skyrim.esm","type":"CONT","value":40,"weight":20,"inputs":[["6f993:Skyrim.esm",4],["5ace4:Skyrim.esm",2]]},{"key":"largechest","item":"1600a","recipe":"1608a","edid":"ThornswoodFurnitureLargeChest","name":"Large Chest","base":"f8476:Skyrim.esm","type":"CONT","value":70,"weight":30,"inputs":[["6f993:Skyrim.esm",6],["5ace4:Skyrim.esm",3]]},{"key":"roundtable","item":"16040","recipe":"160c0","edid":"ThornswoodFurnitureRoundTable","name":"Round Table","base":"2ec1f:Skyrim.esm","type":"STAT","value":30,"weight":20,"inputs":[["6f993:Skyrim.esm",5]]},{"key":"squaretable","item":"16041","recipe":"160c1","edid":"ThornswoodFurnitureSquareTable","name":"Square Table","base":"2f239:Skyrim.esm","type":"STAT","value":30,"weight":20,"inputs":[["6f993:Skyrim.esm",5]]},{"key":"shelf","item":"16042","recipe":"160c2","edid":"ThornswoodFurnitureShelf","name":"Shelf","base":"2e6cd:Skyrim.esm","type":"STAT","value":25,"weight":15,"inputs":[["6f993:Skyrim.esm",4],["5ace4:Skyrim.esm",1]]},{"key":"fineroundtable","item":"16043","recipe":"160c3","edid":"ThornswoodFurnitureFineRoundTable","name":"Fine Round Table","base":"c29de:Skyrim.esm","type":"STAT","value":120,"weight":25,"inputs":[["6f993:Skyrim.esm",6],["5ace4:Skyrim.esm",1]]}]},"merchant-traders.json":{"version":1,"count":60,"byRef":{"13c008:Arena - Markarth Side.esp":{"name":"Tailor","role":"Tailor","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Markarth Side","cell":"f9a47:Arena - Markarth Side.esp","world":null,"pos":[-56,0,0]},"177da:Dragonborn.esm":{"name":"Enchanter","role":"Enchanter","hold":"Solstheim","bookHold":"ravenrock","locationName":"Tel Mithryn","cell":"17787:Dragonborn.esm","world":null,"pos":[102.66351318359375,1159.6314697265625,-8.091889381408691]},"1828f:Dragonborn.esm":{"name":"Smith","role":"Smith","hold":"Solstheim","bookHold":"ravenrock","locationName":"Raven Rock","cell":"17ec4:Dragonborn.esm","world":null,"pos":[-663.4784545898438,-301.1336669921875,0]},"18291:Dragonborn.esm":{"name":"Cook","role":"Cook","hold":"Solstheim","bookHold":"ravenrock","locationName":"Raven Rock","cell":"17ec0:Dragonborn.esm","world":null,"pos":[-39.04017639160156,-178.24331665039062,0]},"18293:Dragonborn.esm":{"name":"Woodworker","role":"Woodworker","hold":"Solstheim","bookHold":"ravenrock","locationName":"Raven Rock","cell":"17ebf:Dragonborn.esm","world":null,"pos":[-149.79263305664062,-146.8022918701172,0]},"182a2:Dragonborn.esm":{"name":"Alchemist","role":"Alchemist","hold":"Solstheim","bookHold":"ravenrock","locationName":"Raven Rock","cell":"18277:Dragonborn.esm","world":null,"pos":[-3.5353641510009766,232.098876953125,0]},"18fc0:Dragonborn.esm":{"name":"Tailor","role":"Tailor","hold":"Solstheim","bookHold":"ravenrock","locationName":"Skaal Village","cell":"18f4a:Dragonborn.esm","world":null,"pos":[-472.4573669433594,846.078857421875,40.82240295410156]},"1939ba:aaaGraniteHill.esp":{"name":"Tailor","role":"Tailor","hold":"Falkreath","bookHold":"falkreath","locationName":"Granite Hill","cell":"626a:aaaGraniteHill.esp","world":null,"pos":[-1024,0,512]},"1981e:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"Falkreath","bookHold":"falkreath","locationName":"Falkreath","cell":"13a76:Skyrim.esm","world":null,"pos":[-1219.1793212890625,-180.9888458251953,-0.1077728271484375]},"198a0:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a0e:Skyrim.esm","world":null,"pos":[-204.85626220703125,-453.2304382324219,0]},"198ac:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a0f:Skyrim.esm","world":null,"pos":[21.030447006225586,-535.8790283203125,0]},"198b1:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"169fe:Skyrim.esm","world":null,"pos":[-247.2842254638672,-1140.2867431640625,0.0000152587890625]},"198c5:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a04:Skyrim.esm","world":null,"pos":[-1115.4222412109375,1085.11181640625,576.4193725585938]},"198d2:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a11:Skyrim.esm","world":null,"pos":[21.52102279663086,-248.43890380859375,0]},"198d8:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Haafingar","bookHold":"solitude","locationName":"Solitude","cell":"16a10:Skyrim.esm","world":null,"pos":[-277.358154296875,-1007.031494140625,0.000003814697265625]},"198ea:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16dff:Skyrim.esm","world":null,"pos":[439.7211608886719,2819.8076171875,0]},"198eb:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16dff:Skyrim.esm","world":null,"pos":[-351.8253479003906,2705.2294921875,2.836996078491211]},"198f7:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16df6:Skyrim.esm","world":null,"pos":[-166.40286254882812,1063.5419921875,-112]},"19906:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16df2:Skyrim.esm","world":null,"pos":[519.8775634765625,2151.841064453125,6911.1318359375]},"19908:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16df2:Skyrim.esm","world":null,"pos":[-5168.5185546875,-167.9541778564453,6635.326171875]},"1990a:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"the Reach","bookHold":"markarth","locationName":"Markarth","cell":"16df2:Skyrim.esm","world":null,"pos":[-4416,1952,6896]},"19dd0:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"16bd9:Skyrim.esm","world":null,"pos":[-42.64916229248047,-54.30506896972656,64]},"19df0:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"16bd2:Skyrim.esm","world":null,"pos":[-1226.40966796875,1024.047119140625,128]},"19df1:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"53081:Skyrim.esm","world":null,"pos":[-181.75938415527344,-184.0110321044922,64]},"19dfb:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"16bce:Skyrim.esm","world":null,"pos":[0,784,112]},"19e14:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"9ccde:Skyrim.esm","world":null,"pos":[2084.01806640625,2835.379638671875,176]},"1a66d:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"165b6:Skyrim.esm","world":null,"pos":[-520,-248,64]},"1a66e:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"1605e:Skyrim.esm","world":null,"pos":[336,-416,64]},"1a672:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"165b3:Skyrim.esm","world":null,"pos":[119.512451171875,-23.152530670166016,69.51840209960938]},"1a67c:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"1db4e:Skyrim.esm","world":null,"pos":[-16,128,64]},"1a681:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"165b7:Skyrim.esm","world":null,"pos":[-16.498863220214844,-1200.2633056640625,80]},"1a684:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"Whiterun","bookHold":"whiterun","locationName":"Whiterun","cell":"165b2:Skyrim.esm","world":null,"pos":[-800,-320,320]},"1a6b5:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"13a86:Skyrim.esm","world":null,"pos":[1088.7137451171875,-91.87908172607422,2.565845489501953]},"1a6be:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"13a83:Skyrim.esm","world":null,"pos":[909.4266357421875,18.256004333496094,272]},"1a6bf:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"13a83:Skyrim.esm","world":null,"pos":[822.4622192382812,18.16551971435547,272]},"1a6c3:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"13a80:Skyrim.esm","world":null,"pos":[-776.2161865234375,1119.9918212890625,0]},"1aa5e:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Morthal","cell":"138d0:Skyrim.esm","world":null,"pos":[693.3634643554688,28.15774154663086,272.34967041015625]},"1aa61:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Morthal","cell":"138cf:Skyrim.esm","world":null,"pos":[860.4638671875,-160.4937744140625,272]},"1aa62:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Morthal","cell":"138ce:Skyrim.esm","world":null,"pos":[794.4549560546875,-143.3380584716797,10.95335578918457]},"1b115:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"1678c:Skyrim.esm","world":null,"pos":[1587.1324462890625,-4987.16552734375,72.77753448486328]},"1b11a:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"16789:Skyrim.esm","world":null,"pos":[-432,-3872,320]},"1b123:Skyrim.esm":{"name":"Woodworker","role":"Woodworker","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"16782:Skyrim.esm","world":null,"pos":[-1072.8953857421875,-1134.9822998046875,-128]},"1b124:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"16781:Skyrim.esm","world":null,"pos":[-2954.65576171875,356.79949951171875,-448]},"1b132:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"1677c:Skyrim.esm","world":null,"pos":[-2832,-2752,64]},"1b135:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Eastmarch","bookHold":"windhelm","locationName":"Windhelm","cell":"7d033:Skyrim.esm","world":null,"pos":[1312.3782958984375,-5028.5703125,58.14128494262695]},"1c18c:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13813:Skyrim.esm","world":null,"pos":[-1035.252197265625,-131.28944396972656,10.275467872619629]},"1c18d:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13814:Skyrim.esm","world":null,"pos":[1470.461181640625,17.313034057617188,0.00006103515625]},"1c18e:Skyrim.esm":{"name":"Tailor","role":"Tailor","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13814:Skyrim.esm","world":null,"pos":[1986.1158447265625,-209.83944702148438,0.000034332275390625]},"1c1aa:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold College","cell":"cab91:Skyrim.esm","world":null,"pos":[413.85235595703125,348.97003173828125,0.00002288818359375]},"1e7d6:Skyrim.esm":{"name":"Enchanter","role":"Enchanter","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13814:Skyrim.esm","world":null,"pos":[1944.821533203125,696.4560546875,0.00000762939453125]},"31efc3:Riften Expansion.esp":{"name":"Tailor","role":"Tailor","hold":"the Rift","bookHold":"riften","locationName":"Riften","cell":"cc3f6:Riften Expansion.esp","world":null,"pos":[-273.2473449707031,-81.94912719726562,63.99998474121094]},"33a2:JKs Skyrim.esp":{"name":"Woodworker","role":"Woodworker","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"32b8:JKs Skyrim.esp","world":null,"pos":[1486.3250732421875,1923.6727294921875,228.70834350585938]},"3a198:Skyrim.esm":{"name":"Cook","role":"Cook","hold":"Falkreath","bookHold":"falkreath","locationName":"Falkreath","cell":"3a184:Skyrim.esm","world":null,"pos":[-348.84991455078125,-99.87165832519531,0]},"3a19b:Skyrim.esm":{"name":"Alchemist","role":"Alchemist","hold":"Falkreath","bookHold":"falkreath","locationName":"Falkreath","cell":"3a183:Skyrim.esm","world":null,"pos":[-630.467041015625,23.01331329345703,0.5730171203613281]},"3a19f:Skyrim.esm":{"name":"Smith","role":"Smith","hold":"Falkreath","bookHold":"falkreath","locationName":"Falkreath","cell":"13a73:Skyrim.esm","world":null,"pos":[1587.974609375,132.00314331054688,240]},"3a22:JKs Skyrim.esp":{"name":"Cook","role":"Cook","hold":"the Pale","bookHold":"dawnstar","locationName":"Dawnstar","cell":"32b8:JKs Skyrim.esp","world":null,"pos":[1204.6116943359375,1890.033203125,228.7083740234375]},"72c89:North Keep.esp":{"name":"Enchanter","role":"Enchanter","hold":"Falkreath","bookHold":"falkreath","locationName":"The Estates' Edge","cell":"3a988:North Keep.esp","world":null,"pos":[224.81382751464844,-550.4144287109375,15.826522827148438]},"b4a3:Populated Cities Towns Villages Legendary.esp":{"name":"Woodworker","role":"Woodworker","hold":"Winterhold","bookHold":"winterhold","locationName":"Winterhold","cell":"13814:Skyrim.esm","world":null,"pos":[2143.7470703125,154.48138427734375,0.000091552734375]},"b818d:Arena - Markarth Side.esp":{"name":"Woodworker","role":"Woodworker","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Markarth Side","cell":"5c591:Arena - Markarth Side.esp","world":null,"pos":[-237.17320251464844,-167.08517456054688,261.5469055175781]},"e24:JKs Skyrim.esp":{"name":"Smith","role":"Smith","hold":"Hjaalmarch","bookHold":"morthal","locationName":"Morthal","cell":"93be:Skyrim.esm","world":"3c:Skyrim.esm","pos":[-37173.703125,64145.35546875,-13940.6337890625]}}},"property-word.json":{"_about":"Word to a property holder when their door's lock is picked or their deed is presented (#2680). Staff data: change the numbers here, never in gamemode.js. Minutes and days are real time. A key that is missing or the wrong type keeps the default in the property block's WORD_DEFAULTS, and the server log says which.","pick":{"on":true,"delayMinutes":20,"describe":true,"samePickerMinutes":360},"deed":{"on":true,"delayMinutes":10,"describe":true},"bundle":true,"perHolderPerDay":6,"maxPending":20,"keepDays":14,"reach":400,"needLockpick":true,"everySeconds":30},"thalmor-patrols.json":{"version":1,"about":["Thalmor patrols (#1390, docs/systems/thalmor.md). Staff settings, naming nobody.","on: whether any patrol is out at all. Off until staff turn it on.","most: the most roads with a patrol in the province at once (the page says 3).","stageMost: a cap for a world stage, by its id in war-stages.json, e.g. {\"peace\": 1}. With no stage, or none for the current one, most holds.","returnMinutes: how long a dead member takes to come back at its point. leash: how far one strays from its point.","tier: the difficulty tier the members fight at, or null for none.","roads: one patrol each. A road is refused if it is not in Tamriel, has fewer than 2 or more than 4 points, or a point is near a walled town.","Each point is one member, made from the base at the same place in bases. A road may set its own returnMinutes and leash.","After a change, run node scripts/dev/Build-StaffData.js, which carries this file inside gamemode.js (the server has no game/data beside it, #2873), commit both and deploy the gamemode. It takes effect at the next start or gamemode reload. A road turned off loses its members then."],"on":false,"most":3,"stageMost":{},"returnMinutes":45,"leash":1536,"tier":null,"roads":[{"id":"pale","name":"the Pale road","on":true,"world":"3c:Skyrim.esm","from":"the cut Immersive Patrols II Justiciar placements in the Pale: 2422ce:Immersive Patrols II.esp, 2422d0:Immersive Patrols II.esp, 2422d1:Immersive Patrols II.esp, 2422cc:Immersive Patrols II.esp","bases":["23d1b6:Immersive Patrols II.esp","23d1b6:Immersive Patrols II.esp","23d1b6:Immersive Patrols II.esp","23d1b7:Immersive Patrols II.esp"],"points":[[42204.65,61535.45,-7697.89],[42792.77,58992.17,-7899.64],[42415.52,60846.96,-7642.09],[41325.44,59586.77,-7582.31]]},{"id":"haafingar","name":"the Haafingar road","on":true,"world":"3c:Skyrim.esm","from":"the cut Immersive Patrols II Justiciar placements in Haafingar: 274d83:Immersive Patrols II.esp, 274d84:Immersive Patrols II.esp, 274d85:Immersive Patrols II.esp, 274d86:Immersive Patrols II.esp","bases":["60f90:Immersive Patrols II.esp","60f91:Immersive Patrols II.esp","60f91:Immersive Patrols II.esp","60f91:Immersive Patrols II.esp"],"points":[[-96155.64,90703.16,-10613],[-96411.34,90665.63,-10628.01],[-96272.46,90564.34,-10628.63],[-96112.45,90458.13,-10628.67]]},{"id":"hjaalmarch","name":"the Hjaalmarch road","on":true,"world":"3c:Skyrim.esm","from":"the cut Immersive Patrols II Justiciar placements in Hjaalmarch: 274d87:Immersive Patrols II.esp, 274d88:Immersive Patrols II.esp, 274d89:Immersive Patrols II.esp, 274d8a:Immersive Patrols II.esp","bases":["60fa2:Immersive Patrols II.esp","60fa2:Immersive Patrols II.esp","60fa2:Immersive Patrols II.esp","60f9e:Immersive Patrols II.esp"],"points":[[-54940.8,60060.26,-13541.87],[-55096.18,60241.4,-13532.52],[-55182.89,60086.05,-13502.88],[-55383.89,60339.38,-13504.62]]}]}};
 
 /*
   THE TABLES READ OUT OF THE LOAD ORDER ARE FILES BESIDE THE GAMEMODE (#5191).
@@ -92,7 +92,7 @@ const WELLS = table('WELLS');
 const WEATHER = table('WEATHER');
 const WARMTH = table('WARMTH');
 const FOODS = table('FOODS');
-const FOOD_GROUPS = {"items":{"10211a:Skyrim.esm":"raw","10394d:Skyrim.esm":"ingredient","10d666:Skyrim.esm":"ingredient","117ff:HearthFires.esm":"cooked","11801:HearthFires.esm":"cooked","12010f:WindhelmSSE.esp":"prepared","12f9c4:WindhelmSSE.esp":"ingredient","1391d:Dawnguard.esm":"drugs","13f593:WindhelmSSE.esp":"ale","14dc4:Dawnguard.esm":"ingredient","17167b:WindhelmSSE.esp":"drink","18001:Thornswood-Content.esp":"tea","18002:Thornswood-Content.esp":"tea","18003:Thornswood-Content.esp":"tea","19010:Thornswood-Content.esp":"soup","19011:Thornswood-Content.esp":"cooked","19012:Thornswood-Content.esp":"cooked","19013:Thornswood-Content.esp":"cooked","19014:Thornswood-Content.esp":"cooked","19015:Thornswood-Content.esp":"soup","19016:Thornswood-Content.esp":"soup","19017:Thornswood-Content.esp":"soup","19018:Thornswood-Content.esp":"soup","19019:Thornswood-Content.esp":"cooked","1901a:Thornswood-Content.esp":"soup","1901b:Thornswood-Content.esp":"soup","1901c:Thornswood-Content.esp":"cooked","1901d:Thornswood-Content.esp":"cooked","1901e:Thornswood-Content.esp":"soup","1901f:Thornswood-Content.esp":"soup","19020:Thornswood-Content.esp":"soup","19021:Thornswood-Content.esp":"soup","19022:Thornswood-Content.esp":"soup","19023:Thornswood-Content.esp":"cooked","19024:Thornswood-Content.esp":"cooked","19025:Thornswood-Content.esp":"cooked","19026:Thornswood-Content.esp":"cooked","19027:Thornswood-Content.esp":"cooked","19028:Thornswood-Content.esp":"cooked","19029:Thornswood-Content.esp":"cooked","1902a:Thornswood-Content.esp":"cooked","1902b:Thornswood-Content.esp":"cooked","1902c:Thornswood-Content.esp":"cooked","1902d:Thornswood-Content.esp":"cooked","1902e:Thornswood-Content.esp":"soup","1902f:Thornswood-Content.esp":"soup","19030:Thornswood-Content.esp":"cooked","19031:Thornswood-Content.esp":"cooked","19032:Thornswood-Content.esp":"cooked","19033:Thornswood-Content.esp":"cooked","19034:Thornswood-Content.esp":"cooked","19035:Thornswood-Content.esp":"cooked","19036:Thornswood-Content.esp":"cooked","19037:Thornswood-Content.esp":"cooked","19038:Thornswood-Content.esp":"cooked","19039:Thornswood-Content.esp":"cooked","1903a:Thornswood-Content.esp":"cooked","1903b:Thornswood-Content.esp":"cooked","1903c:Thornswood-Content.esp":"cooked","1903d:Thornswood-Content.esp":"cooked","1903e:Thornswood-Content.esp":"cooked","1903f:Thornswood-Content.esp":"cooked","19040:Thornswood-Content.esp":"cooked","19041:Thornswood-Content.esp":"cooked","19042:Thornswood-Content.esp":"cooked","19043:Thornswood-Content.esp":"cooked","19044:Thornswood-Content.esp":"cooked","19045:Thornswood-Content.esp":"cooked","19046:Thornswood-Content.esp":"soup","19047:Thornswood-Content.esp":"soup","19048:Thornswood-Content.esp":"soup","19049:Thornswood-Content.esp":"soup","1904a:Thornswood-Content.esp":"soup","1904b:Thornswood-Content.esp":"soup","1904c:Thornswood-Content.esp":"soup","1904d:Thornswood-Content.esp":"soup","1904e:Thornswood-Content.esp":"cooked","1a010:Thornswood-Content.esp":"feast","1a011:Thornswood-Content.esp":"feast","1a012:Thornswood-Content.esp":"feast","1a013:Thornswood-Content.esp":"feast","1a030:Thornswood-Content.esp":"feast","1a031:Thornswood-Content.esp":"feast","1a032:Thornswood-Content.esp":"feast","1a033:Thornswood-Content.esp":"feast","1a040:Thornswood-Content.esp":"ale","1a041:Thornswood-Content.esp":"ale","1a042:Thornswood-Content.esp":"ale","1a043:Thornswood-Content.esp":"ale","206e7:Dragonborn.esm":"ingredient","2844d3:Triumvirate - Mage Archetypes.esp":"potion","3206fc:WindhelmSSE.esp":"ale","3533:HearthFires.esm":"cooked","3534:HearthFires.esm":"drink","3537:HearthFires.esm":"cooked","3538:HearthFires.esm":"ingredient","3539:HearthFires.esm":"cooked","353a:HearthFires.esm":"cooked","353b:HearthFires.esm":"cooked","353c:HearthFires.esm":"ingredient","353d:HearthFires.esm":"soup","353e:HearthFires.esm":"soup","353f:HearthFires.esm":"cooked","3540:HearthFires.esm":"raw","3541:HearthFires.esm":"cooked","3bd14:Dragonborn.esm":"raw","3bd15:Dragonborn.esm":"raw","3cd5b:Dragonborn.esm":"soup","3cf72:Dragonborn.esm":"cooked","3d125:Dragonborn.esm":"raw","3f4bd:Skyrim.esm":"drugs","4477e9:WindhelmSSE.esp":"prepared","4477ea:WindhelmSSE.esp":"prepared","57a7a:Skyrim.esm":"drugs","64b2e:Skyrim.esm":"ingredient","64b2f:Skyrim.esm":"ingredient","64b30:Skyrim.esm":"cooked","64b31:Skyrim.esm":"prepared","64b32:Skyrim.esm":"prepared","64b33:Skyrim.esm":"prepared","64b34:Skyrim.esm":"prepared","64b35:Skyrim.esm":"prepared","64b36:Skyrim.esm":"prepared","64b38:Skyrim.esm":"cooked","64b39:Skyrim.esm":"prepared","64b3a:Skyrim.esm":"cooked","64b3b:Skyrim.esm":"cooked","64b3c:Skyrim.esm":"cooked","64b3d:Skyrim.esm":"cooked","64b3e:Skyrim.esm":"cooked","64b3f:Skyrim.esm":"ingredient","64b40:Skyrim.esm":"ingredient","64b41:Skyrim.esm":"ingredient","64b42:Skyrim.esm":"ingredient","64b43:Skyrim.esm":"cooked","65c37:Skyrim.esm":"ale","65c38:Skyrim.esm":"ale","65c39:Skyrim.esm":"ale","65c97:Skyrim.esm":"cooked","65c98:Skyrim.esm":"prepared","65c99:Skyrim.esm":"raw","65c9a:Skyrim.esm":"raw","65c9b:Skyrim.esm":"raw","65c9c:Skyrim.esm":"raw","65c9d:Skyrim.esm":"raw","65c9e:Skyrim.esm":"raw","65c9f:Skyrim.esm":"raw","669a2:Skyrim.esm":"raw","669a3:Skyrim.esm":"prepared","669a4:Skyrim.esm":"raw","669a5:Skyrim.esm":"ingredient","721e8:Skyrim.esm":"cooked","7224c:Skyrim.esm":"cooked","7224e:Skyrim.esm":"cooked","722b0:Skyrim.esm":"cooked","722bb:Skyrim.esm":"cooked","722bd:Skyrim.esm":"cooked","722c2:Skyrim.esm":"cooked","722c7:Skyrim.esm":"cooked","80d:Gourmet.esp":"cooked","810:Gourmet.esp":"cooked","815:Gourmet.esp":"cooked","816:Gourmet.esp":"soup","817:Gourmet.esp":"soup","818:Gourmet.esp":"soup","81c:Gourmet.esp":"soup","822:Gourmet.esp":"ale","8aa:Gourmet.esp":"cooked","8ac:Gourmet.esp":"raw","8ae:Gourmet.esp":"raw","8b1:Gourmet.esp":"soup","8b3:Gourmet.esp":"soup","8e2:Gourmet.esp":"cooked","8e4:Gourmet.esp":"cooked","8ea:Gourmet.esp":"soup","8eb:Gourmet.esp":"soup","8f5:Gourmet.esp":"soup","8f6:Gourmet.esp":"soup","8f7:Gourmet.esp":"soup","901:Gourmet.esp":"cooked","902:Gourmet.esp":"cooked","903:Gourmet.esp":"cooked","936:Gourmet.esp":"drugs","981:Gourmet.esp":"cooked","9db:HearthFires.esm":"cooked","9dc:HearthFires.esm":"cooked","9df:Gourmet.esp":"soup","9e0:Gourmet.esp":"soup","9e1:Gourmet.esp":"soup","9e2:Gourmet.esp":"soup","9e3:Gourmet.esp":"soup","9e4:Gourmet.esp":"soup","9e5:Gourmet.esp":"soup","9e6:Gourmet.esp":"soup","aed90:Skyrim.esm":"drugs","cadfb:Skyrim.esm":"prepared","cd614:Skyrim.esm":"cooked","dc172:Skyrim.esm":"drugs","e8448:Skyrim.esm":"cooked","e8947:Skyrim.esm":"cooked","eba01:Skyrim.esm":"soup","eba02:Skyrim.esm":"soup","eba03:Skyrim.esm":"raw","edb2e:Skyrim.esm":"raw","f2011:Skyrim.esm":"raw","f4314:Skyrim.esm":"soup","f4315:Skyrim.esm":"soup","f431b:Skyrim.esm":"soup","f431c:Skyrim.esm":"soup","f431d:Skyrim.esm":"soup","f431e:Skyrim.esm":"soup","f4320:Skyrim.esm":"cooked"},"strip":{"groups":["raw","cooked","soup","ingredient","prepared","drink"],"keep":{"12f9c4:WindhelmSSE.esp":"Sack of Frostwheat Flour: Resist Frost 3 for 60s rides with Restore Health 1","12010f:WindhelmSSE.esp":"Frostwheat Bread: Resist Frost 5 for 60s rides with Restore Health 3","17167b:WindhelmSSE.esp":"Snowberry Juice: Resist Frost 5 for 30s rides with Restore Stamina 5"}},"season":{"plain":{"soup":"warm"},"extras":{"34d22:Skyrim.esm":"guard","34cdf:Skyrim.esm":"stamina"},"dishes":{}},"quality":{"burnt":"19000:Thornswood-Content.esp","fine":{"3cd5b:Dragonborn.esm":"19010:Thornswood-Content.esp","3cf72:Dragonborn.esm":"19011:Thornswood-Content.esp","80d:Gourmet.esp":"19012:Thornswood-Content.esp","810:Gourmet.esp":"19013:Thornswood-Content.esp","815:Gourmet.esp":"19014:Thornswood-Content.esp","816:Gourmet.esp":"19015:Thornswood-Content.esp","817:Gourmet.esp":"19016:Thornswood-Content.esp","818:Gourmet.esp":"19017:Thornswood-Content.esp","81c:Gourmet.esp":"19018:Thornswood-Content.esp","8aa:Gourmet.esp":"19019:Thornswood-Content.esp","8b1:Gourmet.esp":"1901a:Thornswood-Content.esp","8b3:Gourmet.esp":"1901b:Thornswood-Content.esp","8e2:Gourmet.esp":"1901c:Thornswood-Content.esp","8e4:Gourmet.esp":"1901d:Thornswood-Content.esp","8ea:Gourmet.esp":"1901e:Thornswood-Content.esp","8eb:Gourmet.esp":"1901f:Thornswood-Content.esp","8f5:Gourmet.esp":"19020:Thornswood-Content.esp","8f6:Gourmet.esp":"19021:Thornswood-Content.esp","8f7:Gourmet.esp":"19022:Thornswood-Content.esp","901:Gourmet.esp":"19023:Thornswood-Content.esp","902:Gourmet.esp":"19024:Thornswood-Content.esp","903:Gourmet.esp":"19025:Thornswood-Content.esp","981:Gourmet.esp":"19026:Thornswood-Content.esp","9db:HearthFires.esm":"19027:Thornswood-Content.esp","9dc:HearthFires.esm":"19028:Thornswood-Content.esp","3533:HearthFires.esm":"19029:Thornswood-Content.esp","3537:HearthFires.esm":"1902a:Thornswood-Content.esp","3539:HearthFires.esm":"1902b:Thornswood-Content.esp","353a:HearthFires.esm":"1902c:Thornswood-Content.esp","353b:HearthFires.esm":"1902d:Thornswood-Content.esp","353d:HearthFires.esm":"1902e:Thornswood-Content.esp","353e:HearthFires.esm":"1902f:Thornswood-Content.esp","353f:HearthFires.esm":"19030:Thornswood-Content.esp","117ff:HearthFires.esm":"19031:Thornswood-Content.esp","11801:HearthFires.esm":"19032:Thornswood-Content.esp","64b30:Skyrim.esm":"19033:Thornswood-Content.esp","64b38:Skyrim.esm":"19034:Thornswood-Content.esp","64b3a:Skyrim.esm":"19035:Thornswood-Content.esp","64b3b:Skyrim.esm":"19036:Thornswood-Content.esp","64b3c:Skyrim.esm":"19037:Thornswood-Content.esp","64b3d:Skyrim.esm":"19038:Thornswood-Content.esp","64b3e:Skyrim.esm":"19039:Thornswood-Content.esp","64b43:Skyrim.esm":"1903a:Thornswood-Content.esp","65c97:Skyrim.esm":"1903b:Thornswood-Content.esp","721e8:Skyrim.esm":"1903c:Thornswood-Content.esp","7224c:Skyrim.esm":"1903d:Thornswood-Content.esp","7224e:Skyrim.esm":"1903e:Thornswood-Content.esp","722b0:Skyrim.esm":"1903f:Thornswood-Content.esp","722bb:Skyrim.esm":"19040:Thornswood-Content.esp","722bd:Skyrim.esm":"19041:Thornswood-Content.esp","722c2:Skyrim.esm":"19042:Thornswood-Content.esp","722c7:Skyrim.esm":"19043:Thornswood-Content.esp","e8448:Skyrim.esm":"19044:Thornswood-Content.esp","e8947:Skyrim.esm":"19045:Thornswood-Content.esp","eba01:Skyrim.esm":"19046:Thornswood-Content.esp","eba02:Skyrim.esm":"19047:Thornswood-Content.esp","f4314:Skyrim.esm":"19048:Thornswood-Content.esp","f4315:Skyrim.esm":"19049:Thornswood-Content.esp","f431b:Skyrim.esm":"1904a:Thornswood-Content.esp","f431c:Skyrim.esm":"1904b:Thornswood-Content.esp","f431d:Skyrim.esm":"1904c:Thornswood-Content.esp","f431e:Skyrim.esm":"1904d:Thornswood-Content.esp","f4320:Skyrim.esm":"1904e:Thornswood-Content.esp","1a010:Thornswood-Content.esp":"1a030:Thornswood-Content.esp","1a011:Thornswood-Content.esp":"1a031:Thornswood-Content.esp","1a012:Thornswood-Content.esp":"1a032:Thornswood-Content.esp","1a013:Thornswood-Content.esp":"1a033:Thornswood-Content.esp"}},"feasts":{"1a010:Thornswood-Content.esp":"stamina","1a011:Thornswood-Content.esp":"guard","1a012:Thornswood-Content.esp":"stamina","1a013:Thornswood-Content.esp":"warm"},"inSeason":{"45c28:Skyrim.esm":["spring","summer"],"6ac4a:Skyrim.esm":["summer","autumn"],"1b3bd:Skyrim.esm":["autumn","winter"],"5076e:Skyrim.esm":["winter","spring"]},"spoil":{"days":{"raw":7,"ingredient":7,"cooked":14,"soup":14,"prepared":14,"feast":14},"keeps":{"10394d:Skyrim.esm":"Honey","12f9c4:WindhelmSSE.esp":"Sack of Frostwheat Flour","14dc4:Dawnguard.esm":"Soul Husk","3538:HearthFires.esm":"Sack of Flour","4477ea:WindhelmSSE.esp":"Nord Chocolate","64b31:Skyrim.esm":"Goat Cheese Wedge","64b32:Skyrim.esm":"Eidar Cheese Wedge","64b33:Skyrim.esm":"Goat Cheese Wheel","64b34:Skyrim.esm":"Eidar Cheese Wheel","64b35:Skyrim.esm":"Sliced Goat Cheese Wheel","64b36:Skyrim.esm":"Sliced Eidar Cheese Wheel","64b39:Skyrim.esm":"Long Taffy Treat","669a3:Skyrim.esm":"Mammoth Cheese Bowl","cadfb:Skyrim.esm":"Spiced Beef"},"extra":{"3534:HearthFires.esm":7,"353c:HearthFires.esm":14,"19000:Thornswood-Content.esp":14},"preserve":["raw"],"salt":"34cdf:Skyrim.esm","firewood":"6f993:Skyrim.esm","spoiled":"19100:Thornswood-Content.esp","names":{"10211a:Skyrim.esm":"Mammoth Snout","10d666:Skyrim.esm":"Gourd","117ff:HearthFires.esm":"Jazbay Dumpling","11801:HearthFires.esm":"Snowberry Dumpling","12010f:WindhelmSSE.esp":"Frostwheat Bread","19000:Thornswood-Content.esp":"Burnt Meal","19010:Thornswood-Content.esp":"Fine Ash Yam Soup","19011:Thornswood-Content.esp":"Fine Cooked Boar Meat","19012:Thornswood-Content.esp":"Fine Juniper Berry Dumpling","19013:Thornswood-Content.esp":"Fine Mammoth Cheese Fondue","19014:Thornswood-Content.esp":"Fine Eidar Cheese Fondue","19015:Thornswood-Content.esp":"Fine Ash Hopper Stew","19016:Thornswood-Content.esp":"Fine Boar Stew","19017:Thornswood-Content.esp":"Fine Mammoth Stew","19018:Thornswood-Content.esp":"Fine Goat Stew","19019:Thornswood-Content.esp":"Fine Cooked Dog","1901a:Thornswood-Content.esp":"Fine Gourd Soup","1901b:Thornswood-Content.esp":"Fine Carrot Soup","1901c:Thornswood-Content.esp":"Fine Roasted Carrots","1901d:Thornswood-Content.esp":"Fine Roasted Yams","1901e:Thornswood-Content.esp":"Fine Rabbit Stew","1901f:Thornswood-Content.esp":"Fine Pheasant Stew","19020:Thornswood-Content.esp":"Fine Mushroom Stew","19021:Thornswood-Content.esp":"Fine Wild Mushroom Stew","19022:Thornswood-Content.esp":"Fine Glowing Mushroom Stew","19023:Thornswood-Content.esp":"Fine Roasted Mushrooms","19024:Thornswood-Content.esp":"Fine Roasted Wild Mushrooms","19025:Thornswood-Content.esp":"Fine Roasted Glowing Mushroom","19026:Thornswood-Content.esp":"Fine Jelly Dumpling","19027:Thornswood-Content.esp":"Fine Braided Bread","19028:Thornswood-Content.esp":"Fine Garlic Bread","19029:Thornswood-Content.esp":"Fine Apple Dumpling","1902a:Thornswood-Content.esp":"Fine Potato Bread","1902b:Thornswood-Content.esp":"Fine Juniper Berry Crostata","1902c:Thornswood-Content.esp":"Fine Jazbay Crostata","1902d:Thornswood-Content.esp":"Fine Snowberry Crostata","1902e:Thornswood-Content.esp":"Fine Potato Soup","1902f:Thornswood-Content.esp":"Fine Clam Chowder","19030:Thornswood-Content.esp":"Fine Steamed Mudcrab Legs","19031:Thornswood-Content.esp":"Fine Jazbay Dumpling","19032:Thornswood-Content.esp":"Fine Snowberry Dumpling","19033:Thornswood-Content.esp":"Fine Boiled Creme Treat","19034:Thornswood-Content.esp":"Fine Honey Nut Treat","19035:Thornswood-Content.esp":"Fine Baked Potatoes","19036:Thornswood-Content.esp":"Fine Salmon Steak","19037:Thornswood-Content.esp":"Fine Slaughterfish Steak","19038:Thornswood-Content.esp":"Fine Sweet Roll","19039:Thornswood-Content.esp":"Fine Grilled Leeks","1903a:Thornswood-Content.esp":"Fine Apple Pie","1903b:Thornswood-Content.esp":"Fine Bread Loaf","1903c:Thornswood-Content.esp":"Fine Cooked Beef","1903d:Thornswood-Content.esp":"Fine Goat Roast","1903e:Thornswood-Content.esp":"Fine Horker Loaf","1903f:Thornswood-Content.esp":"Fine Horse Haunch","19040:Thornswood-Content.esp":"Fine Mammoth Steak","19041:Thornswood-Content.esp":"Fine Venison Chop","19042:Thornswood-Content.esp":"Fine Rabbit Haunch","19043:Thornswood-Content.esp":"Fine Pheasant Roast","19044:Thornswood-Content.esp":"Fine Cooked Skeever","19045:Thornswood-Content.esp":"Fine Grilled Chicken Breast","19046:Thornswood-Content.esp":"Fine Cabbage and Tomato Soup","19047:Thornswood-Content.esp":"Fine Cabbage Soup","19048:Thornswood-Content.esp":"Fine Beef Stew","19049:Thornswood-Content.esp":"Fine Horker Stew","1904a:Thornswood-Content.esp":"Fine Cabbage Potato Soup","1904b:Thornswood-Content.esp":"Fine Tomato Soup","1904c:Thornswood-Content.esp":"Fine Venison Stew","1904d:Thornswood-Content.esp":"Fine Vegetable Soup","1904e:Thornswood-Content.esp":"Fine Goat Cheese Fondue","1a010:Thornswood-Content.esp":"First Planting Loaf","1a011:Thornswood-Content.esp":"Midyear Jazbay Tart","1a012:Thornswood-Content.esp":"Harvest's End Roast","1a013:Thornswood-Content.esp":"Saturalia Spice Cake","1a030:Thornswood-Content.esp":"Fine First Planting Loaf","1a031:Thornswood-Content.esp":"Fine Midyear Jazbay Tart","1a032:Thornswood-Content.esp":"Fine Harvest's End Roast","1a033:Thornswood-Content.esp":"Fine Saturalia Spice Cake","206e7:Dragonborn.esm":"Ash Yam","3533:HearthFires.esm":"Apple Dumpling","3534:HearthFires.esm":"Jug of Milk","3537:HearthFires.esm":"Potato Bread","3539:HearthFires.esm":"Juniper Berry Crostata","353a:HearthFires.esm":"Jazbay Crostata","353b:HearthFires.esm":"Snowberry Crostata","353c:HearthFires.esm":"Butter","353d:HearthFires.esm":"Potato Soup","353e:HearthFires.esm":"Clam Chowder","353f:HearthFires.esm":"Steamed Mudcrab Legs","3540:HearthFires.esm":"Mudcrab Legs","3541:HearthFires.esm":"Salmon Steak","3bd14:Dragonborn.esm":"Boar Meat","3bd15:Dragonborn.esm":"Ash Hopper Meat","3cd5b:Dragonborn.esm":"Ash Yam Soup","3cf72:Dragonborn.esm":"Cooked Boar Meat","3d125:Dragonborn.esm":"Ash Hopper Leg","4477e9:WindhelmSSE.esp":"Nord Rolled Cake","64b2e:Skyrim.esm":"Red Apple","64b2f:Skyrim.esm":"Green Apple","64b30:Skyrim.esm":"Boiled Creme Treat","64b38:Skyrim.esm":"Honey Nut Treat","64b3a:Skyrim.esm":"Baked Potatoes","64b3b:Skyrim.esm":"Salmon Steak","64b3c:Skyrim.esm":"Slaughterfish Steak","64b3d:Skyrim.esm":"Sweet Roll","64b3e:Skyrim.esm":"Grilled Leeks","64b3f:Skyrim.esm":"Cabbage","64b40:Skyrim.esm":"Carrot","64b41:Skyrim.esm":"Potato","64b42:Skyrim.esm":"Tomato","64b43:Skyrim.esm":"Apple Pie","65c97:Skyrim.esm":"Bread Loaf","65c98:Skyrim.esm":"Bread","65c99:Skyrim.esm":"Raw Beef","65c9a:Skyrim.esm":"Goat Meat","65c9b:Skyrim.esm":"Horker Meat","65c9c:Skyrim.esm":"Horse Meat","65c9d:Skyrim.esm":"Pheasant Breast","65c9e:Skyrim.esm":"Raw Rabbit Leg","65c9f:Skyrim.esm":"Salmon Meat","669a2:Skyrim.esm":"Venison","669a4:Skyrim.esm":"Mammoth Snout","669a5:Skyrim.esm":"Leek","721e8:Skyrim.esm":"Cooked Beef","7224c:Skyrim.esm":"Goat Roast","7224e:Skyrim.esm":"Horker Loaf","722b0:Skyrim.esm":"Horse Haunch","722bb:Skyrim.esm":"Mammoth Steak","722bd:Skyrim.esm":"Venison Chop","722c2:Skyrim.esm":"Rabbit Haunch","722c7:Skyrim.esm":"Pheasant Roast","80d:Gourmet.esp":"Juniper Berry Dumpling","810:Gourmet.esp":"Mammoth Cheese Fondue","815:Gourmet.esp":"Eidar Cheese Fondue","816:Gourmet.esp":"Ash Hopper Stew","817:Gourmet.esp":"Boar Stew","818:Gourmet.esp":"Mammoth Stew","81c:Gourmet.esp":"Goat Stew","8aa:Gourmet.esp":"Cooked Dog","8ac:Gourmet.esp":"Skeever Meat","8ae:Gourmet.esp":"Slaughterfish Meat","8b1:Gourmet.esp":"Gourd Soup","8b3:Gourmet.esp":"Carrot Soup","8e2:Gourmet.esp":"Roasted Carrots","8e4:Gourmet.esp":"Roasted Yams","8ea:Gourmet.esp":"Rabbit Stew","8eb:Gourmet.esp":"Pheasant Stew","8f5:Gourmet.esp":"Mushroom Stew","8f6:Gourmet.esp":"Wild Mushroom Stew","8f7:Gourmet.esp":"Glowing Mushroom Stew","901:Gourmet.esp":"Roasted Mushrooms","902:Gourmet.esp":"Roasted Wild Mushrooms","903:Gourmet.esp":"Roasted Glowing Mushroom","981:Gourmet.esp":"Jelly Dumpling","9db:HearthFires.esm":"Braided Bread","9dc:HearthFires.esm":"Garlic Bread","9df:Gourmet.esp":"Hot Goat Stew","9e0:Gourmet.esp":"Hot Mammoth Stew","9e1:Gourmet.esp":"Hot Pheasant Stew","9e2:Gourmet.esp":"Hot Rabbit Stew","9e3:Gourmet.esp":"Hot Mushroom Stew","9e4:Gourmet.esp":"Hot Wild Mushroom Stew","9e5:Gourmet.esp":"Hot Glowing Mushroom Stew","9e6:Gourmet.esp":"Hot Ash Hopper Stew","cd614:Skyrim.esm":"Homecooked Meal","e8448:Skyrim.esm":"Cooked Skeever","e8947:Skyrim.esm":"Grilled Chicken Breast","eba01:Skyrim.esm":"Cabbage and Tomato Soup","eba02:Skyrim.esm":"Cabbage Soup","eba03:Skyrim.esm":"Clam Meat","edb2e:Skyrim.esm":"Dog Meat","f2011:Skyrim.esm":"Chicken Breast","f4314:Skyrim.esm":"Beef Stew","f4315:Skyrim.esm":"Horker Stew","f431b:Skyrim.esm":"Cabbage Potato Soup","f431c:Skyrim.esm":"Tomato Soup","f431d:Skyrim.esm":"Venison Stew","f431e:Skyrim.esm":"Vegetable Soup","f4320:Skyrim.esm":"Goat Cheese Fondue"}}};
+const FOOD_GROUPS = {"items":{"10211a:Skyrim.esm":"raw","10394d:Skyrim.esm":"ingredient","10d666:Skyrim.esm":"ingredient","117ff:HearthFires.esm":"cooked","11801:HearthFires.esm":"cooked","12010f:WindhelmSSE.esp":"prepared","12f9c4:WindhelmSSE.esp":"ingredient","1391d:Dawnguard.esm":"drugs","13f593:WindhelmSSE.esp":"ale","14dc4:Dawnguard.esm":"ingredient","17167b:WindhelmSSE.esp":"drink","18001:Thornswood-Content.esp":"tea","18002:Thornswood-Content.esp":"tea","18003:Thornswood-Content.esp":"tea","19010:Thornswood-Content.esp":"soup","19011:Thornswood-Content.esp":"cooked","19012:Thornswood-Content.esp":"cooked","19013:Thornswood-Content.esp":"cooked","19014:Thornswood-Content.esp":"cooked","19015:Thornswood-Content.esp":"soup","19016:Thornswood-Content.esp":"soup","19017:Thornswood-Content.esp":"soup","19018:Thornswood-Content.esp":"soup","19019:Thornswood-Content.esp":"cooked","1901a:Thornswood-Content.esp":"soup","1901b:Thornswood-Content.esp":"soup","1901c:Thornswood-Content.esp":"cooked","1901d:Thornswood-Content.esp":"cooked","1901e:Thornswood-Content.esp":"soup","1901f:Thornswood-Content.esp":"soup","19020:Thornswood-Content.esp":"soup","19021:Thornswood-Content.esp":"soup","19022:Thornswood-Content.esp":"soup","19023:Thornswood-Content.esp":"cooked","19024:Thornswood-Content.esp":"cooked","19025:Thornswood-Content.esp":"cooked","19026:Thornswood-Content.esp":"cooked","19027:Thornswood-Content.esp":"cooked","19028:Thornswood-Content.esp":"cooked","19029:Thornswood-Content.esp":"cooked","1902a:Thornswood-Content.esp":"cooked","1902b:Thornswood-Content.esp":"cooked","1902c:Thornswood-Content.esp":"cooked","1902d:Thornswood-Content.esp":"cooked","1902e:Thornswood-Content.esp":"soup","1902f:Thornswood-Content.esp":"soup","19030:Thornswood-Content.esp":"cooked","19031:Thornswood-Content.esp":"cooked","19032:Thornswood-Content.esp":"cooked","19033:Thornswood-Content.esp":"cooked","19034:Thornswood-Content.esp":"cooked","19035:Thornswood-Content.esp":"cooked","19036:Thornswood-Content.esp":"cooked","19037:Thornswood-Content.esp":"cooked","19038:Thornswood-Content.esp":"cooked","19039:Thornswood-Content.esp":"cooked","1903a:Thornswood-Content.esp":"cooked","1903b:Thornswood-Content.esp":"cooked","1903c:Thornswood-Content.esp":"cooked","1903d:Thornswood-Content.esp":"cooked","1903e:Thornswood-Content.esp":"cooked","1903f:Thornswood-Content.esp":"cooked","19040:Thornswood-Content.esp":"cooked","19041:Thornswood-Content.esp":"cooked","19042:Thornswood-Content.esp":"cooked","19043:Thornswood-Content.esp":"cooked","19044:Thornswood-Content.esp":"cooked","19045:Thornswood-Content.esp":"cooked","19046:Thornswood-Content.esp":"soup","19047:Thornswood-Content.esp":"soup","19048:Thornswood-Content.esp":"soup","19049:Thornswood-Content.esp":"soup","1904a:Thornswood-Content.esp":"soup","1904b:Thornswood-Content.esp":"soup","1904c:Thornswood-Content.esp":"soup","1904d:Thornswood-Content.esp":"soup","1904e:Thornswood-Content.esp":"cooked","1a010:Thornswood-Content.esp":"feast","1a011:Thornswood-Content.esp":"feast","1a012:Thornswood-Content.esp":"feast","1a013:Thornswood-Content.esp":"feast","1a030:Thornswood-Content.esp":"feast","1a031:Thornswood-Content.esp":"feast","1a032:Thornswood-Content.esp":"feast","1a033:Thornswood-Content.esp":"feast","1a040:Thornswood-Content.esp":"ale","1a041:Thornswood-Content.esp":"ale","1a042:Thornswood-Content.esp":"ale","1a043:Thornswood-Content.esp":"ale","1c000:Thornswood-Content.esp":"soup","1c001:Thornswood-Content.esp":"soup","1c003:Thornswood-Content.esp":"soup","1c004:Thornswood-Content.esp":"soup","1c006:Thornswood-Content.esp":"soup","1c007:Thornswood-Content.esp":"soup","1c009:Thornswood-Content.esp":"soup","1c00a:Thornswood-Content.esp":"soup","1c00c:Thornswood-Content.esp":"cooked","1c00d:Thornswood-Content.esp":"cooked","1c00f:Thornswood-Content.esp":"cooked","1c010:Thornswood-Content.esp":"cooked","1c012:Thornswood-Content.esp":"soup","1c013:Thornswood-Content.esp":"soup","1c015:Thornswood-Content.esp":"soup","1c016:Thornswood-Content.esp":"soup","1c018:Thornswood-Content.esp":"cooked","1c019:Thornswood-Content.esp":"cooked","1c01b:Thornswood-Content.esp":"cooked","1c01c:Thornswood-Content.esp":"cooked","1c01e:Thornswood-Content.esp":"cooked","1c01f:Thornswood-Content.esp":"cooked","1c021:Thornswood-Content.esp":"cooked","1c022:Thornswood-Content.esp":"cooked","1c024:Thornswood-Content.esp":"cooked","1c025:Thornswood-Content.esp":"cooked","1c027:Thornswood-Content.esp":"cooked","1c028:Thornswood-Content.esp":"cooked","1c02a:Thornswood-Content.esp":"cooked","1c02b:Thornswood-Content.esp":"cooked","1c02d:Thornswood-Content.esp":"cooked","1c02e:Thornswood-Content.esp":"cooked","1c030:Thornswood-Content.esp":"cooked","1c031:Thornswood-Content.esp":"cooked","1c033:Thornswood-Content.esp":"cooked","1c034:Thornswood-Content.esp":"cooked","1c036:Thornswood-Content.esp":"cooked","1c037:Thornswood-Content.esp":"cooked","1c039:Thornswood-Content.esp":"cooked","1c03a:Thornswood-Content.esp":"cooked","1c03c:Thornswood-Content.esp":"cooked","1c03d:Thornswood-Content.esp":"cooked","1c03f:Thornswood-Content.esp":"cooked","1c040:Thornswood-Content.esp":"cooked","1c042:Thornswood-Content.esp":"cooked","1c043:Thornswood-Content.esp":"cooked","1c045:Thornswood-Content.esp":"cooked","1c046:Thornswood-Content.esp":"cooked","1c048:Thornswood-Content.esp":"cooked","1c049:Thornswood-Content.esp":"cooked","1c04b:Thornswood-Content.esp":"cooked","1c04c:Thornswood-Content.esp":"cooked","1c04e:Thornswood-Content.esp":"cooked","1c04f:Thornswood-Content.esp":"cooked","1c051:Thornswood-Content.esp":"cooked","1c052:Thornswood-Content.esp":"cooked","1c054:Thornswood-Content.esp":"cooked","1c055:Thornswood-Content.esp":"cooked","1c057:Thornswood-Content.esp":"cooked","1c058:Thornswood-Content.esp":"cooked","1c05a:Thornswood-Content.esp":"cooked","1c05b:Thornswood-Content.esp":"cooked","1c05d:Thornswood-Content.esp":"cooked","1c05e:Thornswood-Content.esp":"cooked","1c060:Thornswood-Content.esp":"cooked","1c061:Thornswood-Content.esp":"cooked","1c063:Thornswood-Content.esp":"cooked","1c064:Thornswood-Content.esp":"cooked","1c066:Thornswood-Content.esp":"soup","1c067:Thornswood-Content.esp":"soup","1c069:Thornswood-Content.esp":"soup","1c06a:Thornswood-Content.esp":"soup","1c06c:Thornswood-Content.esp":"soup","1c06d:Thornswood-Content.esp":"soup","1c06f:Thornswood-Content.esp":"soup","1c070:Thornswood-Content.esp":"soup","1c072:Thornswood-Content.esp":"soup","1c073:Thornswood-Content.esp":"soup","1c075:Thornswood-Content.esp":"soup","1c076:Thornswood-Content.esp":"soup","1c078:Thornswood-Content.esp":"soup","1c079:Thornswood-Content.esp":"soup","1c07b:Thornswood-Content.esp":"soup","1c07c:Thornswood-Content.esp":"soup","1c07e:Thornswood-Content.esp":"cooked","1c07f:Thornswood-Content.esp":"cooked","1c081:Thornswood-Content.esp":"cooked","1c082:Thornswood-Content.esp":"cooked","1c084:Thornswood-Content.esp":"soup","1c085:Thornswood-Content.esp":"soup","1c087:Thornswood-Content.esp":"soup","1c088:Thornswood-Content.esp":"soup","1c08a:Thornswood-Content.esp":"soup","1c08b:Thornswood-Content.esp":"soup","1c08d:Thornswood-Content.esp":"soup","1c08e:Thornswood-Content.esp":"soup","1c090:Thornswood-Content.esp":"cooked","1c091:Thornswood-Content.esp":"cooked","1c093:Thornswood-Content.esp":"cooked","1c094:Thornswood-Content.esp":"cooked","1c096:Thornswood-Content.esp":"soup","1c097:Thornswood-Content.esp":"soup","1c099:Thornswood-Content.esp":"soup","1c09a:Thornswood-Content.esp":"soup","1c09c:Thornswood-Content.esp":"soup","1c09d:Thornswood-Content.esp":"soup","1c09f:Thornswood-Content.esp":"soup","1c0a0:Thornswood-Content.esp":"soup","1c0a2:Thornswood-Content.esp":"soup","1c0a3:Thornswood-Content.esp":"soup","1c0a5:Thornswood-Content.esp":"soup","1c0a6:Thornswood-Content.esp":"soup","1c0a8:Thornswood-Content.esp":"soup","1c0a9:Thornswood-Content.esp":"soup","1c0ab:Thornswood-Content.esp":"soup","1c0ac:Thornswood-Content.esp":"soup","1c0ae:Thornswood-Content.esp":"soup","1c0af:Thornswood-Content.esp":"soup","1c0b1:Thornswood-Content.esp":"soup","1c0b2:Thornswood-Content.esp":"soup","1c0b4:Thornswood-Content.esp":"cooked","1c0b5:Thornswood-Content.esp":"cooked","1c0b7:Thornswood-Content.esp":"cooked","1c0b8:Thornswood-Content.esp":"cooked","1c0ba:Thornswood-Content.esp":"cooked","1c0bb:Thornswood-Content.esp":"cooked","1c0bd:Thornswood-Content.esp":"cooked","1c0be:Thornswood-Content.esp":"cooked","1c0c0:Thornswood-Content.esp":"cooked","1c0c1:Thornswood-Content.esp":"cooked","1c0c3:Thornswood-Content.esp":"cooked","1c0c4:Thornswood-Content.esp":"cooked","1c0c6:Thornswood-Content.esp":"cooked","1c0c7:Thornswood-Content.esp":"cooked","1c0c9:Thornswood-Content.esp":"cooked","1c0ca:Thornswood-Content.esp":"cooked","1c0cc:Thornswood-Content.esp":"cooked","1c0cd:Thornswood-Content.esp":"cooked","1c0cf:Thornswood-Content.esp":"cooked","1c0d0:Thornswood-Content.esp":"cooked","1c0d2:Thornswood-Content.esp":"soup","1c0d3:Thornswood-Content.esp":"soup","1c0d5:Thornswood-Content.esp":"soup","1c0d6:Thornswood-Content.esp":"soup","1c0d8:Thornswood-Content.esp":"soup","1c0d9:Thornswood-Content.esp":"soup","1c0db:Thornswood-Content.esp":"soup","1c0dc:Thornswood-Content.esp":"soup","1c0de:Thornswood-Content.esp":"soup","1c0df:Thornswood-Content.esp":"soup","1c0e1:Thornswood-Content.esp":"soup","1c0e2:Thornswood-Content.esp":"soup","1c0e4:Thornswood-Content.esp":"soup","1c0e5:Thornswood-Content.esp":"soup","1c0e7:Thornswood-Content.esp":"soup","1c0e8:Thornswood-Content.esp":"soup","1c0ea:Thornswood-Content.esp":"soup","1c0eb:Thornswood-Content.esp":"soup","1c0ed:Thornswood-Content.esp":"soup","1c0ee:Thornswood-Content.esp":"soup","1c0f0:Thornswood-Content.esp":"soup","1c0f1:Thornswood-Content.esp":"soup","1c0f3:Thornswood-Content.esp":"soup","1c0f4:Thornswood-Content.esp":"soup","1c0f6:Thornswood-Content.esp":"soup","1c0f7:Thornswood-Content.esp":"soup","1c0f9:Thornswood-Content.esp":"soup","1c0fa:Thornswood-Content.esp":"soup","1c0fc:Thornswood-Content.esp":"soup","1c0fd:Thornswood-Content.esp":"soup","1c0ff:Thornswood-Content.esp":"soup","1c100:Thornswood-Content.esp":"soup","1c102:Thornswood-Content.esp":"cooked","1c103:Thornswood-Content.esp":"cooked","1c105:Thornswood-Content.esp":"cooked","1c106:Thornswood-Content.esp":"cooked","206e7:Dragonborn.esm":"ingredient","2844d3:Triumvirate - Mage Archetypes.esp":"potion","3206fc:WindhelmSSE.esp":"ale","3533:HearthFires.esm":"cooked","3534:HearthFires.esm":"drink","3537:HearthFires.esm":"cooked","3538:HearthFires.esm":"ingredient","3539:HearthFires.esm":"cooked","353a:HearthFires.esm":"cooked","353b:HearthFires.esm":"cooked","353c:HearthFires.esm":"ingredient","353d:HearthFires.esm":"soup","353e:HearthFires.esm":"soup","353f:HearthFires.esm":"cooked","3540:HearthFires.esm":"raw","3541:HearthFires.esm":"cooked","3bd14:Dragonborn.esm":"raw","3bd15:Dragonborn.esm":"raw","3cd5b:Dragonborn.esm":"soup","3cf72:Dragonborn.esm":"cooked","3d125:Dragonborn.esm":"raw","3f4bd:Skyrim.esm":"drugs","4477e9:WindhelmSSE.esp":"prepared","4477ea:WindhelmSSE.esp":"prepared","57a7a:Skyrim.esm":"drugs","64b2e:Skyrim.esm":"ingredient","64b2f:Skyrim.esm":"ingredient","64b30:Skyrim.esm":"cooked","64b31:Skyrim.esm":"prepared","64b32:Skyrim.esm":"prepared","64b33:Skyrim.esm":"prepared","64b34:Skyrim.esm":"prepared","64b35:Skyrim.esm":"prepared","64b36:Skyrim.esm":"prepared","64b38:Skyrim.esm":"cooked","64b39:Skyrim.esm":"prepared","64b3a:Skyrim.esm":"cooked","64b3b:Skyrim.esm":"cooked","64b3c:Skyrim.esm":"cooked","64b3d:Skyrim.esm":"cooked","64b3e:Skyrim.esm":"cooked","64b3f:Skyrim.esm":"ingredient","64b40:Skyrim.esm":"ingredient","64b41:Skyrim.esm":"ingredient","64b42:Skyrim.esm":"ingredient","64b43:Skyrim.esm":"cooked","65c37:Skyrim.esm":"ale","65c38:Skyrim.esm":"ale","65c39:Skyrim.esm":"ale","65c97:Skyrim.esm":"cooked","65c98:Skyrim.esm":"prepared","65c99:Skyrim.esm":"raw","65c9a:Skyrim.esm":"raw","65c9b:Skyrim.esm":"raw","65c9c:Skyrim.esm":"raw","65c9d:Skyrim.esm":"raw","65c9e:Skyrim.esm":"raw","65c9f:Skyrim.esm":"raw","669a2:Skyrim.esm":"raw","669a3:Skyrim.esm":"prepared","669a4:Skyrim.esm":"raw","669a5:Skyrim.esm":"ingredient","721e8:Skyrim.esm":"cooked","7224c:Skyrim.esm":"cooked","7224e:Skyrim.esm":"cooked","722b0:Skyrim.esm":"cooked","722bb:Skyrim.esm":"cooked","722bd:Skyrim.esm":"cooked","722c2:Skyrim.esm":"cooked","722c7:Skyrim.esm":"cooked","80d:Gourmet.esp":"cooked","810:Gourmet.esp":"cooked","815:Gourmet.esp":"cooked","816:Gourmet.esp":"soup","817:Gourmet.esp":"soup","818:Gourmet.esp":"soup","81c:Gourmet.esp":"soup","822:Gourmet.esp":"ale","8aa:Gourmet.esp":"cooked","8ac:Gourmet.esp":"raw","8ae:Gourmet.esp":"raw","8b1:Gourmet.esp":"soup","8b3:Gourmet.esp":"soup","8e2:Gourmet.esp":"cooked","8e4:Gourmet.esp":"cooked","8ea:Gourmet.esp":"soup","8eb:Gourmet.esp":"soup","8f5:Gourmet.esp":"soup","8f6:Gourmet.esp":"soup","8f7:Gourmet.esp":"soup","901:Gourmet.esp":"cooked","902:Gourmet.esp":"cooked","903:Gourmet.esp":"cooked","936:Gourmet.esp":"drugs","981:Gourmet.esp":"cooked","9db:HearthFires.esm":"cooked","9dc:HearthFires.esm":"cooked","9df:Gourmet.esp":"soup","9e0:Gourmet.esp":"soup","9e1:Gourmet.esp":"soup","9e2:Gourmet.esp":"soup","9e3:Gourmet.esp":"soup","9e4:Gourmet.esp":"soup","9e5:Gourmet.esp":"soup","9e6:Gourmet.esp":"soup","aed90:Skyrim.esm":"drugs","cadfb:Skyrim.esm":"prepared","cd614:Skyrim.esm":"cooked","dc172:Skyrim.esm":"drugs","e8448:Skyrim.esm":"cooked","e8947:Skyrim.esm":"cooked","eba01:Skyrim.esm":"soup","eba02:Skyrim.esm":"soup","eba03:Skyrim.esm":"raw","edb2e:Skyrim.esm":"raw","f2011:Skyrim.esm":"raw","f4314:Skyrim.esm":"soup","f4315:Skyrim.esm":"soup","f431b:Skyrim.esm":"soup","f431c:Skyrim.esm":"soup","f431d:Skyrim.esm":"soup","f431e:Skyrim.esm":"soup","f4320:Skyrim.esm":"cooked"},"strip":{"groups":["raw","cooked","soup","ingredient","prepared","drink"],"keep":{"12f9c4:WindhelmSSE.esp":"Sack of Frostwheat Flour: Resist Frost 3 for 60s","12010f:WindhelmSSE.esp":"Frostwheat Bread: Resist Frost 5 for 60s","17167b:WindhelmSSE.esp":"Snowberry Juice: Resist Frost 5 for 30s"}},"season":{"plain":{"soup":"warm"},"extras":{"34d22:Skyrim.esm":"guard","34cdf:Skyrim.esm":"stamina"},"dishes":{"1c000:Thornswood-Content.esp":{"of":"353d:HearthFires.esm","extra":"34d22:Skyrim.esm","recipe":"1c002:Thornswood-Content.esp"},"1c001:Thornswood-Content.esp":{"of":"353d:HearthFires.esm","extra":"34d22:Skyrim.esm"},"1c003:Thornswood-Content.esp":{"of":"353d:HearthFires.esm","extra":"34cdf:Skyrim.esm","recipe":"1c005:Thornswood-Content.esp"},"1c004:Thornswood-Content.esp":{"of":"353d:HearthFires.esm","extra":"34cdf:Skyrim.esm"},"1c006:Thornswood-Content.esp":{"of":"353e:HearthFires.esm","extra":"34d22:Skyrim.esm","recipe":"1c008:Thornswood-Content.esp"},"1c007:Thornswood-Content.esp":{"of":"353e:HearthFires.esm","extra":"34d22:Skyrim.esm"},"1c009:Thornswood-Content.esp":{"of":"353e:HearthFires.esm","extra":"34cdf:Skyrim.esm","recipe":"1c00b:Thornswood-Content.esp"},"1c00a:Thornswood-Content.esp":{"of":"353e:HearthFires.esm","extra":"34cdf:Skyrim.esm"},"1c00c:Thornswood-Content.esp":{"of":"353f:HearthFires.esm","extra":"34d22:Skyrim.esm","recipe":"1c00e:Thornswood-Content.esp"},"1c00d:Thornswood-Content.esp":{"of":"353f:HearthFires.esm","extra":"34d22:Skyrim.esm"},"1c00f:Thornswood-Content.esp":{"of":"353f:HearthFires.esm","extra":"34cdf:Skyrim.esm","recipe":"1c011:Thornswood-Content.esp"},"1c010:Thornswood-Content.esp":{"of":"353f:HearthFires.esm","extra":"34cdf:Skyrim.esm"},"1c012:Thornswood-Content.esp":{"of":"3cd5b:Dragonborn.esm","extra":"34d22:Skyrim.esm","recipe":"1c014:Thornswood-Content.esp"},"1c013:Thornswood-Content.esp":{"of":"3cd5b:Dragonborn.esm","extra":"34d22:Skyrim.esm"},"1c015:Thornswood-Content.esp":{"of":"3cd5b:Dragonborn.esm","extra":"34cdf:Skyrim.esm","recipe":"1c017:Thornswood-Content.esp"},"1c016:Thornswood-Content.esp":{"of":"3cd5b:Dragonborn.esm","extra":"34cdf:Skyrim.esm"},"1c018:Thornswood-Content.esp":{"of":"3cf72:Dragonborn.esm","extra":"34d22:Skyrim.esm","recipe":"1c01a:Thornswood-Content.esp"},"1c019:Thornswood-Content.esp":{"of":"3cf72:Dragonborn.esm","extra":"34d22:Skyrim.esm"},"1c01b:Thornswood-Content.esp":{"of":"3cf72:Dragonborn.esm","extra":"34cdf:Skyrim.esm","recipe":"1c01d:Thornswood-Content.esp"},"1c01c:Thornswood-Content.esp":{"of":"3cf72:Dragonborn.esm","extra":"34cdf:Skyrim.esm"},"1c01e:Thornswood-Content.esp":{"of":"64b3b:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c020:Thornswood-Content.esp"},"1c01f:Thornswood-Content.esp":{"of":"64b3b:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c021:Thornswood-Content.esp":{"of":"64b3b:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c023:Thornswood-Content.esp"},"1c022:Thornswood-Content.esp":{"of":"64b3b:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c024:Thornswood-Content.esp":{"of":"64b3c:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c026:Thornswood-Content.esp"},"1c025:Thornswood-Content.esp":{"of":"64b3c:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c027:Thornswood-Content.esp":{"of":"64b3c:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c029:Thornswood-Content.esp"},"1c028:Thornswood-Content.esp":{"of":"64b3c:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c02a:Thornswood-Content.esp":{"of":"721e8:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c02c:Thornswood-Content.esp"},"1c02b:Thornswood-Content.esp":{"of":"721e8:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c02d:Thornswood-Content.esp":{"of":"721e8:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c02f:Thornswood-Content.esp"},"1c02e:Thornswood-Content.esp":{"of":"721e8:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c030:Thornswood-Content.esp":{"of":"7224c:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c032:Thornswood-Content.esp"},"1c031:Thornswood-Content.esp":{"of":"7224c:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c033:Thornswood-Content.esp":{"of":"7224c:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c035:Thornswood-Content.esp"},"1c034:Thornswood-Content.esp":{"of":"7224c:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c036:Thornswood-Content.esp":{"of":"7224e:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c038:Thornswood-Content.esp"},"1c037:Thornswood-Content.esp":{"of":"7224e:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c039:Thornswood-Content.esp":{"of":"7224e:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c03b:Thornswood-Content.esp"},"1c03a:Thornswood-Content.esp":{"of":"7224e:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c03c:Thornswood-Content.esp":{"of":"722b0:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c03e:Thornswood-Content.esp"},"1c03d:Thornswood-Content.esp":{"of":"722b0:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c03f:Thornswood-Content.esp":{"of":"722b0:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c041:Thornswood-Content.esp"},"1c040:Thornswood-Content.esp":{"of":"722b0:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c042:Thornswood-Content.esp":{"of":"722bb:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c044:Thornswood-Content.esp"},"1c043:Thornswood-Content.esp":{"of":"722bb:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c045:Thornswood-Content.esp":{"of":"722bb:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c047:Thornswood-Content.esp"},"1c046:Thornswood-Content.esp":{"of":"722bb:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c048:Thornswood-Content.esp":{"of":"722bd:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c04a:Thornswood-Content.esp"},"1c049:Thornswood-Content.esp":{"of":"722bd:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c04b:Thornswood-Content.esp":{"of":"722bd:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c04d:Thornswood-Content.esp"},"1c04c:Thornswood-Content.esp":{"of":"722bd:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c04e:Thornswood-Content.esp":{"of":"722c2:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c050:Thornswood-Content.esp"},"1c04f:Thornswood-Content.esp":{"of":"722c2:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c051:Thornswood-Content.esp":{"of":"722c2:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c053:Thornswood-Content.esp"},"1c052:Thornswood-Content.esp":{"of":"722c2:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c054:Thornswood-Content.esp":{"of":"722c7:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c056:Thornswood-Content.esp"},"1c055:Thornswood-Content.esp":{"of":"722c7:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c057:Thornswood-Content.esp":{"of":"722c7:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c059:Thornswood-Content.esp"},"1c058:Thornswood-Content.esp":{"of":"722c7:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c05a:Thornswood-Content.esp":{"of":"810:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c05c:Thornswood-Content.esp"},"1c05b:Thornswood-Content.esp":{"of":"810:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c05d:Thornswood-Content.esp":{"of":"810:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c05f:Thornswood-Content.esp"},"1c05e:Thornswood-Content.esp":{"of":"810:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c060:Thornswood-Content.esp":{"of":"815:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c062:Thornswood-Content.esp"},"1c061:Thornswood-Content.esp":{"of":"815:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c063:Thornswood-Content.esp":{"of":"815:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c065:Thornswood-Content.esp"},"1c064:Thornswood-Content.esp":{"of":"815:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c066:Thornswood-Content.esp":{"of":"816:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c068:Thornswood-Content.esp"},"1c067:Thornswood-Content.esp":{"of":"816:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c069:Thornswood-Content.esp":{"of":"816:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c06b:Thornswood-Content.esp"},"1c06a:Thornswood-Content.esp":{"of":"816:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c06c:Thornswood-Content.esp":{"of":"817:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c06e:Thornswood-Content.esp"},"1c06d:Thornswood-Content.esp":{"of":"817:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c06f:Thornswood-Content.esp":{"of":"817:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c071:Thornswood-Content.esp"},"1c070:Thornswood-Content.esp":{"of":"817:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c072:Thornswood-Content.esp":{"of":"818:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c074:Thornswood-Content.esp"},"1c073:Thornswood-Content.esp":{"of":"818:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c075:Thornswood-Content.esp":{"of":"818:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c077:Thornswood-Content.esp"},"1c076:Thornswood-Content.esp":{"of":"818:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c078:Thornswood-Content.esp":{"of":"81c:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c07a:Thornswood-Content.esp"},"1c079:Thornswood-Content.esp":{"of":"81c:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c07b:Thornswood-Content.esp":{"of":"81c:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c07d:Thornswood-Content.esp"},"1c07c:Thornswood-Content.esp":{"of":"81c:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c07e:Thornswood-Content.esp":{"of":"8aa:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c080:Thornswood-Content.esp"},"1c07f:Thornswood-Content.esp":{"of":"8aa:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c081:Thornswood-Content.esp":{"of":"8aa:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c083:Thornswood-Content.esp"},"1c082:Thornswood-Content.esp":{"of":"8aa:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c084:Thornswood-Content.esp":{"of":"8b1:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c086:Thornswood-Content.esp"},"1c085:Thornswood-Content.esp":{"of":"8b1:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c087:Thornswood-Content.esp":{"of":"8b1:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c089:Thornswood-Content.esp"},"1c088:Thornswood-Content.esp":{"of":"8b1:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c08a:Thornswood-Content.esp":{"of":"8b3:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c08c:Thornswood-Content.esp"},"1c08b:Thornswood-Content.esp":{"of":"8b3:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c08d:Thornswood-Content.esp":{"of":"8b3:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c08f:Thornswood-Content.esp"},"1c08e:Thornswood-Content.esp":{"of":"8b3:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c090:Thornswood-Content.esp":{"of":"8e4:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c092:Thornswood-Content.esp"},"1c091:Thornswood-Content.esp":{"of":"8e4:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c093:Thornswood-Content.esp":{"of":"8e4:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c095:Thornswood-Content.esp"},"1c094:Thornswood-Content.esp":{"of":"8e4:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c096:Thornswood-Content.esp":{"of":"8ea:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c098:Thornswood-Content.esp"},"1c097:Thornswood-Content.esp":{"of":"8ea:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c099:Thornswood-Content.esp":{"of":"8ea:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c09b:Thornswood-Content.esp"},"1c09a:Thornswood-Content.esp":{"of":"8ea:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c09c:Thornswood-Content.esp":{"of":"8eb:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c09e:Thornswood-Content.esp"},"1c09d:Thornswood-Content.esp":{"of":"8eb:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c09f:Thornswood-Content.esp":{"of":"8eb:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c0a1:Thornswood-Content.esp"},"1c0a0:Thornswood-Content.esp":{"of":"8eb:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c0a2:Thornswood-Content.esp":{"of":"8f5:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c0a4:Thornswood-Content.esp"},"1c0a3:Thornswood-Content.esp":{"of":"8f5:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c0a5:Thornswood-Content.esp":{"of":"8f5:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c0a7:Thornswood-Content.esp"},"1c0a6:Thornswood-Content.esp":{"of":"8f5:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c0a8:Thornswood-Content.esp":{"of":"8f6:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c0aa:Thornswood-Content.esp"},"1c0a9:Thornswood-Content.esp":{"of":"8f6:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c0ab:Thornswood-Content.esp":{"of":"8f6:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c0ad:Thornswood-Content.esp"},"1c0ac:Thornswood-Content.esp":{"of":"8f6:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c0ae:Thornswood-Content.esp":{"of":"8f7:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c0b0:Thornswood-Content.esp"},"1c0af:Thornswood-Content.esp":{"of":"8f7:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c0b1:Thornswood-Content.esp":{"of":"8f7:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c0b3:Thornswood-Content.esp"},"1c0b2:Thornswood-Content.esp":{"of":"8f7:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c0b4:Thornswood-Content.esp":{"of":"901:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c0b6:Thornswood-Content.esp"},"1c0b5:Thornswood-Content.esp":{"of":"901:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c0b7:Thornswood-Content.esp":{"of":"901:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c0b9:Thornswood-Content.esp"},"1c0b8:Thornswood-Content.esp":{"of":"901:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c0ba:Thornswood-Content.esp":{"of":"902:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c0bc:Thornswood-Content.esp"},"1c0bb:Thornswood-Content.esp":{"of":"902:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c0bd:Thornswood-Content.esp":{"of":"902:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c0bf:Thornswood-Content.esp"},"1c0be:Thornswood-Content.esp":{"of":"902:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c0c0:Thornswood-Content.esp":{"of":"903:Gourmet.esp","extra":"34d22:Skyrim.esm","recipe":"1c0c2:Thornswood-Content.esp"},"1c0c1:Thornswood-Content.esp":{"of":"903:Gourmet.esp","extra":"34d22:Skyrim.esm"},"1c0c3:Thornswood-Content.esp":{"of":"903:Gourmet.esp","extra":"34cdf:Skyrim.esm","recipe":"1c0c5:Thornswood-Content.esp"},"1c0c4:Thornswood-Content.esp":{"of":"903:Gourmet.esp","extra":"34cdf:Skyrim.esm"},"1c0c6:Thornswood-Content.esp":{"of":"e8448:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0c8:Thornswood-Content.esp"},"1c0c7:Thornswood-Content.esp":{"of":"e8448:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0c9:Thornswood-Content.esp":{"of":"e8448:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0cb:Thornswood-Content.esp"},"1c0ca:Thornswood-Content.esp":{"of":"e8448:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0cc:Thornswood-Content.esp":{"of":"e8947:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0ce:Thornswood-Content.esp"},"1c0cd:Thornswood-Content.esp":{"of":"e8947:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0cf:Thornswood-Content.esp":{"of":"e8947:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0d1:Thornswood-Content.esp"},"1c0d0:Thornswood-Content.esp":{"of":"e8947:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0d2:Thornswood-Content.esp":{"of":"eba01:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0d4:Thornswood-Content.esp"},"1c0d3:Thornswood-Content.esp":{"of":"eba01:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0d5:Thornswood-Content.esp":{"of":"eba01:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0d7:Thornswood-Content.esp"},"1c0d6:Thornswood-Content.esp":{"of":"eba01:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0d8:Thornswood-Content.esp":{"of":"eba02:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0da:Thornswood-Content.esp"},"1c0d9:Thornswood-Content.esp":{"of":"eba02:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0db:Thornswood-Content.esp":{"of":"eba02:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0dd:Thornswood-Content.esp"},"1c0dc:Thornswood-Content.esp":{"of":"eba02:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0de:Thornswood-Content.esp":{"of":"f4314:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0e0:Thornswood-Content.esp"},"1c0df:Thornswood-Content.esp":{"of":"f4314:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0e1:Thornswood-Content.esp":{"of":"f4314:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0e3:Thornswood-Content.esp"},"1c0e2:Thornswood-Content.esp":{"of":"f4314:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0e4:Thornswood-Content.esp":{"of":"f4315:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0e6:Thornswood-Content.esp"},"1c0e5:Thornswood-Content.esp":{"of":"f4315:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0e7:Thornswood-Content.esp":{"of":"f4315:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0e9:Thornswood-Content.esp"},"1c0e8:Thornswood-Content.esp":{"of":"f4315:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0ea:Thornswood-Content.esp":{"of":"f431b:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0ec:Thornswood-Content.esp"},"1c0eb:Thornswood-Content.esp":{"of":"f431b:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0ed:Thornswood-Content.esp":{"of":"f431b:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0ef:Thornswood-Content.esp"},"1c0ee:Thornswood-Content.esp":{"of":"f431b:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0f0:Thornswood-Content.esp":{"of":"f431c:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0f2:Thornswood-Content.esp"},"1c0f1:Thornswood-Content.esp":{"of":"f431c:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0f3:Thornswood-Content.esp":{"of":"f431c:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0f5:Thornswood-Content.esp"},"1c0f4:Thornswood-Content.esp":{"of":"f431c:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0f6:Thornswood-Content.esp":{"of":"f431d:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0f8:Thornswood-Content.esp"},"1c0f7:Thornswood-Content.esp":{"of":"f431d:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0f9:Thornswood-Content.esp":{"of":"f431d:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c0fb:Thornswood-Content.esp"},"1c0fa:Thornswood-Content.esp":{"of":"f431d:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c0fc:Thornswood-Content.esp":{"of":"f431e:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c0fe:Thornswood-Content.esp"},"1c0fd:Thornswood-Content.esp":{"of":"f431e:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c0ff:Thornswood-Content.esp":{"of":"f431e:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c101:Thornswood-Content.esp"},"1c100:Thornswood-Content.esp":{"of":"f431e:Skyrim.esm","extra":"34cdf:Skyrim.esm"},"1c102:Thornswood-Content.esp":{"of":"f4320:Skyrim.esm","extra":"34d22:Skyrim.esm","recipe":"1c104:Thornswood-Content.esp"},"1c103:Thornswood-Content.esp":{"of":"f4320:Skyrim.esm","extra":"34d22:Skyrim.esm"},"1c105:Thornswood-Content.esp":{"of":"f4320:Skyrim.esm","extra":"34cdf:Skyrim.esm","recipe":"1c107:Thornswood-Content.esp"},"1c106:Thornswood-Content.esp":{"of":"f4320:Skyrim.esm","extra":"34cdf:Skyrim.esm"}},"recipes":{"353d:HearthFires.esm":"3542:HearthFires.esm","353e:HearthFires.esm":"3543:HearthFires.esm","353f:HearthFires.esm":"3544:HearthFires.esm","3cd5b:Dragonborn.esm":"3cd5d:Dragonborn.esm","3cf72:Dragonborn.esm":"81e:Gourmet.esp","64b3b:Skyrim.esm":"f4310:Skyrim.esm","64b3c:Skyrim.esm":"8af:Gourmet.esp","721e8:Skyrim.esm":"f4309:Skyrim.esm","7224c:Skyrim.esm":"f430a:Skyrim.esm","7224e:Skyrim.esm":"f430b:Skyrim.esm","722b0:Skyrim.esm":"f430c:Skyrim.esm","722bb:Skyrim.esm":"f430d:Skyrim.esm","722bd:Skyrim.esm":"f4311:Skyrim.esm","722c2:Skyrim.esm":"f430f:Skyrim.esm","722c7:Skyrim.esm":"f430e:Skyrim.esm","810:Gourmet.esp":"811:Gourmet.esp","815:Gourmet.esp":"813:Gourmet.esp","816:Gourmet.esp":"81b:Gourmet.esp","817:Gourmet.esp":"81a:Gourmet.esp","818:Gourmet.esp":"819:Gourmet.esp","81c:Gourmet.esp":"81d:Gourmet.esp","8aa:Gourmet.esp":"8ab:Gourmet.esp","8b1:Gourmet.esp":"8bb:Gourmet.esp","8b3:Gourmet.esp":"8ba:Gourmet.esp","8e4:Gourmet.esp":"8e5:Gourmet.esp","8ea:Gourmet.esp":"8ec:Gourmet.esp","8eb:Gourmet.esp":"8ed:Gourmet.esp","8f5:Gourmet.esp":"8f8:Gourmet.esp","8f6:Gourmet.esp":"8f9:Gourmet.esp","8f7:Gourmet.esp":"8fa:Gourmet.esp","901:Gourmet.esp":"904:Gourmet.esp","902:Gourmet.esp":"905:Gourmet.esp","903:Gourmet.esp":"906:Gourmet.esp","e8448:Skyrim.esm":"8ad:Gourmet.esp","e8947:Skyrim.esm":"f4308:Skyrim.esm","eba01:Skyrim.esm":"f4312:Skyrim.esm","eba02:Skyrim.esm":"3cd5c:Dragonborn.esm","f4314:Skyrim.esm":"f4313:Skyrim.esm","f4315:Skyrim.esm":"f4316:Skyrim.esm","f431b:Skyrim.esm":"f431a:Skyrim.esm","f431c:Skyrim.esm":"f4318:Skyrim.esm","f431d:Skyrim.esm":"f4317:Skyrim.esm","f431e:Skyrim.esm":"f4319:Skyrim.esm","f4320:Skyrim.esm":"812:Gourmet.esp"}},"quality":{"burnt":"19000:Thornswood-Content.esp","fine":{"117ff:HearthFires.esm":"19031:Thornswood-Content.esp","11801:HearthFires.esm":"19032:Thornswood-Content.esp","1a010:Thornswood-Content.esp":"1a030:Thornswood-Content.esp","1a011:Thornswood-Content.esp":"1a031:Thornswood-Content.esp","1a012:Thornswood-Content.esp":"1a032:Thornswood-Content.esp","1a013:Thornswood-Content.esp":"1a033:Thornswood-Content.esp","1c000:Thornswood-Content.esp":"1c001:Thornswood-Content.esp","1c003:Thornswood-Content.esp":"1c004:Thornswood-Content.esp","1c006:Thornswood-Content.esp":"1c007:Thornswood-Content.esp","1c009:Thornswood-Content.esp":"1c00a:Thornswood-Content.esp","1c00c:Thornswood-Content.esp":"1c00d:Thornswood-Content.esp","1c00f:Thornswood-Content.esp":"1c010:Thornswood-Content.esp","1c012:Thornswood-Content.esp":"1c013:Thornswood-Content.esp","1c015:Thornswood-Content.esp":"1c016:Thornswood-Content.esp","1c018:Thornswood-Content.esp":"1c019:Thornswood-Content.esp","1c01b:Thornswood-Content.esp":"1c01c:Thornswood-Content.esp","1c01e:Thornswood-Content.esp":"1c01f:Thornswood-Content.esp","1c021:Thornswood-Content.esp":"1c022:Thornswood-Content.esp","1c024:Thornswood-Content.esp":"1c025:Thornswood-Content.esp","1c027:Thornswood-Content.esp":"1c028:Thornswood-Content.esp","1c02a:Thornswood-Content.esp":"1c02b:Thornswood-Content.esp","1c02d:Thornswood-Content.esp":"1c02e:Thornswood-Content.esp","1c030:Thornswood-Content.esp":"1c031:Thornswood-Content.esp","1c033:Thornswood-Content.esp":"1c034:Thornswood-Content.esp","1c036:Thornswood-Content.esp":"1c037:Thornswood-Content.esp","1c039:Thornswood-Content.esp":"1c03a:Thornswood-Content.esp","1c03c:Thornswood-Content.esp":"1c03d:Thornswood-Content.esp","1c03f:Thornswood-Content.esp":"1c040:Thornswood-Content.esp","1c042:Thornswood-Content.esp":"1c043:Thornswood-Content.esp","1c045:Thornswood-Content.esp":"1c046:Thornswood-Content.esp","1c048:Thornswood-Content.esp":"1c049:Thornswood-Content.esp","1c04b:Thornswood-Content.esp":"1c04c:Thornswood-Content.esp","1c04e:Thornswood-Content.esp":"1c04f:Thornswood-Content.esp","1c051:Thornswood-Content.esp":"1c052:Thornswood-Content.esp","1c054:Thornswood-Content.esp":"1c055:Thornswood-Content.esp","1c057:Thornswood-Content.esp":"1c058:Thornswood-Content.esp","1c05a:Thornswood-Content.esp":"1c05b:Thornswood-Content.esp","1c05d:Thornswood-Content.esp":"1c05e:Thornswood-Content.esp","1c060:Thornswood-Content.esp":"1c061:Thornswood-Content.esp","1c063:Thornswood-Content.esp":"1c064:Thornswood-Content.esp","1c066:Thornswood-Content.esp":"1c067:Thornswood-Content.esp","1c069:Thornswood-Content.esp":"1c06a:Thornswood-Content.esp","1c06c:Thornswood-Content.esp":"1c06d:Thornswood-Content.esp","1c06f:Thornswood-Content.esp":"1c070:Thornswood-Content.esp","1c072:Thornswood-Content.esp":"1c073:Thornswood-Content.esp","1c075:Thornswood-Content.esp":"1c076:Thornswood-Content.esp","1c078:Thornswood-Content.esp":"1c079:Thornswood-Content.esp","1c07b:Thornswood-Content.esp":"1c07c:Thornswood-Content.esp","1c07e:Thornswood-Content.esp":"1c07f:Thornswood-Content.esp","1c081:Thornswood-Content.esp":"1c082:Thornswood-Content.esp","1c084:Thornswood-Content.esp":"1c085:Thornswood-Content.esp","1c087:Thornswood-Content.esp":"1c088:Thornswood-Content.esp","1c08a:Thornswood-Content.esp":"1c08b:Thornswood-Content.esp","1c08d:Thornswood-Content.esp":"1c08e:Thornswood-Content.esp","1c090:Thornswood-Content.esp":"1c091:Thornswood-Content.esp","1c093:Thornswood-Content.esp":"1c094:Thornswood-Content.esp","1c096:Thornswood-Content.esp":"1c097:Thornswood-Content.esp","1c099:Thornswood-Content.esp":"1c09a:Thornswood-Content.esp","1c09c:Thornswood-Content.esp":"1c09d:Thornswood-Content.esp","1c09f:Thornswood-Content.esp":"1c0a0:Thornswood-Content.esp","1c0a2:Thornswood-Content.esp":"1c0a3:Thornswood-Content.esp","1c0a5:Thornswood-Content.esp":"1c0a6:Thornswood-Content.esp","1c0a8:Thornswood-Content.esp":"1c0a9:Thornswood-Content.esp","1c0ab:Thornswood-Content.esp":"1c0ac:Thornswood-Content.esp","1c0ae:Thornswood-Content.esp":"1c0af:Thornswood-Content.esp","1c0b1:Thornswood-Content.esp":"1c0b2:Thornswood-Content.esp","1c0b4:Thornswood-Content.esp":"1c0b5:Thornswood-Content.esp","1c0b7:Thornswood-Content.esp":"1c0b8:Thornswood-Content.esp","1c0ba:Thornswood-Content.esp":"1c0bb:Thornswood-Content.esp","1c0bd:Thornswood-Content.esp":"1c0be:Thornswood-Content.esp","1c0c0:Thornswood-Content.esp":"1c0c1:Thornswood-Content.esp","1c0c3:Thornswood-Content.esp":"1c0c4:Thornswood-Content.esp","1c0c6:Thornswood-Content.esp":"1c0c7:Thornswood-Content.esp","1c0c9:Thornswood-Content.esp":"1c0ca:Thornswood-Content.esp","1c0cc:Thornswood-Content.esp":"1c0cd:Thornswood-Content.esp","1c0cf:Thornswood-Content.esp":"1c0d0:Thornswood-Content.esp","1c0d2:Thornswood-Content.esp":"1c0d3:Thornswood-Content.esp","1c0d5:Thornswood-Content.esp":"1c0d6:Thornswood-Content.esp","1c0d8:Thornswood-Content.esp":"1c0d9:Thornswood-Content.esp","1c0db:Thornswood-Content.esp":"1c0dc:Thornswood-Content.esp","1c0de:Thornswood-Content.esp":"1c0df:Thornswood-Content.esp","1c0e1:Thornswood-Content.esp":"1c0e2:Thornswood-Content.esp","1c0e4:Thornswood-Content.esp":"1c0e5:Thornswood-Content.esp","1c0e7:Thornswood-Content.esp":"1c0e8:Thornswood-Content.esp","1c0ea:Thornswood-Content.esp":"1c0eb:Thornswood-Content.esp","1c0ed:Thornswood-Content.esp":"1c0ee:Thornswood-Content.esp","1c0f0:Thornswood-Content.esp":"1c0f1:Thornswood-Content.esp","1c0f3:Thornswood-Content.esp":"1c0f4:Thornswood-Content.esp","1c0f6:Thornswood-Content.esp":"1c0f7:Thornswood-Content.esp","1c0f9:Thornswood-Content.esp":"1c0fa:Thornswood-Content.esp","1c0fc:Thornswood-Content.esp":"1c0fd:Thornswood-Content.esp","1c0ff:Thornswood-Content.esp":"1c100:Thornswood-Content.esp","1c102:Thornswood-Content.esp":"1c103:Thornswood-Content.esp","1c105:Thornswood-Content.esp":"1c106:Thornswood-Content.esp","3533:HearthFires.esm":"19029:Thornswood-Content.esp","3537:HearthFires.esm":"1902a:Thornswood-Content.esp","3539:HearthFires.esm":"1902b:Thornswood-Content.esp","353a:HearthFires.esm":"1902c:Thornswood-Content.esp","353b:HearthFires.esm":"1902d:Thornswood-Content.esp","353d:HearthFires.esm":"1902e:Thornswood-Content.esp","353e:HearthFires.esm":"1902f:Thornswood-Content.esp","353f:HearthFires.esm":"19030:Thornswood-Content.esp","3cd5b:Dragonborn.esm":"19010:Thornswood-Content.esp","3cf72:Dragonborn.esm":"19011:Thornswood-Content.esp","64b30:Skyrim.esm":"19033:Thornswood-Content.esp","64b38:Skyrim.esm":"19034:Thornswood-Content.esp","64b3a:Skyrim.esm":"19035:Thornswood-Content.esp","64b3b:Skyrim.esm":"19036:Thornswood-Content.esp","64b3c:Skyrim.esm":"19037:Thornswood-Content.esp","64b3d:Skyrim.esm":"19038:Thornswood-Content.esp","64b3e:Skyrim.esm":"19039:Thornswood-Content.esp","64b43:Skyrim.esm":"1903a:Thornswood-Content.esp","65c97:Skyrim.esm":"1903b:Thornswood-Content.esp","721e8:Skyrim.esm":"1903c:Thornswood-Content.esp","7224c:Skyrim.esm":"1903d:Thornswood-Content.esp","7224e:Skyrim.esm":"1903e:Thornswood-Content.esp","722b0:Skyrim.esm":"1903f:Thornswood-Content.esp","722bb:Skyrim.esm":"19040:Thornswood-Content.esp","722bd:Skyrim.esm":"19041:Thornswood-Content.esp","722c2:Skyrim.esm":"19042:Thornswood-Content.esp","722c7:Skyrim.esm":"19043:Thornswood-Content.esp","80d:Gourmet.esp":"19012:Thornswood-Content.esp","810:Gourmet.esp":"19013:Thornswood-Content.esp","815:Gourmet.esp":"19014:Thornswood-Content.esp","816:Gourmet.esp":"19015:Thornswood-Content.esp","817:Gourmet.esp":"19016:Thornswood-Content.esp","818:Gourmet.esp":"19017:Thornswood-Content.esp","81c:Gourmet.esp":"19018:Thornswood-Content.esp","8aa:Gourmet.esp":"19019:Thornswood-Content.esp","8b1:Gourmet.esp":"1901a:Thornswood-Content.esp","8b3:Gourmet.esp":"1901b:Thornswood-Content.esp","8e2:Gourmet.esp":"1901c:Thornswood-Content.esp","8e4:Gourmet.esp":"1901d:Thornswood-Content.esp","8ea:Gourmet.esp":"1901e:Thornswood-Content.esp","8eb:Gourmet.esp":"1901f:Thornswood-Content.esp","8f5:Gourmet.esp":"19020:Thornswood-Content.esp","8f6:Gourmet.esp":"19021:Thornswood-Content.esp","8f7:Gourmet.esp":"19022:Thornswood-Content.esp","901:Gourmet.esp":"19023:Thornswood-Content.esp","902:Gourmet.esp":"19024:Thornswood-Content.esp","903:Gourmet.esp":"19025:Thornswood-Content.esp","981:Gourmet.esp":"19026:Thornswood-Content.esp","9db:HearthFires.esm":"19027:Thornswood-Content.esp","9dc:HearthFires.esm":"19028:Thornswood-Content.esp","e8448:Skyrim.esm":"19044:Thornswood-Content.esp","e8947:Skyrim.esm":"19045:Thornswood-Content.esp","eba01:Skyrim.esm":"19046:Thornswood-Content.esp","eba02:Skyrim.esm":"19047:Thornswood-Content.esp","f4314:Skyrim.esm":"19048:Thornswood-Content.esp","f4315:Skyrim.esm":"19049:Thornswood-Content.esp","f431b:Skyrim.esm":"1904a:Thornswood-Content.esp","f431c:Skyrim.esm":"1904b:Thornswood-Content.esp","f431d:Skyrim.esm":"1904c:Thornswood-Content.esp","f431e:Skyrim.esm":"1904d:Thornswood-Content.esp","f4320:Skyrim.esm":"1904e:Thornswood-Content.esp"}},"feasts":{"1a010:Thornswood-Content.esp":"stamina","1a011:Thornswood-Content.esp":"guard","1a012:Thornswood-Content.esp":"stamina","1a013:Thornswood-Content.esp":"warm"},"inSeason":{"45c28:Skyrim.esm":["spring","summer"],"6ac4a:Skyrim.esm":["summer","autumn"],"1b3bd:Skyrim.esm":["autumn","winter"],"5076e:Skyrim.esm":["winter","spring"]},"spoil":{"days":{"raw":7,"ingredient":7,"cooked":14,"soup":14,"prepared":14,"feast":14},"keeps":{"10394d:Skyrim.esm":"Honey","12f9c4:WindhelmSSE.esp":"Sack of Frostwheat Flour","14dc4:Dawnguard.esm":"Soul Husk","3538:HearthFires.esm":"Sack of Flour","4477ea:WindhelmSSE.esp":"Nord Chocolate","64b31:Skyrim.esm":"Goat Cheese Wedge","64b32:Skyrim.esm":"Eidar Cheese Wedge","64b33:Skyrim.esm":"Goat Cheese Wheel","64b34:Skyrim.esm":"Eidar Cheese Wheel","64b35:Skyrim.esm":"Sliced Goat Cheese Wheel","64b36:Skyrim.esm":"Sliced Eidar Cheese Wheel","64b39:Skyrim.esm":"Long Taffy Treat","669a3:Skyrim.esm":"Mammoth Cheese Bowl","cadfb:Skyrim.esm":"Spiced Beef"},"extra":{"3534:HearthFires.esm":7,"353c:HearthFires.esm":14,"19000:Thornswood-Content.esp":14},"preserve":["raw"],"salt":"34cdf:Skyrim.esm","firewood":"6f993:Skyrim.esm","spoiled":"19100:Thornswood-Content.esp","names":{"10211a:Skyrim.esm":"Mammoth Snout","10d666:Skyrim.esm":"Gourd","117ff:HearthFires.esm":"Jazbay Dumpling","11801:HearthFires.esm":"Snowberry Dumpling","12010f:WindhelmSSE.esp":"Frostwheat Bread","19000:Thornswood-Content.esp":"Burnt Meal","19010:Thornswood-Content.esp":"Fine Ash Yam Soup","19011:Thornswood-Content.esp":"Fine Cooked Boar Meat","19012:Thornswood-Content.esp":"Fine Juniper Berry Dumpling","19013:Thornswood-Content.esp":"Fine Mammoth Cheese Fondue","19014:Thornswood-Content.esp":"Fine Eidar Cheese Fondue","19015:Thornswood-Content.esp":"Fine Ash Hopper Stew","19016:Thornswood-Content.esp":"Fine Boar Stew","19017:Thornswood-Content.esp":"Fine Mammoth Stew","19018:Thornswood-Content.esp":"Fine Goat Stew","19019:Thornswood-Content.esp":"Fine Cooked Dog","1901a:Thornswood-Content.esp":"Fine Gourd Soup","1901b:Thornswood-Content.esp":"Fine Carrot Soup","1901c:Thornswood-Content.esp":"Fine Roasted Carrots","1901d:Thornswood-Content.esp":"Fine Roasted Yams","1901e:Thornswood-Content.esp":"Fine Rabbit Stew","1901f:Thornswood-Content.esp":"Fine Pheasant Stew","19020:Thornswood-Content.esp":"Fine Mushroom Stew","19021:Thornswood-Content.esp":"Fine Wild Mushroom Stew","19022:Thornswood-Content.esp":"Fine Glowing Mushroom Stew","19023:Thornswood-Content.esp":"Fine Roasted Mushrooms","19024:Thornswood-Content.esp":"Fine Roasted Wild Mushrooms","19025:Thornswood-Content.esp":"Fine Roasted Glowing Mushroom","19026:Thornswood-Content.esp":"Fine Jelly Dumpling","19027:Thornswood-Content.esp":"Fine Braided Bread","19028:Thornswood-Content.esp":"Fine Garlic Bread","19029:Thornswood-Content.esp":"Fine Apple Dumpling","1902a:Thornswood-Content.esp":"Fine Potato Bread","1902b:Thornswood-Content.esp":"Fine Juniper Berry Crostata","1902c:Thornswood-Content.esp":"Fine Jazbay Crostata","1902d:Thornswood-Content.esp":"Fine Snowberry Crostata","1902e:Thornswood-Content.esp":"Fine Potato Soup","1902f:Thornswood-Content.esp":"Fine Clam Chowder","19030:Thornswood-Content.esp":"Fine Steamed Mudcrab Legs","19031:Thornswood-Content.esp":"Fine Jazbay Dumpling","19032:Thornswood-Content.esp":"Fine Snowberry Dumpling","19033:Thornswood-Content.esp":"Fine Boiled Creme Treat","19034:Thornswood-Content.esp":"Fine Honey Nut Treat","19035:Thornswood-Content.esp":"Fine Baked Potatoes","19036:Thornswood-Content.esp":"Fine Salmon Steak","19037:Thornswood-Content.esp":"Fine Slaughterfish Steak","19038:Thornswood-Content.esp":"Fine Sweet Roll","19039:Thornswood-Content.esp":"Fine Grilled Leeks","1903a:Thornswood-Content.esp":"Fine Apple Pie","1903b:Thornswood-Content.esp":"Fine Bread Loaf","1903c:Thornswood-Content.esp":"Fine Cooked Beef","1903d:Thornswood-Content.esp":"Fine Goat Roast","1903e:Thornswood-Content.esp":"Fine Horker Loaf","1903f:Thornswood-Content.esp":"Fine Horse Haunch","19040:Thornswood-Content.esp":"Fine Mammoth Steak","19041:Thornswood-Content.esp":"Fine Venison Chop","19042:Thornswood-Content.esp":"Fine Rabbit Haunch","19043:Thornswood-Content.esp":"Fine Pheasant Roast","19044:Thornswood-Content.esp":"Fine Cooked Skeever","19045:Thornswood-Content.esp":"Fine Grilled Chicken Breast","19046:Thornswood-Content.esp":"Fine Cabbage and Tomato Soup","19047:Thornswood-Content.esp":"Fine Cabbage Soup","19048:Thornswood-Content.esp":"Fine Beef Stew","19049:Thornswood-Content.esp":"Fine Horker Stew","1904a:Thornswood-Content.esp":"Fine Cabbage Potato Soup","1904b:Thornswood-Content.esp":"Fine Tomato Soup","1904c:Thornswood-Content.esp":"Fine Venison Stew","1904d:Thornswood-Content.esp":"Fine Vegetable Soup","1904e:Thornswood-Content.esp":"Fine Goat Cheese Fondue","1a010:Thornswood-Content.esp":"First Planting Loaf","1a011:Thornswood-Content.esp":"Midyear Jazbay Tart","1a012:Thornswood-Content.esp":"Harvest's End Roast","1a013:Thornswood-Content.esp":"Saturalia Spice Cake","1a030:Thornswood-Content.esp":"Fine First Planting Loaf","1a031:Thornswood-Content.esp":"Fine Midyear Jazbay Tart","1a032:Thornswood-Content.esp":"Fine Harvest's End Roast","1a033:Thornswood-Content.esp":"Fine Saturalia Spice Cake","1c000:Thornswood-Content.esp":"Garlic Potato Soup","1c001:Thornswood-Content.esp":"Fine Garlic Potato Soup","1c003:Thornswood-Content.esp":"Salted Potato Soup","1c004:Thornswood-Content.esp":"Fine Salted Potato Soup","1c006:Thornswood-Content.esp":"Garlic Clam Chowder","1c007:Thornswood-Content.esp":"Fine Garlic Clam Chowder","1c009:Thornswood-Content.esp":"Salted Clam Chowder","1c00a:Thornswood-Content.esp":"Fine Salted Clam Chowder","1c00c:Thornswood-Content.esp":"Garlic Steamed Mudcrab Legs","1c00d:Thornswood-Content.esp":"Fine Garlic Steamed Mudcrab Legs","1c00f:Thornswood-Content.esp":"Salted Steamed Mudcrab Legs","1c010:Thornswood-Content.esp":"Fine Salted Steamed Mudcrab Legs","1c012:Thornswood-Content.esp":"Garlic Ash Yam Soup","1c013:Thornswood-Content.esp":"Fine Garlic Ash Yam Soup","1c015:Thornswood-Content.esp":"Salted Ash Yam Soup","1c016:Thornswood-Content.esp":"Fine Salted Ash Yam Soup","1c018:Thornswood-Content.esp":"Garlic Cooked Boar Meat","1c019:Thornswood-Content.esp":"Fine Garlic Cooked Boar Meat","1c01b:Thornswood-Content.esp":"Salted Cooked Boar Meat","1c01c:Thornswood-Content.esp":"Fine Salted Cooked Boar Meat","1c01e:Thornswood-Content.esp":"Garlic Salmon Steak","1c01f:Thornswood-Content.esp":"Fine Garlic Salmon Steak","1c021:Thornswood-Content.esp":"Salted Salmon Steak","1c022:Thornswood-Content.esp":"Fine Salted Salmon Steak","1c024:Thornswood-Content.esp":"Garlic Slaughterfish Steak","1c025:Thornswood-Content.esp":"Fine Garlic Slaughterfish Steak","1c027:Thornswood-Content.esp":"Salted Slaughterfish Steak","1c028:Thornswood-Content.esp":"Fine Salted Slaughterfish Steak","1c02a:Thornswood-Content.esp":"Garlic Cooked Beef","1c02b:Thornswood-Content.esp":"Fine Garlic Cooked Beef","1c02d:Thornswood-Content.esp":"Salted Cooked Beef","1c02e:Thornswood-Content.esp":"Fine Salted Cooked Beef","1c030:Thornswood-Content.esp":"Garlic Goat Roast","1c031:Thornswood-Content.esp":"Fine Garlic Goat Roast","1c033:Thornswood-Content.esp":"Salted Goat Roast","1c034:Thornswood-Content.esp":"Fine Salted Goat Roast","1c036:Thornswood-Content.esp":"Garlic Horker Loaf","1c037:Thornswood-Content.esp":"Fine Garlic Horker Loaf","1c039:Thornswood-Content.esp":"Salted Horker Loaf","1c03a:Thornswood-Content.esp":"Fine Salted Horker Loaf","1c03c:Thornswood-Content.esp":"Garlic Horse Haunch","1c03d:Thornswood-Content.esp":"Fine Garlic Horse Haunch","1c03f:Thornswood-Content.esp":"Salted Horse Haunch","1c040:Thornswood-Content.esp":"Fine Salted Horse Haunch","1c042:Thornswood-Content.esp":"Garlic Mammoth Steak","1c043:Thornswood-Content.esp":"Fine Garlic Mammoth Steak","1c045:Thornswood-Content.esp":"Salted Mammoth Steak","1c046:Thornswood-Content.esp":"Fine Salted Mammoth Steak","1c048:Thornswood-Content.esp":"Garlic Venison Chop","1c049:Thornswood-Content.esp":"Fine Garlic Venison Chop","1c04b:Thornswood-Content.esp":"Salted Venison Chop","1c04c:Thornswood-Content.esp":"Fine Salted Venison Chop","1c04e:Thornswood-Content.esp":"Garlic Rabbit Haunch","1c04f:Thornswood-Content.esp":"Fine Garlic Rabbit Haunch","1c051:Thornswood-Content.esp":"Salted Rabbit Haunch","1c052:Thornswood-Content.esp":"Fine Salted Rabbit Haunch","1c054:Thornswood-Content.esp":"Garlic Pheasant Roast","1c055:Thornswood-Content.esp":"Fine Garlic Pheasant Roast","1c057:Thornswood-Content.esp":"Salted Pheasant Roast","1c058:Thornswood-Content.esp":"Fine Salted Pheasant Roast","1c05a:Thornswood-Content.esp":"Garlic Mammoth Cheese Fondue","1c05b:Thornswood-Content.esp":"Fine Garlic Mammoth Cheese Fondue","1c05d:Thornswood-Content.esp":"Salted Mammoth Cheese Fondue","1c05e:Thornswood-Content.esp":"Fine Salted Mammoth Cheese Fondue","1c060:Thornswood-Content.esp":"Garlic Eidar Cheese Fondue","1c061:Thornswood-Content.esp":"Fine Garlic Eidar Cheese Fondue","1c063:Thornswood-Content.esp":"Salted Eidar Cheese Fondue","1c064:Thornswood-Content.esp":"Fine Salted Eidar Cheese Fondue","1c066:Thornswood-Content.esp":"Garlic Ash Hopper Stew","1c067:Thornswood-Content.esp":"Fine Garlic Ash Hopper Stew","1c069:Thornswood-Content.esp":"Salted Ash Hopper Stew","1c06a:Thornswood-Content.esp":"Fine Salted Ash Hopper Stew","1c06c:Thornswood-Content.esp":"Garlic Boar Stew","1c06d:Thornswood-Content.esp":"Fine Garlic Boar Stew","1c06f:Thornswood-Content.esp":"Salted Boar Stew","1c070:Thornswood-Content.esp":"Fine Salted Boar Stew","1c072:Thornswood-Content.esp":"Garlic Mammoth Stew","1c073:Thornswood-Content.esp":"Fine Garlic Mammoth Stew","1c075:Thornswood-Content.esp":"Salted Mammoth Stew","1c076:Thornswood-Content.esp":"Fine Salted Mammoth Stew","1c078:Thornswood-Content.esp":"Garlic Goat Stew","1c079:Thornswood-Content.esp":"Fine Garlic Goat Stew","1c07b:Thornswood-Content.esp":"Salted Goat Stew","1c07c:Thornswood-Content.esp":"Fine Salted Goat Stew","1c07e:Thornswood-Content.esp":"Garlic Cooked Dog","1c07f:Thornswood-Content.esp":"Fine Garlic Cooked Dog","1c081:Thornswood-Content.esp":"Salted Cooked Dog","1c082:Thornswood-Content.esp":"Fine Salted Cooked Dog","1c084:Thornswood-Content.esp":"Garlic Gourd Soup","1c085:Thornswood-Content.esp":"Fine Garlic Gourd Soup","1c087:Thornswood-Content.esp":"Salted Gourd Soup","1c088:Thornswood-Content.esp":"Fine Salted Gourd Soup","1c08a:Thornswood-Content.esp":"Garlic Carrot Soup","1c08b:Thornswood-Content.esp":"Fine Garlic Carrot Soup","1c08d:Thornswood-Content.esp":"Salted Carrot Soup","1c08e:Thornswood-Content.esp":"Fine Salted Carrot Soup","1c090:Thornswood-Content.esp":"Garlic Roasted Yams","1c091:Thornswood-Content.esp":"Fine Garlic Roasted Yams","1c093:Thornswood-Content.esp":"Salted Roasted Yams","1c094:Thornswood-Content.esp":"Fine Salted Roasted Yams","1c096:Thornswood-Content.esp":"Garlic Rabbit Stew","1c097:Thornswood-Content.esp":"Fine Garlic Rabbit Stew","1c099:Thornswood-Content.esp":"Salted Rabbit Stew","1c09a:Thornswood-Content.esp":"Fine Salted Rabbit Stew","1c09c:Thornswood-Content.esp":"Garlic Pheasant Stew","1c09d:Thornswood-Content.esp":"Fine Garlic Pheasant Stew","1c09f:Thornswood-Content.esp":"Salted Pheasant Stew","1c0a0:Thornswood-Content.esp":"Fine Salted Pheasant Stew","1c0a2:Thornswood-Content.esp":"Garlic Mushroom Stew","1c0a3:Thornswood-Content.esp":"Fine Garlic Mushroom Stew","1c0a5:Thornswood-Content.esp":"Salted Mushroom Stew","1c0a6:Thornswood-Content.esp":"Fine Salted Mushroom Stew","1c0a8:Thornswood-Content.esp":"Garlic Wild Mushroom Stew","1c0a9:Thornswood-Content.esp":"Fine Garlic Wild Mushroom Stew","1c0ab:Thornswood-Content.esp":"Salted Wild Mushroom Stew","1c0ac:Thornswood-Content.esp":"Fine Salted Wild Mushroom Stew","1c0ae:Thornswood-Content.esp":"Garlic Glowing Mushroom Stew","1c0af:Thornswood-Content.esp":"Fine Garlic Glowing Mushroom Stew","1c0b1:Thornswood-Content.esp":"Salted Glowing Mushroom Stew","1c0b2:Thornswood-Content.esp":"Fine Salted Glowing Mushroom Stew","1c0b4:Thornswood-Content.esp":"Garlic Roasted Mushrooms","1c0b5:Thornswood-Content.esp":"Fine Garlic Roasted Mushrooms","1c0b7:Thornswood-Content.esp":"Salted Roasted Mushrooms","1c0b8:Thornswood-Content.esp":"Fine Salted Roasted Mushrooms","1c0ba:Thornswood-Content.esp":"Garlic Roasted Wild Mushrooms","1c0bb:Thornswood-Content.esp":"Fine Garlic Roasted Wild Mushrooms","1c0bd:Thornswood-Content.esp":"Salted Roasted Wild Mushrooms","1c0be:Thornswood-Content.esp":"Fine Salted Roasted Wild Mushrooms","1c0c0:Thornswood-Content.esp":"Garlic Roasted Glowing Mushroom","1c0c1:Thornswood-Content.esp":"Fine Garlic Roasted Glowing Mushroom","1c0c3:Thornswood-Content.esp":"Salted Roasted Glowing Mushroom","1c0c4:Thornswood-Content.esp":"Fine Salted Roasted Glowing Mushroom","1c0c6:Thornswood-Content.esp":"Garlic Cooked Skeever","1c0c7:Thornswood-Content.esp":"Fine Garlic Cooked Skeever","1c0c9:Thornswood-Content.esp":"Salted Cooked Skeever","1c0ca:Thornswood-Content.esp":"Fine Salted Cooked Skeever","1c0cc:Thornswood-Content.esp":"Garlic Grilled Chicken Breast","1c0cd:Thornswood-Content.esp":"Fine Garlic Grilled Chicken Breast","1c0cf:Thornswood-Content.esp":"Salted Grilled Chicken Breast","1c0d0:Thornswood-Content.esp":"Fine Salted Grilled Chicken Breast","1c0d2:Thornswood-Content.esp":"Garlic Cabbage and Tomato Soup","1c0d3:Thornswood-Content.esp":"Fine Garlic Cabbage and Tomato Soup","1c0d5:Thornswood-Content.esp":"Salted Cabbage and Tomato Soup","1c0d6:Thornswood-Content.esp":"Fine Salted Cabbage and Tomato Soup","1c0d8:Thornswood-Content.esp":"Garlic Cabbage Soup","1c0d9:Thornswood-Content.esp":"Fine Garlic Cabbage Soup","1c0db:Thornswood-Content.esp":"Salted Cabbage Soup","1c0dc:Thornswood-Content.esp":"Fine Salted Cabbage Soup","1c0de:Thornswood-Content.esp":"Garlic Beef Stew","1c0df:Thornswood-Content.esp":"Fine Garlic Beef Stew","1c0e1:Thornswood-Content.esp":"Salted Beef Stew","1c0e2:Thornswood-Content.esp":"Fine Salted Beef Stew","1c0e4:Thornswood-Content.esp":"Garlic Horker Stew","1c0e5:Thornswood-Content.esp":"Fine Garlic Horker Stew","1c0e7:Thornswood-Content.esp":"Salted Horker Stew","1c0e8:Thornswood-Content.esp":"Fine Salted Horker Stew","1c0ea:Thornswood-Content.esp":"Garlic Cabbage Potato Soup","1c0eb:Thornswood-Content.esp":"Fine Garlic Cabbage Potato Soup","1c0ed:Thornswood-Content.esp":"Salted Cabbage Potato Soup","1c0ee:Thornswood-Content.esp":"Fine Salted Cabbage Potato Soup","1c0f0:Thornswood-Content.esp":"Garlic Tomato Soup","1c0f1:Thornswood-Content.esp":"Fine Garlic Tomato Soup","1c0f3:Thornswood-Content.esp":"Salted Tomato Soup","1c0f4:Thornswood-Content.esp":"Fine Salted Tomato Soup","1c0f6:Thornswood-Content.esp":"Garlic Venison Stew","1c0f7:Thornswood-Content.esp":"Fine Garlic Venison Stew","1c0f9:Thornswood-Content.esp":"Salted Venison Stew","1c0fa:Thornswood-Content.esp":"Fine Salted Venison Stew","1c0fc:Thornswood-Content.esp":"Garlic Vegetable Soup","1c0fd:Thornswood-Content.esp":"Fine Garlic Vegetable Soup","1c0ff:Thornswood-Content.esp":"Salted Vegetable Soup","1c100:Thornswood-Content.esp":"Fine Salted Vegetable Soup","1c102:Thornswood-Content.esp":"Garlic Goat Cheese Fondue","1c103:Thornswood-Content.esp":"Fine Garlic Goat Cheese Fondue","1c105:Thornswood-Content.esp":"Salted Goat Cheese Fondue","1c106:Thornswood-Content.esp":"Fine Salted Goat Cheese Fondue","206e7:Dragonborn.esm":"Ash Yam","3533:HearthFires.esm":"Apple Dumpling","3534:HearthFires.esm":"Jug of Milk","3537:HearthFires.esm":"Potato Bread","3539:HearthFires.esm":"Juniper Berry Crostata","353a:HearthFires.esm":"Jazbay Crostata","353b:HearthFires.esm":"Snowberry Crostata","353c:HearthFires.esm":"Butter","353d:HearthFires.esm":"Potato Soup","353e:HearthFires.esm":"Clam Chowder","353f:HearthFires.esm":"Steamed Mudcrab Legs","3540:HearthFires.esm":"Mudcrab Legs","3541:HearthFires.esm":"Salmon Steak","3bd14:Dragonborn.esm":"Boar Meat","3bd15:Dragonborn.esm":"Ash Hopper Meat","3cd5b:Dragonborn.esm":"Ash Yam Soup","3cf72:Dragonborn.esm":"Cooked Boar Meat","3d125:Dragonborn.esm":"Ash Hopper Leg","4477e9:WindhelmSSE.esp":"Nord Rolled Cake","64b2e:Skyrim.esm":"Red Apple","64b2f:Skyrim.esm":"Green Apple","64b30:Skyrim.esm":"Boiled Creme Treat","64b38:Skyrim.esm":"Honey Nut Treat","64b3a:Skyrim.esm":"Baked Potatoes","64b3b:Skyrim.esm":"Salmon Steak","64b3c:Skyrim.esm":"Slaughterfish Steak","64b3d:Skyrim.esm":"Sweet Roll","64b3e:Skyrim.esm":"Grilled Leeks","64b3f:Skyrim.esm":"Cabbage","64b40:Skyrim.esm":"Carrot","64b41:Skyrim.esm":"Potato","64b42:Skyrim.esm":"Tomato","64b43:Skyrim.esm":"Apple Pie","65c97:Skyrim.esm":"Bread Loaf","65c98:Skyrim.esm":"Bread","65c99:Skyrim.esm":"Raw Beef","65c9a:Skyrim.esm":"Goat Meat","65c9b:Skyrim.esm":"Horker Meat","65c9c:Skyrim.esm":"Horse Meat","65c9d:Skyrim.esm":"Pheasant Breast","65c9e:Skyrim.esm":"Raw Rabbit Leg","65c9f:Skyrim.esm":"Salmon Meat","669a2:Skyrim.esm":"Venison","669a4:Skyrim.esm":"Mammoth Snout","669a5:Skyrim.esm":"Leek","721e8:Skyrim.esm":"Cooked Beef","7224c:Skyrim.esm":"Goat Roast","7224e:Skyrim.esm":"Horker Loaf","722b0:Skyrim.esm":"Horse Haunch","722bb:Skyrim.esm":"Mammoth Steak","722bd:Skyrim.esm":"Venison Chop","722c2:Skyrim.esm":"Rabbit Haunch","722c7:Skyrim.esm":"Pheasant Roast","80d:Gourmet.esp":"Juniper Berry Dumpling","810:Gourmet.esp":"Mammoth Cheese Fondue","815:Gourmet.esp":"Eidar Cheese Fondue","816:Gourmet.esp":"Ash Hopper Stew","817:Gourmet.esp":"Boar Stew","818:Gourmet.esp":"Mammoth Stew","81c:Gourmet.esp":"Goat Stew","8aa:Gourmet.esp":"Cooked Dog","8ac:Gourmet.esp":"Skeever Meat","8ae:Gourmet.esp":"Slaughterfish Meat","8b1:Gourmet.esp":"Gourd Soup","8b3:Gourmet.esp":"Carrot Soup","8e2:Gourmet.esp":"Roasted Carrots","8e4:Gourmet.esp":"Roasted Yams","8ea:Gourmet.esp":"Rabbit Stew","8eb:Gourmet.esp":"Pheasant Stew","8f5:Gourmet.esp":"Mushroom Stew","8f6:Gourmet.esp":"Wild Mushroom Stew","8f7:Gourmet.esp":"Glowing Mushroom Stew","901:Gourmet.esp":"Roasted Mushrooms","902:Gourmet.esp":"Roasted Wild Mushrooms","903:Gourmet.esp":"Roasted Glowing Mushroom","981:Gourmet.esp":"Jelly Dumpling","9db:HearthFires.esm":"Braided Bread","9dc:HearthFires.esm":"Garlic Bread","9df:Gourmet.esp":"Hot Goat Stew","9e0:Gourmet.esp":"Hot Mammoth Stew","9e1:Gourmet.esp":"Hot Pheasant Stew","9e2:Gourmet.esp":"Hot Rabbit Stew","9e3:Gourmet.esp":"Hot Mushroom Stew","9e4:Gourmet.esp":"Hot Wild Mushroom Stew","9e5:Gourmet.esp":"Hot Glowing Mushroom Stew","9e6:Gourmet.esp":"Hot Ash Hopper Stew","cd614:Skyrim.esm":"Homecooked Meal","e8448:Skyrim.esm":"Cooked Skeever","e8947:Skyrim.esm":"Grilled Chicken Breast","eba01:Skyrim.esm":"Cabbage and Tomato Soup","eba02:Skyrim.esm":"Cabbage Soup","eba03:Skyrim.esm":"Clam Meat","edb2e:Skyrim.esm":"Dog Meat","f2011:Skyrim.esm":"Chicken Breast","f4314:Skyrim.esm":"Beef Stew","f4315:Skyrim.esm":"Horker Stew","f431b:Skyrim.esm":"Cabbage Potato Soup","f431c:Skyrim.esm":"Tomato Soup","f431d:Skyrim.esm":"Venison Stew","f431e:Skyrim.esm":"Vegetable Soup","f4320:Skyrim.esm":"Goat Cheese Fondue"}}};
 const RACES = table('RACES');
 
 const PREFER_SLOT = 'temple';
@@ -5874,18 +5874,30 @@ function killPieces(actorId) {
  * percentages, which only this handler can write. Anything else lets the death
  * go on to mp.onDeath below.
  *
- * Cheat Death answers first (#1385). Going down (#2681, docs/systems/injury.md)
- * is the second answer and is not built yet. Nothing here may ask
- * cheatDeath() about anything but this death: it spends its day when it says
- * yes.
+ * Cheat Death answers first (#1385). Going down (#4607, docs/systems/injury.md)
+ * is the second answer: a person is kept at the injury block's DOWN.keep and
+ * is down until somebody stands them up or the clock lets this death through.
+ * Nothing here may ask cheatDeath() about anything but this death: it spends
+ * its day when it says yes.
  */
-mp.onDying = guard('onDying', function (actorId) {
+mp.onDying = guard('onDying', function (actorId, killerId) {
   const perks = globalThis.__thornswoodPerks;
-  if (!perks || !perks.cheatDeath) { return undefined; }
-  const kept = perks.cheatDeath(actorId);
-  if (!(kept > 0)) { return undefined; }
-  mp.set(actorId, 'dyingHealth', kept);
-  return false;
+  if (perks && perks.cheatDeath) {
+    const kept = perks.cheatDeath(actorId);
+    if (kept > 0) {
+      mp.set(actorId, 'dyingHealth', kept);
+      return false;
+    }
+  }
+  const hurt = globalThis.__thornswoodHurt;
+  if (hurt && hurt.goDown) {
+    const down = hurt.goDown(actorId, killerId);
+    if (down > 0) {
+      mp.set(actorId, 'dyingHealth', down);
+      return false;
+    }
+  }
+  return undefined;
 });
 
 /**
@@ -5898,6 +5910,8 @@ mp.onDying = guard('onDying', function (actorId) {
  * a person.
  */
 mp.onDeath = guard('onDeath', function (actorId, killerId) {
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   /*
     A BLOW THE SERVER LANDED ITSELF STILL HAS A KILLER (#1386). The extra
     damage of a warrior's Heavy or Wreck is written by the maneuvers block
@@ -6120,6 +6134,8 @@ mp.onRespawn = guard('onRespawn', function (actorId) {
     log('respawn', actorId, 'refused: a temporary spawn, removed instead');
     return false;
   }
+  const stuck = globalThis.__thornswoodStuck;
+  if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   const sp = mp.get(actorId, 'spawnPoint');
   log('respawn', actorId, 'at', sp && sp.cellOrWorldDesc);
   if (!(Number(mp.get(actorId, 'profileId')) > 0)) {
@@ -8386,7 +8402,7 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
       */
       var dyeW = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodHairDye;
       var dLine = '';
-      try { dLine = (dyeW && dyeW.pressed) ? dyeW.pressed(casterRefrId, kwW) : ''; } catch (eDye) {
+      try { dLine = (dyeW && dyeW.pressed) ? dyeW.pressed(casterRefrId, kwW, refrId) : ''; } catch (eDye) {
         log('the hair dye at', refrId.toString(16), 'threw:', eDye);
       }
       if (dLine) { notify(casterRefrId, dLine); say(casterRefrId, dLine); answeredHere = true; }
@@ -9760,16 +9776,11 @@ function cookedOutput(actorId, row) {
   }
 }
 
-function onCraftRoll(actorId, roll) {
+function onCraftRoll(actorId, roll, s) {
   const gate = globalThis.__thornswoodRolls;
   if (gate && typeof gate.has === 'function') {
     try { return !!gate.has(actorId, roll); } catch (e) { return false; }
   }
-  const C = globalThis.__thornswoodCharacter;
-  if (!C || !C.stateOf) { return false; }
-  let s = null;
-  try { s = C.stateOf(actorId); } catch (e) { return false; }
-  if (!s) { return false; }
   const list = s.rolls;
   if (Array.isArray(list)) { return list.indexOf(roll) !== -1; }
   if (list && typeof list === 'object') { return !!list[roll]; }
@@ -9777,6 +9788,7 @@ function onCraftRoll(actorId, roll) {
 }
 
 function craftAnswer(actorId, row) {
+  const preview = arguments[2] === true;
   const out = { refusal: null, note: null, credit: null };
 
   /*
@@ -9832,7 +9844,7 @@ function craftAnswer(actorId, row) {
   }
   let s = null;
   try {
-    s = C.stateOf(actorId);
+    s = preview && C.previewState ? C.previewState(actorId) : C.stateOf(actorId);
   } catch (e) {
     log('the craft gate threw reading the character, so it is open:', e);
     return out;
@@ -9873,7 +9885,7 @@ function craftAnswer(actorId, row) {
   if (row && row.roll) {
     const roll = String(row.roll);
     let on = false;
-    try { on = onCraftRoll(actorId, roll); } catch (e) { on = false; }
+    try { on = onCraftRoll(actorId, roll, s); } catch (e) { on = false; }
     if (!on) {
       const made = String(row.name || 'that');
       out.refusal = roll === 'embassy'
@@ -11225,6 +11237,24 @@ function unfitToMake(actorId, workbenchId) {
   return (needs && needs.craftRefusal) ? needs.craftRefusal(actorId) : '';
 }
 
+// A named recipe from an old menu still has its mod's counts or bench.
+// Shared by start and completion; resolved recipe-less events already use
+// this game's counts and bench, so they do not ask this named-record check.
+function recipeMetadataRefusal(desc) {
+  if (typeof RECIPES_SET_IN_GAME === 'object' && Object.prototype.hasOwnProperty.call(RECIPES_SET_IN_GAME, desc)) {
+    const asks = RECIPES_SET_IN_GAME[desc];
+    return 'The ' + asks.name.trim() + ' takes different materials here than that bench listed. ' +
+           'Leave the bench and use it again to see what it takes.';
+  }
+  if (typeof RECIPES_MOVED_IN_GAME === 'object' && RECIPES_MOVED_IN_GAME &&
+      Object.prototype.hasOwnProperty.call(RECIPES_MOVED_IN_GAME, desc)) {
+    const moved = RECIPES_MOVED_IN_GAME[desc];
+    return 'The ' + String(moved.name || 'that').trim() + ' is not made at this bench here. ' +
+           'Leave the bench and use the one it is made at.';
+  }
+  return '';
+}
+
 /*
   HOW LONG A CRAFT TAKES AT THE BENCH (#3161).
 
@@ -11304,8 +11334,21 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
     try { desc = mp.getDescFromId(recipeId); } catch (e) { desc = null; }
   } else {
     desc = recipeSetInGame(craftedItemBaseId, workbenchId, arguments[6]);
+    if (!desc && typeof recipeMovedInGame === 'function') {
+      desc = recipeMovedInGame(craftedItemBaseId, workbenchId, arguments[6]);
+    }
   }
   const row = (desc && typeof desc === 'string') ? craftRow(desc) : null;
+  // The same read-only learning gate is asked again at completion. Its
+  // credit and allowed note belong only to that later successful craft.
+  const stale = recipeId ? recipeMetadataRefusal(desc) : '';
+  const refusal = stale || (row && typeof row === 'object' ? craftAnswer(actorId, row, true).refusal : '');
+  if (refusal) {
+    notify(actorId, refusal);
+    say(actorId, refusal);
+    log(actorId.toString(16), 'was refused', desc, '(' + (row && row.name || 'recipe') + '):', refusal);
+    return false;
+  }
   const size = craftSize(row, workbenchId);
   mp.set(actorId, 'craftWork', { ms: CRAFT_WORK_MS[size] });
 
@@ -11431,27 +11474,11 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
       log('no descriptor for recipe', recipeId, 'so the craft is allowed');
       return;
     }
-    // The mod's own counts for a recipe set in each game: this game has not
-    // set the new ones yet (#613), and they are what the craft costs.
-    if (typeof RECIPES_SET_IN_GAME === 'object' && Object.prototype.hasOwnProperty.call(RECIPES_SET_IN_GAME, desc)) {
-      const asks = RECIPES_SET_IN_GAME[desc];
-      const no = 'The ' + asks.name.trim() + ' takes different materials here than that bench listed. ' +
-                 'Leave the bench and use it again to see what it takes.';
+    const no = recipeMetadataRefusal(desc);
+    if (no) {
       notify(actorId, no);
       say(actorId, no);
-      log(actorId.toString(16), 'was refused', desc, '(' + asks.name + ') at the mod\'s own counts');
-      return false;
-    }
-    // The bench its mod put it at, for a recipe moved in each game: this
-    // game has not moved it yet (#3120), and that bench is not its trade's.
-    if (typeof RECIPES_MOVED_IN_GAME === 'object' && RECIPES_MOVED_IN_GAME &&
-        Object.prototype.hasOwnProperty.call(RECIPES_MOVED_IN_GAME, desc)) {
-      const moved = RECIPES_MOVED_IN_GAME[desc];
-      const no = 'The ' + String(moved.name || 'that').trim() + ' is not made at this bench here. ' +
-                 'Leave the bench and use the one it is made at.';
-      notify(actorId, no);
-      say(actorId, no);
-      log(actorId.toString(16), 'was refused', desc, '(' + moved.name + ') at', moved.from, 'and it is made at', moved.to);
+      log(actorId.toString(16), 'was refused', desc, 'with its old recipe settings:', no);
       return false;
     }
   }
@@ -12422,7 +12449,7 @@ log('gamemode loaded:',
   if (globalThis.__thornswoodRoster) {
     try { clearInterval(globalThis.__thornswoodRoster); } catch (e) { }
   }
-  globalThis.__thornswoodRoster = setInterval(function () {
+  function refresh() {
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return; }
 
@@ -12473,7 +12500,9 @@ log('gamemode loaded:',
 
     // Still dirty when the write was refused: the file is behind the book.
     if (dirty) { dirty = !write(); }
-  }, EVERY_MS);
+  }
+  globalThis.__thornswoodRefreshRoster = refresh;
+  globalThis.__thornswoodRoster = setInterval(refresh, EVERY_MS);
 
   console.log('[thornswood] character roster published at ' + FILE);
 })();
@@ -13611,6 +13640,7 @@ log('gamemode loaded:',
     // The key goes in a header, never the address. An address is what a web
     // server writes down, and this key is the door's whole secret. Entry 248.
     var url = String(conf.site).replace(/\/+$/, '') + '/api/allowed';
+    var requestedAt = Date.now();
     var req;
     try {
       req = https.get(url, { headers: { 'X-Thornswood-Key': String(conf.key) } }, function (resp) {
@@ -13698,6 +13728,24 @@ log('gamemode loaded:',
                  (doc.lookupFailedWhy ? ': ' + doc.lookupFailedWhy : ''));
           }
 
+          // A failed or late request can still refresh unrelated role fields,
+          // but it cannot replace the last readable ban list or advance its clock.
+          var previousBansRequestedAt = (Array.isArray(had.bans) &&
+            had.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }))
+            ? String(had.bansRequestedAt || '') : '';
+          var previousBansRequested = new Date(previousBansRequestedAt).getTime() || 0;
+          var previousBansWritten = new Date(String(had.at || '')).getTime() || 0;
+          // A role-only rewrite must not turn an invalid ban stamp into
+          // valid proof or make it look like a door file from before stamps.
+          if (!(previousBansRequested > 0 && previousBansRequested <= previousBansWritten &&
+                previousBansWritten <= Date.now())) {
+            previousBansRequested = 0;
+            if (previousBansRequestedAt) { previousBansRequestedAt = 'invalid'; }
+          }
+          var takeBans = Array.isArray(doc.bans) && !doc.bansBroken && !doc.stateBroken &&
+            doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); }) &&
+            requestedAt > previousBansRequested && requestedAt <= Date.now();
+
           // Whole, never in place (#2740): Set-Door reads it on the box while
           // the server runs, and an in-place write read half way is no list.
           try {
@@ -13726,7 +13774,10 @@ log('gamemode loaded:',
               // Staff bans with why and until (#412), from the site's own
               // file rather than Discord, so they are fresh even when the
               // lists above were kept. The staff block ends a banned session.
-              bans: Array.isArray(doc.bans) ? doc.bans : [],
+              bans: takeBans ? doc.bans : (Array.isArray(had.bans) ? had.bans : []),
+              // The request's start, never its response time, is the proof
+              // used when handing local game bans back to the site.
+              bansRequestedAt: takeBans ? new Date(requestedAt).toISOString() : previousBansRequestedAt,
               // Characters staff have killed for good (#1010). The staff
               // block ends one quietly if it is in the world.
               pk: Array.isArray(doc.pk) ? doc.pk : [],
@@ -15319,6 +15370,11 @@ log('gamemode loaded:',
   function onLogin(e) {
     var now = Date.now();
     var asked = Number(e && e.profileId) || 0;
+    var staff = g.__thornswoodStaff;
+    if (!staff || typeof staff.restraintAdmission !== 'function' || !staff.restraintAdmission(asked)) {
+      console.log('[thornswood] login of profile ' + asked + ' refused: staff restraint authority is unavailable or movement awaits staff resolution');
+      return 0;
+    }
     if (!e || !e.proof) {
       console.log('[thornswood] login of profile ' + asked + ' on user ' + (e && e.userId) +
                   ' challenged; handed over as asked (watching, #1320)');
@@ -17135,6 +17191,138 @@ log('gamemode loaded:',
     return yes(s);
   }
 
+  // #6737: explicit testing exception to the ordinary one-class pick.
+  // Preserve spent tree points, then place the current choices again through
+  // the same capped allocation used at creation. No kit or rank reward.
+  function removePlaced(s) {
+    for (var skill in s.placed) {
+      if (!own(s.placed, skill)) { continue; }
+      if (!treeSkill(skill) || !Number.isInteger(s.placed[skill]) || s.placed[skill] < 0 ||
+          !Number.isInteger(s.tree[skill]) || s.tree[skill] < s.placed[skill]) {
+        return 'the placed skill points cannot be read';
+      }
+    }
+    for (var oldSkill in s.placed) {
+      if (!own(s.placed, oldSkill)) { continue; }
+      s.tree[oldSkill] -= s.placed[oldSkill];
+      if (!s.tree[oldSkill]) { delete s.tree[oldSkill]; }
+    }
+    s.placed = {};
+    return null;
+  }
+  function setClassForTesting(state, cls) {
+    if (!own(CLASSES, cls)) { return no('no such class'); }
+    var s = clone(state);
+    if (s.cls === cls) { return no('that is already the current class'); }
+    if (s.cls && !own(CLASSES, s.cls)) { return no('the current class cannot be read'); }
+    var invalid = removePlaced(s);
+    if (invalid) { return no(invalid); }
+    if (s.cls) { delete s.ranks[s.cls]; delete s.work[s.cls]; }
+    s.cls = null;
+    var picked = pickClass(s, cls);
+    if (!picked.ok) { return picked; }
+    s = picked.state;
+    if (s.prof) { place(s, 'professions', s.prof); }
+    if (s.half) { place(s, 'halves', s.half); }
+    for (var i = 0; i < s.schools.length; i++) { place(s, 'schools', s.schools[i]); }
+    return yes(s);
+  }
+
+  function captureKnowledge(state) {
+    var s = clone(state), h = s.spellHistory || {};
+    var balances = clone(h.points || {});
+    balances.spells = clone(balances.spells || {});
+    balances.staff = clone(balances.staff || {});
+    function union(a, b) {
+      var out = (a || []).slice();
+      (b || []).forEach(function (x) { if (out.indexOf(x) < 0) { out.push(x); } });
+      return out;
+    }
+    if (s.prof) { balances.spells[s.prof] = s.spells ? s.spells.points : 0; }
+    if (s.prof === 'enchanter') { balances.staff.enchanter = staffPoints(s); }
+    s.spellHistory = { spells: union(h.spells, s.spells && s.spells.known),
+      staffSpells: union(h.staffSpells, s.staffSpells), points: balances,
+      otherSpells: union(h.otherSpells, []) };
+    s.spellHistory.otherSpells.forEach(function (desc) {
+      var known = spellByDesc(desc);
+      if (known && s.spellHistory.spells.indexOf(known.name) < 0) { s.spellHistory.spells.push(known.name); }
+    });
+    return s;
+  }
+
+  // History is permanent; only the book eligible under today's choices is
+  // active. More than two outsider candidates requires an explicit choice.
+  function activeKnowledge(state, staffRank) {
+    var s = captureKnowledge(state), h = s.spellHistory;
+    h.otherSpells.forEach(function (desc) {
+      if (staffRank(desc) && h.staffSpells.indexOf(desc) < 0) { h.staffSpells.push(desc); }
+    });
+    var outside = (s.taught || []).concat(s.untaught || []);
+    var schools = s.prof === 'mage' ? s.schools : outside.filter(function (x) { return SCHOOLS.indexOf(x) >= 0; });
+    var spells = h.spells.filter(function (name) {
+      var spell = spellAt(name);
+      var rank = spell && (s.prof === 'mage' ? rankOf(s, spell.school) : 'novice');
+      return spell && schools.indexOf(spell.school) >= 0 && rankIndex(rank) >= rankIndex(spell.rank);
+    });
+    var staff = h.staffSpells.filter(function (desc) {
+      var rank = staffRank(desc);
+      var have = s.prof === 'enchanter' ? rankOf(s, STAFF_HALF) :
+        (outside.indexOf(STAFF_HALF) >= 0 ? 'novice' : null);
+      return rank && have && rankIndex(have) >= rankIndex(rank);
+    });
+    function selected(list, key, capped) {
+      if (!capped) { return { ok: true, list: list }; }
+      var choices = s.spellSelections || {};
+      if (!own(choices, key)) {
+        return list.length <= LIMITS.outsiderSpells ? { ok: true, list: list } :
+          { ok: false, why: 'choose up to ' + LIMITS.outsiderSpells + ' ' + key + ' explicitly', choices: list };
+      }
+      var chosen = choices[key];
+      if (!Array.isArray(chosen) || chosen.length > LIMITS.outsiderSpells || chosen.some(function (x, i) {
+        return list.indexOf(x) < 0 || chosen.indexOf(x) !== i;
+      })) { return { ok: false, why: 'the selected ' + key + ' are not eligible', choices: list }; }
+      return { ok: true, list: chosen.slice() };
+    }
+    var a = selected(spells, 'spells', s.prof !== 'mage');
+    if (!a.ok) { return a; }
+    var b = selected(staff, 'staffSpells', s.prof !== 'enchanter');
+    if (!b.ok) { return b; }
+    s.spells = s.spells || { points: 0, known: [] };
+    s.spells.known = a.list;
+    s.staffSpells = b.list;
+    return yes(s);
+  }
+
+  function setProfessionForTesting(state, prof, halfOrSchools) {
+    var checked = pickProfession(fresh(), prof, halfOrSchools);
+    if (!checked.ok) { return checked; }
+    var s = captureKnowledge(state);
+    if ((s.taught || []).length || Object.keys(s.masters || {}).length || (s.apprentices || []).length) {
+      return no('end the current teaching relationships on K before changing profession');
+    }
+    if (s.prof === prof && s.half === checked.state.half &&
+        JSON.stringify((s.schools || []).slice().sort()) === JSON.stringify(checked.state.schools.slice().sort())) {
+      return no('that is already the current profession and choice');
+    }
+    var invalid = removePlaced(s);
+    if (invalid) { return no(invalid); }
+    halvesOf(s.prof).forEach(function (key) { delete s.ranks[key]; delete s.work[key]; });
+    s.prof = null; s.half = null; s.schools = []; s.spells = null;
+    delete s.staffPoints; delete s.staffSpells; delete s.weave;
+    if (s.cls) { place(s, 'classes', s.cls); }
+    var picked = pickProfession(s, prof, halfOrSchools);
+    if (!picked.ok) { return picked; }
+    // Each profession gets its canonical starting spell points once. Returning
+    // to it restores its last balance, including zero after spending them.
+    var balances = picked.state.spellHistory.points;
+    if (own(balances.spells, prof)) {
+      picked.state.spells = picked.state.spells || { points: 0, known: [] };
+      picked.state.spells.points = balances.spells[prof];
+    }
+    if (prof === 'enchanter' && own(balances.staff, prof)) { picked.state.staffPoints = balances.staff[prof]; }
+    return picked;
+  }
+
   /**
     One profession and one half of it, in one step, because the half is not
     a flavour. A mage picks schools instead of a half, exactly two of them.
@@ -18129,7 +18317,9 @@ log('gamemode loaded:',
   g.__thornswoodProgression = {
     TABLE: TABLE, SPELLS: SPELLS, SPELL_IDS: SPELL_IDS, TUNING: TUNING,
     fresh: fresh, clone: clone,
-    pickClass: pickClass, pickProfession: pickProfession, teach: teach,
+    pickClass: pickClass, setClassForTesting: setClassForTesting,
+    pickProfession: pickProfession, setProfessionForTesting: setProfessionForTesting,
+    captureKnowledge: captureKnowledge, activeKnowledge: activeKnowledge, teach: teach,
     takeOn: takeOn, release: release,
     rankUp: rankUp, pickThirdSchool: pickThirdSchool, spendPoint: spendPoint,
     perks: perks, canWork: canWork, canDo: canDo,
@@ -18553,15 +18743,21 @@ log('gamemode loaded:',
       '    var st = ctx.state;',
       '    if (!st) { return; }',
       '    if (st.thornswoodSkyId === id) { return; }',
-      '    st.thornswoodSkyId = id;',
+      // An id is applied only when its native operation completes. A form
+      // unavailable during loading must not suppress later owner updates.
       '    if (!id) {',
-      '      try { if (ctx.sp.Weather.releaseOverride) { ctx.sp.Weather.releaseOverride(); } } catch (e0) { }',
+      '      if (!ctx.sp.Weather.releaseOverride) { return; }',
+      '      ctx.sp.Weather.releaseOverride();',
+      '      st.thornswoodSkyId = id;',
       '      return;',
       '    }',
       '    var form = ctx.sp.Game.getFormEx(id);',
       '    if (!form) { return; }',
       '    var weather = ctx.sp.Weather.from(form);',
-      '    if (weather && weather.forceActive) { weather.forceActive(true); }',
+      '    if (weather && weather.forceActive) {',
+      '      weather.forceActive(true);',
+      '      st.thornswoodSkyId = id;',
+      '    }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
@@ -19402,6 +19598,9 @@ log('gamemode loaded:',
               trade carts block, #3158)
     books     members, their book chat, books they own, when they last left
               (the books)
+    restraints target profile's active freeze/silence; actor-only resets keep
+              them. Explicit wipe IDs clear only freeze/pending anchors, once,
+              leaving timed silences. The same private book keeps receipts.
     merchants the guild traders' supply waits, commission promises and a
               trade still waiting on the character, in the ledger and in
               each trader's own saved copy, retired traders' too (the purse
@@ -19470,7 +19669,11 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     }
     var v = null;
     try { v = JSON.parse(String(text).replace(/^\uFEFF/, '')); } catch (e) { v = null; }
-    return valid(v) ? { list: v } : { bad: v, file: p };
+    var wipes = v && v.freezeWipeIds;
+    var wipesOk = v && (v.clearFreezes === undefined || typeof v.clearFreezes === 'boolean') &&
+      (wipes === undefined || (Array.isArray(wipes) && wipes.every(function (id) { return typeof id === 'string' && /^[0-9a-f]{32}$/.test(id); }) && new Set(wipes).size === wipes.length)) &&
+      (v.clearFreezes === true ? Array.isArray(wipes) && wipes.length > 0 : !wipes || wipes.length === 0);
+    return valid(v) && wipesOk ? { list: v } : { bad: v, file: p };
   }
   function ids(a, b) {
     var seen = {}, out = [];
@@ -19496,6 +19699,9 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
     if (Object.prototype.hasOwnProperty.call(b, k)) { done[k] = Math.max(a[k], b[k]); }
   });
   var list = { profiles: ids(was.profiles, taking.list.profiles), actors: ids(was.actors, taking.list.actors), done: done };
+  function pendingWipes(v) { return v.clearFreezes === true && !(v.done && v.done.restraints) ? v.freezeWipeIds : []; }
+  var wipes = ids(pendingWipes(was), pendingWipes(taking.list)).sort();
+  if (wipes.length) { list.clearFreezes = true; list.freezeWipeIds = wipes; }
   try {
     fs.writeFileSync(TAKEN + '.tmp', JSON.stringify(list));
     fs.renameSync(TAKEN + '.tmp', TAKEN);
@@ -19510,7 +19716,7 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
 (function () {
   'use strict';
   var g = (typeof globalThis !== 'undefined' ? globalThis : this);
-  var PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'];
+  var PARTS = ['saves', 'farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'restraints', 'merchants'];
   var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
   // Into thornswood.log with the rest of the gamemode's own lines (log, at the top of the file).
   function rlog(line) {
@@ -19612,10 +19818,12 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
       file: file,
       profiles: list.profiles.slice(),
       actors: (list.actors || []).slice(),
+      freezeWipeIds: list.clearFreezes === true && !(list.done && list.done.restraints) ? list.freezeWipeIds.slice() : [],
       done: list.done ? Object.assign({}, list.done) : {},
       who: {
         profile: function (n) { n = Number(n) || 0; return n > 0 && has(P, n); },
-        actor: function (n) { n = Number(n) || 0; return isFormId(n) && has(A, n); }
+        actor: function (n) { n = Number(n) || 0; return isFormId(n) && has(A, n); },
+        freezeWipeIds: function () { return st.freezeWipeIds.slice(); }
       }
     };
     /*
@@ -19659,7 +19867,9 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
         rlog('every part is done, and the list is gone');
         return;
       }
-      fs.writeFileSync(st.file + '.tmp', JSON.stringify({ profiles: st.profiles, actors: st.actors, done: st.done }));
+      var list = { profiles: st.profiles, actors: st.actors, done: st.done };
+      if (st.freezeWipeIds.length) { list.clearFreezes = true; list.freezeWipeIds = st.freezeWipeIds; }
+      fs.writeFileSync(st.file + '.tmp', JSON.stringify(list));
       fs.renameSync(st.file + '.tmp', st.file);
     } catch (e) {
       rlog('the list could not be marked (' + ((e && e.code) || e) + '), so the parts that ran run again at the next start');
@@ -19677,6 +19887,7 @@ function thornswoodTakeReleaseList(fs, path, priv, valid) {
       return;
     }
     st.done[part] = Date.now();
+    if (part === 'restraints') { st.freezeWipeIds = []; }
     var out = [];
     for (var k in r.counts) { if (has(r.counts, k) && r.counts[k]) { out.push(k + ' ' + r.counts[k]); } }
     rlog(part + ': ' + (out.length ? out.join(', ') : 'nothing of theirs'));
@@ -22412,13 +22623,19 @@ module.exports = {
     return out;
   }
 
-  function save() {
+  function save(durable) {
     try {
-      var dir = require('path').dirname(registerPath());
-      storeWrite(registerPath(),
-        JSON.stringify({ claims: claims, arrears: arrears,
-                        funds: funds, notices: notices, boards: boards, steps: steps,
-                        masters: masterCut, dropbox: dropbox, word: wordBook }, null, 1), registerRead);
+      var text = JSON.stringify({ claims: claims, arrears: arrears,
+        funds: funds, notices: notices, boards: boards, steps: steps,
+        masters: masterCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
+      if (durable === true) {
+        if (registerRead.bad) { throw new Error('the property register could not be read at startup'); }
+        var file = registerPath();
+        require('fs').mkdirSync(require('path').dirname(file), { recursive: true });
+        mp.writeFileWhole(file, text);
+      } else {
+        storeWrite(registerPath(), text, registerRead);
+      }
       return true;
     } catch (e) {
       plog('could not write the register:', e);
@@ -22430,6 +22647,8 @@ module.exports = {
   var arrears = loadArrears();
   var masterCut = loadMasterCut();
   var wordBook = loadWord();
+  // Read with the rest, before anything can save, so no write leaves them out (#4901).
+  var debits = loadDebits();
 
   /*
     RENT STILL OWED BY SOMEBODY WHO NO LONGER HOLDS THE PLACE (#3893), from
@@ -24061,6 +24280,115 @@ module.exports = {
     return true;
   }
 
+  // The blank and named mold may belong to different people. Every write
+  // compares the actual inventory and receipt; a publication exception is
+  // classified by readback, never assumed to mean the write was refused.
+  function handMold(actorId, profileId, owner, building) {
+    var merchants = globalThis.__thornswoodMerchantTrade;
+    var untouched = 'The mold could not be handed over. Your blank was not spent.';
+    var unknown = 'The mold handover could not be confirmed. Ask staff to check it before trying again.';
+    var self = actorId === owner.actorId;
+    var methods = ['compareAndSetInventory', 'validateInventoryTransaction', 'getInventoryReceipt',
+      'getSavedInventoryReceipt', 'getActorRuntimeIdentity'];
+    var lease = self ? 'withQuestInventoryMutation' : 'withPairedInventoryMutation';
+    if (!merchants || typeof merchants[lease] !== 'function' ||
+        !methods.every(function (key) { return typeof mp[key] === 'function'; })) {
+      return {ok:false,why:untouched};
+    }
+    function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+    function identity(s) {
+      return Number(mp.get(s.actor, 'profileId')) === s.profile &&
+        mp.getActorRuntimeIdentity(s.actor) === s.runtime;
+    }
+    function read(actor) {
+      var profile = Number(mp.get(actor, 'profileId')), runtime = mp.getActorRuntimeIdentity(actor);
+      var desc = mp.getDescFromId(actor), receipt = mp.getInventoryReceipt(actor);
+      var inventory = mp.get(actor, 'inventory');
+      if (!Number.isSafeInteger(profile) || profile <= 0 || typeof runtime !== 'string' ||
+          !/^[1-9][0-9]{0,19}$/.test(runtime) || typeof desc !== 'string' || !desc ||
+          typeof receipt !== 'string' || mp.validateInventoryTransaction(inventory) !== true) {
+        throw new Error('Mold inventory is unavailable');
+      }
+      var old = JSON.parse(receipt), sequence = old === null ? 1 : old.sequence + 1;
+      if (old !== null && (!old || Object.keys(old).length !== 3 || old.actor !== desc ||
+          old.profile !== profile || !Number.isSafeInteger(old.sequence) || old.sequence < 1) ||
+          !Number.isSafeInteger(sequence)) { throw new Error('Mold receipt is unavailable'); }
+      var s = {actor:actor,profile:profile,runtime:runtime,desc:desc,receipt:receipt,sequence:sequence,
+        inventory:JSON.parse(JSON.stringify(inventory))};
+      if (!identity(s)) { throw new Error('Mold actor changed'); }
+      return s;
+    }
+    function matches(s) {
+      return identity(s) && mp.getInventoryReceipt(s.actor) === s.receipt &&
+        same(mp.get(s.actor, 'inventory'), s.inventory);
+    }
+    function replace(s, next, alive) {
+      try {
+        if (!alive() || !matches(s) || mp.validateInventoryTransaction(next) !== true) {
+          return {state:'unknown'};
+        }
+        try {
+          mp.compareAndSetInventory(s.actor, s.inventory, s.receipt, next, s.sequence, s.profile);
+        } catch (e) {
+          plog('mold inventory write needs readback for', s.actor.toString(16));
+        }
+        var committed = Object.assign({}, s, {inventory:next,sequence:s.sequence+1,
+          receipt:JSON.stringify({actor:s.desc,profile:s.profile,sequence:s.sequence})});
+        if (alive() && matches(committed)) { return {state:'committed',snapshot:committed}; }
+        if (alive() && matches(s)) { return {state:'unchanged'}; }
+      } catch (e) { /* Unknown writes are never replayed or compensated. */ }
+      return {state:'unknown'};
+    }
+    try {
+      var entered = false;
+      function handover(human, alive, recipient) {
+        entered = true;
+        var source, target, debit, named;
+        try {
+          source = read(actorId);
+          target = self ? source : read(owner.actorId);
+          if (source.profile !== profileId || human.profileId !== source.profile || human.desc !== source.desc ||
+              target.profile !== owner.profileId ||
+              !self && (!recipient || recipient.profileId !== target.profile || recipient.desc !== target.desc ||
+                !Number.isSafeInteger(source.sequence + 1)) ||
+              mp.getSavedInventoryReceipt(actorId) !== source.receipt ||
+              mp.getSavedInventoryReceipt(owner.actorId) !== target.receipt) {
+            return {ok:false,why:untouched};
+          }
+          debit = blankMoldAfter(source.inventory);
+          if (!debit) { return {ok:false,why:untouched}; }
+          named = JSON.parse(JSON.stringify(self ? debit : target.inventory));
+          named.entries.push({baseId:idOf(MOLD),count:1,name:moldLabel(building)});
+          if (mp.validateInventoryTransaction(debit) !== true || mp.validateInventoryTransaction(named) !== true) {
+            return {ok:false,why:untouched};
+          }
+        } catch (e) { return {ok:false,why:untouched}; }
+        if (self) {
+          var converted = replace(source, named, alive);
+          return converted.state === 'committed' ? {ok:true} :
+            {ok:false,why:converted.state === 'unchanged' ? untouched : unknown,
+              uncertain:converted.state === 'unknown'};
+        }
+        var taken = replace(source, debit, alive);
+        if (taken.state !== 'committed') {
+          return {ok:false,why:taken.state === 'unchanged' ? untouched : unknown,
+            uncertain:taken.state === 'unknown'};
+        }
+        var handed = replace(target, named, alive);
+        if (handed.state === 'committed') { return {ok:true}; }
+        if (handed.state !== 'unchanged') { return {ok:false,why:unknown,uncertain:true}; }
+        var restored = replace(taken.snapshot, source.inventory, alive);
+        return restored.state === 'committed' ?
+          {ok:false,why:'The mold could not be handed over. Your blank is back in your pack.'} :
+          {ok:false,why:'The mold was not delivered and the blank could not be returned. Ask staff to check it before trying again.',
+            uncertain:restored.state === 'unknown'};
+      }
+      var result = self ? merchants.withQuestInventoryMutation(actorId, handover) :
+        merchants.withPairedInventoryMutation(actorId, owner.actorId, handover);
+      return entered ? result : {ok:false,why:untouched};
+    } catch (e) { return {ok:false,why:unknown,uncertain:true}; }
+  }
+
   /*
     May this person walk through that building's doors.
 
@@ -24333,13 +24661,17 @@ module.exports = {
       over by hand, which is the point: the switch is the plugin.
     */
     if (blankMoldsExist()) {
-      if (!takeBlankMold(actorId)) {
+      if (!carriesBlankMold(actorId)) {
         toProfile(profileId, 'You are carrying no blank key mold. Forge one at a forge, one iron ' +
                              'ingot, then bring it back to this door.');
         return true;
       }
-    }
-    if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
+      var stamped = handMold(actorId, profileId, owner, building);
+      if (!stamped.ok) {
+        toProfile(profileId, stamped.why || 'The mold could not be handed over. Your blank was not spent.');
+        return true;
+      }
+    } else if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
       toProfile(profileId, 'The mold could not be handed over. Say so in the dev channel.');
       return true;
     }
@@ -24467,13 +24799,9 @@ module.exports = {
                            'from that one.');
       return true;
     }
-    if (!takeBlankMold(actorId)) {
-      toProfile(profileId, 'You are carrying no blank key mold. A smith forges one at a forge ' +
-                           'out of one iron ingot.');
-      return true;
-    }
-    if (!giveNamed(owner.actorId, MOLD, moldLabel(building))) {
-      toProfile(profileId, 'The mold could not be handed over. Say so in the dev channel.');
+    var stamped = handMold(actorId, profileId, owner, building);
+    if (!stamped.ok) {
+      toProfile(profileId, stamped.why || 'The mold could not be handed over. Your blank was not spent.');
       return true;
     }
     plog('a mold for', nameOf(building), 'was pressed at the door for', held.name);
@@ -24862,17 +25190,26 @@ module.exports = {
     if (!baseId) { return false; }
     var inv = null;
     try { inv = mp.get(actorId, 'inventory'); } catch (e) { return false; }
-    var entries = (inv && inv.entries) || [];
+    var next = blankMoldAfter(inv);
+    if (!next) { return false; }
+    try { mp.set(actorId, 'inventory', next); } catch (e2) { return false; }
+    return true;
+  }
+
+  /** A replacement which spends one blank, retaining every other entry. */
+  function blankMoldAfter(inv) {
+    var baseId = idOf(MOLD);
+    if (!baseId || !inv || !Array.isArray(inv.entries)) { return null; }
+    var next = JSON.parse(JSON.stringify(inv)), entries = next.entries;
     for (var i = 0; i < entries.length; i++) {
       var e = entries[i];
       if (!e || !(e.count > 0) || e.baseId !== baseId) { continue; }
       if (e.name) { continue; }
       if (e.count > 1) { e.count = e.count - 1; }
       else { entries.splice(i, 1); }
-      try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return false; }
-      return true;
+      return next;
     }
-    return false;
+    return null;
   }
 
   /** The building whose mold is in this pack, or null. One at a time is enough. */
@@ -25416,9 +25753,9 @@ module.exports = {
     the two generated name tables /give reads, when this file has them.
   */
   var boxNames = null;
-  function itemName(entry) {
-    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
-    var base = Number(entry && entry.baseId) || 0;
+  /** Decoded base name by its whole descriptor, or '' when unknown. Read only. */
+  function baseItemName(baseId) {
+    var base = Number(baseId) || 0;
     if (base === GOLD_ID) { return 'Gold'; }
     if (!boxNames) {
       boxNames = {};
@@ -25437,6 +25774,16 @@ module.exports = {
     var desc = '';
     try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     if (desc && Object.prototype.hasOwnProperty.call(boxNames, desc)) { return boxNames[desc]; }
+    return '';
+  }
+
+  function itemName(entry) {
+    if (entry && typeof entry.name === 'string' && entry.name) { return entry.name; }
+    var base = Number(entry && entry.baseId) || 0;
+    var name = baseItemName(base);
+    if (name) { return name; }
+    var desc = '';
+    try { desc = String(mp.getDescFromId(base) || '').toLowerCase(); } catch (e) { desc = ''; }
     return desc ? 'something (' + desc + ')' : 'something';
   }
 
@@ -25541,7 +25888,20 @@ module.exports = {
   function boxPutGold(hold, actorId, profileId, amount) {
     var n = Math.floor(Number(amount));
     if (!(n > 0) || String(n) !== String(amount).trim()) { return 'Say how much gold, as a whole number.'; }
-    if (!takeGold(actorId, n)) { return 'You do not have ' + n + ' gold in one purse.'; }
+    // Into the register only once the pack's take is saved (#4901): landBoxGold.
+    var r = packs.begin(actorId, goldCut(n, 'You do not have ' + n + ' gold in one purse.'), 'box-gold',
+                        { hold: hold, n: n, who: characterName(actorId) });
+    if (r.why) { return r.why; }
+    return r.line || ('The ' + n + ' gold goes in the box once your pack is saved, in a moment.');
+  }
+
+  /* Gold in, once its take out of the pack is saved (#4901). Answers the line for whoever put it in. */
+  function landBoxGold(row, landed) {
+    var hold = row.data.hold, n = row.data.n, who = row.data.who;
+    var profileId = row.human.profileId;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + n + ' gold out of it, so it is still in your pack and not in the box.';
+    }
     var owed = rentOwedBy(profileId);
     var left = n;
     var rent = [];
@@ -25562,7 +25922,6 @@ module.exports = {
                                : { building: owed[i].building, amount: take });
     }
     var d = dropboxOf(hold);
-    var who = characterName(actorId);
     var item = { n: d.next++, by: profileId, name: who, kind: 'gold', baseId: GOLD_ID, count: n,
                  what: 'Gold', at: Date.now() };
     if (rent.length) { item.rent = rent; }
@@ -25570,7 +25929,6 @@ module.exports = {
     var paid = n - left;
     boxLog(hold, { act: 'in', n: item.n, who: profileId, whoName: who, by: profileId, byName: who,
                    what: 'Gold', count: n, note: paid ? paid + ' of it rent' : '' });
-    save();
     plog(who, '(profile ' + profileId + ') put', n, 'gold in', hold + '\'s drop box', paid ? '(' + paid + ' of it rent)' : '');
     return 'You put ' + n + ' gold in the box.' + (paid ? ' ' + paid + ' of it pays your rent.' : '');
   }
@@ -25593,20 +25951,40 @@ module.exports = {
     if (e.worn || e.wornLeft) { return 'Take it off first.'; }
     var n = Math.floor(Number(count));
     if (!(n > 0) || n > (Number(e.count) || 0)) { return 'You do not have that many.'; }
-    var kept = JSON.parse(JSON.stringify(e));
-    delete kept.count; delete kept.worn; delete kept.wornLeft;
-    e.count = (Number(e.count) || 0) - n;
-    if (e.count <= 0) { entries.splice(at, 1); }
-    try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return 'Your pack could not be written.'; }
-    var d = dropboxOf(hold);
-    var who = characterName(actorId);
+    // Into the register only once the pack's take is saved (#4901): landBoxLeft.
+    var r = packs.begin(actorId, function (list) {
+      var it = list[at];
+      if (!it || Number(it.baseId) === GOLD_ID || it.worn || it.wornLeft || n > (Number(it.count) || 0)) {
+        return 'Your pack changed. Nothing was put in the box.';
+      }
+      var kept = JSON.parse(JSON.stringify(it));
+      delete kept.worn; delete kept.wornLeft;
+      kept.count = n;
+      it.count = (Number(it.count) || 0) - n;
+      if (it.count <= 0) { list.splice(at, 1); }
+      return { entries: list, taken: [kept] };
+    }, 'box-left', { hold: hold, to: to, who: characterName(actorId) });
+    if (r.why) { return r.why; }
+    return r.line || 'It goes in the box for ' + to + ' once your pack is saved, in a moment.';
+  }
+
+  /* Something left for somebody, once its take out of the pack is saved (#4901). */
+  function landBoxLeft(row, landed) {
+    var hold = row.data.hold, to = row.data.to, who = row.data.who;
+    var profileId = row.human.profileId;
+    var kept = JSON.parse(JSON.stringify(row.taken[0] || {}));
+    var n = Number(kept.count) || 0;
+    delete kept.count;
     var what = itemName(kept);
+    if (!landed) {
+      return 'Your pack was not saved with ' + what + ' out of it, so it is still in your pack and not in the box.';
+    }
+    var d = dropboxOf(hold);
     var item = { n: d.next++, by: profileId, name: who, kind: 'left', baseId: Number(kept.baseId),
                  count: n, what: what, entry: kept, forName: to, at: Date.now() };
     d.items.push(item);
     boxLog(hold, { act: 'in', n: item.n, who: profileId, whoName: who, by: profileId, byName: who,
                    what: what, count: n, forName: to });
-    save();
     plog(who, '(profile ' + profileId + ') left', n, what, 'for', to, 'in', hold + '\'s drop box');
     return 'You left ' + (n > 1 ? n + ' ' : '') + what + ' in the box for ' + to + '.';
   }
@@ -25791,12 +26169,17 @@ module.exports = {
     Every one answers by drawing the panel again, with what happened in it.
   */
   function dropboxCmd(parts, actorId, profileId, toProfile) {
+    var sub = (parts && parts.length > 1) ? String(parts[1]).trim().toLowerCase() : 'open';
+    // Optional correlation metadata for Put in, never a transaction key or
+    // authority. Old callers omit it; no other action can acknowledge it.
+    var goldRequest = sub === 'gold' && parts && typeof parts[3] === 'string' &&
+      /^[a-zA-Z0-9-]{1,80}$/.test(parts[3]) ? parts[3] : '';
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to use its drop box.');
+      if (goldRequest) { showBox(actorId, { open: false, goldRequest: goldRequest }); }
       return true;
     }
-    var sub = (parts && parts.length > 1) ? String(parts[1]).trim().toLowerCase() : 'open';
     var said = '';
     var records = false;
     if (sub === 'gold') {
@@ -25811,7 +26194,9 @@ module.exports = {
     } else if (sub !== 'open') {
       said = 'The box does not know that.';
     }
-    showBox(actorId, boxView(actorId, profileId, hold, said, records));
+    var view = boxView(actorId, profileId, hold, said, records);
+    if (goldRequest) { view.goldRequest = goldRequest; }
+    showBox(actorId, view);
     return true;
   }
 
@@ -26554,8 +26939,13 @@ module.exports = {
       e.kind = v.kind;
       e.guestAt = v.guest ? v.guest.at : 0;
     }
+    var previous = bedHas(bedState.lying, actorId) ? bedState.lying[actorId] : null;
     bedState.lying[actorId] = e;
     var line = needs.resting(actorId, e.kind);
+    if (!e.seat && (!previous || previous.ref !== e.ref)) {
+      var college = g.__thornswoodCollege;
+      if (college && college.bedRested) { college.bedRested(actorId); }
+    }
     // Sitting down says nothing: people sit at every table in every inn, and
     // the Rest bar is what shows it counting.
     if (e.seat) { return ''; }
@@ -26924,7 +27314,7 @@ module.exports = {
     the gate: Solitude, Whiterun, Windhelm, Riften and Markarth are walled
     cities, each its own worldspace inside the walls, and their numbers were
     read inside them. Measured 15 Oct:
-      - the game's own NPCs placed near each point (docs/NPC-SPAWNS.csv)
+      - the game's own NPCs placed near each point (game/data/NPC-SPAWNS.csv)
         stand in WhiterunWorld 1a26f, RiftenWorld 16bb4, WindhelmWorld 1691d
         and MarkarthWorld 16d71;
       - Solitude has no NPC within 3,000, so the cell its point falls in was
@@ -27224,6 +27614,45 @@ module.exports = {
       });
     }
     return { rows: rows, older: up - rows.length };
+  }
+
+  // Private posting evidence, never the public wall or letter body. Each of
+  // the ten ledgers contributes at most its last 32 slots, including down
+  // posts. Missing older evidence is uncertainty, not a failed posting.
+  // profileId is the one the social tick read for this actor in this pass;
+  // reading it again here, before and after the scan, doubled the tick's
+  // profile reads (#6879). The character is still checked on both sides of
+  // the scan by its desc and runtime identity.
+  function boardSubmissions(actorId, profileId) {
+    try {
+      var desc = mp.getDescFromId(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!Number.isSafeInteger(profileId) || profileId < 1 ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) return null;
+      var found = [];
+      for (var h = 0; h < LEDGER_HOLDS.length; h++) {
+        var hold = LEDGER_HOLDS[h], list = notices[hold];
+        if (!Array.isArray(list)) continue;
+        for (var i = list.length - 1, first = Math.max(0, list.length - 32); i >= first; i--) {
+          var n = list[i], meta = n && n.boardSubmission;
+          var kind = n && n.letter && !n.haul ? 'letter' : n && n.haul && !n.letter ? 'haul' : '';
+          if (!meta || meta.version !== 1 || typeof meta.id !== 'string' || !/^[0-9a-f]{32}$/.test(meta.id) ||
+              meta.kind !== kind || !kind ||
+              meta.actorDesc !== desc || n.by !== profileId || typeof n.at !== 'number' || !Number.isFinite(n.at)) continue;
+          found.push({ id: meta.id, kind: kind, hold: hold, status: 'posted', at: n.at, index: i });
+        }
+      }
+      found.sort(function (a, b) { return b.at - a.at || b.index - a.index || a.hold.localeCompare(b.hold); });
+      var counts = { letter: 0, haul: 0 };
+      var results = found.filter(function (r) { return counts[r.kind]++ < 16; }).map(function (r) {
+        return { id: r.id, kind: r.kind, hold: r.hold, status: r.status };
+      });
+      if (mp.getDescFromId(actorId) !== desc || mp.getActorRuntimeIdentity(actorId) !== runtime) return null;
+      return { owner: { profileId: profileId, actorDesc: desc, runtime: runtime }, results: results };
+    } catch (e) {
+      plog('could not read private board posting evidence:', e);
+      return null;
+    }
   }
 
   /** What the board panel draws. Null until they are near one. */
@@ -27802,6 +28231,239 @@ module.exports = {
     return false;
   }
 
+  function admitPackDebit(actor, change) {
+    var merchants = g.__thornswoodMerchantTrade;
+    return merchants ? merchants.withQuestInventoryMutation(actor, change) : null;
+  }
+
+  // -- pack first (#4901), begin --
+  /*
+    Write the intent before taking from a pack. The engine saves the
+    inventory and an operation marker together. The receipt identifies the
+    character and sequence, and the marker identifies the specific debit.
+    This register keeps one pending debit and one fixed-size marker per
+    character. Only a later admitted debit can replace the marker after the
+    earlier intent has finished. Completion replaces the durable intent
+    with the finished register state before making that state visible.
+  */
+  function packFirst(mp, book, keep, landers, tell, markerField, commit, nextMarker, admit) {
+    var registered = false;
+    try {
+      mp.makeProperty(markerField, {
+        isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+      });
+      registered = true;
+    } catch (err) { tell(0, '', err); }
+
+    function sequenceOf(receipt, who) {
+      var doc = JSON.parse(receipt);
+      if (doc === null) { return 0; }
+      if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
+          !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
+        throw new Error('the pack receipt belongs to a different character or has an invalid sequence');
+      }
+      return doc.sequence;
+    }
+    function ready() {
+      return registered && ['compareAndSetInventoryAndProperty', 'getInventoryReceipt',
+        'getSavedInventoryReceipt', 'getActorRuntimeIdentity', 'getNpcAIState',
+        'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+    }
+    function person(actorId) {
+      var ai = mp.getNpcAIState(actorId);
+      var desc = mp.getDescFromId(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!ai || ai.isHuman !== true || !Number.isInteger(ai.profileId) || ai.profileId < 1 ||
+          !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) {
+        return null;
+      }
+      return { desc: desc, profileId: ai.profileId, life: ai.lifeGeneration, runtime: runtime };
+    }
+    function validMarker(value) {
+      return typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    }
+    function readMarker(id) {
+      var value = mp.get(id, markerField);
+      if (value == null || validMarker(value)) { return value == null ? null : value; }
+      throw new Error('the pack debit marker is invalid');
+    }
+    function sameOwner(row, who) {
+      return row && row.human && row.human.desc === who.desc && row.human.profileId === who.profileId;
+    }
+    function wellFormed(row) {
+      return !!row && Object.prototype.hasOwnProperty.call(landers, row.kind) &&
+        !!row.human && typeof row.human.desc === 'string' && Number.isInteger(row.human.profileId) &&
+        row.human.profileId > 0 && Number.isSafeInteger(row.human.life) && row.human.life >= 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && validMarker(row.marker) &&
+        (row.previousMarker === null || validMarker(row.previousMarker)) && Array.isArray(row.taken);
+    }
+    function settleOne(row) {
+      if (!wellFormed(row)) { return ''; }
+      var id = mp.getIdFromDesc(row.human.desc) >>> 0;
+      if (!id) { return ''; }
+      var who = person(id);
+      if (!who || !sameOwner(row, who)) { return ''; }
+      var mark = readMarker(id);
+      var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
+      var live = sequenceOf(mp.getInventoryReceipt(id), who);
+      if (mark === row.marker && saved >= row.sequence && live >= saved) {
+        return commit(landers[row.kind], row, true, id);
+      }
+      if (mark === row.previousMarker && who.life === row.human.life && live === saved && saved >= row.sequence - 1) {
+        return commit(landers[row.kind], row, false, id);
+      }
+      return '';
+    }
+    function begin(actorId, cut, kind, data) {
+      if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
+      try {
+        var admitted = admit(actorId, function (owner, stillActive) {
+          return { debit: beginAdmitted(actorId, cut, kind, data, owner, stillActive) };
+        });
+        if (admitted && admitted.debit) { return admitted.debit; }
+      } catch (e) {
+        tell(0, '', e);
+      }
+      return { why: 'Your pack is busy or could not be checked. Nothing was taken.' };
+    }
+    function beginAdmitted(actorId, cut, kind, data, owner, stillActive) {
+      var who, receipt, before, previousMarker, sequence, marker;
+      try {
+        who = person(actorId);
+        if (!who || !owner || owner.desc !== who.desc || owner.profileId !== who.profileId || !stillActive()) {
+          return { why: 'Your pack owner could not be verified. Nothing was taken.' };
+        }
+        if (book().some(function (row) { return sameOwner(row, who); })) {
+          return { why: 'The server is still writing down your last take. Nothing was taken.' };
+        }
+        receipt = mp.getInventoryReceipt(actorId);
+        if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
+          return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
+        }
+        sequence = sequenceOf(receipt, who) + 1;
+        if (!Number.isSafeInteger(sequence)) { throw new Error('the pack receipt sequence is exhausted'); }
+        previousMarker = readMarker(actorId);
+        marker = nextMarker();
+        var inv = mp.get(actorId, 'inventory');
+        before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
+      } catch (e) {
+        tell(0, '', e);
+        return { why: 'Your pack could not be read. Nothing was taken.' };
+      }
+      var out = cut(JSON.parse(JSON.stringify(before)));
+      if (typeof out === 'string') { return { why: out }; }
+      var row = { kind: kind, data: data, human: { desc: who.desc, profileId: who.profileId, life: who.life },
+                  sequence: sequence, marker: marker, previousMarker: previousMarker, taken: out.taken, at: Date.now() };
+      if (!validMarker(marker) || marker === previousMarker) {
+        return { why: 'The server could not identify that debit. Nothing was taken.' };
+      }
+      var rows = book();
+      rows.push(row);
+      if (!keep()) {
+        rows.splice(rows.indexOf(row), 1);
+        return { why: 'The server could not write that down. Nothing was taken.' };
+      }
+      if (!stillActive()) { return { line: '' }; }
+      try {
+        mp.compareAndSetInventoryAndProperty(actorId, { entries: before }, receipt, { entries: out.entries },
+          sequence, who.profileId, { name: markerField, expected: previousMarker, replacement: marker,
+                                   expectedLifeGeneration: who.life, expectedRuntimeIdentity: who.runtime });
+      } catch (e2) {
+        tell(0, '', e2);
+      }
+      try { return { line: settleOne(row) }; }
+      catch (e3) {
+        tell(0, '', e3);
+        return { line: '' };
+      }
+    }
+    function settle() {
+      if (!ready()) { return; }
+      var rows = book().slice();
+      for (var i = 0; i < rows.length; i++) {
+        var line = '';
+        try { line = settleOne(rows[i]); }
+        catch (e) { tell(0, '', e); }
+        if (line) { tell(rows[i].human.profileId, line); }
+      }
+    }
+    return { begin: begin, settle: settle, ready: ready };
+  }
+  // -- pack first (#4901), end --
+
+  /* A whole count of gold out of one stack, the way takeGold takes it: { entries, taken } or the refusal. */
+  function goldCut(amount, refusal) {
+    return function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        if (e && e.baseId === GOLD_ID && (Number(e.count) || 0) >= amount) {
+          e.count -= amount;
+          if (e.count <= 0) { entries.splice(i, 1); }
+          return { entries: entries, taken: [{ baseId: GOLD_ID, count: amount }] };
+        }
+      }
+      return refusal;
+    };
+  }
+
+  /* The debits the register holds: takes armed and not yet landed or let go (#4901). */
+  function loadDebits() {
+    var raw = registerRead.doc;
+    var list = (raw && Array.isArray(raw.debits)) ? raw.debits : [];
+    if (list.length) { plog('read', list.length, 'take(s) out of a pack waiting on its save'); }
+    return list;
+  }
+
+  /* A line to a person in the world, from a debit that landed or let go without them asking. */
+  function tellPerson(pid, line, err) {
+    if (err) { plog('a take out of a pack:', err); return; }
+    var to = onlineActorOf(Number(pid));
+    if (!to || !line) { return; }
+    try { notify(to, line); } catch (e) { plog('could not show', Number(to).toString(16), 'a line:', e); }
+    try { say(to, line); } catch (e2) { plog('could not say a line to', Number(to).toString(16) + ':', e2); }
+    refreshPanel(to);
+  }
+
+  function commitPackDebit(land, row, paid) {
+    var original = { claims: claims, arrears: arrears, funds: funds, notices: notices,
+                     dropbox: dropbox, debits: debits };
+    var draft = JSON.parse(JSON.stringify(original));
+    claims = draft.claims;
+    arrears = draft.arrears;
+    funds = draft.funds;
+    notices = draft.notices;
+    dropbox = draft.dropbox;
+    debits = debits.filter(function (debit) { return debit !== row; });
+    var committed = false;
+    try {
+      var line = land(JSON.parse(JSON.stringify(row)), paid);
+      committed = save(true);
+      return committed ? line : '';
+    } finally {
+      if (!committed) {
+        claims = original.claims;
+        arrears = original.arrears;
+        funds = original.funds;
+        notices = original.notices;
+        dropbox = original.dropbox;
+        debits = original.debits;
+      }
+    }
+  }
+
+  var packs = packFirst(mp, function () { return debits; }, function () { return save(true); }, {
+    'box-gold': landBoxGold,
+    'box-left': landBoxLeft,
+    'post': landPost,
+    'letter': landLetter,
+    'haul': landHaul
+  }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, require('crypto').randomUUID, admitPackDebit);
+
+  if (g.__thornswoodPackTimer) { try { clearInterval(g.__thornswoodPackTimer); } catch (e) { plog('the old pack timer would not stop:', e); } }
+  g.__thornswoodPackTimer = setInterval(
+    guard('packTick', packs.settle), 1000);
+
   /*
     THE LEDGER PAYING OUT, and only a letter's held courier pay, #1374.
 
@@ -27903,7 +28565,19 @@ module.exports = {
     };
   }
 
-  function post(parts, actorId, profileId, toProfile, isJob) {
+  function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
+    if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
+        (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
+      toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
+      return true;
+    }
+    // Same authoritative location, size, fee, reward and pack-first landing.
+    // Only the legacy command boundary unescapes or normalizes text.
+    return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
+                kind === 'job', {title:title,body:body,hold:expectedHold});
+  }
+
+  function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
     /*
       AT THE BOARD, because that is what makes it a board rather than a
       command. It is the same rule as claiming at a door: the place is the
@@ -27913,6 +28587,10 @@ module.exports = {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to put something on it.');
+      return true;
+    }
+    if (exactWords && exactWords.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.');
       return true;
     }
     /*
@@ -27933,9 +28611,9 @@ module.exports = {
       }
       from = 2;
     }
-    var words = postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
+    var words = exactWords || postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
     var what = isJob ? 'the job' : 'the notice';
-    if (!words.title) {
+    if (!words.title.trim()) {
       toProfile(profileId, 'Give ' + what + ' a title. Nothing was taken.');
       return true;
     }
@@ -27944,7 +28622,7 @@ module.exports = {
                 words.title.length + '. Nothing was taken.');
       return true;
     }
-    if (!words.body) {
+    if (!words.body.trim()) {
       toProfile(profileId, isJob ? 'Say what the job is. Nothing was taken.'
                                  : 'Say what the notice says. Nothing was taken.');
       return true;
@@ -27956,11 +28634,12 @@ module.exports = {
     }
     var fee = isJob ? JOB_FEE : NOTICE_FEE;
     var cost = fee + reward;
-    if (!Number.isSafeInteger(cost) || !takeGold(actorId, cost)) {
-      toProfile(profileId, isJob
-        ? 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + reward +
-          ' reward, and you do not have it. Nothing was taken.'
-        : 'That costs ' + fee + ' gold and you do not have it.');
+    var short = isJob
+      ? 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + reward +
+        ' reward, and you do not have it. Nothing was taken.'
+      : 'That costs ' + fee + ' gold and you do not have it.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
       return true;
     }
     var who = 'somebody';
@@ -27968,24 +28647,38 @@ module.exports = {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-
-    if (!notices[hold]) { notices[hold] = []; }
     var made = { by: profileId, name: who, title: words.title, text: words.body, at: Date.now(),
                  job: !!isJob, taken: 0 };
     // The reward is held on the ledger in pay, the way a letter's 15 and a
     // haul's pay are (noticeHolds), until the poster says it is done.
     if (isJob) { made.pay = reward; }
+    // On the board only once the pack's take is saved (#4901): landPost.
+    var r = packs.begin(actorId, goldCut(cost, short),
+      'post', { hold: hold, made: made, cost: cost, fee: fee, reward: reward });
+    toProfile(profileId, r.why || r.line ||
+      ('Your ' + (isJob ? 'job' : 'notice') + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
+    return true;
+  }
+
+  /* A notice or a job onto its board, once its fee is saved out of the pack (#4901). */
+  function landPost(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost, fee = row.data.fee, reward = row.data.reward;
+    var isJob = !!made.job;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the ' +
+             (isJob ? 'job' : 'notice') + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
     notices[hold].push(made);
     funds[hold] = (Number(funds[hold]) || 0) + cost;
-    save();
-    plog(who, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', words.title);
-    toProfile(profileId, isJob
+    plog(made.name, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', made.title);
+    return isJob
       ? 'Your job is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
         ' for the board, and the ' + reward + ' reward, held until you say the job is done. ' +
         'Then it goes to whoever took it.'
-      : 'Your notice is on the board in ' + hold + '. That cost ' + fee + ' gold.');
-    refreshPanel(actorId);
-    return true;
+      : 'Your notice is on the board in ' + hold + '. That cost ' + fee + ' gold.';
   }
 
   /*
@@ -28357,10 +29050,17 @@ module.exports = {
     return n;
   }
 
-  function unpin(parts, actorId, profileId, toProfile) {
+  function unpin(parts, actorId, profileId, toProfile, expected) {
     var hold = boardHere(actorId);
     if (!hold) {
       toProfile(profileId, 'Stand at the board you put it on.');
+      return true;
+    }
+    // Resolve the board once. New page intents bind this captured board and
+    // its original creation before any authority, refund or haul operation.
+    if (expected && (!Object.prototype.hasOwnProperty.call(boards, expected.hold) || expected.hold !== hold)) {
+      toProfile(profileId, 'The board changed. Review the current board and press again.');
+      refreshPanel(actorId);
       return true;
     }
     var list = notices[hold] || [];
@@ -28370,6 +29070,11 @@ module.exports = {
       return true;
     }
     var n = list[at];
+    if (expected && (!n || !Number.isSafeInteger(n.at) || n.at < 0 || n.at !== expected.at)) {
+      toProfile(profileId, 'That post changed. Review the current board and press again.');
+      refreshPanel(actorId);
+      return true;
+    }
     if (n.down) {
       toProfile(profileId, 'That one is already down.');
       return true;
@@ -28492,8 +29197,8 @@ module.exports = {
         /letter "Lydia Stormblade" Meet me at the Drunken Huntsman at dusk.
 
     NOBODY TYPES THESE (#1595). Patrick, 4 Oct: nothing people do is a chat
-    command. The board panel's Write a letter sends the second form, the name
-    always in double quotes, and nothing a person reads names /letter.
+    command. The current board panel sends /letter-post-v1 with separate encoded
+    strings. These older forms remain compatible; no public help names them.
 
     #1374, as docs/systems/noticeboards.md has it. A letter is a job with a
     named person at the other end, written standing at the board. The words
@@ -28505,15 +29210,100 @@ module.exports = {
     panels, Your jobs and the taking line say who it is for and from whom, and
     the log does not record them either.
   */
-  function postLetter(parts, actorId, profileId, toProfile) {
+  // Two encoded strings keep quotes and spaces out of the legacy word parser.
+  // This verb is intentionally unknown to a server that still strips names.
+  function postLetterV1(parts, actorId, profileId, toProfile) {
+    var to, words;
+    if (!Array.isArray(parts) || parts.length !== 3 || typeof parts[1] !== 'string' ||
+        typeof parts[2] !== 'string' || parts[1].length > 540 || parts[2].length > 2700) {
+      toProfile(profileId, 'That letter request is invalid. Nothing was posted or taken.'); return true;
+    }
+    try { to = decodeURIComponent(parts[1]); words = decodeURIComponent(parts[2]); }
+    catch (eLetter) {
+      toProfile(profileId, 'That letter request has invalid text. Nothing was posted or taken.'); return true;
+    }
+    // Same unsafe characters as character names; quotes and valid spaces stay.
+    // Do not run a rename normalizer or change the existing name-match policy.
+    if (!validLetterText(to, words)) {
+      toProfile(profileId, 'That letter request is invalid or too long. Nothing was posted or taken.'); return true;
+    }
+    return postLetter(parts, actorId, profileId, toProfile, {to:to,words:words});
+  }
+
+  function validLetterText(to, words) {
+    if (typeof to !== 'string' || typeof words !== 'string' || !to.trim() || to.length > 60 ||
+        /[\p{C}\p{Zl}\p{Zp}<>]/u.test(to) || !words.trim() || words.length > LETTER_CHARS) return false;
+    // JSON can carry an escaped lone surrogate that the older URI decoder
+    // rejected. Keep both private entry points on that same text boundary.
+    try { encodeURIComponent(to); encodeURIComponent(words); return true; }
+    catch (e) { return false; }
+  }
+
+  var BOARD_OWNER_CHANGED = 'Your character changed before this post was handled. Nothing was posted or taken; keep your draft.';
+  function boardOwnerMatches(actorId, profileId, expected) {
+    if (!Array.isArray(expected) || expected.length !== 3 || !Number.isSafeInteger(expected[0]) ||
+        expected[0] < 1 || expected[0] !== profileId || typeof expected[1] !== 'string' || !expected[1] ||
+        typeof expected[2] !== 'string' || !/^[1-9][0-9]{0,19}$/.test(expected[2])) return false;
+    try {
+      return mp.get(actorId, 'profileId') === profileId && mp.getDescFromId(actorId) === expected[1] &&
+        mp.getActorRuntimeIdentity(actorId) === expected[2] && mp.get(actorId, 'profileId') === profileId &&
+        mp.getDescFromId(actorId) === expected[1] && mp.getActorRuntimeIdentity(actorId) === expected[2];
+    } catch (e) { return false; }
+  }
+  function boardSubmissionCut(actorId, profileId, submission, cut) {
+    // Runs inside the existing native admission, immediately before any
+    // debit intent. Its captured runtime/life proof still guards the CAS.
+    return function (entries) {
+      return boardOwnerMatches(actorId, profileId, submission.expectedOwner) ? cut(entries) : BOARD_OWNER_CHANGED;
+    };
+  }
+
+  // One private UI boundary. The request ID correlates a saved posting only;
+  // it is not authorization or an exactly-once/retry key. Legacy routes stay.
+  function submitBoard(payload, actorId, profileId, toProfile) {
+    var kind = payload && payload[0];
+    if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul') ||
+        payload.length !== (kind === 'letter' ? 6 : 7) ||
+        typeof payload[1] !== 'string' || !/^[0-9a-f]{32}$/.test(payload[1]) ||
+        typeof payload[2] !== 'string' || LEDGER_HOLDS.indexOf(payload[2]) < 0 ||
+        payload.slice(4).some(function (field) { return typeof field !== 'string'; }) ||
+        (kind === 'letter' && !validLetterText(payload[4], payload[5]))) {
+      toProfile(profileId, 'That board submission is invalid. Nothing was posted or taken.'); return true;
+    }
+    if (!boardOwnerMatches(actorId, profileId, payload[3])) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
+    var desc;
+    try {
+      desc = mp.getDescFromId(actorId);
+      if (mp.get(actorId, 'profileId') !== profileId || typeof desc !== 'string' || !desc) throw new Error('posting owner changed');
+    } catch (e) {
+      plog('could not identify the owner of a board submission:', e);
+      toProfile(profileId, 'That posting owner could not be checked. Nothing was posted or taken.'); return true;
+    }
+    var meta = { version: 1, id: payload[1], kind: kind, actorDesc: desc };
+    var expectedOwner = payload[3].slice();
+    if (kind === 'letter') return postLetter([], actorId, profileId, toProfile,
+      { to: payload[4], words: payload[5], hold: payload[2], submission: meta, expectedOwner: expectedOwner });
+    // Match the old /haul word boundary, including its whitespace joining.
+    var parts = ['/haul', payload[4], payload[5]].concat(payload[6].trim().split(/\s+/));
+    return postHaul(parts, actorId, profileId, toProfile, { hold: payload[2], submission: meta, expectedOwner: expectedOwner });
+  }
+
+  function postLetter(parts, actorId, profileId, toProfile, written) {
+    var submission = written && written.submission ? written : null;
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     var hold = boardHere(actorId);
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to write a letter there.');
       return true;
     }
+    if (written && written.hold !== undefined && written.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.'); return true;
+    }
     var rest = (parts && parts.length > 1) ? parts.slice(1).join(' ').trim() : '';
     var to = '', words = '';
-    if (rest.charAt(0) === '"') {
+    if (written) { to = written.to; words = written.words; }
+    else if (rest.charAt(0) === '"') {
       var shut = rest.indexOf('"', 1);
       if (shut > 1) { to = rest.slice(1, shut).trim(); words = rest.slice(shut + 1).trim(); }
     } else {
@@ -28535,26 +29325,40 @@ module.exports = {
       return true;
     }
     var cost = LETTER_FEE + LETTER_PAY;
-    if (!takeGold(actorId, cost)) {
-      toProfile(profileId, 'A letter costs ' + cost + ' gold and you do not have it.');
-      return true;
-    }
     var who = 'somebody';
     try {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-    if (!notices[hold]) { notices[hold] = []; }
-    notices[hold].push({ by: profileId, name: who, text: words, at: Date.now(),
-                         job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 });
-    funds[hold] = (Number(funds[hold]) || 0) + cost;
-    save();
-    plog(who, 'posted a letter for', to, 'in', hold, 'for', cost, 'gold');
-    toProfile(profileId, 'Your letter for ' + to + ' is on the board in ' + hold + '. That cost ' + cost +
-              ' gold: ' + LETTER_FEE + ' for the board, and ' + LETTER_PAY +
-              ' held for whoever carries it.');
-    refreshPanel(actorId);
+    var made = { by: profileId, name: who, text: words, at: Date.now(),
+                 job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 };
+    if (written && written.submission) made.boardSubmission = written.submission;
+    // On the board only once the pack's take is saved (#4901): landLetter.
+    var postingCut = goldCut(cost, 'A letter costs ' + cost + ' gold and you do not have it.');
+    if (submission) postingCut = boardSubmissionCut(actorId, profileId, submission, postingCut);
+    var r = packs.begin(actorId, postingCut,
+                        'letter', { hold: hold, made: made, cost: cost });
+    toProfile(profileId, r.why || r.line ||
+      ('Your letter for ' + to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
     return true;
+  }
+
+  /* A letter onto its board, once its cost is saved out of the pack (#4901). The words stay out of the log. */
+  function landLetter(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the letter for ' +
+             made.to + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(made.name, 'posted a letter for', made.to, 'in', hold, 'for', cost, 'gold');
+    return 'Your letter for ' + made.to + ' is on the board in ' + hold + '. That cost ' + cost +
+           ' gold: ' + LETTER_FEE + ' for the board, and ' + LETTER_PAY +
+           ' held for whoever carries it.';
   }
 
   /*
@@ -28788,11 +29592,16 @@ module.exports = {
     return postHaul(parts, actorId, profileId, toProfile);
   }
 
-  function postHaul(parts, actorId, profileId, toProfile) {
+  function postHaul(parts, actorId, profileId, toProfile, submission) {
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     var hold = boardHere(actorId);
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     if (!hold) {
       toProfile(profileId, 'Stand at the board of the hold you are sending from to post a haul.');
       return true;
+    }
+    if (submission && submission.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.'); return true;
     }
     var word = String(parts[1] || '').trim();
     var pay = /^\d+$/.test(word) ? Number(word) : 0;
@@ -28822,9 +29631,10 @@ module.exports = {
     }
     var fee = co.haulFee();
     var cost = fee + pay;
-    if (!Number.isSafeInteger(cost) || !takeGold(actorId, cost)) {
-      toProfile(profileId, 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + pay +
-                ' pay, and you do not have it. Nothing was taken.');
+    var short = 'That costs ' + cost + ' gold, ' + fee + ' for the board and the ' + pay +
+                ' pay, and you do not have it. Nothing was taken.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
       return true;
     }
     var who = 'somebody';
@@ -28832,23 +29642,43 @@ module.exports = {
       var ap = mp.get(actorId, 'appearance');
       if (ap && ap.name) { who = String(ap.name); }
     } catch (e) { }
-    if (!notices[hold]) { notices[hold] = []; }
     // The haul carries the cut it was posted under, so a change of terms never re-prices it.
-    notices[hold].push(co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
-                                      job: true, haul: true, dest: dest, pay: pay, taken: 0 }));
-    // deposit saves the notice with the coin, so the two cannot part.
-    if (!deposit(hold, cost, 'a haul to ' + dest + ': the ' + fee + ' fee, and ' + pay + ' pay held')) {
-      notices[hold].pop();
-      payOut(actorId, cost);
-      toProfile(profileId, 'That did not work. Nothing was taken.');
-      return true;
-    }
-    plog(who, 'posted a haul in', hold, 'to', dest, 'for', pay, 'gold and the', fee, 'fee');
-    toProfile(profileId, 'Your haul to ' + dest + ' is on the board in ' + hold + ', number ' +
-              notices[hold].length + '. That cost ' + cost + ' gold: ' + fee + ' for the board, and the ' +
-              pay + ' pay, held until it is confirmed at ' + dest + '.');
-    refreshPanel(actorId);
+    var made = co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
+                              job: true, haul: true, dest: dest, pay: pay, taken: 0 });
+    if (submission) made.boardSubmission = submission.submission;
+    // On the board only once the pack's take is saved (#4901): landHaul.
+    var postingCut = goldCut(cost, short);
+    if (submission) postingCut = boardSubmissionCut(actorId, profileId, submission, postingCut);
+    var r = packs.begin(actorId, postingCut, 'haul',
+                        { hold: hold, made: made, cost: cost, fee: fee, pay: pay, dest: dest });
+    toProfile(profileId, r.why || r.line ||
+      ('Your haul to ' + dest + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
     return true;
+  }
+
+  /*
+    A haul onto its board, once its cost is saved out of the pack (#4901).
+    The coin is counted on the hold's ledger in the same write as the notice
+    (the debit's landing), so the two cannot part, and nothing is ever handed
+    back: the pack's take is saved before any of it is counted.
+  */
+  function landHaul(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost;
+    var fee = row.data.fee, pay = row.data.pay, dest = row.data.dest;
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the haul to ' +
+             dest + ' is not on the board.';
+    }
+    made.at = Date.now();
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(cost, 'gold onto', hold + '\'s ledger:', 'a haul to ' + dest + ': the ' + fee + ' fee, and ' + pay + ' pay held');
+    plog(made.name, 'posted a haul in', hold, 'to', dest, 'for', pay, 'gold and the', fee, 'fee');
+    return 'Your haul to ' + dest + ' is on the board in ' + hold + ', number ' +
+           notices[hold].length + '. That cost ' + cost + ' gold: ' + fee + ' for the board, and the ' +
+           pay + ' pay, held until it is confirmed at ' + dest + '.';
   }
 
   function confirmHaul(parts, actorId, profileId, toProfile) {
@@ -29596,6 +30426,7 @@ module.exports = {
     if (word === '/take') { return take(parts, actorId, profileId, toProfile); }
     if (word === '/dropjob') { return dropJob(parts, actorId, profileId, toProfile); }
     if (word === '/unpin') { return unpin(parts, actorId, profileId, toProfile); }
+    if (word === '/letter-post-v1') { return postLetterV1(parts, actorId, profileId, toProfile); }
     if (word === '/letter') { return postLetter(parts, actorId, profileId, toProfile); }
     if (word === '/deliver') { return deliver(parts, actorId, profileId, toProfile); }
     if (word === '/haul') { return haulCmd(parts, actorId, profileId, toProfile); }
@@ -30191,6 +31022,7 @@ module.exports = {
           n.by = 0;
           n.name = 'somebody';
           delete n.title; delete n.text; delete n.to;
+          delete n.boardSubmission;
           touched = true;
         }
         if (mine(n.taken)) {
@@ -30294,17 +31126,18 @@ module.exports = {
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
-    deposit: deposit, takeGold: takeGold, LEDGER_HOLDS: LEDGER_HOLDS,
+    deposit: deposit, takeGold: takeGold, settlePacks: packs.settle, LEDGER_HOLDS: LEDGER_HOLDS,
     withdraw: withdraw, mayWithdraw: mayWithdraw, heldOn: heldOn,
     haulTenth: haulTenth, haulTick: haulTick, saleCuts: saleCuts, inCompany: inCompany,
     holdStanding: holdStanding,
     rentDue: rentDue, funds: function () { return funds; },
     // Rent still owed on a place by somebody who no longer holds it (#3893).
     arrears: function () { return arrears; },
-    notices: function () { return notices; }, takedown: takedown,
+    notices: function () { return notices; }, takedown: takedown, unpin: unpin,
     // A notice in an office's name, with no fee (#513). See the world stage block.
     officePost: officePost,
-    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel,
+    boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel, postExact: postExact,
+    submitBoard: submitBoard, boardSubmissions: boardSubmissions,
     standBoard: standBoard, standBoards: standBoards, boardActivated: boardActivated,
     boxOffset: boxOffset, boardAngle: boardAngle,
     standBench: standBench, standBenches: standBenches,
@@ -30312,7 +31145,7 @@ module.exports = {
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
-    itemName: itemName
+    itemName: itemName, baseItemName: baseItemName
   };
   plog('ready,', Object.keys(BUILDING_BY_DOOR).length, 'doors across',
        Object.keys(BUILDING_NAME).length, 'buildings,',
@@ -30677,7 +31510,7 @@ module.exports = {
         /remnant add <person>         onto the remnant roll, after the application
         /remnant remove <person>      off it
   */
-  function command(word, parts, actorId, profileId, toProfile) {
+  function command(word, parts, actorId, profileId, toProfile, cmd) {
     var roll = word === '/remnant' ? 'remnant' : 'embassy';
     var verb = String((parts && parts[1]) || '').toLowerCase();
     var rest = (parts || []).slice(2);
@@ -30687,6 +31520,14 @@ module.exports = {
       return true;
     }
     if (!verb) { toProfile(profileId, listing(roll)); return true; }
+
+    if (verb === 'add' || verb === 'arm' || verb === 'disarm' || verb === 'remove') {
+      var staffLog = g.__thornswoodStaff;
+      if (staffLog && typeof staffLog.unproven === 'function') {
+        var unp = staffLog.unproven(cmd, profileId);
+        if (unp) { toProfile(profileId, unp); return true; }
+      }
+    }
 
     var armed = false;
     if (roll === 'embassy' && verb === 'add' && rest.length > 1 &&
@@ -31311,10 +32152,36 @@ module.exports = {
       pos: [stop.pos[0], stop.pos[1], stop.pos[2]],
       rot: [0, 0, stop.rot]
     });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
   }
 
   function answer(line, from, went) {
     return { line: line, from: from, went: !!went };
+  }
+
+  // A displayed route grants no permission to move a now-frozen or dead rider.
+  function riderCheck(actorId, profileId, expected) {
+    var unavailable = { line: 'Your character is unavailable. Open the ride panel again.' };
+    var ai, runtime;
+    try {
+      ai = mp.getNpcAIState(actorId);
+      runtime = mp.getActorRuntimeIdentity(actorId);
+    } catch (e) { return unavailable; }
+    if (!Number.isSafeInteger(profileId) || profileId <= 0 || !ai || ai.isHuman !== true ||
+        ai.profileId !== profileId || !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+        typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) ||
+        runtime.length === 20 && runtime > '18446744073709551615') { return unavailable; }
+    var identity = JSON.stringify([actorId, profileId, ai.lifeGeneration, runtime]);
+    if (expected && identity !== expected) { return unavailable; }
+    if (ai.isDead === true) { return { line: 'You are dead, so you cannot ride. Nothing was taken.' }; }
+    if (ai.isDead !== false) { return unavailable; }
+    var frozen = g.__thornswoodStaffState && g.__thornswoodStaffState.frozen;
+    if (!frozen || typeof frozen !== 'object' || Array.isArray(frozen)) { return unavailable; }
+    if (frozen[profileId]) {
+      return { line: 'Staff have you frozen in place, so you cannot ride. Nothing was taken.' };
+    }
+    return { line: '', identity: identity };
   }
 
   /** A ride, and the move when it goes: the line to say back, the stop it was asked at, and whether it went. */
@@ -31333,10 +32200,14 @@ module.exports = {
       plog('a ride was asked for and the hold ledger is not loaded');
       return answer('The hold\'s ledger is not running on this server, so nobody rides. Say so in the dev channel.', from);
     }
+    var rider = riderCheck(actorId, profileId);
+    if (rider.line) { return answer(rider.line, from); }
     // A pack that is short keeps all of it and stays where it is.
     if (!canPay(actorId, price)) {
       return answer('The ride to ' + to.name + ' is ' + price + ' gold and you do not have it. Nothing was taken.', from);
     }
+    var current = riderCheck(actorId, profileId, rider.identity);
+    if (current.line) { return answer(current.line, from); }
     /*
       THE MOVE, THEN THE FARE, so a move the server could not make costs
       nothing and no coin ever has to go back into a pack. The pack was read a
@@ -34355,13 +35226,20 @@ return module.exports;
     }
 
     /* The panel's words (game\ui\thornswood-ship.js). Answers a line for the chat, or ''. */
-    function command(parts, actorId, profileId) {
+    function command(parts, actorId, profileId, cmd) {
       var w = TRADE_DOCK.parse(parts);
       if (w.why) { return w.why; }
       var said = '';
       if (w.verb === 'close') { sessions[actorId] = null; push(actorId, { open: false }); return ''; }
       if (w.verb === 'staff' || w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
         if (!hook('__thornswoodIsStaff', profileId)) { return 'Only staff keep the ports and routes.'; }
+        if (w.verb === 'draft' || w.verb === 'confirm' || w.verb === 'add') {
+          var staffLog = g.__thornswoodStaff;
+          if (staffLog && typeof staffLog.unproven === 'function') {
+            var unp = staffLog.unproven(cmd, profileId);
+            if (unp) { return unp; }
+          }
+        }
         try { said = staffWord(w, actorId, profileId); } catch (eStaff) { said = String((eStaff && eStaff.message) || eStaff); }
         sessions[actorId] = { mode: 'staff', at: Date.now() };
         pushStaff(actorId, profileId, said);
@@ -36993,6 +37871,7 @@ return module.exports;
     empty map after a restart costs one redraw each, which is right anyway.
   */
   var lastDrawn = {};
+  var writeResults = {};
 
   /*
     The client side script. It runs inside skymp5-client EVERY FRAME for as
@@ -37021,6 +37900,10 @@ return module.exports;
       '(function(){',
       '  try {',
       '    var v = ctx.value;',
+      '    try {',
+      '      var front = globalThis.Thornswood;',
+      '      if (front && typeof front.localCritterClass === "function") front.localCritterClass(v && typeof v === "object" ? v["class"] : null);',
+      '    } catch (critterError) { ctx.sp.printConsole("Torchbug class delivery failed: " + critterError); }',
       '    if (!v || typeof v !== "object") { return; }',
       // No panel on the value means the write moved a counter and nothing
       // the panel draws, so the browser is not touched at all. See drawn().
@@ -37089,7 +37972,28 @@ return module.exports;
     return lastAsked;
   }
 
-  function writeState(actorId, s, redraw) {
+  function writeState(actorId, s, redraw, nativeTome) {
+    var expected = null;
+    writeResults[actorId] = false;
+    if (s.spellHistory) {
+      expected = readState(actorId);
+      var knowledge = g.__thornswoodCharacterKnowledge;
+      if (!knowledge) { throw new Error('The atomic spell writer is not running.'); }
+      var active = knowledge.prepare(s);
+      if (!active.ok) { throw new Error('Could not prepare active knowledge: ' + active.why); }
+      if (nativeTome) {
+        var eligible = function (a, b) { return (a || []).every(function (x, i) { return b.indexOf(x) >= 0 && a.indexOf(x) === i; }); };
+        if (!eligible(s.spells && s.spells.known, active.state.spells.known) || !eligible(s.staffSpells, active.state.staffSpells)) {
+          throw new Error('The tome would grant knowledge that is not currently eligible.');
+        }
+        // Native ReadBookEvent will add only the tome's own spell. Historical
+        // extras made eligible by this study remain latent until an atomic
+        // refresh can publish them in the book and engine together.
+        active.state.spells.known = ((s.spells && s.spells.known) || []).slice();
+        active.state.staffSpells = (s.staffSpells || []).slice();
+      }
+      s = active.state;
+    }
     s.v = 1;
     // forPanel is what the client sees; the rules state is what is stored.
     // Both travel in the one property so the panel never sees a half state.
@@ -37160,13 +38064,16 @@ return module.exports;
     }
     var written = false;
     try {
-      mp.set(actorId, CHAR_PROPERTY, s);
-      written = true;
+      if (s.spellHistory && !nativeTome) {
+        written = g.__thornswoodCharacterKnowledge.commit(actorId, expected, s);
+        if (!written) { throw new Error('The character or active spells changed before the write.'); }
+      } else { mp.set(actorId, CHAR_PROPERTY, s); written = true; }
       // Only once it is actually written. A write that threw sent nothing,
       // and remembering it as sent would hold the next one back as well.
-      if (sending) { lastDrawn[actorId] = sig; }
+      if (written && sending) { lastDrawn[actorId] = sig; }
     } catch (e) {
       clog('could not write', actorId.toString(16), e);
+      if (s.spellHistory || nativeTome) { throw e; }
     }
     /*
       What the menus list goes with the record, so only once it is written
@@ -37176,12 +38083,15 @@ return module.exports;
       with no end: an actor whose form is gone (a name taken off the embassy
       roll after its character went) stopped the server.
     */
+    writeResults[actorId] = written;
     if (written) {
       // Twin Souls is a second enchantment slot in the menu (#1389). It lives
       // beside the craft gate, outside this block, the way spellOn does.
-      if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); }
+      try { if (typeof handEnchantSlots === 'function') { handEnchantSlots(actorId, s); } }
+      catch (eSlots) { clog('character saved but enchantment slots could not be published for', actorId.toString(16), eSlots); }
       // And what the crafting menu lists, from the same answer the craft gate gives (#613).
-      if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); }
+      try { if (typeof handRecipesHidden === 'function') { handRecipesHidden(actorId); } }
+      catch (eRecipes) { clog('character saved but recipe visibility could not be published for', actorId.toString(16), eRecipes); }
     }
     return s;
   }
@@ -37192,7 +38102,7 @@ return module.exports;
     rules, so an old value the rules refuse is simply not carried, and the
     log says which.
   */
-  function migrate(actorId) {
+  function migrate(actorId, preview) {
     var s = P.fresh();
     var old = null;
     try { old = mp.get(actorId, 'thornswoodChargen'); } catch (e) { old = null; }
@@ -37220,17 +38130,23 @@ return module.exports;
           leftover privilege (bard instruments, etc.) reads it, and leave
           the progression state empty so they re-pick like somebody new.
         */
-        clog('migrate', actorId.toString(16), 'old trade', trade, 'is RP-only; cleared, they must pick a class and profession');
-        try { old['class'] = ''; mp.set(actorId, 'thornswoodChargen', old); } catch (eClear) { }
+        if (!preview) {
+          clog('migrate', actorId.toString(16), 'old trade', trade, 'is RP-only; cleared, they must pick a class and profession');
+          try { old['class'] = ''; mp.set(actorId, 'thornswoodChargen', old); } catch (eClear) { }
+        }
       } else if (trade) {
         clog('migrate', actorId.toString(16), 'old trade', trade, 'has no home in the rulebook; left on the old property, nothing chosen here');
       }
     }
-    return writeState(actorId, s);
+    return preview ? s : writeState(actorId, s);
   }
 
   function stateOf(actorId) {
     return readState(actorId) || migrate(actorId);
+  }
+
+  function previewState(actorId) {
+    return readState(actorId) || migrate(actorId, true);
   }
 
   // ------------------------------------------------- gates, work, spells --
@@ -37410,6 +38326,7 @@ return module.exports;
       try { FS.worked(actorId); } catch (eSteps) { clog('first steps threw at a piece of work:', eSteps); }
     }
     writeState(actorId, r.state);
+    if (r.state.spellHistory && !writeResults[actorId]) { return null; }
     return raiseLines(actorId, r);
   }
 
@@ -37454,6 +38371,11 @@ return module.exports;
     had no form id for it all end up in the same place.
   */
   function grantKnown(actorId) {
+    var current = stateOf(actorId);
+    if (current.spellHistory) {
+      var active = writeState(actorId, current);
+      return writeResults[actorId] ? active.spells.known.length + active.staffSpells.length : 0;
+    }
     // Only the book is granted (#1387): what it does not list comes off
     // first, out of the book and off the character, in the college block.
     var college = g.__thornswoodCollege;
@@ -38036,7 +38958,7 @@ return module.exports;
         word === '/rent' || word === '/sleephere' || word === '/notice' || word === '/job' ||
         word === '/board' || word === '/take' ||
         word === '/haul' || word === '/world' ||
-        word === '/letter' || word === '/deliver' ||
+        word === '/letter-post-v1' || word === '/letter' || word === '/deliver' ||
         word === '/dropjob' || word === '/unpin') {
       if (!actorId) {
         toProfile(profileId, 'The server cannot find your character right now. Give it a moment and try again.');
@@ -38307,6 +39229,10 @@ return module.exports;
     }
     r.state.note = null;
     var st = writeState(actorId, r.state);
+    if (r.state.spellHistory && !writeResults[actorId]) {
+      toProfile(profileId, 'The character change could not be saved. Nothing was learned or spent.');
+      return true;
+    }
     clog(word, parts.slice(1).join(' '), 'for', actorId.toString(16), 'accepted');
 
     /*
@@ -38515,7 +39441,24 @@ return module.exports;
   }
 
   g.__thornswoodCharacter = {
-    PROPERTY: CHAR_PROPERTY, stateOf: stateOf, writeState: writeState,
+    PROPERTY: CHAR_PROPERTY, stateOf: stateOf, previewState: previewState, writeState: writeState,
+    // ReadBookEvent owns AddSpell and consuming the tome after this returns.
+    // Saving eligible book/history here must not pre-add that engine spell.
+    writeTomeState: function (actorId, s) {
+      var next = P.clone(s);
+      // Canonical tome rules already enforce the outsider cap. A newly learned
+      // eligible spell takes its place beside the currently selected spells.
+      if (next.spellHistory && next.spellSelections) {
+        if (next.prof !== 'mage' && Object.prototype.hasOwnProperty.call(next.spellSelections, 'spells')) {
+          next.spellSelections.spells = ((next.spells && next.spells.known) || []).slice();
+        }
+        if (next.prof !== 'enchanter' && Object.prototype.hasOwnProperty.call(next.spellSelections, 'staffSpells')) {
+          next.spellSelections.staffSpells = (next.staffSpells || []).slice();
+        }
+      }
+      return writeState(actorId, next, false, true);
+    },
+    writeSucceeded: function (actorId) { return writeResults[actorId] === true; },
     forPanel: forPanel, mapHalf: mapHalf, migrate: migrate, command: command,
     beginCreation: beginCreation, arrival: arrival, updateOwnerScript: updateOwnerScript,
     gate: gate, gateHalf: gateHalf, credit: credit,
@@ -41048,6 +41991,20 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     }
 
     var staffDesc = (S && S.isStaffSpell && spell.desc && S.isStaffSpell(spell.desc)) ? spell.desc : null;
+    if (s.spellHistory) {
+      var knowledge = g.__thornswoodCharacterKnowledge;
+      if (!knowledge) { throw new Error('The retained knowledge writer is not running.'); }
+      var eligible = knowledge.prepare(s);
+      if (!eligible.ok) { throw new Error('Retained knowledge cannot be prepared: ' + eligible.why); }
+      var restoreBook = !P.knowsSpell(s, spell.name) && P.knowsSpell(eligible.state, spell.name);
+      var restoreStaff = staffDesc && !P.knowsStaff(s, staffDesc) && P.knowsStaff(eligible.state, staffDesc);
+      if (restoreBook || restoreStaff) {
+        // This is knowledge already earned, newly eligible after study. One
+        // normal atomic refresh restores it before the already-known path,
+        // so its tome and point cannot be spent for the same knowledge again.
+        s = C.writeState(actorId, eligible.state);
+      }
+    }
     var fresh = !!staffDesc && !!P.knowsStaff && !P.knowsStaff(s, staffDesc);
     var outsider = fresh && !!P.staffTaught && P.staffTaught(s);
     var enchNote = (fresh && P.isEnchanter && P.isEnchanter(s))
@@ -41061,7 +42018,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
       if (outsider) {
         var again = S.learn(P, s, staffDesc);
         if (again.ok) {
-          C.writeState(actorId, again.state);
+          C.writeTomeState(actorId, again.state);
           var gone = spendTome(actorId, bookBaseId);
           return { refused: false, line: 'You know ' + spell.name + ' already, and the tome unlocks it for staves: ' +
                    'you can bind it into a staff at a staff enchanter now.' + (gone ? ' The tome is spent.' : '') };
@@ -41086,7 +42043,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
             It is not written into their spell book, so it takes none of the
             places a Master mage's teaching gives.
           */
-          C.writeState(actorId, st.state);
+          C.writeTomeState(actorId, st.state);
           tlog(Number(actorId).toString(16), 'unlocked', spell.name, spell.desc, 'for staves from a tome');
           return { refused: false, line: 'The tome unlocks ' + spell.name + ' for staves: you can bind it into a staff ' +
                    'at a staff enchanter now. It took one of your ' + P.TABLE.limits.outsiderSpells +
@@ -41112,7 +42069,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
         staffLine = ' It is not unlocked for staves: you need ' + joinNeeds(st2.missing || [{ why: st2.why }]) + '.';
       }
     }
-    C.writeState(actorId, next);
+    C.writeTomeState(actorId, next);
     var raised = C.raiseLines ? C.raiseLines(actorId, r) : null;
     tlog(Number(actorId).toString(16), 'learned', spell.name, spell.desc, 'from a tome');
     return { refused: false, line: 'The tome teaches you ' + spell.name + ', ' + word(spell.rank) + ' ' +
@@ -41207,9 +42164,8 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
   the character is not in it, because the server does not see those. The
   moment it ends is kept on the character, so a relog or a restart does not
   end it early. Waiting the 30 minutes clears it. The page's other clear, a
-  cooked meal and a bed, is not built here: the needs block has known a
-  cooked meal since #1382 (NEEDS.foodGroup.cooked), and nothing in this
-  block ends withered on one and a rest in a bed yet (#6239).
+  cooked meal followed by a bed rest, uses the needs block's accepted cooked
+  meal and the beds block's new validated rest session (#6239).
 */
 (function () {
   'use strict';
@@ -41666,17 +42622,43 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     return {
       drank: Array.isArray(rec.drank) ? rec.drank.filter(isFinite) : [],
       cast: Array.isArray(rec.cast) ? rec.cast.filter(isFinite) : [],
-      until: Number(rec.until) || 0
+      until: Number(rec.until) || 0,
+      mealAt: Number(rec.mealAt) || 0
     };
   }
 
   function witheredWrite(actorId, rec) {
-    try { mp.set(actorId, WITHERED_PROPERTY, rec); } catch (e) { clog('could not write withered for', hex(actorId) + ':', e); }
+    try { mp.set(actorId, WITHERED_PROPERTY, rec); return true; }
+    catch (e) { clog('could not write withered for', hex(actorId) + ':', e); return false; }
   }
 
   /** True while this person is withered. */
   function isWithered(actorId, at) {
     return witheredRead(actorId).until > (at || now());
+  }
+
+  // Only an accepted cooked meal during this withering can precede its cure.
+  function cookedMeal(actorId) {
+    if (!personOf(actorId)) { return false; }
+    var rec = witheredRead(actorId), t = now();
+    if (rec.until <= t) { return false; }
+    rec.mealAt = t;
+    return witheredWrite(actorId, rec);
+  }
+
+  // Called only for a new rest in validated bed furniture, including bedrolls.
+  function bedRested(actorId) {
+    if (!personOf(actorId)) { return false; }
+    var rec = witheredRead(actorId), t = now();
+    if (rec.until <= t || rec.mealAt <= 0 || rec.mealAt > t ||
+        rec.mealAt < rec.until - WITHERED.minutes * 60000) { return false; }
+    rec.until = 0;
+    rec.mealAt = 0;
+    if (!witheredWrite(actorId, rec)) { return false; }
+    delete witherTimers[actorId];
+    tell(actorId, 'Your meal and bed rest have cleared the withering. Your health and magicka are your own again.');
+    push(actorId);
+    return true;
   }
 
   /* The end of it, on its own clock, and the map written again when it comes. */
@@ -41709,6 +42691,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     var set = rec.drank.length >= WITHERED.potions || rec.cast.length >= WITHERED.casts;
     if (set) {
       rec.until = t + WITHERED.minutes * 60000;
+      rec.mealAt = 0;
       rec.drank = [];
       rec.cast = [];
     }
@@ -41806,7 +42789,7 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
     reanimates: reanimates, hit: hit,
     isRestoration: isRestoration, cast: cast, effects: effects, strain: strain,
     WITHERED: WITHERED, WITHERED_PROPERTY: WITHERED_PROPERTY, drank: drank, isWithered: isWithered,
-    witheredAtLogin: witheredAtLogin,
+    witheredAtLogin: witheredAtLogin, cookedMeal: cookedMeal, bedRested: bedRested,
     takeScript: takeScript, laydownScript: laydownScript
   };
   clog('ready');
@@ -42652,7 +43635,12 @@ mp.onUpdateEquipmentAttempt = guard('onUpdateEquipmentAttempt', function (actorI
 */
 mp.onReadBook = guard('onReadBook', function (actorId, bookBaseId) {
   const tomes = globalThis.__thornswoodTomes;
-  const r = tomes ? tomes.read(actorId, bookBaseId) : null;
+  let r;
+  try { r = tomes ? tomes.read(actorId, bookBaseId) : null; }
+  catch (e) {
+    log('spell tomes: reading or saving failed for ' + Number(actorId).toString(16) + ': ' + String(e));
+    r = { refused: true, line: 'The spell could not be learned safely. You keep the tome and your spell points.' };
+  }
   if (r && r.line) {
     notify(actorId, r.line);
     say(actorId, r.line);
@@ -44009,6 +44997,61 @@ function thornswoodBooks(env) {
 })();
 
 
+// Atomic active spell membership for characters with preserved spell history.
+(function () {
+  'use strict';
+  var g = globalThis;
+  function prepare(state) {
+    var P = g.__thornswoodProgression, SS = g.__thornswoodStaffSpells;
+    if (!SS) { return { ok: false, why: 'the spell catalogue is not running' }; }
+    return P.activeKnowledge(state, SS.rankOf);
+  }
+  function commit(actorId, expected, replacement) {
+    if (typeof mp.compareAndSetActorPropertyAndSpells !== 'function') {
+      throw new Error('This engine cannot commit character progression and active spells together.');
+    }
+    if (typeof mp.getActorLearnedSpells !== 'function') { throw new Error('This engine cannot read the full learned spell snapshot.'); }
+    var P = g.__thornswoodProgression, SS = g.__thornswoodStaffSpells;
+    var runtime = mp.getActorRuntimeIdentity(actorId);
+    var identity = mp.getNpcAIState(actorId);
+    var current = mp.getActorLearnedSpells(actorId);
+    if (!Array.isArray(current) || current.length > 4096 || current.some(function (id, i) {
+      return !Number.isInteger(id) || id <= 0 || id >= 0xff000000 || current.indexOf(id) !== i;
+    })) { throw new Error('The full learned spell snapshot cannot be read safely.'); }
+    current = current.slice();
+    var managed = Object.keys(P.SPELL_IDS).map(function (name) { return P.SPELL_IDS[name]; })
+      .concat(Object.keys(SS.STAFF_SPELLS)).map(function (desc) { return mp.getIdFromDesc(desc); });
+    var college = g.__thornswoodCollege;
+    if (!college || !college.spellKind) { throw new Error('The spell type catalogue is not running.'); }
+    var history = replacement.spellHistory.otherSpells;
+    var next = current.filter(function (id) {
+      if (managed.indexOf(id) >= 0) { return false; }
+      var kind = college.spellKind(id);
+      if (!kind || [0, 1, 2, 3, 4, 5, 10, 11].indexOf(kind.type) < 0) {
+        throw new Error('An unrelated spell type cannot be read safely.');
+      }
+      var desc = mp.getDescFromId(id);
+      if (kind.type !== 0 || (typeof INSTRUMENT_SPELL !== 'undefined' && String(INSTRUMENT_SPELL).toLowerCase() === String(desc).toLowerCase())) {
+        return true;
+      }
+      if (history.indexOf(desc) < 0) { history.push(desc); }
+      return false;
+    });
+    var wanted = replacement.spells.known.map(function (name) { return P.SPELL_IDS[name]; })
+      .concat(replacement.staffSpells);
+    wanted.forEach(function (desc) {
+      var id = mp.getIdFromDesc(desc);
+      if (!Number.isInteger(id) || id <= 0) { throw new Error('An eligible spell has no form in this load order.'); }
+      if (next.indexOf(id) < 0) { next.push(id); }
+    });
+    return mp.compareAndSetActorPropertyAndSpells(actorId, identity.profileId, {
+      name: g.__thornswoodCharacter.PROPERTY, expected: expected, replacement: replacement,
+      expectedRuntimeIdentity: runtime, expectedLifeGeneration: identity.lifeGeneration,
+      expectedSpells: current, replacementSpells: next
+    });
+  }
+  g.__thornswoodCharacterKnowledge = { prepare: prepare, commit: commit };
+})();
 // ==== thornswood chat commands ====
 /*
   EVERY WORD THIS SERVER ANSWERS, WRITTEN DOWN ONCE.
@@ -44032,7 +45075,7 @@ function thornswoodBooks(env) {
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc', '/o',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
@@ -44104,7 +45147,7 @@ const WORDS = ['/ooc', '/o',
                // A letter (#1595): Write a letter on the board panel sends
                // /letter, and the look prompt's Hand over the letter sends
                // /deliver. Never typed, and not in PLAYER_WORDS either.
-               '/letter', '/deliver',
+               '/letter-post-v1', '/letter', '/deliver',
                // The company's terms card on the Office page of K, for staff
                // (#512, #2695): propose, confirm and drop. Sent by the page,
                // never typed, and so NOT in PLAYER_WORDS.
@@ -44216,7 +45259,7 @@ const WORDS = ['/ooc', '/o',
                // are the J panel's lines, never typed (#1630). /hidename too,
                // which the P panel's Name buttons send and which was missing
                // here, so it ran before the character was in the world (#1628).
-               '/friend', '/party', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
+               '/friend', '/party', '/party-action-v1', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
                // Contracts between people (#4561): K's Contracts section
                // sends them. Never typed, so not in PLAYER_WORDS.
                '/contract',
@@ -44499,7 +45542,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   /** Every line from the voice service, on its way to handle(). */
   function dispatch(cmd) {
     var profileId = Number(cmd && cmd.profileId) || 0;
-    var parts = String((cmd && cmd.text) || '').trim().split(/\s+/);
+    var parts = commandParts(cmd && cmd.text);
     var word = parts[0].toLowerCase();
     // The launcher's join pass, from the front plugin (#937). Needs no
     // character and answers nothing; see the join pass block.
@@ -45083,6 +46126,21 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   */
   var journalFullSaid = {};
   var FULL_SAY_MS = 10000;
+  // These payloads are JSON strings, never words to reconstruct with spaces.
+  function commandParts(text) {
+    var raw = String(text || '').trim();
+    var head = /^\S+/.exec(raw);
+    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1' || head[0] === '/board-unpin-v1' || head[0] === '/board-submit-v1')) return [head[0]];
+    return raw.split(/\s+/);
+  }
+
+  function savedTextPayload(text, word, maximum, fields) {
+    if (typeof text !== 'string' || text.length > maximum || text.indexOf(word + ' ') !== 0) return null;
+    var value;
+    try { value = JSON.parse(text.slice(word.length + 1)); } catch (e) { return null; }
+    if (!Array.isArray(value) || value.length !== fields) return null;
+    return value;
+  }
   function journalCommand(soc, actorId, profileId, parts, text) {
     var verb = String(parts[1] || '').toLowerCase();
     var s = soc.stateOf(actorId);
@@ -45219,7 +46277,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     var profileId = Number(cmd.profileId) || 0;
     if (!profileId) { return; }
 
-    var parts = String(cmd.text || '').trim().split(/\s+/);
+    var parts = commandParts(cmd.text);
     var word = parts[0].toLowerCase();
     var arg = (parts[1] || '').toLowerCase();
 
@@ -45290,6 +46348,97 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         'The server cannot find your character right now. Give it a moment and ' +
         'try again; if it keeps saying that, say so and what you were doing.');
       return false;
+    }
+
+    if (word === '/party-action-v1') {
+      if (!needCharacter()) return;
+      var partyApi = g.__thornswoodSocial;
+      var partyLine = typeof cmd.text === 'string' ? cmd.text : '';
+      var partyMatch = /^\/party-action-v1 (disband|kick) ([a-f0-9]{48}) ([a-f0-9]{48})(?: ([1-9][0-9]{0,15}))?$/.exec(partyLine);
+      var partyTarget = partyMatch && partyMatch[4] ? Number(partyMatch[4]) : 0;
+      var partyValid = partyMatch && partyMatch[0] === partyLine && (partyMatch[1] === 'kick'
+        ? Number.isSafeInteger(partyTarget) && partyTarget > 0 : !partyMatch[4]);
+      var partyAnswer = !partyValid ? 'That party request is invalid. Review the party and press again.'
+        : !partyApi ? 'Party actions are not available right now.'
+        : partyApi.confirmPartyAction(partyApi.profileOf(actorId), partyMatch[1], partyMatch[2], partyMatch[3], partyTarget);
+      toProfile(profileId, partyAnswer || (partyMatch[1] === 'kick' ? 'They left the party.' : 'The party is ended.'));
+      if (partyApi) partyApi.push(actorId, true);
+      return;
+    }
+
+    if (word === '/journal-write-v1') {
+      // Exact JSON strings, including leading/trailing whitespace and literal
+      // backslashes. Nothing here passes through the legacy title/body codec.
+      if (!needCharacter()) return;
+      var journalPayload = savedTextPayload(cmd.text, word, 25000, 4);
+      var journals = g.__thornswoodSocial;
+      if (!journalPayload || !journalPayload.every(function (x) { return typeof x === 'string'; }) ||
+          !/^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[0]) ||
+          !(journalPayload[1] === '' || /^[a-zA-Z0-9_-]{1,80}$/.test(journalPayload[1])) ||
+          journalPayload[2].length > 60 || journalPayload[3].length > 4000) {
+        toProfile(profileId, 'That page could not be saved: the request is invalid or too long. Your draft is still in J.');
+        return;
+      }
+      if (!journals || !journals.writePageExact) {
+        toProfile(profileId, 'Saving pages is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      var journalWhy = journals.writePageExact(actorId, journalPayload[0], journalPayload[1], journalPayload[2], journalPayload[3]);
+      if (journalWhy) toProfile(profileId, journalWhy);
+      journals.pushJournalSave(actorId);
+      return;
+    }
+
+    if (word === '/board-submit-v1') {
+      if (!needCharacter()) return;
+      var submitPayload = savedTextPayload(cmd.text, word, 8200, 6) || savedTextPayload(cmd.text, word, 8200, 7);
+      var submitProperty = g.__thornswoodProperty;
+      if (!submitPayload || !submitProperty || !submitProperty.submitBoard) {
+        toProfile(profileId, 'That board submission is invalid or unavailable. Keep your draft.'); return;
+      }
+      submitProperty.submitBoard(submitPayload, actorId, profileId, toProfile);
+      return;
+    }
+
+    if (word === '/board-post-v1') {
+      if (!needCharacter()) return;
+      var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
+      var propertyPosts = g.__thornswoodProperty;
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+          !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
+          (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
+          typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
+          postPayload[2].length > 60 || postPayload[3].length > 600 ||
+          typeof postPayload[4] !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(postPayload[4])) {
+        toProfile(profileId, 'That post request is invalid or too long. Nothing was posted or taken.');
+        return;
+      }
+      if (!propertyPosts || !propertyPosts.postExact) {
+        toProfile(profileId, 'Posting is not running on this server. Keep your draft and try again later.');
+        return;
+      }
+      propertyPosts.postExact(postPayload[0], postPayload[1], postPayload[2], postPayload[3],
+                              postPayload[4], actorId, profileId, toProfile);
+      return;
+    }
+
+    if (word === '/board-unpin-v1') {
+      if (!needCharacter()) return;
+      var unpinPayload = savedTextPayload(cmd.text, word, 8200, 3);
+      var unpinProperty = g.__thornswoodProperty;
+      if (!unpinPayload || typeof unpinPayload[0] !== 'string' ||
+          !Number.isSafeInteger(unpinPayload[1]) || unpinPayload[1] <= 0 ||
+          !Number.isSafeInteger(unpinPayload[2]) || unpinPayload[2] < 0) {
+        toProfile(profileId, 'That Take down request is invalid. Review the current board and press again.');
+        return;
+      }
+      if (!unpinProperty || !unpinProperty.unpin) {
+        toProfile(profileId, 'Taking posts down is unavailable right now. Review the board later.');
+        return;
+      }
+      unpinProperty.unpin(['/unpin', String(unpinPayload[1])], actorId, profileId, toProfile,
+                          { hold: unpinPayload[0], at: unpinPayload[2] });
+      return;
     }
 
     // A lockpick that broke in somebody's game.
@@ -45412,7 +46561,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     if (word === '/embassy' || word === '/remnant') {
       var accord = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodEmbassy;
       if (!accord) { toProfile(profileId, 'That is not running on this server.'); return true; }
-      try { accord.command(word, parts, actorId, profileId, toProfile); } catch (eAccord) {
+      try { accord.command(word, parts, actorId, profileId, toProfile, cmd); } catch (eAccord) {
         log(word + ' threw:', eAccord);
         toProfile(profileId, 'That did not work. Say so in the dev channel.');
       }
@@ -45466,7 +46615,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       var shipsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTradeShips;
       if (!shipsApi || !shipsApi.command) { toProfile(profileId, 'Trade ships are not running on this server.'); return true; }
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
-      var shipSaid = shipsApi.command(parts, actorId, profileId);
+      var shipSaid = shipsApi.command(parts, actorId, profileId, cmd);
       if (shipSaid) { toProfile(profileId, shipSaid); }
       return true;
     }
@@ -45768,24 +46917,28 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       /*
         A trade that is already open takes verbs rather than a name.
 
-        add, remove, gold, ok and cancel, and the panel sends exactly the same
-        lines, the same way the J panel sends /journal. One way in.
+        add, remove, gold, agree and cancel, and the panel sends exactly the
+        same lines. Agree names a version with a verb older servers never
+        interpret as an approval.
       */
       if (word === '/trade') {
         var tr2 = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTrade;
         if (!tr2) { toProfile(profileId, 'Trading is not running on this server.'); return true; }
-        if (String(parts[1] || '').toLowerCase() === 'refresh') {
+        var verb = String(parts[1] || '').toLowerCase();
+        if (verb === 'refresh' || verb === 'ok') {
           tr2.refresh(actorId);
+          if (verb === 'ok') {
+            toProfile(profileId, 'The trade window is out of date. Close the game, let the launcher update, then rejoin before trading.');
+          }
           return true;
         }
         var live = tr2.tradeOf(actorId);
-        var verb = String(parts[1] || '').toLowerCase();
-        if (live || verb === 'cancel' || verb === 'ok' || verb === 'add' ||
+        if (live || verb === 'cancel' || verb === 'agree' || verb === 'add' ||
             verb === 'remove' || verb === 'gold' || verb === 'pack' || verb === 'sale') {
           if (!live) { toProfile(profileId, 'You are not trading.'); return true; }
           var out = '';
           if (verb === 'cancel') { out = tr2.cancel(actorId); }
-          else if (verb === 'ok') { out = tr2.confirm(actorId); }
+          else if (verb === 'agree') { out = tr2.confirm(actorId, parts.length === 3 ? parts[2] : undefined); }
           else if (verb === 'gold') { out = tr2.gold(actorId, parts[2]); }
           // The panel's Buy for the company (#1393). Never typed.
           else if (verb === 'sale') { out = tr2.sale(actorId); }
@@ -46008,6 +47161,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       names no person goes on to the branches below, and /ooc or /roll from
       somebody staff silenced stops here.
     */
+    var commandTools = g.__thornswoodCommandTools;
+    if (commandTools && commandTools.command(cmd, word, parts, profileId, actorId)) { return; }
     var staffCmd = g.__thornswoodStaff;
     if (staffCmd) {
       try {
@@ -46064,6 +47219,11 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
         log('/tp refused profile ' + profileId + ' (roster: ' + src + ', written: ' + written + ')');
         return;
       }
+      var staffLogTp = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogTp && typeof staffLogTp.unproven === 'function') {
+        var unpTp = staffLogTp.unproven(cmd, profileId);
+        if (unpTp) { toProfile(profileId, unpTp); return; }
+      }
       /*
         THE WHOLE REST OF THE LINE, because a place name has spaces in it.
 
@@ -46088,10 +47248,16 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       // The listing above answers whether or not the sweep found anybody. The
       // move is the part that needs a character to move.
       if (!needCharacter()) { return; }
+      if (staffLogTp && staffLogTp.state && staffLogTp.state.frozen[profileId]) {
+        toProfile(profileId, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+        return;
+      }
       try {
         mp.set(actorId, 'locationalData', {
           cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot
         });
+        var stuck = globalThis.__thornswoodStuck;
+        if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
       } catch (e) {
         toProfile(profileId, 'That did not work: ' + e);
         return;
@@ -46158,6 +47324,11 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!isPlaytester(profileId)) {
         toProfile(profileId, word + ' is not yours to run. Ask Patrick to add profile ' + profileId + '.');
         return;
+      }
+      var staffLogGive = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodStaff;
+      if (staffLogGive && typeof staffLogGive.unproven === 'function') {
+        var unpGive = staffLogGive.unproven(cmd, profileId);
+        if (unpGive) { toProfile(profileId, unpGive); return; }
       }
       if (!needCharacter()) { return; }
 
@@ -46264,6 +47435,8 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     // This is deliberately LOCAL. Out of character talk belongs to the scene
     // it interrupts, not to everybody in Skyrim, and a server wide one would
     // be a second general chat inside the game.
+    // The chat box handles both aliases in voice/headlines.js (#4238).
+    // Direct game-server calls still use this handler.
     if (word === '/ooc' || word === '/o') {
       var said = parts.slice(1).join(' ').trim();
       if (!said) {
@@ -46341,18 +47514,19 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       is no line a client can send that produces the same output, because the
       page's own /roll is gone rather than merely discouraged.
 
-      THE SPEC IS THE SAME ONE PEOPLE ALREADY TYPE, deliberately: the number
-      is the number of sides, 6x3 is three of them, and a leading d is
-      dropped because somebody who has rolled dice before types it on reflex.
-      Nobody has to learn anything new.
+      Existing notation stays: the number is the number of sides, 6x3 is
+      three of them, and a leading d is accepted. Count-d-sides notation,
+      such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
       part of a conversation and belongs in the room it happened in.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
-      var spec = parts.slice(1).join('').trim().toLowerCase();
-      spec = spec.replace(/\s+/g, '').replace(/(^|[x*])d/g, '$1');
+      var spec = parts.slice(1).join('').trim().toLowerCase().replace(/\s+/g, '');
+      var notation = /^(\d+)d(\d+)$/.exec(spec);
+      if (notation) { spec = notation[2] + 'x' + notation[1]; }
+      spec = spec.replace(/(^|[x*])d/g, '$1');
       if (!spec) { spec = String(ROLL_DEFAULT_SIDES); }
 
       var rm = /^(\d+)(?:[x*](\d+))?$/.exec(spec);
@@ -46361,7 +47535,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!rm || !isFinite(rsides) || rsides < 1 || rsides > ROLL_MAX_SIDES ||
           !isFinite(rcount) || rcount < 1 || rcount > ROLL_MAX_DICE) {
         toProfile(profileId,
-          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 for three of them. ' +
+          'The number is the sides: /roll 20, /roll 1000, or /roll 6x3 (also /roll 3d6) for three of them. ' +
           'Whole numbers, 1 to ' + ROLL_MAX_SIDES + ', up to ' + ROLL_MAX_DICE + ' dice.');
         return;
       }
@@ -46714,6 +47888,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
     here, so there is one staff test and not a second copy of it.
   */
   g.__thornswoodIsStaff = isStaff;
+  g.__thornswoodCommandRoles = {playtester:isPlaytester,staff:isStaff,admin:isAdmin};
 
   /*
     WHO MAY ADD keep TO /spawn (#2623). Djinn, 17 October: "testers and
@@ -47770,13 +48945,13 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       '        st.thornswoodCuffWhere = 0;',
       '        step("take the cuffs off", function () { if (cuffs) { pc.unequipItem(cuffs, false, true); } });',
       '        step("end the bound idle", function () { sp.Debug.sendAnimationEvent(pc, "OffsetStop"); });',
-      '        step("stop naming fighting held", function () { if (sp.storage.thornswoodControlsHeld) { delete sp.storage.thornswoodControlsHeld.fighting; } });',
-      '        step("give fighting back", function () { sp.Game.enablePlayerControls(false, true, false, false, false, false, false, false, 0); });',
+      '        step("stop naming fighting held", function () { var held = sp.storage.thornswoodControlsHeld || {}; var left = String(held.fighting || "").split(",").filter(function (r) { return !!r && r !== "cuffed"; }); if (left.length) { held.fighting = left.join(","); } else { delete held.fighting; } sp.storage.thornswoodControlsHeld = held; });',
+      '        step("give fighting back", function () { var held = sp.storage.thornswoodControlsHeld || {}; if (!held.fighting) { sp.Game.enablePlayerControls(false, true, false, false, false, false, false, false, 0); } });',
       '        return;',
       '      }',
       '      st.thornswoodCuffBound = true;',
       '      st.thornswoodCuffWhere = where;',
-      '      step("name fighting held", function () { var held = sp.storage.thornswoodControlsHeld || {}; held.fighting = "cuffed"; sp.storage.thornswoodControlsHeld = held; });',
+      '      step("name fighting held", function () { var held = sp.storage.thornswoodControlsHeld || {}; var r = String(held.fighting || "").split(",").filter(function (x) { return !!x; }); if (r.indexOf("cuffed") < 0) { r.push("cuffed"); } held.fighting = r.join(","); sp.storage.thornswoodControlsHeld = held; });',
       '      step("turn fighting off", function () { sp.Game.disablePlayerControls(false, true, false, false, false, false, false, false, 0); });',
       '      step("put the weapon away", function () { if (pc.isWeaponDrawn()) { pc.sheatheWeapon(); } });',
       '      step("lock the cuffs on", function () { if (cuffs && pc.getItemCount(cuffs) > 0) { pc.equipItem(cuffs, true, true); } });',
@@ -49020,6 +50195,65 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       return out;
     }
 
+    /* A staff repair is prepared without writes, kits or profession changes.
+       Every carried unit below sound is repaired. Stronger pieces retain
+       their condition, and the worn record must identify the exact old extra. */
+    function prepareTestingRepair(inventory, equipment) {
+      function no(line) { return { ok: false, line: line }; }
+      if (!inventory || !Array.isArray(inventory.entries) || !equipment ||
+          !equipment.inv || !Array.isArray(equipment.inv.entries)) {
+        return no('The server could not read your inventory and equipment. Nothing was requested.');
+      }
+      function valid(entry) {
+        return entry && Number.isInteger(entry.baseId) && entry.baseId > 0 && entry.baseId <= 0xffffffff &&
+          Number.isInteger(entry.count) && entry.count > 0 && entry.count <= 0xffffffff;
+      }
+      if (!inventory.entries.every(valid) || !equipment.inv.entries.every(valid)) {
+        return no('The saved inventory or equipment is invalid. Nothing was requested.');
+      }
+      function identity(entry) {
+        function ordered(value) {
+          if (Array.isArray(value)) { return value.map(ordered); }
+          if (!value || typeof value !== 'object') { return value; }
+          var sorted = {};
+          Object.keys(value).sort().forEach(function (key) { sorted[key] = ordered(value[key]); });
+          return sorted;
+        }
+        var extra = copy(entry);
+        delete extra.count; delete extra.worn; delete extra.wornLeft;
+        return JSON.stringify(ordered(extra));
+      }
+      var nextInventory = JSON.parse(JSON.stringify(inventory));
+      var nextEquipment = JSON.parse(JSON.stringify(equipment));
+      var identities = inventory.entries.map(identity), used = {};
+      var items = 0, stacks = 0;
+      for (var i = 0; i < inventory.entries.length; i++) {
+        var entry = inventory.entries[i];
+        if (pieceKind(entry.baseId) && conditionOf(entry) < CONDITION.sound) {
+          nextInventory.entries[i] = withCondition(entry, CONDITION.sound);
+          items += entry.count; stacks++;
+        }
+      }
+      if (!Number.isSafeInteger(items) || items > 0xffffffff) { return no('Too much equipment for one repair. Nothing was requested.'); }
+      for (var w = 0; w < equipment.inv.entries.length; w++) {
+        var worn = equipment.inv.entries[w];
+        if (!pieceKind(worn.baseId)) { continue; }
+        var key = identity(worn), matching = [];
+        for (var j = 0; j < identities.length; j++) {
+          if (identities[j] === key && inventory.entries[j].count - (used[j] || 0) >= worn.count) { matching.push(j); }
+        }
+        if (matching.length !== 1) {
+          return no('The worn equipment record does not identify one carried stack. Change equipment and try again.');
+        }
+        var index = matching[0]; used[index] = (used[index] || 0) + worn.count;
+        var renamed = nextInventory.entries[index];
+        if (renamed.name === undefined) { delete nextEquipment.inv.entries[w].name; }
+        else { nextEquipment.inv.entries[w].name = renamed.name; }
+      }
+      return { ok: true, items: items, stacks: stacks,
+        inventory: nextInventory, equipment: nextEquipment };
+    }
+
     /** The entries with n units of entries[i] set to that condition. */
     function setUnits(entries, i, n, cond) {
       var out = entries.map(copy);
@@ -49301,13 +50535,28 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     /*
       WHAT THE PANEL AND THE INVENTORY KEY SEND, as the words after /repair.
       Nothing, the key: draw the panel. 'mend <base in hex> <condition>
-      <name>', a row's button: mend that piece, then draw the panel again.
+      <name>' is retained for old panels. New buttons send mend-name-v1 with
+      one percent-encoded name, keeping every space before the same repair.
       Answers the line to say in the chat, or '' for none.
     */
     function panel(actorId, words) {
       words = words || [];
       var line = '';
-      if (String(words[0] || '').toLowerCase() === 'mend') {
+      var action = String(words[0] || '').toLowerCase();
+      if (action === 'mend-name-v1') {
+        var name = null;
+        if (words.length === 4 && /^[0-9a-f]{1,8}$/i.test(String(words[1])) &&
+            parseInt(words[1], 16) > 0 && /^(0|[1-9][0-9]{0,2})$/.test(String(words[2])) &&
+            Number(words[2]) <= CONDITION.highest && String(words[3]).length <= 8000) {
+          try { name = decodeURIComponent(String(words[3])); } catch (e) { name = null; }
+        }
+        if (!name) { line = 'That repair request could not be read. Open the repair panel again.'; }
+        else {
+          line = repairWithKit(actorId, {
+            baseId: parseInt(words[1], 16), cond: Number(words[2]), name: name
+          }).line;
+        }
+      } else if (action === 'mend') {
         line = repairWithKit(actorId, {
           baseId: parseInt(String(words[1] || ''), 16) || 0,
           cond: Number(words[2]),
@@ -49630,6 +50879,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       CONDITION: CONDITION, DULL_PER_DAY: DULL_PER_DAY, DAY_MS: DAY_MS,
       BREAK_CHANCE: BREAK_CHANCE, WEAR_PER_HIT: WEAR_PER_HIT, KITS: kits,
       pieceKind: pieceKind, conditionOf: conditionOf, withCondition: withCondition,
+      prepareTestingRepair: prepareTestingRepair,
       repairTo: repairTo, repairWithKit: repairWithKit, view: view, panel: panel,
       opened: opened, hit: hit, onHit: onHit, pressed: pressed, loading: loading
     };
@@ -50250,11 +51500,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var at = clock && Number(clock.at) > 0 ? Number(clock.at) : now;
       var days = Math.max(0, Math.floor((now - at) / DAY_MS));
       var from = clock && Number(clock.at) > 0 ? Math.max(0, Number(clock.days) || 0) : days;
-      var turned = Math.max(0, days - from);
-      var cold = false;
-      try { cold = !!api.cold(containerId); } catch (e) { cold = false; }
-      var spoiling = cold ? 0 : turned - winterDays(at, from, days);
-      var res = aged(entries, spoiling);
+      var time = storageTime(containerId, at, from, now);
+      var res = aged(entries, time.turned);
       if (!same(res.entries, entries) && !api.setInventory(containerId, res.entries)) {
         return null;
       }
@@ -50265,9 +51512,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       }
       if (res.gone.length) {
         api.log('spoilage:', Number(containerId).toString(16), 'spoiled', JSON.stringify(res.gone), 'after',
-                spoiling, 'day(s)');
+                time.turned, 'day(s)');
       }
-      return { turned: spoiling, cold: cold, gone: res.gone };
+      return { turned: time.turned, cold: time.cold, gone: res.gone };
+    }
+
+    // Shared calculation only: the caller commits the clock with its goods.
+    // Guild shelves use the same place/season rules as a physical chest.
+    function storageTime(placeId, at, from, now) {
+      var days = Math.max(0, Math.floor((now - at) / DAY_MS));
+      var cold = false;
+      try { cold = !!api.cold(placeId); } catch (e) { cold = false; }
+      return { clock: { at: at, days: days }, cold: cold,
+        turned: cold ? 0 : Math.max(0, days - from) - winterDays(at, from, days) };
     }
 
     /*
@@ -50434,7 +51691,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return {
       DAY_MS: DAY_MS, PASS_MS: PASS_MS, GAP_MS: GAP_MS, SMOKE_PER_WOOD: SMOKE_PER_WOOD,
       lifeOf: lifeOf, leftOf: leftOf, keptOf: keptOf, bareName: bareName, ownName: ownName,
-      aged: aged, pass: pass, opened: opened, pressed: pressed, outputName: outputName,
+      aged: aged, storageTime: storageTime, pass: pass, opened: opened, pressed: pressed, outputName: outputName,
       inputRefusal: inputRefusal, view: view, preserve: preserve, panel: panel, mayPreserve: mayPreserve
     };
   }
@@ -50707,6 +51964,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     (doc.pieces || []).forEach(function (r) { if (r && r.key) { rows[r.key] = r; } });
     var book = api.readRegister() || {};
     var pieces = (book && typeof book.pieces === 'object' && book.pieces) ? book.pieces : {};
+    // Pieces taken out of a pack and not yet set down, waiting on the pack's save (#4901).
+    var debits = (book && Array.isArray(book.debits)) ? book.debits : [];
     // In memory only: a piece in somebody's hands, by actor, { ref, until }.
     var carrying = {};
 
@@ -50720,8 +51979,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     function carryMs() { return num(limits.carryMs, 60000); }
     function turnStep() { return num(limits.turnStep, 45); }
 
+    /* Answers whether the register was written. */
     function save() {
-      api.writeRegister({ pieces: pieces });
+      return api.writeRegister({ pieces: pieces, debits: debits }) !== false;
     }
 
     function piecesIn(building) {
@@ -50730,6 +51990,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         if (own(pieces, k) && pieces[k] && pieces[k].building === building) { out.push(pieces[k]); }
       }
       return out;
+    }
+
+    /* Pieces for that building still waiting on a pack's save, which the cap counts too. */
+    function waitingIn(building) {
+      return debits.filter(function (d) { return d && d.data && d.data.building === building; }).length;
     }
 
     /* The building the person stands in, when it is one the property block knows. */
@@ -50786,7 +52051,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var c = may ? carryOf(actorId) : null;
       return {
         b: building, n: building ? api.nameOf(building) : '', may: may,
-        p: may ? piecesIn(building).map(function (x) { return hex(x.ref); }) : [],
+        p: may ? piecesIn(building).filter(function (x) { return !!x.ref; }).map(function (x) { return hex(x.ref); }) : [],
         c: c ? hex(c.ref) : '', left: c ? Math.max(0, c.until - api.now()) : 0
       };
     }
@@ -50825,9 +52090,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       if (why) { return why; }
       var row = own(rows, key) ? rows[key] : null;
       if (!row || !typeOn(row.type)) { return 'That is not furniture that can be set down.'; }
+      if (!api.placementReady()) { return 'Furniture placement is unavailable just now.'; }
       if (!(api.count(actorId, row.itemDesc) > 0)) { return 'You carry no ' + row.name + '.'; }
       var cap = capOf(building);
-      if (piecesIn(building).length >= cap) {
+      if (piecesIn(building).length + waitingIn(building) >= cap) {
         return api.nameOf(building) + ' already has ' + cap + ' pieces set down, which is all it takes.';
       }
       var bad = api.baseRefusal(row);
@@ -50835,25 +52101,96 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var pos = inFront(actorId);
       if (!pos) { return 'Could not tell where you stand. Try again.'; }
       var angle = wrap(num(api.angleOf(actorId)[2], 0) + 180);
-      if (!api.take(actorId, row.itemDesc)) { return 'Could not take the ' + row.name + ' out of your pack.'; }
-      var id = 0;
-      try {
-        id = api.place(row.base);
-        stand(id, row.base, actorId, pos, angle);
-      } catch (e) {
-        api.log('furniture: could not set down', row.key, 'in', building + ':', e);
-        if (id) { try { api.remove(id); } catch (e2) { } }
-        api.give(actorId, row.itemDesc);
-        return 'The ' + row.name + ' could not be set down. It is back in your pack.';
-      }
-      pieces[hex(id)] = { ref: id, key: row.key, base: row.base, building: building,
-                          pos: pos.map(function (v) { return Math.round(v * 10) / 10; }), angle: angle };
-      save();
-      api.log('furniture:', api.who(actorId), 'set down a', row.name, hex(id), 'in', api.nameOf(building),
-              '(' + building + ') at', pieces[hex(id)].pos.join(','), 'turned', angle);
-      lookAll(building);
-      return '';
+      // Set down only once the pack's take is saved (#4901): landPiece.
+      var r = packs.begin(actorId, function (entries) { return api.cutOne(entries, row.itemDesc) || ('You carry no ' + row.name + '.'); },
+                          'piece', { key: row.key, building: building, angle: angle,
+                                     pos: pos.map(function (v) { return Math.round(v * 10) / 10; }), by: api.who(actorId) });
+      if (r.why) { return r.why; }
+      return r.line && r.line !== PIECE_DOWN ? r.line : '';
     }
+
+    var PIECE_DOWN = 'It is set down.';
+
+    /*
+      A piece set down, once its item is saved out of the pack (#4901). Its
+      place was fixed when it was asked for. One that cannot be stood just
+      now stays in the register, the way standAll keeps one with nothing to
+      stand next to, and is stood at the next start: the item is out of the
+      pack for good, so the piece is never dropped.
+    */
+    function landPiece(d, landed) {
+      var w = d.data;
+      var row = own(rows, w.key) ? rows[w.key] : null;
+      var name = row ? row.name : w.key;
+      if (!landed) {
+        return { line: 'Your pack was not saved with the ' + name + ' out of it, so it was not set down.' };
+      }
+      return { name: name, piece: { ref: 0, marker: d.marker, key: w.key, base: row ? row.base : w.base,
+                                     building: w.building, pos: w.pos, angle: w.angle } };
+    }
+
+    // A paid piece is durable before it gets a reference. Bind the disabled
+    // reference before moving and enabling it in the building.
+    var pendingPaid = {};
+    function standPaidPiece(k, preferred) {
+      var piece = pieces[k];
+      pendingPaid[piece.marker] = k;
+      if (!piece.base) { return false; }
+      var anchor = preferred && api.cellOf(preferred) === piece.building ? preferred : api.anchorIn(piece.building);
+      if (!anchor) { return false; }
+      try {
+        var id = piece.ref;
+        if (!(id && api.refStands(id, piece.base) && api.placementMarker(id) === piece.marker)) {
+          id = api.stagePlacement(piece.base, piece.marker);
+        }
+        if (id !== piece.ref) {
+          if (own(pieces, hex(id)) && pieces[hex(id)].marker !== piece.marker) {
+            throw new Error('the placed reference already belongs to another registered piece');
+          }
+          var next = Object.assign({}, pieces);
+          delete next[k];
+          next[hex(id)] = Object.assign({}, piece, { ref: id });
+          if (!api.writePackRegister({ pieces: next, debits: debits })) { return false; }
+          pieces = next;
+          piece = next[hex(id)];
+          pendingPaid[piece.marker] = hex(id);
+        }
+        if (!api.refAt(id, piece.base, piece.building, piece.pos, piece.angle)) {
+          stand(id, piece.base, anchor, piece.pos, piece.angle);
+        }
+        if (!api.refAt(id, piece.base, piece.building, piece.pos, piece.angle)) {
+          throw new Error('the disabled furniture did not reach its registered position');
+        }
+        api.enablePlacement(id);
+        delete pendingPaid[piece.marker];
+      } catch (e) {
+        api.log('furniture: could not stand paid piece', piece.key + ':', e);
+        return false;
+      }
+      lookAll(piece.building);
+      return true;
+    }
+
+    function commitPackDebit(land, row, paid, actor) {
+      var result = land(row, paid);
+      var next = Object.assign({}, pieces);
+      var waiting = debits.filter(function (debit) { return debit !== row; });
+      var k = 'w' + row.marker;
+      if (paid) { next[k] = result.piece; }
+      if (!api.writePackRegister({ pieces: next, debits: waiting })) { return ''; }
+      pieces = next;
+      debits = waiting;
+      if (!paid) { return result.line; }
+      if (standPaidPiece(k, actor)) {
+        api.log('furniture:', row.data.by, 'set down a', result.name, 'in', api.nameOf(row.data.building));
+        return PIECE_DOWN;
+      }
+      return 'The ' + result.name + ' is kept in the register and will stand once it can be placed.';
+    }
+
+    var packs = api.packFirst(function () { return debits; }, function () {
+      return api.writePackRegister({ pieces: pieces, debits: debits });
+    }, { piece: landPiece }, commitPackDebit);
 
     /* The piece under their crosshair, when they may touch it: { piece } or { why }. */
     function reachable(actorId, refHex) {
@@ -50960,6 +52297,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         if (!own(pieces, k)) { continue; }
         var p = pieces[k];
         if (!p || !p.base || !p.building || !p.pos) { continue; }
+        if (p.marker) {
+          if (p.ref && api.refAt(p.ref, p.base, p.building, p.pos, p.angle) &&
+              api.placementMarker(p.ref) === p.marker && api.placementEnabled(p.ref)) {
+            kept++;
+          } else {
+            var localRef = p.ref && api.cellOf(p.ref) === p.building ? p.ref : 0;
+            if (!localRef && !api.anchorIn(p.building)) {
+              api.log('furniture: nothing to stand', p.key, k, 'next to in', p.building);
+            }
+            if (standPaidPiece(k, localRef)) { stood++; }
+          }
+          continue;
+        }
         if (api.refAt(p.ref, p.base, p.building, p.pos, p.angle)) { kept++; continue; }
         var id = api.refStands(p.ref, p.base) ? p.ref : 0;
         var anchor = (id && api.cellOf(id) === p.building) ? id : api.anchorIn(p.building);
@@ -51011,6 +52361,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return {
       command: command, look: look, lineFor: lineFor, view: view, place: place, move: move,
       down: down, turn: turn, pick: pick, standAll: standAll, refusal: refusal, capOf: capOf,
+      settle: function () {
+        packs.settle();
+        for (var marker in pendingPaid) {
+          var key = pendingPaid[marker];
+          if (own(pieces, key)) { standPaidPiece(key, 0); }
+          else { delete pendingPaid[marker]; }
+        }
+      },
       pieces: function () { return pieces; }, carrying: function () { return carrying; }
     };
   }
@@ -51214,15 +52572,243 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     try { mp.set(actorId, 'inventory', { entries: entries }); return true; } catch (e) { return false; }
   }
 
+  function admitPackDebit(actor, change) {
+    var merchants = g.__thornswoodMerchantTrade;
+    return merchants ? merchants.withQuestInventoryMutation(actor, change) : null;
+  }
+
+  // -- pack first (#4901), begin --
+  /*
+    Write the intent before taking from a pack. The engine saves the
+    inventory and an operation marker together. The receipt identifies the
+    character and sequence, and the marker identifies the specific debit.
+    This register keeps one pending debit and one fixed-size marker per
+    character. Only a later admitted debit can replace the marker after the
+    earlier intent has finished. Completion replaces the durable intent
+    with the finished register state before making that state visible.
+  */
+  function packFirst(mp, book, keep, landers, tell, markerField, commit, nextMarker, admit) {
+    var registered = false;
+    try {
+      mp.makeProperty(markerField, {
+        isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+      });
+      registered = true;
+    } catch (err) { tell(0, '', err); }
+
+    function sequenceOf(receipt, who) {
+      var doc = JSON.parse(receipt);
+      if (doc === null) { return 0; }
+      if (!doc || doc.actor !== who.desc || doc.profile !== who.profileId ||
+          !Number.isSafeInteger(doc.sequence) || doc.sequence < 1) {
+        throw new Error('the pack receipt belongs to a different character or has an invalid sequence');
+      }
+      return doc.sequence;
+    }
+    function ready() {
+      return registered && ['compareAndSetInventoryAndProperty', 'getInventoryReceipt',
+        'getSavedInventoryReceipt', 'getActorRuntimeIdentity', 'getNpcAIState',
+        'getDescFromId', 'getIdFromDesc', 'get'].every(function (k) { return typeof mp[k] === 'function'; });
+    }
+    function person(actorId) {
+      var ai = mp.getNpcAIState(actorId);
+      var desc = mp.getDescFromId(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!ai || ai.isHuman !== true || !Number.isInteger(ai.profileId) || ai.profileId < 1 ||
+          !Number.isSafeInteger(ai.lifeGeneration) || ai.lifeGeneration < 0 ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) {
+        return null;
+      }
+      return { desc: desc, profileId: ai.profileId, life: ai.lifeGeneration, runtime: runtime };
+    }
+    function validMarker(value) {
+      return typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    }
+    function readMarker(id) {
+      var value = mp.get(id, markerField);
+      if (value == null || validMarker(value)) { return value == null ? null : value; }
+      throw new Error('the pack debit marker is invalid');
+    }
+    function sameOwner(row, who) {
+      return row && row.human && row.human.desc === who.desc && row.human.profileId === who.profileId;
+    }
+    function wellFormed(row) {
+      return !!row && Object.prototype.hasOwnProperty.call(landers, row.kind) &&
+        !!row.human && typeof row.human.desc === 'string' && Number.isInteger(row.human.profileId) &&
+        row.human.profileId > 0 && Number.isSafeInteger(row.human.life) && row.human.life >= 0 &&
+        Number.isSafeInteger(row.sequence) && row.sequence > 0 && validMarker(row.marker) &&
+        (row.previousMarker === null || validMarker(row.previousMarker)) && Array.isArray(row.taken);
+    }
+    function settleOne(row) {
+      if (!wellFormed(row)) { return ''; }
+      var id = mp.getIdFromDesc(row.human.desc) >>> 0;
+      if (!id) { return ''; }
+      var who = person(id);
+      if (!who || !sameOwner(row, who)) { return ''; }
+      var mark = readMarker(id);
+      var saved = sequenceOf(mp.getSavedInventoryReceipt(id), who);
+      var live = sequenceOf(mp.getInventoryReceipt(id), who);
+      if (mark === row.marker && saved >= row.sequence && live >= saved) {
+        return commit(landers[row.kind], row, true, id);
+      }
+      if (mark === row.previousMarker && who.life === row.human.life && live === saved && saved >= row.sequence - 1) {
+        return commit(landers[row.kind], row, false, id);
+      }
+      return '';
+    }
+    function begin(actorId, cut, kind, data) {
+      if (!ready()) { return { why: 'That is not running on this server. Nothing was taken.' }; }
+      try {
+        var admitted = admit(actorId, function (owner, stillActive) {
+          return { debit: beginAdmitted(actorId, cut, kind, data, owner, stillActive) };
+        });
+        if (admitted && admitted.debit) { return admitted.debit; }
+      } catch (e) {
+        tell(0, '', e);
+      }
+      return { why: 'Your pack is busy or could not be checked. Nothing was taken.' };
+    }
+    function beginAdmitted(actorId, cut, kind, data, owner, stillActive) {
+      var who, receipt, before, previousMarker, sequence, marker;
+      try {
+        who = person(actorId);
+        if (!who || !owner || owner.desc !== who.desc || owner.profileId !== who.profileId || !stillActive()) {
+          return { why: 'Your pack owner could not be verified. Nothing was taken.' };
+        }
+        if (book().some(function (row) { return sameOwner(row, who); })) {
+          return { why: 'The server is still writing down your last take. Nothing was taken.' };
+        }
+        receipt = mp.getInventoryReceipt(actorId);
+        if (mp.getSavedInventoryReceipt(actorId) !== receipt) {
+          return { why: 'Your pack is still being saved after your last change. Try again in a moment. Nothing was taken.' };
+        }
+        sequence = sequenceOf(receipt, who) + 1;
+        if (!Number.isSafeInteger(sequence)) { throw new Error('the pack receipt sequence is exhausted'); }
+        previousMarker = readMarker(actorId);
+        marker = nextMarker();
+        var inv = mp.get(actorId, 'inventory');
+        before = JSON.parse(JSON.stringify((inv && inv.entries) || []));
+      } catch (e) {
+        tell(0, '', e);
+        return { why: 'Your pack could not be read. Nothing was taken.' };
+      }
+      var out = cut(JSON.parse(JSON.stringify(before)));
+      if (typeof out === 'string') { return { why: out }; }
+      var row = { kind: kind, data: data, human: { desc: who.desc, profileId: who.profileId, life: who.life },
+                  sequence: sequence, marker: marker, previousMarker: previousMarker, taken: out.taken, at: Date.now() };
+      if (!validMarker(marker) || marker === previousMarker) {
+        return { why: 'The server could not identify that debit. Nothing was taken.' };
+      }
+      var rows = book();
+      rows.push(row);
+      if (!keep()) {
+        rows.splice(rows.indexOf(row), 1);
+        return { why: 'The server could not write that down. Nothing was taken.' };
+      }
+      if (!stillActive()) { return { line: '' }; }
+      try {
+        mp.compareAndSetInventoryAndProperty(actorId, { entries: before }, receipt, { entries: out.entries },
+          sequence, who.profileId, { name: markerField, expected: previousMarker, replacement: marker,
+                                   expectedLifeGeneration: who.life, expectedRuntimeIdentity: who.runtime });
+      } catch (e2) {
+        tell(0, '', e2);
+      }
+      try { return { line: settleOne(row) }; }
+      catch (e3) {
+        tell(0, '', e3);
+        return { line: '' };
+      }
+    }
+    function settle() {
+      if (!ready()) { return; }
+      var rows = book().slice();
+      for (var i = 0; i < rows.length; i++) {
+        var line = '';
+        try { line = settleOne(rows[i]); }
+        catch (e) { tell(0, '', e); }
+        if (line) { tell(rows[i].human.profileId, line); }
+      }
+    }
+    return { begin: begin, settle: settle, ready: ready };
+  }
+  // -- pack first (#4901), end --
+
+  /* One furniture item out of a list of pack entries, for packFirst: { entries, taken }, or null when none is there. */
+  function cutOne(entries, itemDesc) {
+    var baseId = idOf(itemDesc) >>> 0;
+    if (!baseId) { return null; }
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (!e || (e.baseId >>> 0) !== baseId || !(Number(e.count) > 0)) { continue; }
+      e.count = Number(e.count) - 1;
+      if (e.count <= 0) { entries.splice(i, 1); }
+      return { entries: entries, taken: [{ baseId: baseId, count: 1 }] };
+    }
+    return null;
+  }
+
+  /* A line to a person in the world, from a piece that landed or let go after they asked. */
+  function tellPerson(pid, line, err) {
+    if (err) { plog('furniture: a take out of a pack:', err); return; }
+    if (!line) { return; }
+    var online = [];
+    try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { online = []; }
+    for (var i = 0; i < online.length; i++) {
+      var pidHere = 0;
+      try { pidHere = Number(mp.get(online[i], 'profileId')) || 0; } catch (e2) { pidHere = 0; }
+      if (pidHere !== Number(pid)) { continue; }
+      if (typeof notify === 'function') {
+        try { notify(online[i], line); } catch (e3) { plog('furniture: could not log a line to', hex(online[i]) + ':', e3); }
+      }
+      if (typeof say === 'function') {
+        try { say(online[i], line); } catch (e4) { plog('furniture: could not say a line to', hex(online[i]) + ':', e4); }
+      }
+      return;
+    }
+  }
+
+  var placementField = 'thornswoodFurniturePlacement';
+  var placementRegistered = false;
+  try {
+    mp.makeProperty(placementField, {
+      isVisibleByOwner: false, isVisibleByNeighbors: false, updateOwner: '', updateNeighbor: ''
+    });
+    placementRegistered = true;
+  } catch (err) { plog('could not register furniture placement markers:', err); }
+
   g.__thornswoodFurniture = create({
     catalog: doc,
     now: function () { return Date.now(); },
     log: plog,
     readRegister: function () { return furnitureRead.doc; },
     writeRegister: function (book) {
-      try { storeWrite(registerPath(), JSON.stringify(book, null, 1), furnitureRead); }
-      catch (e) { plog('furniture: could not write', registerPath() + ':', e); }
+      try { storeWrite(registerPath(), JSON.stringify(book, null, 1), furnitureRead); return true; }
+      catch (e) { plog('furniture: could not write', registerPath() + ':', e); return false; }
     },
+    writePackRegister: function (book) {
+      try {
+        if (furnitureRead.bad) { throw new Error('the furniture register could not be read at startup'); }
+        var file = registerPath();
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        mp.writeFileWhole(file, JSON.stringify(book, null, 1));
+        return true;
+      } catch (e) { plog('furniture: could not commit a placement:', e); return false; }
+    },
+    packFirst: function (book, keep, landers, commit) {
+      return packFirst(mp, book, keep, landers, tellPerson, 'thornswoodFurnitureDebit', commit, require('crypto').randomUUID, admitPackDebit);
+    },
+    placementReady: function () {
+      return placementRegistered && typeof mp.writeFileWhole === 'function' &&
+        typeof mp.placeDisabledFurniture === 'function';
+    },
+    placementMarker: function (id) { return mp.get(id, placementField); },
+    placementEnabled: function (id) { return mp.get(id, 'isDisabled') === false; },
+    stagePlacement: function (baseDesc, marker) {
+      return mp.placeDisabledFurniture(idOf(baseDesc) >>> 0, marker);
+    },
+    enablePlacement: function (id) { mp.set(id, 'isDisabled', false); },
+    cutOne: cutOne,
+    actorOf: function (desc) { try { return mp.getIdFromDesc(desc) >>> 0; } catch (e) { return 0; } },
     cellOf: cellOf,
     posOf: function (id) { try { return mp.get(id, 'pos') || null; } catch (e) { return null; } },
     angleOf: function (id) { try { return mp.get(id, 'angle') || null; } catch (e) { return null; } },
@@ -51328,6 +52914,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   });
 
   try { g.__thornswoodFurniture.standAll(); } catch (e) { plog('furniture: standing the pieces failed:', e); }
+
+  // A piece is set down once its item is saved out of the pack (#4901): see packFirst.
+  if (g.__thornswoodFurniturePackTimer) {
+    try { clearInterval(g.__thornswoodFurniturePackTimer); } catch (e) { plog('furniture: the old pack timer would not stop:', e); }
+  }
+  g.__thornswoodFurniturePackTimer = setInterval(
+    guard('furniturePackTick', g.__thornswoodFurniture.settle), 1000);
 })();
 // ==== end thornswood furniture ====
 
@@ -51411,14 +53004,15 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       chosen so the first version would be felt at the end of a long evening
       rather than the end of an hour. An evening is not how anybody plays
       this: a session is two hours and nothing ever moved far enough to
-      matter. So food empties in two hours and twenty four minutes, drink in
-      an hour and twelve, and rest in eight hours, which is a meter that is
-      still about sleeping rather than about eating.
+      matter. That made food empty in two hours and twenty four minutes,
+      drink in an hour and twelve, and rest in eight hours.
 
-      The proportions are Blade's and are untouched: drink goes twice as fast
-      as food, and rest is over three times food.
+      The approved tuning for #6481 cuts only the base food and drink drain
+      by 20%: food now empties in three hours and drink in an hour and a half.
+      Drink still goes twice as fast as food. Rest keeps its eight-hour clock,
+      and the cold multipliers stay the same.
     */
-    drain: { food: 2.5 * 100 / 6, drink: 2.5 * 100 / 3, rest: 2.5 * 100 / 20 },
+    drain: { food: 2 * 100 / 6, drink: 2 * 100 / 3, rest: 2.5 * 100 / 20 },
 
     /*
       TEMPERATURE, AND IT IS THE ONE METER THAT IS NOT A CLOCK.
@@ -52202,6 +53796,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   function read(actorId) {
     var v = null;
     try { v = mp.get(actorId, NEEDS_PROPERTY); } catch (e) { v = null; }
+    return normalizedNeeds(v);
+  }
+
+  function normalizedNeeds(v) {
     if (!v || typeof v !== 'object') { return null; }
     return {
       food: clamp(v.food), drink: clamp(v.drink), rest: clamp(v.rest),
@@ -52285,6 +53883,61 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /*
+    An explicit testing change brings every meter to the same clock, overrides
+    one value, and commits once. Existing malformed meters are refused rather
+    than silently replaced by read()'s compatibility defaults. Only a genuinely
+    absent record is initialized, because the caller explicitly asked to set it.
+  */
+  function setForTesting(actorId, key, value) {
+    if (['food', 'drink', 'rest', 'temp'].indexOf(key) === -1 ||
+        typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+      return { ok: false, why: 'Choose a needs value from 0 to 100.' };
+    }
+    if (inCreation(actorId)) { return { ok: false, why: 'Finish creating your character before changing needs.' }; }
+    var raw;
+    try { raw = mp.get(actorId, NEEDS_PROPERTY); }
+    catch (e) { return { ok: false, why: 'The server could not read those needs. Nothing changed.' }; }
+    var now = Date.now();
+    if (raw === undefined || raw === null) { raw = fresh(); raw.at = now; }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+        ['food', 'drink', 'rest', 'temp'].some(function (meter) {
+          return typeof raw[meter] !== 'number' || !Number.isFinite(raw[meter]) || raw[meter] < 0 || raw[meter] > 100;
+        }) || typeof raw.at !== 'number' || !Number.isFinite(raw.at) || raw.at <= 0 || raw.at > now) {
+      return { ok: false, why: 'The saved needs are invalid or unavailable. Nothing changed.' };
+    }
+    var normalized = normalizedNeeds(raw), arriving = !here[actorId] && onlineNow(actorId);
+    var projected;
+    try {
+      var api = g.__thornswoodNeeds;
+      projected = api && api.ignoresNeeds && api.ignoresNeeds(actorId)
+        ? { needs: normalized, changed: false }
+        : projectNeeds(normalized, now, arriving, projectionEnvironment(actorId, true));
+    }
+    catch (e) { return { ok: false, why: 'The server could not read the needs context. Nothing changed.' }; }
+    // Preserve metadata this operation did not change, including fields added
+    // by another module. Apply exactly the canonical elapsed-time changes.
+    var next = Object.assign({}, raw);
+    Object.keys(projected.needs).forEach(function (field) {
+      if (JSON.stringify(projected.needs[field]) !== JSON.stringify(normalized[field])) {
+        next[field] = projected.needs[field];
+      }
+    });
+    next[key] = value;
+    next.at = now;
+    if (!write(actorId, next)) { return { ok: false, why: 'The server could not save those needs. Nothing changed.' }; }
+    if (arriving) { here[actorId] = true; }
+    /* Character refresh asks settle/view again. During this synchronous
+       delivery it must see the committed snapshot, not charge a few more
+       milliseconds and produce a second authoritative needs write. */
+    testingSnapshot[actorId] = next;
+    try {
+      projectionEffects(actorId, projected, true);
+      pushEffects(actorId, true);
+    } finally { delete testingSnapshot[actorId]; }
+    return { ok: true, from: raw[key], to: value };
+  }
+
+  /*
     Whether somebody is still making their character. The chargen block's own
     answer, through the global the way the character block reaches it, and no
     answer counts as not in creation, so a missing block never freezes anybody.
@@ -52333,9 +53986,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     land on the same number. The tick below only exists to make the change
     visible and to notice a band crossing; the arithmetic does not need it.
   */
+  var testingSnapshot = {};
   function settle(actorId, now) {
+    if (testingSnapshot[actorId]) { return Object.assign({}, testingSnapshot[actorId]); }
     now = now || Date.now();
     var n = read(actorId);
+    // Pausing the clock at its source preserves the actual meters. It does
+    // not fill them, and disabling the mode cannot charge the skipped time.
+    if (ignoresNeeds(actorId)) {
+      if (!n) { n = fresh(); }
+      n.at = now;
+      if (!write(actorId,n)) { throw new Error('The paused needs clock could not be saved.'); }
+      return n;
+    }
     var arriving = !here[actorId] && onlineNow(actorId);
     if (arriving) { here[actorId] = true; }
     /*
@@ -52365,9 +54028,26 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
     if (!n) { n = fresh(); write(actorId, n); return n; }
 
+    var projected = projectNeeds(n, now, arriving, projectionEnvironment(actorId));
+    if (!projected.changed) { return projected.needs; }
+    write(actorId, projected.needs);
+    projectionEffects(actorId, projected);
+    return projected.needs;
+  }
+
+  /*
+    Stage the existing elapsed-time calculation without saving needs or sending
+    effects. The supplied environment owns all outside reads: the ordinary
+    path retains its existing character migration and bard-cache behavior.
+    Callers preparing a staff change must supply read-only context instead.
+    Helpers are asked at their original points, including warmth after crashes.
+    The input stays untouched; event flags are delivered only after a save.
+  */
+  function projectNeeds(before, now, arriving, environment) {
+    var n = Object.assign({}, before);
     var away = now - n.at;
     var hours = (now - n.at) / 3600000;
-    if (hours <= 0) { return n; }
+    if (hours <= 0) { return { needs: n, changed: false }; }
     // A session that has been away for a week does not starve to death twice
     // over; the meters bottom out at 0 anyway, and this keeps the arithmetic
     // sane for anything that reads the difference.
@@ -52396,7 +54076,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
     var restRate = NEEDS.drain.rest;
     if (n.worked && (now - n.worked) < NEEDS.workFor) {
-      restRate = restRate * workMultiplier(actorId);
+      restRate = restRate * environment.workMultiplier();
     }
     /*
       THE TIME AWAY GAINS NO REST (#1764). On an arrival n.resting is still
@@ -52408,7 +54088,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       may. The time away drains; the fill for the beds that give it is
       arrived(), below, and the beds' first sight of them gets them up.
     */
-    var gain = arriving ? 0 : restingGain(actorId, n);
+    var gain = arriving ? 0 : environment.restingGain(n);
     /*
       A DRUG HOLDS THE REST DRAIN AT ZERO while its window lasts (#1382), for
       the part of this stretch before drugUntil. Resting still gains.
@@ -52484,19 +54164,25 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       toward wherever they stand now, from their game's first /place.
     */
     if (!arriving) {
-      var target = warmthTarget(actorId, n);
-      // Winter out under the sky cools a quarter faster (#3144), so its half
-      // life is the cooling one cut by that share. Warming is left alone.
-      var half = (target > n.temp)
-        ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
-        : NEEDS.settleMinutes / outdoorCooling(n);
-      var k = 1 - Math.pow(0.5, (hours * 60) / half);
-      if (k > 1) { k = 1; }
-      if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
+      var end = n.at + hours * 3600000;
+      var fireFrom = Number(environment.burningFrom) || 0;
+      var fireEnd = Number(environment.burningUntil) || 0;
+      var cursor = n.at;
+      function temperatureTo(until, onFire) {
+        var target = environment.warmthTarget(n, onFire);
+        var coolingShare = target > n.temp ? 1 : environment.outdoorCooling(n);
+        approachTemperature(n, target, until - cursor, coolingShare);
+        cursor = until;
+      }
+      // The environment supplies the interval. No runtime state is read by
+      // projection, and a refused pre-fire save cannot heat earlier time.
+      if (fireFrom > cursor) { temperatureTo(Math.min(end, fireFrom), false); }
+      if (cursor < end && fireFrom <= cursor && fireEnd > cursor) { temperatureTo(Math.min(end, fireEnd), true); }
+      if (cursor < end) { temperatureTo(end, false); }
     }
 
     // A night in a bed, on top of the time away settled above (#1606).
-    var slept = arriving ? arrived(actorId, n, away) : '';
+    var slept = arriving ? arrived(n, away) : '';
     var hungBefore = n.hangoverUntil > now;
     /*
       DRUNK WEARS OFF INTO A HANGOVER (#3153). n.drunk is still what the last
@@ -52518,16 +54204,34 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     n.drugged = n.drugUntil > now;
 
     n.at = now;
-    write(actorId, n);
+    return { needs: n, changed: true, hungBefore: hungBefore,
+             hung: hung, pulled: pulled, slept: slept };
+  }
+
+  function projectionEnvironment(actorId, savedOnly) {
+    var fireEnd = burningUntil(actorId, savedOnly);
+    return {
+      workMultiplier: function () { return workMultiplier(actorId, savedOnly); },
+      restingGain: function (n) { return restingGain(actorId, n, savedOnly); },
+      warmthTarget: function (n, onFire) { return warmthTarget(actorId, n, savedOnly, onFire ? NEEDS.fire.at : 0); },
+      burningFrom: fireEnd ? burnStarts[actorId] : 0,
+      burningUntil: fireEnd,
+      outdoorCooling: outdoorCooling
+    };
+  }
+
+  function projectionEffects(actorId, projected, savedOnly) {
+    var hungBefore = projected.hungBefore, hung = projected.hung;
+    var pulled = projected.pulled, slept = projected.slept;
     // A hangover starting or ending changes what there is to tend (#1382),
     // and what the character pays (effects reads it).
     if (hungBefore !== hung) {
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       hangoverCare(actorId);
       if (hung) { notify(actorId, NEEDS.ale.hungLine); say(actorId, NEEDS.ale.hungLine); }
     }
     if (pulled) {
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       notify(actorId, NEEDS.drug.withdrawal.line);
       say(actorId, NEEDS.drug.withdrawal.line);
     }
@@ -52539,11 +54243,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       */
       var beds = g.__thornswoodBeds;
       if (beds && beds.off) { beds.off(actorId); }
-      pushEffects(actorId);
+      pushEffects(actorId, savedOnly);
       notify(actorId, slept);
       say(actorId, slept);
     }
-    return n;
   }
 
   /*
@@ -52607,11 +54310,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return worth + (n.wetPlace - worth) * left;
   }
 
-  function warmthTarget(actorId, n) {
+  function approachTemperature(n, target, ms, coolingShare) {
+    // The same documented half-gap curve, including winter cooling.
+    var half = target > n.temp ? (NEEDS.settleWarmMinutes || NEEDS.settleMinutes)
+      : NEEDS.settleMinutes / coolingShare;
+    var k = Math.min(1, 1 - Math.pow(0.5, ms / (half * 60000)));
+    if (k > 0) { n.temp = clamp(n.temp + (target - n.temp) * k); }
+  }
+
+  function warmthTarget(actorId, n, savedOnly, bodyFireWorth) {
     var raw = NEEDS.place[n.place];
     if (typeof raw !== 'number') { raw = NEEDS.comfort; }
     raw = wetPlaceWorth(n, raw);
-    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId) + waterKind(actorId, n);
+    raw = raw + outdoorSeason(n) + weathered(actorId, n) + fireWarmth(n, actorId, savedOnly, bodyFireWorth) + waterKind(actorId, n);
     if (raw < 0) { raw = 0; }
     if (raw > 100) { raw = 100; }
     if (raw === NEEDS.comfort) { return mealWarmed(n, raw); }
@@ -52675,14 +54386,27 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A fire is not gated on the roof, because a campfire in a blizzard is the
     whole point of a campfire.
   */
-  function fireWarmth(n, actorId) {
+  function nearbyFireWarmth(n, actorId, savedOnly) {
     if (!n) { return 0; }
     var d = Number(n.fire);
     if (!isFinite(d) || d < 0) { return 0; }
     var reach = NEEDS.fire.reach || 1;
     if (d >= reach) { return 0; }
-    var at = (actorId && carverFire(actorId)) ? NEEDS.fire.master : NEEDS.fire.at;
+    var at = (actorId && carverFire(actorId, savedOnly)) ? NEEDS.fire.master : NEEDS.fire.at;
     return at * (1 - (d / reach));
+  }
+
+  function burningUntil(actorId, savedOnly, identity) {
+    if (!burning || !Object.prototype.hasOwnProperty.call(burning, actorId)) { return 0; }
+    // A new profile, runtime or life can read needs before the burn tick.
+    // Only the actor that reported the fire can bank its elapsed warmth.
+    if ((identity || burnIdentity(actorId, savedOnly)) !== burnIdentities[actorId]) { return 0; }
+    return burning[actorId] + NEEDS.burn.every * 3;
+  }
+
+  function fireWarmth(n, actorId, savedOnly, bodyFireWorth) {
+    var body = bodyFireWorth === undefined ? (burningUntil(actorId) > Date.now() ? NEEDS.fire.at : 0) : bodyFireWorth;
+    return Math.max(nearbyFireWarmth(n, actorId, savedOnly), body);
   }
 
   /*
@@ -52702,15 +54426,23 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     The perk is the progression block's own answer, held at master in the
     half somebody picked. Nothing loaded answers no, which is an ordinary fire.
   */
-  function perkHeld(actorId, key) {
+  function projectionCharacter(actorId, savedOnly) {
+    var c = g.__thornswoodCharacter;
+    if (!savedOnly) { return c && c.stateOf ? c.stateOf(actorId) : null; }
+    var state = mp.get(actorId, (c && c.PROPERTY) || 'thornswoodCharacter');
+    return state && typeof state === 'object' && state.v === 1 ? state : null;
+  }
+
+  function perkHeld(actorId, key, savedOnly) {
     var P = g.__thornswoodProgression;
     var C = g.__thornswoodCharacter;
     if (!P || !P.perks || !C || !C.stateOf) { return false; }
-    try { return P.perks(C.stateOf(actorId)).indexOf(key) !== -1; } catch (e) { return false; }
+    try { return P.perks(projectionCharacter(actorId, savedOnly)).indexOf(key) !== -1; }
+    catch (e) { if (savedOnly) { throw e; } return false; }
   }
 
-  function carverFire(actorId) {
-    if (perkHeld(actorId, 'mastercarver')) { return true; }
+  function carverFire(actorId, savedOnly) {
+    if (perkHeld(actorId, 'mastercarver', savedOnly)) { return true; }
     var reach = NEEDS.fire.reach || 1;
     var online = [];
     try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { return false; }
@@ -52733,7 +54465,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       } catch (e) { continue; }
       var theirs = read(them);
       if (!theirs || !(theirs.fire >= 0) || theirs.fire >= reach) { continue; }
-      if (perkHeld(them, 'mastercarver')) { return true; }
+      if (perkHeld(them, 'mastercarver', savedOnly)) { return true; }
     }
     return false;
   }
@@ -52902,10 +54634,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     2026: vanilla food's extra magic effects go, except temperature ones, so
     alchemy matters more. FOOD_GROUPS.strip says which groups lose them and
     which records keep them. The engine scales a record's effects as a whole
-    (EatItemEvent, eatItemScale), so a record whose temperature effect rides
-    with another effect is kept whole until the engine can drop one effect
-    and keep another. Hunger and thirst are this block's own numbers, not
-    record effects, and are not touched.
+    (EatItemEvent, eatItemScale). Thornswood-Last.esp removes the recovery
+    effects from the three foods that keep frost resistance (#4612).
+    Hunger and thirst come from this block's own numbers.
   */
   var stripIndex = null;
 
@@ -53220,6 +54951,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       // A cooked meal's help (#2682), only for a meal that went down: not
       // inside the 8 seconds, and not on a full stomach, where it sits badly.
       if (ate1.taken && !ate1.full) {
+        if (group === 'cooked' || group === 'soup' || group === 'feast') {
+          var college = g.__thornswoodCollege;
+          if (college && college.cookedMeal) { college.cookedMeal(actorId); }
+        }
         var help = mealHelpOf(baseId, group);
         // A fine dish's help lasts longer (#2906), and a feast's lasts half
         // as long as a meal's, fine or plain (#3152).
@@ -53495,13 +55230,13 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /** How much faster working drains rest, by the best rank this person holds. */
-  function workMultiplier(actorId) {
+  function workMultiplier(actorId, savedOnly) {
     var best = 'novice';
     try {
       var P = g.__thornswoodProgression;
       var C = g.__thornswoodCharacter;
       if (P && C && C.stateOf) {
-        var s = C.stateOf(actorId);
+        var s = projectionCharacter(actorId, savedOnly);
         var ranks = (s && s.ranks) || {};
         var order = ['novice', 'advanced', 'expert', 'master'];
         for (var k in ranks) {
@@ -53509,16 +55244,16 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           if (order.indexOf(ranks[k]) > order.indexOf(best)) { best = ranks[k]; }
         }
       }
-    } catch (e) { }
+    } catch (e) { if (savedOnly) { throw e; } }
     return NEEDS.workRest[best] || NEEDS.workRest.novice;
   }
 
   /** What this person is recovering per hour, by where they are resting. */
-  function restingGain(actorId, n) {
+  function restingGain(actorId, n, savedOnly) {
     if (!n.resting) { return 0; }
     var base = NEEDS.recover[n.resting] || 0;
     if (!base) { return 0; }
-    if (bardNear(actorId)) { base += NEEDS.bard; }
+    if (bardNear(actorId, savedOnly)) { base += NEEDS.bard; }
     return base;
   }
 
@@ -53589,14 +55324,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
   }
 
-  function bardNear(actorId) {
+  function bardNear(actorId, savedOnly) {
     var myCell = null;
     try { myCell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return false; }
     if (!myCell) { return false; }
     var now = Date.now();
     for (var id in BARDS) {
       if (!Object.prototype.hasOwnProperty.call(BARDS, id)) { continue; }
-      if (now - BARDS[id] > BARD_FOR) { delete BARDS[id]; continue; }
+      if (now - BARDS[id] > BARD_FOR) { if (!savedOnly) { delete BARDS[id]; } continue; }
       var who = Number(id);
       if (who === actorId) { continue; }
       var theirs = null;
@@ -53615,6 +55350,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   */
   function effects(actorId, n) {
     var out = {};
+    if (ignoresNeeds(actorId)) { return out; }
     if (!n) { return out; }
     function add(cost) {
       for (var av in cost) {
@@ -53708,7 +55444,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       tempTarget: Math.round(warmthTarget(actorId, n)),
       roof: !!n.roof, night: !!n.night,
       fireAway: (typeof n.fire === 'number' && n.fire >= 0) ? Math.round(n.fire) : -1,
-      fireWorth: Math.round(fireWarmth(n, actorId)),
+      fireWorth: Math.round(nearbyFireWarmth(n, actorId)),
+      burning: burningUntil(actorId) > Date.now(),
       exposure: Math.round(weathered(actorId, n)),
       // How much slower a storm makes you right now, 0 when not in one (#3176).
       storm: stormy(n) ? NEEDS.weather.storm : 0,
@@ -54240,6 +55977,18 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return true;
   }
 
+  // Staff's scene tool changes the source state, not just the screen effect.
+  // Keep food, drink, rest, temperature, tea, injuries and diseases intact.
+  function clearIntoxication(actorId) {
+    var n = read(actorId);
+    if (!n) { throw new Error('The needs record is unavailable.'); }
+    n.ale = 0; n.aleAt = null; n.aleHelpUntil = 0; n.drunk = false;
+    n.drugUntil = 0; n.drugCrash = 0; n.drugged = false; n.doses = [];
+    n.withdrawalUntil = 0; n.hangoverUntil = 0; n.look = '';
+    if (!write(actorId,n)) { throw new Error('The cleared effects could not be saved.'); }
+    pushEffects(actorId); hangoverCare(actorId);
+  }
+
   /* The injury block's line and look prompt row, for a hangover (careOf). */
   function hangoverCare(actorId) {
     var hurtC = g.__thornswoodHurt;
@@ -54275,6 +56024,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     to matter is worth being told about and every swing before that is not.
   */
   function worked(actorId, key) {
+    if (ignoresNeeds(actorId)) { return ''; }
     var n = settle(actorId);
     var was = { food: bandOf(n.food), drink: bandOf(n.drink), rest: bandOf(n.rest),
                 temp: tempBand(n.temp).name };
@@ -54321,7 +56071,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     caller, and that call was never written; the first commit of this
     repository already has it without one.
   */
-  function arrived(actorId, n, away) {
+  function arrived(n, away) {
     if (!(away >= NEEDS.sleptFor)) { return ''; }
     var row = awayRow(n.resting);
     var rest = Number(row.rest) || 0, food = Number(row.food) || 0, drink = Number(row.drink) || 0;
@@ -54389,6 +56139,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
   /** Too tired to make anything. See CRAFT_REST. */
   function tooTiredToCraft(actorId) {
+    if (ignoresNeeds(actorId)) { return false; }
     var n = settle(actorId);
     return n.rest < CRAFT_REST;
   }
@@ -54404,6 +56155,17 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     if (!tooTiredToCraft(actorId)) { return ''; }
     return 'You are too tired to make anything: your Rest is under ' + CRAFT_REST + '. ' +
            'Sit down, or lie down in a bed, first.';
+  }
+
+  function ignoresNeeds(actorId) {
+    try { return mp.get(actorId,'isGodMode') === true; }
+    catch (e) { return false; }
+  }
+
+  function godmodeChanged(actorId) {
+    var hurt = g.__thornswoodHurt;
+    if (hurt && hurt.clearFireExposure) { hurt.clearFireExposure(actorId); }
+    pushEffects(actorId);
   }
 
   /*
@@ -54437,11 +56199,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     not change anything, and a band change is at most a handful of times an
     evening per person.
   */
-  function pushEffects(actorId) {
+  function pushEffects(actorId, savedOnly) {
     try {
       var c = g.__thornswoodCharacter;
       if (!c || !c.stateOf || !c.writeState) { return; }
-      var s = c.stateOf(actorId);
+      var s = projectionCharacter(actorId, savedOnly);
       if (!s) { return; }
       // redraw, because the rules state has not changed and the panel
       // signature would hold the write back. What changed is underneath it.
@@ -54917,12 +56679,69 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     and needs no launcher release.
   */
   var BURN_PROPERTY = 'thornswoodBurn';
+  var BURN_VISUAL_PROPERTY = 'thornswoodBurnVisual';
+  // Saved actor properties from an earlier process are not a current fire.
+  // The script and each report share this gamemode registration's token.
+  var burnEpoch = String(Date.now()) + ':' + String(Math.random());
+  var burnSequence = 0;
   var burning = {};        // actorId -> when they last said they were alight
+  var burnIdentities = {}; // actorId -> profile, current runtime and life
+  var burnStarts = {};     // actual start, independent of whether needs saved
+
+  function burnIdentity(actorId, savedOnly) {
+    try {
+      var state = mp.getNpcAIState(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!state || state.isConnected !== true || state.isDead || state.isDisabled ||
+          !(state.profileId > 0) || !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0 ||
+          typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) { return ''; }
+      return JSON.stringify([state.profileId, runtime, state.lifeGeneration]);
+    } catch (e) {
+      if (savedOnly) { throw e; }
+      nlog('could not read the burning actor identity:', e);
+      return '';
+    }
+  }
+
+  function publishBurnVisual(actorId, on) {
+    try {
+      mp.set(actorId, BURN_VISUAL_PROPERTY, { on: on, epoch: burnEpoch, seq: ++burnSequence });
+    } catch (e) { nlog('could not publish the fire visual for', actorId, e); }
+  }
+
+  function clearBurning(actorId) {
+    var hadFire = Object.prototype.hasOwnProperty.call(burning, actorId);
+    var online = onlineNow(actorId);
+    // Bank heat only for the original actor. An offline character keeps the
+    // saved reading, and their next settle is an arrival.
+    var bankHeat = hadFire && online && burningUntil(actorId) > 0;
+    try {
+      if (bankHeat) { settle(actorId); }
+    } finally {
+      // Closing the fire is independent of saving this temperature sample.
+      if (hadFire && !online) { delete here[actorId]; }
+      delete burning[actorId];
+      delete burnIdentities[actorId];
+      delete burnStarts[actorId];
+      publishBurnVisual(actorId, false);
+    }
+    if (bankHeat) { pushEffects(actorId); }
+  }
 
   /** The client says it started or stopped burning. */
   function setBurning(actorId, on) {
-    if (on) { burning[actorId] = Date.now(); }
-    else { delete burning[actorId]; }
+    var identity = on ? burnIdentity(actorId) : '';
+    if (on && identity) {
+      var wasBurning = burningUntil(actorId, false, identity) > Date.now();
+      // A new fire cannot warm the time before the report. A heartbeat also
+      // banks the old interval before extending its deadline.
+      settle(actorId);
+      if (!wasBurning) { burnStarts[actorId] = Date.now(); }
+      burning[actorId] = Date.now();
+      burnIdentities[actorId] = identity;
+      publishBurnVisual(actorId, true);
+      if (!wasBurning) { pushEffects(actorId); }
+    } else { clearBurning(actorId); }
   }
 
   /** Tell one person's client to catch fire for a while. */
@@ -54942,8 +56761,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     for (var id in burning) {
       if (!Object.prototype.hasOwnProperty.call(burning, id)) { continue; }
       // A client that stops reporting has gone, crashed or stopped burning
-      // without saying so. Two of its own beats is enough to let go.
-      if (now - burning[id] > NEEDS.burn.every * 3) { delete burning[id]; continue; }
+      // without saying so. Three server beats without a report lets go.
+      if (now - burning[id] > NEEDS.burn.every * 3 || burnIdentity(Number(id)) !== burnIdentities[id]) {
+        clearBurning(Number(id)); continue;
+      }
       alight.push(Number(id));
     }
     if (!alight.length) { return; }
@@ -55013,6 +56834,61 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     ].join('\n');
   }
 
+  // This is only the observer's shader. The existing owner script/plugin
+  // continues to own ignition, damage and the report that drives spreading.
+  function burnVisualScript() {
+    return [
+      '(function(){',
+      '  var st = ctx.state;',
+      '  if (!st) { return; }',
+      '  try {',
+      '    var a = ctx.sp.Actor.from(ctx.refr);',
+      '    if (!a) { return; }',
+      '    var v = ctx.value, now = Date.now();',
+      '    var current = v && v.epoch === ' + JSON.stringify(burnEpoch) + ' && v.on === true && Number.isSafeInteger(v.seq);',
+      '    if (current && (st.thornswoodBurnVisualEpoch !== v.epoch || st.thornswoodBurnVisualSeq !== v.seq)) {',
+      '      if (st.thornswoodBurnVisualEpoch !== v.epoch) { st.thornswoodBurnVisualHidden = true; }',
+      '      st.thornswoodBurnVisualEpoch = v.epoch;',
+      '      st.thornswoodBurnVisualSeq = v.seq;',
+      '      st.thornswoodBurnVisualUntil = now + ' + (NEEDS.burn.every * 3) + ';',
+      '    }',
+      '    if (!current || ctx.get("isDead") || now >= (st.thornswoodBurnVisualUntil || 0)) {',
+      '      if (st.thornswoodBurnVisualShown) {',
+      '        var ended = ctx.sp.EffectShader.from(ctx.sp.Game.getFormEx(0x1b212));',
+      '        if (ended) { ended.stop(a); }',
+      '        st.thornswoodBurnVisualShown = false;',
+      '      }',
+      '      return;',
+      '    }',
+      '    if (!a.is3DLoaded()) { st.thornswoodBurnVisualHidden = true; return; }',
+      // Heartbeats extend receipt validity. They do not stack native Play calls.
+      // Replace only when the finite shader lease ends or the body reloads.
+      '    if (!st.thornswoodBurnVisualShown || st.thornswoodBurnVisualHidden || now >= (st.thornswoodBurnShaderUntil || 0)) {',
+      '      var shader = ctx.sp.EffectShader.from(ctx.sp.Game.getFormEx(0x1b212));',
+      '      if (!shader) { return; }',
+      '      if (st.thornswoodBurnVisualShown) { shader.stop(a); }',
+      '      shader.play(a, ' + (NEEDS.burn.every * 3 / 1000) + ');',
+      '      st.thornswoodBurnVisualShown = true;',
+      '      st.thornswoodBurnVisualHidden = false;',
+      '      st.thornswoodBurnShaderUntil = now + ' + (NEEDS.burn.every * 3) + ';',
+      '    }',
+      '  } catch (e) {',
+      '    if (!st.thornswoodBurnVisualError) {',
+      '      st.thornswoodBurnVisualError = true;',
+      '      ctx.sp.printConsole("[Thornswood] remote fire visual failed: " + String(e));',
+      '    }',
+      '  }',
+      '})();'
+    ].join('\n');
+  }
+
+  mp.makeProperty(BURN_VISUAL_PROPERTY, {
+    isVisibleByOwner: false,
+    isVisibleByNeighbors: true,
+    updateOwner: '',
+    updateNeighbor: burnVisualScript()
+  });
+
   try {
     mp.makeProperty(BURN_PROPERTY, {
       isVisibleByOwner: true,
@@ -55064,20 +56940,23 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // How a cook comes out, and the records it can come out as (#2906).
     cookedAs: cookedAs, fineOf: fineOf, isFine: isFine, burntMeal: burntMeal,
     settle: settle, view: view, effects: effects,
+    // Stage a needs snapshot; saving and delivery remain the caller's job.
+    project: projectNeeds,
     // The bars as a line of text, for /needs (#2267).
     textView: textView,
     ate: ate, resting: resting, worked: worked, bard: bard,
     place: place, tooTiredToCraft: tooTiredToCraft, craftRefusal: craftRefusal,
-    setBurning: setBurning, catchFire: catchFire,
+    setBurning: setBurning, catchFire: catchFire, clearBurning: clearBurning,
     fresh: fresh, clamp: clamp,
     // The bard the server sees playing (#1631).
     playing: playing, bardSeen: bardSeen,
     // The meters as last settled, without settling them again (#1383).
-    read: read,
+    read: read, setForTesting: setForTesting,
     // One pass of the minute tick, for the harnesses (#1382).
     tick: tick,
     // The hangover, for the physicker's remedy in the wounds panel (#1382).
-    hungOver: hungOver, soberUp: soberUp,
+    hungOver: hungOver, soberUp: soberUp, clearIntoxication: clearIntoxication,
+    ignoresNeeds: ignoresNeeds, godmodeChanged: godmodeChanged,
     // What logging out now would do, in the Body page's words (#2246).
     awayWords: awayWords
   };
@@ -55568,22 +57447,24 @@ module.exports = {
   }
 
   // ------------------------------------------------------------ the steep --
-  var steeps = {};   // actorId -> { dye, from, fire }
+  var steeps = {};   // actorId -> { dye, from, fire, workbench }
 
   /*
     E on something. Starts a steep at the list's cooking spot when one dye's
     inputs are carried and none is steeping. Answers a line, or '' when this
-    press is none of the dye's business. Never refuses anything.
+    press is none of the dye's business. Refusals apply only to the dye.
   */
-  function pressed(actorId, benchKeyword) {
+  function pressed(actorId, benchKeyword, workbenchId) {
     if (!LIST || !benchKeyword || benchKeyword !== LIST.steepAt) { return ''; }
     if (Object.prototype.hasOwnProperty.call(steeps, actorId)) { return ''; }
     var dye = HAIR_DYE.dyeFor(HAIR_DYE.carriedFor(packOf(actorId), LIST, inputIds(), dyeItemId()), LIST);
     if (!dye) { return ''; }
     if (!HAIR_DYE.mayMake(LIST, canWork(actorId))) { return notYours(); }
+    var unfit = unfitToMake(actorId, workbenchId);
+    if (unfit) { return unfit; }
     var N = g.__thornswoodNeeds;
     var fire = !!(N && N.fireNear && N.fireNear(actorId));
-    steeps[actorId] = { dye: dye.id, from: Date.now(), fire: fire };
+    steeps[actorId] = { dye: dye.id, from: Date.now(), fire: fire, workbench: workbenchId };
     var secs = LIST.steepSeconds;
     return 'You set ' + dye.name + ' to steep. Stay by the fire for ' +
            (secs % 60 === 0 ? (secs / 60) + (secs === 60 ? ' minute.' : ' minutes.') : secs + ' seconds.');
@@ -55605,11 +57486,13 @@ module.exports = {
     }
     if (Date.now() - st.from < LIST.steepSeconds * 1000) { return ''; }
     delete steeps[actorId];
-    return finishSteep(actorId, dye);
+    return finishSteep(actorId, dye, st.workbench);
   }
 
-  function finishSteep(actorId, dye) {
+  function finishSteep(actorId, dye, workbenchId) {
     if (!HAIR_DYE.mayMake(LIST, canWork(actorId))) { return notYours(); }
+    var unfit = unfitToMake(actorId, workbenchId);
+    if (unfit) { return unfit; }
     var pack = packOf(actorId);
     var next = HAIR_DYE.afterSteep(pack, dye, LIST, inputIds(), dyeItemId());
     if (!next) { return 'You no longer carry everything ' + dye.name + ' takes, so nothing steeped.'; }
@@ -55813,13 +57696,19 @@ module.exports = {
   a physicker setting a bone. Yours from the inventory, somebody else's from
   the look prompt, both through one panel (game/ui/thornswood-treat.js).
 
-  GOING DOWN IS NOT HERE YET. The engine now asks mp.onDying before health
-  reaching zero kills, before anything is sent (#1626), so that is the moment
-  this file can say "down, not dead": refuse the death and keep them at a
-  health of its own. The rest of going down (the downed flag the clients are
-  sent, no fighting or casting while down, being stabilized, the wake) is
-  #2681. Until it is built a bleed that empties your health is a death with
-  no killer, the world's, and the temple keeps your wounds.
+  GOING DOWN (#4607, docs/systems/injury.md, "Down"). The engine asks
+  mp.onDying before health reaching zero kills, before anything is sent
+  (#1626, fork #101), and a refusal with dyingHealth keeps the person alive
+  at that share of their most: no death, no ragdoll, nothing undone. So a
+  person whose health would reach zero goes down here instead (goDown): kept
+  at DOWN.keep, held from fighting and casting on their own machine (the
+  thornswoodDown property's script), and able to talk. A bandage from
+  somebody else, a healing spell landing on them, or a healing potion
+  stands them up at a quarter of their health (standUp). Nobody does in
+  DOWN.minutes, and the tick lets the death through (wake): the ordinary
+  wake at the temple, with the wounds they had. Staff seeing who is down,
+  confirming the outcome and changing the minutes is #6409; a potion brewed
+  at a lab standing somebody up is #6407.
   ============================================================================
 */
 (function () {
@@ -55978,6 +57867,17 @@ module.exports = {
   var MEAL_GUARD = { cooked: { mult: 0.5, min: 20 }, feast: { mult: 0.25, min: 10 } };
 
   /*
+    DOWN (#4607). injury.md: "The clock is 3 real minutes", and "Health
+    returns to 25% of its max, not to full". keep is the share of their most
+    a person is held at while down: the engine takes any share above nothing
+    (DyingHealthBinding), and 1% is the least a health bar still shows.
+  */
+  var DOWN = { minutes: 3, keep: 0.01, stable: 0.25 };
+  // The down person's own machine reads this (downScript, below), and so does
+  // anybody near them, for the look prompt.
+  var DOWN_PROPERTY = 'thornswoodDown';
+
+  /*
     BENCHES THAT TAKE BOTH HANDS, by the keyword a bench carries (BENCH_BY_BASE).
     A broken arm and a missing hand refuse these. The page does not list them,
     and Patrick's answer on #1383 (4 October) is these: the forges, the armour
@@ -56003,7 +57903,8 @@ module.exports = {
   // ------------------------------------------------------------ the record --
 
   function fresh() {
-    return { wounds: [], ills: [], crooked: {}, agreed: {}, cold: 0, ground: 0, show: [], brews: [], guard: null };
+    return { wounds: [], ills: [], crooked: {}, agreed: {}, cold: 0, ground: 0, show: [], brews: [], guard: null,
+             down: null, wake: false };
   }
 
   /*
@@ -56059,6 +57960,11 @@ module.exports = {
     if (gd && num(gd.until, 0) > 0 && num(gd.mult, 1) > 0 && num(gd.mult, 1) < 1) {
       out.guard = { until: num(gd.until, 0), mult: num(gd.mult, 1) };
     }
+    var dn = (v.down && typeof v.down === 'object') ? v.down : null;
+    if (dn && num(dn.at, 0) > 0 && num(dn.until, 0) > 0) {
+      out.down = { at: num(dn.at, 0), until: num(dn.until, 0), by: Math.max(0, num(dn.by, 0)) };
+    }
+    out.wake = v.wake === true;
     return out;
   }
 
@@ -56226,6 +58132,7 @@ module.exports = {
      never shows". */
   function lines(rec, now) {
     var out = [];
+    if (rec.down) { out.push('Down'); }
     var bleeding = 0, slowed = true;
     for (var i = 0; i < rec.wounds.length; i++) {
       var w = rec.wounds[i];
@@ -56321,7 +58228,7 @@ module.exports = {
       sitting, 20 an hour"), with no roof and not indoors. Or an hour at spent
       cold. Each clock starts again once it has caught.
     */
-    if (n && N) {
+    if (n && N && !(N.ignoresNeeds && N.ignoresNeeds(actorId))) {
       var open = n.resting === 'sit' && !n.roof && !!n.place && n.place !== 'indoors';
       if (open) {
         if (!rec.ground) { rec.ground = now; changed = true; }
@@ -56339,6 +58246,9 @@ module.exports = {
           rec.cold = now; changed = true;
         }
       } else if (rec.cold) { rec.cold = 0; changed = true; }
+    } else if (n && N && N.ignoresNeeds && N.ignoresNeeds(actorId)) {
+      // God mode cannot accrue an hour of cold exposure for a later tick.
+      if (rec.ground || rec.cold) { rec.ground = 0; rec.cold = 0; changed = true; }
     }
 
     /*
@@ -56445,6 +58355,8 @@ module.exports = {
       var who = online[i];
       try {
         var rec = read(who);
+        // Down past the clock, and nobody came (#4607).
+        if (rec.down && now >= rec.down.until) { wake(who); continue; }
         var was = rec.show.join('|');
         var r = step(who, rec, now);
         var shown = lines(rec, now).join('|');
@@ -56483,7 +58395,9 @@ module.exports = {
       // The wounds first: most people are not bleeding, and asking everybody
       // whether they are dead before that was a second engine read a person
       // every second for nothing (#5431).
-      var rate = bleedRate(read(who));
+      var held = read(who);
+      // Somebody down is held at DOWN.keep, not bled further (#4607).
+      var rate = held.down ? 0 : bleedRate(held);
       if (!rate) { continue; }
       var dead = false;
       try { dead = !!mp.get(who, 'isDead'); } catch (e) { continue; }
@@ -56530,6 +58444,7 @@ module.exports = {
   if (!g.__thornswoodHurtFires) { g.__thornswoodHurtFires = {}; }
   var fires = g.__thornswoodHurtFires;
   var FIRE_GAP_MS = 6000;  // the needs block lets go of a silent client after three of its beats
+  function clearFireExposure(actorId) { delete fires[actorId]; }
 
   /*
     A FIRE NOBODY PUT OUT STILL BURNT (#2260). The burn used to be written
@@ -56539,6 +58454,10 @@ module.exports = {
     hurt tick for somebody who never came back to send one.
   */
   function burning(actorId, on, now) {
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.ignoresNeeds && needs.ignoresNeeds(actorId)) {
+      clearFireExposure(actorId); return '';
+    }
     now = now || Date.now();
     var f = has(fires, actorId) ? fires[actorId] : null;
     if (on) {
@@ -56633,6 +58552,8 @@ module.exports = {
     var s = spellRank(source);
     if (!s || s.self || !personal(targetId)) { return; }
     tell(targetId, healed(targetId, s.rank));
+    // Any healing spell from somebody else stands them back up (#4607).
+    tell(targetId, standUp(targetId, 'a healing spell'));
   }
 
   // ----------------------------------------------- the blow that opens one --
@@ -56828,11 +58749,18 @@ module.exports = {
   }
 
   /*
-    SOMETHING DRUNK FROM THE PACK (mp.onEatItem, below). A potion of cure
-    disease clears one ordinary disease. It is still the thirst sip, which the
-    needs block gives from the same event (eaten). Answers a line, or ''.
+    SOMETHING DRUNK FROM THE PACK (mp.onEatItem, below). A healing potion
+    stands somebody down back up (#4607). A potion of cure disease clears one
+    ordinary disease. Either is still the thirst sip, which the needs block
+    gives from the same event (eaten). Answers a line, or ''.
   */
   function swallowed(actorId, baseId) {
+    var up = healsHealth(baseId) ? standUp(actorId, 'a healing potion') : '';
+    var cured = cureSwallowed(actorId, baseId);
+    return [up, cured].filter(function (s) { return !!s; }).join(' ');
+  }
+
+  function cureSwallowed(actorId, baseId) {
     var cure = false;
     for (var i = 0; i < CURE_DISEASE.length; i++) {
       var id = 0;
@@ -57004,12 +58932,175 @@ module.exports = {
   */
   function died(actorId) {
     delete fires[actorId];
+    var needs = g.__thornswoodNeeds;
+    if (needs && needs.clearBurning) { needs.clearBurning(actorId); }
     var rec = read(actorId);
     var any = false;
     for (var i = 0; i < rec.wounds.length; i++) {
       if (rec.wounds[i].bleed) { rec.wounds[i].bleed = false; any = true; }
     }
+    // Down ends with the death (#4607): the wake is the temple's. Their machine
+    // is told by what it was last sent, because the wake's own death has
+    // already taken the down off the record (wake, below).
+    var wasDown = !!rec.down || rec.wake;
+    if (wasDown) { rec.down = null; rec.wake = false; any = true; }
     if (any) { write(actorId, rec); }
+    var shown = null;
+    try { shown = mp.get(actorId, DOWN_PROPERTY); } catch (e) { shown = null; }
+    if (wasDown || (shown && shown.down)) { showDown(actorId, false); }
+  }
+
+  // -------------------------------------------------------- going down --
+
+  function profileOf(id) {
+    try { return Math.max(0, Number(mp.get(id, 'profileId')) || 0); } catch (e) { return 0; }
+  }
+
+  /*
+    WHAT THE DOWN PERSON'S MACHINE IS SENT, and anybody near them: whether
+    they are down. at moves on every change, so the script acts once a change.
+  */
+  function showDown(actorId, down) {
+    try { mp.set(actorId, DOWN_PROPERTY, { down: !!down, at: Date.now() }); return true; }
+    catch (e) { hlog('could not send down to', actorId.toString(16) + ':', e); return false; }
+  }
+
+  /*
+    ASKED BY mp.onDying (event-handlers.ts), after Cheat Death: this person's
+    health is about to reach nothing. Answers the share of their most the
+    engine keeps them at, or 0 to let the death through.
+
+      somebody who is not a person   0: an animal, a bandit or a guard dies.
+      wake set                       0, once: DOWN.minutes ran out (wake,
+                                     below), and this is that death.
+      already down                   DOWN.keep, and the clock is not moved: a
+                                     blow on somebody down does not kill them.
+                                     A death needs a yes (death.md).
+      anybody else                   down now, for DOWN.minutes.
+
+    by is the profile of whoever's blow it was, 0 for the world's (a fall, a
+    fire, a bleed): death.md asks the question only when it was a person.
+    A record that cannot be written lets the death through, because a down
+    nothing remembers could never end.
+  */
+  function goDown(actorId, killerId) {
+    if (!personal(actorId)) { return 0; }
+    var rec = read(actorId);
+    if (rec.wake) {
+      rec.wake = false;
+      write(actorId, rec);
+      hlog(actorId.toString(16), 'was not stood up in', DOWN.minutes, 'minutes, and wakes at the temple');
+      return 0;
+    }
+    if (rec.down) { return DOWN.keep; }
+    var now = Date.now();
+    var by = (killerId && killerId !== actorId) ? profileOf(killerId) : 0;
+    rec.down = { at: now, until: now + DOWN.minutes * MIN, by: by };
+    if (!write(actorId, rec)) { return 0; }
+    showDown(actorId, true);
+    redraw(actorId);
+    hlog(actorId.toString(16), 'went down', by ? ('to profile ' + by) : 'to the world');
+    tell(actorId, 'You are down. You can talk, but not fight or cast. A bandage, a healing spell or a ' +
+                  'healing potion gets you back up. If nobody comes in ' + DOWN.minutes +
+                  ' minutes, you wake at the temple.');
+    return DOWN.keep;
+  }
+
+  /*
+    BACK UP: the property says so, and health is a quarter of their most, or
+    what they have if that is more. The record is already written without
+    the down.
+  */
+  function rise(actorId, how) {
+    showDown(actorId, false);
+    var p = null;
+    try { p = mp.get(actorId, 'percentages'); } catch (e) { p = null; }
+    if (!p || typeof p !== 'object') {
+      hlog('could not read the health of', actorId.toString(16), 'to stand them up');
+    } else {
+      try {
+        mp.set(actorId, 'percentages', { health: Math.max(num(p.health, 0), DOWN.stable),
+                                         magicka: num(p.magicka, 0), stamina: num(p.stamina, 0) });
+      } catch (e) { hlog('could not stand', actorId.toString(16), 'up:', e); }
+    }
+    hlog(actorId.toString(16), 'is back up:', how);
+  }
+
+  /* Stood up by a healing spell or a potion. Answers the line to tell them, or ''. */
+  function standUp(actorId, how) {
+    var rec = read(actorId);
+    if (!rec.down) { return ''; }
+    rec.down = null;
+    if (!write(actorId, rec)) { return ''; }
+    redraw(actorId);
+    rise(actorId, how);
+    return 'You are back on your feet, still hurt.';
+  }
+
+  /*
+    THE CLOCK RAN OUT with nobody standing them up: the death goes through.
+    wake tells goDown to let the next one go, and health written to nothing
+    is that death, through the engine's own onDying and onDeath, so the wake
+    is the temple's with the wounds they had (died, above). A write the
+    engine refuses puts the down back, so the record never says less than
+    the truth.
+  */
+  function wake(actorId) {
+    var rec = read(actorId);
+    if (!rec.down) { return false; }
+    var p = null;
+    try { p = mp.get(actorId, 'percentages'); } catch (e) { p = null; }
+    if (!p || typeof p !== 'object') {
+      hlog('could not read the health of', actorId.toString(16), 'for the wake');
+      return false;
+    }
+    var down = rec.down;
+    rec.down = null;
+    rec.wake = true;
+    if (!write(actorId, rec)) { return false; }
+    try {
+      mp.set(actorId, 'percentages', { health: 0, magicka: num(p.magicka, 0), stamina: num(p.stamina, 0) });
+      return true;
+    } catch (e) {
+      hlog('could not let the death of', actorId.toString(16), 'through:', e);
+      rec.down = down;
+      rec.wake = false;
+      write(actorId, rec);
+      return false;
+    }
+  }
+
+  /*
+    WHETHER A DRINK HEALS: a potion record (ALCH without the food flag, ENIT's
+    second word, bit 2) with a restore health effect, the AlchRestoreHealth
+    family named by editor id the way Build-IngredientTable.js names them.
+    Asked once per record. A potion brewed at a lab has no record: #6407.
+  */
+  var healsSeen = {};
+  function healsHealth(baseId) {
+    baseId = Number(baseId) || 0;
+    if (!baseId) { return false; }
+    if (has(healsSeen, baseId)) { return healsSeen[baseId]; }
+    var heals = false;
+    var res = recordOf(baseId);
+    if (res && res.record && String(res.record.type || '') === 'ALCH') {
+      var enit = fieldOf(res, 'ENIT');
+      var flags = (enit && enit.length >= 8) ? (enit[4] | (enit[5] << 8) | (enit[6] << 16)) + enit[7] * 0x1000000 : 0;
+      var fields = res.record.fields || [];
+      for (var i = 0; !(flags & 2) && !heals && i < fields.length; i++) {
+        if (!fields[i] || String(fields[i].type) !== 'EFID') { continue; }
+        var d = fields[i].data || [];
+        if (d.length < 4) { continue; }
+        var local = (d[0] | (d[1] << 8) | (d[2] << 16)) + d[3] * 0x1000000;
+        var global = local;
+        try {
+          if (typeof res.toGlobalRecordId === 'function') { global = Number(res.toGlobalRecordId(local)) || local; }
+        } catch (e) { global = local; }
+        if (editorIdOf(recordOf(global)).indexOf('AlchRestoreHealth') === 0) { heals = true; }
+      }
+    }
+    healsSeen[baseId] = heals;
+    return heals;
   }
 
   /*
@@ -57097,6 +59188,8 @@ module.exports = {
 
   /* Whether anybody could tend anything on this record. */
   function needsCare(rec) {
+    // Somebody down is the first thing anybody near could tend (#4607).
+    if (rec.down) { return true; }
     for (var i = 0; i < rec.wounds.length; i++) {
       var w = rec.wounds[i];
       if (bandageHelps(w) || poulticeHelps(w) || (w.k === 'break' && !w.set)) { return true; }
@@ -57174,15 +59267,29 @@ module.exports = {
     }
     if (what === 'bandage') {
       var wb = firstWound(rec, bandageHelps, function (w) { return cutOrBite(w) && w.bleed; });
-      if (!wb) { return { why: 'There is no open wound a bandage would help.' }; }
+      // A bandage stands somebody down back up (#4607), wound or none. Somebody
+      // else's: injury.md, "if someone stabilizes you".
+      var downed = !!rec.down && !self;
+      if (!wb && !downed) {
+        return { why: (rec.down && self) ? 'You cannot get yourself back up. Somebody near you has to.'
+                                         : 'There is no open wound a bandage would help.' };
+      }
       if (carried(doerId, 'bandage') < 1) { return { why: 'You carry no bandage. ' + TREAT.bandage.maker }; }
       return { item: 'bandage', apply: function () {
+        if (!wb) {
+          rec.down = null;
+          return { line: 'You bandage ' + nameOf(targetId) + ' and help them back up.',
+                   them: by + ' bandages you and helps you back up.', up: true };
+        }
         var bled = cutOrBite(wb) && wb.bleed;
         wb.bandage = true;
         if (cutOrBite(wb)) { wb.bleed = false; }
         var after = bled ? ' The bleeding stops.' : '';
-        return { line: 'You bandage ' + your + ' ' + wordFor(wb) + '.' + after,
-                 them: by + ' bandages your ' + wordFor(wb) + '.' + after };
+        var up = downed ? ' You help them back up.' : '';
+        var upThem = downed ? ' You are back on your feet.' : '';
+        if (downed) { rec.down = null; }
+        return { line: 'You bandage ' + your + ' ' + wordFor(wb) + '.' + after + up,
+                 them: by + ' bandages your ' + wordFor(wb) + '.' + after + upThem, up: downed };
       } };
     }
     if (what === 'splint') {
@@ -57285,6 +59392,7 @@ module.exports = {
     var said = p.apply();
     write(targetId, rec);
     redraw(targetId);
+    if (said.up) { rise(targetId, 'a bandage from ' + doerId.toString(16)); }
     hlog(doerId.toString(16), 'tended', targetId.toString(16) + ':', what);
     return { ok: true, line: said.line, them: self ? '' : said.them };
   }
@@ -57501,6 +59609,83 @@ module.exports = {
   }
 
   /*
+    DOWN, ON THEIR OWN MACHINE (#4607). Once a change of the record: down
+    names fighting held for this reason, turns fighting off (in Skyrim that
+    is attacking and casting both), puts the weapon away and plays the
+    bleedout pose; up takes the reason off, gives fighting back only when no
+    other reason still holds it (the cuffs name theirs the same way), and
+    ends the pose. After that only the cell is read, so the pose a load
+    screen throws away is played once more. Talking and the menus stay
+    theirs. Only the server's record stands them up: the script never ends
+    the pose on its own.
+  */
+  function downScript() {
+    return [
+      '(function(){',
+      '  var sp = ctx.sp, st = ctx.state, v = ctx.value;',
+      '  if (!st) { return; }',
+      '  function step(what, f) {',
+      '    try { f(); } catch (e) {',
+      '      var seen = st.thornswoodDownReported || (st.thornswoodDownReported = {});',
+      '      if (seen[what]) { return; }',
+      '      seen[what] = true;',
+      '      sp.printConsole("[thornswood] down: could not " + what + ": " + e);',
+      '    }',
+      '  }',
+      '  function reasons() {',
+      '    var held = sp.storage.thornswoodControlsHeld || {};',
+      '    return String(held.fighting || "").split(",").filter(function (r) { return !!r; });',
+      '  }',
+      '  function name(list) {',
+      '    var held = sp.storage.thornswoodControlsHeld || {};',
+      '    if (list.length) { held.fighting = list.join(","); } else { delete held.fighting; }',
+      '    sp.storage.thornswoodControlsHeld = held;',
+      '  }',
+      '  var down = !!(v && v.down);',
+      '  var pc = sp.Game.getPlayer();',
+      '  if (!pc) { return; }',
+      '  var cell = pc.getParentCell();',
+      '  var where = cell ? cell.getFormID() : 0;',
+      '  var at = v ? v.at : 0;',
+      '  if (st.thornswoodDownAt !== at) {',
+      '    var was = !!st.thornswoodDown;',
+      '    st.thornswoodDownAt = at;',
+      '    st.thornswoodDown = down;',
+      '    st.thornswoodDownWhere = where;',
+      '    if (down) {',
+      '      step("name fighting held", function () { var r = reasons(); if (r.indexOf("down") < 0) { r.push("down"); } name(r); });',
+      '      step("turn fighting off", function () { sp.Game.disablePlayerControls(false, true, false, false, false, false, false, false, 0); });',
+      '      step("put the weapon away", function () { if (pc.isWeaponDrawn()) { pc.sheatheWeapon(); } });',
+      '      step("go down", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStart"); });',
+      '      return;',
+      '    }',
+      '    if (!was) { return; }',
+      '    var left = [];',
+      '    step("stop naming fighting held", function () { left = reasons().filter(function (r) { return r !== "down"; }); name(left); });',
+      '    step("give fighting back", function () { if (!left.length) { sp.Game.enablePlayerControls(false, true, false, false, false, false, false, false, 0); } });',
+      '    step("get up", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStop"); });',
+      '    return;',
+      '  }',
+      '  if (!down || !where || st.thornswoodDownWhere === where) { return; }',
+      '  st.thornswoodDownWhere = where;',
+      '  step("go down after a load", function () { sp.Debug.sendAnimationEvent(pc, "BleedoutStart"); });',
+      '})();'
+    ].join('\n');
+  }
+
+  try {
+    mp.makeProperty(DOWN_PROPERTY, {
+      // The owner's machine holds them; a neighbour sees the record, for the look prompt.
+      isVisibleByOwner: true,
+      isVisibleByNeighbors: true,
+      updateOwner: downScript(),
+      updateNeighbor: ''
+    });
+  } catch (e) {
+    // Already made by a previous load. The script cannot change until a restart, which a deploy is.
+  }
+
+  /*
     THE TREATMENT PANEL'S VIEW, seen by its owner only, handed to the page the
     way the repair panel's is; game/ui/thornswood-treat.js draws it, and a
     view with open set opens it. at moves on every send, so the key pressed
@@ -57616,8 +59801,11 @@ module.exports = {
     read: read, write: write, step: step, tick: tick, bleedTick: bleedTick, bleedRate: bleedRate,
     stageOf: stageOf, lines: lines, chanceFor: chanceFor,
     forNeeds: forNeeds, burntWear: burntWear, wound: wound, burning: burning, settleQuietFires: settleQuietFires,
+    clearFireExposure: clearFireExposure,
     healed: healed, cast: cast, hit: hit, swallowed: swallowed, rite: rite,
     exposed: exposed, craftRefusal: craftRefusal, died: died, scarOf: scarOf, staff: staff,
+    DOWN: DOWN, DOWN_PROPERTY: DOWN_PROPERTY, goDown: goDown, standUp: standUp, wake: wake,
+    healsHealth: healsHealth, downScript: downScript,
     BITERS: BITERS, TREAT: TREAT, TREAT_REACH: TREAT_REACH,
     weaponKind: weaponKind, woundFrom: woundFrom, bitingRaces: bitingRaces, blow: blow, landed: landed,
     needsCare: needsCare, careOf: careOf, careChanged: careChanged, plan: plan, treat: treat, viewFor: viewFor, panel: panel
@@ -57770,8 +59958,7 @@ module.exports = {
 
   function write(actorId, s) {
     s.at = Date.now();
-    if (tickMemo) { tickMemo['s' + actorId] = s; }
-    try { mp.set(actorId, SOCIAL_PROPERTY, s); return true; }
+    try { mp.set(actorId, SOCIAL_PROPERTY, s); if (tickMemo) { tickMemo['s' + actorId] = s; } return true; }
     catch (e) { return false; }
   }
 
@@ -57816,7 +60003,11 @@ module.exports = {
   function online() {
     return memo('online', function () {
       var all = [];
-      try { all = mp.get(0, 'onlinePlayers') || []; } catch (e) { return []; }
+      try { all = mp.get(0, 'onlinePlayers'); } catch (e) { return []; }
+      // Raw membership also proves disconnects for private save outcomes.
+      // Keep it only for this pass, before hiding faces still being created.
+      if (tickMemo && Array.isArray(all)) tickMemo.onlineRaw = all;
+      all = all || [];
       var chargen = g.__thornswoodChargen;
       if (!chargen || !chargen.hasStoredAppearance) { return all; }
       var out = [];
@@ -57938,7 +60129,9 @@ module.exports = {
       // prompt's Tend their wounds.
       var care = false;
       try { care = !!(g.__thornswoodHurt && g.__thornswoodHurt.careOf && g.__thornswoodHurt.careOf(id)); } catch (eCare) { care = false; }
-      at.push({ id: id, pos: pos, cell: cell, pid: profileOf(id), name: nameOfPerson(id), scar: scar, care: care });
+      var tools = g.__thornswoodStaffTools;
+      var invisible = !!(tools && tools.isInvisible && tools.isInvisible(id));
+      at.push({ id: id, pos: pos, cell: cell, pid: profileOf(id), name: nameOfPerson(id), scar: scar, care: care, invisible: invisible });
     }
 
     var reach = SOCIAL.nearReach * SOCIAL.nearReach;
@@ -57977,7 +60170,7 @@ module.exports = {
           p: them.pid,
           f: s.friends[them.pid] ? 1 : 0,
           m: s.muted[them.pid] ? 1 : 0,
-          h: (s.namesAll || (s.namesOff && s.namesOff[them.pid])) ? 1 : 0,
+          h: (them.invisible || s.namesAll || (s.namesOff && s.namesOff[them.pid])) ? 1 : 0,
           y: (party && party.members.indexOf(them.pid) !== -1) ? 1 : 0,
           s: (beds && beds.mark) ? beds.mark(me.pid, them.pid, me.cell) : 0
         };
@@ -58076,6 +60269,8 @@ module.exports = {
           p: mp.get(id, 'pos') || [0, 0, 0],
           c: String(mp.get(id, 'worldOrCellDesc') || '')
         };
+        var tools = g.__thornswoodStaffTools;
+        at[profileOf(id)].invisible = !!(tools && tools.isInvisible && tools.isInvisible(id));
       } catch (e) { }
     }
 
@@ -58093,7 +60288,7 @@ module.exports = {
           if (!row) { continue; }             // in the party and not online
           list.push({ a: row.a, n: row.n, p: row.p, c: row.c,
                       l: pid === p.leader ? 1 : 0,
-                      h: (viewer.namesAll || (viewer.namesOff && viewer.namesOff[pid])) ? 1 : 0 });
+                      h: (row.invisible || viewer.namesAll || (viewer.namesOff && viewer.namesOff[pid])) ? 1 : 0 });
         }
       }
 
@@ -58370,6 +60565,17 @@ module.exports = {
   var inParty = {};      // pid -> partyId
   var nextParty = 1;
 
+  // Public only to party owners. These bind an intent, never grant authority.
+  // Retire the UI capability on entropy failure; ordinary party play continues.
+  function rotatePartyIntent(p, creating) {
+    p.intentVersion = '';
+    try {
+      var crypto = require('crypto');
+      if (creating) p.intentId = crypto.randomBytes(24).toString('hex');
+      p.intentVersion = crypto.randomBytes(24).toString('hex');
+    } catch (e) { slog('party confirmation is unavailable'); }
+  }
+
   function partyOf(pid) {
     var id = inParty[pid];
     if (!id) { return null; }
@@ -58383,12 +60589,14 @@ module.exports = {
     if (!p) {
       var id = 'p' + (nextParty++);
       p = { leader: leaderPid, members: [leaderPid], at: Date.now() };
+      rotatePartyIntent(p, true);
       parties[id] = p;
       inParty[leaderPid] = id;
     }
     if (p.members.length >= SOCIAL.mostParty) { return 'That party is full.'; }
     if (p.members.indexOf(pid) !== -1) { return 'They are already with you.'; }
     leaveParty(pid);
+    rotatePartyIntent(p, false);
     p.members.push(pid);
     inParty[pid] = inParty[leaderPid];
     return '';
@@ -58399,6 +60607,7 @@ module.exports = {
     if (!p) { return false; }
     var id = inParty[pid];
     var at = p.members.indexOf(pid);
+    rotatePartyIntent(p, false);
     if (at !== -1) { p.members.splice(at, 1); }
     delete inParty[pid];
     if (p.leader === pid) { p.leader = p.members[0] || 0; }
@@ -58458,6 +60667,7 @@ module.exports = {
     if (p.leader !== leaderPid) { return 'Only the leader can do that.'; }
     if (p.members.indexOf(whoPid) === -1) { return 'They are not in your party.'; }
     if (p.leader === whoPid) { return 'They already lead this party.'; }
+    rotatePartyIntent(p, false);
     p.leader = whoPid;
     pushMembers(p.members.slice());
     return '';
@@ -58473,6 +60683,23 @@ module.exports = {
     delete parties[id];
     pushMembers(left);
     return '';
+  }
+
+  function partyIntent(p) {
+    return p && /^[a-f0-9]{48}$/.test(p.intentId || '') && /^[a-f0-9]{48}$/.test(p.intentVersion || '')
+      ? { id: p.intentId, version: p.intentVersion } : null;
+  }
+
+  function confirmPartyAction(pid, action, id, version, whoPid) {
+    var p = partyOf(pid);
+    var current = partyIntent(p);
+    if (!current || current.id !== id || current.version !== version) {
+      return 'The party changed. Review the current party and press again.';
+    }
+    // The canonical operations still enforce leader and exact membership.
+    if (action === 'disband') return disbandParty(pid);
+    if (action === 'kick') return kickParty(pid, whoPid);
+    return 'That party action is not available.';
   }
 
   /*
@@ -58552,8 +60779,34 @@ module.exports = {
     return null;
   }
 
-  function writePage(actorId, journalId, pageId, title, text) {
-    var s = stateOf(actorId);
+  // Kept through a gamemode reload, never persisted. One result per online
+  // actor, fenced to the owner/runtime so recycled form ids expose no prose.
+  var journalSaves = g.__thornswoodJournalSaveState || (g.__thornswoodJournalSaveState = {});
+  function journalSaveState(actorId, create) {
+    var profile, runtime;
+    try { profile = profileOf(actorId); runtime = mp.getActorRuntimeIdentity(actorId); } catch (e) { return null; }
+    if (!Number.isSafeInteger(profile) || !(profile > 0) || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) return null;
+    var state = journalSaves[actorId];
+    if (state && (state.profile !== profile || state.runtime !== runtime)) { delete journalSaves[actorId]; state = null; }
+    if (!state && create) state = journalSaves[actorId] = {profile:profile,runtime:runtime,uncertain:false,result:null};
+    return state;
+  }
+  function writePageExact(actorId, journalId, pageId, title, text) {
+    if (typeof title !== 'string' || typeof text !== 'string' || title.length > 60 || text.length > SOCIAL.pageChars) {
+      return 'That page is too long or invalid. Nothing was saved.';
+    }
+    return writePage(actorId, journalId, pageId, title, text, true);
+  }
+
+  function writePage(actorId, journalId, pageId, title, text, exact) {
+    var resultState = exact ? journalSaveState(actorId, true) : null;
+    if (exact && !resultState) return 'The page save cannot be confirmed right now. Keep your unsaved draft.';
+    // Prepare on a clone: a refused property write must not mutate the cached
+    // page and publish it as an authoritative successful save.
+    var current = exact ? readNow(actorId) : stateOf(actorId);
+    if (!current) return 'That journal cannot be read right now. Your draft has not been saved.';
+    var s = JSON.parse(JSON.stringify(current));
+    var previous = JSON.stringify(s);
     var j = findJournal(s, journalId);
     if (!j) { return 'No such journal.'; }
     /*
@@ -58576,10 +60829,34 @@ module.exports = {
       page = { id: 'p' + Date.now().toString(36) + j.pages.length, shared: {} };
       j.pages.push(page);
     }
-    page.title = String(title || 'Page').slice(0, 60);
+    page.title = exact ? title : String(title || 'Page').slice(0, 60);
     page.text = body;
     page.at = Date.now();
-    write(actorId, s);
+    var ok = write(actorId, s);
+    var status = ok ? 'saved' : 'refused';
+    var digest = '';
+    if (ok && resultState) {
+      try { digest = require('crypto').createHash('sha256').update(JSON.stringify(s)).digest('hex'); }
+      catch (eDigest) { status = 'uncertain'; }
+      // An identical-value setter queues nothing. Only our prior successful
+      // queue of this exact full snapshot can qualify that no-op as accepted.
+      if (JSON.stringify(s) === previous && (!digest || resultState.confirmedDigest !== digest)) status = 'uncertain';
+    }
+    if (!ok) {
+      if (tickMemo) delete tickMemo['s' + actorId];
+      // The native setter may apply before RequestSave/publication throws.
+      // Readback only classifies live state, never proves queued persistence.
+      try { if (JSON.stringify(mp.get(actorId, SOCIAL_PROPERTY)) !== previous) status = 'uncertain'; }
+      catch (eReadback) { status = 'uncertain'; }
+    }
+    if (resultState) {
+      if (status === 'uncertain') resultState.uncertain = true;
+      else if (status === 'saved') { resultState.uncertain = false; resultState.confirmedDigest = digest; }
+      resultState.result = {journalId:journalId,pageId:page.id,title:page.title,text:body,status:status};
+    }
+    if (!ok || status === 'uncertain') return status === 'uncertain'
+      ? 'The page save could not be confirmed. Keep the unsaved draft and check it before trying again.'
+      : 'That page could not be saved. Your draft has not been saved.';
     return '';
   }
 
@@ -58593,6 +60870,14 @@ module.exports = {
       }
     }
     return false;
+  }
+
+  function pushJournalSave(actorId) {
+    // A failed input read must not call stateOf's first-use initializer.
+    var current = readNow(actorId);
+    if (!current) return;
+    if (tickMemo) tickMemo['s' + actorId] = current;
+    push(actorId);
   }
 
   /*
@@ -58783,8 +61068,10 @@ module.exports = {
     var offerNow = standingOffer(mine);
     return {
       me: mine,
+      journalSave: (function () { var save = journalSaveState(actorId, false); return save ? save.result : null; })(),
       friends: friends,
       party: party,
+      partyIntent: partyIntent(p),
       near: near,
       hidden: hidden,
       together: partyNear(actorId),
@@ -58815,6 +61102,10 @@ module.exports = {
           if (!prop || !prop.boardPanel) { return null; }
           return prop.boardPanel(actorId, mine);
         } catch (eBoard) { return null; }
+      })(),
+      boardSubmissions: (function () {
+        var prop = g.__thornswoodProperty;
+        return prop && prop.boardSubmissions ? prop.boardSubmissions(actorId, mine) : null;
       })(),
       // J's Boards tab: the ten towns, the board picked there, read only,
       // and your jobs under it (#1627).
@@ -58888,6 +61179,12 @@ module.exports = {
     try { partyTick(); } catch (e) { slog('party tick:', e); }
     try { pushTextMutes(); } catch (e) { slog('text mute:', e); }
     var all = online();
+    // The public list can fail or omit a face still loading. Only a successful
+    // raw online read retires outcomes; an unknown read is not a disconnect.
+    var saveOnline = tickMemo && tickMemo.onlineRaw;
+    if (Array.isArray(saveOnline)) for (var savedActor in journalSaves) {
+      if (saveOnline.indexOf(Number(savedActor)) < 0) delete journalSaves[savedActor];
+    }
     for (var i = 0; i < all.length; i++) {
       try { push(all[i]); } catch (e) { }
     }
@@ -58951,8 +61248,9 @@ module.exports = {
     partyOf: partyOf, joinParty: joinParty, leaveParty: leaveParty,
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
+    confirmPartyAction: confirmPartyAction,
     partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
-    newJournal: newJournal, writePage: writePage, dropJournal: dropJournal,
+    newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,
     view: view, push: push, tick: tick, nearTick: nearTick,
     partyTick: partyTick, PARTY_PROPERTY: PARTY_PROPERTY
@@ -59361,6 +61659,11 @@ module.exports = {
     if (t.a === actorId) { t.okA = v; } else { t.okB = v; }
   }
 
+  // A public offer identifier, not an ownership credential. Fresh random
+  // versions scope every session and mutation across reloads/restarts without
+  // a resettable counter or an overflow. Crypto failure never falls back.
+  function freshOfferVersion() { return require('crypto').randomBytes(24).toString('hex'); }
+
   /*
     Any change to either pile takes BOTH confirmations back.
 
@@ -59369,7 +61672,14 @@ module.exports = {
     swap goes through on an agreement that no longer describes what is in the
     piles.
   */
-  function unconfirm(t) { t.okA = false; t.okB = false; t.at = Date.now(); }
+  function unconfirm(t, saleCuts) {
+    // Invalidate first: if minting fails, the changed pile can never retain
+    // an old valid approval or version. An unversioned offer cannot agree.
+    t.offerVersion = '';
+    t.okA = false; t.okB = false;
+    t.saleCuts = arguments.length > 1 ? saleCuts : currentSaleCuts(t);
+    t.offerVersion = freshOfferVersion();
+  }
 
   function begin(aActor, bActor) {
     if (open[aActor]) { return 'You are already trading.'; }
@@ -59379,11 +61689,17 @@ module.exports = {
       a: aActor, b: bActor,
       offerA: [], offerB: [], goldA: 0, goldB: 0,
       okA: false, okB: false, at: Date.now(),
+      offerVersion: freshOfferVersion(),
       // The company worker buying, when it is a sale out of Skyrim (#1393).
       sale: 0,
+      saleCuts: null,
       // The number the panel names each piece by, for this trade (#1718).
       keys: {}, pieces: []
     };
+    // Public continuity for local drafts, never an ownership credential.
+    // The initial offer already minted a unique identity; later edits rotate
+    // only offerVersion, while this identity lasts exactly this conversation.
+    t.sessionId = t.offerVersion;
     open[aActor] = t; open[bActor] = t;
     trades.push(t);
     push(t);
@@ -59454,10 +61770,11 @@ module.exports = {
     A name somebody can read.
 
     Skyrim.esm and the DLCs are localized. A FULL field there is not a name:
-    it is a four byte index into the strings file. String() of those bytes is
-    a row of numbers, which is what the trade list was showing. A FULL is
-    used only when it is real text. Otherwise the editor id is spaced out
-    (SteelSword becomes Steel Sword). A string index is never shown.
+    it is a four byte index into the strings file. Some indexes even look
+    printable (Hammer's is [46,74,0,0], or '.J'). Use the shared
+    decoded content names first, matched by the whole record descriptor.
+    FULL is text only when the winning plugin is proven unlocalized.
+    Unknown provenance and missing decoded names use the editor id.
   */
   function fieldText(data) {
     if (typeof data === 'string') {
@@ -59498,6 +61815,11 @@ module.exports = {
     if (Object.prototype.hasOwnProperty.call(nameCache, baseId)) { return nameCache[baseId]; }
     var label = '';
     var edid = '';
+    var names = g.__thornswoodProperty;
+    if (names && typeof names.baseItemName === 'function') {
+      try { label = names.baseItemName(baseId); }
+      catch (eName) { tlog('could not read decoded item name for', baseId + ':', eName); }
+    }
     try {
       var res = mp.lookupEspmRecordById(baseId);
       var rec = res && res.record;
@@ -59507,7 +61829,7 @@ module.exports = {
         for (var i = 0; i < fields.length; i++) {
           if (!fields[i]) { continue; }
           var t = String(fields[i].type || '');
-          if (t === 'FULL' && !label) { label = fieldText(fields[i].data); }
+          if (t === 'FULL' && !label && res.isLocalized === false) { label = fieldText(fields[i].data); }
           else if (t === 'EDID' && !edid) { edid = fieldText(fields[i].data); }
         }
       }
@@ -59651,13 +61973,13 @@ module.exports = {
         var room = hit.c - side[k].c;
         if (room <= 0) { return 'That is all of them already.'; }
         side[k].c += Math.min(n, room);
-        unconfirm(t); push(t);
+        t.at = Date.now(); unconfirm(t); push(t);
         return '';
       }
     }
     if (side.length >= TRADE.mostLines) { return 'That is as much as one side can offer.'; }
     side.push({ id: hit.id, x: hit.x, n: hit.n, c: n });
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     return '';
   }
 
@@ -59673,7 +61995,7 @@ module.exports = {
              String(side[i].id) === want || side[i].id.toString(16) === want)) {
         if (n > 0 && side[i].c > n) { side[i].c -= n; }
         else { side.splice(i, 1); }
-        unconfirm(t); push(t);
+        t.at = Date.now(); unconfirm(t); push(t);
         return '';
       }
     }
@@ -59689,7 +62011,7 @@ module.exports = {
     var have = holding(actorId, GOLD);
     if (want > have) { return 'You only have ' + have + '.'; }
     if (t.a === actorId) { t.goldA = want; } else { t.goldB = want; }
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     return '';
   }
 
@@ -59720,7 +62042,7 @@ module.exports = {
     if (!t) { return 'You are not trading.'; }
     if (t.sale === actorId) {
       t.sale = 0;
-      unconfirm(t); push(t);
+      t.at = Date.now(); unconfirm(t); push(t);
       try { say(other(t, actorId), nameOf(actorId) + ' is not buying for the company now. It is an ordinary trade.'); }
       catch (e) { }
       return '';
@@ -59730,7 +62052,7 @@ module.exports = {
       return 'Only somebody the Free Skyrim Trading Company has taken on buys for it. It is an application, in Discord.';
     }
     t.sale = actorId;
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     try {
       say(other(t, actorId), nameOf(actorId) + ' is buying for the Free Skyrim Trading Company. ' +
           'What you put up leaves Skyrim and does not come back.');
@@ -59738,20 +62060,57 @@ module.exports = {
     return '';
   }
 
-  /* The split of the price as the panel shows it to either side. */
-  function saleView(t, actorId) {
+  // Read the one canonical policy and snapshot only its actual payout. No
+  // guessed/default split is safe to agree to when terms are unavailable.
+  function currentSaleCuts(t) {
+    if (!t.sale) { return null; }
     var pr = g.__thornswoodProperty;
     var price = t.sale === t.a ? t.goldA : t.goldB;
-    var cuts = (pr && pr.saleCuts && pr.saleCuts(price)) || { price: price, worker: 0, gone: 0, seller: price };
-    return { mine: t.sale === actorId, worker: nameOf(t.sale), price: cuts.price,
-             cut: cuts.worker, gone: cuts.gone, seller: cuts.seller };
+    if (!(price > 0) || !pr || typeof pr.saleCuts !== 'function') { return null; }
+    var cuts = pr.saleCuts(price);
+    if (!cuts || !['price', 'worker', 'gone', 'seller'].every(function (key) {
+      return Number.isSafeInteger(cuts[key]) && cuts[key] >= 0;
+    }) || cuts.price !== price || cuts.worker + cuts.gone + cuts.seller !== price) { return null; }
+    return { price: cuts.price, worker: cuts.worker, gone: cuts.gone, seller: cuts.seller };
   }
 
-  function confirm(actorId) {
+  function sameSaleCuts(a, b) {
+    return !!a && !!b && a.price === b.price && a.worker === b.worker && a.gone === b.gone && a.seller === b.seller;
+  }
+
+  /* The captured split this version shows, never a live unapproved split. */
+  function saleView(t, actorId) {
+    var cuts = t.saleCuts;
+    return { mine: t.sale === actorId, worker: nameOf(t.sale), available: !!cuts,
+             price: t.sale === t.a ? t.goldA : t.goldB,
+             cut: cuts ? cuts.worker : null, gone: cuts ? cuts.gone : null, seller: cuts ? cuts.seller : null };
+  }
+
+  function confirm(actorId, offerVersion) {
     var t = tradeOf(actorId);
     if (!t) { return 'You are not trading.'; }
+    // The normal cleanup tick may still be waiting. An approval cannot revive
+    // a conversation whose full idle window has already elapsed.
+    if (Date.now() - t.at > TRADE.idleFor) { return 'The trade timed out.'; }
+    if (arguments.length !== 2 || typeof offerVersion !== 'string' || !/^[0-9a-f]{48}$/.test(offerVersion) ||
+        offerVersion !== t.offerVersion) {
+      refresh(actorId);
+      return 'The trade offer changed or the window is out of date. Read both piles and press Agree again.';
+    }
+    if (t.sale) {
+      var cuts = currentSaleCuts(t);
+      if (!cuts || !sameSaleCuts(cuts, t.saleCuts)) {
+        unconfirm(t, cuts); push(t);
+        if (!((t.sale === t.a ? t.goldA : t.goldB) > 0)) { return nameOf(t.sale) + ' has put up no gold for it.'; }
+        return cuts ? 'The company payout changed. Read the trade and press Agree again.'
+          : 'The company payout is unavailable. Put up a valid price and read the trade again before agreeing.';
+      }
+    }
     if (okOf(t, actorId)) { return 'You have already agreed.'; }
     setOk(t, actorId, true);
+    // Only a newly accepted approval renews idle time. A refused final swap
+    // may invalidate approvals, but it is not activity that keeps a trade open.
+    if (!(t.okA && t.okB)) { t.at = Date.now(); }
     push(t);
     var them = other(t, actorId);
     if (!(t.okA && t.okB)) {
@@ -59883,8 +62242,11 @@ module.exports = {
         return refuse(nameOf(seller) + ' does not have the ' + things[i].n + ' any more.');
       }
     }
-    var cuts = pr.saleCuts(price);
-    if (!cuts) { return refuse('The company\'s terms are not loaded on this server. Say so in the dev channel.'); }
+    var cuts = currentSaleCuts(t);
+    if (!cuts || !sameSaleCuts(cuts, t.saleCuts)) {
+      unconfirm(t, cuts); push(t);
+      return 'The company payout changed or is unavailable. Read the trade and press Agree again.';
+    }
     var cost = cuts.price - cuts.worker;
     var sold = saleById(seller, worker, things, cuts.seller, cost);
     if (sold === false) {
@@ -59904,14 +62266,14 @@ module.exports = {
     var me = nameOf(worker), them = nameOf(seller);
     try {
       say(seller, 'Sold to the Free Skyrim Trading Company for ' + cuts.price + ' gold. ' + what +
-          ' left Skyrim. ' + (cuts.worker
+          ' left Skyrim. ' + (cuts.worker || cuts.gone
             ? 'You receive ' + cuts.seller + ': ' + cuts.worker + ' went to ' + me + ' for handling it, and ' +
               cuts.gone + ' left the world.'
-            : 'Under 10 gold nothing is cut, and you receive the whole ' + cuts.price + '.'));
-      say(worker, 'Bought for the company at ' + cuts.price + ' gold. ' + what + ' left Skyrim. ' + (cuts.worker
+            : (cuts.price < 10 ? 'Under 10 gold nothing is cut, and you receive the whole ' : 'Nothing is cut, and you receive the whole ') + cuts.price + '.'));
+      say(worker, 'Bought for the company at ' + cuts.price + ' gold. ' + what + ' left Skyrim. ' + (cuts.worker || cuts.gone
             ? 'It cost you ' + cost + ': your ' + cuts.worker + ' for handling it stays with you, ' + cuts.gone +
               ' left the world, and ' + them + ' received ' + cuts.seller + '.'
-            : 'Under 10 gold nothing is cut: ' + them + ' received the whole ' + cuts.price + '.'));
+            : (cuts.price < 10 ? 'Under 10 gold nothing is cut: ' : 'Nothing is cut: ') + them + ' received the whole ' + cuts.price + '.'));
     } catch (e) { }
     ledger('sale', seller, worker, { gold: 0, items: things }, { gold: cuts.seller, items: [] });
     tlog(me, 'bought', them + '\'s', what, 'for the company at', cuts.price, 'gold:', cuts.seller, 'to the seller,',
@@ -59970,9 +62332,11 @@ module.exports = {
     for (var i = 0; i < things.length; i++) { pairs.push([things[i].id, things[i].c, things[i].x]); }
     var gone = withoutPairs((sellerInv.entries || []).slice(), pairs);
     var paid = withoutPairs((workerInv.entries || []).slice(), [[GOLD, cost]]);
-    if (!gone || !paid || !(share > 0) || !(cost >= share)) { return false; }
-    var landed = false;
-    for (var k = 0; k < gone.length; k++) {
+    if (!gone || !paid || !(share >= 0) || !(cost >= share)) { return false; }
+    // Canonical terms may leave the seller zero. Credit no coins in that
+    // case, preserving existing coin metadata and never creating count 0.
+    var landed = share === 0;
+    for (var k = 0; share > 0 && k < gone.length; k++) {
       if (gone[k] && gone[k].baseId === GOLD && !gone[k].worn) {
         gone[k] = { baseId: GOLD, count: (gone[k].count || 1) + share };
         landed = true;
@@ -60188,6 +62552,8 @@ module.exports = {
     var meA = t.a === actorId;
     return {
       open: true,
+      sessionId: t.sessionId,
+      offerVersion: t.offerVersion,
       them: nameOf(other(t, actorId)),
       mine: shown(t, meA ? t.offerA : t.offerB),
       theirs: shown(t, meA ? t.offerB : t.offerA),
@@ -60825,7 +63191,8 @@ module.exports = {
     bridge". Names have spaces, so the longest name of somebody in the world
     that the line starts with wins; then a first name that only one person in
     the world has; and failing both, the first word, kept as typed, because a
-    person who has already logged off can still be reported.
+    person who has already logged off can still be reported. A name shared
+    by several people here is refused before any delivery or cooldown (#4749).
 
     could is everybody in the world the name could mean (#4922), whichever
     one is picked or none: anybody a word of whose name starts with the first
@@ -60846,24 +63213,29 @@ module.exports = {
   function whoAbout(words, people) {
     var line = words.join(' ').toLowerCase();
     var could = couldBe(words, people);
-    var best = null, bestName = '';
+    var first = String(words[0] || '').toLowerCase();
+    var same = [];
+    var best = null, bestName = '', bestCount = 0;
     for (var i = 0; i < people.length; i++) {
       var n = String(people[i].name || '').toLowerCase().trim();
       if (!n) { continue; }
+      if (n.split(/\s+/, 1)[0] === first) { same.push(people[i]); }
       if ((line === n || line.indexOf(n + ' ') === 0) && n.length > bestName.length) {
         best = people[i];
         bestName = n;
+        bestCount = 1;
+      } else if (best && n === bestName) {
+        bestCount++;
       }
     }
     if (best) {
+      // A one-word full name can also be another person's first name.
+      if (bestCount > 1 || (bestName === first && same.length > 1)) { return { ambiguous: true }; }
       var used = bestName.split(/\s+/).length;
       if (could.indexOf(best) < 0) { could.push(best); }
       return { name: best.name, person: best, could: could, rest: words.slice(used).join(' ').trim() };
     }
-    var first = String(words[0] || '').toLowerCase();
-    var same = people.filter(function (p) {
-      return String(p.name || '').toLowerCase().trim().split(/\s+/)[0] === first;
-    });
+    if (same.length > 1 || could.length > 1) { return { ambiguous: true }; }
     if (first && same.length === 1) {
       return { name: same[0].name, person: same[0], could: could, rest: words.slice(1).join(' ').trim() };
     }
@@ -60945,6 +63317,11 @@ module.exports = {
         return;
       }
       about = whoAbout(words, people);
+      if (about.ambiguous) {
+        toProfile(profileId, 'That name matches more than one person. Use their full name. ' +
+          'If their full names are the same, use /helpme to explain which person you mean. Nothing was sent.');
+        return;
+      }
       said = about.rest;
       if (!said) {
         toProfile(profileId, 'Say what ' + about.name + ' did after the name, so staff know ' +
@@ -61069,7 +63446,7 @@ module.exports = {
       safely, out of a short trail the server keeps of where each character
       has been; when no such spot is known, or the one it knows is the same
       stuck place, it sends you to the nearest temple instead;
-    - once every 5 minutes for each character;
+    - once every 5 minutes for each character, including a cancelled wait;
     - refused outright while you are dead, with a line saying why;
     - in a fight it is a soft lock: a 15 second wait, cancelled if you are hit
       or you move, with a line either way; out of a fight it works at once;
@@ -61093,8 +63470,10 @@ module.exports = {
 
   THE TRAIL. Every 3 seconds, for each character in the world who is alive
   and not still being made: a new point when they are 200 units or more from
-  the last one, or in another cell, 10 kept. A sample that dropped more than
-  300 units since the last one is a fall and never becomes a point, so
+  the last one, or in another cell, at most 10 kept for one minute. A death,
+  carriage ride or server teleport starts this trail over (#4838).
+  A sample that dropped more than 300 units since the last one is a fall
+  and never becomes a point, so
   somebody who fell through the world is not sent back into the air.
 
   WHICH POINT. The newest one at least 256 units from where they are now (any
@@ -61135,6 +63514,7 @@ module.exports = {
   var TICK_MS = 1000;
   var TRAIL_MS = 3000;            // between trail samples
   var TRAIL_KEEP = 10;
+  var TRAIL_MAX_MS = 60000;       // only the last minute's steps are recent
   var TRAIL_STEP = 200;           // units from the last point before a new one
   var SAME_PLACE = 256;           // units: closer than this is the same place
   var FALL = 300;                 // units dropped between samples: a fall
@@ -61264,6 +63644,22 @@ module.exports = {
     if (!state.chars[k]) { state.chars[k] = { trail: [], hp: -1, anim: '', fightAt: 0, last: null }; }
     return state.chars[k];
   }
+  // A confirmed testing teleport starts a new local trail. It is not a use
+  // of /stuck and cannot erase combat history or an existing cooldown.
+  function teleported(pid, actorId) {
+    resetTrail(actorId);
+    if (state.waiting[pid] && state.waiting[pid].actorId === actorId) { delete state.waiting[pid]; }
+  }
+
+  // A server move begins a new journey. Keep the cooldown and the last
+  // successful escape's trap information, which are independent of steps.
+  function resetTrail(actorId) {
+    var c = state.chars[hex(actorId)];
+    if (c) { c.trail = []; c.last = null; }
+  }
+  function expireTrail(c, now) {
+    while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
+  }
 
   /* The Discord account the join pass for this profile named, or ''. */
   function accountOf(pid) {
@@ -61288,7 +63684,8 @@ module.exports = {
   /* One character, every few seconds: the trail. */
   function trailOne(actorId, now) {
     var c = charOf(actorId);
-    if (isDead(actorId) || inCreation(actorId)) { c.last = null; return; }
+    if (isDead(actorId) || inCreation(actorId)) { resetTrail(actorId); return; }
+    expireTrail(c, now);
     var here = placeOf(actorId);
     if (!here) { return; }
     var falling = !!(c.last && c.last.desc === here.desc && c.last.pos[2] - here.pos[2] > FALL);
@@ -61339,6 +63736,7 @@ module.exports = {
   /* The spot a few steps back, or null. */
   function backSpot(actorId, here) {
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     var before = state.used[hex(actorId)];
     // Still where the last /stuck put them: that spot is the stuck place.
     if (before && before.to && samePlace(before.to, here)) { return null; }
@@ -61356,6 +63754,7 @@ module.exports = {
     var f = frameOf(here.desc);
     if (f) { return { frame: f, x: here.pos[0], y: here.pos[1] }; }
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     for (var i = c.trail.length - 1; i >= 0; i--) {
       var tf = frameOf(c.trail[i].desc);
       if (tf) { return { frame: tf, x: c.trail[i].pos[0], y: c.trail[i].pos[1] }; }
@@ -61476,9 +63875,15 @@ module.exports = {
   }
 
   // --------------------------------------------------------------- wait --
-  function cancel(pid, w, because, said) {
+  function cancel(pid, w, now, because, said) {
     delete state.waiting[pid];
-    tell(pid, said);
+    // A cancelled fight wait is a use too (#4784). Keep the last move's
+    // origin and destination: backSpot still needs them to avoid a trap.
+    var key = hex(w.actorId);
+    var used = state.used[key] || {};
+    used.at = now;
+    state.used[key] = used;
+    tell(pid, said + ' You can use it again in 5 minutes.');
     record(pid, w.actorId, nameOf(w.actorId),
            'used /stuck in a fight and the wait was cancelled because ' + because +
            ', at ' + where(w.from) + '. Nobody was moved.',
@@ -61499,22 +63904,22 @@ module.exports = {
         continue;
       }
       if (isDead(w.actorId)) {
-        cancel(pid, w, 'they died',
+        cancel(pid, w, now, 'they died',
                '/stuck was cancelled because you died. You will wake at the nearest temple. ' +
                'This use is logged for staff.');
         continue;
       }
       var hp = health(w.actorId);
       if (hp >= 0 && w.hp >= 0 && hp < w.hp - 0.001) {
-        cancel(pid, w, 'they were hit',
-               '/stuck was cancelled because you were hit. Get clear of the fight and try again. ' +
+        cancel(pid, w, now, 'they were hit',
+               '/stuck was cancelled because you were hit. Get clear of the fight. ' +
                'This use is logged for staff.');
         continue;
       }
       if (hp >= 0) { w.hp = hp; }
       var here = placeOf(w.actorId);
       if (here && (here.desc !== w.from.desc || dist3(here.pos, w.from.pos) > MOVE_SLACK)) {
-        cancel(pid, w, 'they moved',
+        cancel(pid, w, now, 'they moved',
                '/stuck was cancelled because you moved. Stand still for the whole 15 seconds, ' +
                'or walk out if you can. This use is logged for staff.');
         continue;
@@ -61597,6 +64002,7 @@ module.exports = {
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
+    resetTrail: resetTrail, teleported: teleported,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };
@@ -61609,6 +64015,188 @@ module.exports = {
 })();
 // ==== end thornswood stuck ====
 
+// Registered playtest/admin tools and their role-specific help (#6731).
+// Only modules loaded by the server can register an implemented command.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var levels = { playtester: 1, staff: 2, admin: 3 };
+  var modules = Object.create(null), routes = Object.create(null), entries = [];
+
+  function register(id, definition) {
+    if (typeof id !== 'string' || !/^[a-z][a-z0-9-]*$/.test(id) || modules[id] || !definition ||
+        typeof definition.command !== 'function' || !Array.isArray(definition.help) || !definition.help.length) {
+      throw new Error('A command module needs a unique name, a handler and help entries.');
+    }
+    var own = Object.create(null);
+    var added = definition.help.map(function (entry) {
+      if (!entry || typeof entry.word !== 'string' || !/^\/[a-z][a-z0-9-]*$/.test(entry.word) ||
+          typeof entry.role !== 'string' ||
+          !Object.prototype.hasOwnProperty.call(levels, entry.role) ||
+          typeof entry.syntax !== 'string' || !entry.syntax.trim() ||
+          typeof entry.text !== 'string' || !entry.text.trim() || routes[entry.word] || own[entry.word + '|' + entry.role]) {
+        throw new Error('Command help needs a unique command, a known role, syntax and a description.');
+      }
+      own[entry.word + '|' + entry.role] = true;
+      return { word: entry.word, role: entry.role, syntax: entry.syntax, text: entry.text };
+    });
+    modules[id] = definition.command;
+    added.forEach(function (entry) {
+      if (!routes[entry.word] || levels[entry.role] < levels[routes[entry.word].role]) {
+        routes[entry.word] = { handler: definition.command, role: entry.role };
+      }
+      entries.push(entry);
+      if (WORDS.indexOf(entry.word) === -1) { WORDS.push(entry.word); }
+    });
+  }
+
+  function command(cmd, word, parts, pid, actorId) {
+    var route = routes[word];
+    if (!route) { return false; }
+    var staff = g.__thornswoodStaff;
+    if (!staff) { throw new Error('The staff authorization boundary is not available.'); }
+    var refused = staff.authorizeTool(cmd, pid, actorId, route.role);
+    if (refused) { staff.tell(pid, refused); return true; }
+    route.handler(cmd, word, parts, pid, actorId);
+    return true;
+  }
+
+  function help(role) {
+    var level = levels[role] || 0;
+    return entries.filter(function (entry) { return levels[entry.role] <= level; })
+      .map(function (entry) { return { word: entry.word, role: entry.role, syntax: entry.syntax, text: entry.text }; });
+  }
+  g.__thornswoodCommandTools = { register: register, command: command, help: help };
+
+  // These predate the module catalog and are implemented by the existing
+  // router/staff blocks. Their canonical detailed reference is the guide.
+  var legacy = [
+    { role: 'playtester', syntax: '/give <item> [count]', text: 'Give yourself an item; for example /give iron ore 5.' },
+    { role: 'playtester', syntax: '/spawn <creature> [count] [keep]', text: 'Spawn nearby; for example /spawn troll 2.' },
+    { role: 'playtester', syntax: '/tp <place>, /goto <place>', text: 'Move yourself; for example /tp whiterun.' },
+    { role: 'playtester', syntax: '/where', text: 'Read your current location and facing.' },
+    { role: 'staff', syntax: '/silence <person> [length] [why], /unsilence <person>', text: 'Silence or restore speech.' },
+    { role: 'staff', syntax: '/freeze <person> [why], /unfreeze <person>', text: 'Hold someone in place or release them.' },
+    { role: 'staff', syntax: '/goto <person>, /bring <person>, /tp <person> <place>', text: 'Move yourself to someone, or move them.' },
+    { role: 'staff', syntax: '/give <person> <item> [count], /spawnat <person> <creature> [count]', text: 'Give items or spawn nearby.' },
+    { role: 'staff', syntax: '/warn <person> <why>, /kick <person> [why]', text: 'Warn someone or end their session.' },
+    { role: 'staff', syntax: '/ban <person> <length> <why>, /banaccount <person> <length> <why>', text: 'Ban one character or their account.' },
+    { role: 'staff', syntax: '/unban <person>, /unbanaccount <person>, /note <person> <text>', text: 'Lift a ban or keep a staff note.' },
+    { role: 'staff', syntax: '/pk <person> <why>', text: 'Record a permanent character death.' },
+    { role: 'staff', syntax: '/hurt <person> [what], /despawn', text: 'Inspect or set a scene injury, or remove a spawned creature.' },
+    { role: 'admin', syntax: '/unpk <person or character> <why>', text: 'Undo a permanent death made by mistake.' },
+    { role: 'admin', syntax: '/embassy, /remnant', text: 'Read and manage the corresponding rolls.' }
+  ];
+
+  function showHelp(cmd, word, parts, pid, actorId) {
+    var role = word === '/adminhelp' ? 'admin' : word === '/staffhelp' ? 'staff' : 'playtester';
+    var staff = g.__thornswoodStaff;
+    if (parts.length !== 1) { staff.tell(pid, 'Usage: ' + word); return true; }
+    var title = role === 'admin' ? 'Admin commands' : role === 'staff' ? 'Staff commands' : 'Playtest commands';
+    staff.tell(pid, title + ': self-only playtest tools work on both Dev and Main.');
+    legacy.filter(function (entry) { return levels[entry.role] <= levels[role]; })
+      .concat(help(role)).forEach(function (entry) { staff.tell(pid, entry.syntax + ': ' + entry.text); });
+    return true;
+  }
+  register('help', {
+    command: showHelp,
+    help: [
+      { word: '/testhelp', role: 'playtester', syntax: '/testhelp', text: 'Show your self-only test commands.' },
+      { word: '/staffhelp', role: 'staff', syntax: '/staffhelp', text: 'Show the staff moderation commands.' },
+      { word: '/adminhelp', role: 'admin', syntax: '/adminhelp', text: 'Show the admin commands and the lower tiers.' }
+    ]
+  });
+})();
+// ==== thornswood admin rename ====
+// #6739: change the saved appearance name through the engine's normal
+// appearance binding, which persists it and reliably updates its listeners.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var MAX_NAME = 60;
+  // Refuse invisible controls, markup and malformed Unicode; never remove
+  // them and quietly save a different name. Ordinary spaces are normalized.
+  var UNSAFE = /[\p{C}\p{Zl}\p{Zp}<>]/u;
+  var NAME = /^[\p{L}\p{M}\p{N} .'\u2019-]+$/u;
+
+  function validateName(text) {
+    if (typeof text !== 'string' || UNSAFE.test(text)) {
+      return { why: 'A name cannot contain controls, invisible marks or markup.' };
+    }
+    var name = text.normalize('NFC').trim().replace(/ +/g, ' ');
+    if (!name || !/[\p{L}\p{N}]/u.test(name)) { return { why: 'A name needs at least one letter or number.' }; }
+    if (Array.from(name).length > MAX_NAME) { return { why: 'A name is at most 60 characters.' }; }
+    if (!NAME.test(name)) { return { why: 'Use letters, numbers, spaces, apostrophes, hyphens or periods in a name.' }; }
+    return { name: name, why: '' };
+  }
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/rename') { return false; }
+    var staff = g.__thornswoodStaff;
+    if (!staff || typeof staff.authorizeTool !== 'function') {
+      if (g.__thornswoodToProfile) { g.__thornswoodToProfile(pid, 'Renaming is unavailable right now.'); }
+      return true;
+    }
+    // Self and other-character renames have exactly the same admin boundary.
+    var refused = staff.authorizeTool(cmd, pid, actorId, 'admin');
+    if (refused) { staff.tell(pid, refused); return true; }
+    if (UNSAFE.test(String(cmd.text || ''))) {
+      staff.tell(pid, 'A name cannot contain controls, invisible marks or markup.');
+      return true;
+    }
+    var words = parts.slice(1);
+    var target;
+    if (String(words[0] || '').toLowerCase() === 'self') {
+      target = { actorId: actorId, pid: pid, rest: words.slice(1) };
+    } else {
+      target = staff.takePerson(words);
+      if (!target.actorId) { staff.tell(pid, target.why || 'Name somebody who is in the world.'); return true; }
+    }
+    if (!target.rest.length) {
+      staff.tell(pid, 'Use /rename self <new name> or /rename <person> <new name>.');
+      return true;
+    }
+    var named = validateName(target.rest.join(' '));
+    if (named.why) { staff.tell(pid, named.why); return true; }
+    var saved;
+    try { saved = mp.get(target.actorId, 'appearance'); }
+    catch (eRead) { staff.tell(pid, 'The server could not read that character\'s saved appearance, so the name was not changed.'); return true; }
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+      staff.tell(pid, 'That character has no saved appearance to rename yet.');
+      return true;
+    }
+    var oldName = String(saved.name || '');
+    if (oldName === named.name) { staff.tell(pid, 'That character is already called ' + named.name + '.'); return true; }
+    // Take the requestor's name before a self rename changes it.
+    var byName = staff.nameOf(actorId);
+    var next = Object.assign({}, saved, { name: named.name });
+    try { mp.set(target.actorId, 'appearance', next); }
+    catch (eWrite) { staff.tell(pid, 'The server could not rename that character. Nothing was confirmed; try again later.'); return true; }
+    staff.record('rename', pid, byName, target.pid, oldName,
+      'Renamed to ' + named.name + '.', 0,
+      { character: target.actorId.toString(16), oldName: oldName, newName: named.name });
+    // Publish from the same saved appearance used by the normal roster and
+    // nearby views, including when somebody disconnects before their timer.
+    if (g.__thornswoodRefreshRoster) { g.__thornswoodRefreshRoster(); }
+    var social = g.__thornswoodSocial;
+    if (social && social.nearTick) { social.nearTick(); }
+    staff.tell(pid, 'Renamed ' + (target.actorId === actorId ? 'your character' : oldName) +
+      ' to ' + named.name + '. This is logged for staff.');
+    if (target.pid !== pid) { staff.tell(target.pid, 'An admin renamed your character to ' + named.name + '. This is logged for staff.'); }
+    return true;
+  }
+
+  g.__thornswoodRename = { command: command, validateName: validateName };
+  if (g.__thornswoodCommandTools) {
+    g.__thornswoodCommandTools.register('rename', {
+      command: command,
+      help: [{ word: '/rename', role: 'admin',
+        syntax: '/rename self <newname> | /rename <person> <newname>',
+        text: 'Renames the same saved character. Names use 1 to 60 characters: letters, numbers, spaces, apostrophes, hyphens or periods.' }]
+    });
+  }
+})();
+// ==== end thornswood admin rename ====
 // ==== thornswood staff ====
 /*
   WHAT A MODERATOR CAN DO IN THE WORLD. Issue #412, "A moderator has no powers
@@ -61620,7 +64208,7 @@ module.exports = {
     /unfreeze <person>            lets them go
     /bring <person>               moves them to you
     /goto <person>                moves you to them (/goto <place> is still the place teleport)
-    /silence <person> [minutes] [why]   their voice, what they type, the words above their head, and the speaking mark stop; 30 minutes unless said
+    /silence <person> [length] [why]   minutes or /ban's length forms; a day at most, 30 minutes unless said
     /unsilence <person>           lets them speak again
     /warn <person> <why>          tells them, in their chat, that staff have warned them
     /give <person> <item> [count]         puts it in their pack
@@ -61713,7 +64301,7 @@ module.exports = {
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w and /s are held back by the voice service itself.
+  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
   var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
@@ -61726,9 +64314,152 @@ module.exports = {
   // On globalThis, so a hot reload keeps who is frozen and who is silenced.
   if (!g.__thornswoodStaffState) { g.__thornswoodStaffState = { frozen: {}, silenced: {} }; }
   var state = g.__thornswoodStaffState;
+  var restraintGeneration = (g.__thornswoodRestraintGeneration || 0) + 1;
+  g.__thornswoodRestraintGeneration = restraintGeneration;
+  var restraintFile = null;
+  try {
+    var restraintSettings = mp.getServerSettings();
+    if (!object(restraintSettings) || (restraintSettings.privDir !== undefined &&
+        (typeof restraintSettings.privDir !== 'string' || !restraintSettings.privDir))) { throw new Error('private folder settings are invalid'); }
+    restraintFile = path.join(restraintSettings.privDir || 'private', 'staff-restraints.json');
+  } catch (e) { log('staff restraints: could not establish the private folder: ' + e); }
+  var restraintBytes = null, restraintRevision = 0, restraintWipes = [], restraintsReady = false;
+
+  // One private authority. Runtime notice timestamps and ban overlays do not
+  // belong in this book. A stale hot-reload closure cannot become its writer.
+  function currentRestraints() { return g.__thornswoodRestraintGeneration === restraintGeneration; }
+  function object(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function profileKey(k) { return /^[1-9][0-9]*$/.test(k) && Number.isSafeInteger(Number(k)); }
+  function vector(v) { return Array.isArray(v) && v.length === 3 && v.every(function (n) { return typeof n === 'number' && Number.isFinite(n); }); }
+  function anchor(v) {
+    if (!object(v) || typeof v.desc !== 'string' || !v.desc || v.desc.length > 512 ||
+        !vector(v.pos) || !vector(v.rot) || !Number.isSafeInteger(v.by) || v.by <= 0) {
+      throw new Error('invalid freeze anchor');
+    }
+    var out = { desc: v.desc, pos: v.pos.slice(), rot: v.rot.slice(), by: v.by };
+    if (v.pending !== undefined) {
+      if (!object(v.pending) || typeof v.pending.desc !== 'string' || !v.pending.desc ||
+          v.pending.desc.length > 512 || !vector(v.pending.pos) || !vector(v.pending.rot)) {
+        throw new Error('invalid pending movement');
+      }
+      out.pending = { desc: v.pending.desc, pos: v.pending.pos.slice(), rot: v.pending.rot.slice() };
+    }
+    return out;
+  }
+  function restraintDocument(v) {
+    if (!object(v) || v.version !== 1 || !Number.isSafeInteger(v.revision) || v.revision < 0 ||
+        !object(v.frozen) || !object(v.silenced)) { throw new Error('invalid restraint book'); }
+    var wipes = v.clearedWipes === undefined ? [] : v.clearedWipes;
+    if (!Array.isArray(wipes) || wipes.some(function (id) { return typeof id !== 'string' || !/^[0-9a-f]{32}$/.test(id); }) ||
+        new Set(wipes).size !== wipes.length) { throw new Error('invalid freeze-wipe receipts'); }
+    var out = { version: 1, revision: v.revision, frozen: {}, silenced: {}, clearedWipes: wipes.slice() };
+    Object.keys(v.frozen).forEach(function (k) {
+      if (!profileKey(k)) { throw new Error('invalid frozen profile'); }
+      out.frozen[k] = anchor(v.frozen[k]);
+    });
+    Object.keys(v.silenced).forEach(function (k) {
+      var s = v.silenced[k];
+      if (!profileKey(k) || !object(s) || !Number.isSafeInteger(s.until) || s.until <= 0 ||
+          !Number.isSafeInteger(s.by) || s.by <= 0) {
+        throw new Error('invalid silence');
+      }
+      out.silenced[k] = { until: s.until, by: s.by };
+    });
+    return out;
+  }
+  function restraintUnavailable(why) {
+    restraintsReady = false;
+    log('staff restraints unavailable: ' + why + '. Repair the private book; new admissions and restraint changes are refused.');
+  }
+  function readRestraintBytes() {
+    if (!restraintFile || !fs) { throw new Error('private restraint storage is unavailable'); }
+    var bytes = fs.readFileSync(restraintFile);
+    if (bytes.length > 4 * 1024 * 1024) { throw new Error('restraint book exceeds 4 MiB'); }
+    var text = bytes.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(bytes)) { throw new Error('restraint book is not UTF-8'); }
+    return text;
+  }
+  function encodeRestraints(doc) {
+    var bytes = JSON.stringify(doc);
+    if (Buffer.byteLength(bytes, 'utf8') > 4 * 1024 * 1024) { throw new Error('staged restraint book exceeds 4 MiB'); }
+    return bytes;
+  }
+  function acceptRestraints(doc, bytes) {
+    state.frozen = doc.frozen; state.silenced = doc.silenced;
+    restraintRevision = doc.revision; restraintBytes = bytes; restraintsReady = true;
+    g.__thornswoodRestraintBookKnown = restraintFile;
+    restraintWipes = doc.clearedWipes;
+  }
+  function loadRestraints() {
+    if (!currentRestraints()) { return false; }
+    try {
+      var bytes;
+      try { bytes = readRestraintBytes(); }
+      catch (e) {
+        if (!e || e.code !== 'ENOENT' || restraintBytes !== null || g.__thornswoodRestraintBookKnown === restraintFile) { throw e; }
+        // First upgrade can carry real in-process restraints from the former
+        // memory-only module. Validate them before their first durable save.
+        var initial = restraintDocument({ version: 1, revision: 0, frozen: state.frozen, silenced: state.silenced });
+        bytes = encodeRestraints(initial);
+        fs.mkdirSync(path.dirname(restraintFile), { recursive: true });
+        try { mp.writeFileWhole(restraintFile, bytes); }
+        catch (writeError) { if (readRestraintBytes() !== bytes) { throw writeError; } }
+        if (readRestraintBytes() !== bytes) { throw new Error('initial restraint book was not placed'); }
+      }
+      acceptRestraints(restraintDocument(JSON.parse(bytes)), bytes);
+      return true;
+    } catch (e) { restraintUnavailable(e); return false; }
+  }
+  function restraintReady() { return currentRestraints() && (restraintsReady || loadRestraints()); }
+  function saveRestraints(change) {
+    if (!restraintReady()) { return false; }
+    try {
+      if (readRestraintBytes() !== restraintBytes) { throw new Error('restraint book changed outside its current writer'); }
+      var doc = restraintDocument({ version: 1, revision: restraintRevision + 1, frozen: state.frozen, silenced: state.silenced, clearedWipes: restraintWipes });
+      change(doc);
+      doc = restraintDocument(doc);
+      var next = encodeRestraints(doc);
+      var writeError = null;
+      try { mp.writeFileWhole(restraintFile, next); } catch (e) { writeError = e; }
+      var observed = readRestraintBytes();
+      if (observed !== next) {
+        if (observed !== restraintBytes) { restraintUnavailable('unrecognized write outcome'); }
+        log('staff restraints: change was not committed: ' + (writeError || 'the requested bytes were not placed'));
+        return false;
+      }
+      acceptRestraints(doc, next);
+      return true;
+    } catch (e) { restraintUnavailable(e); return false; }
+  }
+  function requireRestraintSave(pid, change) {
+    if (saveRestraints(change)) { return true; }
+    tell(pid, currentRestraints() ? 'The restraint change could not be saved. No success was recorded; staff must check the private restraint book.'
+                                : 'The staff module was reloaded. Use the current command again.');
+    return false;
+  }
+  loadRestraints();
+  if (typeof g.__thornswoodRelease === 'function') {
+    g.__thornswoodRelease('restraints', function (who) {
+      if (!restraintReady()) { return { saved: false }; }
+      var wipes = who.freezeWipeIds ? who.freezeWipeIds() : [];
+      var unseen = wipes.filter(function (id) { return restraintWipes.indexOf(id) === -1; });
+      var freezes = Object.keys(state.frozen).filter(function (pid) { return unseen.length || who.profile(pid); });
+      var silences = Object.keys(state.silenced).filter(function (pid) { return who.profile(pid); });
+      var saved = true;
+      if (freezes.length || silences.length || unseen.length) {
+        saved = saveRestraints(function (doc) {
+          freezes.forEach(function (pid) { delete doc.frozen[pid]; });
+          silences.forEach(function (pid) { delete doc.silenced[pid]; });
+          doc.clearedWipes = doc.clearedWipes.concat(unseen);
+        });
+      }
+      return { saved: saved, counts: { freezes: freezes.length, silences: silences.length, wipes: unseen.length } };
+    });
+  }
   // Bans made here, until the door's next list carries them; and who is
   // already on their way out, so the sweep tells them once.
   if (!state.banned) { state.banned = {}; }
+  var bansLoadedAt = Date.now();  // old hot-reload overlays have no acknowledgement time
   if (!state.ending) { state.ending = {}; }
   // Characters killed for good here (#1010), until the door's list carries them.
   if (!state.pk) { state.pk = {}; }
@@ -61737,6 +64468,37 @@ module.exports = {
   // Bans lifted here, so the door's list, which can carry a lifted ban for up
   // to its five minute refresh, does not end their session again meanwhile.
   if (!state.lifted) { state.lifted = {}; }
+  migrateScopes(state.banned);
+  migrateScopes(state.lifted);
+
+  // Existing hot reloads can carry a single receipt or lift per character.
+  function migrateScopes(records) {
+    Object.keys(records).forEach(function (pid) {
+      var record = records[pid];
+      if (!record.scope && record.at === undefined && record.until === undefined) { return; }
+      var scopes = {};
+      scopes[record.scope || 'account'] = record;
+      records[pid] = scopes;
+    });
+  }
+  function recordScope(records, pid, scope, record) {
+    if (!records[pid]) { records[pid] = {}; }
+    records[pid][scope] = record;
+  }
+  function forgetScope(records, pid, scope) {
+    var scopes = records[pid];
+    if (!scopes) { return; }
+    delete scopes[scope];
+    if (!scopes.account && !scopes.character) { delete records[pid]; }
+  }
+  function pruneScopes(records, expired) {
+    Object.keys(records).forEach(function (pid) {
+      var scopes = records[pid];
+      Object.keys(scopes).forEach(function (scope) {
+        if (expired(scopes[scope])) { forgetScope(records, pid, scope); }
+      });
+    });
+  }
 
   function settings() {
     try { return mp.getServerSettings() || {}; } catch (e) { return {}; }
@@ -61754,7 +64516,10 @@ module.exports = {
 
   function tell(pid, text) {
     var t = g.__thornswoodToProfile;
-    if (t && pid) { t(pid, text); }
+    if (t && pid) {
+      try { t(pid, text); }
+      catch (e) { log('staff: notification could not reach profile ' + pid + ': ' + e); }
+    }
   }
 
   function online() {
@@ -61839,6 +64604,24 @@ module.exports = {
     return '';
   }
 
+  // Shared boundary for self-only playtest tools and admin utilities. These
+  // roles are the command router's existing tiers, including explicit lists.
+  // A profile in a message alone never authorizes an action on an actor.
+  function authorizeTool(cmd, pid, actorId, tier) {
+    if (['playtester','staff','admin'].indexOf(tier) === -1) { return REFUSED; }
+    var proof = unproven(cmd,pid);
+    if (proof) { return proof; }
+    try {
+      var roles = g.__thornswoodCommandRoles;
+      if (!roles || typeof roles[tier] !== 'function' || !roles[tier](pid)) { return REFUSED; }
+      if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(actorId) || actorId <= 0 ||
+          online().indexOf(actorId) === -1 || Number(mp.get(actorId,'profileId')) !== pid) {
+        return 'The command needs your own current character in the world.';
+      }
+    } catch (e) { return 'The command could not verify your current character and role.'; }
+    return '';
+  }
+
   /*
     One line in thornswood.log and one in moderation.log for the bot. extra,
     when given, is more of the same row: the property block's staff presses
@@ -61866,32 +64649,106 @@ module.exports = {
 
   function placeOf(actorId) {
     try {
-      return { desc: String(mp.get(actorId, 'worldOrCellDesc') || ''),
-               pos: (mp.get(actorId, 'pos') || [0, 0, 0]).slice(0, 3),
-               rot: (mp.get(actorId, 'angle') || [0, 0, 0]).slice(0, 3) };
+      var desc = mp.get(actorId, 'worldOrCellDesc'), pos = mp.get(actorId, 'pos'), rot = mp.get(actorId, 'angle');
+      if (typeof desc !== 'string' || !desc || !vector(pos) || !vector(rot)) { return null; }
+      return { desc: desc, pos: pos.slice(), rot: rot.slice() };
     } catch (e) { return null; }
   }
   function moveTo(actorId, where) {
     mp.set(actorId, 'locationalData', { cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
+  }
+
+  function movementIdentity(pid, actor) {
+    var native = mp.getNpcAIState(actor), runtime = mp.getActorRuntimeIdentity(actor), user = mp.getUserByActor(actor);
+    if (!native || native.profileId !== pid || native.isHuman !== true || native.isConnected !== true ||
+        !Number.isSafeInteger(native.lifeGeneration) || native.lifeGeneration < 0 ||
+        typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) || !Number.isInteger(user) || user < 0 ||
+        profileOf(actor) !== pid || online().indexOf(actor) < 0) { throw new Error('character identity changed'); }
+    var guid = mp.getUserGuid(user);
+    if (typeof guid !== 'string' || !guid) { throw new Error('connection identity unavailable'); }
+    return { actor: actor, pid: pid, runtime: runtime, life: native.lifeGeneration, user: user, guid: guid };
+  }
+  function sameMovementIdentity(who) {
+    try {
+      var now = movementIdentity(who.pid, who.actor);
+      return now.runtime === who.runtime && now.life === who.life && now.user === who.user && now.guid === who.guid;
+    } catch (e) { return false; }
+  }
+  function holdPendingMovement(who, caller) {
+    tell(caller, 'Movement may already have occurred, but its frozen position could not be confirmed and saved. The character is held out until staff check the problem and explicitly /unfreeze ' + who.pid + '.');
+    log('staff restraints: profile ' + who.pid + ' has pending movement; no teleport retry or rollback was requested');
+    var sentence = 'A staff move could not be confirmed and saved. Staff must resolve your frozen character before you return.';
+    if (!sameMovementIdentity(who)) { return; }
+    try { sessionEnds(who.pid, sentence); } catch (e) { log('staff restraints: pending-move session notice failed: ' + e); }
+    // The notice can call transport code. Recheck the entire connection/life
+    // immediately before ending it; never act on a replacement character.
+    if (sameMovementIdentity(who)) {
+      try { mp.kick(who.user); } catch (e) { log('staff restraints: could not end pending-move connection: ' + e); }
+    }
+  }
+  function samePlace(a, b) {
+    return a && b && a.desc === b.desc && a.pos.every(function (n, i) { return n === b.pos[i]; }) &&
+      a.rot.every(function (n, i) { return n === b.rot[i]; });
+  }
+  function moveStaffPerson(mover, movedPid, dest, caller) {
+    var frozen, who;
+    if (!currentRestraints()) { tell(caller, 'The staff module was reloaded. Use the current command again.'); return false; }
+    if (!restraintReady()) { tell(caller, 'Staff restraint authority is unavailable. No movement was requested.'); return false; }
+    frozen = state.frozen[movedPid];
+    if (frozen) {
+      if (frozen.pending) { tell(caller, 'That frozen character already has unresolved movement. Check the problem and explicitly /unfreeze ' + movedPid + '.'); return false; }
+      try { who = movementIdentity(movedPid, mover); }
+      catch (e) { tell(caller, 'The server could not verify that character. No movement was requested.'); return false; }
+      if (!requireRestraintSave(caller, function (doc) {
+        doc.frozen[movedPid].pending = { desc: dest.desc, pos: dest.pos.slice(), rot: dest.rot.slice() };
+      })) { return false; }
+      if (!sameMovementIdentity(who)) { holdPendingMovement(who, caller); return false; }
+    }
+    try { mp.set(mover, 'locationalData', { cellOrWorldDesc: dest.desc, pos: dest.pos, rot: dest.rot }); }
+    catch (e) { log('staff: native movement returned an error; checking the actual location: ' + e); }
+    var observed = placeOf(mover);
+    if (frozen) {
+      if (!observed || !sameMovementIdentity(who) || !saveRestraints(function (doc) {
+        observed.by = frozen.by; doc.frozen[movedPid] = observed;
+      })) { holdPendingMovement(who, caller); return false; }
+    }
+    if (!samePlace(observed, dest)) {
+      tell(caller, 'The requested destination was not confirmed. No successful move was recorded.'); return false;
+    }
+    // A post-move trail publication failure cannot turn a confirmed move and
+    // saved anchor into an apparent refusal that invites duplicate movement.
+    try {
+      var stuck = g.__thornswoodStuck;
+      if (stuck && stuck.resetTrail) { stuck.resetTrail(mover); }
+    } catch (e) { log('staff: confirmed movement could not reset the stuck trail: ' + e); }
+    return true;
   }
 
   // ------------------------------------------------------------ silence --
   function silencedFor(pid) {
     var s = state.silenced[pid];
     if (!s) { return 0; }
-    if (Date.now() >= s.until) { delete state.silenced[pid]; pushSilenced(); return 0; }
+    if (Date.now() >= s.until) { return 0; }
     return Math.max(1, Math.ceil((s.until - Date.now()) / 60000));
   }
 
   /* The whole list to the voice service, which holds back their lines. */
   function pushSilenced() {
-    if (!http) { return; }
+    if (!http || !restraintReady()) { return; }
     var now = Date.now();
     var list = {};
+    var expired = Object.keys(state.silenced).filter(function (k) { return state.silenced[k].until <= now; });
+    if (expired.length) {
+      saveRestraints(function (doc) { expired.forEach(function (k) { delete doc.silenced[k]; }); });
+      // Pruning can discover a changed or unreadable book. Keep voice's last
+      // confirmed list until the private authority can be read again.
+      if (!restraintsReady) { return; }
+    }
     for (var k in state.silenced) {
       if (!Object.prototype.hasOwnProperty.call(state.silenced, k)) { continue; }
       if (state.silenced[k].until > now) { list[k] = state.silenced[k].until; }
-      else { delete state.silenced[k]; }
     }
     var body = JSON.stringify({ profiles: list });
     try {
@@ -61909,10 +64766,12 @@ module.exports = {
   /* Anybody frozen who has moved is put back. Kept by profile, so leaving and
      coming back does not undo it. */
   function freezeTick() {
+    if (!currentRestraints()) { return; }
     var now = Date.now();
     for (var k in state.frozen) {
       if (!Object.prototype.hasOwnProperty.call(state.frozen, k)) { continue; }
       var f = state.frozen[k];
+      if (f.pending) { continue; }
       var a = actorFor(Number(k));
       if (!a) { continue; }
       var here = placeOf(a);
@@ -61995,6 +64854,10 @@ module.exports = {
   function doAimed(a, pid, actorId, me, look) {
     var them = a.them;
     if (!them.actorId) { tell(pid, them.why); return true; }
+    if (a.kind === 'tp' && them.pid === pid && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
 
     if (a.kind === 'give') {
       var hit = look.findThing(a.want);
@@ -62050,10 +64913,7 @@ module.exports = {
       destName = fp.where.town;
     }
     if (!dest || !dest.desc) { tell(pid, 'The server cannot tell where that is right now. Try again.'); return true; }
-    try { moveTo(them.actorId, dest); } catch (e) { tell(pid, 'That did not work: ' + e); return true; }
-    if (state.frozen[them.pid]) {
-      state.frozen[them.pid] = { desc: dest.desc, pos: dest.pos.slice(0, 3), rot: dest.rot.slice(0, 3), by: state.frozen[them.pid].by };
-    }
+    if (!moveStaffPerson(them.actorId, them.pid, dest, pid)) { return true; }
     tell(pid, 'Sent ' + them.name + ' to ' + destName + '.');
     if (them.pid !== pid) { tell(them.pid, 'Staff sent you to ' + destName + '.'); }
     record('tp', pid, me, them.pid, them.name, 'to ' + destName, 0);
@@ -62122,25 +64982,45 @@ module.exports = {
   }
 
   /* Every active ban the door's last list carried, and the ones made here since. */
-  var bansRead = { at: 0, list: [], pk: [] };
+  // Once the site has taken over, a transient missing file during hot reload
+  // cannot erase its last confirmed bans either.
+  var confirmedBans = state.confirmedBans || (state.confirmedBans = { list: [], requestedAt: 0 });
+  var bansRead = { at: 0, list: confirmedBans.list, pk: [], banAt: confirmedBans.requestedAt };
   function readDoor(now) {
     if (now - bansRead.at < BAN_SWEEP_MS) { return; }
     bansRead.at = now;
-    var list = [], pk = [], written = 0;
+    var list = null, pk = [], written = 0, bansRequested = 0, hasBanStamp = false;
     try {
       var doc = JSON.parse(fs.readFileSync(path.join(String(settings().privDir || 'private'), 'allowed.json'), 'utf8')
                              .replace(/^\uFEFF/, ''));
-      if (doc && Array.isArray(doc.bans)) { list = doc.bans; }
+      if (doc && Array.isArray(doc.bans) && doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); })) {
+        list = doc.bans;
+      }
       if (doc && Array.isArray(doc.pk)) { pk = doc.pk; }
       written = Date.parse(String((doc && doc.at) || '')) || 0;
-    } catch (e) { list = []; pk = []; }
-    bansRead.list = list;
+      if (list) {
+        hasBanStamp = !!doc.bansRequestedAt;
+        bansRequested = Date.parse(String(doc.bansRequestedAt || '')) || 0;
+      }
+    } catch (e) { list = null; pk = []; }
     bansRead.pk = pk;
     bansRead.written = written;
-    // A lift the door's list has caught up with needs remembering no longer.
-    for (var k in state.lifted) {
-      if (Object.prototype.hasOwnProperty.call(state.lifted, k) && written > state.lifted[k].at) { delete state.lifted[k]; }
+    // The site's confirmed newer request now owns these bans, including a
+    // lift made on the site. A late older request or unreadable list does not.
+    if (list && bansRequested > confirmedBans.requestedAt && bansRequested <= written && written <= now) {
+      bansRead.list = confirmedBans.list = list;
+      bansRead.banAt = confirmedBans.requestedAt = bansRequested;
+      pruneScopes(state.banned, function (ban) {
+        return bansRequested > (Number(ban.at) || bansLoadedAt);
+      });
+    } else if (list && !hasBanStamp && !confirmedBans.requestedAt) {
+      // Read old door files until the first confirmed snapshot arrives. A
+      // broken file cannot erase the last known list or its ban-specific time.
+      bansRead.list = list;
+      bansRead.banAt = written;
     }
+    // A lift the door's ban list has caught up with needs remembering no longer.
+    pruneScopes(state.lifted, function (lift) { return bansRead.banAt > lift.at; });
     // The same for a PK made or undone here: once the list is newer it says
     // which holds, so a PK an admin undid on the site stops counting here too.
     for (var p in state.pk) {
@@ -62163,6 +65043,18 @@ module.exports = {
     }
     return out;
   }
+  // Account bans govern the whole account. Within one kind, keep the
+  // longest active ban; a permanent ban outlasts every timed one.
+  function preferredBan(have, next) {
+    if (!have) { return next; }
+    var account = (have.scope || 'account') === 'account';
+    var nextAccount = (next.scope || 'account') === 'account';
+    if (account !== nextAccount) { return nextAccount ? next : have; }
+    var until = Number(have.until) || 0;
+    var nextUntil = Number(next.until) || 0;
+    if (until && (!nextUntil || nextUntil > until)) { return next; }
+    return have;
+  }
   function bansNow(now) {
     readDoor(now);
     var out = {};
@@ -62175,19 +65067,19 @@ module.exports = {
       for (var j = 0; j < ps.length; j++) {
         var p = Number(ps[j]);
         if (!(p > 0)) { continue; }
-        var lift = state.lifted[p];
-        if (lift && lift.scope === scope && lift.at >= (bansRead.written || 0)) { continue; }
-        // A ban on the whole account says more than one on the character.
-        if (out[p] && out[p].scope === 'account') { continue; }
-        out[p] = { why: String(b.why || ''), until: until, scope: scope };
+        var lifts = state.lifted[p];
+        var lift = lifts && lifts[scope];
+        if (lift && lift.at >= bansRead.banAt) { continue; }
+        out[p] = preferredBan(out[p], { why: String(b.why || ''), until: until, scope: scope });
       }
     }
-    for (var k in state.banned) {
-      if (!Object.prototype.hasOwnProperty.call(state.banned, k)) { continue; }
-      var s = state.banned[k];
-      if (s.until && s.until <= now) { delete state.banned[k]; continue; }
-      out[Number(k)] = s;
-    }
+    pruneScopes(state.banned, function (ban) { return ban.until && ban.until <= now; });
+    Object.keys(state.banned).forEach(function (pid) {
+      var scopes = state.banned[pid];
+      Object.keys(scopes).forEach(function (scope) {
+        out[pid] = preferredBan(out[pid], scopes[scope]);
+      });
+    });
     return out;
   }
 
@@ -62275,15 +65167,15 @@ module.exports = {
         if (!ok) { tell(pid, 'The site did not take the ban, so nothing changed: ' + v + '.'); return; }
         var until = Number(v.until) || 0;
         var covers = whole && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
-        var ban = { why: why, until: until, scope: whole ? 'account' : 'character' };
         var now = Date.now();
+        var ban = { why: why, until: until, scope: whole ? 'account' : 'character', at: now };
         for (var i = 0; i < covers.length; i++) {
           var p = Number(covers[i]);
           if (!(p > 0)) { continue; }
-          state.banned[p] = ban;
-          delete state.lifted[p];
+          recordScope(state.banned, p, ban.scope, ban);
+          forgetScope(state.lifted, p, ban.scope);
           var a = (p === them.pid && them.actorId) || actorFor(p);
-          if (a) { endBanned(p, a, ban, now); }
+          if (a) { endBanned(p, a, bansNow(now)[p], now); }
         }
         tell(pid, whole
           ? ('Banned ' + them.name + '\'s whole account, every character on it and any new one, ' + untilText(until) + '.')
@@ -62302,11 +65194,11 @@ module.exports = {
           var covers = wholeU && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
           for (var i = 0; i < covers.length; i++) {
             var p = Number(covers[i]);
-            var had = state.banned[p];
-            if (had && (had.scope || 'account') === (wholeU ? 'account' : 'character')) { delete state.banned[p]; }
+            var scope = wholeU ? 'account' : 'character';
+            forgetScope(state.banned, p, scope);
             delete state.ending[p];
             // The door's list can still carry it for a few minutes.
-            if (v.was) { state.lifted[p] = { at: now, scope: wholeU ? 'account' : 'character' }; }
+            if (v.was) { recordScope(state.lifted, p, scope, { at: now }); }
           }
           if (wholeU) {
             tell(pid, v.was ? ('The ban on ' + them.name + '\'s account is lifted.') : (them.name + '\'s account was not banned.'));
@@ -62415,6 +65307,7 @@ module.exports = {
     answered the line, false to let handle() carry on.
   */
   function command(cmd, word, parts, pid, actorId, isStaff, look) {
+    if (!currentRestraints()) { tell(pid, 'The staff module was reloaded. Use the current command again.'); return true; }
     if (SILENCED_WORDS.indexOf(word) !== -1) {
       var left = silencedFor(pid);
       if (!left) { return false; }
@@ -62465,6 +65358,14 @@ module.exports = {
     }
 
     var me = actorId ? nameOf(actorId) : ('profile ' + pid);
+    if (['/freeze', '/unfreeze', '/silence', '/unsilence'].indexOf(word) !== -1 && !restraintReady()) {
+      tell(pid, 'Staff restraint authority is unavailable. The private restraint book must be repaired before changing it.');
+      return true;
+    }
+    if (word === '/goto' && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
     /*
       /DESPAWN: TAKE A SPAWNED CREATURE OUT FOR GOOD (#2623). Djinn, 17 Oct:
       a creature made with keep stays and comes back, and staff need a way
@@ -62528,7 +65429,7 @@ module.exports = {
       if (!them.pid) { tell(pid, them.why); return true; }
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       if (!state.silenced[them.pid]) { tell(pid, them.name + ' is not silenced.'); return true; }
-      delete state.silenced[them.pid];
+      if (!requireRestraintSave(pid, function (doc) { delete doc.silenced[them.pid]; })) { return true; }
       pushSilenced();
       tell(them.pid, 'Staff have let you speak again.');
       tell(pid, them.name + ' can speak again.');
@@ -62539,7 +65440,7 @@ module.exports = {
       if (!them.pid) { tell(pid, them.why); return true; }
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       if (!state.frozen[them.pid]) { tell(pid, them.name + ' is not frozen.'); return true; }
-      delete state.frozen[them.pid];
+      if (!requireRestraintSave(pid, function (doc) { delete doc.frozen[them.pid]; })) { return true; }
       tell(them.pid, 'Staff have let you go. You can move again.');
       tell(pid, them.name + ' can move again.');
       record('unfreeze', pid, me, them.pid, them.name, '', 0);
@@ -62550,11 +65451,19 @@ module.exports = {
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       var mins = SILENCE_DEFAULT_MIN;
       var rest = them.rest || [];
-      if (rest.length && /^\d+$/.test(rest[0])) {
-        mins = Math.max(1, Math.min(SILENCE_MAX_MIN, Number(rest[0])));
-        reason = rest.slice(1).join(' ').trim();
+      if (rest.length) {
+        var length = banLength(rest[0]);
+        if (length > 0 && Number.isFinite(length)) {
+          mins = Math.min(SILENCE_MAX_MIN, length);
+          reason = rest.slice(1).join(' ').trim();
+        } else if (/^[+-]?(?:\d|\.)/.test(rest[0]) || length === 0) {
+          tell(pid, 'That silence length is not valid. Use minutes, 30m, 2h or 1d; a day at most. Nothing changed.');
+          return true;
+        }
       }
-      state.silenced[them.pid] = { until: Date.now() + mins * 60000, name: them.name, by: pid };
+      if (!requireRestraintSave(pid, function (doc) {
+        doc.silenced[them.pid] = { until: Date.now() + mins * 60000, name: them.name, by: pid };
+      })) { return true; }
       pushSilenced();
       tell(them.pid, 'Staff have silenced you for ' + mins + ' minutes' +
                      (reason ? ': ' + reason + '.' : '.') +
@@ -62608,10 +65517,13 @@ module.exports = {
     }
     if (word === '/freeze') {
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
+      if (state.frozen[them.pid] && state.frozen[them.pid].pending) {
+        tell(pid, 'That frozen character has unresolved movement. Check the problem and explicitly /unfreeze ' + them.pid + ' first.'); return true;
+      }
       var spot = placeOf(them.actorId);
       if (!spot || !spot.desc) { tell(pid, 'The server cannot tell where ' + them.name + ' is right now. Try again.'); return true; }
       spot.by = pid;
-      state.frozen[them.pid] = spot;
+      if (!requireRestraintSave(pid, function (doc) { doc.frozen[them.pid] = spot; })) { return true; }
       tell(them.pid, 'Staff have frozen you in place' + (reason ? ': ' + reason + '.' : '.') +
                      ' Wait here and somebody will talk to you.');
       tell(pid, 'Froze ' + them.name + '. /unfreeze ' + them.name + ' lets them go.');
@@ -62627,10 +65539,9 @@ module.exports = {
       var mover = (word === '/bring') ? them.actorId : actorId;
       var dest = placeOf(word === '/bring' ? actorId : them.actorId);
       if (!dest || !dest.desc) { tell(pid, 'The server cannot tell where that is right now. Try again.'); return true; }
-      try { moveTo(mover, dest); } catch (e) { tell(pid, 'That did not work: ' + e); return true; }
       // Somebody frozen and then brought stays frozen where they were brought.
       var movedPid = (word === '/bring') ? them.pid : pid;
-      if (state.frozen[movedPid]) { dest.by = state.frozen[movedPid].by; state.frozen[movedPid] = dest; }
+      if (!moveStaffPerson(mover, movedPid, dest, pid)) { return true; }
       if (word === '/bring') {
         tell(them.pid, 'Staff brought you to them.');
         tell(pid, 'Brought ' + them.name + ' to you.');
@@ -62655,7 +65566,9 @@ module.exports = {
 
   g.__thornswoodStaff = {
     command: command, find: find, takePerson: takePerson, unproven: unproven, record: record,
+    authorizeTool: authorizeTool, tell: tell, nameOf: nameOf, actorFor: actorFor,
     freezeTick: freezeTick, pushSilenced: pushSilenced, silencedFor: silencedFor,
+    restraintAdmission: function (pid) { return restraintReady() && !(state.frozen[pid] && state.frozen[pid].pending); },
     banSweep: banSweep, banLength: banLength, bansNow: bansNow, pkNow: pkNow,
     state: state, REFUSED: REFUSED, WORDS: WORDS_STAFF
   };
@@ -62664,6 +65577,233 @@ module.exports = {
 })();
 // ==== end thornswood staff ====
 
+// ==== thornswood equipment testing repair ====
+(function () {
+  'use strict';
+  var g = globalThis, USAGE = 'Usage: /repairgear or /repairgear for <person>.';
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/repairgear') { return false; }
+    var staff = g.__thornswoodStaff, refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = actor, targetPid = pid;
+    if (parts.length !== 1) {
+      if (parts.length < 3 || String(parts[1]).toLowerCase() !== 'for') { staff.tell(pid, USAGE); return true; }
+      var person = staff.takePerson(parts.slice(2));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, USAGE); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId; targetPid = person.pid;
+    }
+    var D = g.__thornswoodDurability;
+    if (!D || !D.prepareTestingRepair || typeof mp.compareAndSetActorInventoryAndEquipment !== 'function' ||
+        typeof mp.getActorRuntimeIdentity !== 'function' || typeof mp.getNpcAIState !== 'function') {
+      staff.tell(pid, 'Equipment testing repair is unavailable on this server.'); return true;
+    }
+    var runtime, state, inventory, equipment, plan;
+    try {
+      runtime = mp.getActorRuntimeIdentity(target);
+      state = mp.getNpcAIState(target);
+      if (typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) || !state ||
+          state.profileId !== targetPid || !state.isHuman || !state.isConnected ||
+          !Number.isSafeInteger(state.lifeGeneration) || state.lifeGeneration < 0) {
+        staff.tell(pid, 'That character changed before repair. Nothing was requested.'); return true;
+      }
+      inventory = mp.get(target, 'inventory'); equipment = mp.get(target, 'equipment');
+      plan = D.prepareTestingRepair(inventory, equipment);
+    } catch (e) { staff.tell(pid, 'The server could not prepare that repair. Nothing was requested.'); return true; }
+    if (!plan.ok) { staff.tell(pid, plan.line); return true; }
+    if (!plan.items) { staff.tell(pid, 'No readable carried equipment needs repair.'); return true; }
+    var name = staff.nameOf(target), me = staff.nameOf(actor), changed;
+    try {
+      changed = mp.compareAndSetActorInventoryAndEquipment(target, targetPid, {
+        expectedInventory: inventory, replacementInventory: plan.inventory,
+        expectedEquipment: equipment, replacementEquipment: plan.equipment,
+        expectedLifeGeneration: state.lifeGeneration, expectedRuntimeIdentity: runtime
+      });
+    } catch (e) {
+      staff.tell(pid, 'Repair could not be confirmed. Have the server problem checked before trying again.'); return true;
+    }
+    if (changed !== true) { staff.tell(pid, 'The equipment changed before repair. Nothing was repaired; check it and try again.'); return true; }
+    staff.record('repair', pid, me, targetPid, name, 'restored equipment below sound to 100%', 0,
+      { items: plan.items, stacks: plan.stacks });
+    var pieces = plan.items + (plan.items === 1 ? ' piece' : ' pieces') + ' of equipment';
+    staff.tell(pid, 'Repaired ' + pieces + ' to 100% for ' + name + '.');
+    if (targetPid !== pid) { staff.tell(targetPid, 'An admin repaired ' + pieces + ' to 100% for testing.'); }
+    return true;
+  }
+  g.__thornswoodStaffRepair = { command: command };
+  g.__thornswoodCommandTools.register('repair', {
+    command: command,
+    help: [{ word: '/repairgear', role: 'playtester', syntax: '/repairgear',
+      text: 'Repair your carried equipment below 100% for testing, preserving stronger pieces and every item extra.' },
+      { word: '/repairgear', role: 'admin', syntax: '/repairgear for <person>',
+        text: 'Repair another character\'s carried equipment for testing.' }]
+  });
+})();
+// ==== end thornswood equipment testing repair ====
+// ==== thornswood staff progression ====
+// #6736: a test tool for one legal step on the character's current ladder.
+// Progression owns the rewards and character owns the saved record and view.
+(function () {
+  'use strict';
+  var g = globalThis;
+  var USAGE = 'Use /rankup class [for <person>] or /rankup profession [school] [for <person>].';
+
+  function command(cmd, word, parts, pid, actorId) {
+    var settingClass = word === '/setclass';
+    var settingProfession = word === '/setprofession';
+    if (word !== '/rankup' && !settingClass && !settingProfession) { return false; }
+    var usage = settingClass ? 'Use /setclass <class> [for <person>].' : settingProfession ?
+      'Use /setprofession <profession> <half or school,school> [spells <names>] [staffspells <names>] [for <person>].' : USAGE;
+    var staff = g.__thornswoodStaff;
+    if (!staff) { return true; }
+    function refuse(why) { staff.tell(pid, why); return true; }
+    var P = g.__thornswoodProgression, C = g.__thornswoodCharacter;
+    if (!P || !C) { return refuse('The progression tools are not running.'); }
+    var args = parts.slice(1);
+    var kind = settingClass ? 'class' : settingProfession ? 'profession' : String(args.shift() || '').toLowerCase();
+    if (kind !== 'class' && kind !== 'profession') { return refuse(usage); }
+    var at = args.map(function (s) { return String(s).toLowerCase(); }).indexOf('for');
+    var targetWords = at < 0 ? [] : args.slice(at + 1);
+    var choice = at < 0 ? args : args.slice(0, at);
+    if ((at >= 0 && !targetWords.length) ||
+        (!settingProfession && choice.length > (settingClass || kind === 'profession' ? 1 : 0)) ||
+        (settingClass && choice.length !== 1) || (settingProfession && choice.length < 2)) {
+      return refuse(usage);
+    }
+    var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
+    if (targetWords.length && !(targetWords.length === 1 && targetWords[0].toLowerCase() === 'me')) {
+      target = staff.takePerson(targetWords);
+      if (!target.actorId || !target.pid || target.rest.length) {
+        return refuse(target.why || 'Name exactly one character after for.');
+      }
+    }
+    var denied = staff.authorizeTool(cmd, pid, actorId, target.actorId === actorId ? 'playtester' : 'admin');
+    if (denied) { return refuse(denied); }
+    if (staff.actorFor(target.pid) !== target.actorId) { return refuse('That character is not in the world.'); }
+    var s = C.stateOf(target.actorId), key;
+    if (settingProfession) {
+      var prof = String(choice[0]).toLowerCase();
+      var half = prof === 'mage' ? String(choice[1]).toLowerCase().split(',') : C.mapHalf(choice[1]);
+      var replacement = P.setProfessionForTesting(s, prof, half);
+      if (!replacement.ok) { return refuse(replacement.why); }
+      var selections = replacement.state.spellSelections || {};
+      var seen = {};
+      for (var n = 2; n < choice.length;) {
+        var label = String(choice[n++]).toLowerCase();
+        if ((label !== 'spells' && label !== 'staffspells') || seen[label]) { return refuse(usage); }
+        seen[label] = true;
+        var start = n;
+        while (n < choice.length && ['spells', 'staffspells'].indexOf(String(choice[n]).toLowerCase()) < 0) { n++; }
+        var text = choice.slice(start, n).join(' ');
+        if (!text) { return refuse(usage); }
+        var names = text.toLowerCase() === 'none' ? [] : text.split(',').map(function (x) { return x.trim(); });
+        var picked = [];
+        for (var j = 0; j < names.length; j++) {
+          var spell = label === 'spells' ? P.spellAt(names[j]) : g.__thornswoodStaffSpells.find(names[j]);
+          if (!spell) { return refuse('No known spell is named ' + names[j] + '.'); }
+          picked.push(label === 'spells' ? spell.name : spell.desc);
+        }
+        selections[label === 'spells' ? 'spells' : 'staffSpells'] = picked;
+      }
+      replacement.state.spellSelections = selections;
+      var prepared = g.__thornswoodCharacterKnowledge.prepare(replacement.state);
+      if (!prepared.ok) {
+        return refuse(prepared.why + (prepared.choices ? ': ' + prepared.choices.join(', ') + '.' : '.'));
+      }
+      try { C.writeState(target.actorId, prepared.state, true); }
+      catch (e) { return refuse('The profession change could not be saved.'); }
+      if (!C.writeSucceeded(target.actorId)) { return refuse('The profession change could not be saved.'); }
+      var name = P.TABLE.professions[prof].name;
+      staff.tell(target.pid, 'Your profession is now ' + name + ' at Novice. Your learned knowledge is kept; only eligible spells are active.');
+      if (target.pid !== pid) { staff.tell(pid, 'Changed ' + target.name + '\'s profession to ' + name + '.'); }
+      staff.record('setprofession', pid, staff.nameOf(actorId), target.pid, target.name, name, 0,
+        { from: s.prof || null, to: prof, half: prepared.state.half, schools: prepared.state.schools });
+      return true;
+    }
+    if (settingClass) {
+      var cls = String(choice[0]).toLowerCase();
+      var changed = P.setClassForTesting(s, cls);
+      if (!changed.ok) { return refuse(changed.why); }
+      try { C.writeState(target.actorId, changed.state, true); }
+      catch (e) { return refuse('The class change could not be saved.'); }
+      if (C.stateOf(target.actorId).cls !== cls) { return refuse('The class change could not be saved.'); }
+      staff.tell(target.pid, 'Your class is now ' + C.nameOf(cls) + ' at Novice.');
+      if (target.pid !== pid) { staff.tell(pid, 'Changed ' + target.name + '\'s class to ' + C.nameOf(cls) + '.'); }
+      staff.record('setclass', pid, staff.nameOf(actorId), target.pid, target.name, cls, 0,
+        { from: s.cls || null, to: cls });
+      return true;
+    }
+    if (kind === 'class') {
+      key = s.cls;
+      if (!P.has(P.TABLE.classes, key)) { return refuse('Choose a class before advancing its rank.'); }
+    } else {
+      if (!P.has(P.TABLE.professions, s.prof)) { return refuse('Choose a profession before advancing its rank.'); }
+      if (s.prof === 'mage') {
+        key = String(choice[0] || '').toLowerCase();
+        if (P.TABLE.schools.indexOf(key) < 0 || s.schools.indexOf(key) < 0) {
+          return refuse('Name one of that mage\'s chosen schools after profession.');
+        }
+      } else {
+        if (choice.length) { return refuse('This profession advances its chosen half, without a school name.'); }
+        key = s.half;
+        if (P.halvesOf(s.prof).indexOf(key) < 0) { return refuse('Choose a half of the profession before advancing its rank.'); }
+      }
+    }
+    var from = P.rankOf(s, key);
+    // creditWork migrates a legacy class without standing to novice itself.
+    var legacyClass = !from && kind === 'class';
+    if (legacyClass) { from = 'novice'; }
+    var rung = P.TABLE.ranks.indexOf(from);
+    if (rung < 0) { return refuse('That progression rank cannot be read. Nothing was advanced.'); }
+    if (from === 'master') { return refuse('That rank is already Master.'); }
+    var need = legacyClass ? P.TUNING.workPerRank.advanced : P.workNeeded(s, key);
+    var done = P.workDone(s, key);
+    if (!Number.isFinite(need) || need <= 0 || !Number.isFinite(done) || done < 0) {
+      return refuse('That work count cannot be read. Nothing was advanced.');
+    }
+    // One threshold, once. Normal school rewards are calculated by the same
+    // function as earned work; no rank or reward is written by this module.
+    var r = P.creditWork(s, key, null, Math.max(1, need - done));
+    if (!r.ok || !r.raised || r.raised.key !== key || r.raised.to !== P.TABLE.ranks[rung + 1]) {
+      return refuse((r && r.why) || 'That rank cannot advance.');
+    }
+    try { C.writeState(target.actorId, r.state, true); }
+    catch (e) { return refuse('The new rank could not be saved.'); }
+    // writeState logs a refused engine write; do not report or audit success
+    // unless the single saved character property contains the new rank.
+    if (P.rankOf(C.stateOf(target.actorId), key) !== r.raised.to) {
+      return refuse('The new rank could not be saved.');
+    }
+    staff.tell(target.pid, C.raiseLines(target.actorId, r));
+    if (target.pid !== pid) {
+      staff.tell(pid, 'Advanced ' + target.name + '\'s ' + C.nameOf(key) + ' to ' + r.raised.to + '.');
+    }
+    staff.record('rankup', pid, staff.nameOf(actorId), target.pid, target.name,
+      kind + ' ' + key, 0, { key: key, from: r.raised.from, to: r.raised.to });
+    return true;
+  }
+
+  g.__thornswoodStaffProgression = { command: command };
+  var tools = g.__thornswoodCommandTools;
+  if (tools && tools.register) {
+    tools.register('progression', { command: command, help: [{ word: '/rankup', role: 'playtester',
+      syntax: '/rankup class|profession [school]', text: 'Advance your current class or profession by one rank.' },
+      { word: '/rankup', role: 'admin', syntax: '/rankup class|profession [school] for <person>',
+        text: 'Advance another character\'s current class or profession by one rank.' },
+      { word: '/setclass', role: 'playtester', syntax: '/setclass <class>', text: 'Change your gathering class at Novice.' },
+      { word: '/setclass', role: 'admin', syntax: '/setclass <class> for <person>',
+        text: 'Change another character\'s gathering class at Novice.' },
+      { word: '/setprofession', role: 'playtester', syntax: '/setprofession <profession> <half or school,school>',
+        text: 'Change your profession at Novice, keeping knowledge with only eligible spells active.' },
+      { word: '/setprofession', role: 'admin', syntax: '/setprofession <profession> <half or school,school> for <person>',
+        text: 'Change another character\'s profession at Novice, keeping their knowledge.' }] });
+  }
+})();
+// ==== end thornswood staff progression ====
 // ==== thornswood take back ====
 /*
   ============================================================================
@@ -62833,6 +65973,68 @@ module.exports = {
   tblog('ready: asks from the hub are taken every', EVERY_MS / 1000, 's');
 })();
 // ==== end thornswood take back ====
+// Restore vitals for a self-only playtest or an admin's named target (#6733).
+(function () {
+  'use strict';
+  var g = globalThis;
+  var USAGE = 'Usage: /heal, or /heal for <person> for an admin.';
+
+  function command(cmd, word, parts, pid, actorId) {
+    if (word !== '/heal') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actorId, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = { actorId: actorId, pid: pid, name: staff.nameOf(actorId) };
+    var args = parts.slice(1);
+    if (args.length) {
+      if (args.length < 2 || args[0].toLowerCase() !== 'for') { staff.tell(pid, USAGE); return true; }
+      target = staff.takePerson(args.slice(1));
+      if (!target.actorId || target.rest.length) { staff.tell(pid, target.why || USAGE); return true; }
+      if (target.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actorId, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+    }
+    var dead, current;
+    try { dead = mp.get(target.actorId, 'isDead'); current = mp.get(target.actorId, 'percentages'); }
+    catch (e) { staff.tell(pid, 'The server could not read those vitals. Nothing was requested.'); return true; }
+    if (dead === true) { staff.tell(pid, 'That character is dead. Healing cannot undo death; use the normal wake or the appropriate admin process.'); return true; }
+    if (dead !== false || !current || ['health', 'magicka', 'stamina'].some(function (key) {
+      return typeof current[key] !== 'number' || !Number.isFinite(current[key]);
+    })) {
+      staff.tell(pid, 'The server could not read those vitals. Nothing was requested.'); return true;
+    }
+    if (current.health === 1 && current.magicka === 1 && current.stamina === 1) {
+      staff.tell(pid, target.name + ' already has full health, magicka and stamina.'); return true;
+    }
+    try {
+      mp.set(target.actorId, 'percentages', { health: 1, magicka: 1, stamina: 1 });
+      var confirmed = mp.get(target.actorId, 'percentages');
+      if (mp.get(target.actorId, 'isDead') !== false || !confirmed ||
+          confirmed.health !== 1 || confirmed.magicka !== 1 || confirmed.stamina !== 1) {
+        throw new Error('The native vitals write was not applied.');
+      }
+    }
+    catch (e) {
+      log('heal: could not confirm vitals for ' + target.actorId.toString(16) + ': ' + e);
+      staff.tell(pid, 'Healing could not be confirmed. The server recorded why; try again only after the problem is checked.');
+      return true;
+    }
+    var byName = staff.nameOf(actorId);
+    staff.record('heal', pid, byName, target.pid, target.name, 'restored health, magicka and stamina', 0);
+    staff.tell(pid, 'Restored health, magicka and stamina for ' + target.name + '.');
+    if (target.pid !== pid) { staff.tell(target.pid, 'An admin restored your health, magicka and stamina.'); }
+    return true;
+  }
+  g.__thornswoodHeal = { command: command };
+  g.__thornswoodCommandTools.register('heal', {
+    command: command,
+    help: [
+      { word: '/heal', role: 'playtester', syntax: '/heal', text: 'Restore your health, magicka and stamina for testing.' },
+      { word: '/heal', role: 'admin', syntax: '/heal for <person>', text: 'Restore another character\'s vitals without undoing death or permanent decisions.' }
+    ]
+  });
+})();
 // ==== thornswood staff crafting ====
 /*
   STAFF CRAFTING TOOLS, ON THE OFFICE PAGE OF K (#3167). Patrick, 22 Oct
@@ -62849,7 +66051,8 @@ module.exports = {
                  point, a mage's spell point, an Enchanter's staff spell
                  point. The count toward the next rank starts again at 0, as
                  it does when work raises the rank (professions.md).
-    A recipe     recipes asked by what they make, for that person. A recipe
+    A recipe     owned recipes and kept smelts asked by what they make, for that person.
+                 Unowned recipes are outside this check. A recipe
                  is stuck for one of four reasons, and the card names which:
                    - the craft gate refuses it, and says why (a rank, a half,
                      a race, a roll), which the rank tool or the person's own
@@ -62880,7 +66083,7 @@ module.exports = {
   /craftstaff is a line the page sends, never one anybody is told to type:
     pick <profile>|-                     the person the card is for, or nobody
     raise <profile> <key>                one rank up in that class, half or school
-    recipe <profile> <words>             what the gate says about recipes making that
+    recipe <profile> <words>             what the gate says about owned recipes and kept smelts making that
     recipes <profile>                    hand their game the gate's list now
     give <profile> <n> <item> | <why>    give back n of an item, with the reason
 */
@@ -63080,7 +66283,7 @@ module.exports = {
       var asked = words.slice(2).join(' ').trim().slice(0, ASK_MOST);
       if (!asked) { tell(pid, 'Type part of the name of what the recipe makes, then press Check.'); return true; }
       state.checks[pid] = { pid: whoPid, want: asked };
-      if (!recipeRows(asked).rows.length) { tell(pid, 'No recipe anybody owns makes anything called ' + asked + '.'); }
+      if (!recipeRows(asked).rows.length) { tell(pid, 'This check found no owned recipe or kept smelt making ' + asked + '. Unowned recipes are outside this check.'); }
       redraw(actorId);
       return true;
     }
@@ -63164,6 +66367,56 @@ module.exports = {
 })();
 // ==== end thornswood staff crafting ====
 
+// ==== thornswood needs testing tools ====
+(function () {
+  'use strict';
+  var g = globalThis;
+  var METERS = { hunger: 'food', thirst: 'drink', rest: 'rest', temperature: 'temp' };
+  var USAGE = 'Usage: /setneeds <hunger|thirst|rest|temperature> <0..100> [for <person>].';
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/setneeds') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var meter = String(parts[1] || '').toLowerCase(), number = String(parts[2] || '');
+    if (!Object.prototype.hasOwnProperty.call(METERS, meter) || !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(number) ||
+        !Number.isFinite(Number(number)) || Number(number) < 0 || Number(number) > 100 ||
+        (parts.length !== 3 && (parts.length < 5 || String(parts[3]).toLowerCase() !== 'for'))) {
+      staff.tell(pid, USAGE); return true;
+    }
+    var target = actor, targetPid = pid;
+    if (parts.length > 3) {
+      var person = staff.takePerson(parts.slice(4));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, USAGE); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId; targetPid = person.pid;
+    }
+    var needs = g.__thornswoodNeeds;
+    if (!needs || !needs.setForTesting) { staff.tell(pid, 'Needs testing is unavailable. Try again later.'); return true; }
+    var me = staff.nameOf(actor), name = staff.nameOf(target);
+    var result = needs.setForTesting(target, METERS[meter], Number(number));
+    if (!result.ok) { staff.tell(pid, result.why); return true; }
+    staff.record('setneeds', pid, me, targetPid, name, '', 0,
+      { meter: meter, from: result.from, to: result.to });
+    var label = meter.charAt(0).toUpperCase() + meter.slice(1);
+    staff.tell(pid, label + ' set to ' + result.to + '/100 for ' + name + '.');
+    if (targetPid !== pid) { staff.tell(targetPid, 'Staff set your ' + meter + ' to ' + result.to + '/100 for testing.'); }
+    return true;
+  }
+  g.__thornswoodStaffNeeds = { command: command };
+  g.__thornswoodCommandTools.register('setneeds', {
+    command: command,
+    help: [{ word: '/setneeds', role: 'playtester', syntax: '/setneeds <hunger|thirst|rest|temperature> <0..100>',
+      text: 'Set one of your needs for testing. Food, drink and rest are full at 100; temperature is comfortable at 50.' },
+      { word: '/setneeds', role: 'admin', syntax: '/setneeds <hunger|thirst|rest|temperature> <0..100> for <person>',
+        text: 'Set one need on another character for testing.' }]
+  });
+})();
+// ==== end thornswood needs testing tools ====
 // SHARED RESOURCE STOCK BEGIN
 function createSharedResourceStock(api, now) {
   const property='thornswoodResourceStock';
@@ -63244,6 +66497,114 @@ function createSharedResourceStock(api, now) {
 try { globalThis.__thornswoodResourceStock=createSharedResourceStock(mp,()=>Date.now()); }
 catch(error) { log('Shared resource stock could not start: '+error); }
 
+// ==== thornswood gameplay inspection ====
+// #6732: inspect the recorded gameplay state without settling or writing it.
+(function () {
+  'use strict';
+  var g = globalThis;
+  function object(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function read(actor, property) {
+    try { return mp.get(actor, property); } catch (e) { return undefined; }
+  }
+  function text(value, most) {
+    if (typeof value !== 'string') { return 'unavailable'; }
+    var out = value.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' ').trim();
+    return out ? (out.length > most ? out.slice(0, most - 3) + '...' : out) : 'unavailable';
+  }
+  function number(value, scale, suffix) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isFinite(value * scale)) { return 'unavailable'; }
+    return String(Number((value * scale).toFixed(1))) + suffix;
+  }
+  function field(value, key, scale, suffix) {
+    return number(object(value) ? value[key] : undefined, scale, suffix);
+  }
+  function named(value, table) {
+    if (value === null || value === '') { return 'not chosen'; }
+    return typeof value === 'string' && table && Object.prototype.hasOwnProperty.call(table, value)
+      ? table[value].name : 'unavailable';
+  }
+  function rankLabels(table) {
+    var out = {};
+    Object.keys(table.classes).forEach(function (key) { out[key] = table.classes[key].name; });
+    Object.keys(table.professions).forEach(function (key) {
+      var halves = table.professions[key].halves;
+      Object.keys(halves || {}).forEach(function (half) { out[half] = halves[half]; });
+    });
+    table.schools.forEach(function (key) { out[key] = key.charAt(0).toUpperCase() + key.slice(1); });
+    return out;
+  }
+  function report(staff, pid, actor) {
+    var appearance = read(actor, 'appearance');
+    staff.tell(pid, 'Character: ' + text(object(appearance) ? appearance.name : undefined, 90) +
+      ' (form ' + actor.toString(16) + ').');
+    var pos = read(actor, 'pos');
+    staff.tell(pid, 'Location: ' + text(read(actor, 'worldOrCellDesc'), 120) + '; position ' +
+      [0,1,2].map(function (i) { return number(Array.isArray(pos) ? pos[i] : undefined, 1, ''); }).join(', ') + '.');
+    var vitals = read(actor, 'percentages');
+    staff.tell(pid, 'Health: ' + field(vitals, 'health', 100, '%') + '; Magicka: ' +
+      field(vitals, 'magicka', 100, '%') + '; Stamina: ' + field(vitals, 'stamina', 100, '%') + '.');
+    // Needs.read supplies defaults and stateOf can migrate. Read the saved
+    // properties themselves so missing or invalid values remain unavailable.
+    var needs = read(actor, 'thornswoodNeeds');
+    staff.tell(pid, 'Needs (last recorded): Food: ' + field(needs, 'food', 1, '/100') +
+      '; Drink: ' + field(needs, 'drink', 1, '/100') + '; Rest: ' + field(needs, 'rest', 1, '/100') +
+      '; Temperature: ' + field(needs, 'temp', 1, '/100') + '.');
+    var saved = read(actor, 'thornswoodCharacter');
+    var state = object(saved) && saved.v === 1 ? saved : null;
+    var progression = g.__thornswoodProgression;
+    var table = progression && progression.TABLE;
+    var labels = table ? rankLabels(table) : {};
+    staff.tell(pid, 'Class: ' + (state ? named(state.cls, table && table.classes) : 'unavailable') +
+      '; Profession: ' + (state ? named(state.prof, table && table.professions) : 'unavailable') +
+      '; Half: ' + (state && typeof state.half === 'string' && Object.prototype.hasOwnProperty.call(labels, state.half)
+        ? labels[state.half] : state && state.half === null ? 'not chosen' : 'unavailable') + '.');
+    var ranks = state && object(state.ranks) ? state.ranks : null;
+    var entries = ranks && table ? Object.keys(labels).filter(function (key) {
+      return Object.prototype.hasOwnProperty.call(ranks, key);
+    }).map(function (key) {
+      return labels[key] + ': ' + (table.ranks.indexOf(ranks[key]) !== -1 ? ranks[key] : 'unavailable');
+    }) : null;
+    var line = 'Ranks: ';
+    (entries || []).forEach(function (entry) {
+      if (line.length + entry.length > 250) { staff.tell(pid, line); line = 'Ranks: '; }
+      line += (line === 'Ranks: ' ? '' : '; ') + entry;
+    });
+    staff.tell(pid, line + (entries ? (entries.length ? '.' : 'none recorded.') : 'unavailable.'));
+    var godMode = read(actor, 'isGodMode');
+    staff.tell(pid, 'God mode: ' + (typeof godMode === 'boolean' ? (godMode ? 'on' : 'off') : 'unavailable') + '.');
+  }
+  function command(cmd, word, parts, pid, actor) {
+    if (word !== '/inspect') { return false; }
+    var staff = g.__thornswoodStaff;
+    var refused = staff.authorizeTool(cmd, pid, actor, 'playtester');
+    if (refused) { staff.tell(pid, refused); return true; }
+    var target = actor;
+    if (parts.length !== 1) {
+      if (String(parts[1]).toLowerCase() !== 'for' || parts.length < 3) {
+        staff.tell(pid, 'Usage: /inspect or /inspect for <person>.'); return true;
+      }
+      var person = staff.takePerson(parts.slice(2));
+      if (!person.actorId) { staff.tell(pid, person.why); return true; }
+      if (person.rest.length) { staff.tell(pid, 'Usage: /inspect for <person>.'); return true; }
+      if (person.pid !== pid) {
+        refused = staff.authorizeTool(cmd, pid, actor, 'admin');
+        if (refused) { staff.tell(pid, refused); return true; }
+      }
+      target = person.actorId;
+    }
+    report(staff, pid, target);
+    return true;
+  }
+  g.__thornswoodInspect = { command: command };
+  g.__thornswoodCommandTools.register('inspect', {
+    command: command,
+    help: [{ word: '/inspect', role: 'playtester', syntax: '/inspect',
+      text: 'Read your own recorded gameplay state without changing it.' },
+      { word: '/inspect', role: 'admin', syntax: '/inspect for <person>',
+        text: 'Read another character\'s recorded gameplay state without changing it.' }]
+  });
+})();
+// ==== end thornswood gameplay inspection ====
 // NPC MERCHANT PURSES BEGIN
 function createPrivateMerchantLedger(fs,path,settings,references,durableWriter) {
   return createPrivateEconomyLedger(fs,path,settings,'merchant',references,durableWriter);
@@ -63684,6 +67045,55 @@ function createNpcMerchantPurses(api,data,storage) {
 }
 // NPC MERCHANT PURSES END
 
+// Self-only person teleport for Playtesters on Dev and Main (#6757).
+(function () {
+  'use strict';
+  var g=globalThis,USAGE='Usage: /tpto <person>.';
+  function place(actor) {
+    var desc=mp.get(actor,'worldOrCellDesc'),pos=mp.get(actor,'pos'),rot=mp.get(actor,'angle');
+    function vector(value){return Array.isArray(value)&&value.length===3&&value.every(Number.isFinite);}
+    if(typeof desc!=='string'||!desc||!vector(pos)||!vector(rot)){throw new Error('Authoritative location is unavailable.');}
+    return {desc:desc,pos:pos.slice(),rot:rot.slice()};
+  }
+  function command(cmd,word,parts,pid,actor) {
+    if(word!=='/tpto'){return false;}
+    var staff=g.__thornswoodStaff,refused=staff.authorizeTool(cmd,pid,actor,'playtester');
+    if(refused){staff.tell(pid,refused);return true;}
+    if(parts.length<2){staff.tell(pid,USAGE);return true;}
+    var person=staff.takePerson(parts.slice(1));
+    if(!person.actorId||person.rest.length){staff.tell(pid,person.why||USAGE);return true;}
+    if(person.actorId===actor||person.pid===pid){staff.tell(pid,'That is you.');return true;}
+    try {
+      if(mp.get(actor,'isDead')!==false||mp.get(person.actorId,'isDead')!==false){
+        staff.tell(pid,'Both characters must be alive to teleport.');return true;
+      }
+      var from=place(actor),to=place(person.actorId);
+      if(!staff.state||!staff.state.frozen){throw new Error('Staff restraint state is unavailable.');}
+      if(staff.state.frozen[pid]){staff.tell(pid,'Staff have frozen you in place.');return true;}
+      var cuffs=g.__thornswoodCuffs,property=g.__thornswoodProperty,stuck=g.__thornswoodStuck;
+      if(!cuffs||!cuffs.cuffedBy||!property||!property.lockedJailHere||!stuck||!stuck.teleported){
+        throw new Error('Movement safeguards are unavailable.');
+      }
+      if(cuffs.cuffedBy(actor)){staff.tell(pid,'You are cuffed, so you cannot teleport yourself.');return true;}
+      if(property.lockedJailHere(actor,pid)){staff.tell(pid,'A guard has a cell locked here, so you cannot teleport out of this jail.');return true;}
+      mp.set(actor,'locationalData',{cellOrWorldDesc:to.desc,pos:to.pos,rot:to.rot});
+      var confirmed=place(actor);
+      if(confirmed.desc!==to.desc||confirmed.pos.some(function(n,i){return n!==to.pos[i];})){
+        throw new Error('The native teleport was not applied.');
+      }
+      stuck.teleported(pid,actor);
+      staff.record('tpto',pid,staff.nameOf(actor),person.pid,person.name,'Self-only playtest teleport.',0,{from:from,to:to});
+      staff.tell(pid,'Sent to '+person.name+'.');
+    } catch(e) {
+      log('tpto: could not confirm teleport for '+actor.toString(16)+': '+e);
+      staff.tell(pid,'The teleport could not be confirmed. Staff can check the server log.');
+    }
+    return true;
+  }
+  g.__thornswoodPersonTeleport={command:command};
+  g.__thornswoodCommandTools.register('person-teleport',{command:command,
+    help:[{word:'/tpto',role:'playtester',syntax:'/tpto <person>',text:'Teleport yourself to an online person; restraints still apply.'}]});
+})();
 // NPC POPULATION POLICY BEGIN
 /*
   THALMOR PATROLS (#1390). docs/systems/thalmor.md: "A patrol is 2 to 4. They
@@ -64006,6 +67416,14 @@ function createNpcPopulation(api,data,plugins,merchants,options) {
     // A spawn staff did not keep (#2623): removed when it dies.
     const entry=configured.get(id);
     return !!(entry && entry.rule.commanded && !entry.rule.keep);
+  },staffKillable:id=>{
+    const entry=configured.get(id);
+    if(!entry || !entry.rule || !entry.rule.row) return false;
+    // Hostile encounters and staff spawns only. Town residents, traders,
+    // transport, farms and ambient creatures are never mass-kill targets.
+    return entry.rule.commanded===true || typeof entry.rule.patrol==='string' ||
+      (entry.rule.row[6]==='enemy' &&
+        ['dungeon','wilderness','cave','bandit-camp','sewer','giant-camp'].includes(entry.rule.row[7]));
   },spawned:()=>{
     // Every creature a spawn command made that is still held here, kept or
     // not, alive or dead: what staff's /despawn chooses from (#2623).
@@ -65785,12 +69203,13 @@ function createSettlement(deps) {
       return all;
     } catch(error) {active=false;throw error;}
   }
-  function admitted(human, reference, reserveCapacity) {
+  function admitted(human, reference, reserveCapacity, recipientKey) {
     var pending = records(), key = humanKey(human);
     if (!key || reserveCapacity!==false && pending.length >= MAX_PENDING) return false;
     return pending.every(function (record) {
       var other = record.state.pending.human;
-      return humanKey(other) && humanKey(other) !== key && record.reference !== reference;
+      var otherKey = humanKey(other);
+      return otherKey && otherKey !== key && otherKey !== recipientKey && record.reference !== reference;
     });
   }
   function save(id, state, next, intentId, caller) {
@@ -66024,20 +69443,38 @@ function createSettlement(deps) {
       return changed;
     } finally { busy = false; }
   }
-  function withInventoryMutation(actorId,change) {
+  function inventoryMutationLease(actorId,change,recipientId) {
     if(!available() || busy)return {ok:false,why:'unavailable'};
     busy=true;
     var leased=true;
     try {
       var human=transfer.identity(actorId);
-      if(!human || !admitted(human,'',false))return {ok:false,why:'waiting'};
+      var recipient, recipientKey;
+      if (recipientId !== undefined) {
+        recipient = transfer.identity(recipientId);
+        recipientKey = humanKey(recipient);
+        if (!recipientKey || recipientKey === humanKey(human)) return {ok:false,why:'waiting'};
+      }
+      if(!human || !admitted(human,'',false,recipientKey))return {ok:false,why:'waiting'};
       if(transfer.saved(actorId)!==transfer.receipt(actorId))return {ok:false,why:'waiting'};
+      if(recipient && transfer.saved(recipientId)!==transfer.receipt(recipientId))return {ok:false,why:'waiting'};
       if(!active)return {ok:false,why:'unavailable'};
-      var result=change(human,function(){return active && leased;});
+      var alive = function(){return active && leased;};
+      var result = recipient ? change(human,alive,recipient) : change(human,alive);
       // Unknown receipts revoke all writers until a reload reads durable state.
       if(result && result.uncertain)active=false;
       return result;
     } finally {leased=false;busy=false;}
+  }
+  function withInventoryMutation(actorId,change) {
+    return inventoryMutationLease(actorId,change);
+  }
+  // A saved receipt alone does not prove that the next sequence is free.
+  // Hold both identities against the same pending-record check and lease.
+  function withPairedInventoryMutation(actorId,recipientId,change) {
+    if (!Number.isInteger(recipientId) || recipientId <= 0 || recipientId > 0xffffffff || recipientId === actorId)
+      return {ok:false,why:'unavailable'};
+    return inventoryMutationLease(actorId,change,recipientId);
   }
   function canInventoryMutation(actorId) {
     if(!available() || busy)return false;
@@ -66081,7 +69518,8 @@ function createSettlement(deps) {
     return how;
   }
   return {begin:begin,tick:tick,outcome:outcome,available:available,canRetire:canRetire,changeCommissions:changeCommissions,pruneSupplyHistory:pruneSupplyHistory,
-    withInventoryMutation:withInventoryMutation,canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
+    withInventoryMutation:withInventoryMutation,withPairedInventoryMutation:withPairedInventoryMutation,
+    canInventoryMutation:canInventoryMutation,shutdown:function () { active=false; }};
 }
 
 module.exports = {createSettlement:createSettlement,stockRows:stockRows,inventory:inventory,takeEntries:takeEntries,
@@ -66558,7 +69996,7 @@ function createQuestTransactions(deps) {
   function identity(actor) {
     return active ? actorIdentity(mp,actor) : null;
   }
-  function commit(actor,expectedRecord,nextRecord,changes,admission) {
+  function commit(actor,expectedRecord,nextRecord,changes,admission,abandoned) {
     if(!available())return {ok:false,why:'unavailable'};
     try {
       var token=identity(actor);
@@ -66566,6 +70004,17 @@ function createQuestTransactions(deps) {
       // Match the addon's JSON boundary, including omitted optional fields.
       nextRecord=JSON.parse(JSON.stringify(nextRecord));
       if(!Array.isArray(changes))throw new Error('Invalid quest goods.');
+      var collecting=changes.some(function(change){return change && change.upTo!==undefined;});
+      if(collecting || abandoned!==undefined) {
+        if(!collecting || !abandoned || typeof abandoned!=='object' || Array.isArray(abandoned) ||
+            Object.keys(abandoned).sort().join(',')!=='quest,until' ||
+            typeof abandoned.quest!=='string' || !/^[a-z][a-z0-9-]{0,127}$/.test(abandoned.quest) ||
+            abandoned.until!==null && (!Number.isSafeInteger(abandoned.until) || abandoned.until<=0) ||
+            !expectedRecord || !expectedRecord.open || !Object.prototype.hasOwnProperty.call(expectedRecord.open,abandoned.quest) ||
+            !nextRecord.open || Object.prototype.hasOwnProperty.call(nextRecord.open,abandoned.quest) ||
+            !changes.length || changes.some(function(change){return !change || change.count>=0 || change.upTo!==true;}))
+          throw new Error('Invalid quest abandonment.');
+      }
       if(changes.length===0) {
         var metadataOwner=JSON.parse(token);
         if(!available() || identity(actor)!==token)return {ok:false,why:'identity'};
@@ -66609,14 +70058,31 @@ function createQuestTransactions(deps) {
           sequence=oldReceipt.sequence+1;
         }
         if(!Number.isSafeInteger(sequence))throw new Error('Quest inventory receipt sequence is exhausted.');
-        var before=inventoryTools.inventory(mp.get(actor,'inventory')),next=before;
+        var before=inventoryTools.inventory(mp.get(actor,'inventory')),next=before,short=false;
         changes.forEach(function(change){
           if(!Number.isSafeInteger(change.count) || change.count===0)throw new Error('Invalid quest goods.');
+          if(change.upTo!==undefined && (change.upTo!==true || change.count>0))throw new Error('Invalid quest collection.');
           var baseId=mp.getIdFromDesc(change.item);
           if(!Number.isInteger(baseId) || baseId<=0 || baseId>0xffffffff)throw new Error('Quest goods are unavailable.');
-          next=change.count<0?inventoryTools.takeEntries(next,baseId,-change.count).inventory:
-            inventoryTools.addEntries(next,[{baseId:baseId,count:change.count}]);
+          if(change.count<0) {
+            var amount=-change.count;
+            // Only abandonment requests up-to collection. Plan it from this
+            // locked snapshot; the final CAS fences both goods and quest.
+            if(change.upTo===true) {
+              amount=Math.min(amount,next.entries.reduce(function(n,row){return row.baseId===baseId?n+row.count:n;},0));
+              if(amount < -change.count)short=true;
+            }
+            if(amount>0)next=inventoryTools.takeEntries(next,baseId,amount).inventory;
+          } else next=inventoryTools.addEntries(next,[{baseId:baseId,count:change.count}]);
         });
+        if(short) {
+          if(!abandoned || abandoned.until===null || !nextRecord.cool || typeof nextRecord.cool!=='object' || Array.isArray(nextRecord.cool))
+            throw new Error('The normal quest cooldown is unavailable.');
+          var previous=nextRecord.cool[abandoned.quest];
+          if(previous!==undefined && (!Number.isSafeInteger(previous) || previous<0))throw new Error('The quest cooldown cannot be verified.');
+          nextRecord.cool[abandoned.quest]=Math.max(previous || 0,abandoned.until);
+          if(Buffer.byteLength(JSON.stringify(nextRecord),'utf8')>16384)throw new Error('The quest record is too large.');
+        }
         var nextReceipt=JSON.stringify({actor:human.desc,profile:human.profileId,sequence:sequence});
         if(!stillActive() || !available() || identity(actor)!==token)return {ok:false,why:'identity'};
         if(admission!==undefined && (typeof admission!=='function' || admission()!==true))return {ok:false,why:'session'};
@@ -67680,6 +71146,39 @@ function createNativeMerchantTransfer(mp) {
   };
 }
 
+// A proposed ledger value only; the caller commits stock and clock together.
+function agedMerchantStock(state, spoilage, merchantId, now) {
+  if (!spoilage || typeof spoilage.storageTime !== 'function' || typeof spoilage.aged !== 'function')
+    throw new Error('Merchant food aging is unavailable. Nothing moved.');
+  if (!Number.isSafeInteger(now) || now <= 0) throw new Error('The shop clock cannot be verified. Nothing moved.');
+  var next = JSON.parse(JSON.stringify(state)), clock = state.spoilClock;
+  var legacy = clock === undefined;
+  if (legacy) clock = {at:now,days:0};
+  if (!clock || typeof clock !== 'object' || Array.isArray(clock) || Object.keys(clock).length !== 2 ||
+      !Number.isSafeInteger(clock.at) || clock.at <= 0 || clock.at > now ||
+      !Number.isSafeInteger(clock.days) || clock.days < 0 || clock.days > Math.floor((now-clock.at)/spoilage.DAY_MS))
+    throw new Error('The shop food clock cannot be verified. Nothing moved.');
+  var time = spoilage.storageTime(merchantId,clock.at,clock.days,now);
+  next.stock.forEach(function (row) {
+    if (Object.prototype.hasOwnProperty.call(row,'ageUnknown') && row.ageUnknown !== true)
+      throw new Error('The shop food age cannot be verified. Nothing moved.');
+    var entry = row.entry || {baseId:row.baseId,count:row.count};
+    SETTLEMENT.inventory({entries:[entry]});
+    if (entry.baseId !== row.baseId || entry.count !== row.count)
+      throw new Error('The shop food count cannot be verified. Nothing moved.');
+    if (legacy && spoilage.lifeOf(entry.baseId) && !spoilage.keptOf(entry)) row.ageUnknown = true;
+    if (row.ageUnknown) return;
+    var changed = spoilage.aged([entry],time.turned).entries[0];
+    if (!changed || changed.count !== row.count) throw new Error('The shop food count cannot be verified. Nothing moved.');
+    if (JSON.stringify(changed) !== JSON.stringify(entry)) {
+      row.entry = changed;
+      if (changed.baseId !== row.baseId) { row.baseId = changed.baseId; row.name = changed.name; }
+    }
+  });
+  next.spoilClock = time.clock;
+  return JSON.stringify(next) === JSON.stringify(state) ? null : next;
+}
+
 function createMerchantTrading(deps) {
   var purses = deps.purses;
   var prices = deps.prices;
@@ -67693,6 +71192,14 @@ function createMerchantTrading(deps) {
   var now = deps.now || function () { return Date.now(); };
   var reach = deps.reach == null ? REACH : deps.reach;
   var sessions = new Map();
+  function ageStock(merchantId,state,caller) {
+    if (!state || state.pending || typeof deps.spoilage !== 'function') return state;
+    var next = agedMerchantStock(state,deps.spoilage(),merchantId,now());
+    if (!next) return state;
+    var committed = purses.compareAndCommit(merchantId,state.revision || 0,next,caller);
+    if (!committed) throw new Error('The trader changed. Choose the trade again. Nothing moved.');
+    return committed;
+  }
   var viewOwners = new WeakMap();
   var sessionSerial = 0;
   /*
@@ -67747,7 +71254,7 @@ function createMerchantTrading(deps) {
     entries.forEach(function (entry) {
       var key = SETTLEMENT.metadataKey(entry);
       var row = stock.find(function (held) {
-        return held.name === name && SETTLEMENT.metadataKey(held.entry || {baseId:held.baseId,count:held.count}) === key;
+        return !held.ageUnknown && held.name === name && SETTLEMENT.metadataKey(held.entry || {baseId:held.baseId,count:held.count}) === key;
       });
       if (row) {
         if (row.count + entry.count > MAX_GOLD) throw new Error('The shelf is full.');
@@ -67761,7 +71268,7 @@ function createMerchantTrading(deps) {
     var entries = [], left = count;
     for (var i = 0; i < stock.length && left > 0; i++) {
       var row = stock[i];
-      if (row.baseId !== baseId || String(row.name || '').toLowerCase() !== name.toLowerCase()) continue;
+      if (row.ageUnknown || row.baseId !== baseId || String(row.name || '').toLowerCase() !== name.toLowerCase()) continue;
       var n = Math.min(row.count, left);
       entries.push(Object.assign({}, row.entry || {baseId:row.baseId}, {count:n}));
       row.count -= n; left -= n;
@@ -67774,7 +71281,7 @@ function createMerchantTrading(deps) {
   function inReach(humanId, merchantId) {
     var human = world.actor(humanId);
     var merchant = world.actor(merchantId);
-    if (!human || !merchant || !human.pos || !merchant.pos) {
+    if (!human || !merchant) {
       return { ok: false, reason: 'You are not close enough to trade.' };
     }
     if (human.isHuman !== true || !(human.profileId > 0)) {
@@ -67783,7 +71290,10 @@ function createMerchantTrading(deps) {
     if (merchant.isHuman || merchant.profileId > 0) {
       return { ok: false, reason: 'That is not a guild trader.' };
     }
-    if (String(human.cell) !== String(merchant.cell) || human.cell == null || human.cell === '') {
+    if (merchant.isDead !== false || merchant.isDisabled !== false) {
+      return { ok: false, reason: 'This guild trader is unavailable.' };
+    }
+    if (!human.pos || !merchant.pos || String(human.cell) !== String(merchant.cell) || human.cell == null || human.cell === '') {
       return { ok: false, reason: 'You are not close enough to trade.' };
     }
     var d = Math.hypot(
@@ -67897,12 +71407,12 @@ function createMerchantTrading(deps) {
       if (buy !== null) quotedBuy = true;
       if (buy !== null && carried > 0) carriedBuy = true;
       var held = (state.stock || []).find(function (entry) {
-        return entry.baseId === resolved.baseId && String(entry.name || '').toLowerCase() === key;
+        return !entry.ageUnknown && entry.baseId === resolved.baseId && String(entry.name || '').toLowerCase() === key;
       });
       var count = 0;
       var stock = state.stock || [];
       for (var s = 0; s < stock.length; s++) {
-        if (stock[s].baseId === resolved.baseId && String(stock[s].name || '').toLowerCase() === key) count += stock[s].count;
+        if (!stock[s].ageUnknown && stock[s].baseId === resolved.baseId && String(stock[s].name || '').toLowerCase() === key) count += stock[s].count;
       }
       offers.push({
         name: name,
@@ -67948,7 +71458,7 @@ function createMerchantTrading(deps) {
       supply: supply,
       quests: questView(actorId,merchantId),
       note: note || (settlement.available()
-        ? ''
+        ? ((state.stock || []).some(function(row){return row.ageUnknown;}) ? 'Some older food has no verified age and is not for sale.' : '')
         : 'Buying and selling wait on the native transfer. Nothing has moved.')
     };
     var currentIdentity = viewIdentity ? sessionIdentity(world.actor(actorId)) : null;
@@ -67980,7 +71490,21 @@ function createMerchantTrading(deps) {
         var closed=closedView(session.actorId,profileId,session);
         views.push({actorId:session.actorId,view:closed}); return;
       }
-      var state = purses.read(session.merchantId), place = state && placeOf(state.reference);
+      var state;
+      try {
+        state = ageStock(session.merchantId,purses.read(session.merchantId),function(){return ownsSession(session.actorId,profileId,session);});
+      } catch(error) {
+        if (!active || sessions.get(profileId)!==session) return;
+        var refused = closedView(session.actorId,profileId,session);
+        refused.note = String(error.message || error);
+        views.push({actorId:session.actorId,view:refused});
+        if (typeof deps.notice === 'function' && isCurrentView(session.actorId,refused)) {
+          try { deps.notice(profileId,refused.note); }
+          catch(noticeError) { if (typeof deps.log === 'function') deps.log('Merchant food notice failed: '+noticeError); }
+        }
+        return;
+      }
+      var place = state && placeOf(state.reference);
       if (state && place) {
         var view=viewFor(session.merchantId,state,place,session.actorId,profileId,session.note,{session:session,identity:session.identity});
         var current = sessionIdentity(world.actor(session.actorId));
@@ -68049,7 +71573,9 @@ function createMerchantTrading(deps) {
       if (!authed(profileId, reached.human)) return fail('That request is not yours.');
       var identity=sessionIdentity(reached.human);
       if (!identity) return fail('This character is unavailable.', closedView(actorId,profileId,prior));
-      var state = purses.prepare(merchantId);
+      var state;
+      try { state = ageStock(merchantId,purses.prepare(merchantId),function(){return active && sessions.get(profileId)===prior;}); }
+      catch(error) { return fail(String(error.message || error)); }
       if (!active || sessions.get(profileId)!==prior) return fail('This character is unavailable.');
       if (!state) return fail('That is not a guild trader.');
       var place = placeOf(state.reference);
@@ -68123,7 +71649,7 @@ function createMerchantTrading(deps) {
         'open-limit':'Finish or leave one of your three open jobs of this kind first.',
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
         session:'Choose the work again from the trader.'};
-      var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what you drew and leave the work.') :
+      var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what remains of the draw and leave the work.') :
         reasons[result.why] || 'The work could not be changed.';
       if (isCommission && result.settling) {
         var settling=result.settling;
@@ -68132,7 +71658,15 @@ function createMerchantTrading(deps) {
           released:'Your inventory changed before the turn-in. Nothing moved. Turn the work in again.'});
       }
       if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
-      var questState=purses.prepare(merchantId),questPlace=questState && placeOf(questState.reference);
+      var questState;
+      try {
+        questState = ageStock(merchantId,purses.prepare(merchantId),function(){return ownsSession(actorId,profileId,originalSession);});
+      } catch(error) {
+        if (!ownsSession(actorId,profileId,originalSession)) return {text:'',view:null};
+        if (typeof deps.log === 'function') deps.log('Merchant shelf refresh failed after quest: ' + error);
+        return refuseSession(text + ' The shelf could not be refreshed. Open the trader panel again.');
+      }
+      var questPlace=questState && placeOf(questState.reference);
       var questResponse=questState && questPlace ? viewFor(merchantId,questState,questPlace,actorId,profileId,text,{session:originalSession,identity:originalSession.identity}) : closedView(actorId,profileId,originalSession);
       return questResponse && isCurrentView(actorId,questResponse) ? fail(text,questResponse) : {text:'',view:null};
     }
@@ -68161,7 +71695,9 @@ function createMerchantTrading(deps) {
       var view=responseView(state,note);
       return view && isCurrentView(actorId,view) ? fail(text,view) : {text:'',view:null};
     }
-    var state = purses.prepare(merchantId);
+    var state;
+    try { state = ageStock(merchantId,purses.prepare(merchantId),function(){return ownsSession(actorId,profileId,originalSession);}); }
+    catch(error) { return fail(String(error.message || error)); }
     if (!state) return fail('That is not a guild trader.');
     if (state.pending) return fail('This trader has a transfer waiting.');
     var place = placeOf(state.reference);
@@ -68299,6 +71835,9 @@ function createMerchantTrading(deps) {
     },
     nativeReady: function () { return settlement.available(); },
     withQuestInventoryMutation: function(actorId,change) {return active ? settlement.withInventoryMutation(actorId,change) : {ok:false,why:'unavailable'};},
+    withPairedInventoryMutation: function(actorId,recipientId,change) {
+      return active ? settlement.withPairedInventoryMutation(actorId,recipientId,change) : {ok:false,why:'unavailable'};
+    },
     questReady: function(actorId) {return active && settlement.canInventoryMutation(actorId);},
     questAdmission: function(actorId,merchantId) {
       if (!active) return null;
@@ -68349,6 +71888,11 @@ function installMerchantTrading(env) {
   var minted = typeof env.minted === 'function' ? env.minted : function () { return false; };
   var trading = createMerchantTrading({
     purses: env.purses,
+    spoilage: function () { return g.__thornswoodSpoilage; },
+    notice: function (profileId,line) {
+      if (typeof g.__thornswoodToProfile !== 'function') throw new Error('Merchant notice delivery is unavailable.');
+      g.__thornswoodToProfile(profileId,line);
+    },
     minted: minted,
     log:log,
     prices: {
@@ -68366,8 +71910,15 @@ function installMerchantTrading(env) {
     transfer: createNativeMerchantTransfer(mp),
     world: {
       actor: function (id) {
-        var ai = null;
-        try { ai = mp.getNpcAIState(id); } catch (e) { ai = null; }
+        var ai = null, desc = null, runtimeIdentity = null;
+        try {
+          ai = mp.getNpcAIState(id);
+          // Only the player's session is pinned to a runtime identity.
+          if (ai && ai.isHuman) {
+            desc = mp.getDescFromId(id);
+            runtimeIdentity = mp.getActorRuntimeIdentity(id);
+          }
+        } catch (e) { ai = null; }
         var pos = ai && Array.isArray(ai.pos) ? ai.pos.slice(0, 3) : null;
         var cell = ai ? (ai.cellOrWorld || ai.cell || null) : null;
         try {
@@ -68383,9 +71934,11 @@ function installMerchantTrading(env) {
         return {
           pos: pos,
           cell: cell,
-          desc: mp.getDescFromId(id),
+          desc: desc,
           lifeGeneration: ai && ai.lifeGeneration,
-          runtimeIdentity: mp.getActorRuntimeIdentity(id),
+          runtimeIdentity: runtimeIdentity,
+          isDead: ai && ai.isDead,
+          isDisabled: ai && ai.isDisabled,
           profileId: ai && ai.profileId || 0,
           isHuman: !!(ai && ai.isHuman)
         };
@@ -68508,6 +72061,7 @@ function installMerchantTrading(env) {
 }
 
 module.exports = {
+  agedMerchantStock: agedMerchantStock,
   createMerchantTrading: createMerchantTrading,
   createNativeMerchantTransfer: createNativeMerchantTransfer,
   createQuestTransactions: QUEST_TRANSFER.createQuestTransactions,
@@ -68562,6 +72116,277 @@ function questItemBlocked(baseId) {
   return !QUEST_ITEM_POLICY || QUEST_ITEM_POLICY.blocked(baseId);
 }
 
+// ==== thornswood staff scene tools (#6628) ====
+// The contract, trust boundary and real-game checks are in
+// docs/systems/staff-tools.md. Only server-owned properties reach natives.
+(function () {
+  'use strict';
+  var g = globalThis;
+  if (!g.__thornswoodCommandTools || !g.__thornswoodCommandTools.register) {
+    throw new Error('Staff scene tools require the registered command catalog.');
+  }
+  var WORDS = ['/fly', '/phase', '/godmode', '/invisible', '/cleareffects', '/killall'];
+  var OWNER = 'thornswoodStaffTools', VISIBLE = 'thornswoodStaffVisible';
+  var REACH = 1500, MOST = 40, PHASE = 256;
+  var active = {}, serial = Number(g.__thornswoodStaffToolsSerial) || 0;
+  var RUN = serverRunId();
+
+  function tell(pid, text) { if (g.__thornswoodToProfile) { g.__thornswoodToProfile(pid, text); } }
+  function report(word, pid, actor, why, extra) {
+    var staff = g.__thornswoodStaff;
+    if (staff && staff.record) { staff.record(word.slice(1), pid, nameOf(actor), pid, nameOf(actor), why, 0, extra); }
+  }
+  function nameOf(actor) {
+    try { var appearance = mp.get(actor, 'appearance'); return String(appearance && appearance.name || 'staff'); }
+    catch (e) { return 'staff'; }
+  }
+  function pass(pid) { var seen = g.__thornswoodPassSeen; return seen && seen.passes && seen.passes[pid]; }
+  function permitted(cmd, word, pid, actor) {
+    var staff = g.__thornswoodStaff;
+    if (!staff || !staff.authorizeTool || staff.authorizeTool(cmd,pid,actor,word === '/killall' ? 'admin' : 'playtester')) { return false; }
+    return mp.get(actor, 'isDead') === false;
+  }
+  function vec(v) { return Array.isArray(v) && v.length === 3 && v.every(Number.isFinite); }
+  function place(actor) {
+    var out = {desc: mp.get(actor, 'worldOrCellDesc'), pos: mp.get(actor, 'pos'), rot: mp.get(actor, 'angle')};
+    if (typeof out.desc !== 'string' || !out.desc || !vec(out.pos) || !vec(out.rot)) { throw new Error('actor location is unavailable'); }
+    return out;
+  }
+  function movementRefusal(pid, actor) {
+    var state = g.__thornswoodStaffState;
+    if (!state || !state.frozen) { return 'The staff restraint state is unavailable.'; }
+    if (state.frozen[pid]) { return 'Staff have frozen you in place.'; }
+    // The jail helper treats an unreadable cell as outside jail. Establish
+    // a readable authoritative location before asking that existing helper.
+    place(actor);
+    var cuffs = g.__thornswoodCuffs, property = g.__thornswoodProperty;
+    if (!cuffs || !cuffs.cuffedBy || !property || !property.lockedJailHere) { return 'The restraint checks are unavailable.'; }
+    if (cuffs.cuffedBy(actor)) { return 'Your hands are cuffed.'; }
+    if (property.lockedJailHere(actor, pid)) { return 'A guard has a cell locked here.'; }
+    return '';
+  }
+  function publish(actor, row) {
+    var seq = ++serial; g.__thornswoodStaffToolsSerial = serial;
+    row.flight = (row.fly === true || row.godmode === true) && !movementRefusal(row.pid,Number(actor));
+    var current = pass(row.pid), until = current ? Number(current.x) : 0;
+    row.until = until;
+    mp.set(actor, OWNER, {fly: row.flight, godmode: row.godmode === true, seq: seq,run:RUN,until:until});
+    mp.set(actor, VISIBLE, {invisible: row.invisible === true, seq: seq,run:RUN,until:until});
+  }
+  function revoke(actor, row, why) {
+    if (row.godmode) {
+      var needs = g.__thornswoodNeeds;
+      try { if (needs && needs.settle) { needs.settle(Number(actor)); } }
+      catch (e) { log('staff tools: needs could not settle before revocation: ' + e); }
+      mp.set(actor, 'isGodMode', false);
+      try { if (needs && needs.godmodeChanged) { needs.godmodeChanged(Number(actor)); } }
+      catch (e) { log('staff tools: needs could not redraw after revocation: ' + e); }
+    }
+    publish(actor, {});
+    delete active[actor];
+    report('/tools-off', row.pid, Number(actor), why);
+  }
+  function tick() {
+    Object.keys(active).forEach(function (key) {
+      var row = active[key], actor = Number(key);
+      try {
+        var current = pass(row.pid), roles = g.__thornswoodCommandRoles;
+        var online = mp.get(0, 'onlinePlayers');
+        if (!Array.isArray(online) || online.indexOf(actor) < 0 ||
+            Number(mp.get(actor, 'profileId')) !== row.pid || mp.get(actor, 'isDead') !== false ||
+            mp.getActorRuntimeIdentity(actor) !== row.life ||
+            !current || !(Number(current.x) > Date.now()) || !roles || !roles.playtester || !roles.playtester(row.pid) ||
+            (row.godmode && mp.get(actor, 'isGodMode') !== true)) {
+          revoke(actor, row, 'The staff session or its authority ended.'); return;
+        }
+        if (Number(current.x) !== row.until) { publish(actor,row); }
+        var restrained = movementRefusal(row.pid, actor);
+        if (row.flight && restrained) {
+          row.fly = false; publish(actor, row);
+          report('/fly', row.pid, actor, 'off: movement is restrained');
+          tell(row.pid, 'Flight ended because movement is restrained.');
+        }
+        else if (!row.flight && (row.fly || row.godmode) && !restrained) { publish(actor,row); }
+      } catch (e) {
+        // Failure to read authority must revoke, never renew, a privilege.
+        try { revoke(actor, row, 'Staff authority could not be checked.'); }
+        catch (failure) { log('staff tools: could not revoke actor ' + actor + ': ' + failure); }
+      }
+    });
+  }
+  function toggle(words, current) {
+    if (!words.length) { return !current; }
+    if (words.length !== 1 || (words[0] !== 'on' && words[0] !== 'off')) { return null; }
+    return words[0] === 'on';
+  }
+  function killable(id, cell, origin) {
+    var population = g.__thornswoodNpcPopulation;
+    if (!population || !population.staffKillable || !population.staffKillable(id)) { return false; }
+    // This native answer establishes actor type, ownership and authored NPC
+    // flags. A missing field is not evidence that an actor is safe to kill.
+    var s = mp.getNpcAIState(id);
+    if (!s || !Number.isInteger(s.profileId) || s.profileId >= 0 ||
+        s.isHuman !== false || s.isConnected !== false || s.isServerControlled !== true ||
+        s.isEssential !== false || s.isProtected !== false || s.isUnique !== false ||
+        s.isDead !== false || s.isDisabled !== false || !Number.isInteger(s.aggression) ||
+        s.aggression < 2 || s.aggression > 3 || s.cellOrWorld !== cell || !vec(s.pos)) { return false; }
+    return Math.hypot(s.pos[0]-origin[0], s.pos[1]-origin[1], s.pos[2]-origin[2]) <= REACH;
+  }
+  function killall(pid, actor) {
+    var here = place(actor), cell = mp.getIdFromDesc(here.desc);
+    if (!Number.isInteger(cell) || cell <= 0) { throw new Error('cell identity is unavailable'); }
+    var nearby = mp.getNeighborsByPosition(cell, here.pos);
+    if (!Array.isArray(nearby)) { throw new Error('nearby actors are unavailable'); }
+    var candidates = [], seen = {}, failed = [], killed = [];
+    nearby.forEach(function (id) {
+      if (!Number.isInteger(id) || id <= 0 || id === actor || seen[id]) { return; }
+      seen[id] = true;
+      try {
+        if (!killable(id, cell, here.pos)) { return; }
+        var pos = mp.getNpcAIState(id).pos;
+        candidates.push({id:id, distance:Math.hypot(pos[0]-here.pos[0],pos[1]-here.pos[1],pos[2]-here.pos[2])});
+      } catch (e) { /* An unreadable actor is excluded, never presumed an NPC. */ }
+    });
+    candidates.sort(function (a,b) { return a.distance-b.distance || a.id-b.id; });
+    candidates.slice(0,MOST).forEach(function (target) {
+      try {
+        // Recheck immediately before the write, including all identity flags.
+        if (!killable(target.id,cell,here.pos)) { failed.push(target.id); return; }
+        mp.set(target.id,'isDead',true);
+        if (mp.get(target.id,'isDead') === true) { killed.push(target.id); }
+        else { failed.push(target.id); }
+      } catch (e) { failed.push(target.id); }
+    });
+    tell(pid, 'Ended ' + killed.length + ' nearby hostile NPCs. ' + failed.length + ' could not be ended. People and protected NPCs were excluded.');
+    report('/killall',pid,actor,'Nearby hostile NPCs only.',{killed:killed,failed:failed,limit:MOST,reach:REACH});
+  }
+  function command(cmd, word, words, pid, actor) {
+    if (WORDS.indexOf(word) === -1) { return false; }
+    try {
+      if (!permitted(cmd,word,pid,actor)) { tell(pid,'That tool needs your proven playtest or admin session and its current living character.'); return true; }
+      var key = word.slice(1), row = active[actor] || {pid:pid,fly:false,godmode:false,invisible:false};
+      if (key === 'fly' || key === 'godmode' || key === 'invisible') {
+        var actorRuntime = mp.getActorRuntimeIdentity(actor);
+        if (typeof actorRuntime !== 'string' || !actorRuntime) {
+          throw new Error('actor runtime authority is unavailable');
+        }
+        if (row.life && row.life !== actorRuntime) {
+          revoke(actor,row,'Actor runtime authority changed.');
+          row = {pid:pid,fly:false,godmode:false,invisible:false};
+        }
+        row.life = actorRuntime;
+        var on = toggle(words,row[key]);
+        if (on === null) { tell(pid,'Use ' + word + ' on or ' + word + ' off.'); return true; }
+        if (key === 'fly' && on) {
+          var refusal = movementRefusal(pid,actor);
+          if (refusal) { tell(pid,refusal + ' Flight is unavailable.'); return true; }
+        }
+        if (key === 'godmode') {
+          if (typeof mp.get(actor,'isGodMode') !== 'boolean') { throw new Error('the server damage-protection API is unavailable'); }
+          var modeNeeds = g.__thornswoodNeeds;
+          if (!modeNeeds || !modeNeeds.settle || !modeNeeds.godmodeChanged) { throw new Error('the needs mode API is unavailable'); }
+          modeNeeds.settle(actor);
+          mp.set(actor,'isGodMode',on);
+        }
+        row[key] = on; active[actor] = row; publish(actor,row);
+        if (key === 'godmode') { modeNeeds.godmodeChanged(actor); }
+        tell(pid,word + ' is ' + (on ? 'on.' : 'off.') +
+          (key === 'fly' && !on && row.godmode ? ' God mode still enables flight while movement is unrestricted.' : ''));
+        report(word,pid,actor,on ? 'on' : 'off');
+        if (!row.fly && !row.godmode && !row.invisible) { delete active[actor]; }
+        return true;
+      }
+      if (words.length) { tell(pid,word + ' takes no target or other arguments.'); return true; }
+      if (key === 'phase') {
+        var noMove = movementRefusal(pid,actor);
+        if (noMove) { tell(pid,noMove + ' Phasing is unavailable.'); return true; }
+        var here = place(actor), heading = here.rot[2] * Math.PI / 180;
+        var pos = [here.pos[0]+Math.sin(heading)*PHASE,here.pos[1]+Math.cos(heading)*PHASE,here.pos[2]].map(Math.fround);
+        var stuck = g.__thornswoodStuck;
+        if (!stuck || !stuck.teleported) { throw new Error('teleport history is unavailable'); }
+        mp.set(actor,'locationalData',{cellOrWorldDesc:here.desc,pos:pos,rot:here.rot.slice()});
+        var confirmed = place(actor);
+        if (confirmed.desc !== here.desc || confirmed.pos.some(function(n,i){return n !== pos[i];})) {
+          throw new Error('the native phase move was not applied');
+        }
+        stuck.teleported(pid,actor);
+        report(word,pid,actor,'Forward in the same cell.',{from:here.pos,to:pos});
+        tell(pid,'Moved a short distance forward.'); return true;
+      }
+      if (key === 'cleareffects') {
+        var needs = g.__thornswoodNeeds;
+        if (!needs || !needs.clearIntoxication) { throw new Error('intoxication state is unavailable'); }
+        needs.clearIntoxication(actor);
+        report(word,pid,actor,'Alcohol and drug effects cleared.');
+        tell(pid,'Your alcohol and drug effects are cleared.'); return true;
+      }
+      killall(pid,actor); return true;
+    } catch (e) {
+      if (active[actor]) {
+        try { revoke(actor,active[actor],'The tool could not be applied.'); }
+        catch (revokeError) { log('staff tools: could not revoke after tool failure: ' + revokeError); }
+      }
+      tell(pid,'The staff tool could not complete. The server log says why.');
+      log('staff tools: ' + word + ' for profile ' + pid + ' failed: ' + e);
+      return true;
+    }
+  }
+  function shutdown() {
+    var failures = [];
+    Object.keys(active).forEach(function(id) {
+      try { revoke(Number(id),active[id],'The staff tools reloaded.'); }
+      catch (e) { failures.push(e); log('staff tools: could not withdraw actor '+id+' during reload: '+e); }
+    });
+    // One destroyed/unreadable actor cannot leave every other mode enabled.
+    // Still fail the reload visibly and retain the old authority timer.
+    if (failures.length) { throw failures[0]; }
+  }
+  function ownerScript() {
+    return [
+      '(function(){',
+      'var sp=ctx.sp,v=ctx.value||{};if(!sp){return;}',
+      'var store=sp.storage;if(!store){sp.printConsole("staff tools: native mode storage unavailable");return;}',
+      'var allowed=v.run==='+JSON.stringify(RUN)+'&&Number(v.until)>Date.now();',
+      'var signature=String(v.seq)+"|"+allowed;if(ctx.state.thornswoodToolAttempt===signature){return;}ctx.state.thornswoodToolAttempt=signature;',
+      'try {',
+      ' var fly=allowed&&v.fly===true,god=allowed&&v.godmode===true;',
+      ' if((store.thornswoodStaffFlight===true)!==fly){sp.Debug.toggleCollisions();store.thornswoodStaffFlight=fly;}',
+      ' if(store.thornswoodStaffGod!==god){sp.Debug.setGodMode(god);store.thornswoodStaffGod=god;}',
+      '}catch(e){sp.printConsole("staff tools: could not apply native mode: "+e);}',
+      '})();'
+    ].join('\n');
+  }
+  function visibilityScript() {
+    return [
+      '(function(){var v=ctx.value||{},a=ctx.sp.Actor.from(ctx.refr);if(!a){return;}',
+      'var invisible=v.run==='+JSON.stringify(RUN)+'&&Number(v.until)>Date.now()&&v.invisible===true;if(ctx.state.thornswoodStaffInvisible===invisible){return;}',
+      'try{a.setAlpha(invisible?0:1,false);ctx.state.thornswoodStaffInvisible=invisible;}',
+      'catch(e){ctx.sp.printConsole("staff tools: could not apply visibility: "+e);}})();'
+    ].join('\n');
+  }
+  mp.makeProperty(OWNER,{isVisibleByOwner:true,isVisibleByNeighbors:false,updateOwner:ownerScript(),updateNeighbor:''});
+  mp.makeProperty(VISIBLE,{isVisibleByOwner:true,isVisibleByNeighbors:true,updateOwner:visibilityScript(),updateNeighbor:visibilityScript()});
+  // The loader clears property registrations on reload. Re-register before
+  // the old module withdraws its values, or its writes would be refused.
+  if (g.__thornswoodStaffTools) { g.__thornswoodStaffTools.shutdown(); }
+  if (g.__thornswoodStaffToolsTimer) { clearInterval(g.__thornswoodStaffToolsTimer); }
+  g.__thornswoodStaffToolsTimer = setInterval(guard('staffToolAuthority',tick),1000);
+  g.__thornswoodStaffTools = {words:WORDS,command:command,tick:tick,ownerScript:ownerScript,visibilityScript:visibilityScript,
+    isInvisible:function(actor){var row=active[actor];return !!(row && row.invisible && pass(row.pid) && Number(pass(row.pid).x)>Date.now());},
+    shutdown:shutdown};
+  g.__thornswoodCommandTools.register('scene-tools',{
+    command:function(cmd,word,parts,pid,actor){return command(cmd,word,parts.slice(1),pid,actor);},
+    help:[
+      {word:'/fly',role:'playtester',syntax:'/fly [on|off]',text:'Toggle collision-free flight for yourself; restraints still apply.'},
+      {word:'/phase',role:'playtester',syntax:'/phase',text:'Move a short distance forward within this cell; restraints still apply.'},
+      {word:'/godmode',role:'playtester',syntax:'/godmode [on|off]',text:'Toggle flight, damage protection, lethal valid attacks and paused needs for yourself.'},
+      {word:'/invisible',role:'playtester',syntax:'/invisible [on|off]',text:'Hide or show your character.'},
+      {word:'/cleareffects',role:'playtester',syntax:'/cleareffects',text:'Clear your alcohol and drug effects without removing injuries or disease.'},
+      {word:'/killall',role:'admin',syntax:'/killall',text:'End up to 40 nearby ordinary hostile NPCs; people and protected actors are excluded.'}
+    ]
+  });
+})();
+// ==== end thornswood staff scene tools ====
 // NPC SERVER STARTUP BEGIN
 (function () {
 const owner={};
@@ -68976,7 +72801,7 @@ if (typeof globalThis.__thornswoodReleaseWaiting === 'function') { globalThis.__
       });
       return next;
     }
-    function keep(actor, b, changes, eligible) {
+    function keep(actor, b, changes, eligible, abandoned) {
       try {
         if (!active || deps.available && !deps.available() || deps.identity(actor)!==b.owner) return false;
         var after={open:b.open,cool:b.cool};
@@ -68990,7 +72815,7 @@ if (typeof globalThis.__thornswoodReleaseWaiting === 'function') { globalThis.__
         // Only the captured callback-free session check follows that read.
         if(eligible)admission=function(){return admitted(original) && eligible() && admitted(finalSession);};
         if(!admitted(admission))return false;
-        return deps.commit(actor, b.expected, next, changes || [],admission).ok === true;
+        return deps.commit(actor, b.expected, next, changes || [],admission,abandoned).ok === true;
       } catch (e) {
         note('could not write the quests of', actor + ', so nothing changed:', e);
         return false;
@@ -69304,15 +73129,21 @@ if (typeof globalThis.__thornswoodReleaseWaiting === 'function') { globalThis.__
       }
       var open = b.open[id];
       if (!open) return { ok: false, why: 'none' };
+      var hours=byId[id] && byId[id].hours, now=deps.now(), until=now+hours*3600000;
+      // Use only this work's existing normal duration. A partial collection
+      // with unavailable terms must fail closed inside the locked snapshot.
+      var abandoned={quest:id,until:typeof hours==='number' && isFinite(hours) && hours>0 &&
+        Number.isSafeInteger(until) && until>now ? until : null};
       if(id==='mammoth') {
-        var abandoned=huntBundles && huntBundles.mammothAbandon(open);
-        if(!abandoned || !abandoned.ok)return {ok:false,why:'unavailable'};
+        var bundle=huntBundles && huntBundles.mammothAbandon(open);
+        if(!bundle || !bundle.ok)return {ok:false,why:'unavailable'};
+        var changes=bundle.changes.map(function(change){return Object.assign({},change,{upTo:true});});
         delete b.open[id];
-        return keep(actor,b,abandoned.changes) ? {ok:true} : {ok:false,why:'unwritten'};
+        return keep(actor,b,changes,undefined,changes.length?abandoned:undefined) ? {ok:true} : {ok:false,why:'unwritten'};
       }
-      var changes = open.drawn > 0 ? [{item: open.itemDesc, count: -open.drawn}] : [];
+      var changes = open.drawn > 0 ? [{item: open.itemDesc, count: -open.drawn, upTo: true}] : [];
       delete b.open[id];
-      if (!keep(actor, b, changes)) return { ok: false, why: 'unwritten' };
+      if (!keep(actor, b, changes, undefined, changes.length?abandoned:undefined)) return { ok: false, why: 'unwritten' };
       return { ok: true };
     }
     function offer(actor,id,opts,held) {

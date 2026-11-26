@@ -5,9 +5,19 @@ fast as hunger.
 
 ## The clock
 
-It empties in 1 hour and 12 minutes. That is 83.33 points an hour.
+It empties in 1 hour and 30 minutes of real time. That is 66.67 points an hour.
 Cold speeds it on the same steps as hunger: 1.25 when cold is weary,
 1.5 at bad, 2 at spent. See [Temperature](temperature.md).
+
+While in the world, from full to empty, with no drink and the same temperature
+band throughout:
+
+| Temperature band | Drain multiplier | Time |
+| --- | --- | --- |
+| Fine or any heat band | 1 | 1 hour and 30 minutes |
+| Weary cold | 1.25 | 1 hour and 12 minutes |
+| Bad cold | 1.5 | 1 hour |
+| Spent cold | 2 | 45 minutes |
 
 ## The bands
 

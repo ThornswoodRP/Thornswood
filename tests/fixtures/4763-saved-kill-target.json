@@ -1,0 +1,16 @@
+{
+  "ref": "10f540:Skyrim.esm",
+  "base": "567c8:Skyrim.esm",
+  "world": null,
+  "cell": "15261:Skyrim.esm",
+  "pos": [-7649.5029296875, 3653.6396484375, -1855.7203369140625],
+  "leash": 1536,
+  "returnMinutes": 30,
+  "role": "enemy",
+  "habitat": "dungeon",
+  "tier": 1,
+  "species": "draugr",
+  "cap": 8,
+  "ambush": true,
+  "locationName": "Hillgrund's Tomb"
+}

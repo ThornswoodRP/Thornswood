@@ -70,6 +70,7 @@ PUSHED = []
 
 async def _push(*a):
     PUSHED.append(a)
+    return True     # a site that kept it, as push answers then (#4230)
 
 bot.push_async = _push
 

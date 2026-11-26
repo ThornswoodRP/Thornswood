@@ -1,7 +1,7 @@
 // test-1714-cut-file.js
 //
 // #1714. scripts/dev/Write-CutItems.js sorted the recipe table into
-// docs/systems/cut-items.json once, before anything was cut (#1391). Since
+// game/data/cut-items.json once, before anything was cut (#1391). Since
 // #1622 Build-RecipeTable.ps1 reads that file and writes a table that is
 // already cut, and the script's rules read such a table wrongly: cut rows
 // nobody owned are in the refused map now, and the rows kept after the first
@@ -27,9 +27,9 @@ function yes(what, cond) {
 
 const SCRIPT = fs.readFileSync(path.join(REPO_DIR, "scripts", "dev", "Write-CutItems.js"), "utf8");
 const TABLE = fs.readFileSync(path.join(REPO_DIR, "game", "data", "recipes.json"), "utf8");
-const CUT_JSON = fs.readFileSync(path.join(REPO_DIR, "docs", "systems", "cut-items.json"), "utf8");
+const CUT_JSON = fs.readFileSync(path.join(REPO_DIR, "game", "data", "cut-items.json"), "utf8");
 const CUT_MD = fs.readFileSync(path.join(REPO_DIR, "docs", "systems", "cut-items.md"), "utf8");
-const KEPT_JSON = fs.readFileSync(path.join(REPO_DIR, "docs", "systems", "cut-kept.json"), "utf8");
+const KEPT_JSON = fs.readFileSync(path.join(REPO_DIR, "game", "data", "cut-kept.json"), "utf8");
 
 // A folder laid out the way the script expects, with what it reads.
 function sandbox(table, cutJson, cutMd, keptJson) {
@@ -39,9 +39,9 @@ function sandbox(table, cutJson, cutMd, keptJson) {
   fs.mkdirSync(path.join(root, "docs", "systems"), { recursive: true });
   fs.writeFileSync(path.join(root, "scripts", "dev", "Write-CutItems.js"), SCRIPT);
   fs.writeFileSync(path.join(root, "game", "data", "recipes.json"), typeof table === "string" ? table : JSON.stringify(table));
-  if (cutJson !== null) { fs.writeFileSync(path.join(root, "docs", "systems", "cut-items.json"), cutJson); }
+  if (cutJson !== null) { fs.writeFileSync(path.join(root, "game", "data", "cut-items.json"), cutJson); }
   if (cutMd !== null) { fs.writeFileSync(path.join(root, "docs", "systems", "cut-items.md"), cutMd); }
-  if (keptJson) { fs.writeFileSync(path.join(root, "docs", "systems", "cut-kept.json"), keptJson); }
+  if (keptJson) { fs.writeFileSync(path.join(root, "game", "data", "cut-kept.json"), keptJson); }
   return root;
 }
 function run(root) {
@@ -49,7 +49,9 @@ function run(root) {
   return { code: r.status, out: String(r.stdout || "") + String(r.stderr || "") };
 }
 function readOut(root, name) {
-  const f = path.join(root, "docs", "systems", name);
+  const f = name.endsWith('.md')
+    ? path.join(root, "docs", "systems", name)
+    : path.join(root, "game", "data", name);
   return fs.existsSync(f) ? fs.readFileSync(f, "utf8") : null;
 }
 const roots = [];
@@ -69,7 +71,7 @@ try {
   const today = box(TABLE, CUT_JSON, CUT_MD, KEPT_JSON);
   const r = run(today);
   yes("a run on today's table exits 0", r.code === 0);
-  yes("it says it started from the cut file", /already cut, so the list is the one docs\/systems\/cut-items\.json has/.test(r.out));
+  yes("it says it started from the cut file", /already cut, so the list is the one game\/data\/cut-items\.json has/.test(r.out));
   yes("cut-items.json is written back byte for byte", readOut(today, "cut-items.json") === CUT_JSON);
   yes("cut-items.md is written back byte for byte", readOut(today, "cut-items.md") === CUT_MD);
   yes("and so is cut-kept.json", readOut(today, "cut-kept.json") === KEPT_JSON);
@@ -151,7 +153,7 @@ try {
   const blind = box(JSON.stringify(grown), CUT_JSON, CUT_MD, null);
   const rb = run(blind);
   yes("new rows with no cut-kept.json to tell them apart stop (exit 1) and write nothing",
-    rb.code === 1 && /STOP\. There is no docs\/systems\/cut-kept\.json/.test(rb.out) && readOut(blind, "cut-items.json") === CUT_JSON && readOut(blind, "cut-kept.json") === null);
+    rb.code === 1 && /STOP\. There is no game\/data\/cut-kept\.json/.test(rb.out) && readOut(blind, "cut-items.json") === CUT_JSON && readOut(blind, "cut-kept.json") === null);
 
   // ---- a cut table with no cut file ---------------------------------------
   const lost = box(TABLE, null, null);

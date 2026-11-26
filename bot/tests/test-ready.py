@@ -249,6 +249,58 @@ try:
     yes('and says so by doing it again rather than by going quiet',
         twelfth.synced == 2)
 
+    # ------------------------------------ registration fails on Discord --
+    #
+    # A failed sync to Discord (#4245): only what Discord confirmed is written
+    # down. A failed registration must try again on the next start.
+    bot.STAMP = os.path.join(TMP, 'stamp-failed-sync.json')
+
+    class FailingTree(Tree):
+        def __init__(self, names, fail_on_sync=True):
+            super().__init__(names)
+            self.fail_on_sync = fail_on_sync
+
+        async def sync(self, guild=None):
+            if guild is not None and self.fail_on_sync:
+                raise RuntimeError('Discord 503 Service Unavailable')
+            await super().sync(guild=guild)
+
+    # First start fails
+    ftree = FailingTree(['close', 'roll'])
+    was_tree, was_client = bot.tree, bot.client
+    bot.tree, bot.client = ftree, Client(HOME)
+    try:
+        asyncio.run(bot.register_commands())
+    finally:
+        bot.tree, bot.client = was_tree, was_client
+
+    yes('a failed registration writes nothing to the stamp',
+        not os.path.exists(bot.STAMP))
+
+    # Next start tries again and succeeds
+    recovered = run(['close', 'roll'], HOME)
+    yes('and the next start tries registering again', recovered.synced == 2)
+    yes('and writes the stamp once confirmed', os.path.exists(bot.STAMP))
+
+    # And next start after success skips
+    next_start = run(['close', 'roll'], HOME)
+    yes('and then skips when already registered', next_start.synced == 0)
+
+    # Existing stamp with new command that fails
+    ftree2 = FailingTree(['close', 'roll', 'audit'])
+    bot.tree, bot.client = ftree2, Client(HOME)
+    try:
+        asyncio.run(bot.register_commands())
+    finally:
+        bot.tree, bot.client = was_tree, was_client
+
+    wrote, _ = bot._stamp_read()
+    yes('a failed registration with existing stamp leaves old commands in stamp',
+        wrote == ['close', 'roll'])
+
+    recovered2 = run(['close', 'roll', 'audit'], HOME)
+    yes('and retries the new commands on next start', recovered2.synced == 2)
+
     # ------------------------------------------------------- the panel --
     #
     # The options a dropdown offers live in the message that was posted, not

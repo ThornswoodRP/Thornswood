@@ -145,8 +145,9 @@ yes('F8 Faction Leader routing is IDs only; empty list refuses; no staff-log fal
     !/startswith\(['"]Lead/.test(bot) &&
     bot.indexOf("name='faction-seat'") === -1 &&
     install.indexOf('UPPER_STAFF_ROLES') !== -1 &&
-    /Owner role ID/.test(install) &&
-    /Lead Gamemaster role ID/.test(install));
+    /the council: Owner, Co-Owner and each of the six leads/.test(install) &&
+    /Setup-Discord\.ps1 -OnBox -Audit prints as the -UpperStaffRoles line/.test(install) &&
+    build.indexOf("('-UpperStaffRoles', COUNCIL_ROLES)") !== -1);
 
 yes('F15 Install-Bot keeps existing UPPER_STAFF_ROLES unless -UpperStaffRoles is passed, IDs only',
     install.indexOf("ContainsKey('UpperStaffRoles')") !== -1 &&

@@ -112,7 +112,37 @@ function sendable(page, ids) {
   return { summary: render(page.summary), description: render(page.description), installInstructions: render(page.installInstructions) };
 }
 
+// Compare the public GraphQL text to what the publisher sends. Only line
+// endings are normalized; case, Markdown and blank lines are part of the copy.
+function publicDifference(page, live, slug) {
+  if (!page || page.version !== 1) return 'collection-page.json is not a version 1 page record.';
+  if (page.collection !== slug) return 'collection-page.json does not name the collection checked (' + slug + ').';
+  for (const field of ['summary', 'description']) {
+    if (typeof page[field] !== 'string' || !page[field].trim()) return 'collection-page.json has no ' + field + ' text.';
+    if (!live || typeof live[field] !== 'string' || !live[field].trim()) return 'Nexus returned no ' + field + ' text.';
+    const lines = text => text.split(/\r\n|\r|\n/);
+    const expected = lines(render(page[field]));
+    const actual = lines(live[field]);
+    for (let i = 0; i < Math.max(expected.length, actual.length); i++) {
+      if (expected[i] !== actual[i]) return field + ' line ' + (i + 1) + ' differs from collection-page.json.';
+    }
+  }
+  return '';
+}
+
+function comparePublic(pagePath, slug) {
+  let page;
+  try { page = JSON.parse(fs.readFileSync(pagePath, 'utf8').replace(/^\ufeff/, '')); }
+  catch { console.log('collection-page.json could not be read as JSON.'); return 0; }
+  // Base64 keeps UTF-8 intact through PowerShell 5.1's ASCII native pipe.
+  const live = JSON.parse(Buffer.from(fs.readFileSync(0, 'ascii').trim(), 'base64').toString('utf8'));
+  const why = publicDifference(page, live, slug);
+  if (why) console.log(why);
+  return 0;
+}
+
 function main(argv) {
+  if (argv[0] === '--compare-public') return comparePublic(argv[1], argv[2]);
   const root = path.join(__dirname, '..', '..');
   const pagePath = argv[0] || path.join(root, 'records', 'collection-page.json');
   const recordPath = argv[1] || path.join(root, 'records', 'collection.json');

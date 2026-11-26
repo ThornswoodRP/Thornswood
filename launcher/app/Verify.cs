@@ -280,7 +280,7 @@ namespace Thornswood
                         ? " is light on the server and not flagged light in your copy, so from there on your load order counts one place more than the server's."
                         : " is flagged light in your copy and is a full plugin on the server, so from there on your load order counts one place less than the server's.") +
                     " The game shows that as LOAD ORDER ERROR.",
-                    null, FromVortex(cfg, f.Key), true));
+                    null, FlagFromCollection(cfg, f.Key), true));
             // The order, position by position. Only when nothing above was
             // found, as before: a plugin turned off or not flagged light
             // already explains the shift from there on, and one problem
@@ -685,6 +685,27 @@ namespace Thornswood
                    "In Vortex, update the Thornswood collection, or reinstall " +
                    (string.IsNullOrEmpty(mod) ? "the mod that has " + plugin : mod) +
                    " (right click it on the Mods page, Reinstall), then press Scan.";
+        }
+
+        /// <summary>
+        /// What puts another author's plugin's light flag right. The flag is
+        /// the collection's patch (#2979), which Vortex applies only to a copy
+        /// it installs from the collection: a copy of the mod Vortex had before
+        /// keeps its author's flag, and reinstalling it lays the author's file
+        /// again (#6888). The collection lists the files of each patched mod,
+        /// which no copy from elsewhere matches, so installing its latest
+        /// revision makes Vortex install and patch its own copy.
+        /// </summary>
+        static string FlagFromCollection(Config cfg, string plugin)
+        {
+            string mod = null;
+            try { mod = OwnGame.VortexModOf(cfg, plugin); }
+            catch (Exception ex) { Swallow.Note("Verify.FlagFromCollection, asking Vortex's record which mod has " + plugin, ex); }
+            return "The Thornswood collection sets this flag on the copy of " +
+                   (string.IsNullOrEmpty(mod) ? "the mod that has " + plugin : mod) +
+                   " that Vortex installs from it, and your copy was not installed from it. " +
+                   "In Vortex, open the Thornswood collection on the Collections page and install its latest revision, then press Scan. " +
+                   "Reinstalling the mod you have puts back its author's copy, which does not have the flag.";
         }
 
         // ---- what puts each one right when Fix cannot (#2627) ------------
@@ -1208,10 +1229,11 @@ namespace Thornswood
             // this, pressing Fix here reached into another SkyMP server's
             // collection and changed a plugin it was relying on. FileMode.Create
             // truncates the file it is given rather than replacing it, so the
-            // link has to come off first.
-            OwnGame.Detach(dest);
+            // link has to come off first, and when it does not, this plugin is
+            // not written and is said as a failed write (#4694).
             try
             {
+                OwnGame.Detach(dest);
                 using (var fs = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None))
                     fs.Write(bytes, 0, bytes.Length);
             }

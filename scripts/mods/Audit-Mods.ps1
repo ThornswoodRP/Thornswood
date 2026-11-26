@@ -1,6 +1,8 @@
 <#
-  Audit-Mods.ps1
+.SYNOPSIS
+  Measures the build and says which parts carry a plugin and which are pure assets, because only the second kind can ever be optional.
 
+.DESCRIPTION
   Measures the build and says which parts carry a plugin and which are pure
   assets, because only the second kind can ever be optional.
 

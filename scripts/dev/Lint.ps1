@@ -117,12 +117,21 @@ Lint 'ruff' {
             (Test-Path -LiteralPath $p) -and ((& $p -m ruff --version 2>$null) -match '^ruff ')
         } {
             param($d)
-            python -m venv $d
-            & (Join-Path $d $bin) -m pip install --quiet --disable-pip-version-check --only-binary :all: --require-hashes -r $req
+            if (Get-Command python -CommandType Application -ErrorAction SilentlyContinue) {
+                python -m venv $d
+                & (Join-Path $d $bin) -m pip install --quiet --disable-pip-version-check --only-binary :all: --require-hashes -r $req
+            }
+            elseif (Get-Command uv -CommandType Application -ErrorAction SilentlyContinue) {
+                uv venv $d
+                uv pip install --quiet --require-hashes -r $req --python (Join-Path $d $bin)
+            }
+            else {
+                throw 'neither python nor uv found on PATH'
+            }
         }
         $py = if ($dir) { Join-Path $dir $bin } else { '' }
     }
-    if (-not $py) { Write-Host '::warning::no ruff venv, ruff lint skipped' }
+    if (-not $py) { Write-Host '::warning::no ruff venv, ruff lint skipped (install python or uv)' }
     else { & $py -m ruff check --no-cache --config (Join-Path $Repo '.github\lint\ruff.toml') --exit-zero --output-format github @list }
 }
 

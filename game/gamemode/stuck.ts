@@ -7,7 +7,7 @@
       safely, out of a short trail the server keeps of where each character
       has been; when no such spot is known, or the one it knows is the same
       stuck place, it sends you to the nearest temple instead;
-    - once every 5 minutes for each character;
+    - once every 5 minutes for each character, including a cancelled wait;
     - refused outright while you are dead, with a line saying why;
     - in a fight it is a soft lock: a 15 second wait, cancelled if you are hit
       or you move, with a line either way; out of a fight it works at once;
@@ -31,8 +31,10 @@
 
   THE TRAIL. Every 3 seconds, for each character in the world who is alive
   and not still being made: a new point when they are 200 units or more from
-  the last one, or in another cell, 10 kept. A sample that dropped more than
-  300 units since the last one is a fall and never becomes a point, so
+  the last one, or in another cell, at most 10 kept for one minute. A death,
+  carriage ride or server teleport starts this trail over (#4838).
+  A sample that dropped more than 300 units since the last one is a fall
+  and never becomes a point, so
   somebody who fell through the world is not sent back into the air.
 
   WHICH POINT. The newest one at least 256 units from where they are now (any
@@ -73,6 +75,7 @@
   var TICK_MS = 1000;
   var TRAIL_MS = 3000;            // between trail samples
   var TRAIL_KEEP = 10;
+  var TRAIL_MAX_MS = 60000;       // only the last minute's steps are recent
   var TRAIL_STEP = 200;           // units from the last point before a new one
   var SAME_PLACE = 256;           // units: closer than this is the same place
   var FALL = 300;                 // units dropped between samples: a fall
@@ -202,6 +205,22 @@
     if (!state.chars[k]) { state.chars[k] = { trail: [], hp: -1, anim: '', fightAt: 0, last: null }; }
     return state.chars[k];
   }
+  // A confirmed testing teleport starts a new local trail. It is not a use
+  // of /stuck and cannot erase combat history or an existing cooldown.
+  function teleported(pid, actorId) {
+    resetTrail(actorId);
+    if (state.waiting[pid] && state.waiting[pid].actorId === actorId) { delete state.waiting[pid]; }
+  }
+
+  // A server move begins a new journey. Keep the cooldown and the last
+  // successful escape's trap information, which are independent of steps.
+  function resetTrail(actorId) {
+    var c = state.chars[hex(actorId)];
+    if (c) { c.trail = []; c.last = null; }
+  }
+  function expireTrail(c, now) {
+    while (c.trail.length && now - c.trail[0].at >= TRAIL_MAX_MS) { c.trail.shift(); }
+  }
 
   /* The Discord account the join pass for this profile named, or ''. */
   function accountOf(pid) {
@@ -226,7 +245,8 @@
   /* One character, every few seconds: the trail. */
   function trailOne(actorId, now) {
     var c = charOf(actorId);
-    if (isDead(actorId) || inCreation(actorId)) { c.last = null; return; }
+    if (isDead(actorId) || inCreation(actorId)) { resetTrail(actorId); return; }
+    expireTrail(c, now);
     var here = placeOf(actorId);
     if (!here) { return; }
     var falling = !!(c.last && c.last.desc === here.desc && c.last.pos[2] - here.pos[2] > FALL);
@@ -277,6 +297,7 @@
   /* The spot a few steps back, or null. */
   function backSpot(actorId, here) {
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     var before = state.used[hex(actorId)];
     // Still where the last /stuck put them: that spot is the stuck place.
     if (before && before.to && samePlace(before.to, here)) { return null; }
@@ -294,6 +315,7 @@
     var f = frameOf(here.desc);
     if (f) { return { frame: f, x: here.pos[0], y: here.pos[1] }; }
     var c = charOf(actorId);
+    expireTrail(c, Date.now());
     for (var i = c.trail.length - 1; i >= 0; i--) {
       var tf = frameOf(c.trail[i].desc);
       if (tf) { return { frame: tf, x: c.trail[i].pos[0], y: c.trail[i].pos[1] }; }
@@ -414,9 +436,15 @@
   }
 
   // --------------------------------------------------------------- wait --
-  function cancel(pid, w, because, said) {
+  function cancel(pid, w, now, because, said) {
     delete state.waiting[pid];
-    tell(pid, said);
+    // A cancelled fight wait is a use too (#4784). Keep the last move's
+    // origin and destination: backSpot still needs them to avoid a trap.
+    var key = hex(w.actorId);
+    var used = state.used[key] || {};
+    used.at = now;
+    state.used[key] = used;
+    tell(pid, said + ' You can use it again in 5 minutes.');
     record(pid, w.actorId, nameOf(w.actorId),
            'used /stuck in a fight and the wait was cancelled because ' + because +
            ', at ' + where(w.from) + '. Nobody was moved.',
@@ -437,22 +465,22 @@
         continue;
       }
       if (isDead(w.actorId)) {
-        cancel(pid, w, 'they died',
+        cancel(pid, w, now, 'they died',
                '/stuck was cancelled because you died. You will wake at the nearest temple. ' +
                'This use is logged for staff.');
         continue;
       }
       var hp = health(w.actorId);
       if (hp >= 0 && w.hp >= 0 && hp < w.hp - 0.001) {
-        cancel(pid, w, 'they were hit',
-               '/stuck was cancelled because you were hit. Get clear of the fight and try again. ' +
+        cancel(pid, w, now, 'they were hit',
+               '/stuck was cancelled because you were hit. Get clear of the fight. ' +
                'This use is logged for staff.');
         continue;
       }
       if (hp >= 0) { w.hp = hp; }
       var here = placeOf(w.actorId);
       if (here && (here.desc !== w.from.desc || dist3(here.pos, w.from.pos) > MOVE_SLACK)) {
-        cancel(pid, w, 'they moved',
+        cancel(pid, w, now, 'they moved',
                '/stuck was cancelled because you moved. Stand still for the whole 15 seconds, ' +
                'or walk out if you can. This use is logged for staff.');
         continue;
@@ -535,6 +563,7 @@
 
   g.__thornswoodStuck = {
     command: command, tick: tick, trailTick: trailTick, sample: sample, backSpot: backSpot, mapSpot: mapSpot,
+    resetTrail: resetTrail, teleported: teleported,
     nearestTemple: nearestTemple, frameOf: frameOf, state: state, TEMPLES: TEMPLES,
     AGAIN_MS: AGAIN_MS, WAIT_MS: WAIT_MS, FIGHT_MS: FIGHT_MS, TICK_MS: TICK_MS, TRAIL_MS: TRAIL_MS
   };

@@ -41,6 +41,22 @@ place in the city do not belong on its streets. A dungeon or sewer under
 a city is its own habitat, not permission to spawn its enemies above it.
 The rule also applies to towns without a separate city worldspace.
 
+Habitat follows the placed room's location records and their type keywords.
+Display names and editor names do not classify a place: Warmaiden's is a
+town shop, and the houses beside Left Hand Mine and Kolskeggr Mine are houses.
+Rooms whose records lack a usable underground type have explicit CELL or
+LCTN annotations in `records/npc-habitats.json`. Each annotation names a real
+record and explains its habitat. An optional shared location must be that
+room's actual location or one of its parents. The catalogue builder refuses
+missing records, duplicate annotations, invalid types and unrelated groups.
+This input travels with the content build through its existing `records`
+input directory.
+
+The annotations preserve the existing underground groups, caps and enemy
+habitat identities, including the Ratway, catacombs and sewers. Existing
+accepted kill work keeps its original targets. Correcting a town room does
+not restore its cut residents or add another guild trader.
+
 Traders you buy from and sell to. They are the merchant's guild of
 the hold they stand in. The guild is these NPCs; people cannot join it.
 Their prices are the average of the price

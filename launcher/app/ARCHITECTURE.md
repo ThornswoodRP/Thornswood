@@ -108,10 +108,10 @@ has been drawn, and `StateChanged`. So:
   opens it), ShellProgress.cs (the Play button as a progress bar),
   ShellScanFix.cs (Scan and Fix on Diagnostics), ShellUpdate.cs,
   ShellChars.cs, ShellPlay.cs, ShellNews.cs, ShellCollection.cs,
-  ShellVortexWatch.cs, ShellMicrophone.cs, Waiting.cs and Stall.cs.
+  ShellVortexWatch.cs, ShellAudioSettings.cs, Waiting.cs and Stall.cs.
 
   Opening Settings also refreshes the active recording-input list through
-  `Mics.All`. `MicrophonePicker` keeps an unavailable saved input selected;
+  `Mics.All`. `AudioDevicePicker` keeps an unavailable saved input selected;
   only an explicit selection saves `Config.MicrophoneName` through the usual
   config save path. It does not replace a running audio worker. The choice
   applies after restarting the launcher.
@@ -256,6 +256,48 @@ that used to move them went: the collection link (`Config.Collection`), the
 site, and the Skyrim build pin (`Config.PinnedExeBytes` and the depots
 between the pin's markers in Downgrade.cs). A new collection or pin goes out
 as a new launcher.
+
+The thirty-two keys in `config.json` and what reads each:
+
+| Key | Default | What reads it | Set by Settings |
+|---|---|---|---|
+| `ServerAddress` | `"play.thornswood.net"` | `Config.VoiceSocket()`, `Shell.cs` ping and status checks, `Checks.cs`, `SkyMp.cs`, `AutoJoin.cs` | No |
+| `ServerPort` | `"7777"` | `Config.VoiceSocket()`, `AutoJoin.cs`, `Shell.cs` ping checks, `SkyMp.cs` | No |
+| `CollectionUrl` | `Config.Collection` | `ShellCollection.cs` (opens the collection link in browser) | No |
+| `ServerFolder` | `""` | `SkyMp.cs` (where it looks for a local server) | No |
+| `VoicePort` | `"7778"` | `Config.VoiceSocket()`, `Voice.cs` proximity voice socket port | No |
+| `VoiceUrl` | `""` | `Config.VoiceBase()`, `Config.VoiceSocket()`, `Voice.cs` | No |
+| `MicrophoneName` | `""` | `Mics.cs` (copied into `Thornswood.ini` at Play), `ShellAudioSettings.cs` | Yes (recording input selector) |
+| `AudioOutputId` | `""` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (audio output selector) |
+| `AudioOutputName` | `""` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (audio output selector) |
+| `AudioOutputConfigured` | `false` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (marked when output chosen) |
+| `MaxOnline` | `0` | `Shell.cs` (format string for awake count) | No |
+| `UpdateBranch` | `"main"` | `Velo.cs`, `Updater.cs` (fallback channel name) | No |
+| `Theme` | `"Forge"` | `Themes.cs:Apply`, `Shell.cs` | Yes (theme selector buttons) |
+| `CustomColors` | `null` | `Themes.cs:ApplyCustom` | Yes (custom theme color editor) |
+| `CustomLight` | `false` | `Themes.cs:ApplyCustom` | Yes (custom theme light toggle) |
+| `Channel` | `""` | `Config.cs` (`IsDev`, `BuildName`, `VoiceSocket()`), `DevBuild.cs`, `Updater.cs`, `Shell.cs` | Yes (server card dev switch) |
+| `DiscordAppId` | `"1549251507361292418"` | `Discord.cs` (Discord RPC client initialization) | No |
+| `SiteUrl` | `"https://thornswood.net"` | `Discord.cs` (presence links), `Shell.cs` | No |
+| `PresenceImage` | `"https://thornswood.net/presence.png"` | `Discord.cs` (presence image link) | No |
+| `DisplaySet` | `false` | `Shell.cs` (checks whether resolution has ever been auto-matched) | No |
+| `KeepLauncherOpen` | `false` | `ShellPlay.cs` (keeps launcher open instead of minimizing during play) | Yes (checkbox) |
+| `CrashSnapshots` | `false` | `CrashDump.cs`, `Shell.cs` (controls full memory crash dumps) | Yes (checkbox) |
+| `CrashSnapshotFolder` | `""` | `CrashDump.cs` (folder for crash snapshots) | No |
+| `LockResolution` | `false` | `Display.cs`, `Shell.cs` (prevents auto-matching screen resolution) | Yes (checkbox) |
+| `MusicOff` | `false` | `Shell.cs` (`StartMenuMusic`), `AudioPlayer.cs` | Yes (music toggle) |
+| `MusicLevel` | `"50"` | `Shell.cs` (`StartMenuMusic`), `AudioPlayer.cs` | Yes (volume slider) |
+| `VortexGame` | `""` | `Paths.cs`, `OwnGame.cs` (override path for Vortex deployment staging) | No |
+| `MakeOwnGame` | `true` | `ShellOwnGame.cs` (whether to make own game folder without prompting) | No |
+| `BrowserBackend` | `""` | `Chars.cs` (written to `SkyrimPlatform.ini`), `YourSettings.cs`, `Diag.cs` | No |
+| `StopServerOnExit` | `true` | `Shell.cs` (stops local server when launcher closes) | No |
+| `AutoUpdate` | `true` | `Updater.cs`, `VeloUpdate.cs`, `ShellUpdate.cs` (downloads and stages updates) | Yes (checkbox) |
+| `AutoJoin` | `true` | `AutoJoin.cs`, `ShellChars.cs` (auto login into game; reset to true on start) | Yes (checkbox) |
+
+Environment variables and registry reads outside `config.json`:
+- Environment variables: `PATH` is read by `SkyMp.cs` to locate `node.exe` when launching a local server; `ProgramFiles(x86)` is read by `Uninstall.cs` as a fallback location for the Steam copy; `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` was previously used when menu music ran through WebView2 before the launcher migrated to Avalonia and native audio.
+- Registry reads: `HKCU\Software\Valve\Steam` (`SteamExe`, `SteamPath`) and `HKLM\SOFTWARE\Wow6432Node\Valve\Steam` (`InstallPath`) are read by `Steam.cs` to find the Steam client and Skyrim installation; `HKCR\nxm\shell\open\command` is read by `Checks.cs` to check whether Vortex is registered for NXM links; `HKLM\SOFTWARE\Microsoft\Cryptography` (`MachineGuid`) is read by `Discord.cs` to build the machine identifier hash for join passes; and `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall` is managed by `Register.cs` for the Windows Installed apps entry.
+- Command-line switches: `-root <path>` overrides the install root folder, and `-uninstall` opens the launcher in uninstall mode on the Settings page.
 
 **Updater** (Updater.cs, Sync.cs, SyncPackage.cs, UpdateStages.cs,
 VeloUpdate.cs, GitHub.cs, ReleaseNews.cs, MainVersion.cs). Every update, held
@@ -594,7 +636,7 @@ There is no class called Creation: the person picks or makes a character at
 the game's own main menu, and these three prepare that menu and read its
 answer. The account's character list (each character's slot, last played
 and play time, the spare id for New character, the ids forgotten) is the
-site's, kept under the Discord account (`/api/play/characters`, #5938);
+site's, kept under the Discord account, one list for each game server (`/api/play/characters`, #5938, #6904);
 `Chars.cs:895 Prepare()` asks for it at every Play and holds the answer in
 memory, and owns the saves folder `Profile\Characters\saves`, the menu's list
 `Game\Data\Platform\thornswood-characters.json` and
@@ -756,8 +798,8 @@ The question no longer follows a downgrade, which never writes the Steam
 copy now.
 Play is never held on it.
 
-**The settings Play writes every time.** Enforce.cs (`SkyrimSoulsRE.ini` and
-`OpenAnimationReplacer.ini`, which those mods rewrite on exit; `SkyrimPlatform.ini`'s
+**The settings Play writes every time.** Enforce.cs (
+`OpenAnimationReplacer.ini`, which that mod rewrites on exit; `SkyrimPlatform.ini`'s
 log level and text window; the actor draw distance in `SkyrimPrefs.ini`), ThornIni.cs
 (`Thornswood.ini` from the template when missing), Mics.cs (the microphone
 name and voice address in `Thornswood.ini`), Display.cs
@@ -791,8 +833,9 @@ install folder, rewritten at every start.
 
 **Uninstall** (Uninstall.cs). Removing the install. Swap.Restore always runs
 first, because deleting Profile with the junctions live would follow them
-into the person's real Skyrim folders. It only ever deletes under Root, and
-the last part runs from a script in the temp folder after the launcher exits.
+into the person's real Skyrim folders. What it removes, and what an install
+leaves on the PC that it does not, is one list: installer\README.md, What an install leaves on the PC (#4431).
+The last part runs from a script in the temp folder after the launcher exits.
 Uninstall under Windows' Installed apps runs the exe with `-uninstall`, and
 the launcher opens on Settings without starting up to play (startup step 10,
 ShellUninstall.cs).
@@ -852,7 +895,11 @@ for the support report), Secrets.cs (DPAPI and locking a file to this account), 
 Skyrim), Online.cs (the headcount the server publishes), Art.cs (the art inside the exe, and the
 moving strip behind the title, `launcher-header.webp`, an animated WebP that
 `HeaderFrames` decodes a frame at a time with SkiaSharp),
-Themes.cs (every colour; the install window is drawn in its Forge too, #2851), Gallery.cs (the pictures the site shows from the world, read
+Themes.cs (every colour; the install window is drawn in its Forge too, #2851,
+or in Contrast, the person's own colours, when Windows has a contrast theme
+on, #4409), SystemLook.cs (what Windows asks of a window's look: its contrast
+theme, that theme's colours and its text size, read once for the install
+window, #4409), Gallery.cs (the pictures the site shows from the world, read
 from `/api/public` for Play's rotating spotlight and the Gallery page; the
 Gallery page uploads via `/api/gallery/submit` and then sends the picture's
 800 and 1600 pixel JPEG copies to `/api/gallery/copy` (#3218), reports via
@@ -943,7 +990,7 @@ cleared at once.
 | 13 | `ShellPlay.cs:251 Verify.DeployPersonal` | `<Root>\Your Mods` copied into `Game\Data`, never a plugin. | those files in `Game\Data` |
 | 14 | `ShellPlay.cs:265 Display.MatchScreen` | Skipped when Lock resolution is ticked. The game's window size and Display Tweaks' resolution follow the screen. | `Game\Data\SKSE\Plugins\SSEDisplayTweaks.ini`, `Profile\MyGames\SkyrimPrefs.ini`, each only when it changes |
 | 14a | `ShellPlay.cs:270 Display.PinMode` | Every Play, locked resolution or not. The mode the launcher shows (borderless unless the Display page says otherwise) written as Display Tweaks' own Fullscreen and Borderless lines. Commented out, as the collection ships them, Display Tweaks takes Skyrim's bFull Screen instead, and the game ran in exclusive full screen while the launcher said borderless (#5946). | `Game\Data\SKSE\Plugins\SSEDisplayTweaks.ini`, only when the lines do not already say the mode |
-| 15 | `ShellPlay.cs:273 Enforce.Apply` | Settings two mods rewrite on the way out, put back; SkyrimPlatform at its normal log level with no text window; one actor draw distance for everybody (#963). Then `ShellPlay.cs:277 CrashDump.Apply`: the full crash snapshot on only when the person ticked it in Settings (#2626), and with it on, those whose crash staff marked looked at deleted, and any past the newest two (#2319). | `Game\Data\SKSE\Plugins\SkyrimSoulsRE.ini`, `OpenAnimationReplacer.ini`, `SkyrimPlatform.ini`, `CrashLogger.ini`, `Profile\MyGames\SkyrimPrefs.ini`; old `crash-*.dmp` in `Profile\MyGames\SKSE` deleted |
+| 15 | `ShellPlay.cs:273 Enforce.Apply` | Settings a mod rewrites on the way out, put back; SkyrimPlatform at its normal log level with no text window; one actor draw distance for everybody (#963). Then `ShellPlay.cs:277 CrashDump.Apply`: the full crash snapshot on only when the person ticked it in Settings (#2626), and with it on, those whose crash staff marked looked at deleted, and any past the newest two (#2319). | `Game\Data\SKSE\Plugins\OpenAnimationReplacer.ini`, `SkyrimPlatform.ini`, `CrashLogger.ini`, `Profile\MyGames\SkyrimPrefs.ini`; old `crash-*.dmp` in `Profile\MyGames\SKSE` deleted |
 | 16 | `ShellPlay.cs:284 AutoJoin.Apply` | `AutoJoin.cs:124 Apply()`: the server address and port, and where the client fetches the server's load order, through Hold.Around. SkyMP has no join screen; this file is the whole of joining. | `skymp5-client-settings.txt` when it changes |
 | 17 | `ShellPlay.cs:293 ThornIni.Ensure` | The template, if the file is missing. | `Game\Data\SKSE\Plugins\Thornswood.ini` |
 | 18 | `ShellPlay.cs:296 Mics.Apply` | This machine's microphone name, the voice port and the voice address. | `Thornswood.ini` |
@@ -989,7 +1036,7 @@ Written or rewritten, when anything needed changing:
   put back, `thornswood-session.txt`, `thornswood-characters.json`,
   `UI\thornswood-characters.js`.
 - `Game\Data\SKSE\Plugins`: `SkyrimPlatform.ini`,
-  `SSEDisplayTweaks.ini`, `SkyrimSoulsRE.ini`, `OpenAnimationReplacer.ini`,
+  `SSEDisplayTweaks.ini`, `OpenAnimationReplacer.ini`,
   `Thornswood.ini`.
 - The files made from the game and the collection's mods (MadeFromGame),
   the behavior files and bodies built with the collection's Pandora and

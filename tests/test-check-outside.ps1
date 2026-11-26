@@ -76,9 +76,13 @@ $ListB  = 'https://api.github.com/repos/Owner/Private/releases?per_page=100'
 $Steam  = 'https://api.steamcmd.net/v1/info/489830'
 $Nexus  = 'https://www.nexusmods.com/games/skyrimspecialedition/collections/abc123'
 $Gql    = 'https://api.nexusmods.com/v2/graphql'
-function NexusJson([string]$name, $rev) {
+$summary = 'Try SkyUI.'
+$description = "## Getting started`n`nTake the caf$([char]0xE9) road.`nKeep to it."
+function NexusJson([string]$name, $rev, [hashtable]$text = @{ summary = $summary; description = ($description -replace "`n", "`r`n") }) {
   if (-not $name) { return '{"data":{"collection":null}}' }
-  return ('{"data":{"collection":{"name":"' + $name + '","latestPublishedRevision":{"revisionNumber":' + $rev + '}}}}')
+  $col = @{ name = $name; latestPublishedRevision = @{ revisionNumber = $rev } }
+  foreach ($field in $text.Keys) { $col[$field] = $text[$field] }
+  return (ConvertTo-Json -InputObject @{ data = @{ collection = $col } } -Depth 5 -Compress)
 }
 $Signed = '?sp=r&sv=2018&jwt=SECRETJWTSIGNATURE'
 function Cdn([string]$id) { return ('https://release-assets.githubusercontent.com/github-production-release-asset/1/' + $id + $Signed) }
@@ -125,12 +129,15 @@ $root = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-outside-' + [Guid]::Ne
 $null = New-Item -ItemType Directory -Force -Path $root
 $record = Join-Path $root 'steam-build.json'
 [IO.File]::WriteAllText($record, '{ "appId": 489830, "publicBuildId": "100", "recordedUtc": "2026-09-24T10:00:14Z" }')
+$pageRecord = Join-Path $root 'collection-page.json'
+$page = @{ version = 1; collection = 'abc123'; revision = 1; summary = 'Try [[SkyUI|12604]].'; description = $description; installInstructions = ''; notSaid = @() }
+[IO.File]::WriteAllText($pageRecord, (ConvertTo-Json -InputObject $page))
 $Allowed = Read-AllowedHosts (Join-Path $RepoRoot 'launcher\app\Updater.cs')
 
 function Run([string]$feedUrl = '', [string[]]$hosts = $Allowed, [string]$steamRecord = $record) {
   $script:Asked.Clear()
   $all = @(Invoke-Outside -Repo $A -Branch 'main' -FeedUrl $feedUrl -Hosts $hosts -SteamRecord $steamRecord `
-             -Collection '' -Server @('thornswood.net', '192.0.2.99') 6>&1)
+             -Collection '' -PageRecord $pageRecord -Server @('thornswood.net', '192.0.2.99') 6>&1)
   $n = @($all | Where-Object { $_ -is [int] }) | Select-Object -Last 1
   $text = (@($all | Where-Object { $_ -is [Management.Automation.InformationRecord] } | ForEach-Object { [string]$_.MessageData }) -join "`n")
   return [pscustomobject]@{
@@ -321,6 +328,21 @@ try {
   Serve $Gql 200 (NexusJson 'Thornswood' 1)
   $r = Run
   Yes 'a GraphQL answer with name and revision is green' ($r.N -eq 0 -and (Has $r.Ok 'the collection "Thornswood" is there, revision 1.'))
+  Yes 'published text matches after rendering marks and normalizing line endings' (Has $r.Ok '*summary and description match*')
+  $query = ($r.Asked | Where-Object Url -eq $Gql).PostBody | ConvertFrom-Json
+  Yes 'the same anonymous query asks for both public text fields' ($query.query -match '\bsummary\b' -and $query.query -match '\bdescription\b')
+  Serve $Gql 200 (NexusJson 'Thornswood' 1 @{ summary = 'Try skyui.'; description = 'Also changed.' })
+  $r = Run
+  Yes 'case-only summary drift names the first field and line, once' ($r.N -eq 1 -and (Has $r.Bad '*summary line 1 differs*'))
+  Serve $Gql 200 (NexusJson 'Thornswood' 1 @{ summary = $summary; description = "## Getting started`n`nChanged.`nAlso changed." })
+  $r = Run
+  Yes 'description drift names the first changed line, including blank lines' ($r.N -eq 1 -and (Has $r.Bad '*description line 3 differs*'))
+  Serve $Gql 200 (NexusJson 'Thornswood' 1 @{ summary = $summary })
+  $r = Run
+  Yes 'missing public description is red, not a match' ($r.N -eq 1 -and (Has $r.Bad '*Nexus returned no description*'))
+  Serve $Gql 200 (NexusJson 'Thornswood' 1 @{ description = $description })
+  $r = Run
+  Yes 'missing public summary is red, not a match' ($r.N -eq 1 -and (Has $r.Bad '*Nexus returned no summary*'))
   Clean
   Serve $Gql 200 (NexusJson '' $null)
   $r = Run

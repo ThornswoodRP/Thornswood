@@ -141,7 +141,7 @@ namespace Thornswood
         readonly ushort[] dynLFc = new ushort[HeapSize], dynLDl = new ushort[HeapSize];
         readonly ushort[] dynDFc = new ushort[2 * DCodes + 1], dynDDl = new ushort[2 * DCodes + 1];
         readonly ushort[] blFc = new ushort[2 * BlCodes + 1], blDl = new ushort[2 * BlCodes + 1];
-        int lMaxCode, dMaxCode, blMaxCode;
+        int lMaxCode, dMaxCode;
         readonly ushort[] blCount = new ushort[MaxBits + 1];
         readonly int[] heap = new int[2 * LCodes + 1];
         int heapLen, heapMax;
@@ -597,7 +597,9 @@ namespace Thornswood
         {
             ScanTree(dynLDl, lMaxCode);
             ScanTree(dynDDl, dMaxCode);
-            blMaxCode = BuildTree(blFc, blDl, null, ExtraBlBits, 0, BlCodes, MaxBlBits);
+            // zlib keeps the bit length tree's largest code in bl_desc and never
+            // reads it again; the tree's lengths in blDl are what is used.
+            BuildTree(blFc, blDl, null, ExtraBlBits, 0, BlCodes, MaxBlBits);
             int maxBlIndex;
             for (maxBlIndex = BlCodes - 1; maxBlIndex >= 3; maxBlIndex--)
                 if (blDl[BlOrder[maxBlIndex]] != 0) break;

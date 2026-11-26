@@ -54,7 +54,6 @@ namespace Thornswood
             /// <summary>True once the person has stopped the run.</summary>
             public Func<bool> Stop = () => false;
             /// <summary>Bytes arrived of the download going now.</summary>
-            public Action<long> OnBytes;
             /// <summary>Where this PC may already hold archives. ModlistFetch.Places unless a harness says otherwise.</summary>
             public Func<IList<ModlistFetch.Place>> Places = () => ModlistFetch.Places();
             /// <summary>Where a download by hand lands. The person's Downloads unless a harness says otherwise.</summary>
@@ -82,7 +81,7 @@ namespace Thornswood
             foreach (ModlistArchive a in missing.Where(a => a.Kind == "http"))
             {
                 say("Downloading " + a.Say());
-                ModlistFetch.ByAddress(a, downloads, s.OnBytes);
+                ModlistFetch.ByAddress(a, downloads, null);
             }
 
             List<ModlistArchive> nexus = missing.Where(a => a.Kind == "nexus").ToList();
@@ -94,7 +93,7 @@ namespace Thornswood
                 {
                     if (s.Stop()) throw new ModlistStop("The install was stopped. What it got is kept; press Install again to go on.");
                     say("Downloading " + a.Say() + " from Nexus");
-                    Nexus.Download(a, downloads, s.OnBytes);
+                    Nexus.Download(a, downloads, null);
                 }
                 nexus.Clear();
             }

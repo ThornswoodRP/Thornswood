@@ -49,7 +49,7 @@ The site's files are in its `data` folder unless the row names another. The bot 
 | `signouts.json` | site | site | High: a sign out (#4405) | its own: a time per keyed account, never written over while it will not read, and while broken every staff sign in reads as signed out (`site/lib/auth.js`) |
 | `notes.json` | site | site | Medium: concurrent edits (#2188) | none |
 | `for-bot/inbox.json`, `for-bot/trouble.json` | site | site, bot (reports and Report a problem from the inbox, the staff channel's trouble posts) | Medium: concurrent edits (#2188) | none |
-| `results.json` | site, from staff marking test results in the hub | site | Low | none |
+| `results.json` | site, from staff marking test results in the hub | site | Low | one mark merges into the latest file; its author comes from the authenticated session, never the request (#5855). An unreadable file or refused save leaves existing marks unchanged |
 | `roster.json` | site, from what each game server's gamemode sends (POST /api/roster) | site (and each person's characters at join) | Medium | none |
 | `economy.json` | site, from each game server's hold economy count (POST /api/economy) | site (the hub's Hold economy page) | Low | none |
 | `session-logs/<session>.json` | site, from the launcher at the end of a play session | site (the hub), Read-LauncherStarts.ps1 | Medium: kept 365 days by the file's time, then deleted (#4432) | none |
@@ -62,11 +62,14 @@ The site's files are in its `data` folder unless the row names another. The bot 
 | `config.json` (the site's own folder) | by hand on the box; the site writes its secret and password into it once when they are missing | site | High: holds secrets, never in the repository | never written over while it will not read (`site/lib/config.js`) |
 | `from-bot/lists.json` | bot (the known issues and roadmap it reads from GitHub) | site (its Known issues and Roadmap pages) | Low | none |
 | `joins.json` | bot | bot, `bot\backfill.py`, `bot\redraw.py` | Medium: each member's join number | none |
+| `welcome-posts.json` | bot | bot | Medium: keyed by Discord message ID; each entry holds `guild` and `member` IDs, join `number`, and `channel` ID. No card contents. | The hourly join sweep checks saved links against readable join records. A saved card becomes eligible for deletion when its member no longer has that join number, after the existing 365-day leaving period or when a deletion request removes it. The link is dropped after deletion or if the post is already absent; other Discord errors leave it in place. Older cards without a saved link are not searched or removed. |
 | `open-tickets.json` | bot | bot | Medium | none |
 | `commands-synced.json` | bot | bot | Low | none |
 | `heartbeat.json` (the bot's data folder) | bot | Watch-Services.ps1 (the watchdog) | Medium: a bot that stops beating is said and restarted | none |
+| `report-posts.json`, `moderation-posts.json` | bot | bot | Message and channel IDs keyed by source fingerprints, so only linked copies go when their source records go | none |
 | `trouble-posts.json`, `news-said.json`, `restarts-said.json`, `staff-notices.json`, `problems-filed.json` | bot | bot | Low: what it has posted already, so nothing posts twice | none |
 | `channel-setup.json`, `known-issues.json` | bot | bot | Low | none |
+| `rules-carried.json` | bot, when it sends its Member reaction message in `#rules` again under the rules (#6891) | bot | Medium: who reacted to the old message, counted as reacted until they react on the new one or take it off | never read on a guess: an unreadable file leaves Member as it is |
 | `bot.env.json` | Install-Bot | bot | Medium; holds a secret and is never in the repository | none |
 | `Thornswood-Admin/for-bot/github-token.json`, `Thornswood-Admin/for-site/github-token.json` | the box admin service (`scripts\vps\admin\admin.js`), every half hour (#5184) | bot (issues for #known-issues and Report a problem), site (its GitHub reads) | High: a GitHub token, never in the repository | each reader takes the token only while it has not ended |
 | `deletion-requests.json` (the site's data, the bot's data, each voice service) | Delete-Person.ps1 | site, bot and voice at their next start, which apply it and delete it (#2758) | High: a person's data leaving | none |

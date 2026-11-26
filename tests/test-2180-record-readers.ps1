@@ -89,6 +89,27 @@ try {
     $v2 = '{"version":2,"collection":"7essxf","revision":8,"plugins":[{"name":"a.esp","size":12,"sha256":"' + $h + '"}]}'
     $good = '{"version":1,"collection":"7essxf","revision":8,"plugins":[{"name":"a.esp","size":12,"sha256":"' + $h + '"}]}'
 
+    # Revision metadata readers (#6228), with the same contents except version.
+    . (Join-Path $repo 'scripts/release/CollectionRevision.ps1')
+    . (Join-Path $repo 'scripts/release/CollectionRecord.ps1')
+    $meta = Join-Path $tmp 'metadata'
+    [void][IO.Directory]::CreateDirectory((Join-Path $meta 'records'))
+    $metaPlugins = Join-Path $meta 'records/collection-plugins.json'
+    [IO.File]::WriteAllText((Join-Path $meta 'records/collection.json'), '{"collection":"7essxf","revision":8,"plugins":[{"name":"a.esp","master":false}]}')
+    [IO.File]::WriteAllText((Join-Path $meta 'records/load-order.json'), '{"loadOrder":["Skyrim.esm","Update.esm","Dawnguard.esm","HearthFires.esm","Dragonborn.esm","a.esp","Thornswood-Content.esp","Thornswood-Last.esp"]}')
+    $readers = [ordered]@{
+        CollectionRevision = { (Get-ShipRecordedCollectionRevision $meta).Revision }
+        ContentPaths = { (Get-ThornswoodContentOrder -Repo $meta).Revision }
+        CollectionRecord = { (Read-CollectionRecord $metaPlugins).revision }
+    }
+    foreach ($reader in $readers.Keys) {
+        [IO.File]::WriteAllText($metaPlugins, $good)
+        Yes "$reader reads revision 8 from a valid version 1 record" ((& $readers[$reader]) -eq 8)
+        [IO.File]::WriteAllText($metaPlugins, $v2)
+        $why = Refusal $readers[$reader]
+        Yes "$reader refuses version 2 before using its revision" ($why.StartsWith($metaPlugins) -and $why -match 'it is version 2, and this checkout knows 1')
+    }
+
     # Ship-Rules: the Thornswood-Last check reads the record before the recipe.
     . (Join-Path $repo 'scripts\release\Ship-Rules.ps1')
     $sr = Join-Path $tmp 'ship'

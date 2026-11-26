@@ -1,6 +1,8 @@
 <#
-  Send-NexusFile.ps1
+.SYNOPSIS
+  Uploads a new version of one of our files on Nexus Mods, in place of the version it has now, from a local archive (#2914).
 
+.DESCRIPTION
   Uploads a new version of one of our files on Nexus Mods, in place of the
   version it has now, from a local archive (#2914).
 

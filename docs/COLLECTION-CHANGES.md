@@ -138,6 +138,31 @@ references, apart from the page text supplied by its record. A failed check
 discards the draft. Files, installer answers and plugin indices stay the same.
 The records and release then follow the new revision in the usual way.
 
+### Listing the files of a patched mod
+
+Vortex applies the collection's patches, such as a plugin's light flag, only
+to a copy it installs while it installs the collection. When an entry does
+not list its files, Vortex 1.15 and older take a copy of the same Nexus file
+somebody already had as the collection's, and that copy keeps its author's
+plugin (#6888). An entry that lists its files, each with the md5 of the
+archive's copy, is never matched by a copy installed elsewhere, so Vortex
+installs and patches its own.
+
+The collection-record workflow's `replicate` input names the patched entries
+by the Nexus file id each installs, separated by commas: a file id, because
+a mod can have two entries. For each, the publisher runs the
+entry's installer with its own answers and lists the files it installs; the
+list takes the place of the answers. Leave `whatif` on to build it, and run
+with it off to publish. Like a tag repair, it refuses any other pending
+record change, and the downloaded draft must change only those entries. The
+layout is held to the record, so the files and plugins stay the same.
+
+A patch is refused on an entry with no list, so a new light flag on such an
+entry comes with its `-Replicate` in the same run. People who already have a
+listed mod from an older revision get it installed once more when they
+update the collection. The publisher does not move an entry with a list to
+a new file, as it does not move one with installer answers.
+
 ## Changing the order or a rule
 
 Change the plugin's `after`, or move its line. The check refuses an order a

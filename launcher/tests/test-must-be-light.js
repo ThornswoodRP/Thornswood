@@ -81,8 +81,18 @@ const runText = run ? run[0] : '';
 const at = runText.indexOf('FlagNotServers(cfg)');
 yes('Verify.Run reports it', at >= 0);
 const issue = at >= 0 ? runText.slice(at, runText.indexOf('true));', at)) : '';
-yes('with no Fix line, because Fix does not write the flag', /null,\s*FromVortex\(cfg, f\.Key\)/.test(issue));
-yes('and sends the person to Vortex for that mod', issue.indexOf('FromVortex(cfg, f.Key)') >= 0);
+yes('with no Fix line, because Fix does not write the flag', /null,\s*FlagFromCollection\(cfg, f\.Key\)/.test(issue));
+yes('and sends the person to Vortex for that mod', issue.indexOf('FlagFromCollection(cfg, f.Key)') >= 0);
+// #6888: the flag is the collection's patch, which Vortex applies only to a
+// copy it installs from the collection, so the way to it is the collection's
+// latest revision, never a reinstall of the mod, which lays the author's file.
+const flagFrom = /static string FlagFromCollection\(Config cfg, string plugin\)[\s\S]*?\n        \}\n/.exec(verify);
+const flagText = flagFrom ? flagFrom[0] : '';
+yes('it names the mod by Vortex\'s record and sends the person to the collection\'s latest revision, not a reinstall (#6888)',
+    flagText.indexOf('OwnGame.VortexModOf(cfg, plugin)') >= 0 &&
+    flagText.indexOf('install its latest revision, then press Scan') >= 0 &&
+    flagText.indexOf('Reinstalling the mod you have puts back its author\'s copy') >= 0 &&
+    !/right click it on the Mods page, Reinstall/.test(flagText));
 yes('both directions are said: light on the server, and full on the server',
     issue.indexOf('is light on the server and not flagged light in your copy') >= 0 &&
     issue.indexOf('is flagged light in your copy and is a full plugin on the server') >= 0);

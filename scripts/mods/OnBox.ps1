@@ -1,6 +1,8 @@
 <#
-  OnBox.ps1
+.SYNOPSIS
+  The four script texts that run on the box (issue #2899), for Run-OnBox.ps1 and the others below: the run (Get-ThornswoodOnBoxScript), and the keeper that makes the run's folder and removes it, in three parts (its hold, keep and end scripts).
 
+.DESCRIPTION
   The four script texts that run on the box (issue #2899), for Run-OnBox.ps1
   and the others below: the run (Get-ThornswoodOnBoxScript), and the keeper
   that makes the run's folder and removes it, in three parts (its hold, keep

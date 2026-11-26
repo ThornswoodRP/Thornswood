@@ -388,7 +388,7 @@ if (P && listsSrc && parts.every(function (p) { return !!p; })) {
       /mp\.onCraft = guard\('onCraft', function \(actorId, craftedItemBaseId, count, recipeId, workbenchId, effects\)/.test(code) &&
       /return recipelessCraft\(actorId, craftedItemBaseId, workbenchId, effects, inputs\);/.test(code));
   const character = slice(gm, '// ==== thornswood character ====', '// ==== end thornswood character ====') || '';
-  const writeState = slice(character, 'function writeState(actorId, s, redraw) {', '\n  }\n') || '';
+  const writeState = slice(character, 'function writeState(', '\n  }\n') || '';
   const grantKnown = slice(character, 'function grantKnown(actorId) {', '\n  }\n') || '';
   yes('the slots are handed over whenever the character is written, and on every spawn',
       /handEnchantSlots\(actorId, s\)/.test(writeState) && /handEnchantSlots\(actorId, s\)/.test(grantKnown));

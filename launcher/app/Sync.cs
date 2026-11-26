@@ -373,7 +373,6 @@ namespace Thornswood
 
             // ---- put them in place ------------------------------------------
             var newInGame = new List<string>();
-            var gameWritten = new List<string>();
             bool carriedProfile = false;
             foreach (SyncItem it in need)
             {
@@ -391,7 +390,6 @@ namespace Thornswood
                 File.Copy(src, it.Dest, true);
                 if (it.InGame)
                 {
-                    gameWritten.Add(it.Rel);
                     if (!existed) newInGame.Add(it.Rel);
                 }
                 else if (it.Rel.Equals("plugins.txt", StringComparison.OrdinalIgnoreCase) ||
@@ -459,7 +457,15 @@ namespace Thornswood
             }
             Swap.RepairConfigs();
             NoteInstalledIntoGame(newInGame);
-            int kept = Keep.Remember(gameWritten);
+            // Every game file of this release is kept as the release has it,
+            // not only the ones this update wrote. A file that already
+            // matched the release was not written, and its kept copy was
+            // still an older build's, which the next Play put back over the
+            // release's file (#5197, 26 Nov: build-1.3.122 matched the game's
+            // thornswood-test.js, and Play put back build-1.3.121's).
+            var inGame = new List<string>();
+            foreach (SyncItem it in items) if (it.InGame) inGame.Add(it.Rel);
+            int kept = Keep.Remember(inGame);
             if (kept > 0) log("Kept " + kept + " of " + Keep.Build() + "'s own game " + (kept == 1 ? "file" : "files") + " to put back if another server or build changes " + (kept == 1 ? "it." : "them."));
             Keep.Forget(removed);
 

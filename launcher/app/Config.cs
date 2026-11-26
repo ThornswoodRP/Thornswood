@@ -120,14 +120,10 @@ namespace Thornswood
         */
         [JsonInclude] public string MicrophoneName = "";
 
-        [JsonInclude, JsonPropertyName("VoiceAuto")] public bool? VoiceAutoSetting = true;
+        [JsonInclude] public string AudioOutputId = "";
+        [JsonInclude] public string AudioOutputName = "";
+        [JsonInclude] public bool AudioOutputConfigured;
 
-        [JsonIgnore]
-        public bool VoiceAuto
-        {
-            get { return VoiceAutoSetting != false; }
-            set { VoiceAutoSetting = value; }
-        }
         // How many the server seats, the M of "N of M awake", for when the
         // server does not announce itself: what the update feed last gave a
         // config.json before the feed went (#5608), and 0 otherwise. Main and

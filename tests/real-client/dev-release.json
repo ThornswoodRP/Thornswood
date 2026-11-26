@@ -39,8 +39,8 @@
       "menu": "RaceSex Menu",
       "open": true,
       "timeout": 90000,
-      "skip": 11,
-      "why": "a character this server has not got is made first: the race menu opens in the hall. A character it has goes straight to the world, and the creation steps are skipped"
+      "skip": 8,
+      "why": "a character this server has not got is made first: the race menu opens in the hall. A character it has goes straight to the world, and the race menu steps are skipped"
     },
     {
       "do": "shot",
@@ -94,9 +94,9 @@
     },
     {
       "do": "page",
-      "why": "the K panel opens by itself in the hall: Home, Whiterun, Review, Confirm, as a person picks them",
+      "why": "a character still in the hall, new or made in an earlier run, takes Starting Location, Whiterun, Review, Confirm on the K panel as a person does; one the server has placed already skips the shot and the trip to town", "skip": 2, "skipIf": "placed",
       "timeout": 120000,
-      "js": "(function(){if(window.__ts5197home)return window.__ts5197home;var r=document.getElementById('ts-skills');if(!r||r.className==='gone')return '';var nav=[].slice.call(r.querySelectorAll('.nav .navrow'));function row(k){for(var i=0;i<nav.length;i++){var e=nav[i].querySelector('.k');if(e&&e.textContent===k)return nav[i];}return null;}var home=row('Home'),review=row('Review');if(!home||!review)return '';var hv=home.querySelector('.v');if(hv&&/\\bneed\\b/.test(hv.className)){if(!/\\bon\\b/.test(home.className)){home.click();return '';}var cards=[].slice.call(r.querySelectorAll('.body .card'));var pick=null;for(var j=0;j<cards.length;j++){var n=cards[j].querySelector('.name');if(n&&/^Whiterun/.test(n.textContent)){pick=cards[j];break;}}if(!pick)pick=cards[0];if(pick)pick.click();return '';}if(!/\\bon\\b/.test(review.className)){review.click();return '';}var c=r.querySelector('[data-act=\"confirm\"]');if(c&&!/\\boff\\b/.test(c.className)){c.click();window.__ts5197home='confirmed '+(hv?hv.textContent:'');return window.__ts5197home;}return '';})()"
+      "js": "(function(){if(window.__ts5197home)return window.__ts5197home;var k=window.thornswoodSkills;if(!k||!k.isCreating)return '';var made=k.isCreating();if(made===null)return '';if(!made)return 'placed';var r=document.getElementById('ts-skills');if(!r||r.className==='gone')return '';var nav=[].slice.call(r.querySelectorAll('.nav .navrow'));function row(k){for(var i=0;i<nav.length;i++){var e=nav[i].querySelector('.k');if(e&&e.textContent===k)return nav[i];}return null;}var home=row('Starting Location'),review=row('Review');if(!home||!review)return '';var hv=home.querySelector('.v');if(hv&&/\\bneed\\b/.test(hv.className)){if(!/\\bon\\b/.test(home.className)){home.click();return '';}var cards=[].slice.call(r.querySelectorAll('.body .card'));var pick=null;for(var j=0;j<cards.length;j++){var n=cards[j].querySelector('.name');if(n&&/^Whiterun/.test(n.textContent)){pick=cards[j];break;}}if(!pick)pick=cards[0];if(pick)pick.click();return '';}if(!/\\bon\\b/.test(review.className)){review.click();return '';}var c=r.querySelector('[data-act=\"confirm\"]');if(c&&!/\\boff\\b/.test(c.className)){c.click();window.__ts5197home='confirmed '+(hv?hv.textContent:'');return window.__ts5197home;}return '';})()"
     },
     {
       "do": "shot",

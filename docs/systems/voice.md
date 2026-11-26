@@ -91,6 +91,13 @@ and the speaking mark stop for everybody. They are told how long. They
 cannot lift it. `/unsilence` and the name, from any staff member but the one silenced,
 lifts it, and it lifts by itself when the minutes run out.
 
+The game server saves a staff silence before confirming it. Reconnecting,
+reloading the game code or restarting either service keeps the original
+deadline. The first voice update after a game restart includes the saved
+silences. An unreadable control book is reported and refuses new game logins;
+it never becomes an empty silence list. Staff can use a profile number to
+`/unsilence` somebody who is offline.
+
 `/silence` on somebody already silenced starts their time again from
 then, for the minutes given, so it can make a silence shorter as well
 as longer. It does not lift it; only `/unsilence` or the time running

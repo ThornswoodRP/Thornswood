@@ -80,7 +80,7 @@ const CHECK = args.indexOf('--check') >= 0;
 
 const INPUTS = [
   'game/data/recipes.json',
-  'docs/systems/cut-items.json',
+  'game/data/cut-items.json',
   'game/data/food-groups.json',
   'game/data/hair-dyes.json',
   'game/data/harvests.json',
@@ -170,7 +170,7 @@ function main() {
 
   // ------------------------------------------------------------ the tables
   const recipes = json('game/data/recipes.json');
-  const cuts = json('docs/systems/cut-items.json');
+  const cuts = json('game/data/cut-items.json');
   const foodGroups = json('game/data/food-groups.json');
   const hairDyes = json('game/data/hair-dyes.json');
   const harvests = json('game/data/harvests.json');
@@ -438,7 +438,7 @@ function main() {
   Object.keys(items).forEach(function (desc) {
     const r = items[desc];
     if (cutItems[desc] && r.via.length) {
-      problems.push(desc + ' (' + (names[desc] || '') + ') is ' + cutItems[desc] + ' in docs/systems/cut-items.json, not found and not made, yet ' +
+      problems.push(desc + ' (' + (names[desc] || '') + ') is ' + cutItems[desc] + ' in game/data/cut-items.json, not found and not made, yet ' +
         r.via.map(function (v) { return v.kind + ' ' + (v.table || v.recipe || ''); }).join(', ') + ' hands it out');
     }
     const kinds = r.via.map(function (v) { return v.kind; });
@@ -509,7 +509,10 @@ function main() {
   }
   if (CHECK) {
     const have = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
-    if (have !== text) {
+    // A previous content artifact can have the old path in readFrom.
+    // Everything else must still match the full regenerated table.
+    const previousPath = text.replace('\n  "game/data/cut-items.json",\n', '\n  "docs/systems/cut-items.json",\n');
+    if (have !== text && have !== previousPath) {
       console.error('game/data/item-sources.json is not what scripts/dev/Build-ItemSources.js writes. Run it and commit the table.');
       return 1;
     }

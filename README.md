@@ -57,7 +57,7 @@ Scrolls and Skyrim are their trademarks.
 - `out/` and `local/`: build output and machine-local files that never go to
   GitHub (both gitignored).
 - `config.example.json`: launcher `config.json` example matching
-  `launcher/app/Config.cs` defaults (empty `UpdateToken`). Site example:
+  `launcher/app/Config.cs` defaults. Site example:
   `site/config.example.json`.
 
 `bot`, `game`, `installer`, `records`, `scripts`, `site`, `tests`, `launcher`,

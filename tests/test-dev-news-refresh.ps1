@@ -345,6 +345,12 @@ try {
         Put (Join-Path $fake 'scripts\dev\Close-Launcher.ps1') "function Stop-Game { param([string]`$Root) return `$false }`r`nfunction Get-GameProcesses { param([string]`$Root) return @() }`r`n"
         # No signing setup here: the catalog Publish-Update signs (#2163, phase B) is left unsigned, and the stub answers that it passed.
         Put (Join-Path $fake 'scripts\release\Sign-ReleaseCatalog.ps1') "function Invoke-ReleaseCatalogSign { param([string]`$Catalog, [string]`$RepoDir) return '' }`r`n"
+        $inst = Join-Path $Scratch 'install-dev'
+        foreach ($dd in 'Game\Data', 'Profile\OwnGame', 'Launcher', 'dist') { New-Item -ItemType Directory -Force -Path (Join-Path $inst $dd) | Out-Null }
+        # The collection revision record, and a Vortex on it (#3597).
+        . (Join-Path $repo 'tests\fixtures\collection-revision.ps1')
+        $env:APPDATA = Join-Path $inst 'roaming'
+        $null = Install-CollectionRevisionFixture -From $repo -RepoCopy $fake -AppData $env:APPDATA
         [void](RunGit $fake init -q)
         [void](RunGit $fake @gitId add -A)
         [void](RunGit $fake @gitId commit -q -m 'the build')
@@ -360,10 +366,8 @@ try {
         Tag-DevRelease $fake $head '20261001-215555-dev' '2026-10-01T21:56:40-06:00'
         Yes ("the stand-in checkout is clean at the build ({0})" -f $head.Substring(0, 12)) ((RunGit $fake status --porcelain).Out -eq '' -and $sideCommit -ne $head)
 
-        $inst = Join-Path $Scratch 'install-dev'
         $pSite = Join-Path $Scratch 'site-pub'
         $rel = Join-Path $Scratch 'rel-dev'
-        foreach ($dd in 'Game\Data', 'Profile\OwnGame', 'Launcher', 'dist') { New-Item -ItemType Directory -Force -Path (Join-Path $inst $dd) | Out-Null }
         New-Item -ItemType Directory -Force -Path (Join-Path $pSite 'feed'), (Join-Path $pSite 'feed-dev'), $rel | Out-Null
         [IO.File]::WriteAllLines((Join-Path $inst 'Profile\OwnGame\files.txt'), @('F|V|1024|638000000000000000|Data\collection.esp'))
         Put (Join-Path $inst 'Game\Data\Platform\UI\thornswood-ours.esp') 'the plugin, changed'
@@ -376,10 +380,6 @@ try {
         Put (Join-Path $inst 'Profile\OwnGame\loadorder.txt') "ours.esp`r`n"
         . (Join-Path $repo 'tests\fixtures\ui-front.ps1')
         Install-UiFrontFixture (Join-Path $inst 'Game')
-        # The collection revision record, and a Vortex on it (#3597).
-        . (Join-Path $repo 'tests\fixtures\collection-revision.ps1')
-        $env:APPDATA = Join-Path $inst 'roaming'
-        $null = Install-CollectionRevisionFixture -From $repo -RepoCopy $fake -AppData $env:APPDATA
         $node = Get-Command node -ErrorAction SilentlyContinue
         Yes 'node is on PATH, for the stand-in game server' ($null -ne $node)
         if ($null -eq $node) { Done }
@@ -432,7 +432,7 @@ try {
         # Stale marks, the shape of 6 Oct: what main has marked DEV, mainVersion behind.
         function Make-Stale {
             $d = Read-Json (SiteFeed $pDevDir)
-            $notes = @($d.news) + @(
+            $notes = @(
                 [pscustomobject]@{ date = '10-5-2026 3:25 PM'; title = 'Work main never took'; body = ''; details = @('x'); channel = 'dev'; sourceCommit = $sideCommit },
                 [pscustomobject]@{ date = '10-5-2026 1:08 PM'; title = 'Work main has'; body = ''; details = @('x'); channel = 'dev'; sourceCommit = $head },
                 [pscustomobject]@{ date = '10-1-2026 9:56 PM'; title = 'Note from before sourceCommit'; body = ''; details = @('x'); channel = 'dev' })

@@ -60,8 +60,9 @@
   SIDE BY SIDE WHEN ASKED (#3114). -Throttle N runs up to N harnesses at
   once, each still a process of its own with its output in files of its own
   and printed the moment it ends, so no pipe is shared and nothing one leaves
-  running can hold the step. The pull request gate (build.yml, "Run the gate
-  harnesses") runs its list this way through -Only: one at a time, its 550
+  running can hold the step. The pull request gate (build-pr.yml, generated
+  from build.yml, "Run the gate harnesses", through Run-Gate.ps1) runs its
+  list this way through -Only: one at a time, its 550
   harnesses took 26 of a 28 minute build on 21 Oct 2026, most of it waiting
   on timers and child processes rather than working. Harnesses side by side
   share the runner's account, so its TEMP, its profile and the checkout. One
@@ -128,7 +129,8 @@
   Which share to run, from 1.
 
 .PARAMETER Of
-  How many shares there are. nightly.yml passes the length of its matrix.
+  How many shares there are. nightly.yml types the number into its -Of and
+  job name to match its shard list (#4298).
 
 .PARAMETER BudgetSeconds
   How long this may take in all. A harness starts only when the time used so
@@ -169,8 +171,8 @@
   test points it at a copy.
 
 .PARAMETER OutDir
-  Where each harness's output is kept while it runs. harness-out under the
-  runner's temp folder, or under TEMP off a runner.
+  Where each harness's output is kept while it runs. harness-out-<share>
+  under the runner's temp folder, or under TEMP off a runner.
 
 .PARAMETER Report
   A JUnit file to write when the run ends: a test case for each check every
@@ -225,6 +227,16 @@ if ($Share -lt 1 -or $Share -gt $Throttle) { Write-Host "::error::-Share $Share 
 if ($StartLog) { $StartLog = [IO.Path]::GetFullPath($StartLog) }
 if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
 $Root = [IO.Path]::GetFullPath($Root)
+function Get-RootEntries([string]$path) {
+    $entries = @{}
+    if (Test-Path -LiteralPath $path) {
+        foreach ($item in @(Get-ChildItem -LiteralPath $path -File -Force)) {
+            $entries[$item.Name] = "$($item.Length)|$($item.LastWriteTimeUtc.Ticks)"
+        }
+    }
+    return $entries
+}
+$rootBefore = Get-RootEntries $Root
 if (-not $OutDir) {
     $base = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
     $OutDir = Join-Path $base ('harness-out-' + $Shard)
@@ -806,11 +818,32 @@ if ($failed.Count) {
     Write-Host ("{0} harness(es) failed: {1}" -f $failed.Count, ($failed -join ', '))
 }
 $reportBad = $false
-if ($Report) { Write-Report $results $notRun }
+# Concurrent harnesses share this checkout. Report a lasting change against
+# the share, and leave the files available to diagnose where it came from.
+$rootAfter = Get-RootEntries $Root
+$rootDirty = @(
+    foreach ($name in ($rootAfter.Keys | Sort-Object)) {
+        if (-not $rootBefore.ContainsKey($name)) { "$name (added)" }
+        elseif ($rootAfter[$name] -ne $rootBefore[$name]) { "$name (modified)" }
+    }
+    foreach ($name in ($rootBefore.Keys | Sort-Object)) {
+        if (-not $rootAfter.ContainsKey($name)) { "$name (removed)" }
+    }
+)
+$reportRows = $results
+if ($rootDirty.Count) {
+    $rootFailure = 'the harness share changed the repository root: ' + ($rootDirty -join ', ')
+    Write-Host ('::error::' + $rootFailure)
+    $reportRows += [pscustomobject]@{
+        Name = 'harness share root audit'; Code = 1; TimedOut = $false; Secs = 0
+        Said = 'FAIL  ' + $rootFailure; Clock = 0
+    }
+}
+if ($Report) { Write-Report $reportRows $notRun }
 if ($Summary) {
     & (Join-Path $PSScriptRoot 'Merge-HarnessReports.ps1') -Path $Report -Expect 1 -Summary $Summary -Title $Title
     if ($LASTEXITCODE -ne 0) { $reportBad = $true; Write-Host '::error::the report could not be written to the run''s summary' }
 }
-if ($failed.Count -or $notRun.Count -or $reportBad) { exit 1 }
+if ($failed.Count -or $notRun.Count -or $reportBad -or $rootDirty.Count) { exit 1 }
 Write-Host 'every harness passed'
 exit 0

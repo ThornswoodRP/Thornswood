@@ -132,6 +132,31 @@ function fidOf(desc) {
   return i < 0 ? null : ((i << 24) | obj) >>> 0;
 }
 
+// #4612. Only the frost effect should remain in each winning food override.
+const foodEffects = policy.foodEffects;
+if (foodEffects) {
+  const frostStats = {
+    '12010f:WindhelmSSE.esp': [5, 60, 60],
+    '12f9c4:WindhelmSSE.esp': [3, 0, 60],
+    '17167b:WindhelmSSE.esp': [5, 0, 30],
+  };
+  for (const row of foodEffects.foods) {
+    yesR(row.name + ' keeps frost resistance and drops recovery', () => {
+      const food = recs['ALCH:' + fidOf(row.food)];
+      if (!food || food.flags & DELETED) { return false; }
+      const effects = food.subs.filter((s) => s.t === 'EFID' || s.t === 'EFIT');
+      const [magnitude, area, duration] = frostStats[row.food];
+      return effects.length === 2 &&
+        effects[0].t === 'EFID' && effects[0].b.length === 4 &&
+        effects[0].b.readUInt32LE(0) === fidOf(foodEffects.keep) &&
+        effects[1].t === 'EFIT' && effects[1].b.length === 12 &&
+        effects[1].b.readFloatLE(0) === magnitude &&
+        effects[1].b.readUInt32LE(4) === area &&
+        effects[1].b.readUInt32LE(8) === duration;
+    });
+  }
+}
+
 // ---------------------------------------------------------------- A
 const cut = catalogue.npcs.filter((r) => !r.keep && r.ref !== '14:Skyrim.esm');
 const lists = manifest.refs;

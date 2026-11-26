@@ -149,6 +149,13 @@ function applyDeletionRequests() {
     }, 'failed-session alerts');
     const R = f.roster.v;
     if (isObj(R.who)) for (const k of Object.keys(R.who)) if (mine(k)) { delete R.who[k]; f.roster.dirty = true; gone('roster rows', 1); }
+    // Each server's own book too (#6904), the same rows kept apart.
+    if (isObj(R.books)) {
+      for (const s of Object.keys(R.books)) {
+        if (!isObj(R.books[s])) continue;
+        for (const k of Object.keys(R.books[s])) if (mine(k)) { delete R.books[s][k]; f.roster.dirty = true; }
+      }
+    }
     // A game server that has not started since still holds their rows and
     // sends them every five minutes; this mark is what /api/roster refuses
     // them by, until every server has let go (#3677).

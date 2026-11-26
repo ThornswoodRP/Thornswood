@@ -11,8 +11,9 @@
   What it checks, against boards made here:
     1. a board that keeps every rule names nothing and exits 0;
     2. an open issue with no Order, two open cards sharing one, an open card
-       with no Status, a closed issue not in Done, Status options other than
-       Todo, In Progress and Done, Auto-close on, and an open issue with no
+       with no Status, a closed issue not in Done, an open issue in Done
+       (#6878: GitHub closes it), Status options other than Todo, In
+       Progress, Merged and Done, Auto-close on, and an open issue with no
        card are each named under their rule, and it exits 3; Auto-add to
        project is no longer read, since board.yml adds every card (#5185);
     3. an archived card and an open pull request with no Order are left out;
@@ -54,7 +55,7 @@ Yes 'it parses' (@($e).Count -eq 0)
 function Card([int]$n, [string]$state, [string]$status, $order, [string]$kind = 'Issue', [bool]$archived = $false) {
     [ordered]@{ repo = 'ThornswoodRP/Thornswood'; number = $n; kind = $kind; title = "card $n"; state = $state; status = $status; order = $order; archived = $archived }
 }
-function Board($items, $statuses = @('Todo', 'In Progress', 'Done'), $addOn = $true, $closeOn = $false) {
+function Board($items, $statuses = @('Todo', 'In Progress', 'Merged', 'Done'), $addOn = $true, $closeOn = $false) {
     [ordered]@{
         read_at = '2026-10-26T17:41:23Z'
         board = [ordered]@{ owner = 'ThornswoodRP'; number = 3 }
@@ -75,21 +76,22 @@ function Run($board, [string[]]$issues) {
 }
 
 try {
-    $good = @((Card 1 'OPEN' 'Todo' 10), (Card 2 'OPEN' 'In Progress' 20), (Card 3 'CLOSED' 'Done' $null), (Card 4 'OPEN' 'Done' 30.5))
+    $good = @((Card 1 'OPEN' 'Todo' 10), (Card 2 'OPEN' 'In Progress' 20), (Card 3 'CLOSED' 'Done' $null), (Card 4 'OPEN' 'Merged' 30.5))
     $r = Run (Board $good) @('1', '2', '4@2026-10-20T00:00:00Z')
     Yes ("a board that keeps every rule: exit 0 ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match 'Every card keeps every rule')
-    $r = Run (Board $good @('Todo', 'In Progress', 'Done') $false $false) @('1', '2', '4')
+    $r = Run (Board $good @('Todo', 'In Progress', 'Merged', 'Done') $false $false) @('1', '2', '4')
     Yes ("  Auto-add to project off is no rule broken now board.yml adds every card (#5185): exit 0 ($($r.Code))") ($r.Code -eq 0)
 
     $bad = @((Card 1 'OPEN' 'Todo' $null), (Card 2 'OPEN' 'Todo' 20), (Card 5 'OPEN' 'Todo' 20), (Card 6 'OPEN' $null 40), (Card 7 'CLOSED' 'In Progress' 50),
-        (Card 8 'OPEN' 'Todo' $null 'Issue' $true), (Card 9 'OPEN' 'Todo' $null 'PullRequest'))
-    $r = Run (Board $bad @('Todo', 'Doing', 'Done') $false $true) @('1', '2', '5', '6', '9', '11@2026-10-01T00:00:00Z', '12@2026-10-27T00:00:00Z')
+        (Card 8 'OPEN' 'Todo' $null 'Issue' $true), (Card 9 'OPEN' 'Todo' $null 'PullRequest'), (Card 10 'OPEN' 'Done' 60))
+    $r = Run (Board $bad @('Todo', 'Doing', 'Done') $false $true) @('1', '2', '5', '6', '9', '10', '11@2026-10-01T00:00:00Z', '12@2026-10-27T00:00:00Z')
     Yes ("a board that breaks them: exit 3 ($($r.Code))") ($r.Code -eq 3)
     Yes '  an open issue with no Order' ($r.Out -match '(?m)^no order: 1\n  #1 card 1$')
     Yes '  two cards sharing an Order' ($r.Out -match '(?m)^shared order: 1\n  Order 20: #2, #5$')
     Yes '  an open card with no Status' ($r.Out -match '(?m)^no status: 1\n  #6 card 6$')
     Yes '  a closed issue not in Done' ($r.Out -match '(?m)^closed open: 1\n  #7 card 7 \(Status In Progress\)$')
-    Yes '  Status options that are not the three' ($r.Out -match 'the Status options are Todo, Doing, Done, not Todo, In Progress, Done')
+    Yes '  an open issue in Done, which GitHub would close (#6878)' ($r.Out -match '(?m)^open done: 1\n  #10 card 10$')
+    Yes '  Status options that are not the four' ($r.Out -match 'the Status options are Todo, Doing, Done, not Todo, In Progress, Merged, Done')
     Yes '  Auto-close on' ($r.Out -match '"Auto-close issue" is on, and should be off' -and $r.Out -notmatch 'Auto-add')
     Yes '  an open issue with no card, made before the read' ($r.Out -match '(?m)^no card: 1\n  #11$')
     Yes 'an archived card and a pull request with no Order are left out' ($r.Out -notmatch '#8 card 8' -and $r.Out -notmatch '#9 card 9')

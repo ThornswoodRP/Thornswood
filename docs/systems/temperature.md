@@ -3,6 +3,22 @@
 One meter. 0 is freezing. 100 is as hot as it goes. 50 is comfortable.
 It moves both ways, toward whatever the place is worth.
 
+## Contents
+
+- [What you see](#what-you-see)
+- [What it costs](#what-it-costs)
+- [How fast it moves](#how-fast-it-moves)
+- [The place](#the-place)
+- [Weather, wind, night, height](#weather-wind-night-height)
+- [Storms on the road](#storms-on-the-road)
+- [The season and the sky](#the-season-and-the-sky)
+- [On the map](#on-the-map)
+- [Fire](#fire)
+- [Water](#water)
+- [Clothing](#clothing)
+- [A meal](#a-meal)
+- [Where this is](#where-this-is)
+
 ## What you see
 
 | Reading | Word |
@@ -164,6 +180,10 @@ It lasts 20 to 60 real minutes, a whole number of minutes, each
 length as likely as the others. Then it rolls again. The next sky is
 not announced.
 
+A sky whose weather is still loading is not considered applied. Once
+that weather is available, the same shared sky is applied without a new
+roll. A sky already applied is left alone on unchanged frames.
+
 The records are Cathedral Weathers, the mod already in the collection.
 Each record is already clear, cloudy, rain, or snow, which is what
 the meter reads. A season mod that follows the game's months, or that
@@ -203,14 +223,34 @@ weather.
 Standing in the coals deals about 7 health a second. That is the flame,
 not the meter. You can read Burning and also be on fire.
 
+Being on fire supplies the same 34 warmth as a normal fire at your feet,
+even after you leave the coals or catch fire from someone else. It uses the
+stronger of that heat and a nearby fire, rather than adding both. The target
+changes with the fire; the reading still follows the half-gap curve above.
+When the fire ends, its warmth ends too. A delayed reading counts only the
+time that fire was active. Time logged out gains no warmth from it.
+
+The Body page names a fire on you separately from a nearby fire and its
+distance. Its current reading, target and worn pieces are the server's
+snapshot when K opens or you press Read again.
+
 Fire spreads. Someone burning sets alight anyone in the same cell
 within about two paces (220 units). The caught burn lasts 5 seconds
 unless they stay next to the person who is alight. It does not run
 through a town.
 
+People nearby see flames on the person who is burning, including when
+that person comes into view after the fire began. The flames stop when
+that fire ends. An old fire does not return after death, a disconnect,
+or a server restart.
+
 ## Water
 
-Only while swimming or wading.
+Only while swimming or wading. Wading follows a placed water plane's actual
+rotation and scale. Its surface must be above the feet and less than 70 game
+units above them; standing beside its transformed edge or above its surface
+is dry. A reference whose current transform cannot be read supplies no guessed
+water footprint.
 
 | Class | On top of the water place |
 | --- | --- |
@@ -271,8 +311,10 @@ It does not replace fur. The tailor can weave a garment for hidden
 armour instead, which is not this meter. See
 [Tailor](professions/tailor.md).
 
-A burn on a part of the body, from [Injury](injury.md), means the
-clothing on that part counts at half until the burn heals.
+A bad burn, from [Injury](injury.md), one that has taken 30 health or
+more, means everything you wear counts at half for warmth until the burn
+heals. The server is not told where the fire touched, and the flames
+cover the whole body, so it is everything worn and not one part.
 
 The server reads equipment. A piece handed to the client inside its own
 game and never seen by the server cannot count. The Body page on K
@@ -280,9 +322,16 @@ says so.
 
 ## A meal
 
-A cooked meal that grants cold resistance shifts the target 4 degrees
-warmer for 20 minutes. A feast shifts it 8 degrees for 10 minutes. See
-[Food](food.md).
+A soup, stew or chowder warms: the target is 4 degrees warmer for 20
+minutes, or 30 minutes for a fine one. Other cooked food gives no
+warmth of its own, and a cook's extra ingredient at the pot gives
+stamina or the disease guard instead. One help at a time: a later
+meal's help replaces the one before it.
+
+Of the four festival feasts, only the Saturalia Spice Cake warms: 8
+degrees warmer for 10 minutes, or 15 minutes for a fine one. The First
+Planting Loaf, the Midyear Jazbay Tart and the Harvest's End Roast give
+stamina or the guard, not warmth. See [Food](food.md).
 
 ## Where this is
 
@@ -294,6 +343,5 @@ page on K are in the server.
 In it: the season shift on an outdoor target, the roll of the sky, the
 winter's quarter faster cooling under the sky (#3144), the
 master woodworker's 48, the master tailor's 4 degrees, the cold link
-into hunger and thirst, the 3 minutes of wet, and a storm's 15% on
-the road. Not in it: the burn
-cutting clothing, and the meal's warmth.
+into hunger and thirst, the 3 minutes of wet, a storm's 15% on
+the road, the bad burn halving what is worn, and a meal's warmth.

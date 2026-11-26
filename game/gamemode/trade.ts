@@ -89,6 +89,11 @@
     if (t.a === actorId) { t.okA = v; } else { t.okB = v; }
   }
 
+  // A public offer identifier, not an ownership credential. Fresh random
+  // versions scope every session and mutation across reloads/restarts without
+  // a resettable counter or an overflow. Crypto failure never falls back.
+  function freshOfferVersion() { return require('crypto').randomBytes(24).toString('hex'); }
+
   /*
     Any change to either pile takes BOTH confirmations back.
 
@@ -97,7 +102,14 @@
     swap goes through on an agreement that no longer describes what is in the
     piles.
   */
-  function unconfirm(t) { t.okA = false; t.okB = false; t.at = Date.now(); }
+  function unconfirm(t, saleCuts) {
+    // Invalidate first: if minting fails, the changed pile can never retain
+    // an old valid approval or version. An unversioned offer cannot agree.
+    t.offerVersion = '';
+    t.okA = false; t.okB = false;
+    t.saleCuts = arguments.length > 1 ? saleCuts : currentSaleCuts(t);
+    t.offerVersion = freshOfferVersion();
+  }
 
   function begin(aActor, bActor) {
     if (open[aActor]) { return 'You are already trading.'; }
@@ -107,11 +119,17 @@
       a: aActor, b: bActor,
       offerA: [], offerB: [], goldA: 0, goldB: 0,
       okA: false, okB: false, at: Date.now(),
+      offerVersion: freshOfferVersion(),
       // The company worker buying, when it is a sale out of Skyrim (#1393).
       sale: 0,
+      saleCuts: null,
       // The number the panel names each piece by, for this trade (#1718).
       keys: {}, pieces: []
     };
+    // Public continuity for local drafts, never an ownership credential.
+    // The initial offer already minted a unique identity; later edits rotate
+    // only offerVersion, while this identity lasts exactly this conversation.
+    t.sessionId = t.offerVersion;
     open[aActor] = t; open[bActor] = t;
     trades.push(t);
     push(t);
@@ -182,10 +200,11 @@
     A name somebody can read.
 
     Skyrim.esm and the DLCs are localized. A FULL field there is not a name:
-    it is a four byte index into the strings file. String() of those bytes is
-    a row of numbers, which is what the trade list was showing. A FULL is
-    used only when it is real text. Otherwise the editor id is spaced out
-    (SteelSword becomes Steel Sword). A string index is never shown.
+    it is a four byte index into the strings file. Some indexes even look
+    printable (Hammer's is [46,74,0,0], or '.J'). Use the shared
+    decoded content names first, matched by the whole record descriptor.
+    FULL is text only when the winning plugin is proven unlocalized.
+    Unknown provenance and missing decoded names use the editor id.
   */
   function fieldText(data) {
     if (typeof data === 'string') {
@@ -226,6 +245,11 @@
     if (Object.prototype.hasOwnProperty.call(nameCache, baseId)) { return nameCache[baseId]; }
     var label = '';
     var edid = '';
+    var names = g.__thornswoodProperty;
+    if (names && typeof names.baseItemName === 'function') {
+      try { label = names.baseItemName(baseId); }
+      catch (eName) { tlog('could not read decoded item name for', baseId + ':', eName); }
+    }
     try {
       var res = mp.lookupEspmRecordById(baseId);
       var rec = res && res.record;
@@ -235,7 +259,7 @@
         for (var i = 0; i < fields.length; i++) {
           if (!fields[i]) { continue; }
           var t = String(fields[i].type || '');
-          if (t === 'FULL' && !label) { label = fieldText(fields[i].data); }
+          if (t === 'FULL' && !label && res.isLocalized === false) { label = fieldText(fields[i].data); }
           else if (t === 'EDID' && !edid) { edid = fieldText(fields[i].data); }
         }
       }
@@ -379,13 +403,13 @@
         var room = hit.c - side[k].c;
         if (room <= 0) { return 'That is all of them already.'; }
         side[k].c += Math.min(n, room);
-        unconfirm(t); push(t);
+        t.at = Date.now(); unconfirm(t); push(t);
         return '';
       }
     }
     if (side.length >= TRADE.mostLines) { return 'That is as much as one side can offer.'; }
     side.push({ id: hit.id, x: hit.x, n: hit.n, c: n });
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     return '';
   }
 
@@ -401,7 +425,7 @@
              String(side[i].id) === want || side[i].id.toString(16) === want)) {
         if (n > 0 && side[i].c > n) { side[i].c -= n; }
         else { side.splice(i, 1); }
-        unconfirm(t); push(t);
+        t.at = Date.now(); unconfirm(t); push(t);
         return '';
       }
     }
@@ -417,7 +441,7 @@
     var have = holding(actorId, GOLD);
     if (want > have) { return 'You only have ' + have + '.'; }
     if (t.a === actorId) { t.goldA = want; } else { t.goldB = want; }
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     return '';
   }
 
@@ -448,7 +472,7 @@
     if (!t) { return 'You are not trading.'; }
     if (t.sale === actorId) {
       t.sale = 0;
-      unconfirm(t); push(t);
+      t.at = Date.now(); unconfirm(t); push(t);
       try { say(other(t, actorId), nameOf(actorId) + ' is not buying for the company now. It is an ordinary trade.'); }
       catch (e) { }
       return '';
@@ -458,7 +482,7 @@
       return 'Only somebody the Free Skyrim Trading Company has taken on buys for it. It is an application, in Discord.';
     }
     t.sale = actorId;
-    unconfirm(t); push(t);
+    t.at = Date.now(); unconfirm(t); push(t);
     try {
       say(other(t, actorId), nameOf(actorId) + ' is buying for the Free Skyrim Trading Company. ' +
           'What you put up leaves Skyrim and does not come back.');
@@ -466,20 +490,57 @@
     return '';
   }
 
-  /* The split of the price as the panel shows it to either side. */
-  function saleView(t, actorId) {
+  // Read the one canonical policy and snapshot only its actual payout. No
+  // guessed/default split is safe to agree to when terms are unavailable.
+  function currentSaleCuts(t) {
+    if (!t.sale) { return null; }
     var pr = g.__thornswoodProperty;
     var price = t.sale === t.a ? t.goldA : t.goldB;
-    var cuts = (pr && pr.saleCuts && pr.saleCuts(price)) || { price: price, worker: 0, gone: 0, seller: price };
-    return { mine: t.sale === actorId, worker: nameOf(t.sale), price: cuts.price,
-             cut: cuts.worker, gone: cuts.gone, seller: cuts.seller };
+    if (!(price > 0) || !pr || typeof pr.saleCuts !== 'function') { return null; }
+    var cuts = pr.saleCuts(price);
+    if (!cuts || !['price', 'worker', 'gone', 'seller'].every(function (key) {
+      return Number.isSafeInteger(cuts[key]) && cuts[key] >= 0;
+    }) || cuts.price !== price || cuts.worker + cuts.gone + cuts.seller !== price) { return null; }
+    return { price: cuts.price, worker: cuts.worker, gone: cuts.gone, seller: cuts.seller };
   }
 
-  function confirm(actorId) {
+  function sameSaleCuts(a, b) {
+    return !!a && !!b && a.price === b.price && a.worker === b.worker && a.gone === b.gone && a.seller === b.seller;
+  }
+
+  /* The captured split this version shows, never a live unapproved split. */
+  function saleView(t, actorId) {
+    var cuts = t.saleCuts;
+    return { mine: t.sale === actorId, worker: nameOf(t.sale), available: !!cuts,
+             price: t.sale === t.a ? t.goldA : t.goldB,
+             cut: cuts ? cuts.worker : null, gone: cuts ? cuts.gone : null, seller: cuts ? cuts.seller : null };
+  }
+
+  function confirm(actorId, offerVersion) {
     var t = tradeOf(actorId);
     if (!t) { return 'You are not trading.'; }
+    // The normal cleanup tick may still be waiting. An approval cannot revive
+    // a conversation whose full idle window has already elapsed.
+    if (Date.now() - t.at > TRADE.idleFor) { return 'The trade timed out.'; }
+    if (arguments.length !== 2 || typeof offerVersion !== 'string' || !/^[0-9a-f]{48}$/.test(offerVersion) ||
+        offerVersion !== t.offerVersion) {
+      refresh(actorId);
+      return 'The trade offer changed or the window is out of date. Read both piles and press Agree again.';
+    }
+    if (t.sale) {
+      var cuts = currentSaleCuts(t);
+      if (!cuts || !sameSaleCuts(cuts, t.saleCuts)) {
+        unconfirm(t, cuts); push(t);
+        if (!((t.sale === t.a ? t.goldA : t.goldB) > 0)) { return nameOf(t.sale) + ' has put up no gold for it.'; }
+        return cuts ? 'The company payout changed. Read the trade and press Agree again.'
+          : 'The company payout is unavailable. Put up a valid price and read the trade again before agreeing.';
+      }
+    }
     if (okOf(t, actorId)) { return 'You have already agreed.'; }
     setOk(t, actorId, true);
+    // Only a newly accepted approval renews idle time. A refused final swap
+    // may invalidate approvals, but it is not activity that keeps a trade open.
+    if (!(t.okA && t.okB)) { t.at = Date.now(); }
     push(t);
     var them = other(t, actorId);
     if (!(t.okA && t.okB)) {
@@ -611,8 +672,11 @@
         return refuse(nameOf(seller) + ' does not have the ' + things[i].n + ' any more.');
       }
     }
-    var cuts = pr.saleCuts(price);
-    if (!cuts) { return refuse('The company\'s terms are not loaded on this server. Say so in the dev channel.'); }
+    var cuts = currentSaleCuts(t);
+    if (!cuts || !sameSaleCuts(cuts, t.saleCuts)) {
+      unconfirm(t, cuts); push(t);
+      return 'The company payout changed or is unavailable. Read the trade and press Agree again.';
+    }
     var cost = cuts.price - cuts.worker;
     var sold = saleById(seller, worker, things, cuts.seller, cost);
     if (sold === false) {
@@ -632,14 +696,14 @@
     var me = nameOf(worker), them = nameOf(seller);
     try {
       say(seller, 'Sold to the Free Skyrim Trading Company for ' + cuts.price + ' gold. ' + what +
-          ' left Skyrim. ' + (cuts.worker
+          ' left Skyrim. ' + (cuts.worker || cuts.gone
             ? 'You receive ' + cuts.seller + ': ' + cuts.worker + ' went to ' + me + ' for handling it, and ' +
               cuts.gone + ' left the world.'
-            : 'Under 10 gold nothing is cut, and you receive the whole ' + cuts.price + '.'));
-      say(worker, 'Bought for the company at ' + cuts.price + ' gold. ' + what + ' left Skyrim. ' + (cuts.worker
+            : (cuts.price < 10 ? 'Under 10 gold nothing is cut, and you receive the whole ' : 'Nothing is cut, and you receive the whole ') + cuts.price + '.'));
+      say(worker, 'Bought for the company at ' + cuts.price + ' gold. ' + what + ' left Skyrim. ' + (cuts.worker || cuts.gone
             ? 'It cost you ' + cost + ': your ' + cuts.worker + ' for handling it stays with you, ' + cuts.gone +
               ' left the world, and ' + them + ' received ' + cuts.seller + '.'
-            : 'Under 10 gold nothing is cut: ' + them + ' received the whole ' + cuts.price + '.'));
+            : (cuts.price < 10 ? 'Under 10 gold nothing is cut: ' : 'Nothing is cut: ') + them + ' received the whole ' + cuts.price + '.'));
     } catch (e) { }
     ledger('sale', seller, worker, { gold: 0, items: things }, { gold: cuts.seller, items: [] });
     tlog(me, 'bought', them + '\'s', what, 'for the company at', cuts.price, 'gold:', cuts.seller, 'to the seller,',
@@ -698,9 +762,11 @@
     for (var i = 0; i < things.length; i++) { pairs.push([things[i].id, things[i].c, things[i].x]); }
     var gone = withoutPairs((sellerInv.entries || []).slice(), pairs);
     var paid = withoutPairs((workerInv.entries || []).slice(), [[GOLD, cost]]);
-    if (!gone || !paid || !(share > 0) || !(cost >= share)) { return false; }
-    var landed = false;
-    for (var k = 0; k < gone.length; k++) {
+    if (!gone || !paid || !(share >= 0) || !(cost >= share)) { return false; }
+    // Canonical terms may leave the seller zero. Credit no coins in that
+    // case, preserving existing coin metadata and never creating count 0.
+    var landed = share === 0;
+    for (var k = 0; share > 0 && k < gone.length; k++) {
       if (gone[k] && gone[k].baseId === GOLD && !gone[k].worn) {
         gone[k] = { baseId: GOLD, count: (gone[k].count || 1) + share };
         landed = true;
@@ -916,6 +982,8 @@
     var meA = t.a === actorId;
     return {
       open: true,
+      sessionId: t.sessionId,
+      offerVersion: t.offerVersion,
       them: nameOf(other(t, actorId)),
       mine: shown(t, meA ? t.offerA : t.offerB),
       theirs: shown(t, meA ? t.offerB : t.offerA),

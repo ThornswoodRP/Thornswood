@@ -343,7 +343,7 @@ for (const sample of ['throw', undefined, null, [], {}, {v: 2, ranks: {miner: 'm
   rankContext.globalThis = rankContext;
   vm.createContext(rankContext);
   vm.runInContext(productionFunction('readState', 'actorId') + '\n' +
-    productionFunction('migrate', 'actorId') + '\n' + productionFunction('stateOf', 'actorId'), rankContext);
+    productionFunction('migrate', 'actorId, preview') + '\n' + productionFunction('stateOf', 'actorId'), rankContext);
   rankContext.__thornswoodCharacter = {
     PROPERTY: 'thornswoodCharacter',
     rankOf: vm.runInContext('(' + characterRank[1] + ')', rankContext)

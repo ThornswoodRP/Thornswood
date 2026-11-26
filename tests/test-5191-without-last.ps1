@@ -102,7 +102,7 @@ function Population([string[]]$names) { '{"loadOrder":[' + ((@($masters) + $name
 # collection records name (ContentPaths.ps1, Get-ThornswoodContentOrder).
 function Put-Record([string]$root, [string[]]$names) {
     Put $root 'records/collection.json' '{"collection":"t","revision":1,"plugins":[]}'
-    Put $root 'records/collection-plugins.json' '{"collection":"t","revision":1,"plugins":[]}'
+    Put $root 'records/collection-plugins.json' ('{"version":1,"collection":"t","revision":1,"plugins":[{"name":"A.esp","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     Put $root 'records/load-order.json' ('{"loadOrder":[' + ((@($masters) + $names | ForEach-Object { '"' + $_ + '"' }) -join ',') + ']}')
 }
 
@@ -110,7 +110,9 @@ function New-Sandbox([string]$chainText = $chain, [string[]]$order = @('A.esp', 
     $root = Join-Path ([IO.Path]::GetTempPath()) ('ts-5191-wl-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     Put $root 'scripts/mods/Rebuild-ContentTables.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/Rebuild-ContentTables.ps1')))
     Put $root 'scripts/dev/OwnPlugins.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/dev/OwnPlugins.ps1')))
-    Put $root 'scripts/mods/ContentPaths.ps1' ([IO.File]::ReadAllText((Join-Path $Repo 'scripts/mods/ContentPaths.ps1')))
+    foreach ($helper in 'scripts/mods/ContentPaths.ps1', 'scripts/release/RecordShape.ps1', 'scripts/release/Read-JsonFile.ps1') {
+        Put $root $helper ([IO.File]::ReadAllText((Join-Path $Repo $helper)))
+    }
     Put $root 'scripts/mods/content-tables.json' $chainText
     Put $root 'scripts/dev/Before.js' $saysList.Replace('NAME', 'before')
     Put $root 'scripts/dev/After.js' $saysList.Replace('NAME', 'after')

@@ -14,7 +14,7 @@ import struct
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'game/data/merchant-role-tables.json'
 INPUTS = ('game/data/recipes.json', 'game/data/harvests.json', 'game/data/hunts.json',
-          'game/data/items.json', 'docs/systems/cut-items.json')
+          'game/data/items.json', 'game/data/cut-items.json')
 ROLES = ('Smith', 'Woodworker', 'Tailor', 'Enchanter', 'Cook', 'Alchemist')
 ITEM_TYPES = ('ALCH', 'AMMO', 'ARMO', 'BOOK', 'INGR', 'KEYM', 'MISC', 'SCRL', 'SLGM', 'WEAP')
 SOUL_GEMS = {('SoulGem' + size + suffix).lower() for size in
@@ -34,6 +34,17 @@ def input_bundle():
     contents = {name: (ROOT / name).read_bytes() for name in INPUTS}
     return ([json.loads(contents[name].decode('utf-8')) for name in INPUTS],
             {name: hashlib.sha256(data).hexdigest() for name, data in contents.items()})
+
+
+def source_hashes_match(stored, current):
+    # Older verified content builds record this input at its previous path.
+    # The same exact bytes must be present at the new path.
+    previous = 'docs/systems/cut-items.json'
+    current_path = 'game/data/cut-items.json'
+    if previous in stored and current_path not in stored:
+        stored = {current_path if name == previous else name: digest
+                  for name, digest in stored.items()}
+    return stored == current
 
 
 def public(row):
@@ -117,6 +128,9 @@ def derive(recipes, harvests, hunts, items, cuts, records):
         evidence.setdefault(item, set()).add(role + ':' + source)
 
     wearables = set()
+    # Imported recipe ingredients remain tradable, but woodworking collection
+    # jobs request only woodworking goods or directly produced resources.
+    woodworking_stock = {row['out'] for row in rows.values() if row['owner'] == 'Woodworker'}
     for key, row in rows.items():
         if row.get('race') == 'riekling' and row['name'] not in cuts['rieklingKept']:
             raise ValueError('Unapproved Riekling company item: ' + row['name'])
@@ -127,7 +141,8 @@ def derive(recipes, harvests, hunts, items, cuts, records):
             if ingredient['item'].lower() == 'f:skyrim.esm':
                 continue  # A crafting fee is not a good the trader buys or supplies.
             add(row['owner'], ingredient['item'], 'recipe:' + key + ':input:' + str(index),
-                supply=True, expected=ingredient.get('type'))
+                supply=(row['owner'] != 'Woodworker' or ingredient['item'] in woodworking_stock or
+                        ingredient.get('producedBy') == 'woodworker'), expected=ingredient.get('type'))
     for item, source in resources(harvests, hunts, items):
         row = record_of(records, item)
         if row['type'] == 'INGR':
@@ -297,7 +312,7 @@ def main():
     inputs, input_hashes = input_bundle()
     if args.check:
         payload = load(OUT)
-        if payload['version'] != 1 or payload['active'] is not False or payload['sources'] != input_hashes:
+        if payload['version'] != 1 or payload['active'] is not False or not source_hashes_match(payload['sources'], input_hashes):
             raise ValueError('Role-table source evidence is stale')
         validate_provenance(payload)
         tables, evidence = derive(*inputs, payload['records'])

@@ -87,8 +87,12 @@ function makeEl(tag) {
   const e = {
     tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '', style: {},
     id: '', className: '', textContent: '', value: '', onclick: null, scrollTop: 0,
+    listeners: {},
+    addEventListener(type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
     appendChild(c) { this.children.push(c); return c; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
+    setAttribute(n, v) { this.attrs[n] = String(v); },
+    removeAttribute(n) { delete this.attrs[n]; },
     focus() { },
     querySelectorAll(sel) {
       const tests = sel.split(',').map(function (s) { return matcher(s.trim()); });

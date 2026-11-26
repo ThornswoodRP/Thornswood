@@ -16,8 +16,9 @@
   commit and one after, a board.json in the shape board-read.yml writes, and
   stand-ins for gh and Invoke-RestMethod that answer from a table and write
   down every call:
-    1. an issue in Done whose merge is in the release gets one comment holding
-       exactly the test task, then is closed as completed, in that order;
+    1. an issue in Merged (#6878), or still in Done from before Merged was
+       made, whose merge is in the release gets one comment holding exactly
+       the test task, then is closed as completed, in that order;
     2. one whose merge came after the release stays open, and so does one
        whose last done-on-merge comment names the later merge;
     3. one with a person's newer "Test task:" for main is closed with no
@@ -169,7 +170,7 @@ try {
     function Card([int]$n, [string]$status = 'Done', [string]$state = 'OPEN', [string]$repo = $Slug) {
         return [ordered]@{ repo = $repo; number = $n; kind = 'Issue'; title = "issue $n"; state = $state; status = $status; order = $null; archived = $false }
     }
-    $items = @((Card 1), (Card 2), (Card 3), (Card 4 'In Progress'), (Card 5 'Done' 'CLOSED'), (Card 6), (Card 7), (Card 8), (Card 10), (Card 11 'Done' 'OPEN' 'EvilPatrick06/other'), (Card 12), (Card 13), (Card 15), (Card 16), (Card 17), (Card 18), (Card 20), (Card 21), (Card 22), (Card 23))
+    $items = @((Card 1 'Merged'), (Card 2), (Card 3), (Card 4 'In Progress'), (Card 5 'Done' 'CLOSED'), (Card 6), (Card 7), (Card 8), (Card 10), (Card 11 'Done' 'OPEN' 'EvilPatrick06/other'), (Card 12), (Card 13), (Card 15), (Card 16), (Card 17), (Card 18), (Card 20), (Card 21), (Card 22), (Card 23))
     $items += [ordered]@{ repo = $Slug; number = 14; kind = 'PullRequest'; title = 'a pull request'; state = 'OPEN'; status = 'Done'; order = $null; archived = $false }
     $script:boardFile = Join-Path $work 'board.json'
     [IO.File]::WriteAllText($script:boardFile, ([ordered]@{ read_at = '2026-10-22T13:41:52Z'; items = $items } | ConvertTo-Json -Depth 6))
@@ -223,7 +224,7 @@ try {
     Yes ("the run passes (exit {0})" -f $r.Code) ($r.Code -eq 0)
     $c1 = @($w | Where-Object { $_ -like "POST repos/$Slug/issues/1/comments *" })
     $p1 = @($w | Where-Object { $_ -like "PATCH repos/$Slug/issues/1 *" })
-    Yes '#1, merge in the release: one comment holding exactly the test task' (
+    Yes '#1, in Merged, merge in the release: one comment holding exactly the test task' (
         $c1.Count -eq 1 -and ($c1[0].Substring($c1[0].IndexOf('{')) | ConvertFrom-Json).body -ceq $task)
     Yes '  then closed as completed, after the comment' (
         $p1.Count -eq 1 -and $p1[0] -match '"state":"closed"' -and $p1[0] -match '"state_reason":"completed"' -and [array]::IndexOf($w, $c1[0]) -lt [array]::IndexOf($w, $p1[0]))

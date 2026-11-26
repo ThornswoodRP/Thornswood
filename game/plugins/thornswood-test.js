@@ -93,15 +93,23 @@ log('run', runId, 'with', steps.length, 'steps');
 // ---------------------------------------------------------- what we see ----
 // Menus from their events, which come at the main menu too, where update
 // (and so any call into the game) does not run yet.
+// When each menu last opened and last closed, as well as which are open
+// now: steps run on tick, and tick does not come while a loading screen is
+// up, so a Loading Menu that opened and closed between two ticks was never
+// seen open (16 Nov: the trip from the hall to Whiterun, about a second).
 const openMenus = {};
+const menuOpenedAt = {};
+const menuClosedAt = {};
 sp.on('menuOpen', function (e) {
   const name = String((e && e.name) || '');
   openMenus[name] = true;
+  menuOpenedAt[name] = Date.now();
   write({ t: 'menu', name: name, open: true });
 });
 sp.on('menuClose', function (e) {
   const name = String((e && e.name) || '');
   delete openMenus[name];
+  menuClosedAt[name] = Date.now();
   write({ t: 'menu', name: name, open: false });
 });
 
@@ -238,8 +246,13 @@ sp.on('tick', function () {
   switch (s.do) {
     case 'wait': {
       if (s.for === 'menu') {
+        // Open (or shut) now, or it opened (or closed) since the step before
+        // this one started, as a message counts for the wait after a key.
         const want = s.open !== false;
-        if (!!openMenus[String(s.menu)] === want) { pass(); return; }
+        const name = String(s.menu);
+        const since = want ? menuOpenedAt[name] : menuClosedAt[name];
+        if (!!openMenus[name] === want) { pass(); return; }
+        if (since !== undefined && since >= prevAt) { pass(want ? 'it opened and closed again before this tick' : 'it closed and opened again before this tick'); return; }
       } else if (s.for === 'world') {
         if (inWorld) { pass(); return; }
       } else if (s.for === 'message') {
@@ -261,7 +274,14 @@ sp.on('tick', function () {
     case 'page': {
       // Asked again every half second until the answer passes, because the
       // thing asked about (a panel drawn, a button there) may come later.
-      if (pageId && answerPasses(pageAnswers[pageId])) { pass(pageAnswers[pageId]); return; }
+      // With "skipIf" and "skip": n, the answer skipIf names says what the
+      // next n steps deal with is not here (a character the server has
+      // already placed needs no Starting Location), so they are passed over.
+      if (pageId && answerPasses(pageAnswers[pageId])) {
+        if (Number(s.skip) > 0 && s.skipIf !== undefined && pageAnswers[pageId] === String(s.skipIf)) { skipOn('the page said ' + pageAnswers[pageId]); }
+        else { pass(pageAnswers[pageId]); }
+        return;
+      }
       if (late) { fail('the page said ' + JSON.stringify(pageId ? pageAnswers[pageId] : undefined) + ' to ' + String(s.js).slice(0, 200)); return; }
       if (!pageId || now - pageAskedAt >= 500) {
         pageId = runId + '-' + at + '-' + now;

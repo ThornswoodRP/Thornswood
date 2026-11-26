@@ -12,13 +12,16 @@
 //   - it takes the run file and deletes it, so the next ordinary Play does
 //     not run it again;
 //   - each kind of step passes on what it waits for, asks the runner and
-//     waits for its answer, and the run ends with a done line and an end ask;
+//     waits for its answer (a menu wait also on a menu that opened and closed
+//     between two ticks, as a loading screen does), and the run ends with a done line and an end ask;
 //   - a step that times out fails, asks for a screenshot named after it, and
-//     ends the run as failed, unless it is a wait with skip, which passes
+//     ends the run as failed, unless it is a wait with skip (or a page step
+//     answered with its skipIf word), which passes
 //     over the steps that deal with what it waited for (creation, for a
 //     character the server has not got);
-//   - every step in tests/real-client/*.json is one the plugin knows, and the
-//     runner names the same three files the plugin does;
+//   - every step in tests/real-client/*.json is one the plugin knows, every
+//     K panel tab, button and call a page step uses is one the panel has, and
+//     the runner names the same three files the plugin does;
 //   - the runner's Windows helper compiles under PowerShell 7, where pwsh is;
 //   - an install on main is put on dev for the run as the launcher's Server
 //     card does, Play waits for dev's launcher, and the channel goes back
@@ -43,6 +46,7 @@ function read(p) {
 }
 const PLUGIN = read(process.env.PLUGIN || path.join('game', 'plugins', 'thornswood-test.js'));
 const RUNNER = read(path.join('scripts', 'dev', 'Run-RealClient.ps1'));
+const SKILLS = read(path.join('game', 'ui', 'thornswood-skills.js')) || '';
 const OUR_ADDRESS = JSON.parse(read(path.join('scripts', 'vps', 'vps.json'))).address;
 
 let pass = 0, fail = 0;
@@ -241,6 +245,73 @@ function game(opts) {
   yes('when it comes, the steps after it run', asks.length === 1 && asks[0].do === 'key' && asks[0].arg === 19);
 }
 
+// A page step with skipIf: a character the server has placed already needs
+// no Starting Location, so the page says so and the steps for it are passed
+// over; any other answer passes the step and the run goes on to them.
+{
+  const steps = [
+    { do: 'page', js: 'k()', skip: 2, skipIf: 'placed' },
+    { do: 'shot', name: 'home-chosen' },
+    { do: 'wait', for: 'menu', menu: 'Loading Menu', open: true },
+    { do: 'end' }
+  ];
+  const g = game({ steps: steps });
+  g.frame();
+  const id = /"page","([^"]+)"/.exec(g.pageRuns[0] || '');
+  g.page('thornswood-test', 'page', id ? id[1] : '', 'placed');
+  g.frame(); g.frame();
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('a page step answered with its skipIf word passes, saying so', st.length >= 1 && st[0].ok === true && /the page said placed, so the next 2 step\(s\) are skipped/.test(st[0].note));
+  yes('  and the two steps after it are skipped, asking the runner for nothing but the end', st.length >= 3 && st[1].note === 'skipped' && st[2].note === 'skipped' &&
+      !g.lines().some(function (l) { return l.t === 'ask' && l.do !== 'end'; }));
+  const done = g.lines().filter(function (l) { return l.t === 'done'; });
+  yes('  and the run ends passed', done.length === 1 && done[0].ok === true && done[0].passed === 4);
+
+  const h = game({ steps: steps });
+  h.frame();
+  const id2 = /"page","([^"]+)"/.exec(h.pageRuns[0] || '');
+  h.page('thornswood-test', 'page', id2 ? id2[1] : '', 'confirmed Whiterun');
+  h.frame(); h.frame();
+  const st2 = h.lines().filter(function (l) { return l.t === 'step'; });
+  const asks = h.lines().filter(function (l) { return l.t === 'ask'; });
+  yes('any other answer passes it and the next step runs', st2.length === 1 && st2[0].note === 'confirmed Whiterun' && asks.length === 1 && asks[0].arg === 'home-chosen');
+}
+
+// ----------------------------------- a menu seen only between two ticks ----
+// Tick does not come while a loading screen is up, so the trip from the hall
+// to the town (16 Nov) opened and closed the Loading Menu between two ticks.
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'Loading Menu', open: true, timeout: 5000 },
+    { do: 'end' }
+  ] });
+  g.frame();
+  g.menu('Loading Menu', true);
+  g.menu('Loading Menu', false);
+  g.frame();
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('a menu that opened and closed between two ticks passes its wait', st.length >= 1 && st[0].ok === true && /opened and closed again/.test(st[0].note));
+}
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'InventoryMenu', open: true },
+    { do: 'wait', for: 'menu', menu: 'InventoryMenu', open: false },
+    { do: 'wait', for: 'menu', menu: 'Loading Menu', open: true, timeout: 1000 },
+    { do: 'end' }
+  ] });
+  g.frame(100);
+  g.menu('Loading Menu', true);
+  g.menu('Loading Menu', false);
+  g.frame(100);
+  g.menu('InventoryMenu', true);
+  g.frame(100);
+  g.menu('InventoryMenu', false);
+  g.frame(100);
+  g.frame(500); g.frame(600); g.frame(); g.frame();
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('  and one that came and went before the step before it began does not', st.length >= 3 && st[0].ok && st[1].ok && st[2].ok === false);
+}
+
 // ------------------------------------------------------ a failing step ----
 {
   const g = game({ steps: [
@@ -308,11 +379,36 @@ function game(opts) {
     yes(n + ' reads, and every step is one the plugin knows', !!bad && bad.length === 0);
     if (bad && bad.length) { console.log('      unknown: ' + bad.map(function (s) { return s.do; }).join(', ')); }
     yes(n + ' ends with an end step', !!doc && doc.steps.length > 0 && doc.steps[doc.steps.length - 1].do === 'end');
+    // A page step finds the K panel's tabs by the titles it shows and its
+    // buttons by data-act, so a renamed tab fails here and not two minutes
+    // into a run on One (26 Nov: #6454 renamed Home to Starting Location).
+    const pages = doc && Array.isArray(doc.steps) ? doc.steps.filter(function (s) { return s.do === 'page' && /ts-skills/.test(s.js || ''); }) : [];
+    const lost = [];
+    pages.forEach(function (s) {
+      let t;
+      const rowRx = /row\('([^']+)'\)/g;
+      while ((t = rowRx.exec(s.js))) { if (SKILLS.indexOf("title: '" + t[1] + "'") < 0) lost.push('tab ' + t[1]); }
+      const callRx = /\bk\.([A-Za-z]+)\b|thornswoodSkills\.([A-Za-z]+)\b/g;
+      while ((t = callRx.exec(s.js))) { const fn = t[1] || t[2]; if (SKILLS.indexOf('    ' + fn + ': function') < 0) lost.push('panel call ' + fn); }
+      const actRx = /data-act=\\?"([a-z]+)\\?"/g;
+      while ((t = actRx.exec(s.js))) { if (SKILLS.indexOf('data-act="' + t[1] + '"') < 0) lost.push('button ' + t[1]); }
+    });
+    if (pages.length) {
+      yes(n + ': every K panel tab, button and call its page steps use is in game/ui/thornswood-skills.js', lost.length === 0);
+      if (lost.length) { console.log('      not there: ' + lost.join(', ')); }
+    }
   });
   [['thornswood-test-run.json', RUN], ['thornswood-test-results.jsonl', OUT], ['thornswood-test-ack.txt', ACK]].forEach(function (p) {
     yes('the plugin and the runner name the same ' + p[0],
         PLUGIN.indexOf("'" + p[1] + "'") >= 0 && RUNNER.indexOf("'" + p[0] + "'") >= 0);
   });
+  // The launcher puts its build's own Data\\Platform files back before Play,
+  // so a copy laid in by hand never reaches the game (26 Nov). The runner
+  // lays none, and says when the game's plugin is not this checkout's.
+  yes('the runner lays no plugin of its own into the game', !/InstallPlugin/.test(RUNNER) && !/Copy-Item[^\n]*thornswood-test\.js/.test(RUNNER));
+  yes('  and says, once the game is up, when the game\'s plugin is not this checkout\'s',
+      /function Get-PluginMismatch\b/.test(RUNNER) && /Get-FileHash -LiteralPath \$inGame/.test(RUNNER) &&
+      /if \(-not \$sawGame\) \{[\s\S]{0,200}\$pluginOff = Get-PluginMismatch/.test(RUNNER) && /if \(\$pluginOff\) \{ \$note = /.test(RUNNER));
   yes('the runner presses the launcher\'s Play by its name in MainWindow.axaml',
       /AutomationIdProperty, 'BtnPlay'/.test(RUNNER) && /x:Name="BtnPlay"/.test(read(path.join('launcher', 'app', 'MainWindow.axaml'))));
   // A launcher from the setup is a Velopack install in %LOCALAPPDATA%\Thornswood,
@@ -379,6 +475,7 @@ namespace ThornswoodRealClient {
       return Activate;
     }
     public static IntPtr GetForegroundWindow() { NativeCalls++; return Foreground; }
+    public static string ForegroundWho() { return "notepad " + Foreground + " \\"Untitled\\""; }
     public static uint SendScan(ushort scan, bool up) {
       Calls++; NativeCalls++; Events += (up ? "U" : "D") + scan + ";";
       if (up) {
@@ -461,6 +558,12 @@ Case 'activated' 42 99 $true $true 1 1 $false -code 23
       const c = cases.find(function (x) { return x.name === name; });
       yes(name + ': invalid code cannot query or change native focus', !!c && !c.ok && c.nativeCalls === 0);
     });
+    ['denied', 'not-foreground', 'lost'].forEach(function (name) {
+      const c = cases.find(function (x) { return x.name === name; });
+      yes(name + ': the note names the window that is in front', !!c && /in front: notepad (99|42) "Untitled"/.test(c.note || ''));
+    });
+    yes('the runner\'s helper asks Windows which process and title are in front',
+        /public static string ForegroundWho\(\)/.test(RUNNER) && /GetWindowThreadProcessId\(h, out pid\)/.test(RUNNER) && /GetWindowText\(h, t, t\.Capacity\)/.test(RUNNER));
     ['unsupported', 'zero-code', 'fraction', 'rounded-boundary', 'preserved-fraction', 'missing', 'denied', 'not-foreground'].forEach(function (name) {
       const c = cases.find(function (x) { return x.name === name; });
       yes(name + ': no injection without game focus', !!c && !c.ok && c.calls === 0 && !!c.note);
@@ -588,6 +691,70 @@ foreach ($scan in @(1,23,36)) {
     yes('and every other field as the launcher wrote it', !!onCfg && onCfg.Theme === 'Forge' && onCfg.ServerIp === '203.0.113.9' && onCfg.Note === 'a "quoted" word');
     yes('put back, config.json is byte for byte what it was', ((/BACK (.*)/.exec(out) || [])[1] || '').trim() === before);
     if (!onCfg) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// A Play the launcher could not start (26 Nov, 10:59 AM on One: "Could not
+// redirect ... Skyrim Special Edition") leaves the launcher open with no game.
+// The run must stop on the launcher's own "Failed to start" line, with its
+// reason, and not wait -Minutes for a game that is never coming.
+{
+  const cp = require('child_process');
+  const os = require('os');
+  const fn = /function Read-LauncherLines \{[\s\S]*?\nfunction Read-LauncherFailure \{[\s\S]*?\n\}\n/.exec(RUNNER);
+  yes('the runner reads the launcher log for a failed Play', !!fn);
+  const loop = RUNNER.indexOf('$sawGame = $false');
+  const check = RUNNER.indexOf('$failed = Read-LauncherFailure', loop);
+  const game = RUNNER.indexOf("Say \"The game is up", loop);
+  yes('the game wait stops on it before any game is up',
+      loop > 0 && check > loop && game > check &&
+      /if \(\$failed\) \{ throw "The launcher could not start the game: \$failed" \}/.test(RUNNER));
+  // The run closes the game, waits for the launcher's own line that it saw
+  // the game close (which is when it puts Windows' Skyrim folders back), and
+  // then closes the launcher's window as a person does. Ending the launcher
+  // by force first left both folders pointing into Profile after every run
+  // (26 Nov, 12:42 PM on One).
+  const fin = RUNNER.slice(RUNNER.indexOf('} finally {', RUNNER.indexOf('$sawGame = $false')));
+  const killGame = fin.indexOf("Get-Process -Name SkyrimSE");
+  const sawClose = fin.indexOf("'Game closed after '");
+  const closeWin = fin.indexOf('CloseMainWindow()');
+  const forced = fin.indexOf('$lp | Stop-Process -Force');
+  yes('after the run the game closes first, then the launcher says the folders are back, then its window is closed',
+      killGame >= 0 && sawClose > killGame && closeWin > sawClose && forced > closeWin);
+  yes('the launcher is not ended by force before its window was asked to close',
+      !/\$ours \| Stop-Process/.test(fin) && /if \(\$lp\.WaitForExit\(30000\)\)/.test(fin));
+  yes('folders still pointing at the build after the run fail it and are named',
+      /\$left = @\(Get-StillRedirected\)/.test(fin) && /if \(\$result -eq 'passed'\) \{ \$result = 'failed' \}/.test(fin));
+  // And the launcher says why. "Could not redirect" alone, with Junction's
+  // reason dropped, is all One's log had to go on.
+  const swap = read(path.join('launcher', 'app', 'Swap.cs'));
+  yes('a redirect that fails says what Windows said and what was found there',
+      /static bool MakeLink\(string link, string target, out string why\)/.test(swap) &&
+      /if \(!MakeLink\(win, ours\[i\], out why\)\)\s*throw new Exception\("Could not redirect " \+ win \+ " \(" \+ why \+ "; found " \+ found \+ "\)"\)/.test(swap));
+  const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+  if (ver.status === 0 && fn) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-5197-log-'));
+    const log = path.join(dir, 'launcher.log');
+    const old = '2026-11-26T16:00:00Z  Failed to start: an older Play, before the run\n';
+    fs.writeFileSync(log, old);
+    const q = function (v) { return "'" + v.replace(/'/g, "''") + "'"; };
+    const script = '$ErrorActionPreference = "Stop"\n$launcherLog = ' + q(log) + '\n' +
+      '$script:launcherLogReadAt = ' + Buffer.byteLength(old) + '\n' + fn[0] +
+      "'NONE [' + (Read-LauncherFailure) + ']'\n" +
+      "[IO.File]::AppendAllText($launcherLog, \"2026-11-26T17:59:51Z  Play pressed by no input device`n2026-11-26T17:59:53Z  Failed to start: Windows would not let go of`n`n    C:\\x`n`nSomething else has it open.`n2026-11-26T17:59:54Z  Next line`n\")\n" +
+      "'GOT [' + (Read-LauncherFailure) + ']'\n" +
+      "'AGAIN [' + (Read-LauncherFailure) + ']'\n" +
+      "[IO.File]::AppendAllText($launcherLog, '2026-11-26T18:00:00Z  Failed to start: half a li')\n" +
+      "'PART [' + (Read-LauncherFailure) + ']'\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const out = (r.stdout || '') + (r.stderr || '');
+    yes('a failure from before the run is not taken for this one', /NONE \[\]/.test(out));
+    yes('the failure is read with every line of its reason, and stops at the next stamped line',
+        /GOT \[Windows would not let go of C:\\x Something else has it open\.\]/.test(out));
+    yes('a failure is read once', /AGAIN \[\]/.test(out));
+    yes('a line still being written is not read yet', /PART \[\]/.test(out));
+    if (!/GOT \[Windows/.test(out)) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }

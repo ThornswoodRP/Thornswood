@@ -49,10 +49,16 @@ fifth of max health and magicka it takes off is worked out from the
 character's own most, what the race and the skill tree give, less what
 hunger, thirst and the rest take off. A fortify from gear or a potion
 running on you is not in that most, because the server cannot see it.
-Waiting the 30 minutes clears it. Eating a cooked meal and resting in a
-bed does not clear it yet. The server knows a cooked meal from any other
-now (see [Food](food.md)), but nothing in it ends withered on one and a
-rest in a bed. That is #6239.
+Waiting the 30 minutes clears it. An accepted cooked meal, soup or feast
+during that withering, followed by a new rest in a bed or bedroll, also
+clears it (#6239). The server uses the food and bed rules already in place.
+Raw food, prepared food, burnt meals, a meal inside the eight-second meal
+window and overeating do not qualify. Chairs and standing do not count as
+bed rest. A meal from before the episode cannot clear it, and eating while
+already in bed requires getting up and starting a new rest afterward.
+The qualifying meal survives a relog or restart within the same withering;
+a new episode starts with no qualifying meal. Recovery does not change the
+normal potion or restoration counters.
 
 The diminishing potions are in the server. The server counts the potions
 in your minute and tells the engine how much of the next one to apply

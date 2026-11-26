@@ -84,7 +84,7 @@ function world() {
       [A_SERA]: { desc: 'Markarth:4', pos: [9, 9, 9], rot: [0, 0, 0] }
     },
     staff: {}, kicked: [], set: [], said: [], silencedPosts: [], logged: [], records: [],
-    queue: [], timers: [], timeouts: [], placed: [], given: []
+    queue: [], timers: [], timeouts: [], placed: [], given: [], files: {}
   };
   w.staff[STAFFER] = true;
   return w;
@@ -107,6 +107,8 @@ function load(w) {
         w.where[id] = { desc: v.cellOrWorldDesc, pos: v.pos.slice(), rot: v.rot.slice() };
       }
     },
+    // Pinned WholeFileWrite.h: successful return places these complete bytes.
+    writeFileWhole: function (file, text) { w.files[file] = text; },
     getServerSettings: function () { return { privDir: 'private' }; },
     getUserByActor: function (a) { return w.online.indexOf(a) >= 0 ? 70 + w.online.indexOf(a) : -1; },
     kick: function (u) { w.kicked.push(u); },
@@ -143,8 +145,13 @@ function load(w) {
     }
   };
   const fakeFs = {
-    readFileSync: function () { throw new Error('not here'); },
-    existsSync: function () { return false; },
+    readFileSync: function (file, encoding) {
+      if (Object.prototype.hasOwnProperty.call(w.files, file)) {
+        return encoding ? w.files[file] : Buffer.from(w.files[file], 'utf8');
+      }
+      const e = new Error('not here'); e.code = 'ENOENT'; throw e;
+    },
+    existsSync: function (file) { return Object.prototype.hasOwnProperty.call(w.files, file); },
     appendFileSync: function (p, text) { w.records.push({ path: p, text: text }); },
     mkdirSync: function (p) { (w.dirs = w.dirs || []).push(p); },
     writeFileSync: function () { }, unlinkSync: function () { }
@@ -421,6 +428,12 @@ if (COMMANDS && STAFF) {
   got = run(w, STAFFER, '/kick Bjorn', false);
   yes('an unproven connection is refused, with a sentence saying so',
       /proved who you are/.test(to(got, STAFFER)[0] || '') && w.records.length === recs);
+  const unpGive = run(w, STAFFER, '/give iron ore 2', false);
+  yes('/give from an unproven connection is refused', /proved who you are/.test(to(unpGive, STAFFER)[0] || ''));
+  const unpSpawn = run(w, STAFFER, '/spawn troll', false);
+  yes('/spawn from an unproven connection is refused', /proved who you are/.test(to(unpSpawn, STAFFER)[0] || ''));
+  const unpTp = run(w, STAFFER, '/tp whiterun', false);
+  yes('/tp from an unproven connection is refused', /proved who you are/.test(to(unpTp, STAFFER)[0] || ''));
   delete w.box.__thornswoodPassSeen.passes[STAFFER];
   got = run(w, STAFFER, '/freeze Bjorn');
   yes('no join pass on hand is refused', /launcher's pass/.test(to(got, STAFFER)[0] || '') && w.records.length === recs);
@@ -436,6 +449,41 @@ if (COMMANDS && STAFF) {
   yes('no em dash in anything said or in the block', all.indexOf(String.fromCharCode(0x2014)) < 0);
   yes('the staff words are not offered to everybody in /help',
       ['/kick', '/freeze', '/silence', '/warn', '/bring'].every(function (x) { return w.box.PLAYER_WORDS.indexOf(x) < 0; }));
+}
+
+// #4636: exercise the real command transport and staff action together.
+// A separate world keeps these cases out of the moderation-order assertions.
+console.log('\nsilence duration forms:');
+for (const [length, minutes] of [['30m', 30], ['2h', 120], ['1d', 1440],
+                                 ['1w', 1440], ['2H', 120], ['45', 45]]) {
+  const s = load(world());
+  pass10(s, STAFFER);
+  const before = Date.now();
+  const said = run(s, STAFFER, '/silence Bjorn ' + length + ' repeated noise');
+  const muted = s.box.__thornswoodStaffState.silenced[BJORN];
+  yes('/silence ' + length + ' uses ' + minutes + ' minutes and retains its reason',
+      !!muted && Math.abs(muted.until - (before + minutes * 60000)) < 5000 &&
+      to(said, BJORN).some(line => line.includes('minutes: repeated noise.')) &&
+      JSON.parse(s.records[0].text).minutes === minutes);
+}
+for (const length of ['0', '-2h', '2hours', '1.5h', 'forever', '9'.repeat(320)]) {
+  const s = load(world());
+  pass10(s, STAFFER);
+  const postsBefore = s.silencedPosts.length;
+  const said = run(s, STAFFER, '/silence Bjorn ' + length + ' repeated noise');
+  yes('/silence rejects invalid length ' + length.slice(0, 16) + ' without any action',
+      !s.box.__thornswoodStaffState.silenced[BJORN] && s.records.length === 0 &&
+      s.silencedPosts.length === postsBefore && to(said, BJORN).length === 0 &&
+      to(said, STAFFER).some(line => /length|duration/i.test(line)));
+}
+{
+  const s = load(world());
+  pass10(s, STAFFER);
+  const said = run(s, STAFFER, '/silence Bjorn repeated noise');
+  const muted = s.box.__thornswoodStaffState.silenced[BJORN];
+  yes('a silence with only a reason retains the default 30 minutes',
+      !!muted && Math.abs(muted.until - (Date.now() + 30 * 60000)) < 5000 &&
+      to(said, BJORN).some(line => line.includes('minutes: repeated noise.')));
 }
 
 // ------------------------------------------------------------------ B --

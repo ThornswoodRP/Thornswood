@@ -34,7 +34,7 @@
   WHAT IT CANNOT DO. GitHub keeps every pull request's commits for good, and
   nobody can delete them, so the old commits stay reachable from the old pull
   request pages. What anybody clones is clean. The engine fork
-  (EvilPatrick06/skymp) and Thornswood-Releases are other repositories and are
+  (ThornswoodRP/skymp) and Thornswood-Releases are other repositories and are
   not touched; the engine\skymp pin is part of the tree and stays.
 
   AFTER IT. Every other clone is on history that no longer exists. Each other

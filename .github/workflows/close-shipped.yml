@@ -4,22 +4,22 @@
 #
 # WHY. A fix people would notice merges with "Test task for #N" in its pull
 # request, and done-on-merge.yml writes that test task on #N and leaves it
-# open in Done until the fix is on the server testers play (#2796).
+# open in Merged until the fix is on the server testers play (#2796, #6878).
 # scripts/release/Close-ShippedIssues.ps1 does the close: it reads the board,
-# and for each open issue in Done whose merge the release carries, writes the
+# and for each open issue in Merged whose merge the release carries, writes the
 # test task on it and closes it, so the bot posts the test task (#3279). With
 # -Dev it writes the Dev test tasks a dev release carries instead, closing
 # nothing (#5199). Until this workflow only Ship.ps1 and Ship-OnBox.ps1 ran it.
 # Since 3 Nov 2026 main has gone out through promote-main.yml and dev through
 # merge-release.yml, neither of which calls it, so from the 8 Nov promotions
-# on, issues whose fixes were on main stayed open in Done with their test
+# on, issues whose fixes were on main stayed open with their test
 # tasks never posted (#5464, #5465, #5473, #5475, #5477, #5524 and more).
 #
 # WHEN. The box deploy agent marks a Deployment to Dev or Main a success once
 # its server runs the Release (docs/DEPLOY-AGENT.md). That status, the one with
 # the agent's log beside it, starts this:
 #   - Main (promote-main.yml, after Patrick approves): the release's commit
-#     is what testers play now, so every issue in Done whose merge it carries
+#     is what testers play now, so every issue in Merged whose merge it carries
 #     is closed with its test task.
 #   - Dev (merge-release.yml): each Dev test task it carries is written with
 #     a "Build: dev release <tag>" line, for #dev-test-tasks; nothing closes.

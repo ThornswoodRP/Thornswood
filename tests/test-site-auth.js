@@ -67,7 +67,7 @@ fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   onlineFile: path.join(dir, 'online.json')
 }, null, 2));
 fs.writeFileSync(path.join(dir, 'data', 'linked.json'), JSON.stringify({
-  [ADMIN_ID]: { id: ADMIN_ID, name: 'Tester', profiles: [PROFILE] }
+  [ADMIN_ID]: { id: ADMIN_ID, name: 'Tester', profiles: [PROFILE], chars: [{ id: PROFILE, slot: 1 }] }
 }));
 
 /* Loaded into the site with -r, ahead of server.js. Written out from this

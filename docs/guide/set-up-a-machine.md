@@ -259,6 +259,17 @@ native libraries beside it into a scratch folder and ends with Done. With no
 10.x SDK it stops and says so; with no C++ build tools `dotnet publish` stops
 with "Platform linker not found".
 
+On this machine, `scripts\dev\Install-Everything.cmd` (double click it) puts
+a build from the clone into the install in one run: the content plugin, the
+recorded SkyMP client, the gamemode and the preflight check when the machine
+has a server build, and the launcher. By default it then publishes the result
+to the dev channel (`Ship.ps1 -Channel dev`), so it needs everything above:
+the VPS access, signing and the dev release folder. It never publishes to
+main. `Install-Everything.cmd -NoShip` only installs, and publishes nothing.
+The `.cmd` runs `scripts\dev\Install-Thornswood.ps1`, which takes the same
+`-NoShip`, and `-Only` or `-Skip` with the step names its header lists. A PC
+that does not ship needs neither: its first run is the launcher's.
+
 The pack baseline lives on the VPS beside the feed, and every Ship receives it
 first, so there is nothing to pull. If the VPS has none for a channel, Ship
 stops with "No baseline yet". To rebuild a baseline by hand:

@@ -301,13 +301,18 @@ async function handle(req, res) {
       : 'That was sent from a page on another site, so it was not done. Do it from a page on this site.' });
   }
 
-  // A page load (GET, HEAD was made GET above) waits SUBMIT_WAIT_MS and may
-  // use the last answer Discord gave (#1096). A Submit waits that same short
-  // time (#467). Every other request that is signed in, including a staff
+  // A page load (GET, HEAD was made GET above) waits SUBMIT_WAIT_MS (#1096).
+  // A Submit waits that same short time (#467). Every other signed-in request,
+  // including a staff
   // POST from the hub, waits no longer than Play (#1164).
   const pageLoad = req.method === 'GET';
   const submitDoor = req.method === 'POST' && SUBMIT_DOORS.has(route);
-  const w = await who(req, (pageLoad || submitDoor) ? SUBMIT_WAIT_MS : PLAY_ANSWER_MS, pageLoad);
+  // Only the shell and its identity/navigation answer may draw from the
+  // last good role answer. Private data and CAPTCHA eligibility need current
+  // authority; a failed/late refresh must not revive old admin/staff rights.
+  const staleShell = pageLoad && (route === '/hub' || route === '/api/hello');
+  const w = await who(req, (pageLoad || submitDoor) ? SUBMIT_WAIT_MS : PLAY_ANSWER_MS,
+                      staleShell);
 
   // ---------------------------------------------------------- member login
   if (p === '/api/login' && req.method === 'POST') {
@@ -750,9 +755,10 @@ async function handle(req, res) {
      time, five an hour from one place, and the inbox is capped so it cannot
      be used to fill the disk. See thornswood report limits above. */
   // What the report page needs to draw the form: the Turnstile site key, or
-  // nothing when the check is off (#3216). Public, like the key itself.
+  // nothing when the check is off or current hub authority already proves
+  // access (#4347). The same proof is checked again when the form submits.
   if (route === '/api/report/form' && req.method === 'GET') {
-    return sendJson(res, 200, { turnstile: turnstileOn() ? cfg.turnstileSiteKey : '' });
+    return sendJson(res, 200, { turnstile: turnstileOn() && !w.member && !w.dev ? cfg.turnstileSiteKey : '' });
   }
 
   if (route === '/api/report' && req.method === 'POST') {
@@ -778,7 +784,9 @@ async function handle(req, res) {
     // Turnstile's pass (#3216), asked before the limit is read again below,
     // because it waits on Cloudflare and nothing may wait between that read
     // and reportTaken. A refused pass is not counted against the sender.
-    if (turnstileOn()) {
+    // who() has already proved current member/staff access. The public form
+    // omits its widget for that proof; all other senders still need a pass.
+    if (turnstileOn() && !w.member && !w.dev) {
       const ts = await turnstilePasses(o.turnstile, requestAddr(req));
       if (ts === 'unasked') {
         return sendJson(res, 503, { error: 'Cloudflare did not answer the check that you are a person, so nothing was sent. Try again in a minute.' });
@@ -1005,6 +1013,7 @@ async function handle(req, res) {
         return sendJson(res, 404, { error: 'no Discord account holds that character, so ban the character' });
       }
       const minutes = banMinutes(o.minutes);
+      if (minutes === null) return sendJson(res, 400, { error: 'Use a whole number of minutes, or 0 for good.' });
       const until = minutes ? now + minutes * 60000 : 0;
       const whole = what === 'banaccount';
       const banKey = whole ? account : 'p:' + pid;
@@ -1559,12 +1568,17 @@ async function handle(req, res) {
     if (!w.admin) return sendJson(res, 403, { error: 'admins only' });
     const file = path.join(UP, rm[1]);
     if (!file.startsWith(UP + path.sep)) return sendJson(res, 400, { error: 'no' });
+    const existed = fs.existsSync(file);
     // A delete that fails is said, not answered ok (#2352, #2354), and the
     // file's note stays so the uploads list still shows what is on disk.
     const gone = deleteUpload(rm[1]);
     if (!gone.ok) return sendJson(res, 500, { ok: false, name: rm[1], fileKept: true, code: gone.code,
                                               error: 'The file could not be deleted (' + gone.code + '). It is still on the site.' });
+    // The file is gone even if the later metadata save is refused.
+    if (existed) modLog({ did: 'uploaddelete', byId: w.id, byName: w.name || w.id,
+      whoName: rm[1], phase: 'file' });
     const meta = jsonFile(UPMETA, {});
+    const hadNote = Object.prototype.hasOwnProperty.call(meta, rm[1]);
     delete meta[rm[1]];
     // Said, not answered ok (#4379). Asking again finishes it: a file that is
     // already gone is no failure to deleteUpload.
@@ -1572,6 +1586,8 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: rm[1], fileDeleted: true,
         error: 'The file was deleted, but the site could not take it off the uploads list. Try again in a minute.' });
     }
+    if (!existed && hadNote) modLog({ did: 'uploaddelete', byId: w.id, byName: w.name || w.id,
+      whoName: rm[1], phase: 'metadata' });
     return sendJson(res, 200, { ok: true });
   }
 
@@ -1774,6 +1790,8 @@ async function handle(req, res) {
 
     const gallery = jsonFile(GALLERY, []);
     const already = gallery.find((g) => String(g.name) === name);
+    const changed = !already || already.url !== '/shot/' + name ||
+      (by && already.by !== by) || (srcset && already.srcset !== srcset);
     if (already) {
       already.url = '/shot/' + name;
       if (by) already.by = by;
@@ -1795,6 +1813,9 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: name, approved: false,
         error: 'The site could not put that on the gallery, so it is still waiting. Try again in a minute.' });
     }
+    // The public entry is committed even if queue cleanup below is refused.
+    if (changed) modLog({ did: 'galleryapprove', byId: gs.discordId, byName: gs.name || gs.discordId,
+      whoName: name, phase: already ? 'updated' : 'approved' });
 
     const left = pending.filter((x) => String(x.name) !== name);
     if (left.length !== pending.length && !putJson(GPENDING, left)) {
@@ -1846,6 +1867,13 @@ async function handle(req, res) {
        that no longer has the name is left alone. The file is not touched
        until all three are saved, so a gallery that would not save is never
        left showing a picture whose file is gone. */
+    let recorded = false;
+    const recordRemoval = (phase) => {
+      if (recorded) return;
+      recorded = true;
+      modLog({ did: 'galleryremove', byId: gs.discordId, byName: gs.name || gs.discordId,
+        whoName: name, phase: phase });
+    };
     const notSaved = (file) => {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'remove-write-failed', file: file }));
       return sendJson(res, 500, { ok: false, name: name,
@@ -1855,18 +1883,20 @@ async function handle(req, res) {
     const leftGal = gallery.filter((x) => String(x.name) !== name);
     const removedGal = gallery.length - leftGal.length;
     if (removedGal && !putJson(GALLERY, leftGal)) return notSaved('the gallery');
+    if (removedGal) recordRemoval('approved');
 
     const pending = jsonFile(GPENDING, []);
     const leftPend = pending.filter((x) => String(x.name) !== name);
     const removedPend = pending.length - leftPend.length;
     if (removedPend && !putJson(GPENDING, leftPend)) return notSaved('the queue');
+    if (removedPend) recordRemoval('pending');
 
     // Drop open reports against this name too, so the reports list does not
     // keep asking about a picture that is already gone.
-    const reports = jsonFile(GREPORTS, []);
+    const reports = jsonFile(GREPORTS, fs.existsSync(GREPORTS) ? null : []);
+    if (!Array.isArray(reports)) return notSaved('the reports');
     const kept = reports.filter((r) => String(r.name) !== name);
     const itsReports = reports.filter((r) => String(r.name) === name);
-    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
 
     /*
       The file (#2352, option C). Deleted, unless the submission had an open
@@ -1892,33 +1922,51 @@ async function handle(req, res) {
       fileDeleted: false
     };
     const file = path.join(UP, name);
-    if (file.startsWith(UP + path.sep) && fs.existsSync(file)) {
-      const now = Date.now();
-      const hold = itsReports.length > 0;
-      const gone = hold ? { ok: false, code: '' } : deleteUpload(name);
-      const meta = jsonFile(UPMETA, {});
+    const hasFile = file.startsWith(UP + path.sep) && fs.existsSync(file);
+    const now = Date.now();
+    const savedMeta = hasFile ? jsonFile(UPMETA, fs.existsSync(UPMETA) ? null : {}) : {};
+    const noteNotSaved = () => {
+      retentionSay('gallery', { event: 'note-write-failed', file: name });
+      answer.ok = false;
+      answer.fileKept = !answer.fileDeleted;
+      answer.error = 'Taken off the gallery, but the site could not record that, so ' +
+                     (answer.fileDeleted ? 'its note is still listed.' : 'its file is still on the site. Try again.');
+      return sendJson(res, 500, answer);
+    };
+    if (!savedMeta || typeof savedMeta !== 'object' || Array.isArray(savedMeta)) return noteNotSaved();
+    const meta = new Map(Object.entries(savedMeta));
+    const oldNote = meta.get(name) || {};
+    const wasRemoved = Number(oldNote.removed) > 0;
+    let heldUntil = Number(oldNote.heldUntil) || 0;
+    if (hasFile && itsReports.length && !heldUntil) {
+      heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
+      meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now,
+        heldUntil: heldUntil, heldReports: itsReports.slice(-20) });
+      // The only copy of these reports stays in the open list until their
+      // retention receipt is saved beside the file.
+      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
+      recordRemoval('hidden');
+    }
+    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
+    if (kept.length !== reports.length) recordRemoval('reports');
+
+    if (hasFile && heldUntil > now) {
+      answer.heldForReport = true;
+      answer.heldUntil = heldUntil;
+      return sendJson(res, 200, answer);
+    }
+    if (hasFile) {
+      const gone = deleteUpload(name);
       if (gone.ok) {
-        delete meta[name];
+        meta.delete(name);
         answer.fileDeleted = true;
+        recordRemoval('file');
       } else {
-        meta[name] = Object.assign({}, meta[name] || {}, { removed: now });
-        if (hold) {
-          meta[name].heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
-          meta[name].heldReports = itsReports.slice(-20);
-          answer.heldForReport = true;
-          answer.heldUntil = meta[name].heldUntil;
-        }
+        meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now });
       }
-      if (!putJson(UPMETA, meta)) {
-        // Unmarked, a kept file would still be served at /up/<name>.
-        retentionSay('gallery', { event: 'note-write-failed', file: name });
-        answer.ok = false;
-        answer.fileKept = !gone.ok;
-        answer.error = 'Taken off the gallery, but the site could not record that, so ' +
-                       (gone.ok ? 'its note is still listed.' : 'its file can still be opened by staff. Try again.');
-        return sendJson(res, 500, answer);
-      }
-      if (!hold && !gone.ok) {
+      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
+      if (!wasRemoved) recordRemoval('hidden');
+      if (!gone.ok) {
         answer.ok = false;
         answer.fileKept = true;
         answer.code = gone.code;
@@ -2004,6 +2052,7 @@ async function handle(req, res) {
     const id = String(o.id || '');
     if (!id) return sendJson(res, 400, { error: 'no id' });
     const reports = jsonFile(GREPORTS, []);
+    const dismissed = reports.find((r) => String(r.id) === id);
     const left = reports.filter((r) => String(r.id) !== id);
     // Said, not answered ok (#4379): the report would come back on the next
     // load of the list.
@@ -2011,6 +2060,8 @@ async function handle(req, res) {
       console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'report-write-failed' }));
       return sendJson(res, 500, { ok: false, id: id, error: 'The site could not save that, so the report is still listed. Try again in a minute.' });
     }
+    if (dismissed) modLog({ did: 'gallerydismiss', byId: gs.discordId, byName: gs.name || gs.discordId,
+      whoName: String(dismissed.name || '') });
     return sendJson(res, 200, { ok: true, id: id, removed: reports.length - left.length });
   }
 
@@ -2043,7 +2094,8 @@ async function handle(req, res) {
       Could not ask Discord is not the same answer as not in the Discord.
 
       standing() leaves inGuild false on every failed lookup and sets
-      lookupFailed to say why, because only a 404 means "not in the server".
+      lookupFailed to say why: only Unknown Member (10007), or proven absence
+      from a complete member list, means "not in the server".
       This door tested inGuild alone, so a rate limit or a Discord outage came
       back as 403 why 'guild', and the launcher writes a 'guild' down as a
       remembered no, which erased the 72 hour grace it keeps for exactly the
@@ -2202,6 +2254,9 @@ async function handle(req, res) {
         // rule above keeps working for the account that has it now.
         for (const d of gone) {
           linked[d].profiles = linked[d].profiles.filter((n) => Number(n) !== pid);
+          // And off its character list onto the caller's (#6906), since the
+          // game's door lets in what the lists hold.
+          chars.takeOver(linked[d], was, pid);
           console.log('[thornswood-docs] join moved profile ' + pid + ' to Discord ' + t.d +
                       ' from Discord ' + d + ', which has left the Thornswood Discord');
         }
@@ -2539,6 +2594,16 @@ async function handle(req, res) {
       if (known.every((s) => clear.indexOf(s) >= 0)) delete marks[pid];
     }
     if (Object.keys(marks).length) store.deleted = marks; else delete store.deleted;
+    /*
+      Each server's book is kept apart as well (#6904), whole as it was
+      sent, since every push carries the server's whole book. A profile id
+      that is a character on both servers (made before the lists were apart)
+      is two characters with two names, and the menu of each server reads
+      its own: /api/play/roster answers from books[channel]. who stays the
+      merged view staff pages name a profile by.
+    */
+    if (!store.books || typeof store.books !== 'object' || Array.isArray(store.books)) store.books = {};
+    const book = {};
     let n = 0;
     for (const pid of Object.keys(who)) {
       if (!/^\d+$/.test(pid) || refused.has(pid)) continue;
@@ -2550,8 +2615,10 @@ async function handle(req, res) {
         town: String(row.town || '').slice(0, 32), where: String(row.where || '').slice(0, 80),
         at: Number(row.at) || Date.now()
       };
+      book[pid] = store.who[pid];
       n++;
     }
+    store.books[srv] = book;
     store.at = Date.now();
     // Said, not answered ok (#4379), the economy's way below.
     if (!putJson(ROSTER, store)) return sendJson(res, 500, { error: 'could not save' });
@@ -2605,17 +2672,21 @@ async function handle(req, res) {
     if (!t) return sendJson(res, 401, { ok: false, why: 'link' });
     const linked = jsonFile(LINKED, {});
     const mine = ((linked[t.d] || {}).profiles || []).map(Number).filter((x) => x > 0);
+    /* The names come from the asking launcher's server's own book (#6904),
+       never the other server's, which is another world: an id made a
+       character on both before the lists were apart has a name in each. */
+    const srv = chars.serverKey(o.channel);
     const store = jsonFile(ROSTER, { who: {} });
+    const book = (store.books && store.books[srv] && typeof store.books[srv] === 'object') ? store.books[srv] : {};
     const rows = {};
     for (const pid of mine) {
-      const row = store.who && store.who[String(pid)];
+      const row = book[String(pid)];
       if (row) rows[String(pid)] = row;
     }
     /* This account's characters that the asking launcher's server looked up
        and does not hold (#955), from its last report if that is recent. The
        launcher marks them on the menu; it trusts the answer only for a
        character last played before goneAt. */
-    const srv = String(o.channel || '') === 'dev' ? 'dev' : 'main';
     const rep = store.servers && store.servers[srv];
     let gone = [], goneAt = 0;
     if (rep && Array.isArray(rep.checked) && Array.isArray(rep.held) &&
@@ -2704,13 +2775,15 @@ async function handle(req, res) {
     const seenDevRole = new Set();
     const seenCompany = new Set();
     const seenFailed = new Set();
-    const hasProfiles = (d) => (Array.isArray((linked[d] || {}).profiles) ? linked[d].profiles : [])
-      .map(Number).some((n) => n > 0);
+    /* Each door lets in only its own server's characters (#6906): the ids on
+       that server's list in linked.json and its spare, never the account's
+       whole profiles list, which holds the ids it checked in on both. */
+    const doorSrv = devDoor ? 'dev' : 'main';
+    const hasProfiles = (d) => chars.doorIds(linked[d], doorSrv).length > 0;
     const answers = await standingsForDoor(Object.keys(linked).filter(hasProfiles));
     for (const d of Object.keys(linked)) {
       const row = linked[d] || {};
-      const profiles = (Array.isArray(row.profiles) ? row.profiles : [])
-        .map(Number).filter((n) => n > 0);
+      const profiles = chars.doorIds(row, doorSrv);
       if (!profiles.length) continue;
       const st = answers.get(d) || { lookupFailed: 'not asked' };
       if (st.lookupFailed) {
@@ -3069,6 +3142,10 @@ async function handle(req, res) {
       op 'played' profileId was played for seconds
       op 'forget' profileId was put in the bin at the menu
 
+    channel names the game server the launcher plays on, dev or main, and
+    each has a list of its own (#6904): a character is in one world, so
+    the other server's menu never shows it and its bin never touches it.
+
     Discord is asked first, as at /api/play/join, and nothing is awaited
     between reading linked.json and writing it. Discord not answering is 503,
     not a no, and the launcher stops Play on it rather than draw a menu
@@ -3089,16 +3166,17 @@ async function handle(req, res) {
 
     const now = Date.now();
     const op = String(o.op || '');
+    const srv = chars.serverKey(o.channel);
     const linked = jsonFile(LINKED, {});
     let refused = null;
-    if (op === 'chose') refused = chars.choose(linked, d, o.profileId, now);
-    else if (op === 'played') refused = chars.played(linked, d, o.profileId, o.seconds, now);
-    else if (op === 'forget') refused = chars.forget(linked, d, o.profileId);
+    if (op === 'chose') refused = chars.choose(linked, d, srv, o.profileId, now);
+    else if (op === 'played') refused = chars.played(linked, d, srv, o.profileId, o.seconds, now);
+    else if (op === 'forget') refused = chars.forget(linked, d, srv, o.profileId);
     else if (op !== '') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
 
     const pkRows = jsonFile(PK, {}) || {};
     const slots = slotsFor(st);
-    const said = chars.settle(linked, d, {
+    const said = chars.settle(linked, d, srv, {
       slots,
       pk: (pid) => { const bar = characterBar(pid, now); return !!(bar && bar.pk); },
       revived: (pid) => !!pkRows[String(pid)] && !pkActive(pkRows[String(pid)])
@@ -3108,7 +3186,7 @@ async function handle(req, res) {
       return sendJson(res, 503, { ok: false, why: 'not recorded', message:
         'The site could not record your characters just now. Try again later, and tell staff if it keeps happening.' });
     }
-    const out = chars.answer(linked, d, slots);
+    const out = chars.answer(linked, d, srv, slots);
     out.said = said;
     if (refused) { out.ok = false; out.why = 'refused'; out.message = refused; }
     return sendJson(res, 200, out);
@@ -3229,7 +3307,7 @@ async function handle(req, res) {
         return sendJson(res, 500, { error: 'the test marks will not read, so nothing was saved' });
       }
       marks[id] = { status: o.status, notes: String(o.notes == null ? '' : o.notes).slice(0, 1000),
-                    by: String(o.by == null ? '' : o.by).slice(0, 60), at: Date.now() };
+                    by: String(w.name || '').slice(0, 60), at: Date.now() };
       if (!putJson(RESULTS, marks)) return sendJson(res, 500, { error: 'could not save' });
       return sendJson(res, 200, { ok: true, results: marks });
     }
@@ -3326,6 +3404,7 @@ async function handle(req, res) {
         const why = String(o.why || '').trim().slice(0, 500);
         if (!why) return sendJson(res, 400, { error: 'a ban says why' });
         const minutes = banMinutes(o.minutes);
+        if (minutes === null) return sendJson(res, 400, { error: 'Use a whole number of minutes, or 0 for good.' });
         const until = minutes ? now + minutes * 60000 : 0;
         const row = { at: now, until, why, by: w.name, byId: w.id, from: 'the hub', account: id };
         const ok = pid
@@ -3393,6 +3472,7 @@ async function handle(req, res) {
           message: 'Somebody saved this page after you opened it, so yours was not saved.' });
       }
       if (!writeDoc(md[1], text)) return sendJson(res, 500, { error: 'could not save' });
+      if (text !== now) modLog({ did: 'docsave', byId: w.id, byName: w.name || w.id, whoName: md[1] });
       return sendJson(res, 200, { ok: true, was: docVersion(text) });
     }
 
@@ -3571,9 +3651,13 @@ async function handle(req, res) {
         return sendJson(res, 404, { error: 'gone', inbox: list,
           message: 'That one is no longer in the inbox. It was deleted, aged out, or taken out by a deletion request.' });
       }
+      const priorState = list[at].state;
       if (act === 'delete') list.splice(at, 1);
       else list[at].state = act === 'dismiss' ? 'not doing this' : 'new';
       if (!putJson(INBOX, trimInbox(list, Date.now()))) return sendJson(res, 500, { error: 'could not save' });
+      if (act === 'delete' || priorState !== list[at].state) {
+        modLog({ did: 'inbox' + act, byId: w.id, byName: w.name || w.id, whoName: id });
+      }
       return sendJson(res, 200, { ok: true, inbox: trimInbox(list, Date.now()) });
     }
 

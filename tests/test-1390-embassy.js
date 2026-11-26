@@ -41,7 +41,7 @@ yes('the recipe table reads', !!RECIPES && Object.keys(RECIPES).length > 1500);
 // How many rows each roll holds is the cut file's to say (#1622): a
 // collection revision that adds Empire or Thalmor gear adds rows to them
 // (#4087, Cheddar's Mashups in revision 5).
-const CUT_COUNTS = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'docs', 'systems', 'cut-items.json'), 'utf8')).counts || {};
+const CUT_COUNTS = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'game', 'data', 'cut-items.json'), 'utf8')).counts || {};
 const adminSrc = slice(gm, 'var ADMIN_ITEMS = {', ';\n');
 let ADMIN_ITEMS = null;
 try { ADMIN_ITEMS = new Function('return ' + adminSrc.slice('var ADMIN_ITEMS = '.length).replace(/;$/, ''))(); } catch (e) { ADMIN_ITEMS = null; }

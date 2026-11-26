@@ -83,13 +83,14 @@ class Guild(object):
 
 
 class Member(object):
-    def __init__(self, uid, name, guild):
+    def __init__(self, uid, name, guild, bot=False):
         self.id = uid
         self.name = name
         self.display_name = name
         self.mention = '<@%d>' % uid
         self.guild = guild
         self.display_avatar = Avatar()
+        self.bot = bot
 
     def __str__(self):
         return self.name
@@ -278,6 +279,26 @@ try:
     yes('J10 and the record is the whole old one, not half of a new one',
         bool(whole) and after == whole
         and ((on_disk() or {}).get('1001') or {}).get('last') == 40)
+
+    # -------------------------------------------------------- a bot joins --
+    #
+    # Issue #4241: A bot added to the server gets no card and no join number,
+    # and a log line says so. The next person to join gets the number the bot
+    # would have taken.
+    bot_member = Member(999, 'MusicBot', g5, bot=True)
+    g5.member_count = 42
+    del SAID[:]
+    nb, okb = join(bot_member)
+    yes('J11 a joining bot gets no card', nb == 'no card')
+    yes('J11 and is not greeted', not okb)
+    yes('J11 and the log says so', any('is a bot, so no welcome card and no join number' in s for s in SAID))
+    disk = on_disk()
+    yes('J11 and the bot is not recorded in join numbers',
+        str(bot_member.id) not in disk.get(str(g5.id), {}).get('members', {}))
+    human = Member(600, 'Rowan', g5)
+    nh, okh = join(human)
+    yes('J11 the next person gets the number the bot did not use (got %r)' % (nh,),
+        nh == 42 and okh)
 finally:
     bot.JOINS = keep['joins']
     bot.JOIN_FLOOR = keep['floor']

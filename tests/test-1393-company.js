@@ -1,3 +1,4 @@
+const observedOfferVersion = require('./fixtures/trade-version');
 // test-1393-company.js
 //
 // #1393. The Free Skyrim Trading Company, as docs/systems/trading-company.md,
@@ -115,6 +116,7 @@ const JOB_FEE = num(/var JOB_FEE = (\d+);/);
 // The haul cut and the sale cuts are the company's terms now (#512, #2695), read
 // by the company terms block, which every sandbox here is handed.
 const COMPANY = require('./fixtures/company-block').companyApi(gm);
+const PACK_FIRST = require('./fixtures/pack-first');
 const HAUL_FROM = COMPANY.terms().haulCutFrom;
 const SALE_FROM = COMPANY.terms().saleCutFrom;
 yes('the job fee is 30, and the company\'s tenth and the sale\'s cuts both start at 10 gold',
@@ -180,6 +182,8 @@ function world() {
       }
     }
   };
+  // A post takes out of the pack through packFirst, with receipts (#4901).
+  PACK_FIRST.receipts(w.mp);
   return w;
 }
 
@@ -187,7 +191,7 @@ function world() {
 function sandbox(w, roles) {
   const said = [];
   const ctx = {
-    mp: w.mp, JSON: JSON, Object: Object, Array: Array, String: String, Number: Number, Math: Math, Date: Date,
+    mp: w.mp, require: require, JSON: JSON, Object: Object, Array: Array, String: String, Number: Number, Math: Math, Date: Date,
     isFinite: isFinite, parseInt: parseInt, isNaN: isNaN,
     console: { log: function () { }, error: function () { } },
     guard: function (name, f) { return f; },
@@ -236,6 +240,8 @@ function boot(reg, w, opts) {
      'evict', 'boxCmd', 'rentCmd', 'bedCmd'].map(function (n) { return 'function ' + n + '() { return true; }'; }).join('\n')
   ];
   NAMES.forEach(function (n) { body.push(lifted[n]); });
+  // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
+  body.push(PACK_FIRST.pieces(prop));
   body.push('return { boards: boards, funds: function () { return funds; }, notices: function () { return notices; }, ' +
             'command: command, boardPanel: boardPanel, boardsView: boardsView, ' +
             'deposit: deposit, withdraw: withdraw, mayWithdraw: mayWithdraw, ' +
@@ -711,7 +717,7 @@ attempt('the board panel', function () {
 
   const page = read('game/ui/thornswood-board.js');
   yes('B8 the panel sends the haul and the confirm, and draws both lists',
-      page.indexOf("net('/haul ' + pay + ' ' + dest + ' ' + what)") !== -1 &&
+      page.indexOf("sendSubmission('haul', [pay, dest, what])") !== -1 &&
       page.indexOf("net('/haul done ' + from + ' ' + n)") !== -1 &&
       /b\.dests/.test(page) && /b\.arrivals/.test(page) && /Send a haul/.test(page) && /Confirm/.test(page) &&
       /row\.haul && b\.steward/.test(page));
@@ -732,7 +738,7 @@ attempt('a company sale', function () {
   const everybody = [WORKER, SELLER, OTHER, ADMIN, MATE];
   const before = total(w, s, everybody);
   function view(p) { const t = tr.tradeOf(p.actor); return t ? tr.view(t, p.actor) : null; }
-  function agree(a, b) { const one = tr.confirm(a.actor); const two = tr.confirm(b.actor); EVERY_LINE.push(one, two); return one + two; }
+  function agree(a, b) { const one = tr.confirm(a.actor, observedOfferVersion(tr, a.actor)); const two = tr.confirm(b.actor, observedOfferVersion(tr, b.actor)); EVERY_LINE.push(one, two); return one + two; }
   function heard(p) { return s.heard(p); }
 
   yes('S1 somebody the company has not taken on is not offered Buy for the company, and cannot press it',
@@ -746,7 +752,7 @@ attempt('a company sale', function () {
       view(WORKER).sale === null);
   tr.add(SELLER.actor, 'Iron Sword', 1);
   tr.gold(WORKER.actor, 120);
-  tr.confirm(SELLER.actor);
+  tr.confirm(SELLER.actor, observedOfferVersion(tr, SELLER.actor));
   yes('S3 pressing it makes it a sale and takes both agreements back',
       tr.sale(WORKER.actor) === '' && tr.tradeOf(WORKER.actor).sale === WORKER.actor &&
       view(SELLER).iAgreed === false && view(WORKER).iAgreed === false);

@@ -109,7 +109,7 @@ if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 
 # OwnGameKinds and Verify name LastPlugin (#2791), which reads the game's archives through FromGameArchive.cs.
 # Config and OwnGame read their JSON through LooseString.cs, and Downgrade asks with Ask.cs (#4823).
-$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Failure.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
+$real = @('OwnGame.cs', 'OwnGameShare.cs', 'OwnGameKinds.cs', 'PathFence.cs', 'Downgrade.cs', 'Steam.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'Swallow.cs', 'Failure.cs', 'Progress.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Ask.cs') |
     ForEach-Object { Join-Path $AppPath $_ }
 foreach ($f in $real) { if (-not (Test-Path -LiteralPath $f)) { Yes "launcher\app\$([IO.Path]::GetFileName($f)) is there" $false; Done } }
 

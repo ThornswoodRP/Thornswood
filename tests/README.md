@@ -87,12 +87,13 @@ workflows, in the scripts' comments and in the docs.
 
 They moved here from `tools\` on 25 September (issue #440, phase 5), and
 `tools\` itself went on 29 September (phase 10). Each one finds the repository
-folder from here, one folder up: a `.js` harness through `REPO_DIR`, declared at
-its top as `path.join(__dirname, '..')`, and a `.ps1` harness through the line
-after its `$Here = $PSScriptRoot` that points `$Here` at the repository folder.
-One beside its product is two folders below the top, so its `REPO_DIR` is
-`path.join(__dirname, '..', '..')` and its `$Here` goes up twice.
-A new harness does the same; copying the top of an existing one is the easy way.
+folder from here, one folder up: a `.js` harness usually through `REPO_DIR`,
+`ROOT` or `REPO`, declared at its top as `path.join(__dirname, '..')`, and a
+`.ps1` harness through the line after its `$Here = $PSScriptRoot` that points
+`$Here` at the repository folder. One beside its product is two folders below the
+top, so its path goes up twice (`path.join(__dirname, '..', '..')` and its `$Here`
+goes up twice). A new harness does the same; copying the top of an existing one
+is the easy way.
 
 ## Running them
 
@@ -106,30 +107,38 @@ pwsh -NoProfile -File tests\test-ship-rules.ps1
 and one beside its product by its path, `pwsh -NoProfile -File
 launcher\tests\test-498-msbuild.ps1`.
 
-Each prints a PASS or FAIL line per check and ends on `N passed, M failed`,
-and exits 1 when anything failed. A harness that reads something only one
+Many harnesses print a PASS or FAIL line per check and end on `N passed, M failed`,
+and exit 1 when anything failed. Others, including many JavaScript checks, use
+node's `assert`, stop at the first failure and print neither, exiting 0 on success
+or throwing on an assertion failure. A harness that reads something only one
 machine has, such as the game folder, says SKIP for that part and checks the
 rest.
 
 Those lines are what the gate's report is made of (#5295). Every line that
 starts PASS, FAIL, SKIP or NOT RUN, after any spaces, is one check, named
 by the rest of the line, in the report scripts\dev\Nightly-Harnesses.ps1
--Report writes and on the run's page. So give each check a line of its own
-that names it, and print nothing else that starts with one of those words.
+-Report writes and on the run's page. When a harness exits non-zero without
+printing a FAIL line (such as an uncaught assertion failure or crash), the
+runner records a failing check from its exit. Where a harness prints checks, give
+each check a line of its own that names it, and print nothing else that starts
+with one of those words.
 
 ## Run by hand
 
 Every script in this folder is a harness, run by a workflow step, used by
 another script, or listed here with the command that runs it;
 `test-4195-every-test-script-runs.ps1` fails on one that is none of those
-(#4195). These two check the merchant code against a built server addon and
+(#4195). These check code against a built server addon, installed records and
 the game's own plugins, which no gate or nightly machine has, so they are run
-by hand on a machine that has both. Neither connects to Main or Dev: each
+by hand on a machine that has them. None connects to Main or Dev: each
 starts an offline server of its own on a port the system picks.
 
 ```
 node tests/native-merchant-settlement.js <built addon .node> <installed record .json>
 node tests/native-retrieval-sources.js <built addon .node> <Skyrim Data folder> <scratch folder> [mammoth|orchard]
+node game/tests/test-npc-merchant-native.js <built addon .node> <installed record .json>
+node game/tests/test-npc-runtime-native.js <built addon .node> <installed record .json>
+node game/tests/test-npc-shared-native.js <built addon .node> <installed record .json>
 ```
 
 - `native-merchant-settlement.js` runs merchant sales and a quest payment
@@ -145,6 +154,30 @@ node tests/native-retrieval-sources.js <built addon .node> <Skyrim Data folder> 
   with a write and read back of the orchard plots. Each plugin must match
   its pinned sha256, and the scratch folder must be inside `temp` two
   folders above the repository.
+- `test-npc-merchant-native.js` loads NPC population data and tests merchant
+  purses and stock initialization against the built server addon.
+- `test-npc-runtime-native.js` checks NPC server runtime message queue, tick,
+  and state updates against the built server addon.
+- `test-npc-shared-native.js` verifies shared NPC runtime population batches,
+  callback limits, and memory usage against the built server addon.
+
+The compiled seasoning check reads the locally built
+`game/content/Thornswood-Content.esp` and `game/content/Thornswood-Last.esp`,
+with `game/data/recipes.json` and `game/data/last-plugin.json` generated from
+the same source and load order. The normal compiler reads the installed
+master plugins without changing them. Run it after the normal content
+compiler has built both plugins:
+
+```
+python tests/test-4610-compiled-records.py
+```
+
+It checks all the garlic and salt recipe overrides, their ingredients,
+yields, conditions and unique identifiers, the five Content masters, and
+the disabled shells left without Last. This runs on a machine with those
+built plugins because releases distribute Last only as its recipe and
+manifest. The hosted source-stage and generated-table checks remain on
+the gate.
 
 ## A harness that runs box code, or needs Windows
 

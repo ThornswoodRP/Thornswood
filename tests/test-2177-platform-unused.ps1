@@ -99,11 +99,12 @@ foreach ($n in $naming) { Write-Host "      $n" }
 
 # The game folder's own front build, client bundle and Modules, where this
 # machine has one. Information for the machine that ships, not a gate.
-$game = Join-Path ([string](& (Join-Path $Here 'scripts\release\Where.ps1') Install)) 'Game\Data\Platform'
-if (Test-Path -LiteralPath $game) {
+$inst = [string](& (Join-Path $Here 'scripts\release\Where.ps1') Install)
+$game = if ($inst) { ($inst.TrimEnd('\', '/') + '\Game\Data\Platform') } else { '' }
+if ($game -and (Test-Path -LiteralPath $game)) {
     $there = @()
     foreach ($sub in 'UI', 'Plugins', 'Modules') {
-        $p = Join-Path $game $sub
+        $p = "$game\$sub"
         if (Test-Path -LiteralPath $p) {
             $there += @(Get-ChildItem -LiteralPath $p -File | Where-Object { $_.Extension -in '.js', '.ts', '.html', '.css', '.txt' })
         }

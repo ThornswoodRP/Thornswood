@@ -248,8 +248,12 @@ function makeEl(tag) {
   const e = {
     tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '', style: {},
     id: '', className: '', textContent: '', value: '', onclick: null,
+    listeners: {},
+    addEventListener(type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
     appendChild(c) { this.children.push(c); return c; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
+    setAttribute(n, value) { this.attrs[n] = String(value); },
+    removeAttribute(n) { delete this.attrs[n]; },
     focus() { },
     querySelectorAll(sel) {
       const tests = sel.split(',').map(function (s) { return matcher(s.trim()); });
@@ -271,6 +275,8 @@ function makeEl(tag) {
   return e;
 }
 function matcher(sel) {
+  const cls = /^\.([\w-]+)$/.exec(sel);
+  if (cls) return function (el) { return el.className.split(/\s+/).indexOf(cls[1]) !== -1; };
   const m = /^([a-z0-9]*)(?:#([\w-]+))?(?:\[([\w-]+)\])?$/i.exec(sel);
   if (!m) { throw new Error('the stand-in page cannot read the selector ' + sel); }
   return function (el) {
@@ -318,6 +324,12 @@ function load(src, initial) {
 }
 function key(pg, k) { pg.keys.keydown({ key: k, preventDefault() { } }); }
 
+const selectorControl = makeEl('div');
+selectorControl.innerHTML = '<div class="card ask"></div><div class="asking"></div>';
+yes('the fixture class selector matches whole class names, not prefixes',
+    selectorControl.querySelectorAll('.ask').length === 1 &&
+    selectorControl.querySelector('.ask').className === 'card ask' && !selectorControl.querySelector('.missing'));
+
 // =================================================================== C. the page
 let allText = '';
 attempt('C', function () {
@@ -342,7 +354,9 @@ attempt('C', function () {
   yes('C3 a topic\'s button shows that topic',
       /Office page on K/.test(texts.land) && /\/stuck/.test(texts.help) && /maneuvers open on 9/.test(texts.work));
   allText = Object.keys(texts).map(function (t) { return texts[t]; }).join(' ');
-  yes('C3 and the one shown is marked', root.querySelector('#ts-help-nav').html.indexOf('data-topic="help" class="go"') !== -1);
+  const currentTopic = nav.filter(function (b) { return b.getAttribute('aria-current') === 'page'; });
+  yes('C3 and the one shown is marked visually and as current', currentTopic.length === 1 &&
+      currentTopic[0].getAttribute('data-topic') === 'help' && currentTopic[0].className === 'go');
   yes('C3 Talking names the voice lock as a fresh install has it, O (#4548)',
       /\bO locks the microphone open\b/.test(texts.talking));
   yes('C3 Living names the stop key as a fresh install has it, N (#4548)',

@@ -25,6 +25,8 @@ def fixture():
             'owner': role, 'out': desc(16 + index), 'type': 'MISC', 'name': role + ' good',
             'fires': True, 'inputItems': [{'item': desc(26 + index), 'type': 'MISC'}]}
     records[desc(16)]['type'] = 'ARMO'
+    # A direct woodworking resource, as recipe provenance classifies Firewood.
+    recipes['recipes'][desc(81)]['inputItems'][0]['producedBy'] = 'woodworker'
     recipes['recipes'][desc(80)]['type'] = 'ARMO'
     for n in (40, 41, 42, 43, 44):
         records[desc(n)]['type'] = 'INGR'
@@ -40,6 +42,38 @@ def fixture():
 
 
 class RoleDataTests(unittest.TestCase):
+    def test_only_the_cut_source_path_may_change(self):
+        old = 'docs/systems/cut-items.json'
+        new = 'game/data/cut-items.json'
+        expected = {new: '1' * 64, 'game/data/hunts.json': '2' * 64}
+        stored = {old: '1' * 64, 'game/data/hunts.json': '2' * 64}
+        self.assertTrue(roles.source_hashes_match(stored, expected))
+        self.assertTrue(roles.source_hashes_match(expected, expected))
+        self.assertFalse(roles.source_hashes_match({**stored, old: '3' * 64}, expected))
+        self.assertFalse(roles.source_hashes_match({**stored, new: expected[new]}, expected))
+        self.assertFalse(roles.source_hashes_match({**stored, 'game/data/hunts.json': '4' * 64}, expected))
+
+    def test_woodworker_collections_require_woodworking_stock(self):
+        f = fixture()
+        rows, records = f[0]['recipes'], f[5]
+        # A public Smith output used by a Woodworker is still Smith stock.
+        rows['60:Skyrim.esm'] = dict(rows['50:Skyrim.esm'], out='46:Skyrim.esm', type='MISC', name='Iron Ingot')
+        rows['50:Skyrim.esm']['inputItems'].append({'item': '46:Skyrim.esm', 'type': 'MISC'})
+        # Upstream supply can pass through woodworking; it does not change
+        # the canonical producer of a crafted ingredient.
+        rows['61:Skyrim.esm'] = dict(rows['51:Skyrim.esm'], out='47:Skyrim.esm', inputItems=[
+            {'item': '46:Skyrim.esm', 'type': 'MISC', 'suppliedBy': 'woodworker'},
+            {'item': '48:Skyrim.esm', 'type': 'MISC', 'producedBy': 'hunter'},
+            {'item': '11:Skyrim.esm', 'type': 'MISC'}])
+        tables, _ = roles.derive(*f)
+        self.assertNotIn('46:Skyrim.esm', tables['Woodworker']['supply'])
+        self.assertNotIn('48:Skyrim.esm', tables['Woodworker']['supply'])
+        self.assertIn('1b:Skyrim.esm', tables['Woodworker']['supply'])
+        self.assertIn('11:Skyrim.esm', tables['Woodworker']['supply'])
+        self.assertIn('46:Skyrim.esm', tables['Woodworker']['buy'])
+        self.assertIn('46:Skyrim.esm', tables['Woodworker']['sell'])
+        self.assertIn('46:Skyrim.esm', tables['Smith']['supply'])
+
     def test_roles_and_measured_nonplant_sources(self):
         tables, evidence = roles.derive(*fixture())
         self.assertEqual(tuple(tables), roles.ROLES)

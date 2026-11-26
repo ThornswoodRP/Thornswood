@@ -40,8 +40,10 @@
                   does not answer it is "unchecked", not a fault here.
     Nexus         the collection, through the same anonymous GraphQL POST
                   Watch-Outside uses (api.nexusmods.com/v2/graphql). Name and
-                  revision when it answers; red when Nexus says there is no
-                  such collection; "unchecked" only when Nexus does not answer
+                  revision when it answers, and its summary and description
+                  against records\collection-page.json (requires Node). Red
+                  when Nexus says there is no such collection or the text
+                  differs; "unchecked" only when Nexus does not answer
                   at all. A plain page request still gets 403 and is not used.
 
   What it cannot ask: whether the three depot manifests Downgrade.cs pins at
@@ -371,6 +373,19 @@ function Check-Steam([string]$path) {
   Line ($path + ' as publicBuildId.')
 }
 
+function Check-CollectionPage($collection, [string]$slug, [string]$record) {
+  $node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $node) { Bad 'the collection page text could not be checked: node is not on PATH.'; return }
+  $compare = Join-Path $PSScriptRoot '../release/collection-page.js'
+  $text = ConvertTo-Json -InputObject @{ summary = $collection.summary; description = $collection.description } -Compress
+  $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
+  try { $why = $encoded | & $node.Source $compare --compare-public $record $slug 2>&1 }
+  catch { Bad 'the collection page text could not be checked: the comparison did not run.'; return }
+  if ($LASTEXITCODE -ne 0) { Bad 'the collection page text could not be checked: the comparison failed.' }
+  elseif ($why) { Bad ('the collection page: ' + $why) }
+  else { Ok 'the public summary and description match collection-page.json.' }
+}
+
 # ------------------------------------------------------------ the walk
 function Invoke-Outside {
   param(
@@ -380,6 +395,7 @@ function Invoke-Outside {
     [string[]]$Hosts,
     [string]$SteamRecord,
     [string]$Collection,
+    [string]$PageRecord = (Join-Path $PSScriptRoot '../../records/collection-page.json'),
     [string[]]$Server,
     # The feed is on the site (#907). Asked once, directly, although the site
     # is the server: it is the one file every launcher reads.
@@ -547,7 +563,7 @@ function Invoke-Outside {
     } else {
       $game = $nx.Groups[1].Value
       $slug = $nx.Groups[2].Value
-      $q = '{ collection(slug: \"' + $slug + '\", domainName: \"' + $game + '\") { name latestPublishedRevision { revisionNumber } } }'
+      $q = '{ collection(slug: \"' + $slug + '\", domainName: \"' + $game + '\") { name summary description latestPublishedRevision { revisionNumber } } }'
       $gql = 'https://api.nexusmods.com/v2/graphql'
       $n = Ask $gql 'application/json' -Body -Method 'POST' -PostBody ('{"query":"' + $q + '"}')
       if (-not $n.code) {
@@ -566,6 +582,7 @@ function Invoke-Outside {
           $rev = ''
           try { $rev = [string]$col.latestPublishedRevision.revisionNumber } catch { $rev = '' }
           Ok ('the collection "' + $col.name + '" is there, revision ' + $rev + '.')
+          Check-CollectionPage $col $slug $PageRecord
         }
       }
     }

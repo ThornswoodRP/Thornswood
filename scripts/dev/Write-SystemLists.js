@@ -1,8 +1,8 @@
 // Write-SystemLists.js
 //
-// Turns the tables into the lists under docs/systems/lists, and writes
-// nothing else: a step of scripts/mods/content-tables.json, so the box writes
-// them with every content build. The class and profession pages beside the
+// Turns the tables into the lists under docs/systems/lists and their maker
+// page: a step of scripts/mods/content-tables.json, so the box writes them
+// with every content build. The class and profession pages beside the
 // folder are written by hand and link to their list; until #5191 this spliced
 // a copy of each list into them, so a build carried hand-written pages and
 // laid an old copy over a newer checkout.
@@ -59,6 +59,9 @@ const races = JSON.parse(fs.readFileSync(RACES, 'utf8'));
 const sources = JSON.parse(fs.readFileSync(SOURCES, 'utf8'));
 
 fs.mkdirSync(OUT, { recursive: true });
+// The audit also reads Check-Makers.waiting.json, this step's unchanged gap policy.
+const makers = require('./Check-Makers.js').run(ROOT, true);
+if (makers.problems.length) { throw new Error(makers.problems.join('\n')); }
 
 const ranks = ['novice', 'advanced', 'expert', 'master'];
 const byHalf = {};
@@ -362,7 +365,7 @@ const classFiles = [
     'Ranked by how hard the crop is to grow. A crop has no gold price. Grow minutes are the novice wait, before the rank multiplier.',
     {}],
   ['fisher.md', 'Fisher', 'game/data/harvests.json', harvests.fish,
-    'Pressed at the water. No rod. A fish has no gold price.',
+    'Press E at the water with a fishing pole in your pack. A fish has no gold price.',
     {}],
   ['hunter.md', 'Hunter', 'game/data/hunts.json', hunts.hunts,
     'Only a hunter loots the body. Yield is least-most of each part. The rank is the rank on the row. A part has no gold price.',
@@ -547,8 +550,7 @@ schools.forEach(function (school) {
   index.push('- [The ' + title + ' book](mage-' + school + '.md) (' + schoolOrder.reduce(function (n, r) { return n + (spellLists[school][r] || []).length; }, 0) + ' spells)');
 });
 
-// Written by scripts/dev/Check-Makers.js --write, which the gate holds
-// (#3132); beside this folder, since a build carries the whole folder.
+// The maker page is written above from this same content build (#6531).
 index.push('- [Who makes what the world hands out](../who-makes-it.md)');
 index.push('');
 write('README.md', index.join('\n') + '\n');

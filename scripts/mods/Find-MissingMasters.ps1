@@ -1,6 +1,8 @@
 ﻿<#
-  Find-MissingMasters.ps1
+.SYNOPSIS
+  Reads the TES4 header of every plugin in Data and reports any master that is no longer present.
 
+.DESCRIPTION
   Reads the TES4 header of every plugin in Data and reports any master that is
   no longer present. A missing master is an instant crash at load, so this is
   the check to run after pulling plugins out of the load order.

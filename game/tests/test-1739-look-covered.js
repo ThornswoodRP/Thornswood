@@ -45,6 +45,7 @@ const anyClaim = slice(front, '  function anyClaim() {', '\n  }\n');
 const gameMenuOpen = slice(front, '  function gameMenuOpen() {', '\n  }\n');
 const cache = between(front, '  const MENU_CACHE_MS = 250;', '  // Menus the game can raise while the browser holds the keyboard');
 const look = between(front, '  const NEAR_EVERY = 320;', '  function lookVerb(cmd) {');
+const escapeHtml = slice(front, '  function escapeHtml(s) {', '\n  }\n');
 yes('the look block, the menu list, busyMenuOpen and anyClaim are in the plugin',
     !!(menus && anyClaim && gameMenuOpen && cache && look));
 
@@ -104,9 +105,9 @@ function rig() {
   const FakeDate = { now: function () { return w.clock; } };
   const prelude =
     "const FRIEND_NAME = 'Y', TRADE_NAME = 'H', MUTE_NAME = 'L', PARTY_NAME = 'P', SLEEP_NAME = 'U';\n" +
-    "const APPRENTICE_NAME = 'K', TREAT_NAME = 'X';\n" +
+    "const APPRENTICE_NAME = 'K', HAIR_DYE_NAME = 'K', CONTRACT_NAME = 'K', TREAT_NAME = 'X';\n" +
     "function deliverName() { return 'E'; }\n" +
-    menus + '\n' + anyClaim + gameMenuOpen + cache + look +
+    menus + '\n' + anyClaim + gameMenuOpen + cache + escapeHtml + look +
     '\nreturn { looking: function () { return lookingAt; }, busyMenuOpen: busyMenuOpen };';
   const api = new Function('sp', 'T', 'claims', 'say', 'guard', 'globalThis', 'Date', prelude)(
     sp, T, w.claims, function (t) { w.logs.push(String(t)); }, guard, glob, FakeDate);

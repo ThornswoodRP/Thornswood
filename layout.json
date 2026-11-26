@@ -1,7 +1,7 @@
 {
   "version": 3,
   "issue": 440,
-  "note": "Where each place is in the repository, read by scripts/release/Where.ps1 and where.js. Version 1 also carried the old C:/Thornswood-Dev folder and the old tools paths as fallbacks for the reorganisation; those went on 28 September, when no machine had the old layout any more. Version 3 (#2019): the engine's build output comes from EngineBuild, the fork folder this machine records as its engine build (Where.ps1 and where.js answer it), which is the checkout's own engine/skymp when the machine records none.",
+  "note": "Where each place is in the repository, read by scripts/release/Where.ps1 and where.js. Version 1 also carried the old C:/Thornswood-Dev folder and the old tools paths as fallbacks for the reorganisation; those went on 28 September, when no machine had the old layout any more. Version 3 (#2019): the engine's build output comes from EngineBuild, the fork folder this machine records as its engine build (Where.ps1 and where.js answer it), which is the checkout's own engine/skymp when the machine records none. folders lists every top folder git tracks (#4438), but three: engine, which is the place Engine (engine/skymp) above, and .github and .githooks, which are GitHub's and git's own and no script asks Where.ps1 for. tests/test-4438-system-pages.js holds it to the folders git tracks.",
   "places": {
     "Engine": "engine/skymp",
     "Out": "out",
@@ -28,6 +28,9 @@
     "launcher": "launcher",
     "installer": "installer",
     "records": "records",
-    "scripts": "scripts"
+    "scripts": "scripts",
+    "deploy": "deploy",
+    "lore": "lore",
+    "tools": "tools"
   }
 }

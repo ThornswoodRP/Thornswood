@@ -263,7 +263,7 @@ function copyTree(from, to) {
         gone.status === 200 && gone.body.indexOf(EMPTY) >= 0);
     // The site logs this line before it answers, but the answer comes on a
     // socket and the line on the stderr pipe, and nothing orders the two here,
-    // so on a busy machine the answer is read first (#4154). Wait for the line
+    // so on a busy machine the answer is read first (#4154, #5254). Wait for the line
     // itself, to the same deadline as "listening on" above.
     const why = /could not read data\/site\/lines\.md/;
     const until = Date.now() + 10000;

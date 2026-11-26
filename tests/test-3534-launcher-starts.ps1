@@ -75,6 +75,9 @@ try {
     $l3 = (& $stamp 10) + '  Launcher start: the window was on screen 10.0 s after the launcher started, 6.0 s of it the mod check, on launcher 1.2.6.'
     $old = (& $stamp 400) + '  Launcher start: the window was on screen 99.0 s after the launcher started, on launcher 1.2.5.'
     $noScan = (& $stamp 5) + '  Launcher start: the window was on screen 3.0 s after the launcher started, on launcher 1.2.7.'
+    $utc = $now.ToUniversalTime().AddHours(-4).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [Globalization.CultureInfo]::InvariantCulture)
+    $utcLine = $utc + '  Launcher start: the window was on screen 6.0 s after the launcher started, 2.0 s of it the mod check, on launcher 1.2.8.'
+    $invalidUtc = '2026-02-31T09:00:00Z' + '  Launcher start: the window was on screen 1.0 s after the launcher started, on launcher 1.2.9.'
     function Put([string]$name, [string]$who, [string[]]$lines, [int]$writtenHoursAgo) {
         $set = [ordered]@{ session = $name; who = $who; at = 0; logs = [ordered]@{ 'launcher.log' = (($lines + @('2026-10-01 00:00:00  Ready.')) -join "`r`n"); 'crash.log' = 'x' } }
         $f = Join-Path $tmp ($name + '.json')
@@ -84,7 +87,8 @@ try {
     # One account's launcher.log as it grows across three sessions.
     Put 'a1' '111111111111111111' @($old, $l1) 25
     Put 'a2' '111111111111111111' @($old, $l1, $l2) 15
-    Put 'a3' '111111111111111111' @($old, $l1, $l2, $l3) 5
+    Put 'a3' '111111111111111111' @($old, $l1, $l2, $l3, $utcLine) 5
+    Put 'a4' '111111111111111111' @($utcLine, $invalidUtc) 3
     # Another account, starting at the very second of one of those.
     Put 'b1' '222222222222222222' @($l1) 25
     # An older launcher with no mod check in its line, and a set from before the window.
@@ -96,12 +100,15 @@ try {
     $rc = $LASTEXITCODE
     $text = $out -join "`n"
     Yes ("it ends 0 ($rc)") ($rc -eq 0)
-    Yes 'it reads the five sets in the window and counts the one that will not read' ($text -match '5 session log sets read, 1 that would not read')
+    Yes 'it reads the six sets in the window and counts the one that will not read' ($text -match '6 session log sets read, 1 that would not read')
     $row = @($out | Where-Object { $_ -match '^1\.2\.6\s' })
     Yes ("1.2.6: four starts, each counted once, the second account's at the same second too ($($row -join ''))") ($row.Count -eq 1 -and $row[0] -match '^1\.2\.6\s+4\s')
     Yes '  the middle 2.0 s, nine in ten 10.0 s, the slowest 10.0 s, the mod check''s middle 0.5 s' ($row.Count -eq 1 -and $row[0] -match '\s2\.0 s\s+10\.0 s\s+10\.0 s\s+0\.5 s$')
     $row7 = @($out | Where-Object { $_ -match '^1\.2\.7\s' })
     Yes 'an older line with no mod check: counted, and "not written"' ($row7.Count -eq 1 -and $row7[0] -match '^1\.2\.7\s+1\s.*not written$')
+    $row8 = @($out | Where-Object { $_ -match '^1\.2\.8\s' })
+    Yes 'an explicit UTC record is counted once across both mixed and UTC-only logs' ($row8.Count -eq 1 -and $row8[0] -match '^1\.2\.8\s+1\s+6\.0 s\s+6\.0 s\s+6\.0 s\s+2\.0 s$')
+    Yes 'a malformed UTC timestamp does not become a start' ($text -notmatch '1\.2\.9')
     Yes 'a start before the window and a set written before it are left out' ($text -notmatch '1\.2\.5' -and $text -notmatch '1\.2\.4')
     Yes 'no account is printed' ($text -notmatch '1111111' -and $text -notmatch '2222222')
 

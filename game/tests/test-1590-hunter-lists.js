@@ -40,6 +40,10 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "tw-1590-"));
 try {
   fs.mkdirSync(path.join(tmp, "scripts", "dev"), { recursive: true });
   fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", "Write-SystemLists.js"), path.join(tmp, "scripts", "dev", "Write-SystemLists.js"));
+  // The list builder also runs the maker check with its unchanged gap policy.
+  ["Check-Makers.js", "Check-Makers.waiting.json"].forEach(function (name) {
+    fs.copyFileSync(path.join(REPO_DIR, "scripts", "dev", name), path.join(tmp, "scripts", "dev", name));
+  });
   fs.mkdirSync(path.join(tmp, "game", "data"), { recursive: true });
   ["recipes", "harvests", "ores", "hunts", "races", "item-sources"].forEach(function (n) {
     fs.copyFileSync(path.join(REPO_DIR, "game", "data", n + ".json"), path.join(tmp, "game", "data", n + ".json"));

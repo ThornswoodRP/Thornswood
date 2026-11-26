@@ -3,12 +3,13 @@
 // records/github-apps.json gives it (the redesign's part 20, plan line 26,
 // 1 Nov 2026)?
 //
-//   node scripts/dev/Check-AppPermissions.js          read GitHub and compare
+//   node scripts/dev/Check-AppPermissions.js          check public Apps on GitHub
 //   node scripts/dev/Check-AppPermissions.js -Record  check the record alone
+//   node scripts/dev/Check-AppPermissions.js -Private check private Apps with an owner's GH_TOKEN
 //
 // Run every night by .github/workflows/nightly.yml, step "Each GitHub App
 // holds only what its record gives it", with GH_TOKEN set to the run's own
-// token. For each App in the record it asks GitHub for GET /apps/<slug>,
+// token. For each public App it asks GitHub for GET /apps/<slug>,
 // which says the permissions the App asks of every installation and the
 // events it is sent, and prints one PASS or FAIL line per App:
 //   - a permission the App holds that the record does not give it, or at a
@@ -25,6 +26,8 @@
 // puts it on the board. The record's own rules (each App once, a why for
 // every permission, levels read or write, Patrick's own agents never a Bot
 // App) are checked first, and -Record checks only those.
+// A private registration's live check needs the owner's sign-in. Nightly
+// lists it for that check without needing an owner token or App key.
 //
 // A change to an App's permissions is Patrick's, on the App's settings page,
 // accepted on each installation; the record changes in a pull request first.
@@ -59,6 +62,8 @@ function checkRecord(doc) {
     if (a.id !== undefined && !(Number.isInteger(a.id) && a.id > 0)) bad.push(at + ': id is a whole number, not ' + JSON.stringify(a.id));
     if (!String(a.for || '').trim()) bad.push(at + ': does not say what it is for');
     if (!String(a.held_by || '').trim()) bad.push(at + ': does not say who holds its key');
+    if (a.private_registration !== undefined && a.private_registration !== true)
+      bad.push(at + ': private_registration must be true when present');
     if (agentSlugs.indexOf(slug) >= 0) bad.push(at + ' is also one of Patrick\'s own agents; a Bot App is never his agent');
     const perms = a.permissions;
     if (!perms || typeof perms !== 'object' || Array.isArray(perms)) { bad.push(at + ': no permissions'); continue; }
@@ -125,6 +130,7 @@ function get(url, token) {
 
 async function main(argv) {
   const recordOnly = argv.indexOf('-Record') >= 0;
+  const privateOnly = argv.indexOf('-Private') >= 0;
   const file = process.env.THORNSWOOD_APPS_RECORD || path.join(REPO, RECORD);
   const api = (process.env.THORNSWOOD_GITHUB_API || 'https://api.github.com').replace(/\/$/, '');
   let doc;
@@ -137,8 +143,13 @@ async function main(argv) {
   if (bad.length) return 1;
   console.log('PASS  ' + RECORD + ' holds its own rules (' + doc.apps.length + ' apps, ' + doc.patrick_agents.length + ' of Patrick\'s own agents apart)');
   if (recordOnly) return 0;
+  const checkedApps = doc.apps.filter(rec => (rec.private_registration === true) === privateOnly);
+  if (!privateOnly) {
+    for (const rec of doc.apps.filter(rec => rec.private_registration))
+      console.log('OWNER CHECK  ' + rec.slug + ' has a private registration. Run -Private with the owner sign-in.');
+  }
   let failed = 0;
-  for (const rec of doc.apps) {
+  for (const rec of checkedApps) {
     let r;
     try { r = await get(api + '/apps/' + rec.slug, process.env.GH_TOKEN || ''); } catch (e) {
       console.log('FAIL  ' + rec.slug + ': GitHub did not answer (' + e.message + ')');
@@ -147,7 +158,10 @@ async function main(argv) {
     }
     if (r.status !== 200 || !r.body) {
       const said = (r.body && r.body.message) ? ': ' + r.body.message : '';
-      console.log('FAIL  ' + rec.slug + ': GitHub answered ' + r.status + said + (r.status === 404 ? ' (no App by that name)' : r.status === 403 ? ' (a private App: a run\'s own token reads only a public one, measured 1 Nov 2026; it is made public on its Advanced settings page, as bramble, workers and the box admin App are)' : ''));
+      const hint = privateOnly && (r.status === 403 || r.status === 404) ? ' (check the owner sign-in)' :
+        r.status === 404 ? ' (no App by that name)' :
+        r.status === 403 ? ' (the workflow token can read only public Apps)' : '';
+      console.log('FAIL  ' + rec.slug + ': GitHub answered ' + r.status + said + hint);
       failed++;
       continue;
     }
@@ -162,7 +176,8 @@ async function main(argv) {
     }
   }
   console.log('');
-  console.log(failed ? failed + ' of ' + doc.apps.length + ' apps differ from ' + RECORD + '. The fix is Patrick\'s, on each App\'s settings page, or a pull request to the record when the job really changed.' : 'every app holds exactly what ' + RECORD + ' gives it');
+  console.log(failed ? failed + ' of ' + checkedApps.length + ' checked Apps differ from ' + RECORD + '. The fix is Patrick\'s, on each App\'s settings page, or a pull request to the record when the job really changed.' :
+    'every checked App matches ' + RECORD);
   return failed ? 1 : 0;
 }
 

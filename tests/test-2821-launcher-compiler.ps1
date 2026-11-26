@@ -3,7 +3,7 @@
 
       pwsh -NoProfile -File .\tests\test-2821-launcher-compiler.ps1
 
-  Issue #2821. Seventeen harnesses compiled launcher or setup code with
+  Issue #2821. Eighteen harnesses compiled launcher or setup code with
   PowerShell's Add-Type or a CSharpCodeProvider, not the compiler the build
   runs. Under Windows PowerShell 5.1 that is the in-box .NET Framework csc,
   which stops at C# 5, so a harness refused a line the build takes, and five
@@ -231,12 +231,15 @@ else {
     # too, unless the project says not to.
     $versioned = '[assembly: System.Reflection.AssemblyFileVersion("2.8.2.1")] namespace Ts2821V { public static class P { public static int Main() { System.Console.WriteLine(System.Diagnostics.FileVersionInfo.GetVersionInfo(typeof(P).Assembly.Location).FileVersion); return 0; } } }'
     $said = ''
+    Write-Host 'LAUNCHER_COMPILER_STAGE version-default-expected-refusal'
     try { $null = Build-LauncherCode -Exe -Source $versioned } catch { $said = $_.Exception.Message }
     $exeV = $null
+    Write-Host 'LAUNCHER_COMPILER_STAGE version-GenerateAssemblyInfo-false'
     try { $exeV = Build-LauncherCode -Exe -Source $versioned -Property @{ GenerateAssemblyInfo = 'false' } } catch { Write-Host ('      ' + $_.Exception.Message) }
     Yes '-Property reaches the project: GenerateAssemblyInfo false lets a program carry its own version, which is refused without it' ($said -match 'CS0579' -and $exeV -and ((@(Invoke-LauncherExe $exeV) -join '') -eq '2.8.2.1'))
 
     $whole = $null
+    Write-Host 'LAUNCHER_COMPILER_STAGE whole-launcher-assembly'
     try { $whole = Add-LauncherAssembly } catch { Write-Host ('      ' + $_.Exception.Message) }
     Yes 'Add-LauncherAssembly builds launcher\app\Thornswood.csproj and gives back Thornswood, loaded' ($whole -and $whole.GetName().Name -eq 'Thornswood' -and $whole.GetType('Thornswood.Updater') -and $whole.GetType('Thornswood.Paths'))
     if ($whole) {

@@ -73,6 +73,13 @@ or move a stop's crate. Add a road between two stops with its least minutes;
 the way back is its own road. Every edit is a draft: the server says what
 confirming it would change, and refuses one that would strand a cart.
 
+The stop key starts with a lowercase letter or digit and uses 1 to 64
+lowercase letters, digits, `:`, `_`, `.` or `-`, with no spaces. The form
+shows that rule and points to a bad key before sending an edit. A road
+needs two different stops; its From and To boxes start on different stops.
+The shared Ports and routes form uses the same checks for ships. Long names
+and keys wrap inside the list instead of covering its buttons.
+
 Put a cart here, beside a stop, puts a new cart there. On the road lists the
 carts being driven, how long their road has left and whether their driver is
 still named. Bring it in brings one in at its stop: a cart whose driver was

@@ -43,6 +43,10 @@ bot/announced.json
 # the Discord ids of everybody waiting on staff, so it
 # stays out of the repo if the bot is ever run from a checkout.
 bot/open-tickets.json
+bot/report-posts.json
+bot/report-posts.json.tmp
+bot/moderation-posts.json
+bot/moderation-posts.json.tmp
 
 # Which arrival each person was, kept by the bot so
 # the number on a join card only ever goes up. A list of Discord ids like the
@@ -50,6 +54,8 @@ bot/open-tickets.json
 # half of a write that has not been swapped in yet.
 bot/joins.json
 bot/joins.json.tmp
+bot/welcome-posts.json
+bot/welcome-posts.json.tmp
 
 # The bot's heartbeat for the watchdog (#449), rewritten every minute by
 # whichever bot is running; a copy here is some other run's.
@@ -191,9 +197,9 @@ bot/data/
 /game/data/crime-factions.json
 /game/plugins/thornswood-table-no-bounty-factions.js
 /game/data/resource-locations.json
-/docs/FISHING-SPOTS.csv
-/docs/HANGING-GAME-SPOTS.csv
-/docs/HUNTING-SPOTS.csv
+/game/data/FISHING-SPOTS.csv
+/game/data/HANGING-GAME-SPOTS.csv
+/game/data/HUNTING-SPOTS.csv
 /game/data/building-holds.json
 /game/data/woodworking-benches.json
 /game/data/market-stalls.json
@@ -206,4 +212,5 @@ bot/data/
 /game/data/item-sources.json
 /game/ui/thornswood-profession-guides.js
 /docs/systems/lists/
+/docs/systems/who-makes-it.md
 /game/gamemode-tables/

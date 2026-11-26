@@ -37,7 +37,7 @@ Whose work: mine
 ## For the Thornswood team
 
 <!-- Closes #N when it finishes an issue nobody would notice. A fix people would notice
-says Refs #N and carries its test task, which moves the issue to Done on merge.
+says Refs #N and carries its test task, which moves the issue to Merged on merge.
 That issue stays open until a main Ship puts the fix on the main server, and that
 Ship closes it with this test task; never close it at the merge, or testers are
 sent to look for a fix main lacks. Main if any playtester can check it with the

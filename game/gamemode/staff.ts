@@ -9,7 +9,7 @@
     /unfreeze <person>            lets them go
     /bring <person>               moves them to you
     /goto <person>                moves you to them (/goto <place> is still the place teleport)
-    /silence <person> [minutes] [why]   their voice, what they type, the words above their head, and the speaking mark stop; 30 minutes unless said
+    /silence <person> [length] [why]   minutes or /ban's length forms; a day at most, 30 minutes unless said
     /unsilence <person>           lets them speak again
     /warn <person> <why>          tells them, in their chat, that staff have warned them
     /give <person> <item> [count]         puts it in their pack
@@ -102,7 +102,7 @@
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w and /s are held back by the voice service itself.
+  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
   var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
@@ -115,9 +115,152 @@
   // On globalThis, so a hot reload keeps who is frozen and who is silenced.
   if (!g.__thornswoodStaffState) { g.__thornswoodStaffState = { frozen: {}, silenced: {} }; }
   var state = g.__thornswoodStaffState;
+  var restraintGeneration = (g.__thornswoodRestraintGeneration || 0) + 1;
+  g.__thornswoodRestraintGeneration = restraintGeneration;
+  var restraintFile = null;
+  try {
+    var restraintSettings = mp.getServerSettings();
+    if (!object(restraintSettings) || (restraintSettings.privDir !== undefined &&
+        (typeof restraintSettings.privDir !== 'string' || !restraintSettings.privDir))) { throw new Error('private folder settings are invalid'); }
+    restraintFile = path.join(restraintSettings.privDir || 'private', 'staff-restraints.json');
+  } catch (e) { log('staff restraints: could not establish the private folder: ' + e); }
+  var restraintBytes = null, restraintRevision = 0, restraintWipes = [], restraintsReady = false;
+
+  // One private authority. Runtime notice timestamps and ban overlays do not
+  // belong in this book. A stale hot-reload closure cannot become its writer.
+  function currentRestraints() { return g.__thornswoodRestraintGeneration === restraintGeneration; }
+  function object(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function profileKey(k) { return /^[1-9][0-9]*$/.test(k) && Number.isSafeInteger(Number(k)); }
+  function vector(v) { return Array.isArray(v) && v.length === 3 && v.every(function (n) { return typeof n === 'number' && Number.isFinite(n); }); }
+  function anchor(v) {
+    if (!object(v) || typeof v.desc !== 'string' || !v.desc || v.desc.length > 512 ||
+        !vector(v.pos) || !vector(v.rot) || !Number.isSafeInteger(v.by) || v.by <= 0) {
+      throw new Error('invalid freeze anchor');
+    }
+    var out = { desc: v.desc, pos: v.pos.slice(), rot: v.rot.slice(), by: v.by };
+    if (v.pending !== undefined) {
+      if (!object(v.pending) || typeof v.pending.desc !== 'string' || !v.pending.desc ||
+          v.pending.desc.length > 512 || !vector(v.pending.pos) || !vector(v.pending.rot)) {
+        throw new Error('invalid pending movement');
+      }
+      out.pending = { desc: v.pending.desc, pos: v.pending.pos.slice(), rot: v.pending.rot.slice() };
+    }
+    return out;
+  }
+  function restraintDocument(v) {
+    if (!object(v) || v.version !== 1 || !Number.isSafeInteger(v.revision) || v.revision < 0 ||
+        !object(v.frozen) || !object(v.silenced)) { throw new Error('invalid restraint book'); }
+    var wipes = v.clearedWipes === undefined ? [] : v.clearedWipes;
+    if (!Array.isArray(wipes) || wipes.some(function (id) { return typeof id !== 'string' || !/^[0-9a-f]{32}$/.test(id); }) ||
+        new Set(wipes).size !== wipes.length) { throw new Error('invalid freeze-wipe receipts'); }
+    var out = { version: 1, revision: v.revision, frozen: {}, silenced: {}, clearedWipes: wipes.slice() };
+    Object.keys(v.frozen).forEach(function (k) {
+      if (!profileKey(k)) { throw new Error('invalid frozen profile'); }
+      out.frozen[k] = anchor(v.frozen[k]);
+    });
+    Object.keys(v.silenced).forEach(function (k) {
+      var s = v.silenced[k];
+      if (!profileKey(k) || !object(s) || !Number.isSafeInteger(s.until) || s.until <= 0 ||
+          !Number.isSafeInteger(s.by) || s.by <= 0) {
+        throw new Error('invalid silence');
+      }
+      out.silenced[k] = { until: s.until, by: s.by };
+    });
+    return out;
+  }
+  function restraintUnavailable(why) {
+    restraintsReady = false;
+    log('staff restraints unavailable: ' + why + '. Repair the private book; new admissions and restraint changes are refused.');
+  }
+  function readRestraintBytes() {
+    if (!restraintFile || !fs) { throw new Error('private restraint storage is unavailable'); }
+    var bytes = fs.readFileSync(restraintFile);
+    if (bytes.length > 4 * 1024 * 1024) { throw new Error('restraint book exceeds 4 MiB'); }
+    var text = bytes.toString('utf8');
+    if (!Buffer.from(text, 'utf8').equals(bytes)) { throw new Error('restraint book is not UTF-8'); }
+    return text;
+  }
+  function encodeRestraints(doc) {
+    var bytes = JSON.stringify(doc);
+    if (Buffer.byteLength(bytes, 'utf8') > 4 * 1024 * 1024) { throw new Error('staged restraint book exceeds 4 MiB'); }
+    return bytes;
+  }
+  function acceptRestraints(doc, bytes) {
+    state.frozen = doc.frozen; state.silenced = doc.silenced;
+    restraintRevision = doc.revision; restraintBytes = bytes; restraintsReady = true;
+    g.__thornswoodRestraintBookKnown = restraintFile;
+    restraintWipes = doc.clearedWipes;
+  }
+  function loadRestraints() {
+    if (!currentRestraints()) { return false; }
+    try {
+      var bytes;
+      try { bytes = readRestraintBytes(); }
+      catch (e) {
+        if (!e || e.code !== 'ENOENT' || restraintBytes !== null || g.__thornswoodRestraintBookKnown === restraintFile) { throw e; }
+        // First upgrade can carry real in-process restraints from the former
+        // memory-only module. Validate them before their first durable save.
+        var initial = restraintDocument({ version: 1, revision: 0, frozen: state.frozen, silenced: state.silenced });
+        bytes = encodeRestraints(initial);
+        fs.mkdirSync(path.dirname(restraintFile), { recursive: true });
+        try { mp.writeFileWhole(restraintFile, bytes); }
+        catch (writeError) { if (readRestraintBytes() !== bytes) { throw writeError; } }
+        if (readRestraintBytes() !== bytes) { throw new Error('initial restraint book was not placed'); }
+      }
+      acceptRestraints(restraintDocument(JSON.parse(bytes)), bytes);
+      return true;
+    } catch (e) { restraintUnavailable(e); return false; }
+  }
+  function restraintReady() { return currentRestraints() && (restraintsReady || loadRestraints()); }
+  function saveRestraints(change) {
+    if (!restraintReady()) { return false; }
+    try {
+      if (readRestraintBytes() !== restraintBytes) { throw new Error('restraint book changed outside its current writer'); }
+      var doc = restraintDocument({ version: 1, revision: restraintRevision + 1, frozen: state.frozen, silenced: state.silenced, clearedWipes: restraintWipes });
+      change(doc);
+      doc = restraintDocument(doc);
+      var next = encodeRestraints(doc);
+      var writeError = null;
+      try { mp.writeFileWhole(restraintFile, next); } catch (e) { writeError = e; }
+      var observed = readRestraintBytes();
+      if (observed !== next) {
+        if (observed !== restraintBytes) { restraintUnavailable('unrecognized write outcome'); }
+        log('staff restraints: change was not committed: ' + (writeError || 'the requested bytes were not placed'));
+        return false;
+      }
+      acceptRestraints(doc, next);
+      return true;
+    } catch (e) { restraintUnavailable(e); return false; }
+  }
+  function requireRestraintSave(pid, change) {
+    if (saveRestraints(change)) { return true; }
+    tell(pid, currentRestraints() ? 'The restraint change could not be saved. No success was recorded; staff must check the private restraint book.'
+                                : 'The staff module was reloaded. Use the current command again.');
+    return false;
+  }
+  loadRestraints();
+  if (typeof g.__thornswoodRelease === 'function') {
+    g.__thornswoodRelease('restraints', function (who) {
+      if (!restraintReady()) { return { saved: false }; }
+      var wipes = who.freezeWipeIds ? who.freezeWipeIds() : [];
+      var unseen = wipes.filter(function (id) { return restraintWipes.indexOf(id) === -1; });
+      var freezes = Object.keys(state.frozen).filter(function (pid) { return unseen.length || who.profile(pid); });
+      var silences = Object.keys(state.silenced).filter(function (pid) { return who.profile(pid); });
+      var saved = true;
+      if (freezes.length || silences.length || unseen.length) {
+        saved = saveRestraints(function (doc) {
+          freezes.forEach(function (pid) { delete doc.frozen[pid]; });
+          silences.forEach(function (pid) { delete doc.silenced[pid]; });
+          doc.clearedWipes = doc.clearedWipes.concat(unseen);
+        });
+      }
+      return { saved: saved, counts: { freezes: freezes.length, silences: silences.length, wipes: unseen.length } };
+    });
+  }
   // Bans made here, until the door's next list carries them; and who is
   // already on their way out, so the sweep tells them once.
   if (!state.banned) { state.banned = {}; }
+  var bansLoadedAt = Date.now();  // old hot-reload overlays have no acknowledgement time
   if (!state.ending) { state.ending = {}; }
   // Characters killed for good here (#1010), until the door's list carries them.
   if (!state.pk) { state.pk = {}; }
@@ -126,6 +269,37 @@
   // Bans lifted here, so the door's list, which can carry a lifted ban for up
   // to its five minute refresh, does not end their session again meanwhile.
   if (!state.lifted) { state.lifted = {}; }
+  migrateScopes(state.banned);
+  migrateScopes(state.lifted);
+
+  // Existing hot reloads can carry a single receipt or lift per character.
+  function migrateScopes(records) {
+    Object.keys(records).forEach(function (pid) {
+      var record = records[pid];
+      if (!record.scope && record.at === undefined && record.until === undefined) { return; }
+      var scopes = {};
+      scopes[record.scope || 'account'] = record;
+      records[pid] = scopes;
+    });
+  }
+  function recordScope(records, pid, scope, record) {
+    if (!records[pid]) { records[pid] = {}; }
+    records[pid][scope] = record;
+  }
+  function forgetScope(records, pid, scope) {
+    var scopes = records[pid];
+    if (!scopes) { return; }
+    delete scopes[scope];
+    if (!scopes.account && !scopes.character) { delete records[pid]; }
+  }
+  function pruneScopes(records, expired) {
+    Object.keys(records).forEach(function (pid) {
+      var scopes = records[pid];
+      Object.keys(scopes).forEach(function (scope) {
+        if (expired(scopes[scope])) { forgetScope(records, pid, scope); }
+      });
+    });
+  }
 
   function settings() {
     try { return mp.getServerSettings() || {}; } catch (e) { return {}; }
@@ -143,7 +317,10 @@
 
   function tell(pid, text) {
     var t = g.__thornswoodToProfile;
-    if (t && pid) { t(pid, text); }
+    if (t && pid) {
+      try { t(pid, text); }
+      catch (e) { log('staff: notification could not reach profile ' + pid + ': ' + e); }
+    }
   }
 
   function online() {
@@ -228,6 +405,24 @@
     return '';
   }
 
+  // Shared boundary for self-only playtest tools and admin utilities. These
+  // roles are the command router's existing tiers, including explicit lists.
+  // A profile in a message alone never authorizes an action on an actor.
+  function authorizeTool(cmd, pid, actorId, tier) {
+    if (['playtester','staff','admin'].indexOf(tier) === -1) { return REFUSED; }
+    var proof = unproven(cmd,pid);
+    if (proof) { return proof; }
+    try {
+      var roles = g.__thornswoodCommandRoles;
+      if (!roles || typeof roles[tier] !== 'function' || !roles[tier](pid)) { return REFUSED; }
+      if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(actorId) || actorId <= 0 ||
+          online().indexOf(actorId) === -1 || Number(mp.get(actorId,'profileId')) !== pid) {
+        return 'The command needs your own current character in the world.';
+      }
+    } catch (e) { return 'The command could not verify your current character and role.'; }
+    return '';
+  }
+
   /*
     One line in thornswood.log and one in moderation.log for the bot. extra,
     when given, is more of the same row: the property block's staff presses
@@ -255,32 +450,106 @@
 
   function placeOf(actorId) {
     try {
-      return { desc: String(mp.get(actorId, 'worldOrCellDesc') || ''),
-               pos: (mp.get(actorId, 'pos') || [0, 0, 0]).slice(0, 3),
-               rot: (mp.get(actorId, 'angle') || [0, 0, 0]).slice(0, 3) };
+      var desc = mp.get(actorId, 'worldOrCellDesc'), pos = mp.get(actorId, 'pos'), rot = mp.get(actorId, 'angle');
+      if (typeof desc !== 'string' || !desc || !vector(pos) || !vector(rot)) { return null; }
+      return { desc: desc, pos: pos.slice(), rot: rot.slice() };
     } catch (e) { return null; }
   }
   function moveTo(actorId, where) {
     mp.set(actorId, 'locationalData', { cellOrWorldDesc: where.desc, pos: where.pos, rot: where.rot });
+    var stuck = g.__thornswoodStuck;
+    if (stuck && stuck.resetTrail) { stuck.resetTrail(actorId); }
+  }
+
+  function movementIdentity(pid, actor) {
+    var native = mp.getNpcAIState(actor), runtime = mp.getActorRuntimeIdentity(actor), user = mp.getUserByActor(actor);
+    if (!native || native.profileId !== pid || native.isHuman !== true || native.isConnected !== true ||
+        !Number.isSafeInteger(native.lifeGeneration) || native.lifeGeneration < 0 ||
+        typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) || !Number.isInteger(user) || user < 0 ||
+        profileOf(actor) !== pid || online().indexOf(actor) < 0) { throw new Error('character identity changed'); }
+    var guid = mp.getUserGuid(user);
+    if (typeof guid !== 'string' || !guid) { throw new Error('connection identity unavailable'); }
+    return { actor: actor, pid: pid, runtime: runtime, life: native.lifeGeneration, user: user, guid: guid };
+  }
+  function sameMovementIdentity(who) {
+    try {
+      var now = movementIdentity(who.pid, who.actor);
+      return now.runtime === who.runtime && now.life === who.life && now.user === who.user && now.guid === who.guid;
+    } catch (e) { return false; }
+  }
+  function holdPendingMovement(who, caller) {
+    tell(caller, 'Movement may already have occurred, but its frozen position could not be confirmed and saved. The character is held out until staff check the problem and explicitly /unfreeze ' + who.pid + '.');
+    log('staff restraints: profile ' + who.pid + ' has pending movement; no teleport retry or rollback was requested');
+    var sentence = 'A staff move could not be confirmed and saved. Staff must resolve your frozen character before you return.';
+    if (!sameMovementIdentity(who)) { return; }
+    try { sessionEnds(who.pid, sentence); } catch (e) { log('staff restraints: pending-move session notice failed: ' + e); }
+    // The notice can call transport code. Recheck the entire connection/life
+    // immediately before ending it; never act on a replacement character.
+    if (sameMovementIdentity(who)) {
+      try { mp.kick(who.user); } catch (e) { log('staff restraints: could not end pending-move connection: ' + e); }
+    }
+  }
+  function samePlace(a, b) {
+    return a && b && a.desc === b.desc && a.pos.every(function (n, i) { return n === b.pos[i]; }) &&
+      a.rot.every(function (n, i) { return n === b.rot[i]; });
+  }
+  function moveStaffPerson(mover, movedPid, dest, caller) {
+    var frozen, who;
+    if (!currentRestraints()) { tell(caller, 'The staff module was reloaded. Use the current command again.'); return false; }
+    if (!restraintReady()) { tell(caller, 'Staff restraint authority is unavailable. No movement was requested.'); return false; }
+    frozen = state.frozen[movedPid];
+    if (frozen) {
+      if (frozen.pending) { tell(caller, 'That frozen character already has unresolved movement. Check the problem and explicitly /unfreeze ' + movedPid + '.'); return false; }
+      try { who = movementIdentity(movedPid, mover); }
+      catch (e) { tell(caller, 'The server could not verify that character. No movement was requested.'); return false; }
+      if (!requireRestraintSave(caller, function (doc) {
+        doc.frozen[movedPid].pending = { desc: dest.desc, pos: dest.pos.slice(), rot: dest.rot.slice() };
+      })) { return false; }
+      if (!sameMovementIdentity(who)) { holdPendingMovement(who, caller); return false; }
+    }
+    try { mp.set(mover, 'locationalData', { cellOrWorldDesc: dest.desc, pos: dest.pos, rot: dest.rot }); }
+    catch (e) { log('staff: native movement returned an error; checking the actual location: ' + e); }
+    var observed = placeOf(mover);
+    if (frozen) {
+      if (!observed || !sameMovementIdentity(who) || !saveRestraints(function (doc) {
+        observed.by = frozen.by; doc.frozen[movedPid] = observed;
+      })) { holdPendingMovement(who, caller); return false; }
+    }
+    if (!samePlace(observed, dest)) {
+      tell(caller, 'The requested destination was not confirmed. No successful move was recorded.'); return false;
+    }
+    // A post-move trail publication failure cannot turn a confirmed move and
+    // saved anchor into an apparent refusal that invites duplicate movement.
+    try {
+      var stuck = g.__thornswoodStuck;
+      if (stuck && stuck.resetTrail) { stuck.resetTrail(mover); }
+    } catch (e) { log('staff: confirmed movement could not reset the stuck trail: ' + e); }
+    return true;
   }
 
   // ------------------------------------------------------------ silence --
   function silencedFor(pid) {
     var s = state.silenced[pid];
     if (!s) { return 0; }
-    if (Date.now() >= s.until) { delete state.silenced[pid]; pushSilenced(); return 0; }
+    if (Date.now() >= s.until) { return 0; }
     return Math.max(1, Math.ceil((s.until - Date.now()) / 60000));
   }
 
   /* The whole list to the voice service, which holds back their lines. */
   function pushSilenced() {
-    if (!http) { return; }
+    if (!http || !restraintReady()) { return; }
     var now = Date.now();
     var list = {};
+    var expired = Object.keys(state.silenced).filter(function (k) { return state.silenced[k].until <= now; });
+    if (expired.length) {
+      saveRestraints(function (doc) { expired.forEach(function (k) { delete doc.silenced[k]; }); });
+      // Pruning can discover a changed or unreadable book. Keep voice's last
+      // confirmed list until the private authority can be read again.
+      if (!restraintsReady) { return; }
+    }
     for (var k in state.silenced) {
       if (!Object.prototype.hasOwnProperty.call(state.silenced, k)) { continue; }
       if (state.silenced[k].until > now) { list[k] = state.silenced[k].until; }
-      else { delete state.silenced[k]; }
     }
     var body = JSON.stringify({ profiles: list });
     try {
@@ -298,10 +567,12 @@
   /* Anybody frozen who has moved is put back. Kept by profile, so leaving and
      coming back does not undo it. */
   function freezeTick() {
+    if (!currentRestraints()) { return; }
     var now = Date.now();
     for (var k in state.frozen) {
       if (!Object.prototype.hasOwnProperty.call(state.frozen, k)) { continue; }
       var f = state.frozen[k];
+      if (f.pending) { continue; }
       var a = actorFor(Number(k));
       if (!a) { continue; }
       var here = placeOf(a);
@@ -384,6 +655,10 @@
   function doAimed(a, pid, actorId, me, look) {
     var them = a.them;
     if (!them.actorId) { tell(pid, them.why); return true; }
+    if (a.kind === 'tp' && them.pid === pid && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
 
     if (a.kind === 'give') {
       var hit = look.findThing(a.want);
@@ -439,10 +714,7 @@
       destName = fp.where.town;
     }
     if (!dest || !dest.desc) { tell(pid, 'The server cannot tell where that is right now. Try again.'); return true; }
-    try { moveTo(them.actorId, dest); } catch (e) { tell(pid, 'That did not work: ' + e); return true; }
-    if (state.frozen[them.pid]) {
-      state.frozen[them.pid] = { desc: dest.desc, pos: dest.pos.slice(0, 3), rot: dest.rot.slice(0, 3), by: state.frozen[them.pid].by };
-    }
+    if (!moveStaffPerson(them.actorId, them.pid, dest, pid)) { return true; }
     tell(pid, 'Sent ' + them.name + ' to ' + destName + '.');
     if (them.pid !== pid) { tell(them.pid, 'Staff sent you to ' + destName + '.'); }
     record('tp', pid, me, them.pid, them.name, 'to ' + destName, 0);
@@ -511,25 +783,45 @@
   }
 
   /* Every active ban the door's last list carried, and the ones made here since. */
-  var bansRead = { at: 0, list: [], pk: [] };
+  // Once the site has taken over, a transient missing file during hot reload
+  // cannot erase its last confirmed bans either.
+  var confirmedBans = state.confirmedBans || (state.confirmedBans = { list: [], requestedAt: 0 });
+  var bansRead = { at: 0, list: confirmedBans.list, pk: [], banAt: confirmedBans.requestedAt };
   function readDoor(now) {
     if (now - bansRead.at < BAN_SWEEP_MS) { return; }
     bansRead.at = now;
-    var list = [], pk = [], written = 0;
+    var list = null, pk = [], written = 0, bansRequested = 0, hasBanStamp = false;
     try {
       var doc = JSON.parse(fs.readFileSync(path.join(String(settings().privDir || 'private'), 'allowed.json'), 'utf8')
                              .replace(/^\uFEFF/, ''));
-      if (doc && Array.isArray(doc.bans)) { list = doc.bans; }
+      if (doc && Array.isArray(doc.bans) && doc.bans.every(function (ban) { return ban && Array.isArray(ban.profiles); })) {
+        list = doc.bans;
+      }
       if (doc && Array.isArray(doc.pk)) { pk = doc.pk; }
       written = Date.parse(String((doc && doc.at) || '')) || 0;
-    } catch (e) { list = []; pk = []; }
-    bansRead.list = list;
+      if (list) {
+        hasBanStamp = !!doc.bansRequestedAt;
+        bansRequested = Date.parse(String(doc.bansRequestedAt || '')) || 0;
+      }
+    } catch (e) { list = null; pk = []; }
     bansRead.pk = pk;
     bansRead.written = written;
-    // A lift the door's list has caught up with needs remembering no longer.
-    for (var k in state.lifted) {
-      if (Object.prototype.hasOwnProperty.call(state.lifted, k) && written > state.lifted[k].at) { delete state.lifted[k]; }
+    // The site's confirmed newer request now owns these bans, including a
+    // lift made on the site. A late older request or unreadable list does not.
+    if (list && bansRequested > confirmedBans.requestedAt && bansRequested <= written && written <= now) {
+      bansRead.list = confirmedBans.list = list;
+      bansRead.banAt = confirmedBans.requestedAt = bansRequested;
+      pruneScopes(state.banned, function (ban) {
+        return bansRequested > (Number(ban.at) || bansLoadedAt);
+      });
+    } else if (list && !hasBanStamp && !confirmedBans.requestedAt) {
+      // Read old door files until the first confirmed snapshot arrives. A
+      // broken file cannot erase the last known list or its ban-specific time.
+      bansRead.list = list;
+      bansRead.banAt = written;
     }
+    // A lift the door's ban list has caught up with needs remembering no longer.
+    pruneScopes(state.lifted, function (lift) { return bansRead.banAt > lift.at; });
     // The same for a PK made or undone here: once the list is newer it says
     // which holds, so a PK an admin undid on the site stops counting here too.
     for (var p in state.pk) {
@@ -552,6 +844,18 @@
     }
     return out;
   }
+  // Account bans govern the whole account. Within one kind, keep the
+  // longest active ban; a permanent ban outlasts every timed one.
+  function preferredBan(have, next) {
+    if (!have) { return next; }
+    var account = (have.scope || 'account') === 'account';
+    var nextAccount = (next.scope || 'account') === 'account';
+    if (account !== nextAccount) { return nextAccount ? next : have; }
+    var until = Number(have.until) || 0;
+    var nextUntil = Number(next.until) || 0;
+    if (until && (!nextUntil || nextUntil > until)) { return next; }
+    return have;
+  }
   function bansNow(now) {
     readDoor(now);
     var out = {};
@@ -564,19 +868,19 @@
       for (var j = 0; j < ps.length; j++) {
         var p = Number(ps[j]);
         if (!(p > 0)) { continue; }
-        var lift = state.lifted[p];
-        if (lift && lift.scope === scope && lift.at >= (bansRead.written || 0)) { continue; }
-        // A ban on the whole account says more than one on the character.
-        if (out[p] && out[p].scope === 'account') { continue; }
-        out[p] = { why: String(b.why || ''), until: until, scope: scope };
+        var lifts = state.lifted[p];
+        var lift = lifts && lifts[scope];
+        if (lift && lift.at >= bansRead.banAt) { continue; }
+        out[p] = preferredBan(out[p], { why: String(b.why || ''), until: until, scope: scope });
       }
     }
-    for (var k in state.banned) {
-      if (!Object.prototype.hasOwnProperty.call(state.banned, k)) { continue; }
-      var s = state.banned[k];
-      if (s.until && s.until <= now) { delete state.banned[k]; continue; }
-      out[Number(k)] = s;
-    }
+    pruneScopes(state.banned, function (ban) { return ban.until && ban.until <= now; });
+    Object.keys(state.banned).forEach(function (pid) {
+      var scopes = state.banned[pid];
+      Object.keys(scopes).forEach(function (scope) {
+        out[pid] = preferredBan(out[pid], scopes[scope]);
+      });
+    });
     return out;
   }
 
@@ -664,15 +968,15 @@
         if (!ok) { tell(pid, 'The site did not take the ban, so nothing changed: ' + v + '.'); return; }
         var until = Number(v.until) || 0;
         var covers = whole && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
-        var ban = { why: why, until: until, scope: whole ? 'account' : 'character' };
         var now = Date.now();
+        var ban = { why: why, until: until, scope: whole ? 'account' : 'character', at: now };
         for (var i = 0; i < covers.length; i++) {
           var p = Number(covers[i]);
           if (!(p > 0)) { continue; }
-          state.banned[p] = ban;
-          delete state.lifted[p];
+          recordScope(state.banned, p, ban.scope, ban);
+          forgetScope(state.lifted, p, ban.scope);
           var a = (p === them.pid && them.actorId) || actorFor(p);
-          if (a) { endBanned(p, a, ban, now); }
+          if (a) { endBanned(p, a, bansNow(now)[p], now); }
         }
         tell(pid, whole
           ? ('Banned ' + them.name + '\'s whole account, every character on it and any new one, ' + untilText(until) + '.')
@@ -691,11 +995,11 @@
           var covers = wholeU && Array.isArray(v.profiles) && v.profiles.length ? v.profiles : [them.pid];
           for (var i = 0; i < covers.length; i++) {
             var p = Number(covers[i]);
-            var had = state.banned[p];
-            if (had && (had.scope || 'account') === (wholeU ? 'account' : 'character')) { delete state.banned[p]; }
+            var scope = wholeU ? 'account' : 'character';
+            forgetScope(state.banned, p, scope);
             delete state.ending[p];
             // The door's list can still carry it for a few minutes.
-            if (v.was) { state.lifted[p] = { at: now, scope: wholeU ? 'account' : 'character' }; }
+            if (v.was) { recordScope(state.lifted, p, scope, { at: now }); }
           }
           if (wholeU) {
             tell(pid, v.was ? ('The ban on ' + them.name + '\'s account is lifted.') : (them.name + '\'s account was not banned.'));
@@ -804,6 +1108,7 @@
     answered the line, false to let handle() carry on.
   */
   function command(cmd, word, parts, pid, actorId, isStaff, look) {
+    if (!currentRestraints()) { tell(pid, 'The staff module was reloaded. Use the current command again.'); return true; }
     if (SILENCED_WORDS.indexOf(word) !== -1) {
       var left = silencedFor(pid);
       if (!left) { return false; }
@@ -854,6 +1159,14 @@
     }
 
     var me = actorId ? nameOf(actorId) : ('profile ' + pid);
+    if (['/freeze', '/unfreeze', '/silence', '/unsilence'].indexOf(word) !== -1 && !restraintReady()) {
+      tell(pid, 'Staff restraint authority is unavailable. The private restraint book must be repaired before changing it.');
+      return true;
+    }
+    if (word === '/goto' && state.frozen[pid]) {
+      tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
+      return true;
+    }
     /*
       /DESPAWN: TAKE A SPAWNED CREATURE OUT FOR GOOD (#2623). Djinn, 17 Oct:
       a creature made with keep stays and comes back, and staff need a way
@@ -917,7 +1230,7 @@
       if (!them.pid) { tell(pid, them.why); return true; }
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       if (!state.silenced[them.pid]) { tell(pid, them.name + ' is not silenced.'); return true; }
-      delete state.silenced[them.pid];
+      if (!requireRestraintSave(pid, function (doc) { delete doc.silenced[them.pid]; })) { return true; }
       pushSilenced();
       tell(them.pid, 'Staff have let you speak again.');
       tell(pid, them.name + ' can speak again.');
@@ -928,7 +1241,7 @@
       if (!them.pid) { tell(pid, them.why); return true; }
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       if (!state.frozen[them.pid]) { tell(pid, them.name + ' is not frozen.'); return true; }
-      delete state.frozen[them.pid];
+      if (!requireRestraintSave(pid, function (doc) { delete doc.frozen[them.pid]; })) { return true; }
       tell(them.pid, 'Staff have let you go. You can move again.');
       tell(pid, them.name + ' can move again.');
       record('unfreeze', pid, me, them.pid, them.name, '', 0);
@@ -939,11 +1252,19 @@
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       var mins = SILENCE_DEFAULT_MIN;
       var rest = them.rest || [];
-      if (rest.length && /^\d+$/.test(rest[0])) {
-        mins = Math.max(1, Math.min(SILENCE_MAX_MIN, Number(rest[0])));
-        reason = rest.slice(1).join(' ').trim();
+      if (rest.length) {
+        var length = banLength(rest[0]);
+        if (length > 0 && Number.isFinite(length)) {
+          mins = Math.min(SILENCE_MAX_MIN, length);
+          reason = rest.slice(1).join(' ').trim();
+        } else if (/^[+-]?(?:\d|\.)/.test(rest[0]) || length === 0) {
+          tell(pid, 'That silence length is not valid. Use minutes, 30m, 2h or 1d; a day at most. Nothing changed.');
+          return true;
+        }
       }
-      state.silenced[them.pid] = { until: Date.now() + mins * 60000, name: them.name, by: pid };
+      if (!requireRestraintSave(pid, function (doc) {
+        doc.silenced[them.pid] = { until: Date.now() + mins * 60000, name: them.name, by: pid };
+      })) { return true; }
       pushSilenced();
       tell(them.pid, 'Staff have silenced you for ' + mins + ' minutes' +
                      (reason ? ': ' + reason + '.' : '.') +
@@ -997,10 +1318,13 @@
     }
     if (word === '/freeze') {
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
+      if (state.frozen[them.pid] && state.frozen[them.pid].pending) {
+        tell(pid, 'That frozen character has unresolved movement. Check the problem and explicitly /unfreeze ' + them.pid + ' first.'); return true;
+      }
       var spot = placeOf(them.actorId);
       if (!spot || !spot.desc) { tell(pid, 'The server cannot tell where ' + them.name + ' is right now. Try again.'); return true; }
       spot.by = pid;
-      state.frozen[them.pid] = spot;
+      if (!requireRestraintSave(pid, function (doc) { doc.frozen[them.pid] = spot; })) { return true; }
       tell(them.pid, 'Staff have frozen you in place' + (reason ? ': ' + reason + '.' : '.') +
                      ' Wait here and somebody will talk to you.');
       tell(pid, 'Froze ' + them.name + '. /unfreeze ' + them.name + ' lets them go.');
@@ -1016,10 +1340,9 @@
       var mover = (word === '/bring') ? them.actorId : actorId;
       var dest = placeOf(word === '/bring' ? actorId : them.actorId);
       if (!dest || !dest.desc) { tell(pid, 'The server cannot tell where that is right now. Try again.'); return true; }
-      try { moveTo(mover, dest); } catch (e) { tell(pid, 'That did not work: ' + e); return true; }
       // Somebody frozen and then brought stays frozen where they were brought.
       var movedPid = (word === '/bring') ? them.pid : pid;
-      if (state.frozen[movedPid]) { dest.by = state.frozen[movedPid].by; state.frozen[movedPid] = dest; }
+      if (!moveStaffPerson(mover, movedPid, dest, pid)) { return true; }
       if (word === '/bring') {
         tell(them.pid, 'Staff brought you to them.');
         tell(pid, 'Brought ' + them.name + ' to you.');
@@ -1044,7 +1367,9 @@
 
   g.__thornswoodStaff = {
     command: command, find: find, takePerson: takePerson, unproven: unproven, record: record,
+    authorizeTool: authorizeTool, tell: tell, nameOf: nameOf, actorFor: actorFor,
     freezeTick: freezeTick, pushSilenced: pushSilenced, silencedFor: silencedFor,
+    restraintAdmission: function (pid) { return restraintReady() && !(state.frozen[pid] && state.frozen[pid].pending); },
     banSweep: banSweep, banLength: banLength, bansNow: bansNow, pkNow: pkNow,
     state: state, REFUSED: REFUSED, WORDS: WORDS_STAFF
   };

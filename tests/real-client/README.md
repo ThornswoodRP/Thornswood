@@ -19,9 +19,13 @@ keeps one list of characters for both servers, so a character made on main
 reads "not on this server" on dev, and playing it makes a new one there. The
 race menu then opens in the hall. The run presses R, the menu's Done,
 answers its question with Enter, accepts the name with Enter (the name box is
-inside the race menu and says no menu of its own), then takes Home on the K panel the way a person does (Whiterun, Review, Confirm),
-and waits for the trip to the town. For a character the server has, the race
-menu never opens, and those steps are skipped.
+inside the race menu and says no menu of its own). For a character the server
+has, the race menu never opens, and those steps are skipped. Then a character
+still in the hall, new or made by an earlier run that stopped there, takes
+the Starting Location on the K panel the way a person does (Whiterun, Review,
+Confirm) and waits for the trip to the town. The panel's
+`thornswoodSkills.isCreating()` says which: a character the server has
+already placed answers `placed`, and the shot and the trip are skipped.
 
 ## On your machine
 
@@ -36,12 +40,19 @@ It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
 `results.jsonl`, the launcher's log for the run and a `.png` for each
 screenshot. `-Root` names another install (the default is
 the install `scripts\release\Where.ps1 Install` finds, with the launcher the
-setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, `-InstallPlugin` copies
-this repository's plugin into a build released before it, and `-Publish` puts
+setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, and `-Publish` puts
 the run on a draft Release of its own, `real-client-<run>`, and a line on the
 newest Dev Deployment that links it. A build's own Release cannot take it,
 because Releases here are immutable once published. A draft makes no tag and
 only the team sees it, and the ten newest runs are kept. It ends 0 only when every step passed.
+
+The game runs the build's own plugin. The launcher keeps its build's
+`Data\Platform` files and puts them back before every Play, so a copy laid
+in by hand never reaches the game (26 Nov: such a copy was put back, and the
+run read the older plugin's miss as a failure of its steps). When the game's
+plugin is not this checkout's, the run says so in `run.log` and its result,
+with the build in place: run from that build's commit, whose steps are the
+ones its plugin knows.
 
 An install on the main channel is put on dev for the run, as the Server
 card's switch does it: the launcher takes dev's package by itself when it
@@ -50,6 +61,17 @@ run ends the install goes back to the channel it was on, and the launcher
 takes that channel's package at its next start. With automatic updates off
 (Settings, Updates) the launcher never takes dev's package, and the run stops
 at the Play wait and says so.
+
+A Play the launcher could not start leaves it open with no game. The run
+reads launcher.log from where it began, stops at the launcher's own "Failed
+to start" line with its reason, and closes the launcher it started, instead of
+waiting the whole `-Minutes` for a game that is not coming (26 Nov).
+
+At the end the run closes the game, waits for the launcher's "Game closed
+after" line, which it writes once it has put Windows' Skyrim folders back,
+and then closes the launcher's window as a person does. A launcher ended by
+force puts nothing back. If either folder still points at the build after
+the run, the run fails and names it.
 
 ## How a step is written
 
@@ -61,7 +83,8 @@ first step that fails, after a screenshot named `fail-<step>`.
 |---|---|
 | `{"do":"page","js":"<expression>"}` | the expression, run in the game's page every half second, gives true, a number other than 0 or a word. It may click things on the way, as a person would. |
 | `{"do":"wait","for":"world"}` | the character stands in a cell with no loading screen or main menu up. |
-| `{"do":"wait","for":"menu","menu":"InventoryMenu","open":true}` | the game says that menu opened (`"open":false`: closed). |
+| `{"do":"wait","for":"menu","menu":"InventoryMenu","open":true}` | the menu is open, or the game said it opened since the step before this one began (`"open":false`: closed). A loading screen can open and close between two of the plugin's ticks, which do not come while it is up. |
+| `{"do":"page",...,"skip":2,"skipIf":"placed"}` | as a page step, but when the page answers exactly the `skipIf` word the next 2 steps, which deal with what is not there, are skipped. |
 | `{"do":"wait",...,"skip":8}` | any wait with `skip` passes too when what it waits for does not come in its time, and the next 8 steps, which deal with it, are skipped. For what comes only sometimes, like creation. |
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
 | `{"do":"key","code":36}` | Windows accepted a scan-code down, a 120 ms hold and a separate up, with game-window focus checks before and after (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
@@ -77,7 +100,9 @@ the old runner's numeric reply cannot pass a key step. Accepted input alone
 does not prove the game or browser handled the key; follow it with a menu,
 message or page check for the expected result. The focus checks and
 Windows input are separate calls, so a focus change between those calls
-cannot be ruled out by a successful acknowledgement.
+cannot be ruled out by a successful acknowledgement. When the game window is
+not in front, the note names the process and the title of the window that is
+(26 Nov: Windows refused the focus at step 20 and nothing said what had it).
 
 Keys stay down for 120 ms, a short human press below the repeat delay.
 The pinned engine sends its browser listener changes in current keyboard

@@ -43,6 +43,10 @@ on:
         description: 'Repair only these existing mod identities (comma-separated Nexus mod numbers); files must already match the record'
         type: string
         default: ''
+      replicate:
+        description: 'Give only these patched mods the list of files they install, so Vortex patches its own copy (#6888; comma-separated Nexus file ids); files must already match the record'
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -89,11 +93,13 @@ jobs:
           RECORD_OUT: ${{ runner.temp }}/collection-record
           WHATIF: ${{ github.event_name == 'workflow_dispatch' && inputs.whatif }}
           REFRESH_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.refresh_tag || '' }}
+          REPLICATE: ${{ github.event_name == 'workflow_dispatch' && inputs.replicate || '' }}
         run: |
           $ErrorActionPreference = 'Stop'
           $a = @{ Out = $env:RECORD_OUT }
           if ($env:WHATIF -eq 'true') { $a.WhatIf = $true }
           if ($env:REFRESH_TAG) { $a.RefreshTag = @($env:REFRESH_TAG.Split(',') | ForEach-Object { $_.Trim() }) }
+          if ($env:REPLICATE) { $a.Replicate = @($env:REPLICATE.Split(',') | ForEach-Object { $_.Trim() }) }
           & (Join-Path $env:GITHUB_WORKSPACE 'scripts/release/Publish-CollectionRecord.ps1') @a
           exit $LASTEXITCODE
 

@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Org.BouncyCastle.Tls;
+using SharpSRTP.DTLS;
 
 namespace Thornswood
 {
@@ -30,7 +31,7 @@ namespace Thornswood
             while (clock.ElapsedMilliseconds < ms) { if (done()) return true; Thread.Sleep(10); }
             return done();
         }
-        static object Layer(VoicePeer p) { return Get(Get(p, "dtls"), "m_recordLayer"); }
+        static object Layer(VoicePeer p) { return Get(((BcDtlsTransport)Get(p, "dtls")).Transport, "m_recordLayer"); }
         static bool IsFailed(object layer) { return (bool)layer.GetType().GetProperty("IsFailed", Hidden).GetValue(layer); }
 
         sealed class Pair : IDisposable
@@ -62,19 +63,20 @@ namespace Thornswood
 
         sealed class BeforeReceive
         {
-            public int Used;
+            public int Calls;
             public volatile bool Called;
             public readonly ManualResetEventSlim Entered = new ManualResetEventSlim();
             public readonly ManualResetEventSlim Release = new ManualResetEventSlim();
+            public readonly ManualResetEventSlim Stopped = new ManualResetEventSlim();
         }
         static volatile BeforeReceive beforeReceive;
 
         // The JS compile adapter routes the unchanged native call here. Park
         // before entering BouncyCastle, so no library deadline has started.
-        public static int ReceiveAfterGate(int id, DtlsTransport transport, byte[] buffer, int offset, int length, int wait)
+        public static int ReceiveAfterGate(int id, IDtlsTransport transport, byte[] buffer, int offset, int length, int wait)
         {
             var gate = beforeReceive;
-            if (id == 2 && gate != null && Interlocked.Exchange(ref gate.Used, 1) == 0)
+            if (id == 2 && gate != null && Interlocked.Increment(ref gate.Calls) == 1)
             {
                 gate.Entered.Set();
                 if (!gate.Release.Wait(10000)) throw new TimeoutException("fixture before-receive barrier");
@@ -83,15 +85,31 @@ namespace Thornswood
             return transport.Receive(buffer, offset, length, wait);
         }
 
-        // Count actual transport reads, and hold the actual local DTLS close.
-        // No peer flags or production timeout values are changed by the test.
+        public static bool ReadAgain(int id, bool closed)
+        {
+            if (id == 2 && closed) beforeReceive?.Stopped.Set();
+            return !closed;
+        }
+
+        [ThreadStatic]
+        static bool waitedOnOpenInput;
+
+        public static bool TakeDatagram(BlockingCollection<byte[]> input, out byte[] packet, int wait)
+        {
+            // Call the actual queue operation with the unmodified timeout.
+            waitedOnOpenInput = wait > 0 && !input.IsAddingCompleted;
+            return input.TryTake(out packet, wait);
+        }
+
+        // Count untimed empty results, which would make the library busy-loop.
+        // The library can legitimately read the transport more than once.
         sealed class ReadBarrier : DatagramTransport
         {
             readonly DatagramTransport inner;
-            int armed = 1;
             int reads;
-            public int Reads { get { return Volatile.Read(ref reads); } }
-            public readonly ManualResetEventSlim Returned = new ManualResetEventSlim();
+            int untimedEmptyReads;
+            public int Reads => Volatile.Read(ref reads);
+            public int UntimedEmptyReads => Volatile.Read(ref untimedEmptyReads);
             public readonly ManualResetEventSlim Closing = new ManualResetEventSlim();
             public readonly ManualResetEventSlim FinishClose = new ManualResetEventSlim();
             public ReadBarrier(DatagramTransport inner) { this.inner = inner; }
@@ -100,10 +118,17 @@ namespace Thornswood
             public int Receive(byte[] b, int o, int n, int wait) { return Receive(b.AsSpan(o, n), wait); }
             public int Receive(Span<byte> b, int wait)
             {
-                Interlocked.Increment(ref reads);
-                bool held = Interlocked.Exchange(ref armed, 0) != 0;
-                try { return inner.Receive(b, wait); }
-                finally { if (held) Returned.Set(); }
+                if (Interlocked.Increment(ref reads) == 1)
+                {
+                    // A short datagram is discarded by BouncyCastle, so it
+                    // advances to another transport read in this same call.
+                    b[0] = 0;
+                    return 1;
+                }
+                waitedOnOpenInput = false;
+                int result = inner.Receive(b, wait);
+                if (result < 0 && !waitedOnOpenInput) Interlocked.Increment(ref untimedEmptyReads);
+                return result;
             }
             public void Send(byte[] b, int o, int n) { inner.Send(b, o, n); }
             public void Send(ReadOnlySpan<byte> b) { inner.Send(b); }
@@ -122,6 +147,7 @@ namespace Thornswood
             beforeReceive = before;
             using (var pair = new Pair())
             {
+                if (!before.Entered.Wait(4000)) throw new InvalidOperationException("actual reader never reached barrier");
                 object layer = Layer(pair.A);
                 var barrier = new ReadBarrier((DatagramTransport)Get(layer, "m_transport"));
                 Set(layer, "m_transport", barrier);
@@ -129,7 +155,7 @@ namespace Thornswood
                 var closing = new Thread(() => { try { pair.A.Dispose(); } catch (Exception e) { closeError = e; } });
                 try
                 {
-                    if (!before.Entered.Wait(4000)) throw new InvalidOperationException("actual reader never reached barrier");
+
                     Check("actual established reader is parked before local close", Get(pair.A, "dtls") != null);
                     closing.Start();
                     if (!barrier.Closing.Wait(4000)) throw new InvalidOperationException("actual Dispose never reached DTLS close");
@@ -140,11 +166,10 @@ namespace Thornswood
                     Thread.Sleep(1100);
                     Check("setup delay cannot consume the library receive deadline", preparation.ElapsedMilliseconds >= 1000 && !before.Called);
                     before.Release.Set();
-                    Check("the parked read returns within its original deadline", barrier.Returned.Wait(3000));
-                    // Fail() runs after the transport returns. Observe it over
-                    // longer than one receive period without changing timers.
-                    Wait(() => IsFailed(layer), 1200);
-                    Check("retired established reader never polls empty reads", barrier.Reads == 1);
+                    Check("the parked read returns within its original deadline", before.Stopped.Wait(3000));
+                    Check("BouncyCastle can read multiple datagrams inside one receive", barrier.Reads > 1);
+                    Check("retired established reader never polls empty reads", barrier.UntimedEmptyReads == 0);
+                    Check("retired reader never starts another top-level receive", Volatile.Read(ref before.Calls) == 1);
                     Check("local orderly retirement never marks DTLS failed", !IsFailed(layer));
                     Check("local retirement sends no fatal alert to the live peer", !IsFailed(Layer(pair.B)));
                 }

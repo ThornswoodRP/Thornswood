@@ -23,7 +23,8 @@
     plugin -> page  setFacing({ id, name }) or setFacing(null) as it opens:
                     who the look prompt was drawn for when J opened
 
-  Everything it does goes out as a /journal line. See the journalCommand note
+  Most actions use /journal; exact page saves use /journal-write-v1 with a
+  JSON [journalId,pageId,title,text] payload. See the journalCommand note
   in gamemode.js. Those lines are the panel's: J is the only way in, nobody is
   told to type them, and no help names them (Patrick, 4 Oct: buttons, not
   commands; #1630).
@@ -45,6 +46,11 @@
   var openBook = '';     // which journal is being read
   var openPage = '';     // which page inside it
   var editing = false;
+  var pageDraft = null; // only the currently selected owned page
+  var pendingLeave = null, leaveChoice = null, lastEdit = 'text', leaveNotice = '';
+  var destructiveArm = null, destructiveTimer = 0, destructiveHeld = '';
+  var groupFieldError = null;
+  var DESTRUCTIVE_ARM_MS = 5000; // The same second-press window as Office.
   var readingShared = -1;
   var openGroup = '';
   var onBoards = false;  // the Boards tab is what the right side shows (issue 1627)
@@ -227,16 +233,48 @@
     root.innerHTML =
       '<div class="panel">' +
       '<h2>Journals</h2>' +
+      '<div id="' + ID + '-leave-choice" hidden role="group" aria-labelledby="' + ID + '-leave-title" style="padding:12px 18px;border:1px solid #c6aa6d;margin:8px 0">' +
+      '<p id="' + ID + '-leave-title">Discard unsaved page changes before leaving this page?</p>' +
+      '<button type="button" id="' + ID + '-keep">Keep editing</button>' +
+      '<button type="button" id="' + ID + '-discard">Discard and continue</button></div>' +
       '<div class="cols">' +
       '<div class="side" id="' + ID + '-side"></div>' +
       '<div class="main" id="' + ID + '-main"></div>' +
       '</div>' +
+      '<p id="' + ID + '-field-reason" role="status" aria-live="polite" style="display:none;margin:0;padding:0 18px"></p>' +
       '<div class="foot"><span id="' + ID + '-foot"></span><span style="flex:1"></span>' +
       '<button id="' + ID + '-help">Help</button>' +
       '<button id="' + ID + '-settings">Settings</button>' +
       '<button id="' + ID + '-close">Close</button></div>' +
       '</div>';
     document.body.appendChild(root);
+    leaveChoice = root.querySelector('#' + ID + '-leave-choice'); leaveChoice.hidden = true;
+    root.addEventListener('focusin', rememberEditor);
+    root.addEventListener('focusout', rememberEditor);
+    root.addEventListener('input', resetDestructive);
+    root.addEventListener('input', function (ev) {
+      if (groupFieldError && ev.target === groupFieldError.field) clearGroupFieldError();
+    });
+    root.addEventListener('click', function (ev) {
+      if (destructiveArm && ev.target !== destructiveArm.button) resetDestructive();
+    }, true);
+    root.addEventListener('keydown', function (ev) {
+      if (shown && destructiveHeld && (ev.key === 'Enter' || ev.key === ' ')) {
+        ev.preventDefault(); ev.stopPropagation(); return;
+      }
+      var button = ev.target;
+      if (!shown || !button || button.tagName !== 'BUTTON' ||
+          (button.getAttribute('data-do') !== 'dropbook' && button.getAttribute('data-g') !== 'disband' &&
+           button.id !== ID + '-discard') || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+      ev.preventDefault(); ev.stopPropagation();
+      if (ev.repeat || destructiveHeld) return;
+      destructiveHeld = ev.key;
+      button.click();
+    }, true);
+    document.addEventListener('keyup', function (ev) {
+      if (ev.key === destructiveHeld) { destructiveHeld = ''; ev.preventDefault(); }
+    });
+    window.addEventListener('blur', function () { destructiveHeld = ''; resetDestructive(); });
     root.querySelector('#' + ID + '-close').onclick = close;
     // Help, beside Close (#1633): the help panel on its People topic, which
     // has journals and group books, and this one put down; the help opens
@@ -260,7 +298,13 @@
     // or a page, where it is a letter somebody is writing.
     document.addEventListener('keydown', function (ev) {
       if (!shown) { return; }
-      if (ev.key === 'Escape') { ev.preventDefault(); close(); return; }
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        if (ev.repeat) return;
+        if (destructiveArm) { resetDestructive(); return; }
+        if (pendingLeave) cancelLeave(true); else close();
+        return;
+      }
       if (keyName && String(ev.key || '').toUpperCase() === keyName.toUpperCase() &&
           !ev.ctrlKey && !ev.altKey && !ev.metaKey && !typing(ev.target)) {
         ev.preventDefault(); close();
@@ -293,6 +337,115 @@
     var p = (book && book.pages) || [];
     for (var i = 0; i < p.length; i++) { if (p[i].id === id) { return p[i]; } }
     return null;
+  }
+
+  function newJournal() {
+    openGroup = '';
+    var now = Date.now();
+    if (newQueued) {
+      if (queued() > 0) { return false; }
+      // It has left since the last press: wait for its answer from now.
+      newQueued = false;
+      newAt = now;
+      return false;
+    }
+    if (newAt && now - newAt < NEW_WAIT_MS) { return false; }
+    newAt = now;
+    newFrom = books().length;
+    var went = net('/journal new Journal');
+    if (went === 'queued') { newQueued = true; }
+    else if (!went) { newAt = 0; }
+    return !!went;
+  }
+
+  function rememberEditor(ev) {
+    var field = ev.target;
+    if (!field || !root.contains(field) || (field.id !== ID + '-ptitle' && field.id !== ID + '-text')) return;
+    lastEdit = field.id === ID + '-ptitle' ? 'ptitle' : 'text';
+    if (pendingLeave && pageDraft === pendingLeave.draft) {
+      pendingLeave.editor = lastEdit;
+      pendingLeave.selection = typeof field.selectionStart === 'number' ?
+        {start:field.selectionStart,end:field.selectionEnd,direction:field.selectionDirection} : null;
+    }
+  }
+
+  function resetDestructive() {
+    if (destructiveArm) destructiveArm.button.textContent = destructiveArm.text;
+    destructiveArm = null;
+    if (destructiveTimer) clearTimeout(destructiveTimer);
+    destructiveTimer = 0;
+  }
+
+  // A mounted control and an unchanged authoritative view, never a cached
+  // command alone. A redraw or changed ownership cannot inherit an arm.
+  function confirmDestructive(button, current, wording, send) {
+    if (!shown || !root.contains(button)) return;
+    var target = current();
+    if (!target) { resetDestructive(); return; }
+    var snapshot = JSON.stringify(target);
+    var again = destructiveArm && destructiveArm.button === button &&
+      destructiveArm.snapshot === snapshot && Date.now() < destructiveArm.until;
+    resetDestructive();
+    if (again) { send(); return; }
+    var armed = {button:button,text:button.textContent,snapshot:snapshot,until:Date.now()+DESTRUCTIVE_ARM_MS};
+    destructiveArm = armed;
+    button.textContent = 'Press again to ' + wording;
+    destructiveTimer = setTimeout(function () {
+      if (destructiveArm === armed) resetDestructive();
+    }, DESTRUCTIVE_ARM_MS);
+  }
+
+  function cancelLeave(focus) {
+    var intent = pendingLeave;
+    pendingLeave = null;
+    if (leaveChoice) {
+      leaveChoice.hidden = true;
+      root.querySelector('#' + ID + '-keep').onclick = null;
+      root.querySelector('#' + ID + '-discard').onclick = null;
+    }
+    if (focus) {
+      var field = root.querySelector('#' + ID + '-' + (intent && intent.editor || lastEdit));
+      if (field) {
+        field.focus();
+        if (intent && pageDraft === intent.draft && intent.selection && typeof field.setSelectionRange === 'function') {
+          field.setSelectionRange(intent.selection.start, intent.selection.end, intent.selection.direction);
+        }
+      }
+    }
+  }
+
+  function leavePage(run, valid, submit, destructiveTitle) {
+    leaveNotice = '';
+    if (!pageDraft) {
+      if ((!valid || valid()) && (!submit || submit()) && run) run();
+      return;
+    }
+    var field = root.querySelector('#' + ID + '-' + lastEdit);
+    var selection = field && typeof field.selectionStart === 'number' ?
+      {start:field.selectionStart,end:field.selectionEnd,direction:field.selectionDirection} : null;
+    var intent = {draft:pageDraft,run:run,valid:valid,editor:lastEdit,selection:selection};
+    pendingLeave = intent; leaveChoice.hidden = false;
+    var keep = root.querySelector('#' + ID + '-keep'), discard = root.querySelector('#' + ID + '-discard');
+    root.querySelector('#' + ID + '-leave-title').textContent = destructiveTitle ?
+      'Throw away "' + destructiveTitle + '" and its unsaved changes?' : 'Discard unsaved page changes before leaving this page?';
+    discard.textContent = destructiveTitle ? 'Throw away journal and unsaved changes' : 'Discard and continue';
+    keep.onclick = function () { if (pendingLeave === intent) cancelLeave(true); };
+    discard.onclick = function () {
+      if (pendingLeave !== intent || pageDraft !== intent.draft) return;
+      if (intent.valid && !intent.valid()) {
+        cancelLeave(true); leaveNotice = 'That destination changed. Your unsaved page is still here. '; drawJournalFoot(); return;
+      }
+      if (submit && !submit()) {
+        cancelLeave(true); leaveNotice = 'Could not continue yet. Your unsaved page is still here. '; drawJournalFoot(); return;
+      }
+      cancelLeave(false); pageDraft = null; draw();
+      if (intent.run) intent.run();
+      if (shown) {
+        var target = root.querySelector('#' + ID + '-' + lastEdit) || root.querySelector('button[data-page]') || root.querySelector('#' + ID + '-main');
+        if (target) { if (!typing(target) && target.tagName !== 'BUTTON') target.tabIndex = -1; target.focus(); }
+      }
+    };
+    keep.focus();
   }
 
   function drawSide() {
@@ -333,7 +486,7 @@
                 '<span class="c">' + esc(gb[gi].kind) + '</span></button>';
       }
       if (group.canBusiness || group.canFaction) {
-        html += '<input id="' + ID + '-gname" placeholder="A name">';
+        html += '<input id="' + ID + '-gname" aria-label="Group name" placeholder="A name">';
         if (group.canBusiness) {
           html += '<button class="item go" data-found="business">New business</button>';
         }
@@ -356,67 +509,51 @@
             renamed on the panel, which is one more click and cannot strand
             anybody.
           */
-          openGroup = '';
-          var now = Date.now();
-          if (newQueued) {
-            if (queued() > 0) { return; }
-            // It has left since the last press: wait for its answer from now.
-            newQueued = false;
-            newAt = now;
-            return;
-          }
-          if (newAt && now - newAt < NEW_WAIT_MS) { return; }
-          newAt = now;
-          newFrom = books().length;
-          var went = net('/journal new Journal');
-          if (went === 'queued') { newQueued = true; }
-          else if (!went) { newAt = 0; }
+          leavePage(null, null, newJournal);
           return;
         }
         if (this.getAttribute('data-shared') !== null) {
-          readingShared = Number(this.getAttribute('data-shared'));
-          openBook = ''; openPage = ''; editing = false; openGroup = '';
-          draw();
+          var index = Number(this.getAttribute('data-shared'));
+          var sharedSnapshot = JSON.stringify(((data && data.shared) || [])[index]);
+          leavePage(function () {
+            readingShared = index; openBook = ''; openPage = ''; editing = false; openGroup = ''; draw();
+          }, function () { return sharedSnapshot !== undefined && JSON.stringify(((data && data.shared) || [])[index]) === sharedSnapshot; });
           return;
         }
-        openBook = this.getAttribute('data-book');
-        readingShared = -1;
-        openPage = '';
-        editing = false;
-        openGroup = '';
-        draw();
+        var bookId = this.getAttribute('data-book');
+        if (bookId === openBook && pageOf(bookOf(openBook), openPage)) return;
+        leavePage(function () {
+          openBook = bookId; readingShared = -1; openPage = ''; editing = false; openGroup = ''; draw();
+        }, function () { return !!bookOf(bookId); });
       };
     }
     var groupBtns = side.querySelectorAll('button[data-group],button[data-found]');
     for (var gbi = 0; gbi < groupBtns.length; gbi++) {
       groupBtns[gbi].onclick = function () {
+        if (!shown || !root.contains(this)) return;
         var found = this.getAttribute('data-found');
         if (found) {
           var nameEl = root.querySelector('#' + ID + '-gname');
           var gname = nameEl ? String(nameEl.value || '').trim() : '';
-          if (!gname) { return; }
+          clearGroupFieldError();
+          if (!needGroupField('gname', 'Give the group a name first.')) return;
           net('/book new ' + found + ' ' + gname);
           return;
         }
-        openGroup = this.getAttribute('data-group');
-        openBook = '';
-        readingShared = -1;
-        openPage = '';
-        editing = false;
-        draw();
+        var groupId = this.getAttribute('data-group');
+        leavePage(function () {
+          openGroup = groupId; openBook = ''; readingShared = -1; openPage = ''; editing = false; draw();
+        }, function () { return !!(data && data.group && data.group.show && (data.group.books || []).some(function (book) { return book.id === groupId; })); });
       };
     }
     var boardBtns = side.querySelectorAll('button[data-board]');
     for (var bb = 0; bb < boardBtns.length; bb++) {
       boardBtns[bb].onclick = function () {
-        onBoards = true;
-        openBook = '';
-        readingShared = -1;
-        openPage = '';
-        editing = false;
-        openGroup = '';
-        net('/board ' + this.getAttribute('data-board'));
-        draw();
+        var hold = this.getAttribute('data-board');
+        leavePage(function () {
+          onBoards = true; openBook = ''; readingShared = -1; openPage = ''; editing = false; openGroup = '';
+          net('/board ' + hold); draw();
+        }, function () { return !!(data && data.boards && (data.boards.list || []).some(function (board) { return board.hold === hold; })); });
       };
     }
   }
@@ -568,9 +705,9 @@
         out += '</div>';
       }
       if (book.canPrices) {
-        out += '<div class="bar"><input id="' + ID + '-price-name" placeholder="what">' +
-               '<input id="' + ID + '-price-buy" placeholder="buy, blank if not">' +
-               '<input id="' + ID + '-price-sell" placeholder="sell, blank if not">' +
+        out += '<div class="bar"><input id="' + ID + '-price-name" aria-label="Item name" placeholder="what">' +
+               '<input id="' + ID + '-price-buy" aria-label="Buying price" placeholder="buy, blank if not">' +
+               '<input id="' + ID + '-price-sell" aria-label="Selling price" placeholder="sell, blank if not">' +
                '<button data-g="price">Set price</button></div>';
       }
       out += '<b>Talk</b>';
@@ -583,7 +720,7 @@
       out += '<div class="none">You cannot read this book.</div>';
     }
     if (book.speak) {
-      out += '<div class="bar"><input id="' + ID + '-gline" placeholder="out of character">' +
+      out += '<div class="bar"><input id="' + ID + '-gline" aria-label="Out of character message" placeholder="out of character">' +
              '<button class="go" data-g="say">Say</button></div>';
     }
     if (book.invite) {
@@ -594,7 +731,7 @@
       */
       out += '<div class="bar">' +
              (facing ? '<button data-g="invitefacing">Invite ' + esc(facing.name) + '</button>' : '') +
-             '<input id="' + ID + '-ginvite" placeholder="who is here">' +
+             '<input id="' + ID + '-ginvite" aria-label="Person to invite" placeholder="who is here">' +
              '<button data-g="invite">Invite</button></div>';
     }
     if (book.canRoles) {
@@ -616,26 +753,26 @@
         }
         out += '</div>';
       }
-      out += '<div class="bar"><input id="' + ID + '-grole" placeholder="a role">' +
+      out += '<div class="bar"><input id="' + ID + '-grole" aria-label="New role name" placeholder="a role">' +
              '<button data-g="rolenew">New role</button></div>';
-      out += '<div class="bar"><input id="' + ID + '-grold" placeholder="a role">' +
-             '<input id="' + ID + '-grnew" placeholder="its new name">' +
+      out += '<div class="bar"><input id="' + ID + '-grold" aria-label="Current role name" placeholder="a role">' +
+             '<input id="' + ID + '-grnew" aria-label="Replacement role name" placeholder="its new name">' +
              '<button data-g="rolerename">Rename role</button></div>';
     }
     // Invite also removes someone who is not the owner (factions.md, Roles).
     if (book.canRoles || book.invite) {
-      out += '<div class="bar"><input id="' + ID + '-gwho" placeholder="who is in the book">' +
-             (book.canRoles ? '<input id="' + ID + '-gset" placeholder="their role">' +
+      out += '<div class="bar"><input id="' + ID + '-gwho" aria-label="Person in the book" placeholder="who is in the book">' +
+             (book.canRoles ? '<input id="' + ID + '-gset" aria-label="Role to assign" placeholder="their role">' +
                               '<button data-g="setrole">Set role</button>' : '') +
              (book.invite ? '<button data-g="remove">Remove</button>' : '') + '</div>';
     }
     if (book.owner) {
-      out += '<div class="bar"><input id="' + ID + '-grename" placeholder="a new name">' +
+      out += '<div class="bar"><input id="' + ID + '-grename" aria-label="New group name" placeholder="a new name">' +
              '<button data-g="rename">Rename</button>' +
              '<button data-g="disband">Disband</button></div>';
     }
     if (book.staff) {
-      out += '<div class="bar"><input id="' + ID + '-ghand" placeholder="who already belongs">' +
+      out += '<div class="bar"><input id="' + ID + '-ghand" aria-label="New owner" placeholder="who already belongs">' +
              '<button data-g="give">Hand it on</button></div>';
     }
     if (book.leave) {
@@ -646,6 +783,49 @@
     for (var a = 0; a < actions.length; a++) {
       actions[a].onclick = onGroup;
     }
+  }
+
+  // Own only the validity and description token installed for this refusal.
+  // Existing hints/errors, and newer changes by another owner, survive cleanup.
+  function clearGroupFieldError() {
+    var error = groupFieldError;
+    if (!error) return;
+    groupFieldError = null;
+    var field = error.field;
+    var ownsValidity = field.validity.customError && field.validationMessage === error.reason;
+    var newerError = field.validity.customError && !ownsValidity;
+    if (ownsValidity) field.setCustomValidity(error.custom);
+    // A surviving replacement error also owns its ordinary true ARIA marker.
+    if (field.getAttribute('aria-invalid') === 'true' && !newerError) {
+      if (error.invalid == null) field.removeAttribute('aria-invalid');
+      else field.setAttribute('aria-invalid', error.invalid);
+    }
+    if (error.added) {
+      var now = field.getAttribute('aria-describedby');
+      var remaining = now === error.installed ? error.described :
+        String(now || '').split(/\s+/).filter(function (id) { return id && id !== ID + '-field-reason'; }).join(' ');
+      if (remaining == null || remaining === '') field.removeAttribute('aria-describedby');
+      else field.setAttribute('aria-describedby', remaining);
+    }
+    var note = root.querySelector('#' + ID + '-field-reason');
+    note.textContent = ''; note.style.display = 'none';
+  }
+
+  function needGroupField(id, reason) {
+    var field = root.querySelector('#' + ID + '-' + id);
+    if (!field || !root.contains(field)) return false;
+    if (String(field.value || '').trim()) return true;
+    var described = field.getAttribute('aria-describedby');
+    var added = String(described || '').split(/\s+/).indexOf(ID + '-field-reason') < 0;
+    var installed = added ? (described ? described + ' ' : '') + ID + '-field-reason' : described;
+    groupFieldError = {field:field,reason:reason,custom:field.validity.customError ? field.validationMessage : '',
+      invalid:field.getAttribute('aria-invalid'),described:described,added:added,installed:installed};
+    var note = root.querySelector('#' + ID + '-field-reason');
+    note.textContent = reason; note.style.display = 'block';
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', installed);
+    field.setCustomValidity(reason); field.focus(); field.reportValidity();
+    return false;
   }
 
   function gval(id) {
@@ -659,18 +839,20 @@
   }
 
   function onGroup() {
+    if (!shown || !root.contains(this)) return;
+    clearGroupFieldError();
     var book = groupBook();
     if (!book) { return; }
     var verb = this.getAttribute('data-g');
     if (verb === 'say') {
       var line = gval('gline');
-      if (!line) { return; }
+      if (!needGroupField('gline', 'Write a message first.')) return;
       net('/book say ' + book.id + ' ' + line);
       return;
     }
     if (verb === 'invite') {
       var who = gval('ginvite');
-      if (!who) { return; }
+      if (!needGroupField('ginvite', 'Name the person to invite.')) return;
       net('/book invite ' + book.id + ' ' + who);
       return;
     }
@@ -682,14 +864,21 @@
     if (verb === 'leave') { net('/book leave ' + book.id); openGroup = ''; return; }
     if (verb === 'rename') {
       var next = gval('grename');
-      if (!next) { return; }
+      if (!needGroupField('grename', 'Give the group a new name.')) return;
       net('/book rename ' + book.id + ' ' + next);
       return;
     }
-    if (verb === 'disband') { net('/book disband ' + book.id); openGroup = ''; return; }
+    if (verb === 'disband') {
+      confirmDestructive(this, function () {
+        var current = groupBook(); return current && current.id === book.id && current.owner ? current : null;
+      }, 'disband "' + book.name + '"', function () {
+        if (net('/book disband ' + book.id)) { openGroup = ''; draw(); }
+      });
+      return;
+    }
     if (verb === 'price') {
       var item = gval('price-name');
-      if (!item) { return; }
+      if (!needGroupField('price-name', 'Name the item to price.')) return;
       net('/book price ' + book.id + ' | ' + item + ' | ' + blankGold('price-buy') + ' | ' + blankGold('price-sell'));
       return;
     }
@@ -699,14 +888,15 @@
     }
     if (verb === 'rolenew') {
       var role = gval('grole');
-      if (!role) { return; }
+      if (!needGroupField('grole', 'Give the new role a name.')) return;
       net('/book role ' + book.id + ' new | ' + role);
       return;
     }
     if (verb === 'rolerename') {
       var was = gval('grold');
       var renamed = gval('grnew');
-      if (!was || !renamed) { return; }
+      if (!needGroupField('grold', 'Name the current role.') ||
+          !needGroupField('grnew', 'Give the role a new name.')) return;
       net('/book role ' + book.id + ' rename | ' + was + ' | ' + renamed);
       return;
     }
@@ -727,25 +917,34 @@
     if (verb === 'setrole') {
       var person = gval('gwho');
       var set = gval('gset');
-      if (!person || !set) { return; }
+      if (!needGroupField('gwho', 'Name the person whose role changes.') ||
+          !needGroupField('gset', 'Name the role to assign.')) return;
       net('/book member ' + book.id + ' role | ' + person + ' | ' + set);
       return;
     }
     if (verb === 'remove') {
       var gone = gval('gwho');
-      if (!gone) { return; }
+      if (!needGroupField('gwho', 'Name the person to remove.')) return;
       net('/book member ' + book.id + ' remove | ' + gone);
       return;
     }
     if (verb === 'give') {
       var heir = gval('ghand');
-      if (!heir) { return; }
+      if (!needGroupField('ghand', 'Name the new owner.')) return;
       net('/book give ' + book.id + ' | ' + heir);
     }
   }
 
   function drawMain() {
     var main = root.querySelector('#' + ID + '-main');
+    // Losing the source view is not permission to erase its private local draft.
+    // Keep the mounted editor for copying, but retire its former write controls.
+    if (draftSourceMissing()) {
+      var stale = main.querySelectorAll('button,select');
+      for (var si = 0; si < stale.length; si++) stale[si].disabled = true;
+      return;
+    }
+
 
     if (openGroup) { drawGroup(main); return; }
 
@@ -779,7 +978,7 @@
 
     var html =
       '<div class="bar">' +
-      '<input id="' + ID + '-title" value="' + esc(book.title) + '" style="max-width:360px">' +
+      '<input id="' + ID + '-title" aria-label="Journal title" value="' + esc(book.title) + '" style="max-width:360px">' +
       '<button data-do="rename">Rename</button>' +
       '<span class="grow"></span>' +
       '<button data-do="dropbook">Throw away</button>' +
@@ -800,18 +999,19 @@
     html += '<button class="go" data-do="newpage">New page</button></div>';
 
     var page = pageOf(book, openPage);
+    if (pageDraft && (pageDraft.journalId !== book.id || pageDraft.pageId !== openPage)) pageDraft = null;
     if (!page) {
       html += '<div class="none">' + (book.pages.length ? 'Pick a page.' : 'No pages yet.') + '</div>';
     } else {
       html +=
         '<div class="bar">' +
-        '<input id="' + ID + '-ptitle" maxlength="' + TITLE_CHARS + '" value="' + esc(page.title) + '" style="max-width:320px">' +
+        '<input id="' + ID + '-ptitle" aria-label="Page title" maxlength="' + TITLE_CHARS + '" value="' + esc(pageDraft ? pageDraft.title : page.title) + '" style="max-width:320px">' +
         '<span class="grow"></span>' +
         '<button data-do="sharepage">Share this page</button>' +
         '<button data-do="unsharepage">Stop sharing it</button>' +
         '<button class="go" data-do="save">Save</button>' +
         '</div>' +
-        '<textarea id="' + ID + '-text" maxlength="' + PAGE_CHARS + '">' + esc(page.text || '') + '</textarea>';
+        '<textarea id="' + ID + '-text" aria-label="Page text" maxlength="' + PAGE_CHARS + '">' + esc(pageDraft ? pageDraft.text : (page.text || '')) + '</textarea>';
     }
 
     main.innerHTML = html;
@@ -819,14 +1019,53 @@
     var pages = main.querySelectorAll('button[data-page]');
     for (var q = 0; q < pages.length; q++) {
       pages[q].onclick = function () {
-        openPage = this.getAttribute('data-page');
-        draw();
+        var pageId = this.getAttribute('data-page');
+        if (pageId === openPage) return;
+        leavePage(function () { openPage = pageId; draw(); }, function () { return !!pageOf(bookOf(book.id), pageId); });
       };
     }
     var acts = main.querySelectorAll('button[data-do]');
     for (var r = 0; r < acts.length; r++) {
-      acts[r].onclick = function () { act(this.getAttribute('data-do'), book); };
+      acts[r].onclick = function () { act(this.getAttribute('data-do'), book, this); };
     }
+    if (page) {
+      var titleField = root.querySelector('#' + ID + '-ptitle');
+      var textField = root.querySelector('#' + ID + '-text');
+      if (titleField) { titleField.value = pageDraft ? pageDraft.title : page.title; titleField.oninput = function () { captureDraft(book); }; }
+      if (textField) { textField.value = pageDraft ? pageDraft.text : (page.text || ''); textField.oninput = function () { captureDraft(book); }; }
+    }
+  }
+
+  function draftSourceMissing() {
+    var source = pageDraft && bookOf(pageDraft.journalId);
+    return !!pageDraft && (!source || !pageOf(source, pageDraft.pageId));
+  }
+
+  function captureDraft(book) {
+    cancelLeave(false); leaveNotice = '';
+    var active = document.activeElement;
+    if (active && (active.id === ID + '-ptitle' || active.id === ID + '-text')) lastEdit = active.id === ID + '-ptitle' ? 'ptitle' : 'text';
+    pageDraft = {journalId:book.id,pageId:openPage,title:val('ptitle'),text:val('text')};
+    drawJournalFoot();
+  }
+
+  function reconcileDraft() {
+    if (!pageDraft || !data) return;
+    var answer = data.journalSave;
+    var book = bookOf(pageDraft.journalId), page = book && pageOf(book, pageDraft.pageId);
+    if (answer && answer.status === 'saved' && answer.journalId === pageDraft.journalId &&
+        answer.pageId === pageDraft.pageId && answer.title === pageDraft.title && answer.text === pageDraft.text &&
+        page && page.title === pageDraft.title && page.text === pageDraft.text) {
+      if (pendingLeave) cancelLeave(leaveChoice.contains(document.activeElement));
+      pageDraft = null;
+      if (shown) drawJournalFoot();
+    }
+  }
+
+  function drawJournalFoot() {
+    var foot = root && root.querySelector('#' + ID + '-foot');
+    if (foot) foot.textContent = (draftSourceMissing() ? 'This page is no longer available. Your unsaved text is kept here for copying. ' : '') + leaveNotice + (pageDraft ? 'Unsaved changes. ' : '') +
+      'Escape' + (keyName ? ' or ' + keyName : '') + ' closes this. Sharing needs them to be a friend.';
   }
 
   function sayNeedFriend() {
@@ -839,34 +1078,54 @@
     return el ? String(el.value || '') : '';
   }
 
-  function act(verb, book) {
+  function act(verb, book, button) {
+    book = book && bookOf(book.id);
+    if (!book || (verb === 'save' && !pageOf(book, openPage))) { drawJournalFoot(); return; }
+
     var who = val('who');
     if (verb === 'rename') {
       net('/journal title ' + book.id + ' ' + val('title'));
       return;
     }
     if (verb === 'newpage') {
-      net('/journal page ' + book.id + ' - New page :: ');
+      leavePage(null, function () { return !!bookOf(book.id); },
+        function () { return !!net('/journal-write-v1 ' + JSON.stringify([book.id, '', 'New page', ''])); });
       return;
     }
     if (verb === 'save') {
-      /*
-        NEWLINES ARE FLATTENED BECAUSE THE CHANNEL IS LINE BASED. The chat
-        socket carries one line at a time, so a page with paragraphs in it
-        would arrive as several commands and the second would be nonsense.
-        They go over as \\n and the server never sees a raw newline.
-      */
+      captureDraft(book);
       var raw = val('text');
       if (raw.length > PAGE_CHARS) {
         var foot = root.querySelector('#' + ID + '-foot');
         if (foot) { foot.textContent = 'That page is ' + raw.length + ' characters long and a page holds ' + PAGE_CHARS + '. Shorten it to save.'; }
         return;
       }
-      var text = raw.split('\n').join('\\n');
-      net('/journal page ' + book.id + ' ' + (openPage || '-') + ' ' + val('ptitle') + ' :: ' + text);
+      var title = val('ptitle');
+      var line = '/journal-write-v1 ' + JSON.stringify([book.id, openPage || '', title, raw]);
+      if (title.length > TITLE_CHARS || line.length > 25000) {
+        var titleFoot = root.querySelector('#' + ID + '-foot');
+        if (titleFoot) titleFoot.textContent = 'That page request is too long. Nothing was sent; your draft is unsaved.';
+        return;
+      }
+      net(line);
       return;
     }
-    if (verb === 'dropbook') { net('/journal drop ' + book.id); openBook = ''; return; }
+    if (verb === 'dropbook') {
+      if (!shown || !root.contains(button)) return;
+      var snapshot = JSON.stringify(book);
+      var current = function () { return openBook === book.id ? bookOf(book.id) : null; };
+      var send = function () { return !!net('/journal drop ' + book.id); };
+      if (pageDraft) {
+        resetDestructive();
+        leavePage(function () { openBook = ''; draw(); }, function () { return JSON.stringify(current()) === snapshot; },
+          send, book.title);
+      } else {
+        confirmDestructive(button, current, 'throw away "' + book.title + '"', function () {
+          if (send()) { openBook = ''; draw(); }
+        });
+      }
+      return;
+    }
     if (verb === 'sharebook') {
       if (!who) { sayNeedFriend(); return; }
       net('/journal share ' + book.id + ' - ' + who);
@@ -886,11 +1145,17 @@
   }
 
   function draw() {
+    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
+    drawContents();
+  }
+
+  function drawContents() {
     if (!root || !shown) { return; }
+    clearGroupFieldError();
+    resetDestructive();
     drawSide();
     drawMain();
-    var foot = root.querySelector('#' + ID + '-foot');
-    foot.textContent = 'Escape' + (keyName ? ' or ' + keyName : '') + ' closes this. Sharing needs them to be a friend.';
+    drawJournalFoot();
   }
 
   function open() {
@@ -900,12 +1165,15 @@
     root.className = 'on';
     fit();
     draw();
+    if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
 
   function close() {
     if (!shown) { return; }
-    shown = false;
+    resetDestructive(); destructiveHeld = '';
+    clearGroupFieldError();
+    shown = false; cancelLeave(false);
     if (root) { root.className = ''; }
     tell('closed');
   }
@@ -943,7 +1211,10 @@
       draw();
     },
     setData: function (d) {
+      resetDestructive();
+      var sourceWasMissing = draftSourceMissing();
       data = d || null;
+      reconcileDraft();
       // The new journal has arrived, so New answers the next press again.
       if ((newAt || newQueued) && books().length !== newFrom) { newAt = 0; newFrom = -1; newQueued = false; }
       /*
@@ -953,6 +1224,7 @@
         while it has focus.
       */
       if (!shown) { return; }
+      if (sourceWasMissing || draftSourceMissing()) { draw(); return; }
       var el = document.activeElement;
       if (el && root && root.contains && root.contains(el) && typing(el)) { return; }
       draw();

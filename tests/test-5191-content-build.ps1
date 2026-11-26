@@ -117,6 +117,7 @@ try {
     # reads the build's files out of git), a chain of one step,
     # its source and the outputs as committed.
     foreach ($f in @('scripts/mods/Build-ContentOnBox.ps1', 'scripts/mods/ContentPaths.ps1', 'scripts/deploy/Artifact.ps1',
+            'scripts/release/RecordShape.ps1', 'scripts/release/Read-JsonFile.ps1',
             'scripts/vps/Vps.ps1', 'scripts/vps/Send-Script.ps1', 'scripts/vps/Lock-Folder.ps1')) {
         Put $f ([IO.File]::ReadAllText((Join-Path $Repo $f)))
     }
@@ -132,7 +133,7 @@ try {
     $loadOrder = '{"collection":"abc","revision":3,"loadOrder":[' + ((@('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'A.esm', 'B.esp', 'Thornswood-Content.esp', 'Thornswood-Last.esp') | ForEach-Object { '"' + $_ + '"' }) -join ',') + ']}'
     Put 'records/load-order.json' $loadOrder
     Put 'records/collection.json' '{"collection":"abc","revision":3,"plugins":[{"name":"A.esm","master":true},{"name":"B.esp","master":false},{"name":"Off.esp","master":false,"enabled":false}]}'
-    Put 'records/collection-plugins.json' '{"collection":"abc","revision":3,"plugins":[]}'
+    Put 'records/collection-plugins.json' ('{"version":1,"collection":"abc","revision":3,"plugins":[{"name":"A.esm","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     $store = Join-Path $root 'store'
     New-Item -ItemType Directory -Force -Path $store | Out-Null
     Put 'layout.json' '{}'
@@ -277,7 +278,7 @@ try {
     # ---- 8. a revision that adds plugins ------------------------------------
     Fresh $v2
     Put 'records/collection.json' '{"collection":"abc","revision":4,"plugins":[{"name":"A.esm","master":true},{"name":"New.esp","master":false,"after":["B.esp"]},{"name":"B.esp","master":false},{"name":"M.esp","master":true},{"name":"Off.esp","master":false,"enabled":false}]}'
-    Put 'records/collection-plugins.json' '{"collection":"abc","revision":4,"plugins":[]}'
+    Put 'records/collection-plugins.json' ('{"version":1,"collection":"abc","revision":4,"plugins":[{"name":"A.esm","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     $env:TS5191_MOVED = 'the moved catalogue'
     TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'revision 4') | Out-Null
     $rev4 = (TGit @('rev-parse', 'HEAD')) -join ''
@@ -366,7 +367,7 @@ try {
     Fresh $rev4
 
     # ---- 9. records of two revisions ---------------------------------------
-    Put 'records/collection-plugins.json' '{"collection":"abc","revision":5,"plugins":[]}'
+    Put 'records/collection-plugins.json' ('{"version":1,"collection":"abc","revision":5,"plugins":[{"name":"A.esm","size":12,"sha256":"' + ('0' * 64) + '"}]}')
     TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'half a revision') | Out-Null
     $r9 = Run
     Yes '9 records of two revisions stop the build before any tool runs' ($r9.Code -ne 0 -and $r9.Text -match 'they move together' -and $r9.Calls.Count -eq 0 -and -not $r9.Key)

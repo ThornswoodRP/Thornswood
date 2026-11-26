@@ -461,9 +461,9 @@ Yes ('no script names C:/Windows/Temp/thornswood-remote.ps1 (' + ($shared -join 
 
 # A function that copies a script up and runs it by file itself, rather than
 # through Send-Script.ps1, names the file afresh each run. Harden-VPS.ps1
-# does that on purpose: it sends a file of the repository with its own
-# arguments, and it already used a guid before #1070. Feed-Store.ps1 used to
-# be the other one; since #1167 Invoke-FeedStoreOp sends through the helper.
+# previously copied a file up with a guid, but since #3035 sends its box script
+# through Get-ThornswoodFileScript and Invoke-ThornswoodRemote with no scp.
+# Feed-Store.ps1 sends through the helper since #1167.
 $own = @()
 foreach ($f in $files) {
     if ($f.Name -eq 'Send-Script.ps1') { continue }
