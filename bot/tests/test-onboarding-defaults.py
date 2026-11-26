@@ -290,20 +290,24 @@ yes('4 the audit says when a default channel is one the plan gates, and names a 
     'deleted one still on the list',
     'onboarding_shut(guild, ob)' in audit and 'which the server no' in audit)
 none_sees = B._seen_by(None).split(', ')
-yes('7 somebody with no role reads Start Here, Information, the Roleplay Guide, '
-    '#welcome-travelers, #general-chat and #travelers-questions (Patrick, 16 Nov), '
-    'and no ticket or application channel',
-    all(c in none_sees for c in ('#rules', '#welcome', '#start-here', '#disboard',
-                                 '#news', '#updates', '#faq', '#game-rules', '#lore',
-                                 '#factions', '#welcome-travelers', '#general-chat',
+yes('7 somebody with no role reads #rules, #welcome-travelers, #general-chat and '
+    '#travelers-questions (Patrick, 26 Nov), and nothing else of Start Here, no '
+    'Information, Roleplay Guide, ticket or application channel',
+    all(c in none_sees for c in ('#rules', '#welcome-travelers', '#general-chat',
                                  '#travelers-questions'))
-    and not any(c in none_sees for c in ('#get-help', '#report-someone',
+    and not any(c in none_sees for c in ('#welcome', '#start-here', '#disboard',
+                                         '#news', '#updates', '#faq', '#game-rules',
+                                         '#lore', '#factions',
+                                         '#get-help', '#report-someone',
                                          '#apply-to-playtest', '#apply-for-a-seat',
                                          '#apply-for-staff', '#media')))
 member_sees = B._seen_by('Member').split(', ')
-yes('7 a Member sees those and the ticket and application channels, and no other '
-    'Playtester channel',
-    all(c in member_sees for c in none_sees + ['#get-help', '#report-someone',
+yes('7 a Member sees those, the rest of Start Here, Information, the Roleplay Guide '
+    'and the ticket and application channels, and no other Playtester channel',
+    all(c in member_sees for c in none_sees + ['#welcome', '#start-here', '#disboard',
+                                               '#news', '#updates', '#faq',
+                                               '#game-rules', '#lore', '#factions',
+                                               '#get-help', '#report-someone',
                                                '#apply-to-playtest', '#apply-for-a-seat',
                                                '#apply-for-staff'])
     and not any(c in member_sees for c in ('#media', '#suggestions',

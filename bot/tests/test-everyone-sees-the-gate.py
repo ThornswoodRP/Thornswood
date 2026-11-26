@@ -1,11 +1,15 @@
 """
 test-everyone-sees-the-gate.py
 
-Somebody who has just joined reads Start Here, Information, the Roleplay
-Guide, #welcome-travelers, #general-chat and #travelers-questions, and talks
-in none of them (Patrick, 16 Nov 2026). Reacting to the rules gives Member
-(bot_rules_gate.py, #5841), and Member reads the ticket and application
-channels and asks in #travelers-questions. Playtester opens the rest.
+Somebody who has just joined reads #rules, #welcome-travelers and
+#general-chat, and talks in none of them, so they read and agree to the rules
+first (Patrick, 26 Nov 2026, page card q-6961-open-reading; #travelers-questions
+stays readable as on 16 Nov). Reacting to the rules gives Member
+(bot_rules_gate.py, #5841), and Member reads the rest of Start Here,
+Information and the Roleplay Guide and the ticket and application channels,
+and asks in #travelers-questions. Playtester opens the rest. In #general-chat
+a Playtester talks and only staff start threads and run commands (Patrick,
+26 Nov 2026, page card q-6961-general-chat).
 
 Measured on the live server on 10 Nov 2026 (Apply-Discord -OnBox -Audit):
 @everyone held no View Channels server wide. Every read channel's overwrite
@@ -26,9 +30,9 @@ So this checks:
      holds beyond it, changes nothing under -Check, and asks nothing when
      nothing is missing. The audit names what is missing.
   3. After it, by the plan's own modes: a newcomer sees and cannot post in
-     Start Here, Information, the Roleplay Guide, #welcome-travelers,
-     #general-chat and #travelers-questions, and sees no ticket or
-     application channel; a Member sees and cannot post in those; a Member
+     #rules, #welcome-travelers, #general-chat and #travelers-questions, and
+     sees nothing else of Start Here, no Information, Roleplay Guide, ticket
+     or application channel; a Member sees and cannot post in those; a Member
      reads #general-chat and posts in #travelers-questions; nobody
      but the bot posts in #welcome-travelers; in #disboard a Member and a
      Playtester run no command and staff talk and run commands. #disboard is
@@ -161,11 +165,11 @@ for catname, specs in B.PLAN:
 
 # Patrick, 16 Nov 2026: "keep those avaialble but than lock the #apply
 # channels untill they accept the rules and get the #member role".
-GATE = ['Start Here', 'Information', 'Roleplay Guide', '#rules', '#welcome',
-        '#start-here', '#disboard', '#news', '#updates', '#faq', '#game-rules',
-        '#lore', '#factions', '#welcome-travelers', '#general-chat',
+GATE = ['Start Here', '#rules', '#welcome-travelers', '#general-chat',
         '#travelers-questions']
-MEMBERS_READ = ['Tickets', 'Applications', '#get-help', '#report-someone',
+MEMBERS_READ = ['Information', 'Roleplay Guide', '#welcome', '#start-here', '#disboard',
+                '#news', '#updates', '#faq', '#game-rules', '#lore', '#factions',
+                'Tickets', 'Applications', '#get-help', '#report-someone',
                 '#apply-to-playtest', '#apply-for-a-seat', '#apply-for-staff']
 BEHIND = ['#media', '#choose-your-hold', '#suggestions']
 
@@ -263,14 +267,29 @@ yes('a Member reads #general-chat and cannot post or answer in a thread there',
 got = resolve(everyone, member, places['#travelers-questions'])
 yes('a Member asks in #travelers-questions',
     got.view_channel and got.read_message_history and got.send_messages)
-for p in ('#general-chat', '#travelers-questions'):
-    for who, m in (('a Playtester', tester), ('staff (Support)', support),
-                   ('a Playtester who is a Member as well',
-                    Member([roles['Member'], roles['Playtester']]))):
-        got = resolve(everyone, m, places[p])
-        yes('%s talks in %s, answers in a thread and runs a command there' % (who, p),
-            got.view_channel and got.send_messages and got.send_messages_in_threads
-            and got.create_public_threads and got.use_application_commands)
+for who, m in (('a Playtester', tester), ('staff (Support)', support),
+               ('a Playtester who is a Member as well',
+                Member([roles['Member'], roles['Playtester']]))):
+    got = resolve(everyone, m, places['#travelers-questions'])
+    yes('%s talks in #travelers-questions, answers in a thread and runs a command there'
+        % who, got.view_channel and got.send_messages and got.send_messages_in_threads
+        and got.create_public_threads and got.use_application_commands)
+# Patrick, 26 Nov 2026 (q-6961-general-chat): "no threads and commands
+# except staff".
+for who, m in (('a Playtester', tester),
+               ('a Playtester who is a Member as well',
+                Member([roles['Member'], roles['Playtester']]))):
+    got = resolve(everyone, m, places['#general-chat'])
+    yes('%s talks in #general-chat and starts no thread and runs no command there' % who,
+        got.view_channel and got.send_messages and not got.create_public_threads
+        and not got.send_messages_in_threads and not got.use_application_commands)
+for who, m in (('staff (Support)', support),
+               ('staff who are a Playtester as well',
+                Member([roles['Playtester'], roles['Moderator']]))):
+    got = resolve(everyone, m, places['#general-chat'])
+    yes('%s talk in #general-chat, start threads and run commands there' % who,
+        got.view_channel and got.send_messages and got.send_messages_in_threads
+        and got.create_public_threads and got.use_application_commands)
 got = resolve(everyone, newcomer, places['#general-chat'])
 yes('a newcomer runs no command and answers in no thread in #general-chat',
     not got.use_application_commands and not got.send_messages_in_threads)
