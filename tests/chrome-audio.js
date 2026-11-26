@@ -61,22 +61,35 @@ async function evaluate(exe, expression, ms) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-chrome-'));
   const chrome = cp.spawn(exe, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run',
     '--no-default-browser-check', '--remote-debugging-port=0', '--user-data-dir=' + dir, 'about:blank'],
-  { stdio: ['ignore', 'ignore', 'pipe'] });
+  { stdio: ['ignore', 'pipe', 'pipe'] });
   let said = '';
-  chrome.stderr.on('data', (d) => { said += d; });
-  const exited = new Promise((ok) => { if (chrome.exitCode !== null) { ok(); } else { chrome.once('exit', ok); } });
   let browserWs = '';
+  // Port zero publishes the actual endpoint. Chrome's documented stdout
+  // announcement also appears on stderr; keep partial lines per stream so
+  // neither fragmented output nor an unrelated line can become readiness.
+  // https://developer.chrome.com/docs/automation-and-testing/debug-headless
+  const pending = { stdout: '', stderr: '' };
+  function output(channel, data) {
+    said += data;
+    pending[channel] += data;
+    let end;
+    while ((end = pending[channel].indexOf('\n')) >= 0) {
+      const line = pending[channel].slice(0, end).trim();
+      pending[channel] = pending[channel].slice(end + 1);
+      const match = /^DevTools listening on (ws:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):([0-9]+)\/devtools\/browser\/[a-z0-9-]+)$/i.exec(line);
+      if (!browserWs && match && Number(match[2]) >= 1 && Number(match[2]) <= 65535) { browserWs = match[1]; }
+    }
+  }
+  chrome.stdout.on('data', (d) => output('stdout', d));
+  chrome.stderr.on('data', (d) => output('stderr', d));
+  const exited = new Promise((ok) => { if (chrome.exitCode !== null) { ok(); } else { chrome.once('exit', ok); } });
   try {
-    const file = path.join(dir, 'DevToolsActivePort');
-    while (!fs.existsSync(file) || fs.readFileSync(file, 'utf8').split('\n').length < 2) {
+    while (!browserWs) {
       if (Date.now() > by) { throw new Error('Chrome did not open its DevTools port in ' + Math.round(limit / 1000) + ' s. It said:\n' + said); }
       if (chrome.exitCode !== null) { throw new Error('Chrome stopped (exit ' + chrome.exitCode + '). It said:\n' + said); }
       await sleep(50);
     }
-    const lines = fs.readFileSync(file, 'utf8').split('\n');
-    const port = lines[0].trim();
-    browserWs = 'ws://127.0.0.1:' + port + lines[1].trim();
-    const list = await (await fetch('http://127.0.0.1:' + port + '/json/list')).json();
+    const list = await (await fetch('http://' + new URL(browserWs).host + '/json/list')).json();
     const page = list.find((t) => t.type === 'page');
     if (!page) { throw new Error('Chrome has no page to run in'); }
     const ws = new WebSocket(page.webSocketDebuggerUrl);
