@@ -803,6 +803,13 @@ foreach ($scan in @(1,23,36)) {
       /worktree add -q --detach \$tree \$dep\.sha/.test(WATCH) && /finally \{\s*git -C \$repoRoot worktree remove --force \$tree/.test(WATCH));
   yes('it marks a Deployment started before the run, so a run that stops early is not started again',
       WATCH.indexOf('Add-Content -LiteralPath $startedFile') > 0 && WATCH.indexOf('Add-Content -LiteralPath $startedFile') < WATCH.indexOf("Run-RealClient.ps1'), '-Publish'"));
+  yes('the task runs the watcher from its own worktree, moved to origin/main before every look',
+      /\$watcher = Join-Path \$repoRoot 'worktrees\\real-client-watcher'/.test(WATCH) &&
+      /\$look = "git -C '\$watcher' fetch -q origin main; git -C '\$watcher' checkout -q --detach origin\/main; & '" \+ \(Join-Path \$watcher 'scripts\\dev\\Watch-RealClient\.ps1'\)/.test(WATCH) &&
+      /-Command "' \+ \$look/.test(WATCH));
+  yes('its worktrees and temp hang off the clone, found through git\'s shared directory',
+      /rev-parse --git-common-dir/.test(WATCH) && /\$repoRoot = Split-Path -Parent/.test(WATCH));
+  yes('-Uninstall takes the watcher\'s worktree off too', /if \(\$Uninstall\) \{[\s\S]*?worktree remove --force \$watcher/.test(WATCH));
   const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
   if (ver.status === 0) {
     const file = path.join(REPO_DIR, 'scripts', 'dev', 'Watch-RealClient.ps1').replace(/'/g, "''");

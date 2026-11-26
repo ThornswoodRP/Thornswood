@@ -90,8 +90,11 @@ five minutes. It starts one run for the newest Dev Deployment that has
 succeeded and has no "Real game run:" line yet, from that Deployment's own
 commit, when no launcher or game is open, the PC is not on the lock screen
 and nobody has used the keyboard or mouse for ten minutes. Each Deployment is
-run once, pass or fail. Every look is a line in
-`temp\real-client\watch.log`; `-Uninstall` takes the task off.
+run once, pass or fail. The task runs the script from
+`worktrees\real-client-watcher`, which `-Install` makes and each look moves
+to origin/main first, so it never runs a stale copy from the shared clone.
+Every look is a line in `temp\real-client\watch.log` of the clone;
+`-Uninstall` takes the task and that worktree off.
 
 ## How a step is written
 
