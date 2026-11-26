@@ -29,7 +29,7 @@ const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-4398-'));
 let list;
 try {
   const { reads } = steps.find(step => step.tool === generator);
-  for (const rel of [generator, ...reads, 'scripts/dev/GamemodeTables.js', 'game/gamemode-tables/SPELL_IDS.json']) {
+  for (const rel of [generator, ...reads, 'scripts/dev/Check-Makers.js', 'scripts/dev/GamemodeTables.js', 'game/gamemode-tables/SPELL_IDS.json']) {
     const destination = path.join(scratch, rel);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(path.join(root, rel), destination);
