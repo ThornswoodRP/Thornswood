@@ -115,6 +115,20 @@ console.log('PASS a patch is refused on an entry with no file list, or one that 
 
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
 const { spawnSync } = require('node:child_process');
+
+// The publisher holds a file list draft to the published archive's other
+// files (--check-replicate runs checkRepairFiles), so it has to take the
+// whole published archive out, not only collection.json. On 26 Nov the first
+// real run took out only collection.json and stopped on every other file.
+{
+  const pub = fs.readFileSync(path.join(__dirname, '../scripts/release/Publish-CollectionRecord.ps1'), 'utf8');
+  const only = /^(.*)\{ \$extract \+= 'collection\.json' \}/m.exec(pub);
+  assert.ok(only, 'the publisher names when it takes out only collection.json');
+  assert.match(only[1], /-not \$repairRequested/);
+  assert.match(only[1], /-not \$replicateRequested/, 'a file list run takes the whole published archive out');
+  assert.match(pub, /--check-replicate' \(Join-Path \$Work 'published\/x'\)/, 'and checks the draft against that copy');
+  console.log('PASS the publisher takes the whole published archive out for a file list run, which the draft check reads');
+}
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-6888-'));
 try {
   for (const script of ['Publish-CollectionRecord.ps1', 'New-NexusRevision.ps1']) {
