@@ -191,6 +191,21 @@ namespace Thornswood
                 // running while their screen says otherwise.
                 if (!await ClearStuckGame(true)) return;
 
+                // A real Skyrim settings folder and its backup both there
+                // (#4698): either can hold the person's saves, so Play waits
+                // for them to keep one, before anything is parked or moved.
+                List<string> twice = Swap.BothKept();
+                if (twice.Count > 0)
+                {
+                    string both = Swap.BothKeptSays(twice);
+                    Log("Not launching. Two copies of your Skyrim settings and saves are on this PC; Scan on the Diagnostics page names them.");
+                    await RunScanAsync(false);
+                    DrawStatus();
+                    ShowPage(PageDiag);
+                    Ask.Tell(both, "Thornswood", Ask.Icon.Warning);
+                    return;
+                }
+
                 // Skyrim's archives this folder shares with the Steam copy still
                 // hold 1.6.1170's bytes (#1217). The change time is all that is
                 // read unless it moved, so this is instant on an ordinary Play.
