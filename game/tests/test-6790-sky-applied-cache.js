@@ -96,6 +96,7 @@ try {
 
     // A native publication can also fail before the owner sees the value.
     const indoor = { place: 'indoors' }, outdoor = { place: 'outdoors' };
+    const logStart = w.log.length;
     let rejectActor = a, refuse = true, writes = 0;
     box.__testSkyWrite = (actor, desired) => {
       if (actor !== rejectActor) { return; }
@@ -120,6 +121,11 @@ try {
     S.skyAdjust(b, outdoor);
     yes('the next ordinary outdoor update publishes the same sky once', writes === 2 && value(b).id === originalSky);
     yes('a refused publication does not reroll or replace the shared sky', S.ensureRoll(S.climateOf(a, outdoor), w.now()).until === deadline);
+    const refusedWrites = w.log.slice(logStart).filter(line => line.includes('could not publish shared sky'));
+    yes('both refused writes log the actor, sky and engine error, with no extra lines on success',
+      refusedWrites.length === 2 &&
+      refusedWrites[0].includes('0x' + a.toString(16) + ' for sky 0x0: native sky publication refused 0') &&
+      refusedWrites[1].includes('0x' + b.toString(16) + ' for sky 0x' + originalSky.toString(16) + ': native sky publication refused ' + originalSky));
   }
   t.done(w);
   finished = true;

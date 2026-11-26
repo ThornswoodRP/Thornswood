@@ -18778,7 +18778,11 @@ log('gamemode loaded:',
     // Remember only a value the server accepted, so the next sky update can
     // publish the same roll or release if this write was refused.
     try { mp.set(actorId, SKY_PROPERTY, { id: id, at: Date.now() }); }
-    catch (e) { return; }
+    catch (e) {
+      slog('could not publish shared sky to actor 0x' + Number(actorId).toString(16) +
+           ' for sky 0x' + id.toString(16) + ':', (e && e.message) || e);
+      return;
+    }
     pushed[actorId] = id;
   }
 
