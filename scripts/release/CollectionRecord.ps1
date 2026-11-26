@@ -825,46 +825,14 @@ function Get-CollectionChangeSet($R, $Collection) {
             $rule.Add([pscustomobject][ordered]@{ name = [string]$p.name; after = [string[]]@($p.after) })
         }
     }
-    # Light flag changes (#2979): a plugin whose light flag in the record differs
-    # from the published collection. An .esl is light by extension with no patch.
-    # An .esp/.esm with light true needs a patch if the published entry does not
-    # carry one; light false needs an existing patch cleared.
-    $setLight = New-Object Collections.Generic.List[string]
-    $clearLight = New-Object Collections.Generic.List[string]
-    $pubEntryByPlugin = @{}
-    foreach ($m in @($Collection.mods)) {
-        if (-not $m.source -or $m.source.type -ne 'nexus') { continue }
-        $recMod = @($R.mods | Where-Object { [long]$_.modId -eq [long]$m.source.modId -and [long]$_.fileId -eq [long]$m.source.fileId }) | Select-Object -First 1
-        if ($recMod) {
-            foreach ($pn in @($recMod.plugins)) {
-                $pubEntryByPlugin[$pn.ToLowerInvariant()] = $m
-            }
-        }
-    }
-    foreach ($p in @($R.plugins)) {
-        if ($p.name -notmatch '\.es[mp]$') { continue }
-        $k = ([string]$p.name).ToLowerInvariant()
-        if ($addedPlugins.ContainsKey($k)) { continue }
-        if (-not $pubEntryByPlugin.ContainsKey($k)) { continue }
-        $m = $pubEntryByPlugin[$k]
-        $hasPatch = ($m.patches -and @($m.patches.PSObject.Properties | Where-Object { $_.Name -ieq $p.name }).Count -gt 0)
-        if ($p.light -eq $true -and -not $hasPatch) {
-            $setLight.Add([string]$p.name)
-        }
-        elseif ($p.light -eq $false -and $hasPatch) {
-            $clearLight.Add([string]$p.name)
-        }
-    }
     return [pscustomobject]@{
-        Add        = $add.ToArray()
-        Answers    = $answers.ToArray()
-        Remove     = [long[]]$remove.ToArray()
-        Move       = $move.ToArray()
-        Rule       = $rule.ToArray()
-        SetLight   = [string[]]$setLight.ToArray()
-        ClearLight = [string[]]$clearLight.ToArray()
-        Problems   = $problems.ToArray()
-        Empty      = (-not $add.Count -and -not $answers.Count -and -not $remove.Count -and -not $move.Count -and -not $rule.Count -and -not $setLight.Count -and -not $clearLight.Count)
+        Add      = $add.ToArray()
+        Answers  = $answers.ToArray()
+        Remove   = [long[]]$remove.ToArray()
+        Move     = $move.ToArray()
+        Rule     = $rule.ToArray()
+        Problems = $problems.ToArray()
+        Empty    = (-not $add.Count -and -not $answers.Count -and -not $remove.Count -and -not $move.Count -and -not $rule.Count)
     }
 }
 
@@ -876,7 +844,5 @@ function Format-CollectionChangeSet($C) {
     foreach ($m in @($C.Move)) { $out.Add("move mod $($m.modId) to file $($m.fileId)" + $(if (@($m.dropPatch).Count) { ', dropping its patch of ' + (@($m.dropPatch) -join ', ') } else { '' })) }
     foreach ($r in @($C.Remove)) { $out.Add("take mod $r out") }
     foreach ($r in @($C.Rule)) { $out.Add("$($r.name) loads after $(@($r.after) -join ', ')") }
-    foreach ($s in @($C.SetLight)) { $out.Add("set light flag on $s") }
-    foreach ($c in @($C.ClearLight)) { $out.Add("clear light flag on $c") }
     return $out.ToArray()
 }
