@@ -330,6 +330,7 @@ sys.path.insert(0, os.path.join(ROOT, 'scripts', 'dev'))
 import bsa  # noqa: E402  (the repository's archive reader)
 import gamemode_tables  # noqa: E402  (where a table the gamemode reads is written, #5191)
 import riftweald  # noqa: E402 (the exact retired TG07 door and bar contract)
+import claimable_doors  # noqa: E402 (four individually reviewed XLOC-only overrides)
 sys.path.insert(0, HERE)
 import last_recipe  # noqa: E402  (the recipe each machine builds this plugin from, #2791)
 import own_plugins  # noqa: E402  (where each plugin of the load order is read from, #2923)
@@ -1594,6 +1595,7 @@ def build(data_dir):
         gates.append(e)
     riftweald_copies = riftweald.entries(plugins, win, policy, subrecords, vmad_parse)
     riftweald_entries = [e for e, _ in riftweald_copies]
+    claimable_entries = claimable_doors.entries(plugins, win, policy, subrecords, vmad_parse)
 
     # Nothing is copied out of a plugin the policy says is never handed on
     # (notCopiedFrom: Patrick, 17 Oct 2026, Immersive Armors is used as-is
@@ -1814,7 +1816,7 @@ def build(data_dir):
         actors.remove(e)
         refs['disabled'].remove(actor_ref[(e.pi, e.fid)])
         refs['heldByServer'].append(actor_ref[(e.pi, e.fid)])
-    for e in actors + gates + riftweald_entries:
+    for e in actors + gates + riftweald_entries + claimable_entries:
         stand(e)
     # The cells only the floor items need: what this adds to the records the
     # plugin copies from other authors (#2791), counted by who wins each.
@@ -1866,7 +1868,7 @@ def build(data_dir):
     # (Build-Recost.py lists those under notCopied instead).
     held = sorted('%s %s (won by %s)%s' % (e.tag.decode(), desc_of(plugins[e.pi].gid(e.fid), canon),
                                            plugins[e.pi].name, placed(e))
-                  for e in actors + gates + riftweald_entries + qentries + [e for e, _ in qprops] +
+                  for e in actors + gates + riftweald_entries + claimable_entries + qentries + [e for e, _ in qprops] +
                   [e for e, _, _ in hold_locs]
                   if plugins[e.pi].name.lower() in blocked)
     for e, row in recipes:
@@ -1922,6 +1924,11 @@ def build(data_dir):
             if kind == 'bar':
                 flags |= DISABLED
             out['refr'].append((rn.one(src, e.fid, 'Riftweald'), flags, pack_subrecords(pairs), e))
+        for e in claimable_entries:
+            src = plugins[e.pi]
+            pairs = claimable_doors.copy_pairs(src, subrecords(src.data(e)), rn)
+            out['refr'].append((rn.one(src, e.fid, 'claimable door'), e.flags & ~COMPRESSED,
+                                pack_subrecords(pairs), e))
         for e in actors:
             src = plugins[e.pi]
             what = '%s ACHR 0x%08X' % (src.name, e.fid)
@@ -2080,6 +2087,7 @@ def build(data_dir):
         'refs': {k: sorted(v, key=ref_key) for k, v in refs.items()},
         'gatesUnlocked': [desc_of(g, canon) for g in GATES],
         'riftwealdUnlocked': list(riftweald.policy_refs(policy)),
+        'claimableDoorsUnlocked': list(claimable_doors.policy_refs(policy)),
         'quests': {'stopped': quests_cut, 'kept': quests_kept, 'modStopped': mod_stopped},
         # The mod quests whose script properties are set here (#3101), each
         # with the plugin whose record it is a copy of.
@@ -2663,9 +2671,9 @@ def verify(data_dir, plugin_bytes, manifest):
     if not last.hflags & LIGHT:
         return ['the plugin is not flagged light']
     source_plugins = plugins
-    source_win = winners(source_plugins, {b'COBJ', b'REFR', b'DOOR', b'ACTI', b'ACHR', b'QUST'})
+    source_win = winners(source_plugins, {b'COBJ', b'REFR', b'DOOR', b'ACTI', b'ACHR', b'QUST', b'CELL'})
     plugins = plugins + [last]
-    win = winners(plugins, {b'ACHR', b'REFR', b'QUST', b'LCTN', b'CELL', b'FLOR', b'COBJ'} | set(FLOOR_TYPES))
+    win = winners(plugins, {b'ACHR', b'REFR', b'QUST', b'LCTN', b'CELL', b'FLOR', b'COBJ', b'DOOR', b'ACTI'} | set(FLOOR_TYPES))
     policy = json.load(open(POLICY, encoding='utf-8'))
     blocked = {row['plugin'].lower() for row in policy.get('notCopiedFrom', [])}
     perks_off = perk_recipes_copied(policy)
@@ -2679,6 +2687,8 @@ def verify(data_dir, plugin_bytes, manifest):
     rn = Renumber(); rn.masters = [name.lower() for name in last.masters]
     fails.extend(riftweald.verify(plugins, source_win, win, last, manifest, policy,
                                  subrecords, vmad_parse, rn))
+    fails.extend(claimable_doors.verify(plugins, source_win, win, last, manifest, policy,
+                                       subrecords, vmad_parse, rn))
     for row in expected_seasoned:
         actual = win.get((b'COBJ', ref_key(row['recipe'])))
         if actual is None or actual.pi != last.index:

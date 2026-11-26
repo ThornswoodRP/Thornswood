@@ -132,6 +132,25 @@
     "measured": "249 of 854 placed plants stand in Winterhold (29%); the rest: Haafingar 192, the Pale 152, the Rift 62, the Reach 56, Eastmarch 41, Falkreath 33, Solstheim 25, Whiterun 20, no hold 15, Hjaalmarch 9. Measured 26 Oct 2026 on the dev server's plugins (scripts/dev/Measure-HoldResources.py)."}
   ]
  },
+ "claimableDoorsUnlocked": {
+  "why": "Remove only four reviewed ordinary authored keyless locks. Preserve every cell owner, native field, base and paired exit. Source or dependency changes require review.",
+  "doors": ["5a7ea:Skyrim.esm", "501a7:Skyrim.esm", "cb8b9:Skyrim.esm", "24201:JKs Skyrim.esp"],
+  "records": {
+   "241ef:JKs Skyrim.esp": {"type": "REFR", "winner": "JKs Skyrim.esp", "sourceSha256": "6f0e2551017806ad9ab7acb074003a81457fa9606ab5e7b2833a862ce393f646", "dataSha256": "fa552a929b397d828eb369edd7f4b976b17243e31f8825541cde4959a57bd261", "flags": 1024},
+   "24201:JKs Skyrim.esp": {"type": "REFR", "winner": "JKs Skyrim.esp", "sourceSha256": "6f0e2551017806ad9ab7acb074003a81457fa9606ab5e7b2833a862ce393f646", "dataSha256": "2c1e8b4e79158c4bfb12f0a0dde2a48101a08b48de590fa5d16c581eddfa46ab", "flags": 1024},
+   "252c7:Skyrim.esm": {"type": "DOOR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "6268f7aa066c4e8488fcb599cf9f0a4d448eab3dbbd10fc9dd23ffd00896f54a", "flags": 0},
+   "2834e:Skyrim.esm": {"type": "DOOR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "6c4a5a98e89d6aaabdcfa07e2923d03e73888029c86f9cf7f966abece9cbd5bf", "flags": 0},
+   "501a7:Skyrim.esm": {"type": "REFR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "e025fdc7925e15785d4b7881eef80dc5518b7ed9fc06e1882f65aa2d6ae47995", "flags": 1024},
+   "501a9:Skyrim.esm": {"type": "REFR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "6a56280480f1e0af35225a9e3ceaf184d4be56dbccd0e6e8402b8c39d6fc0163", "flags": 1024},
+   "52a40:Skyrim.esm": {"type": "REFR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "77d8efe897f92245db1b6471e51b54569dc03e85ce4abaed1f17c50ae68491ab", "flags": 1024},
+   "5a7ea:Skyrim.esm": {"type": "REFR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "80543555a38035f2604485de29a0f4a13e5f1654a3d8c5eed28fbaffdb5aa024", "flags": 1024},
+   "5ad3c:Skyrim.esm": {"type": "DOOR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "5161e733407d864ce77345fee67e8a08c021ca5e4b49db6092d4fb5bb2813848", "flags": 0},
+   "cb8b8:Skyrim.esm": {"type": "REFR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "b2d9d5b3b6ec9ed61aac448aba81e769e5531b938f1071198b9f7763a6e58063", "flags": 1024},
+   "cb8b9:Skyrim.esm": {"type": "REFR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "825360fa9dd4d2dc9712a3a13c45d47ba1e3272272e2d76dcf4e7d6c733f64f1", "flags": 1024},
+   "e9e07:Skyrim.esm": {"type": "DOOR", "winner": "HearthFires.esm", "sourceSha256": "ad4ca9f32c81e7ddd3e39ec95e03b07841f20712989e598778442ea69b6e6a97", "dataSha256": "2ddb75a3c0812fb1d34eeb88fb039574c5a029f5a949663abe30b1b2fb871c63", "flags": 0},
+   "e9e08:Skyrim.esm": {"type": "DOOR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "d2dd9e7ed5f5b5781508e0f3d20e3343e1dcf64703db73094f39c97cc8e9f12b", "flags": 0}
+  }
+ },
  "riftwealdUnlocked": {
   "why": "The obsolete vanilla TG07 key lock and its three secured bolts no longer restrict Riftweald Manor. Only the exact reviewed placed records are changed; the unlocked way out, teleport, Thornswood claims and staff or quest locks elsewhere stay intact. A changed winning record stops the build for review.",
   "door": "27eed:Skyrim.esm",
