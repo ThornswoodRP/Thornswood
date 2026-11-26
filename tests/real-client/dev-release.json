@@ -39,7 +39,7 @@
       "menu": "RaceSex Menu",
       "open": true,
       "timeout": 90000,
-      "skip": 8,
+      "skip": 9,
       "why": "a character this server has not got is made first: the race menu opens in the hall. A character it has goes straight to the world, and the race menu steps are skipped"
     },
     {
@@ -94,6 +94,12 @@
       "open": false,
       "timeout": 20000,
       "why": "the face is done"
+    },
+    {
+      "do": "page",
+      "why": "after the face the server moves the character on to choosing and opens the K panel; until its answer comes the panel still holds the face step's view, which says not creating, so the step after this one cannot yet tell a new character from a placed one (26 Nov, 1:44 PM: it read placed 21 ms after the race menu closed and the K panel opened after)",
+      "timeout": 30000,
+      "js": "(function(){var k=window.thornswoodSkills;return !!(k&&k.isCreating&&k.isCreating()===true);})()"
     },
     {
       "do": "page",
