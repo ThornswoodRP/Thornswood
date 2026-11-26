@@ -172,7 +172,9 @@ try { $arc = Receive-NexusRevisionArchive $want.collection $want.game $published
 $sz = Find-SevenZip
 if (-not $sz) { Stop-Record '7-Zip is not on this machine, and the published revision is a 7z archive.' }
 $extract = @('x', '-y', ('-o' + (Join-Path $Work 'published/x')), $arc.Path)
-if (-not $repairRequested) { $extract += 'collection.json' }
+# A tag repair and a file list are held to the published archive's other
+# files too (checkRepairFiles), so those runs take the whole archive out.
+if (-not $repairRequested -and -not $replicateRequested) { $extract += 'collection.json' }
 & $sz @extract | Out-Null
 $pubJson = Join-Path $Work 'published/x/collection.json'
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $pubJson)) { Stop-Record "Revision $published's archive holds no collection.json 7-Zip could take out." }

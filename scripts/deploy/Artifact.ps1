@@ -311,30 +311,39 @@ function Set-ThornswoodArtifactName([string]$From, [string]$To) {
 }
 
 <#
-  A zip at its name, opened to read and sharing every kind of access (#3067).
-  The run whose zip took the name is still inside MoveFileExW, holding the
-  file with delete access, when the run that lost the name finds it there;
-  Get-FileHash and ZipFile.ExtractToDirectory open with FileShare.Read, which
-  refuses to open beside that handle, and the loser stopped with "being used
-  by another process". A zip at its name is never written again (nothing at a
-  name is replaced), so a reader has nothing to deny anybody.
+  A file at its artifact name, opened to read and sharing every kind of access
+  (#3067, #6916). The run whose file took the name is still inside MoveFileExW,
+  holding the file with delete access, when the run that lost the name finds it there;
+  Get-FileHash, ZipFile.ExtractToDirectory and ReadAllText open with
+  FileShare.Read, which refuses to open beside that handle, and the loser
+  stopped with "being used by another process". A file at its name is never
+  written again (nothing at a name is replaced), so a reader has nothing to deny anybody.
 #>
-function Open-ThornswoodArtifactZip([string]$Zip) {
-  return (New-Object IO.FileStream($Zip, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)))
+function Open-ThornswoodArtifactFile([string]$Path) {
+  return (New-Object IO.FileStream($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)))
 }
 
-# The whole sha256 of a zip at its name, read the way Open-ThornswoodArtifactZip opens it.
+# Text at an immutable artifact name, including its record and folder pointer.
+function Read-ThornswoodArtifactText([string]$Path) {
+  $stream = Open-ThornswoodArtifactFile $Path
+  try {
+    $reader = New-Object IO.StreamReader($stream)
+    try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+  } finally { $stream.Dispose() }
+}
+
+# The whole sha256 of a zip at its name, sharing its publishing handle.
 function Get-ThornswoodArtifactZipSha256([string]$Zip) {
-  $stream = Open-ThornswoodArtifactZip $Zip
+  $stream = Open-ThornswoodArtifactFile $Zip
   try {
     $h = [Security.Cryptography.SHA256]::Create()
     try { return (-join ($h.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') })) } finally { $h.Dispose() }
   } finally { $stream.Dispose() }
 }
 
-# Unpacks a zip at its name into $To, read the way Open-ThornswoodArtifactZip opens it.
+# Unpacks a zip at its name into $To, sharing its publishing handle.
 function Expand-ThornswoodArtifactZip([string]$Zip, [string]$To) {
-  $stream = Open-ThornswoodArtifactZip $Zip
+  $stream = Open-ThornswoodArtifactFile $Zip
   try {
     $archive = New-Object IO.Compression.ZipArchive($stream, [IO.Compression.ZipArchiveMode]::Read)
     try { [IO.Compression.ZipFileExtensions]::ExtractToDirectory($archive, $To) } finally { $archive.Dispose() }
@@ -359,7 +368,7 @@ function Save-ThornswoodArtifactZip([string]$Building, [string]$Zip, [string]$Sh
 # text: Windows PowerShell 5.1 and PowerShell 7 lay the same JSON out apart.
 function Get-ThornswoodArtifactRecordDifference($Want, [string]$Path) {
   $have = $null
-  try { $have = [IO.File]::ReadAllText($Path) | ConvertFrom-Json } catch { return ('it does not read as JSON (' + $_.Exception.Message + ')') }
+  try { $have = Read-ThornswoodArtifactText $Path | ConvertFrom-Json } catch { return ('it does not read as JSON (' + $_.Exception.Message + ')') }
   if ($null -eq $have) { return 'it is empty' }
   $names = @($have.PSObject.Properties | ForEach-Object { $_.Name })
   foreach ($k in @($Want.Keys)) {
@@ -409,7 +418,7 @@ function Save-ThornswoodArtifactFolderName([string]$FolderName, [string]$Leaf) {
 # holds one name, <zip basename>.<32 hex>, of a folder beside it; anything
 # else is refused and left as it is.
 function Get-ThornswoodArtifactFolderNamed([string]$FolderName, [string]$Base) {
-  $leaf = ([IO.File]::ReadAllText($FolderName)).Trim()
+  $leaf = (Read-ThornswoodArtifactText $FolderName).Trim()
   if ($leaf -notmatch ('^' + [regex]::Escape($Base) + '\.[0-9a-f]{32}$')) {
     throw ("$FolderName does not name an unpacked folder of $Base (it holds '" + $leaf + "'). Nothing was changed: remove it and run again.")
   }
