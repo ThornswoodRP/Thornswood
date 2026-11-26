@@ -255,7 +255,7 @@ Category mode: read.
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
 | #game-rules | text | read | everybody | the council | posts: the council; written by the build from content.py GAMERULES, with its Changelog thread; was #game-rules in Thornswood; was #game-rules in In Character; topic: How roleplay works here. Nine rules, and what we let slide. |
-| #lore | text | read | everybody | the council | posts: the council; written by the build from content.py LORE, with its Changelog thread; was #lore in In Character; topic: 4E 252. What happened and who you can be. |
+| #lore | text | read | everybody | the council, Loremaster | posts: the council; written by the build from content.py LORE, with its Changelog thread; was #lore in In Character; topic: 4E 252. What happened and who you can be. |
 | #factions | text | read | everybody | the council | posts: the council; written by the build from content.py FACTIONS, with its Changelog thread; topic: The sixteen factions of 4E 252: who they are, where they keep, who leads them. |
 
 ### Applications
