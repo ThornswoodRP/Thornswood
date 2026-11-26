@@ -450,7 +450,13 @@
     if ((k === 'Enter' || e.keyCode === 13) && !e.shiftKey) {
       // Not the one that opened the box. See the note on openedAt.
       if (Date.now() - openedAt < 400) { return; }
-      setTimeout(blurInput, 0);
+      setTimeout(function () {
+        // The native chat can refuse a send, for example during its cooldown.
+        // It clears the composer only when it consumes the line. Keep an
+        // unsent draft ready for the person's next send or cancel.
+        var el = input();
+        if (!el || !String(el.innerText || '').replace(/\s+/g, '')) { blurInput(); }
+      }, 0);
     }
   }, true);
 

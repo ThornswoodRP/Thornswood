@@ -3,6 +3,9 @@
 What you type. Enter opens the box. A line that starts with `/` is a
 command. A line that does not is speech.
 
+If the chat input refuses Enter, its text stays in the open box. You can
+edit it, press Enter again, or use Escape to return to the game.
+
 While disconnected, chat keeps the newest 20 waiting lines. If another
 line removes the oldest one, a warning says it was removed and the new
 one is queued. It does not repeat the contents of either line.
