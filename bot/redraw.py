@@ -157,7 +157,7 @@ async def work():
             data = await avatar.read()
             png = await asyncio.get_running_loop().run_in_executor(
                 None, card.render, name, data, n or None, None, who.name)
-            await msg.edit(attachments=[discord.File(png, 'welcome.png')])
+            await msg.edit(attachments=[bot_joins.welcome_file(png, name, n or None, who.name)])
             say('redrew the card for %s, number %d%s' % (who, n or 0, why))
         except Exception:
             say('failed for %s:\n%s' % (who, traceback.format_exc()))

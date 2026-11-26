@@ -44,6 +44,10 @@ import harness_bot  # noqa: E402
 
 bot = harness_bot.whole()
 import card  # noqa: E402
+import datetime  # noqa: E402
+import discord  # noqa: E402
+import backfill  # noqa: E402
+import redraw  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 PASS = []
@@ -68,9 +72,11 @@ class Channel(object):
     def __init__(self, name):
         self.name = name
         self.sent = []
+        self.files = []
 
     async def send(self, content=None, **_k):
         self.sent.append(content)
+        self.files.append(_k.get('file'))
 
 
 class Guild(object):
@@ -299,6 +305,115 @@ try:
     nh, okh = join(human)
     yes('J11 the next person gets the number the bot did not use (got %r)' % (nh,),
         nh == 42 and okh)
+
+    # ----------------------------------------- what a screen reader hears --
+    #
+    # Issue #4491: the card went up as a picture with no description, so a
+    # screen reader said nothing about it, and the join number is only in the
+    # picture. All three ways a card goes up are run for real: the bot's
+    # join, backfill.py and redraw.py. Each card has to carry a description
+    # with the name and the number it shows.
+    def described(f, name, nth):
+        d = getattr(f, 'description', None) or ''
+        return isinstance(f, discord.File) and name in d and nth in d
+
+    def words(f):
+        return getattr(f, 'description', None)
+
+    g6 = Guild(1006, 7)
+    bot.JOIN_FLOOR = 0
+    aela = Member(700, 'Aela', g6)
+    join(aela)
+    live = g6.text_channels[0].files[-1] if g6.text_channels[0].files else None
+    yes('J12 the bot\'s own card says who it is for and their number (said %r)' % (words(live),),
+        described(live, 'Aela', '7th'))
+
+    BOT_ID = 990
+    T0 = datetime.datetime(2026, 9, 20, 12, 0, tzinfo=datetime.timezone.utc)
+
+    class Someone(object):
+        def __init__(self, uid):
+            self.id = uid
+
+    class Late(Member):
+        def __init__(self, uid, name, guild, joined):
+            Member.__init__(self, uid, name, guild)
+            self.joined_at = joined
+
+    class Card(object):
+        def __init__(self, who):
+            self.author = Someone(BOT_ID)
+            self.content = '%s came up the road.' % who.mention
+            self.mentions = [who]
+            self.created_at = T0
+            self.jump_url = 'https://discord.invalid/channels/1/1/%d' % who.id
+            self.edits = []
+
+        async def edit(self, attachments=None, **_k):
+            self.edits.append(attachments)
+
+    class Room(Channel):
+        def __init__(self, name, messages=()):
+            Channel.__init__(self, name)
+            self.messages = list(messages)
+
+        async def history(self, limit=None):
+            for m in self.messages:
+                yield m
+
+    class Server(object):
+        def __init__(self, gid, members, channels):
+            self.id = gid
+            self.name = 'Thornswood'
+            self.member_count = len(members)
+            self.me = Someone(BOT_ID)
+            self.text_channels = channels
+            self.members = members
+
+        async def fetch_members(self, limit=None):
+            for m in self.members:
+                yield m
+
+    class Client(object):
+        def __init__(self, guild):
+            self.guilds = [guild]
+
+    async def no_sleep(*_a, **_k):
+        return None
+
+    def script(mod, guild, **flags):
+        flags = dict(flags, client=Client(guild), GO=True, say=lambda *a: None)
+        keep = dict((k, getattr(mod, k)) for k in flags)
+        keep_render, keep_sleep = card.render, asyncio.sleep
+        for k, v in flags.items():
+            setattr(mod, k, v)
+        card.render, asyncio.sleep = fake_render, no_sleep
+        try:
+            asyncio.run(mod.work())
+        finally:
+            card.render, asyncio.sleep = keep_render, keep_sleep
+            for k, v in keep.items():
+                setattr(mod, k, v)
+
+    g7 = Server(1007, [], [])
+    bryn = Late(701, 'Brynjolf', g7, T0)
+    g7.members = [bryn]
+    owed = Room(backfill.WELCOME)
+    g7.text_channels = [owed]
+    script(backfill, g7)
+    posted = owed.files[-1] if owed.files else None
+    yes('J12 backfill.py\'s card says who it is for and their number (said %r)' % (words(posted),),
+        described(posted, 'Brynjolf', '1st'))
+
+    g8 = Server(1008, [], [])
+    vex = Late(702, 'Vex', g8, T0)
+    g8.members = [vex]
+    old = Card(vex)
+    g8.text_channels = [Room(redraw.WELCOME, [old])]
+    script(redraw, g8, ALL=True)
+    redrawn = old.edits[-1][0] if old.edits and old.edits[-1] else None
+    yes('J12 redraw.py\'s card says who it is for and their number (said %r)' % (words(redrawn),),
+        described(redrawn, 'Vex', '1st'))
 finally:
     bot.JOINS = keep['joins']
     bot.JOIN_FLOOR = keep['floor']

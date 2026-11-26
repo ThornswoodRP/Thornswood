@@ -315,6 +315,16 @@ def render(name, avatar_bytes, number=None, line=None, alt=None):
     return out
 
 
+def describe(name, number=None, alt=None):
+    """The card in words, for the image description a screen reader says in
+       place of the picture (#4491): the name and the join number render()
+       draws, which are otherwise only in the image."""
+    words = 'Welcome card for %s' % shown_name(name, alt)
+    if number:
+        words += ', the %s to walk in' % _ordinal(number)
+    return words + '.'
+
+
 def _ordinal(n):
     n = int(n)
     if 10 <= n % 100 <= 20:

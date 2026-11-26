@@ -186,7 +186,7 @@ async def work():
         line = '%s came up the road.' % m.mention
         try:
             if png is not None:
-                await ch.send(line, file=discord.File(png, 'welcome.png'))
+                await ch.send(line, file=bot_joins.welcome_file(png, name, number, m.name))
             else:
                 await ch.send(line)
             say('posted #%d %s%s' % (number, m, why))
