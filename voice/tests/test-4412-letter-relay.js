@@ -13,8 +13,8 @@ const a=w.person(0xff004419,{profileId:1000,name:'Brenna',cell,pos,inventory:{en
 let loud,quiet,old;
 (async()=>{try{
  yes('the whole gamemode loads',w.boot());attachScenarioReservation(w);w.arrive(a);w.run(30000);
- const p=makePage();for(const file of ['bridge','board'])p.run(file,fs.readFileSync(path.join(__dirname,'../../game/ui/thornswood-'+file+'.js'),'utf8'));
- p.win.thornswoodBoard.setData({board:w.box().__thornswoodProperty.boardPanel(a,1000)});p.win.thornswoodBoard.open();
+ const p=makePage();p.win.crypto={getRandomValues:values=>require('node:crypto').randomFillSync(values)};for(const file of ['bridge','board'])p.run(file,fs.readFileSync(path.join(__dirname,'../../game/ui/thornswood-'+file+'.js'),'utf8'));
+ p.win.thornswoodBoard.setData(w.box().__thornswoodSocial.view(a));p.win.thornswoodBoard.open();
  await h.ready();loud=await h.person(1000,'Brenna');quiet=await h.person(1001,'Corvin');
  p.win.thornswoodNet.say=line=>{p.sent.push(line);loud.ws.send(JSON.stringify({t:'chat',text:line,press:true}));return true;};
  const commands=async()=>{await h.settle(loud);return(await(await fetch('http://127.0.0.1:'+h.port()+'/commands')).json()).commands;};
@@ -28,6 +28,19 @@ let loud,quiet,old;
   const prior=w.count(a,15);if(got[0])w.relayCommand(got[0]);w.run(2200);
   const saved=w.readPrivate('property.json').notices.windhelm.at(-1);
   yes(label+' relay and queue keep the exact recipient and full body',saved.to===title&&saved.text===body&&w.count(a,15)===prior-35);
+ }
+ // The actual UI now uses private JSON. Preserve the URI expansion boundary
+ // through real authenticated legacy requests with the same full-size text.
+ for(const [label,title,body]of [['maximum URI','雪'.repeat(60),'雪'.repeat(300)],['quoted Unicode','雪'.repeat(58)+'""','雪'.repeat(300)]]){
+  const legacy='/letter-post-v1 '+encodeURIComponent(title)+' '+encodeURIComponent(body);
+  loud.ws.send(JSON.stringify({t:'chat',text:legacy,press:true}));
+  const received=await commands(),frame=JSON.stringify({t:'chat',text:legacy,press:true});
+  yes(label+' explicit legacy URI reaches the relay whole and authenticated',received.length===1&&received[0].text===legacy&&received[0].profileId===1000&&received[0].proven===true);
+  yes(label+' explicit legacy URI keeps the original command and frame caps',legacy.length<=8200&&Buffer.byteLength(frame,'utf8')<1000000);
+  console.log('MEASURE legacy '+label+': commandChars='+legacy.length+' frameBytes='+Buffer.byteLength(frame,'utf8'));
+  const prior=w.count(a,15);if(received[0])w.relayCommand(received[0]);w.run(2200);
+  const saved=w.readPrivate('property.json').notices.windhelm.at(-1);
+  yes(label+' explicit legacy URI keeps its exact recipient body and fee',saved.to===title&&saved.text===body&&w.count(a,15)===prior-35);
  }
  if(process.env.LEGACY_GM){
   old=standIn.world({name:'4412-old-server',gm:process.env.LEGACY_GM,settings:{thornswoodServer:'main'}});
