@@ -402,6 +402,13 @@ function game(opts) {
     yes('the plugin and the runner name the same ' + p[0],
         PLUGIN.indexOf("'" + p[1] + "'") >= 0 && RUNNER.indexOf("'" + p[0] + "'") >= 0);
   });
+  // The launcher puts its build's own Data\\Platform files back before Play,
+  // so a copy laid in by hand never reaches the game (26 Nov). The runner
+  // lays none, and says when the game's plugin is not this checkout's.
+  yes('the runner lays no plugin of its own into the game', !/InstallPlugin/.test(RUNNER) && !/Copy-Item[^\n]*thornswood-test\.js/.test(RUNNER));
+  yes('  and says, once the game is up, when the game\'s plugin is not this checkout\'s',
+      /function Get-PluginMismatch\b/.test(RUNNER) && /Get-FileHash -LiteralPath \$inGame/.test(RUNNER) &&
+      /if \(-not \$sawGame\) \{[\s\S]{0,200}\$pluginOff = Get-PluginMismatch/.test(RUNNER) && /if \(\$pluginOff\) \{ \$note = /.test(RUNNER));
   yes('the runner presses the launcher\'s Play by its name in MainWindow.axaml',
       /AutomationIdProperty, 'BtnPlay'/.test(RUNNER) && /x:Name="BtnPlay"/.test(read(path.join('launcher', 'app', 'MainWindow.axaml'))));
   // A launcher from the setup is a Velopack install in %LOCALAPPDATA%\Thornswood,

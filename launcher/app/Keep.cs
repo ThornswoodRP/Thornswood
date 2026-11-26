@@ -168,9 +168,10 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// An update wrote these files, relative to the game folder. The ones
-        /// under Data\Platform become the copy to restore from. Returns how
-        /// many.
+        /// These files are as the update in place has them, relative to the
+        /// game folder: the ones under Data\Platform become the copy to
+        /// restore from. Returns how many kept copies changed; one already
+        /// the same is not written again.
         /// </summary>
         public static int Remember(IEnumerable<string> rels)
         {
@@ -184,6 +185,7 @@ namespace Thornswood
                     string src = Path.Combine(Paths.Game, rel);
                     if (!File.Exists(src)) continue;
                     string dst = Path.Combine(Dir, rel);
+                    if (File.Exists(dst) && Same(src, dst)) continue;
                     Directory.CreateDirectory(Path.GetDirectoryName(dst));
                     File.Copy(src, dst, true);
                     n++;
