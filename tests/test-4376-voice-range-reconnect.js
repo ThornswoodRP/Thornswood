@@ -74,6 +74,33 @@ function freePort() {
     s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); });
   });
 }
+/* Nothing is asked of it until it has said it is listening on its own
+   port (#1703). */
+function listening(srv, port) {
+  return new Promise((ok, bad) => {
+    let out = '';
+    const said = (d) => {
+      out += d;
+      const m = /\[voice\] listening on \S+:(\d+)/.exec(out);
+      if (m && Number(m[1]) === port) { end(null); }
+    };
+    const more = (d) => { out += d; };
+    const gone = (code) => end(new Error((/EADDRINUSE/.test(out) ? 'something else already holds port ' + port + ', so ' : '') +
+                                         'the voice service stopped (exit ' + code + ') before it was listening. It printed:\n' + out));
+    const late = setTimeout(() => end(new Error('the voice service did not say it was listening on ' + port +
+                                                ' within fifteen seconds. It printed:\n' + out)), 15000);
+    function end(err) {
+      clearTimeout(late);
+      srv.stdout.removeListener('data', said);
+      srv.stderr.removeListener('data', more);
+      srv.removeListener('exit', gone);
+      if (err) { bad(err); } else { ok(); }
+    }
+    srv.stdout.on('data', said);
+    srv.stderr.on('data', more);
+    srv.on('exit', gone);
+  });
+}
 let PORT = 0, BASE = '', srv = null, srvLog = '';
 async function start() {
   PORT = await freePort();
@@ -87,8 +114,7 @@ async function start() {
   });
   srv.stdout.on('data', (d) => { srvLog += d; });
   srv.stderr.on('data', (d) => { srvLog += d; });
-  const up = await until(() => new RegExp('\\[voice\\] listening on \\S+:' + PORT + '\\b').test(srvLog), 15000);
-  if (!up) throw new Error('the voice service did not say it was listening. It printed:\n' + srvLog);
+  await listening(srv, PORT);
 }
 
 /*
