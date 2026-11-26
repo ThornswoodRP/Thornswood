@@ -103,8 +103,8 @@
     "reads": ["game/data/recipes.json", "game/data/hunts.json", "game/gamemode-tables/BENCH_ACCESS.json", "game/gamemode.js"],
     "writes": ["game/ui/thornswood-profession-guides.js"] },
   { "tool": "scripts/dev/Write-SystemLists.js", "data": null, "plugins": null,
-    "reads": ["game/data/recipes.json", "game/data/harvests.json", "game/data/ores.json", "game/data/hunts.json", "game/data/races.json", "game/data/item-sources.json"],
-    "writes": ["docs/systems/lists"] }
+    "reads": ["game/data/recipes.json", "game/data/harvests.json", "game/data/ores.json", "game/data/hunts.json", "game/data/races.json", "game/data/item-sources.json", "game/gamemode-tables/SPELL_IDS.json"],
+    "writes": ["docs/systems/lists", "docs/systems/who-makes-it.md"] }
  ],
  "notInChain": {
   "scripts/dev/Build-StationSites.py":"Comes before the content plugin, not after it: it measures where the plugin's stations stand, and scripts/mods/Add-ContentRecords.py writes them into the plugin from its table. docs/systems/station-placement.md says how a site changes.",

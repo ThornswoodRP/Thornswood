@@ -71,8 +71,9 @@ try {
     Check '5 the built paths are the plugin, the catalogue and every path the chain writes' (
         $built[0] -ceq 'game/content/Thornswood-Content.esp' -and $built -ccontains 'game/data/npc-population.json' -and
         @($writes | Where-Object { $built -cnotcontains $_ }).Count -eq 0 -and $built.Count -eq (@($writes | Where-Object { $_ -cne 'game/data/npc-population.json' }).Count + 2))
-    Check '5 a file under a folder the chain writes is built, one beside it is not' (
-        (Test-ThornswoodBuiltPath $built 'docs/systems/lists/a.md') -and -not (Test-ThornswoodBuiltPath $built 'docs/systems/who-makes-it.md') -and
+    Check '5 the list folder and maker page are built, an unrelated page beside them is not' (
+        (Test-ThornswoodBuiltPath $built 'docs/systems/lists/a.md') -and (Test-ThornswoodBuiltPath $built 'docs/systems/who-makes-it.md') -and
+        -not (Test-ThornswoodBuiltPath $built 'docs/systems/unrelated-page.md') -and
         (Test-ThornswoodBuiltPath $built 'game\gamemode-tables\DATA.json') -and -not (Test-ThornswoodBuiltPath $built 'game/gamemode.js'))
     $take = [IO.File]::ReadAllText($script)
     Check '5 -Newest lays the built paths, from the one list' ($take -match '\$writes = Get-ThornswoodBuiltPaths -Repo \$Repo')
