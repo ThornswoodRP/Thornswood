@@ -12,7 +12,7 @@ import traceback
 import discord
 
 from bot_core import (TROUBLE_EVERY, TROUBLE_FILE, TROUBLE_ID, TROUBLE_POSTS,
-    WATCH_ID, _state_write, client, log)
+    WATCH_ID, _state_write, as_typed, client, log)
 
 
 # Where the watchdog's messages are said: #staff-updates, by WATCH_ID from
@@ -94,6 +94,20 @@ TROUBLE_LATE_MS = 5 * 60 * 1000
 TROUBLE_HEAD = '**A session went wrong.**'
 
 
+def _trouble_code(line):
+    """
+    A line from somebody's crash.log as its own code block, which it cannot
+    close (#4281).
+
+    Inside a code block Discord reads no escapes, so a backslash would show
+    and still let three backticks end the block, and the rest of the line
+    render as markdown. A zero-width space after every backtick keeps each one
+    on the screen as it was in the log while no two of them touch, so the
+    fences around it are the only ones in the post.
+    """
+    return '```\n%s\n```' % line[:400].replace('`', '`\u200b')
+
+
 def _trouble_line(row):
     """
     The staff-channel line for one session that went wrong.
@@ -109,8 +123,15 @@ def _trouble_line(row):
     A pure function of the row, so the harness can check the wording without a
     Discord, a clock or the file. A row with no start or end (older rows, or a
     session whose ends were never seen) simply drops those phrases.
+
+    THE ROW'S OWN WORDS ARE SHOWN AS TYPED (#4281). The name, the version and
+    the reason come from the site's row, and the line from the uploaded log,
+    so none of it is the bot's to format: the three go through as_typed, as a
+    report's and a staff action's fields do, and the line through
+    _trouble_code. Before that a masked link in the reason was a link, and a
+    log line holding three backticks ended its block early.
     """
-    who = row.get('name') or row.get('who') or 'somebody'
+    who = as_typed(row.get('name') or row.get('who') or 'somebody')
     where = row.get('channel') or ''
     where = {'dev': 'the dev build', 'main': 'the main build'}.get(
         where, 'a build it did not name')
@@ -137,11 +158,11 @@ def _trouble_line(row):
         'and it is the red one.'
         % (who,
            where,
-           (', launcher %s' % row['version']) if row.get('version') else '',
+           (', launcher %s' % as_typed(row['version'])) if row.get('version') else '',
            when,
            late,
-           row.get('why') or 'something went wrong',
-           ('```\n%s\n```' % line[:400]) if line else ''))
+           as_typed(row.get('why')) or 'something went wrong',
+           _trouble_code(line) if line else ''))
 
 
 def _trouble_rows():
@@ -291,14 +312,21 @@ def _trouble_post_matches(content, row):
     True when a post the bot made before #3942 is about this row. The wording
     has changed since the first posts (#532), so the row's own text is looked
     for rather than the whole line: the name, and the log line in its code
-    block or, with no line, the reason.
+    block or, with no line, the reason. Each in both of the ways a post has
+    held them: as they were in the row, which every post made before #4281
+    did, and as _trouble_line shows them since.
     """
     if content == _trouble_line(row)[:1900]:
         return True
     who = row.get('name') or row.get('who') or ''
     line = (row.get('line') or '').strip()
-    mark = ('```\n%s\n```' % line[:400]) if line else (row.get('why') or '')
-    return bool(who) and bool(mark) and who in content and mark in content
+    why = row.get('why') or ''
+    ways = (
+        (who, ('```\n%s\n```' % line[:400]) if line else why),
+        (as_typed(who), _trouble_code(line) if line else as_typed(why)),
+    )
+    return any(bool(w) and bool(mark) and w in content and mark in content
+               for w, mark in ways)
 
 
 async def trouble_backfill(rows, path=None):
@@ -487,9 +515,10 @@ async def trouble_say(text):
         return None
     try:
         # The line carries a name and a line from a log, both from somewhere
-        # else. Mentions stay off, as in watch_say and report_say, so an
-        # @everyone in it is text and not a ping.
-        return await ch.send(text[:1900],
+        # else. Mentions stay off and link previews are suppressed, as in
+        # report_say, so an @everyone in it is text and not a ping, and a
+        # link in it does not unfold into a preview (#4281).
+        return await ch.send(text[:1900], suppress_embeds=True,
                              allowed_mentions=discord.AllowedMentions.none())
     except Exception:
         log('trouble: could not post in #%s:\n' % getattr(ch, 'name', '?')
