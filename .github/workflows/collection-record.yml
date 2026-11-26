@@ -44,7 +44,7 @@ on:
         type: string
         default: ''
       replicate:
-        description: 'Give only these patched mods the list of files they install, so Vortex patches its own copy (#6888; comma-separated Nexus mod numbers); files must already match the record'
+        description: 'Give only these patched mods the list of files they install, so Vortex patches its own copy (#6888; comma-separated Nexus file ids); files must already match the record'
         type: string
         default: ''
 permissions:

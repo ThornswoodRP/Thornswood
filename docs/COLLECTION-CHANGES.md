@@ -148,8 +148,9 @@ plugin (#6888). An entry that lists its files, each with the md5 of the
 archive's copy, is never matched by a copy installed elsewhere, so Vortex
 installs and patches its own.
 
-The collection-record workflow's `replicate` input names the patched mods by
-their Nexus numbers, separated by commas. For each, the publisher runs the
+The collection-record workflow's `replicate` input names the patched entries
+by the Nexus file id each installs, separated by commas: a file id, because
+a mod can have two entries. For each, the publisher runs the
 entry's installer with its own answers and lists the files it installs; the
 list takes the place of the answers. Leave `whatif` on to build it, and run
 with it off to publish. Like a tag repair, it refuses any other pending
