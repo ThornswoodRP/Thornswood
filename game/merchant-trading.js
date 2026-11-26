@@ -629,7 +629,10 @@ function createMerchantTrading(deps) {
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
         session:'Choose the work again from the trader.'};
       var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what remains of the draw and leave the work.') :
-        reasons[result.why] || 'The work could not be changed.';
+        (result.why==='eligibility' && result.detail) ||
+        (result.why==='cooldown' && Number.isSafeInteger(result.waitMinutes) && result.waitMinutes>0
+          ? 'This work is still resting. Come back in '+result.waitMinutes+(result.waitMinutes===1?' minute.':' minutes.') : reasons[result.why]) ||
+        'The work could not be changed.';
       if (isCommission && result.settling) {
         var settling=result.settling;
         await_(settling.id, {merchantId:merchantId,counted:null,profileId:profileId,session:originalSession,
@@ -950,8 +953,8 @@ function installMerchantTrading(env) {
       if(!progression||!character||!character.PROPERTY)return false;
       try {
         var rule=QUEST_ELIGIBILITY.createQuestEligibility({table:progression.TABLE,spellIds:progression.SPELL_IDS});
-        var allowed=rule.allows(rule.validate(gate),mp.get(actor,character.PROPERTY));
-        return allowed&&g.__thornswoodProgression===progression&&g.__thornswoodCharacter===character;
+        var result=rule.check(rule.validate(gate),mp.get(actor,character.PROPERTY));
+        return g.__thornswoodProgression===progression&&g.__thornswoodCharacter===character ? result : false;
       }catch(error){return false;}
     },
     suspended: env.suspended,

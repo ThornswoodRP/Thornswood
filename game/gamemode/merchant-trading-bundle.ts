@@ -123,7 +123,7 @@ function reserve(raw,human,id,terms,at) {
     !integer(terms.unit,0,MAX_GOLD)||!integer(terms.count,1,100000)||!integer(terms.unit*terms.count,0,MAX_GOLD)))return {ok:false,why:'price'};
  const gold=bundle?terms.goods.reduce((sum,row)=>sum+row.count*row.unit,0):terms.unit*terms.count;
  if(owns(next.held,name))return {ok:false,why:'open'};
- if(owns(next.cool,name))return {ok:false,why:'cooldown'};
+ if(owns(next.cool,name))return {ok:false,why:'cooldown',waitMinutes:Math.ceil((cooldownWait(next.cool[name])-at+cooldownAt(next.cool[name]))/60000)};
  if(Object.keys(next.held).length>=MAX_HELD||Object.keys(next.cool).length+Object.keys(next.held).length>=MAX_COOL)return {ok:false,why:'capacity'};
  if(next.serial===Number.MAX_SAFE_INTEGER)return {ok:false,why:'counter'};
  const token=++next.serial;
@@ -1115,7 +1115,10 @@ function createCommissions(deps) {
    part.item.baseId===parts[i].itemId&&part.count===parts[i].count)&&
    (row.deliveryVersion===2?held.hours===row.hours:held.goods===undefined);
  }
- function eligible(actor,row) {return typeof deps.eligible==='function'&&deps.eligible(actor,row.gate)===true;}
+ function eligibility(actor,row) {
+  const result=typeof deps.eligible==='function'&&deps.eligible(actor,row.gate);
+  return result===true ? {ok:true} : result && typeof result==='object' ? result : {ok:false,why:'eligibility'};
+ }
  function context(actor,merchant,row) {
   if(!row||row.merchantId!==merchant)return null;
   const state=purses.read(merchant),human=transfer.identity(actor);
@@ -1132,7 +1135,7 @@ function createCommissions(deps) {
      STATE.owner(state.pending.human)===STATE.owner(human)&&state.pending.previous.commissions&&
      state.pending.previous.commissions.held[key];
    const original=held||pending,quote=original?{goods:original.goods||[{item:original.item,count:original.count,unit:original.unit}],gold:original.gold}:quoted(row);
-   const gate=original?true:eligible(actor,row),waiting=!!state.pending;
+   const requirement=original?{ok:true}:eligibility(actor,row),gate=requirement.ok===true,waiting=!!state.pending;
    const cooldown=last&&at-STATE.cooldownAt(last)<STATE.cooldownWait(last);
    const inventory=original?INVENTORY.inventory(transfer.inventory(actor)):null;
    const enough=!!original&&quote.goods.every(good=>inventory.entries.filter(item=>item.baseId===good.item.baseId)
@@ -1143,7 +1146,7 @@ function createCommissions(deps) {
      Object.keys(jobs.held).length+activeCool<STATE.MAX_COOL;
    const ready=deps.settlement.available()&&deps.settlement.canInventoryMutation(actor);
    const reason=waiting?'This trader is finishing a saved transfer.':!ready?'Trading is waiting for a saved inventory.':
-     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'Staff have set no reward for this work.':
+     !gate?(requirement.detail || 'You do not meet this work\'s requirements.'):cooldown?'This work is still resting. Come back in '+(m=>m+(m===1?' minute.':' minutes.'))(Math.ceil((STATE.cooldownWait(last)-(at-STATE.cooldownAt(last)))/60000)):!quote?'Staff have set no reward for this work.':
      !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':'';
    result.push({id:row.id,name:row.tier[0].toUpperCase()+row.tier.slice(1)+': '+row.name,kind:'commission',
     who:row.who,check:row.text+' '+reason,locations:row.hold+'; return to this '+row.role+'.',exactMerchant:true,
@@ -1169,13 +1172,14 @@ function createCommissions(deps) {
    if(!guards.current()||STATE.owner(transfer.identity(actor))!==STATE.owner(human))return false;
    if(fresh) {
     const again=quoted(row);
-    if(!again||again.argument!==quote.argument||!eligible(actor,row))return false;
+    if(!again||again.argument!==quote.argument||eligibility(actor,row).ok!==true)return false;
    }
    const count=STATE.openCount(namespace(),human);
    return (!fresh||count<3)&&guards.current()&&guards.alive();
   }
   if(verb==='take') {
-   if(!eligible(actor,row))return {ok:false,why:'eligibility'};
+   const requirement=eligibility(actor,row);
+   if(requirement.ok!==true)return requirement;
    const quote=quoted(row);if(!quote||'@'+quote.argument!==argument)return {ok:false,why:'price'};
    if(STATE.openCount(namespace(),human)>=3)return {ok:false,why:'open-limit'};
    const terms=row.deliveryVersion===2?{hash:row.sourceHash,goods:quote.goods,hours:row.hours}:
@@ -1444,41 +1448,50 @@ function createQuestEligibility(source) {
     }
     return Object.freeze(out);
   }
-  function allows(gate, state) {
+  function check(gate, state) {
+    function missing(detail) { return {ok:false, why:'eligibility', detail:detail}; }
+    function title(key) { return key.charAt(0).toUpperCase() + key.slice(1); }
     try {
       gate = validate(gate);
-      if (gate.open === true) return true;
+      if (gate.open === true) return {ok:true};
       var standing = field(state, 'ranks');
-      if (field(state, 'v') !== 1 || !record(standing)) return false;
+      if (field(state, 'v') !== 1 || !record(standing)) return missing();
       function hasRank(key) {
         var index = ranks.indexOf(field(standing, key));
         return index >= 0 && index >= ranks.indexOf(gate.rank);
       }
+      function rankOf(name) { return missing('This work requires ' + title(gate.rank) + ' standing in ' + name + '.'); }
       if (field(gate, 'classKey') !== undefined) {
-        return field(state, 'cls') === gate.classKey && hasRank(gate.classKey);
+        var cls = table.classes[gate.classKey].name || title(gate.classKey);
+        if (field(state, 'cls') !== gate.classKey) return missing('This work requires the ' + cls + ' class.');
+        return hasRank(gate.classKey) ? {ok:true} : rankOf(cls);
       }
-      if (field(state, 'prof') !== gate.profession) return false;
+      var profession = table.professions[gate.profession], name = profession.name || title(gate.profession);
+      if (field(state, 'prof') !== gate.profession) return missing('This work requires the ' + name + ' profession.');
       if (gate.profession !== 'mage') {
-        var halves = Object.keys(table.professions[gate.profession].halves);
-        return field(gate, 'half') !== undefined ? hasRank(gate.half) : halves.some(hasRank);
+        var halves = Object.keys(profession.halves);
+        var qualified = field(gate, 'half') !== undefined ? hasRank(gate.half) : halves.some(hasRank);
+        return qualified ? {ok:true} : rankOf(gate.half ? profession.halves[gate.half] : name);
       }
       var schools = strings(field(state, 'schools'));
-      if (!schools || schools.some(function (s) {return table.schools.indexOf(s) < 0;})) return false;
+      if (!schools || schools.some(function (s) {return table.schools.indexOf(s) < 0;})) return missing();
       var selected = field(gate, 'school') !== undefined ? [gate.school] : schools;
-      return selected.some(function (school) {
-        if (schools.indexOf(school) < 0 || !hasRank(school)) return false;
-        if (gate.rank !== 'master') return true;
-        var known = strings(field(field(state, 'spells'), 'known'));
-        var master = field(field(table.spells, school), 'master');
-        return !!known && Array.isArray(master) && known.some(function (name) {
-          var desc = field(spellIds, name);
-          return typeof name === 'string' && master.indexOf(name) >= 0 && typeof desc === 'string' &&
-            /^[0-9a-f]{1,6}:[^:\r\n]+\.(?:esm|esp|esl)$/i.test(desc);
-        });
+      var ranked = selected.some(function (school) { return schools.indexOf(school) >= 0 && hasRank(school); });
+      if (!ranked) return rankOf(gate.school ? title(gate.school) : 'a school of magic');
+      if (gate.rank !== 'master') return {ok:true};
+      // A master gate names exactly one school. Its mastered spell is required as well as the saved rank.
+      var known = strings(field(field(state, 'spells'), 'known'));
+      var master = field(field(table.spells, gate.school), 'master');
+      var mastered = !!known && Array.isArray(master) && known.some(function (spell) {
+        var desc = field(spellIds, spell);
+        return master.indexOf(spell) >= 0 && typeof desc === 'string' &&
+          /^[0-9a-f]{1,6}:[^:\r\n]+\.(?:esm|esp|esl)$/i.test(desc);
       });
-    } catch (error) { return false; }
+      return mastered ? {ok:true} : missing('This work requires a Master ' + title(gate.school) + ' spell.');
+    } catch (error) { return missing(); }
   }
-  return Object.freeze({validate: validate, allows: allows});
+  function allows(gate, state) { return check(gate,state).ok; }
+  return Object.freeze({validate: validate, allows: allows, check: check});
 }
 module.exports = {createQuestEligibility: createQuestEligibility};
 return module.exports;})();
@@ -2913,7 +2926,10 @@ function createMerchantTrading(deps) {
         recovery:'This work needs its saved payment checked. You can leave it without payment, or ask staff for recovery.',
         session:'Choose the work again from the trader.'};
       var text=result.ok ? (parts[2]==='take'?'You take the work.':parts[2]==='return'?'The work is turned in.':isCommission?'You leave the work without payment.':'You give back what remains of the draw and leave the work.') :
-        reasons[result.why] || 'The work could not be changed.';
+        (result.why==='eligibility' && result.detail) ||
+        (result.why==='cooldown' && Number.isSafeInteger(result.waitMinutes) && result.waitMinutes>0
+          ? 'This work is still resting. Come back in '+result.waitMinutes+(result.waitMinutes===1?' minute.':' minutes.') : reasons[result.why]) ||
+        'The work could not be changed.';
       if (isCommission && result.settling) {
         var settling=result.settling;
         await_(settling.id, {merchantId:merchantId,counted:null,profileId:profileId,session:originalSession,
@@ -3234,8 +3250,8 @@ function installMerchantTrading(env) {
       if(!progression||!character||!character.PROPERTY)return false;
       try {
         var rule=QUEST_ELIGIBILITY.createQuestEligibility({table:progression.TABLE,spellIds:progression.SPELL_IDS});
-        var allowed=rule.allows(rule.validate(gate),mp.get(actor,character.PROPERTY));
-        return allowed&&g.__thornswoodProgression===progression&&g.__thornswoodCharacter===character;
+        var result=rule.check(rule.validate(gate),mp.get(actor,character.PROPERTY));
+        return g.__thornswoodProgression===progression&&g.__thornswoodCharacter===character ? result : false;
       }catch(error){return false;}
     },
     suspended: env.suspended,

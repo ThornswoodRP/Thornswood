@@ -324,7 +324,10 @@ function createCommissions(deps) {
    part.item.baseId===parts[i].itemId&&part.count===parts[i].count)&&
    (row.deliveryVersion===2?held.hours===row.hours:held.goods===undefined);
  }
- function eligible(actor,row) {return typeof deps.eligible==='function'&&deps.eligible(actor,row.gate)===true;}
+ function eligibility(actor,row) {
+  const result=typeof deps.eligible==='function'&&deps.eligible(actor,row.gate);
+  return result===true ? {ok:true} : result && typeof result==='object' ? result : {ok:false,why:'eligibility'};
+ }
  function context(actor,merchant,row) {
   if(!row||row.merchantId!==merchant)return null;
   const state=purses.read(merchant),human=transfer.identity(actor);
@@ -341,7 +344,7 @@ function createCommissions(deps) {
      STATE.owner(state.pending.human)===STATE.owner(human)&&state.pending.previous.commissions&&
      state.pending.previous.commissions.held[key];
    const original=held||pending,quote=original?{goods:original.goods||[{item:original.item,count:original.count,unit:original.unit}],gold:original.gold}:quoted(row);
-   const gate=original?true:eligible(actor,row),waiting=!!state.pending;
+   const requirement=original?{ok:true}:eligibility(actor,row),gate=requirement.ok===true,waiting=!!state.pending;
    const cooldown=last&&at-STATE.cooldownAt(last)<STATE.cooldownWait(last);
    const inventory=original?INVENTORY.inventory(transfer.inventory(actor)):null;
    const enough=!!original&&quote.goods.every(good=>inventory.entries.filter(item=>item.baseId===good.item.baseId)
@@ -352,7 +355,7 @@ function createCommissions(deps) {
      Object.keys(jobs.held).length+activeCool<STATE.MAX_COOL;
    const ready=deps.settlement.available()&&deps.settlement.canInventoryMutation(actor);
    const reason=waiting?'This trader is finishing a saved transfer.':!ready?'Trading is waiting for a saved inventory.':
-     !gate?'You do not meet this work\'s requirements.':cooldown?'This work is still resting.':!quote?'Staff have set no reward for this work.':
+     !gate?(requirement.detail || 'You do not meet this work\'s requirements.'):cooldown?'This work is still resting. Come back in '+(m=>m+(m===1?' minute.':' minutes.'))(Math.ceil((STATE.cooldownWait(last)-(at-STATE.cooldownAt(last)))/60000)):!quote?'Staff have set no reward for this work.':
      !open&&openLimit?'You already hold three commissions.':!open&&!room?'This trader cannot accept more work yet.':'';
    result.push({id:row.id,name:row.tier[0].toUpperCase()+row.tier.slice(1)+': '+row.name,kind:'commission',
     who:row.who,check:row.text+' '+reason,locations:row.hold+'; return to this '+row.role+'.',exactMerchant:true,
@@ -378,13 +381,14 @@ function createCommissions(deps) {
    if(!guards.current()||STATE.owner(transfer.identity(actor))!==STATE.owner(human))return false;
    if(fresh) {
     const again=quoted(row);
-    if(!again||again.argument!==quote.argument||!eligible(actor,row))return false;
+    if(!again||again.argument!==quote.argument||eligibility(actor,row).ok!==true)return false;
    }
    const count=STATE.openCount(namespace(),human);
    return (!fresh||count<3)&&guards.current()&&guards.alive();
   }
   if(verb==='take') {
-   if(!eligible(actor,row))return {ok:false,why:'eligibility'};
+   const requirement=eligibility(actor,row);
+   if(requirement.ok!==true)return requirement;
    const quote=quoted(row);if(!quote||'@'+quote.argument!==argument)return {ok:false,why:'price'};
    if(STATE.openCount(namespace(),human)>=3)return {ok:false,why:'open-limit'};
    const terms=row.deliveryVersion===2?{hash:row.sourceHash,goods:quote.goods,hours:row.hours}:
