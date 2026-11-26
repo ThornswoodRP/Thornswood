@@ -16,11 +16,16 @@
 // Nobody moves a card by hand, and nothing else writes the board.
 //
 // WHAT DECIDES THE STATUS, in this order:
-//   Done         the issue is closed; or a merged pull request of this
-//                repository carries its test task ("Test task for #N:"),
-//                so its fix is on main and waits only for a main Ship
-//                (docs/guide/the-board.md), unless another pull
-//                request naming it is open
+//   Done         the issue is closed, and only then
+//   Merged       a merged pull request of this repository carries its test
+//                task ("Test task for #N:"), so its fix is on main and the
+//                issue stays open until a main release closes it with that
+//                test task (docs/guide/the-board.md), unless another pull
+//                request naming it is open. Not Done: GitHub keeps an
+//                issue's own status and a board Status of the same name
+//                together, so an open issue put in Done is closed by GitHub
+//                a second later, as the board App (#6878, Patrick's A on
+//                26 Nov 2026). Merged is no issue status, so it stays open.
 //   In Progress  an open pull request of this repository names it (Closes,
 //                Fixes, Resolves, Refs or Part of #N, or its test task), in
 //                its title or body, draft or not; or it carries a claimed:
@@ -68,7 +73,7 @@
 'use strict';
 
 const API = 'https://api.github.com/';
-const STATUSES = ['Todo', 'In Progress', 'Done'];
+const STATUSES = ['Todo', 'In Progress', 'Merged', 'Done'];
 // Where a new issue goes until a review moves it (order-on-filing.yml's rule,
 // #3534): after the queue, which is below 10000, in the order of filing.
 const FILED_ORDER = 10000;
@@ -124,7 +129,7 @@ function statusFor(issue, pulls) {
   const open = naming.filter(p => p.state === 'open');
   if (open.length) { return { status: 'In Progress', why: 'pull request ' + open.map(name).join(', ') + ' names it and is open' }; }
   const shipped = naming.filter(p => p.merged && (!p.repo || !issue.repo || p.repo.toLowerCase() === issue.repo.toLowerCase()) && tasksIn(p.body).has(n));
-  if (shipped.length) { return { status: 'Done', why: 'pull request ' + name(shipped[0]) + ' merged with its test task, so it waits on a main Ship' }; }
+  if (shipped.length) { return { status: 'Merged', why: 'pull request ' + name(shipped[0]) + ' merged with its test task, so it waits on a main Ship' }; }
   const claim = (issue.labels || []).find(l => /^claimed:/i.test(l));
   if (claim) { return { status: 'In Progress', why: 'it carries ' + claim }; }
   return { status: 'Todo', why: 'no open pull request names it and nobody has claimed it' };
@@ -237,14 +242,17 @@ function client(token, fetchImpl) {
 function optionName(o) { return o && typeof o.name === 'object' && o.name ? String(o.name.raw || '') : String((o && o.name) || ''); }
 
 // The board's Status field, with each option's id by name, and its Order.
-async function readBoard(gh, owner, number, kind) {
+// need is the Status options it must have: every one of STATUSES for this
+// board; none for the old board --copy-order reads only the Orders of, which
+// never had Merged.
+async function readBoard(gh, owner, number, kind, need) {
   const fields = await gh.all((kind || 'orgs') + '/' + owner + '/projectsV2/' + number + '/fields');
   const pick = name => fields.find(f => String(f.name).toLowerCase() === name.toLowerCase());
   const status = pick('Status');
   if (!status || String(status.data_type).toLowerCase() !== 'single_select') { throw new Error('the board has no single select field named Status'); }
   const so = {};
   for (const o of status.options || []) { so[optionName(o)] = o.id; }
-  const missing = STATUSES.filter(s => !so[s]);
+  const missing = (need || STATUSES).filter(s => !so[s]);
   if (missing.length) { throw new Error('the board\'s Status has no ' + missing.join(', ') + '; it has ' + Object.keys(so).join(', ') + ' (an option is never added from here: GitHub rewrites every option when one is added, which can clear every card\'s Status)'); }
   const order = pick('Order');
   if (order && String(order.data_type).toLowerCase() !== 'number') { throw new Error('the board\'s Order field is not a number'); }
@@ -359,7 +367,7 @@ async function copyOrder(gh, o, from, say) {
   if (!m) { say('--copy-order takes the old board as user/number, such as EvilPatrick06/1'); return 2; }
   let old, board;
   try {
-    old = await readBoard(gh, m[1], m[2], 'users');
+    old = await readBoard(gh, m[1], m[2], 'users', []);
     board = await readBoard(gh, o.owner, o.number);
   } catch (e) { say('stopped, nothing written: ' + e.message); return 1; }
   if (!old.order) { say('stopped, nothing written: the board ' + from + ' has no Order field'); return 1; }

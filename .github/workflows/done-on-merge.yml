@@ -32,8 +32,9 @@
 # its merge (#4135). It reads its body. For each
 # "Test task for #N" naming an open issue of this repository it writes a
 # comment on the issue with the test task in a fenced block, so the bot never
-# reads it as a test task to post. The card moves to Done by itself: board.yml
-# reads the same merged test task (#5185). Until then this put a board: Done
+# reads it as a test task to post. The card moves to Merged by itself: board.yml
+# reads the same merged test task (#5185), and never to Done, which GitHub
+# would close the open issue for (#6878). Until then this put a board: Done
 # label on with Patrick's board token for board-status.yml to carry out.
 # The main release that carries the merge closes the issue with that block as
 # its "Test task:" comment, once the live server runs it (close-shipped.yml,
@@ -51,7 +52,7 @@
 # no pull request behind its commits, so the merges of that morning moved
 # nothing and wrote no comment. A push event is not sent again, and the main
 # Ship closes only an issue whose done-on-merge comment names a merge it
-# carries, so those issues would sit in Done for ever. Started by hand with
+# carries, so those issues would sit in Merged for ever. Started by hand with
 # the merge commits, it does for them exactly what the push would have done.
 # An issue that already holds this workflow's comment for that pull request
 # is said and passed over, so running it twice writes nothing twice.
@@ -175,7 +176,7 @@ jobs:
               } else {
                 $when = 'The main release that carries it closes this issue once the live server runs it, with a comment holding exactly this (close-shipped.yml, scripts/release/Close-ShippedIssues.ps1):'
               }
-              $body = ('Pull request #{0} merged ({1}), so this is in Done and stays open: the merge puts the fix on the main branch, not on the main server testers play. {2}' -f $num, ([string]$p.merge_commit_sha).Substring(0, 12), $when) + "`n`n" + '```' + "`n" + 'Test task: ' + $t.title + "`n" + $steps + "`n" + '```' + "`n`n---`n_Done on merge, .github/workflows/done-on-merge.yml_"
+              $body = ('Pull request #{0} merged ({1}), so this is in Merged and stays open: the merge puts the fix on the main branch, not on the main server testers play. {2}' -f $num, ([string]$p.merge_commit_sha).Substring(0, 12), $when) + "`n`n" + '```' + "`n" + 'Test task: ' + $t.title + "`n" + $steps + "`n" + '```' + "`n`n---`n_Done on merge, .github/workflows/done-on-merge.yml_"
               Invoke-RestMethod -Method Post -Uri ("$api/issues/" + $t.issue + '/comments') -Headers $h -Body (@{ body = $body } | ConvertTo-Json -Compress) -ContentType 'application/json' | Out-Null
               Write-Host ("#{0} finishes #{1}: test task written on the issue" -f $num, $t.issue)
             }

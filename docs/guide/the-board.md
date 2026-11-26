@@ -83,18 +83,26 @@ How to use it:
   ("What this is" says how the Bots use them). Assign yourself when you start one. The stage is Order and
   Status: the `wave:` labels and `needs: the live server` were retired on
   22 Oct (#3192), because nothing read them and Order had replaced them.
-- Status: In Progress the moment work starts, Done when it is merged and only
-  needs testing (Patrick, 19 Oct). Nobody moves a card: the Status follows
+- Status: In Progress the moment work starts, Merged when its fix is merged
+  with its test task and only needs a main release (Patrick, 19 Oct; Merged
+  since his A on 26 Nov 2026, #6878), Done once the issue is closed. Nobody moves a card: the Status follows
   what GitHub knows (#5185, `.github\workflows\board.yml` and
   `scripts\ops\Sync-Board.js`). A closed issue is Done. An open one is In
   Progress while a pull request that names it (`Closes`, `Fixes`,
   `Resolves`, `Refs` or `Part of #N`, or its test task) is open, or while it
-  carries a `claimed:` label; Done once a merged pull request carries its
-  test task; Todo otherwise. So to move a card, change the fact: open the
+  carries a `claimed:` label; Merged once a merged pull request carries its
+  test task; Todo otherwise. Done is never put on an open issue: GitHub
+  keeps an issue's own status and a board Status of the same name together,
+  so an open issue put in Done is closed by GitHub a second later, as the
+  board App, which sent testers to look for fixes main did not have
+  (#6878). Merged is no issue status, so its issue stays open. So to move a card, change the fact: open the
   pull request, put the claim on, or close the issue, and the card follows
-  within a minute. The Status options are Todo, In Progress and Done; never
-  add one through the API, which rewrites every option and can clear the
-  Status on every card. The `board:` labels did this by hand until #5185 and
+  within a minute. The Status options are Todo, In Progress, Merged and
+  Done. GitHub's API replaces every option when one is added: an option
+  given without its old id is a new one, and every card's Status on it is
+  cleared. Merged went in that way on 26 Nov 2026 with each old option's
+  id, name, colour and description given back, and every card kept its
+  Status; `pwsh scripts/ops/Check-Board.ps1` says when the options differ. The `board:` labels did this by hand until #5185 and
   are gone. To see the cards, `pwsh scripts/ops/Read-Board.ps1` starts
   `.github\workflows\board-read.yml`, which reads every card's Status and
   Order and changes nothing, and writes them to board.json (#3192).
@@ -110,11 +118,11 @@ How to use it:
   testers test, since we are in alpha). The pull request carries the test
   task as `Test task for #N: <a title of at most 45 characters>`, then
   numbered steps in plain English and what should happen, with no issue
-  numbers, links or code. At the merge its card goes to Done by itself, and
+  numbers, links or code. At the merge its card goes to Merged by itself, and
   `.github\workflows\done-on-merge.yml` writes the test task on the issue. The main Ship that
   carries the merge closes it (#3279): after it tags the release,
   `scripts\release\Close-ShippedIssues.ps1` reads the board and closes every
-  open issue in Done whose done-on-merge comment names a merge the release was
+  open issue in Merged whose done-on-merge comment names a merge the release was
   built from, with a comment whose first line is `Test task: <title>` and the
   steps under it, and names the ones that stay open. Nobody closes these by
   hand. The bot turns that comment into a post in the #test-tasks forum the
@@ -124,7 +132,7 @@ How to use it:
   only a developer can make the check (Dev, below). To better the test task
   after the merge, write a newer `Test task:` comment of the same kind on
   the issue and leave it open: the Ship closes it with yours instead. A
-  Dev test task never keeps the issue open. Whoever moves an issue to Done
+  Dev test task never keeps the issue open. Whoever finishes an issue
   by hand (a fix spread over several pull requests, a pin, a change on the
   box) writes on it a comment whose first line is `Fixed by <merge commit,
   12 characters> (pull request #N).`, naming the last merge the fix needs,
@@ -136,7 +144,7 @@ How to use it:
   it reads done-on-merge's comment, from anybody, the newer of the two
   winning, and closes the issue when the release carries that merge (#3411).
   It finds the line by searching the open issues' comments, so the issue
-  closes whether or not the board had put its card in Done. A line with neither a test task nor the no-task line keeps the issue open,
+  closes whether or not the board had put its card in Merged. A line with neither a test task nor the no-task line keeps the issue open,
   and the Ship names it as trouble. To see what a main Ship
   would close, without closing anything:
   `.\scripts\release\Close-ShippedIssues.ps1 -Commit origin/main -Check`.

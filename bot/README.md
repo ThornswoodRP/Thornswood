@@ -178,9 +178,9 @@ once in the log.
 - `#known-issues`, read only: one post per open issue labelled Dev Findings
   or Main Findings whose fix has not landed yet, tagged Dev or Main
   (Patrick, 22 Oct). Its fix has landed once the issue has a `Test task:`
-  comment or is in Done: done-on-merge.yml's comment on it, `Pull request #N
-  merged (...)` written by the workflow, which comes with the card's Done
-  (since #5185 nobody moves a card by hand, and no `board: Done` label goes
+  comment or is in Merged: done-on-merge.yml's comment on it, `Pull request #N
+  merged (...)` written by the workflow, which comes with the card's Merged
+  (since #5185 nobody moves a card by hand, and no `board:` label goes
   on). Then it is not a known issue and its post goes at once. A merged pull request alone does
   not take a post down (#3140): when any merged pull request that named the
   issue did, a measuring step on the scripts finding, partial fixes and a

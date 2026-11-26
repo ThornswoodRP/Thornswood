@@ -112,7 +112,7 @@ DONE_ON_MERGE_BY = 'github-actions[bot]'
 
 def merged_fix(comments):
     """True when done-on-merge.yml has written its record of a merged fix
-       on the issue: the issue is in Done and its fix has landed."""
+       on the issue: the issue is in Merged and its fix has landed."""
     for c in comments or []:
         who = str(((c.get('user') or {}).get('login')) or '')
         if who == DONE_ON_MERGE_BY and DONE_ON_MERGE.match(str(c.get('body') or '')):
