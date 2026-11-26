@@ -235,6 +235,17 @@
     return n ? n.post(obj) : false;
   }
 
+  /*
+    This page's range, told to the service on the chat's socket, which holds
+    it on that connection and on every other of the same profile. Once the
+    launcher has the audio it is the launcher's range, which this page keeps
+    in step with (setLauncherStatus), so a new chat connection is told it
+    then too.
+  */
+  function sayMode() {
+    return post({ t: 'vmode', mode: myMode });
+  }
+
   // ------------------------------------------------------------- reporting --
   var lastReport = '';
   function report(stage, detail) {
@@ -766,11 +777,20 @@
     // so on (#1925; see enterRelay).
     if (inRelay()) { n.noVoice(); }
 
-    // Restated on every connect. The join that put us in the room was sent by
-    // the chat file, which knows nothing about modes, so without this a
-    // reconnect would leave everyone hearing us at local while the indicator
-    // on our own screen says whisper.
-    post({ t: 'vmode', mode: myMode });
+    /*
+      The range, said on every connection (#4376). The join that puts this
+      socket in the room is sent by the chat file, which knows nothing about
+      ranges, so the service starts every new connection at local. This used
+      to be said once, here, the first time this page got on the socket: a
+      dropped connection came back with a new join and nothing said it again,
+      so the room heard local while the microphone below still read whisper
+      or yell. And when this page got on before the socket's first welcome,
+      that one post went nowhere either, since the socket takes nothing
+      before it is in. So it is said here for a connection already in, and
+      again on every welcome, which is the service saying a new connection
+      is in.
+    */
+    sayMode();
 
     myPeer = n.peer();
 
@@ -783,7 +803,7 @@
     */
     var onNet = function (m) {
       if (!m || !m.t) { return; }
-      if (m.t === 'welcome') { myPeer = Number(m.peer) || 0; return; }
+      if (m.t === 'welcome') { myPeer = Number(m.peer) || 0; sayMode(); return; }
       /*
         The relay guard comes before the peer list, not after it.
 

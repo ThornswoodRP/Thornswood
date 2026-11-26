@@ -40,6 +40,10 @@ bottom of your screen names the distance you are on, and while you
 speak it takes that distance's color: pale blue, white or amber, the
 color everybody in range sees above you.
 
+The distance stays what you picked when the connection drops and comes
+back: the game tells the room it again on every new connection (#4376,
+`tests\test-4376-voice-range-reconnect.js`).
+
 A voice mute hides the mark as well as the sound. Hiding their name
 does not hide the mark. Turning off their text does not hide it
 either.
