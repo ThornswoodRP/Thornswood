@@ -81,14 +81,15 @@
   -WhatIf does steps 1 to 5: it downloads into the cache and works the whole
   layout out in the scratch folder, prints it, and changes nothing in -Game.
 
-  -Record <folder>, in place of -Game, does steps 1 to 5 and writes the four
-  records of step 6 into that folder, placing no file anywhere. Each mod's
+  -Record <folder>, in place of -Game, does steps 1 to 5 and writes the five
+  records of step 6 (layout.json, files.txt, plugins.txt, loadorder.txt and
+  slidersets.json) into that folder, placing no file anywhere. Each mod's
   unpacked copy is hashed and deleted as soon as it is worked out, so the
   scratch folder never holds more than one mod. This is how a revision is
   laid out without One (#2969). Since #2841 a cloud session holds no Nexus
   key, so it asks for it with
       pwsh scripts/release/Nexus-Run.ps1 -Line 'Install-NexusRevision -Revision 3'
-  which runs this on a box runner with the key and sends the four records
+  which runs this on a box runner with the key and sends the five records
   back. Off Windows, 7-Zip is the build Get-SevenZip.ps1 fetches and the
   cache is $XDG_CACHE_HOME/thornswood/nexus-cache (~/.cache when that is not
   set); every path in the records is the Windows path the layout has on One.
@@ -140,7 +141,7 @@
 
 .PARAMETER Record
   A folder for the layout's record (layout.json, files.txt, plugins.txt,
-  loadorder.txt), with no file laid out. In place of -Game.
+  loadorder.txt, slidersets.json), with no file laid out. In place of -Game.
 
 .PARAMETER KeepPlugins
   With -Record: keeps the plugins the layout places in <Record>\plugins,
@@ -945,7 +946,7 @@ if ($Record) {
   Remove-Tree $script:Work; $script:Work = ''
   Head 'Done'
   Say ('  revision ' + $Revision + ' of ' + $Slug + ': ' + $placed.Count + ' files, ' + $order.Count + ' plugins, nothing placed') 'Green'
-  Say ('  ' + (Join-Path $Record 'layout.json') + ', files.txt, plugins.txt, loadorder.txt')
+  Say ('  ' + (Join-Path $Record 'layout.json') + ', files.txt, plugins.txt, loadorder.txt, slidersets.json')
   if ($KeepPlugins) {
     Say ('  and ' + $keptCount + ' plugins, the copies the layout places, in ' + (Join-Path $Record 'plugins'))
     Say ('  and ' + $menuCount + ' files SkyUI''s menu check reads, in ' + (Join-Path $Record 'menus'))
@@ -959,7 +960,7 @@ if ($Record) {
 $recDir = Join-Path $Game 'Thornswood Layout'
 if ($WhatIf) {
   Head 'What it would do'
-  Say ('  place ' + $placed.Count + ' files in ' + $Game + ' and write ' + $recDir + '\layout.json, files.txt, plugins.txt and loadorder.txt')
+  Say ('  place ' + $placed.Count + ' files in ' + $Game + ' and write ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt and slidersets.json')
   Write-Host ''
   Say ('Nothing in ' + $Game + ' was changed.') 'Green'
   Remove-Tree $script:Work; $script:Work = ''
@@ -1046,7 +1047,7 @@ Remove-Tree $script:Work; $script:Work = ''
 
 Head 'Done'
 Say ('  revision ' + $Revision + ' of ' + $Slug + ': ' + $placed.Count + ' files (' + $linked + ' linked from the unpacked archives, ' + $copied + ' copied), ' + $order.Count + ' plugins') 'Green'
-Say ('  ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt')
+Say ('  ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt, slidersets.json')
 Say '  Next: check a draft on Dev before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
