@@ -710,9 +710,13 @@ namespace Thornswood
             Keep.Restore();
             Keep.Unpark();
             Yes(n + "and Play leaves the release's file in the game", Text(live) == "KEEP new");
+            // A release takes a file out by saying it is gone (:gone:), not by
+            // leaving it off its list.
             all.Remove("Data/Platform/Plugins/thornswood-keeptest.js");
+            all[":gone:Data/Platform/Plugins/thornswood-keeptest.js"] = "always";
             SyncRelease(s, "keep-gone", all, say);
-            Yes(n + "a release without the file takes it and its kept copy away", !File.Exists(live) && !File.Exists(kept));
+            all.Remove(":gone:Data/Platform/Plugins/thornswood-keeptest.js");
+            Yes(n + "a release that says the file is gone takes it and its kept copy away", !File.Exists(live) && !File.Exists(kept));
         }
 
         // ---- 2 --------------------------------------------------------------
