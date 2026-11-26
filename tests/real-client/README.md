@@ -46,8 +46,10 @@ pwsh scripts\dev\Run-RealClient.ps1
 ```
 
 It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
-`results.jsonl`, the launcher's log for the run and a `.png` for each
-screenshot. `-Root` names another install (the default is
+`results.jsonl`, the launcher's log for the run, a `.png` for each
+screenshot, and under `game\` the game's own logs that the run's game wrote
+(`skyrim-platform.log` with the plugins' Trace lines, and the Thornswood
+logs beside it), which the next game start writes over. `-Root` names another install (the default is
 the install `scripts\release\Where.ps1 Install` finds, with the launcher the
 setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, and `-Publish` puts
 the run on a draft Release of its own, `real-client-<run>`, and a line on the

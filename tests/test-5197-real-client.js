@@ -792,6 +792,18 @@ foreach ($scan in @(1,23,36)) {
   }
 }
 
+// The game's own logs are kept with the run, since the next game start
+// writes over them (26 Nov: #6619's "Owner outfit" lines were gone).
+{
+  const RUN = read(path.join('scripts', 'dev', 'Run-RealClient.ps1')) || '';
+  yes('the run keeps the SKSE logs its game wrote, under game\\',
+      /\$runStarted = Get-Date/.test(RUN) && /'Profile\\MyGames\\SKSE'/.test(RUN) &&
+      /Filter '\*\.log' -File \| Where-Object \{ \$_\.LastWriteTime -ge \$runStarted \}/.test(RUN) &&
+      /Join-Path \$Out 'game'/.test(RUN));
+  yes('  read while the game may still hold them, as launcher.log is', /\[IO\.File\]::Open\(\$f\.FullName, 'Open', 'Read', 'ReadWrite'\)/.test(RUN));
+  yes('  and kept before the summary is written, so they go up with the run', RUN.indexOf("Join-Path $Out 'game'") > 0 && RUN.indexOf("Join-Path $Out 'game'") < RUN.indexOf("Compress-Archive"));
+}
+
 // The watcher starts a run by itself after a dev release (#5197's Done when:
 // nobody at the PC), once per Deployment, and never over somebody's game,
 // on a locked PC, or while somebody is using it.
