@@ -113,12 +113,17 @@ What changed.
 
 How you tested it.
 
-Closes #123
+Refs #123
+
+Test task for #123: Short title of the check
+Server: Main
+1. Plain steps.
+What should happen: what the tester sees.
 "@
 gh pr create --title "Short title" --body $body
 ```
 
-The title says what changed. The body says how you tested it. If the work finishes an issue and nobody would notice it in the game, put `Closes #123` in the body. A fix people would notice says `Refs #123` instead, with its test task under it as `Test task for #123: <title>`, because its issue is closed with that test task when a main Ship puts the fix on the main server, not when the pull request merges: the Ship closes it itself (`scripts\release\Close-ShippedIssues.ps1`, #3279) ([Everything we need to do goes on the board](the-board.md)). The pull request targets `main`.
+The title says what changed. The body says how you tested it. A fix that finishes an issue says `Refs #123`, with its test task under it as `Test task for #123: <title>`, because its issue is closed with that test task when a main Ship puts the fix on the main server, not when the pull request merges: the Ship closes it itself (`scripts\release\Close-ShippedIssues.ps1`, #3279) ([Everything we need to do goes on the board](the-board.md)). Only work nobody would notice in the game, the launcher, the site, Discord or the staff tools (a test, a workflow, a doc, a script only the team runs) puts `Closes #123` in the body instead, so the merge closes the issue. The pull request targets `main`.
 
 Run the test that covers your change before you open the pull request.
 
