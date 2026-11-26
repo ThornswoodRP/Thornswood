@@ -72,6 +72,7 @@ for g in tree:
 # it copies from a master (house parts, woodworking moves, cooking quality).
 copied = set(f for f, _ in m.HOUSE_PARTS) | set(f for f, _, _ in m.WOODWORKER_MASTER_RECIPES)
 copied |= set(m.quality_fids(list(m.PLUGIN_MASTERS), m.PLUGIN))
+copied |= set(m.seasoned_fids(list(m.PLUGIN_MASTERS), m.PLUGIN))
 kinds = set(r.tag for r in made)
 made_ids = set(r.fid for r in made)
 stray = ['%s 0x%07X %s' % (r.tag.decode(), r.fid, r.editor_id()) for r in have

@@ -39,9 +39,11 @@ yes('and it is game/data/food-groups.json exactly', !!GROUPS && !!file && JSON.s
 // counted on its own, in its plain dish's group.
 const FINE = (GROUPS && GROUPS.quality && GROUPS.quality.fine) || {};
 const FINE_IDS = new Set(Object.values(FINE));
+const SEASONED = (GROUPS && GROUPS.season && GROUPS.season.dishes) || {};
 const count = {};
-if (GROUPS) { for (const d in GROUPS.items) { if (!FINE_IDS.has(d)) { count[GROUPS.items[d]] = (count[GROUPS.items[d]] || 0) + 1; } } }
-yes('every fine dish is in its plain dish\'s group (#2906), the four festival feasts\' too (#3152)', FINE_IDS.size === 67 &&
+if (GROUPS) { for (const d in GROUPS.items) { if (!FINE_IDS.has(d) && !SEASONED[d]) { count[GROUPS.items[d]] = (count[GROUPS.items[d]] || 0) + 1; } } }
+yes('every fine dish is in its plain dish\'s group (#2906), the four festival feasts\' too (#3152)',
+  FINE_IDS.size === Object.keys(FINE).length && Object.keys(FINE).filter(function (d) { return !SEASONED[d]; }).length === 67 &&
   Object.keys(FINE).every(function (plain) { return !!GROUPS.items[plain] && GROUPS.items[FINE[plain]] === GROUPS.items[plain]; }));
 yes('and the burnt meal is in no group: burnt is a quality, not a group', !!GROUPS.quality && !!GROUPS.quality.burnt &&
   !GROUPS.items[GROUPS.quality.burnt]);

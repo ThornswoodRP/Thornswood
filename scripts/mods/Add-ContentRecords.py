@@ -496,8 +496,11 @@ CONTENTS = (
     # The teas, the burnt, fine and spoiled food (#3163) and the festival
     # feasts and brews (#3152) share one row, which keeps the description
     # under its 512.
-    (r'(ALCH ThornswoodFood|COBJ ThornswoodRecipe)(Tea|Feast|Brew)\w+$|ALCH Thornswood(FoodBurntMeal|FoodFine\w+|FoodSpoiled)$'
-     r'|COBJ ThornswoodRecipeEmptyBottleFromMilk|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled)Effect$', 'own', 'food and drink'),
+    (r'(ALCH ThornswoodFood|COBJ ThornswoodRecipe)(Tea|Feast|Brew|Seasoned)\w+$'
+     r'|ALCH Thornswood(FoodBurntMeal|FoodFine\w+|FoodSpoiled)$'
+     r'|COBJ ThornswoodRecipeEmptyBottleFromMilk|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled)Effect$'
+     r'|MGEF ThornswoodSeasoned(Guard|Stamina)$',
+     'own', 'food and drink'),
     (r'(MISC ThornswoodQuest\w+|ACTI ThornswoodQuestLedgerSource)$', 'own', 'quest items'),
     (r'IMAD Thornswood(Drunk|High|Hangover|Withdrawal)Imod$', 'own', 'the screen looks'),
     (r'BOOK ThornswoodPassage\w+$', 'own', 'town passages'),
@@ -1092,6 +1095,16 @@ BURNT_EFFECT = 0x5019001
 BURNT_EFFECT_WORDS = 'Burnt. Stamina recovers 10% slower for 10 minutes.'
 FINE_EFFECT = 0x5019002
 FINE_EFFECT_WORDS = 'A fine dish. The help a meal of it gives lasts 30 minutes, not 20.'
+# #4610. The added ingredient determines which server-side effect is applied.
+# These display effects have no script and never grant the benefit themselves.
+# season.recipes holds the kept COBJ for each original dish. A plain seasoned
+# entry in season.dishes names its new COBJ, with item and recipe object IDs
+# reserved from 0x1c000. Fine entries have no COBJ because cooking quality
+# swaps the result of the plain seasoned recipe to the corresponding fine item.
+SEASONING = {
+    '34d22:Skyrim.esm': ('Garlic', 0x501c108, 'Guard', 'Garlic-seasoned. Grants protection from disease.'),
+    '34cdf:Skyrim.esm': ('Salted', 0x501c109, 'Stamina', 'Salt-seasoned. Helps restore stamina.'),
+}
 BURNT_MEAL_EDID = 'ThornswoodFoodBurntMeal'
 BURNT_MEAL_NAME = 'Burnt Meal'
 BURNT_MEAL_LOOK = '721e8:Skyrim.esm'            # Cooked Beef
@@ -1522,7 +1535,8 @@ def quality_effects():
         (b'DATA', bytes(data)), (b'SNDD', b''), (b'DNAM', zstr(words))])
         for fid, edid, name, words in (
             (BURNT_EFFECT, 'ThornswoodBurntEffect', 'Burnt', BURNT_EFFECT_WORDS),
-            (FINE_EFFECT, 'ThornswoodFineEffect', 'Fine', FINE_EFFECT_WORDS))]
+            (FINE_EFFECT, 'ThornswoodFineEffect', 'Fine', FINE_EFFECT_WORDS),
+            *((fid, 'ThornswoodSeasoned' + kind, kind, words) for _, fid, kind, words in SEASONING.values()))]
 
 
 def spoiled_records():
@@ -1542,11 +1556,14 @@ def spoiled_records():
             (b'EFID', struct.pack('<I', SPOILED_EFFECT)), (b'EFIT', struct.pack('<fII', 0.0, 0, 0))])]
 
 
-def quality_table():
-    """food-groups.json's quality block: the burnt meal and {plain dish: fine
-    record}."""
+def food_groups():
     with open(FOOD_GROUPS_TABLE, encoding='utf-8') as fh:
-        return json.load(fh).get('quality') or {}
+        return json.load(fh)
+
+
+def quality_table():
+    """food-groups.json's quality block: the burnt meal and {plain dish: fine record}."""
+    return food_groups().get('quality') or {}
 
 
 def quality_fids(plugin_masters, plugin_name):
@@ -1561,7 +1578,9 @@ def quality_wanted(plugin_masters, plugin_name, names):
     """[(form id, editor id, name, the dish whose look it wears, effect)] for
     the burnt meal and every fine dish in food-groups.json's quality block.
     names is {plain dish: its name}, from dish_names()."""
-    quality = quality_table()
+    groups = food_groups()
+    quality = groups['quality']
+    seasoned = groups.get('season', {}).get('dishes', {})
     names = dict(names)
     # The festival feasts are this plugin's own (#3152), named here before any
     # load order holds the plugin they are in.
@@ -1570,6 +1589,14 @@ def quality_wanted(plugin_masters, plugin_name, names):
     out = [(local_fid(quality['burnt'], plugin_masters, plugin_name), BURNT_MEAL_EDID, BURNT_MEAL_NAME,
             BURNT_MEAL_LOOK, BURNT_EFFECT)]
     for plain, fine in sorted(quality.get('fine', {}).items(), key=lambda kv: kv[1]):
+        if plain in seasoned:
+            row = seasoned[plain]
+            if seasoned.get(fine) != {k: row[k] for k in ('of', 'extra')}:
+                raise ValueError('fine seasoned dish differs from its recipe: %s' % fine)
+            name = 'Fine %s %s' % (SEASONING[row['extra']][0], names[row['of']])
+            out.append((local_fid(fine, plugin_masters, plugin_name), 'ThornswoodFoodFineSeasoned' + fine.split(':')[0],
+                        name, row['of'], FINE_EFFECT))
+            continue
         name = names.get(plain)
         if not name:
             raise SystemExit('STOP. %s has a fine record and no name was found for it. Nothing was written.' % plain)
@@ -1625,15 +1652,7 @@ def top_group_records(src, tag):
     return out
 
 
-def dish_names(data_dir, plugins_txt, wanted):
-    """{plain dish: its name} for every dish in wanted, each the FULL of its
-    winning ALCH record in the load order plugins_txt names (the five masters,
-    then each plugin switched on), read from data_dir. Thornswood's own
-    plugins are left out: this plugin is the one being made, and
-    Thornswood-Last.esp is made after it. A localised plugin's FULL is a
-    string id, looked up in its .STRINGS. Both are read the way
-    scripts/dev/Build-RecipeTable.ps1 reads them (Windows-1252), so a fine
-    dish is named as the game names its plain one."""
+def external_load_order(data_dir, plugins_txt):
     last = last_plugin_module()
     if not os.path.isfile(plugins_txt):
         raise SystemExit('STOP. there is no plugin list at %s, so the plain dishes cannot be named. '
@@ -1644,6 +1663,20 @@ def dish_names(data_dir, plugins_txt, wanted):
     if missing:
         raise SystemExit('STOP. %s of the load order in %s %s not in %s. Nothing was written.'
                          % (', '.join(missing), plugins_txt, 'is' if len(missing) == 1 else 'are', data_dir))
+    return order
+
+
+def dish_names(data_dir, plugins_txt, wanted):
+    """{plain dish: its name} for every dish in wanted, each the FULL of its
+    winning ALCH record in the load order plugins_txt names (the five masters,
+    then each plugin switched on), read from data_dir. Thornswood's own
+    plugins are left out: this plugin is the one being made, and
+    Thornswood-Last.esp is made after it. A localised plugin's FULL is a
+    string id, looked up in its .STRINGS. Both are read the way
+    scripts/dev/Build-RecipeTable.ps1 reads them (Windows-1252), so a fine
+    dish is named as the game names its plain one."""
+    last = last_plugin_module()
+    order = external_load_order(data_dir, plugins_txt)
     want = {}
     for desc in wanted:
         local, _, owner = desc.partition(':')
@@ -1746,7 +1779,10 @@ def quality_records(masters_dir, plugins_txt, plugin_masters, problems):
     plugins_txt names. A dish that cannot be made is added to problems and
     left out."""
     feasts = set('%x:%s' % (row[0] & 0xFFFFFF, PLUGIN) for row in FEASTS)
-    plain = sorted(d for d in quality_table().get('fine', {}) if d not in feasts)
+    groups = food_groups()
+    seasoned = groups.get('season', {}).get('dishes', {})
+    plain = sorted({seasoned.get(d, {}).get('of', d)
+                    for d in groups['quality']['fine'] if d not in feasts})
     names = dish_names(masters_dir, plugins_txt, plain)
     out = []
     for fid, edid, name, dish, effect in quality_wanted(plugin_masters, PLUGIN, names):
@@ -1757,6 +1793,40 @@ def quality_records(masters_dir, plugins_txt, plugin_masters, problems):
         if look is not None:
             out.append(quality_record(fid, edid, name, look, effect))
     return out
+
+
+def seasoned_records(masters_dir, plugins_txt, plugin_masters, problems):
+    """Own item records and disabled recipe shells. The full-order Last
+    compiler supplies their actual ingredients and conditions (#4610).
+    Content keeps its five masters; a missing Last patch cannot expose a
+    cheap approximation of a recipe whose inputs belong to another mod."""
+    groups = food_groups()
+    rows = last_plugin_module().seasoned_recipe_rows(groups)
+    names = dish_names(masters_dir, plugins_txt, groups['season']['recipes'])
+    looks = {dish: dish_look(masters_dir, dish, plugin_masters, problems)
+             for dish in groups['season']['recipes']}
+    out = []
+    for row in rows:
+        dish, extra = row['of'], row['extra']
+        look = looks[dish]
+        if look is None:
+            continue
+        adjective, effect, _, _ = SEASONING[extra]
+        suffix = row['item'].split(':')[0]
+        item_id = local_fid(row['item'], plugin_masters, PLUGIN)
+        recipe_id = local_fid(row['recipe'], plugin_masters, PLUGIN)
+        out.append(quality_record(item_id, 'ThornswoodFoodSeasoned' + suffix,
+                                  '%s %s' % (adjective, names[dish]), look, effect))
+        out.append(cobj(recipe_id, 'ThornswoodRecipeSeasoned' + suffix,
+                        [], item_id, 0, conditions=(NEVER_TRUE,)))
+    return out
+
+
+def seasoned_fids(plugin_masters, plugin_name):
+    """The plain seasoned items and their recipes. The fine items are in quality_fids."""
+    dishes = food_groups().get('season', {}).get('dishes', {})
+    return [local_fid(ref, plugin_masters, plugin_name)
+            for item, row in dishes.items() if 'recipe' in row for ref in (item, row['recipe'])]
 
 
 def feast_look(model, box, weight):
@@ -2788,9 +2858,10 @@ def main():
     problems = []
     try:
         quality_made = quality_records(args.masters, args.plugins, plugin_masters, problems)
+        seasoned_made = seasoned_records(args.masters, args.plugins, plugin_masters, problems)
     except (KeyError, ValueError) as e:
         print('')
-        print('STOP. game\\data\\food-groups.json has no quality block this can read (%s). '
+        print('STOP. game\\data\\food-groups.json has no usable cooking records (%s). '
               'Nothing was written.' % e)
         return 1
     if problems:
@@ -2801,7 +2872,7 @@ def main():
         print('Nothing was written.')
         return 1
 
-    records = own + house + wood + quality_made
+    records = own + house + wood + quality_made + seasoned_made
     by_edid = {}
     for r in records:
         other = by_edid.get(r.editor_id())
@@ -2953,6 +3024,7 @@ def main():
     print('  %d recipes of the masters moved to the woodworking bench (#516)' % len(wood))
     print('  %d Dwarven scrap recipes of Skyrim.esm on no bench (#613)' % len(scrap))
     print('  %d cooking quality records (#2906)' % len(quality_made))
+    print('  %d seasoned dish and recipe records (#4610)' % len(seasoned_made))
     kinds = {}
     for r in want.values():
         b = struct.unpack_from('<I', dict(subrecords(r.data))[b'NAME'])[0]
