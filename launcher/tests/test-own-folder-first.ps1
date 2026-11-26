@@ -684,7 +684,35 @@ namespace Thornswood
             OwnGame.CleanSteamCopy(s.Cfg);
             Yes(n + "a Profile\\Payload left behind by a stopped Make is removed at the next start", !Directory.Exists(s.Payload));
             Yes(n + "the Steam copy is what it was before the installer ran, to the byte and the write time", Same(before, Snap(s.Game)));
+            KeptAsReleased(s, n);
             foreach (string m in s.Said) if (!Clean(m)) Yes(n + "no em dash and never the word in: " + m, false);
+        }
+
+        // #5197, 26 Nov: the game file already matched the new release, so the
+        // update did not write it, and its kept copy stayed the older build's.
+        // Play then put the older build's file back over the release's. Every
+        // game file of a release is kept as the release has it.
+        static void KeptAsReleased(Scene s, string n)
+        {
+            Action<string> say = delegate(string m) { Say(s, m); };
+            const string rel = "Data\\Platform\\Plugins\\thornswood-keeptest.js";
+            Dictionary<string, string> all = Released[s.Dir];
+            all["Data/Platform/Plugins/thornswood-keeptest.js"] = "KEEP old";
+            SyncRelease(s, "keep-old", all, say);
+            string live = Path.Combine(Paths.Game, rel), kept = Path.Combine(Keep.Dir, rel);
+            Yes(n + "a file a release wrote is kept as it has it", Text(kept) == "KEEP old");
+            // The next release's copy is already in the game before that
+            // release comes, as the real game run's own copy of its plugin was.
+            File.WriteAllText(live, "KEEP new");
+            all["Data/Platform/Plugins/thornswood-keeptest.js"] = "KEEP new";
+            SyncRelease(s, "keep-new", all, say);
+            Yes(n + "a file that already matched the next release is kept as that release has it, not as the older one did (#5197)", Text(kept) == "KEEP new");
+            Keep.Restore();
+            Keep.Unpark();
+            Yes(n + "and Play leaves the release's file in the game", Text(live) == "KEEP new");
+            all.Remove("Data/Platform/Plugins/thornswood-keeptest.js");
+            SyncRelease(s, "keep-gone", all, say);
+            Yes(n + "a release without the file takes it and its kept copy away", !File.Exists(live) && !File.Exists(kept));
         }
 
         // ---- 2 --------------------------------------------------------------

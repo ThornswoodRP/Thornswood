@@ -40,12 +40,19 @@ It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
 `results.jsonl`, the launcher's log for the run and a `.png` for each
 screenshot. `-Root` names another install (the default is
 the install `scripts\release\Where.ps1 Install` finds, with the launcher the
-setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, `-InstallPlugin` copies
-this repository's plugin into a build released before it, and `-Publish` puts
+setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, and `-Publish` puts
 the run on a draft Release of its own, `real-client-<run>`, and a line on the
 newest Dev Deployment that links it. A build's own Release cannot take it,
 because Releases here are immutable once published. A draft makes no tag and
 only the team sees it, and the ten newest runs are kept. It ends 0 only when every step passed.
+
+The game runs the build's own plugin. The launcher keeps its build's
+`Data\Platform` files and puts them back before every Play, so a copy laid
+in by hand never reaches the game (26 Nov: such a copy was put back, and the
+run read the older plugin's miss as a failure of its steps). When the game's
+plugin is not this checkout's, the run says so in `run.log` and its result,
+with the build in place: run from that build's commit, whose steps are the
+ones its plugin knows.
 
 An install on the main channel is put on dev for the run, as the Server
 card's switch does it: the launcher takes dev's package by itself when it
