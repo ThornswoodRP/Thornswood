@@ -120,7 +120,7 @@ async function siteChecks() {
   const dlBody = pagebody(stated.body);
   yes('A6 with tw-age-18 holding the policy, among other cookies, its first response is the page', stated.status === 200 &&
       !!dlBody && /^<h1>Download<\/h1>/.test(dlBody));
-  yes('A7   with the steps and the download button', !!dlBody && dlBody.indexOf('then four steps</h2>') > 0 &&
+  yes('A7   with the steps and the download button', !!dlBody && dlBody.indexOf('then five steps</h2>') > 0 &&
       dlBody.indexOf('<a class="btn first" href="/file/Thornswood-Tools.exe">Download the installer</a>') > 0 &&
       dlBody.indexOf(H) > 0 && dlBody.indexOf('11-9-2026 4:31 PM') > 0);
   yes('A8   and no gate', stated.body.indexOf('id="ageGate"') < 0);
@@ -229,7 +229,7 @@ async function pageChecks(apiHtml) {
   yes('B5 a statement kept in localStorage alone asks /api/downloads for the body and shows it',
       stored.fetched.indexOf('/api/downloads') >= 0 && stored.shown.length === 1 && stored.shown[0] === apiHtml);
   yes('B6 home.js no longer builds the Downloads page itself',
-      HOME_JS.indexOf('Download the installer') < 0 && HOME_JS.indexOf('then four steps') < 0);
+      HOME_JS.indexOf('Download the installer') < 0 && HOME_JS.indexOf('then five steps') < 0);
   yes('B7 and its own gate is for /join alone', /var AGE_PATHS = \{ '\/join': 1 \};/.test(HOME_JS));
 }
 

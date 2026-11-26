@@ -50,7 +50,7 @@ Somebody reads every application and answers it. Once you are accepted, your
 Discord account is what lets you in. There is nothing else to sign up for, no
 second password, and no form on this site.
 
-You can do steps 2 and 3 while you wait. Step 4 works once you are accepted.
+You can do steps 2 to 4 while you wait. Step 5 works once you are accepted.
 It is an alpha, so things break. Say so when you find something: a bug four
 people report is a bug that gets fixed.
 <!-- /alpha -->
@@ -77,7 +77,18 @@ while you watch, about half a gigabyte, and a connection that drops carries on
 where it stopped rather than starting again. It puts in the launcher, the
 script extender and Thornswood's own content, and nothing else.
 
-## 3. Install the collection in Vortex
+## 3. Downgrade, if your Skyrim is on another build
+
+Open Thornswood from the desktop shortcut. If your Steam copy is on a build
+other than 1.6.1170, which most copies are, a card on the front page says so.
+Press **Downgrade** and Steam downloads 1.6.1170's files under your own
+account, into Thornswood's own folder. It is a few gigabytes, so give it a
+while. Your Steam copy stays on the build it is on.
+
+The collection's card waits until this is done. If your Skyrim is already on
+1.6.1170 there is no card, and you go straight on to the collection.
+
+## 4. Install the collection in Vortex
 
 Not optional. Without it you have a launcher and no mods, and the server turns
 you away when you press Play.
@@ -109,15 +120,15 @@ once a revision is installed.
 If the wrong profile is active in Vortex, the launcher says so before you press
 Play.
 
-## 4. Connect your Discord in the launcher
+## 5. Connect your Discord in the launcher
 
-Open Thornswood from the desktop shortcut and press **Connect Discord** at the
+Press **Connect Discord** in the launcher at the
 bottom of the left sidebar, above Settings. Your browser opens, you say yes,
 and it closes itself.
 
 You never do this again.
 
-## 5. Press Play
+## 6. Press Play
 
 Not Skyrim. Not Steam. Not SKSE. Always the Thornswood shortcut.
 
