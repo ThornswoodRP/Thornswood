@@ -19,8 +19,9 @@ function makePage() {
         c.parentNode = this; this.children.push(c); return c;
       },
       removeChild(c) {
-        const i = this.children.indexOf(c);
-        if (i >= 0) { this.children.splice(i, 1); c.parentNode = null; }
+        const list = this.children.indexOf(c) >= 0 ? this.children : this.kids;
+        const i = list.indexOf(c);
+        if (i >= 0) { list.splice(i, 1); c.parentNode = null; }
         return c;
       },
       insertBefore(c) { return this.appendChild(c); },

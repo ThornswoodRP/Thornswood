@@ -385,10 +385,23 @@ attempt('Write a letter', function () {
   yes('B4 the longest encoded form fits the unchanged relay command bound ('+cap+')',longest.length<=cap&&carry(longest)===longest);
   yes('B4 ordinary legacy letter commands keep the original bound',carry('/letter '+'x'.repeat(cap)).length===cap);
   if (branch) {
-    const sent=[],fields={'ts-board-to':'  "Lydia   Stormblade" ','ts-board-letter':WORDS_OF_IT};
-    const document={getElementById(id){return {value:fields[id]||''};}};
-    new Function('verb','ID','document','net','say',branch)('letter','ts-board',document,l=>sent.push(l),()=>{});
-    yes('B5 quotes and actual spaces remain in the encoded recipient',sent.length===1&&sent[0]==='/letter-post-v1 '+encodeURIComponent(fields['ts-board-to'])+' '+encodeURIComponent(WORDS_OF_IT));
+    const mounted=require('./fixtures/panel-page')();
+    mounted.run('bridge',read('game/ui/thornswood-bridge.js'));
+    mounted.run('board',page);
+    mounted.win.thornswoodBoard.setData({me:1000,board:{hold:'windhelm',where:'Windhelm',here:true,
+      x:1,y:2,z:3,wall:[],jobs:[],dests:[],arrivals:[],submit:[]}});
+    mounted.win.thornswoodBoard.open();
+    const recipient='  "Lydia   Stormblade" ';
+    mounted.doc.getElementById('ts-board-to').value=recipient;
+    mounted.doc.getElementById('ts-board-letter').value=WORDS_OF_IT;
+    const button=mounted.doc.querySelector('[data-do="letter"]');
+    yes('B5 the actual open board owns its mounted letter control',
+      !!button&&mounted.doc.getElementById('ts-board').contains(button)&&typeof button.onclick==='function');
+    if(button){
+      const event=mounted.fire(button,'click','');
+      if(!event.defaultPrevented&&button.onclick)button.onclick.call(button,event);
+    }
+    yes('B5 quotes and actual spaces remain in the encoded recipient',mounted.sent.length===1&&mounted.sent[0]==='/letter-post-v1 '+encodeURIComponent(recipient)+' '+encodeURIComponent(WORDS_OF_IT));
   }
 });
 
