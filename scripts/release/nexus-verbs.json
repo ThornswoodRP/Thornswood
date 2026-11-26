@@ -107,6 +107,7 @@
         "scripts/release/RecordShape.ps1",
         "scripts/release/SevenZip.ps1",
         "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/SliderSets.ps1",
         "scripts/release/WabbajackModlist.cs",
         "scripts/release/Where.ps1"
       ],

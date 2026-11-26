@@ -407,7 +407,7 @@ if ($win) {
     Yes 'every file in files.txt is placed with its sha256 and size, and nothing else is' ($okLines.Count -eq $lines.Count -and $onDisk.Count -eq $lines.Count)
 }
 else {
-    Yes 'nothing is placed off Windows: the record folder holds the four records only' ((@(Get-ChildItem -LiteralPath $recDir -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt' -and -not (Test-Path -LiteralPath $game))
+    Yes 'nothing is placed off Windows: the record folder holds the five records only' ((@(Get-ChildItem -LiteralPath $recDir -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt slidersets.json' -and -not (Test-Path -LiteralPath $game))
 }
 $lj = Get-Content -Raw -LiteralPath (P $recDir 'layout.json') | ConvertFrom-Json
 Yes 'layout.json says the revision, and each mod''s file id, md5 and installer' ($lj.collection.revision -eq 5 -and $lj.collection.slug -eq '7essxf' -and $lj.files -eq 13 -and (@($lj.mods | ForEach-Object { [string]$_.fileId + ':' + $_.installer }) -join ' ') -eq '900001:basic 900002:list 900003:fomod 900004:script-extender 900005:basic 900006:basic 900007:fomod' -and @($lj.mods | Where-Object { $_.fileId -eq 900003 })[0].md5 -eq (Md5 $arc.gamma))
@@ -602,7 +602,7 @@ $wjRec = P $T 'wj-record'
 $r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', $wjRec, '-Modlist', '-Mo2Record', $moRec)
 YesR 'the record with -Modlist runs to the end and prints the modlist''s sha256' ($r.Code -eq 0 -and $r.Out -match 'thornswood\.wabbajack, \d+ bytes, sha256 [0-9a-f]{64}') $r
 $wjFile = P $wjRec 'thornswood.wabbajack'
-Yes 'the record folder holds the four records and the modlist' ((@(Get-ChildItem -LiteralPath $wjRec -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt thornswood.wabbajack')
+Yes 'the record folder holds the five records and the modlist' ((@(Get-ChildItem -LiteralPath $wjRec -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt slidersets.json thornswood.wabbajack')
 $wjEntries = @{}
 if (Test-Path -LiteralPath $wjFile) {
     $za = [IO.Compression.ZipFile]::OpenRead($wjFile)

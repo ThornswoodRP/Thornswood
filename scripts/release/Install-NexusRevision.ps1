@@ -54,6 +54,11 @@
          files.txt     every file placed: sha256, size, file id, path
          plugins.txt   the plugin order, in the shape LoadOrder.ps1 reads
          loadorder.txt the same names without stars
+         slidersets.json  each BodySlide slider set file placed under
+                       Data\CalienteTools\BodySlide\SliderSets: its path,
+                       sha256, size and file id, and each set's name,
+                       OutputPath, OutputFile and GenWeights. Metadata
+                       only; no .osp is kept (SliderSets.ps1, #5888)
        A folder that already holds a layout has its old files checked (each
        is still what files.txt says) and taken out first; one whose size and
        write time are still what placed.tsv recorded when it was placed is
@@ -76,14 +81,15 @@
   -WhatIf does steps 1 to 5: it downloads into the cache and works the whole
   layout out in the scratch folder, prints it, and changes nothing in -Game.
 
-  -Record <folder>, in place of -Game, does steps 1 to 5 and writes the four
-  records of step 6 into that folder, placing no file anywhere. Each mod's
+  -Record <folder>, in place of -Game, does steps 1 to 5 and writes the five
+  records of step 6 (layout.json, files.txt, plugins.txt, loadorder.txt and
+  slidersets.json) into that folder, placing no file anywhere. Each mod's
   unpacked copy is hashed and deleted as soon as it is worked out, so the
   scratch folder never holds more than one mod. This is how a revision is
   laid out without One (#2969). Since #2841 a cloud session holds no Nexus
   key, so it asks for it with
       pwsh scripts/release/Nexus-Run.ps1 -Line 'Install-NexusRevision -Revision 3'
-  which runs this on a box runner with the key and sends the four records
+  which runs this on a box runner with the key and sends the five records
   back. Off Windows, 7-Zip is the build Get-SevenZip.ps1 fetches and the
   cache is $XDG_CACHE_HOME/thornswood/nexus-cache (~/.cache when that is not
   set); every path in the records is the Windows path the layout has on One.
@@ -135,7 +141,7 @@
 
 .PARAMETER Record
   A folder for the layout's record (layout.json, files.txt, plugins.txt,
-  loadorder.txt), with no file laid out. In place of -Game.
+  loadorder.txt, slidersets.json), with no file laid out. In place of -Game.
 
 .PARAMETER KeepPlugins
   With -Record: keeps the plugins the layout places in <Record>\plugins,
@@ -287,7 +293,7 @@ if ($KeepPlugins -and -not (Get-Command node -ErrorAction SilentlyContinue)) { D
 if ($Record) {
   $Record = [IO.Path]::GetFullPath($Record).TrimEnd([IO.Path]::DirectorySeparatorChar)
   if ($WhatIf) { Die '-Record already changes nothing but its own folder; leave -WhatIf off.' }
-  if ((Test-Path -LiteralPath $Record) -and @(Get-ChildItem -LiteralPath $Record -Force | Where-Object { @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'plugins', 'menus', 'thornswood.wabbajack') -notcontains $_.Name }).Count) { Die ('-Record ' + $Record + ' holds more than a layout''s record. Give it a folder of its own.') }
+  if ((Test-Path -LiteralPath $Record) -and @(Get-ChildItem -LiteralPath $Record -Force | Where-Object { @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'slidersets.json', 'plugins', 'menus', 'thornswood.wabbajack') -notcontains $_.Name }).Count) { Die ('-Record ' + $Record + ' holds more than a layout''s record. Give it a folder of its own.') }
   if (Test-Path -LiteralPath (Join-Path $Record 'plugins')) {
     if (-not (Test-Path -LiteralPath (Join-Path $Record 'plugins') -PathType Container) -or @(Get-ChildItem -LiteralPath (Join-Path $Record 'plugins') -Force | Where-Object { $_.PSIsContainer -or $_.Name -notmatch '\.(esp|esm|esl)$' }).Count) { Die ('-Record ' + $Record + ' has a plugins entry that holds more than plugins. Give it a folder of its own.') }
   }
@@ -325,6 +331,7 @@ $skyrimRecord = Join-Path (Join-Path $Repo 'records') 'skyrim-files.json'
 if (-not (Test-Path -LiteralPath $skyrimRecord)) { Die ('records\skyrim-files.json is not in this checkout (' + $skyrimRecord + '), and it is what a FOMOD''s questions about the game are answered from.') }
 Step { Add-Type -LiteralPath @((Join-Path $Here 'NexusLayout.cs'), (Join-Path $Here 'WabbajackModlist.cs'), (Join-Path $Repo 'launcher\app\XxHash64.cs')) } | Out-Null
 . (Join-Path $Here 'HashStamps.ps1')
+. (Join-Path $Here 'SliderSets.ps1')
 if ($Modlist) {
   if (-not $Mo2Record) { $Mo2Record = Join-Path (Join-Path $Repo 'records') 'mo2.json' }
   $mo2 = Step { Get-Content -Raw -LiteralPath $Mo2Record | ConvertFrom-Json }
@@ -521,6 +528,9 @@ $script:Kept = @{}
 $script:KeptMenus = @{}
 # And with -Modlist what the modlist names each file by (#6244).
 $script:WjFiles = @{}
+# And the slider sets each BodySlide .osp holds, by its unpacked path, as
+# metadata only for slidersets.json (#5888). No .osp is kept.
+$script:SliderSetsRead = @{}
 $script:MenuCheck = Join-Path $PSScriptRoot '..\mods\Check-SkyUIMenus.js'
 function Test-MenuInputRel([string]$Rel) {
   return ($Rel -match '^(?i)Scripts\\ski_main\.pex$' -or $Rel -match '^(?i)Interface\\.+\.swf$' -or $Rel -match '^(?i)[^\\]+\.bsa$')
@@ -573,6 +583,14 @@ foreach ($e in $col.Entries) {
     Say ('  ' + $e.Name + ': patched ' + $p.Key + ' (CRC-32 ' + $crc + ' -> ' + [Thornswood.Layout.NexusLayout]::Crc32Of($out) + ')') 'DarkGray'
   }
   foreach ($w in $plan.Warnings) { Say ('  ' + $e.Name + ': the installer says ' + $w) 'Yellow' }
+  # BodySlide's slider set files, read here in every mode: -Record takes the
+  # unpacked copy just below, and a patched .osp is read as it is placed.
+  if ($e.Type -ne 'dinput') {
+    foreach ($s in $plan.Files.Values) {
+      if (-not (Test-SliderSetRel $s.Rel)) { continue }
+      $script:SliderSetsRead[$s.Full] = Step { Read-SliderSetFile $s.Full $s.Rel }
+    }
+  }
   # -Record places nothing, so each file is measured now and the mod's
   # unpacked copy goes before the next is unpacked.
   if ($Record) {
@@ -770,12 +788,16 @@ $layoutRecord = [ordered]@{
   # list's order, are what a deployment is held to (Compare-NexusLayout.ps1).
   pluginRules = @($col.PluginRules | ForEach-Object { [ordered]@{ name = $_.Name; after = @($_.After | ForEach-Object { [string]$_ }) } })
 }
+# slidersets.json: each placed BodySlide slider set file, with files.txt's
+# sha256, and the sets it holds, metadata only (#5888, SliderSets.ps1).
+$sliderSetRecord = Step { New-SliderSetRecord $Slug $Revision $placed $script:SliderSetsRead $col.Entries }
 function Write-LayoutRecord([string]$dir, [bool]$withFiles) {
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   if ($withFiles) { Write-Crlf (Join-Path $dir 'files.txt') $lines }
   Write-Crlf (Join-Path $dir 'plugins.txt') $pl
   Write-Crlf (Join-Path $dir 'loadorder.txt') $lo
   [IO.File]::WriteAllText((Join-Path $dir 'layout.json'), ($layoutRecord | ConvertTo-Json -Depth 6), $utf8)
+  [IO.File]::WriteAllText((Join-Path $dir 'slidersets.json'), ($sliderSetRecord | ConvertTo-Json -Depth 6), $utf8)
 }
 
 if ($Record) {
@@ -924,7 +946,7 @@ if ($Record) {
   Remove-Tree $script:Work; $script:Work = ''
   Head 'Done'
   Say ('  revision ' + $Revision + ' of ' + $Slug + ': ' + $placed.Count + ' files, ' + $order.Count + ' plugins, nothing placed') 'Green'
-  Say ('  ' + (Join-Path $Record 'layout.json') + ', files.txt, plugins.txt, loadorder.txt')
+  Say ('  ' + (Join-Path $Record 'layout.json') + ', files.txt, plugins.txt, loadorder.txt, slidersets.json')
   if ($KeepPlugins) {
     Say ('  and ' + $keptCount + ' plugins, the copies the layout places, in ' + (Join-Path $Record 'plugins'))
     Say ('  and ' + $menuCount + ' files SkyUI''s menu check reads, in ' + (Join-Path $Record 'menus'))
@@ -938,7 +960,7 @@ if ($Record) {
 $recDir = Join-Path $Game 'Thornswood Layout'
 if ($WhatIf) {
   Head 'What it would do'
-  Say ('  place ' + $placed.Count + ' files in ' + $Game + ' and write ' + $recDir + '\layout.json, files.txt, plugins.txt and loadorder.txt')
+  Say ('  place ' + $placed.Count + ' files in ' + $Game + ' and write ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt and slidersets.json')
   Write-Host ''
   Say ('Nothing in ' + $Game + ' was changed.') 'Green'
   Remove-Tree $script:Work; $script:Work = ''
@@ -979,7 +1001,7 @@ foreach ($o in $old.Values) { $f = Join-Path $Game $o.Rel; if (Test-Path -Litera
 # A run cut part way through a copy leaves that file's .part (CopyWhole in
 # NexusLayout.cs, #4303); it is this script's own, for a name files.txt lists.
 foreach ($o in $old.Values) { $f = Join-Path $Game ($o.Rel + '.part'); if (Test-Path -LiteralPath $f -PathType Leaf) { [IO.File]::SetAttributes($f, [IO.FileAttributes]::Normal); [IO.File]::Delete($f) } }
-foreach ($n in 'layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'placed.tsv') { $f = Join-Path $recDir $n; if (Test-Path -LiteralPath $f) { [IO.File]::Delete($f) } }
+foreach ($n in 'layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'slidersets.json', 'placed.tsv') { $f = Join-Path $recDir $n; if (Test-Path -LiteralPath $f) { [IO.File]::Delete($f) } }
 # Folders the old layout left empty go too, deepest first; Data and the
 # game folder stay.
 foreach ($d in @($old.Values | ForEach-Object { Split-Path -Parent $_.Rel } | Where-Object { $_ } | Sort-Object -Unique | Sort-Object { $_.Length } -Descending)) {
@@ -1025,7 +1047,7 @@ Remove-Tree $script:Work; $script:Work = ''
 
 Head 'Done'
 Say ('  revision ' + $Revision + ' of ' + $Slug + ': ' + $placed.Count + ' files (' + $linked + ' linked from the unpacked archives, ' + $copied + ' copied), ' + $order.Count + ' plugins') 'Green'
-Say ('  ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt')
+Say ('  ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt, slidersets.json')
 Say '  Next: check a draft on Dev before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
