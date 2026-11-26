@@ -290,7 +290,9 @@ if (block && RECIPES && ADMIN_ITEMS) {
     const claimSrc = slice(gm, '  function claim(actorId, profileId, toProfile) {\n    var building = here(actorId);', '\n  }\n');
     const evictSrc = slice(gm, '  function evict(actorId, profileId, toProfile, cmd) {', '\n  }\n');
     // A door press is touched(): openedDoor() (the deed and the renewal), then doorLine() (#1637).
-    const touchedSrc = slice(gm, '  function openedDoor(actorId, doorDesc) {', '\n  }\n');
+    // openedDoor writes the door through noteDoor since #6980, so the two go together.
+    const touchedSrc = slice(gm, '  function noteDoor(actorId, doorDesc) {', '\n  }\n') +
+                       slice(gm, '  function openedDoor(actorId, doorDesc) {', '\n  }\n');
     const lineSrc = slice(gm, '  function doorLine(actorId, profileId) {', '\n  }\n');
     yes('B2 claim, evict, the door press and the line at the door are in the property block',
         !!claimSrc && !!evictSrc && !!touchedSrc && !!lineSrc);
