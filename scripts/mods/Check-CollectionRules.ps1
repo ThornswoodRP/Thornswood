@@ -208,6 +208,28 @@ if ($null -ne $doc -and $doc.PSObject.Properties.Name -contains 'pluginRules' -a
   $rules = @($doc.pluginRules.plugins)
 }
 
+# A name in a rule's after or before list is a string, or an object holding it
+# in a name field, the way the Nexus layout reader (NexusLayout.cs) reads one.
+# Made text as it stood, an object came out as "@{name=...}" and its rule was
+# lost (#4515). Each rule is read once here, so the order check below and the
+# loop check (PluginRuleLoops.ps1) both see the plugins' names.
+function Get-RuleEntryName($entry) {
+  if ($null -eq $entry) { return '' }
+  if ($entry -is [string]) { return $entry.Trim() }
+  if ($entry.PSObject.Properties.Name -contains 'name') { return "$($entry.name)".Trim() }
+  return ''
+}
+$rules = @(foreach ($r in $rules) {
+  if ($null -eq $r -or -not ($r.PSObject.Properties.Name -contains 'name')) { continue }
+  $read = [ordered]@{ name = "$($r.name)" }
+  foreach ($side in 'after', 'before') {
+    if ($r.PSObject.Properties.Name -contains $side) {
+      $read[$side] = [string[]]@(foreach ($e in @($r.$side)) { $n = Get-RuleEntryName $e; if ($n) { $n } })
+    }
+  }
+  [pscustomobject]$read
+})
+
 # Every rule as edges, A loads before B. The collection writes names in lower
 # case and the list does not, so everything compares without case.
 $next = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase)
