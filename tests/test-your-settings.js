@@ -10,7 +10,7 @@
 // lifted out of the site with stand-ins for the files, Discord and the reply,
 // the way test-play-characters.js runs /api/play/characters. Then reads the
 // launcher: YourSettings.cs puts the files in place before the game starts,
-// sends them back when it closes, keeps the microphone's line on the PC, and
+// sends them back when it closes, and
 // asks only for names the site keeps.
 //
 // Read only. Nothing here touches settings.json.
@@ -165,14 +165,16 @@ async function ask(files, ticket, req, standing, writes) {
       allowed.length === 7 && tries.every((f) => launcherOk(f) === ys.nameOk('mcm/' + f)));
   yes('and leaves one the site would refuse on the PC, saying so', /if \(MenuFileOk\(n\)\) all\["mcm\/" \+ n\] = f;/.test(cs));
   yes('no screen or graphics file is among them', !/Skyrim(Prefs|Custom)?\.ini/i.test(cs.replace(/\/\/.*$/gm, '')));
-  yes('the microphone\'s line stays on the PC', /MachineLines\s*=\s*\{\s*"MicrophoneName"\s*\}/.test(cs) &&
-      /files\[kv\.Key\]\s*=\s*Strip\(/.test(cs));
+  // #4667: the microphone's line was the one kept on the PC. The launcher is
+  // the one voice client, so Mics writes no such line and nothing is held back.
+  yes('no line is held back from the site any more, the microphone being the launcher\'s alone',
+      !/MachineLines|Strip\(/.test(cs) && /files\[kv\.Key\]\s*=\s*File\.ReadAllText\(kv\.Value\);/.test(cs));
   yes('the launcher\'s choices are sent one at a time, newest last', /static void SendPending\(\)/.test(cs) &&
       /if \(sending\) return;/.test(cs));
 
   const play = read('ShellPlay.cs');
   const putAt = play.indexOf('YourSettings.PutInPlace()');
-  yes('Play puts the account\'s settings in place before the microphone is written', putAt >= 0 &&
+  yes('Play puts the account\'s settings in place before the voice address is written', putAt >= 0 &&
       play.indexOf('Mics.Apply(cfg)') > putAt);
   const shell = read('Shell.cs');
   yes('the launcher sends them back once the game has closed', /YourSettings\.SendBack\(\)/.test(shell));

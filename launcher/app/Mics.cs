@@ -9,18 +9,16 @@ namespace Thornswood
     /// Which microphone Windows is set to record from.
     ///
     /// Voice opens the microphone itself (VoiceAudio.cs, through OpenForVoice
-    /// below). The game's browser can still open one, and asking it for
-    /// nothing in particular gets whatever Chromium calls the default.
-    /// That is not the same as the one in Windows' own sound settings: on this
-    /// machine it took a pair of speakers with an input on them over the
-    /// microphone that was actually selected.
+    /// below): the one chosen in the launcher's settings, otherwise the one
+    /// Windows holds for communications. Asking for nothing in particular, as
+    /// the old browser voice did, got whatever Chromium calls the default,
+    /// which on one machine was a pair of speakers with an input on them
+    /// rather than the microphone actually selected.
     ///
-    /// The browser has no way to ask for "whatever Windows would use", so it
-    /// has to be told a name. The name cannot be a setting that ships with the
-    /// build, because a build goes to everybody and everybody owns a different
-    /// microphone. So the launcher reads it off this machine at launch and
-    /// writes it into that machine's own ini, which makes it right for each
-    /// person without anybody being asked anything.
+    /// The launcher is the one voice client (#4667, decided 26 Oct as V3), so
+    /// the name goes nowhere else. Until then it was written into the game's
+    /// Thornswood.ini at every Play for the game's own browser voice, which
+    /// never carried the audio once the launcher had it.
     ///
     /// Read through the MMDevice COM API, which is the documented way to ask,
     /// declared in VoiceCom.cs as source-generated COM so that it works in
@@ -92,8 +90,7 @@ namespace Thornswood
         /// The recording device voice opens: the one chosen in the launcher's
         /// settings when a device by that name is plugged in, otherwise the
         /// one Windows holds for communications, otherwise its console
-        /// default. The same order Apply writes into the ini, so the game and
-        /// voice name the same microphone.
+        /// default. The same order Apply names for the log.
         ///
         /// The voice page could not do this. It asked the browser for a
         /// microphone and got whatever Chromium calls the default, which is
@@ -142,50 +139,50 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Put this machine's microphone name into this machine's ini.
+        /// Put where voice lives into this machine's ini, for the game's
+        /// overlay, and name the microphone voice will ask for.
         ///
-        /// An explicit choice in the launcher's own settings wins, because a
-        /// person who went looking for this meant it. That choice lives in the
-        /// launcher's config rather than in the ini, on purpose: the ini is a
-        /// mod file, so it is replaced wholesale by an update, and anything
-        /// somebody set in it by hand is gone the next time the build changes.
+        /// The overlay opens its own socket to the voice service for where
+        /// everybody is, which the speaking marks and the party strip are drawn
+        /// from, and has no other way to be told the address. The microphone's
+        /// name is not written: the launcher opens the microphone, and the
+        /// line the game's browser voice read (MicrophoneName) is taken out of
+        /// an ini an older launcher left it in (#4667).
         ///
-        /// Returns the name written, or "" when nothing was.
+        /// Returns the microphone's name for the log, or "" when Windows names
+        /// none.
         /// </summary>
         public static string Apply(Config cfg)
         {
             string want = cfg == null ? "" : (cfg.MicrophoneName ?? "").Trim();
             if (want.Length == 0) want = Default();
-            // The voice server's port travels the same way. The dev build's
-            // launcher talks to the dev voice server, and the plugin in the
-            // shared game folder has to be told which one every launch, or a
-            // dev session would put its positions on the main server.
+            // The voice server's port. The dev build's launcher talks to the
+            // dev voice server, and the plugin in the shared game folder has
+            // to be told which one every launch, or a dev session would put
+            // its positions on the main server.
             string port = cfg == null ? "" : (cfg.VoicePort ?? "").Trim();
-            // And where voice lives. The game overlay opens its own socket and
-            // has no other way to be told. VoiceBase, not the raw setting, so
-            // the game always gets the https address the launcher uses (#1304).
+            // And where voice lives. VoiceBase, not the raw setting, so the
+            // game always gets the https address the launcher uses (#1304).
             string vurl = cfg == null ? "" : cfg.VoiceBase();
             string vsocket = cfg == null ? "" : cfg.VoiceSocket();
-            if (want.Length == 0 && port.Length == 0 && vurl.Length == 0) return "";
 
             string ini = Path.Combine(Paths.Game, "Data\\SKSE\\Plugins\\Thornswood.ini");
-            if (!File.Exists(ini)) return "";
+            if (!File.Exists(ini)) return want;
 
             try
             {
                 var lines = new List<string>(File.ReadAllLines(ini));
-                bool done = false;
                 bool vurlDone = false;
                 bool vsocketDone = false;
-                for (int i = 0; i < lines.Count; i++)
+                for (int i = lines.Count - 1; i >= 0; i--)
                 {
                     string t = lines[i].TrimStart();
                     int eq = t.IndexOf('=');
                     if (eq < 0) continue;
-                    if (want.Length > 0 && t.StartsWith("MicrophoneName", StringComparison.OrdinalIgnoreCase))
+                    string key = t.Substring(0, eq).Trim();
+                    if (key.Equals("MicrophoneName", StringComparison.OrdinalIgnoreCase))
                     {
-                        lines[i] = "MicrophoneName = " + want;
-                        done = true;
+                        lines.RemoveAt(i);
                     }
                     else if (port.Length > 0 && t.StartsWith("VoicePort", StringComparison.OrdinalIgnoreCase))
                     {
@@ -198,34 +195,12 @@ namespace Thornswood
                         lines[i] = "VoiceUrl = " + vurl;
                         vurlDone = true;
                     }
-                    else if (t.Substring(0, eq).Trim().Equals("VoiceSocketUrl", StringComparison.OrdinalIgnoreCase))
+                    else if (key.Equals("VoiceSocketUrl", StringComparison.OrdinalIgnoreCase))
                     {
                         // Rewrite on every Play, including a switch back to Main.
                         lines[i] = "VoiceSocketUrl = " + vsocket;
                         vsocketDone = true;
                     }
-                }
-                // No line to rewrite, so one is added rather than the name being
-                // dropped. The shipped template has never carried this key, so
-                // on every machine the name was read off Windows at Play and
-                // then written nowhere: the voice plugin found no
-                // MicrophoneName, passed an empty name to the page, and the page
-                // opened whatever Chromium calls the default, which is the
-                // device this class exists to get away from. It goes under
-                // [Voice] with the rest of the voice settings, or at the end of
-                // the file when there is no such section.
-                if (want.Length > 0 && !done)
-                {
-                    int at = -1;
-                    for (int i = 0; i < lines.Count; i++)
-                    {
-                        if (!lines[i].Trim().Equals("[Voice]", StringComparison.OrdinalIgnoreCase)) continue;
-                        at = i + 1;
-                        break;
-                    }
-                    if (at < 0) lines.Add("MicrophoneName = " + want);
-                    else lines.Insert(at, "MicrophoneName = " + want);
-                    done = true;
                 }
                 // The shipped template has never carried VoiceUrl, so on every
                 // machine there is no line to rewrite and it has to be added or the
@@ -234,9 +209,9 @@ namespace Thornswood
                 if (!vsocketDone && vsocket.Length > 0) { lines.Add("VoiceSocketUrl = " + vsocket); }
 
                 File.WriteAllLines(ini, lines.ToArray(), new UTF8Encoding(false));
-                return done ? want : "";
             }
-            catch { return ""; }
+            catch (Exception ex) { Swallow.Note("Mics.Apply, Thornswood.ini", ex); }
+            return want;
         }
 
         // ------------------------------------------------------------- interop
