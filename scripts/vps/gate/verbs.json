@@ -962,6 +962,7 @@
         "scripts/dev/bsa.py",
         "scripts/dev/gamemode_tables.py",
         "scripts/dev/own_plugins.py",
+        "scripts/dev/riftweald.py",
         "scripts/mods/Add-ContentRecords.py",
         "scripts/mods/Build-LastPlugin.py",
         "scripts/mods/Check-PluginClean.py",
