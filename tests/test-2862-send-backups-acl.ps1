@@ -123,6 +123,15 @@ Yes '-Status checks the key pair and its lock, and logs in with the send''s own 
     $send.Contains('& $sftp -b $batch @Login ') -and $send.Contains('-v -b $empty @Login ') -and
     $send.Contains("[IO.File]::WriteAllText(`$empty, '')") -and $send.Contains("-y -P '' -f `$Key") -and $send.Contains('Get-Acl -LiteralPath $Key') -and
     ([regex]::Matches($send, '-o IdentitiesOnly|''IdentitiesOnly=yes''')).Count -eq 1)
+# On 26 Nov 2026 the VM read a marker that held "<sha256> <size>" in its
+# body before sftp had written the body, and set a whole backup aside
+# (#6895). The marker is empty and says both in its name, so it is whole the
+# moment it exists; the jail allows no rename to send it any other way.
+$sendCode = $send -replace '(?s)<#.*?#>', ''
+Yes 'the marker after each file is empty and named <name>.<sha256>.<size>.done, never written with a body' (
+    $sendCode.Contains("`$markName = `$f.Name + '.' + `$sha + '.' + `$f.Length + '.done'") -and $sendCode.Contains('[IO.File]::WriteAllBytes($mark, [byte[]]@())') -and
+    $sendCode.Contains("('put `"' + `$mark + '`" `"' + `$markName + '`"')") -and $sendCode -notmatch 'WriteAllText\(\$mark' -and
+    $sendCode.IndexOf("('put `"' + `$f.FullName") -lt $sendCode.IndexOf("('put `"' + `$mark"))
 # PowerShell 7 hands a native program the text it is given: -N '""' locked
 # the drop key with two quote marks, the task could not sign with it, and the
 # VM refused every file on 11 Nov 2026. No script passes '""' to ssh-keygen,
