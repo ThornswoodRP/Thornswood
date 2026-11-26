@@ -340,6 +340,70 @@ try:
 finally:
     bot.client, bot.TROUBLE_ID = keep
 
+# ------------------------------------------- outside text stays text --
+# #4281: the name, version and reason come from the site's row and the line
+# from somebody's crash.log. They went into the post as they were, so a line
+# holding three backticks closed its code block and the rest rendered as
+# markdown, and a masked link in the reason or the name was a link.
+class Kept(Room):
+    """A Room that keeps what each send was given, not only its text."""
+    def __init__(self, cid):
+        Room.__init__(self, cid)
+        self.kw = []
+
+    async def send(self, text, **kw):
+        self.kw.append(kw)
+        return await Room.send(self, text, **kw)
+
+
+evil = {'session': 's-e', 'who': '2', 'name': 'Ae_la [me](https://evil.example)',
+        'channel': 'main', 'start': 0, 'end': 0, 'at': 0, 'version': '1.3.*9*',
+        'why': 'The game crashed, see [the fix](https://evil.example/x) @everyone',
+        'file': 'crash.log', 'line': 'EXCEPTION ```\n**now bold** [here](https://evil.example/y)'}
+text = bot._trouble_line(evil)
+yes('E1 a log line holding three backticks cannot close its code block: the post has its own two fences and no more',
+    text.count('```') == 2)
+inside = text.split('```')[1] if text.count('```') >= 2 else ''
+yes('E2 and the whole line, its backticks too, is inside that block',
+    'EXCEPTION' in inside and 'now bold' in inside and 'here' in inside
+    and inside.count('`') == 3)
+outside = text.split('```')[0] + (text.split('```')[2] if text.count('```') >= 2 else '')
+yes('E3 a masked link in the name or the reason is shown as typed, never a link',
+    '[me](' not in outside.replace('\\[me](', '') and '[the fix](' not in outside.replace('\\[the fix](', ''))
+yes('E4 markdown in the name and the version is shown as typed',
+    'Ae\\_la' in outside and '1.3.\\*9\\*' in outside)
+yes('E5 an @everyone in the reason is text', '@everyone' not in outside)
+
+kept = Kept(1549254991082946570)
+keep = bot.client, bot.TROUBLE_ID
+bot.client, bot.TROUBLE_ID = Bot(kept), kept.id
+try:
+    run(bot.trouble_say(text))
+    state = {}
+    sent = run(bot.send_copy(os.path.join(scratch, 'trouble-posts-4281.json'), state, 'posts',
+                             ['s-e'], text, bot.client))
+finally:
+    bot.client, bot.TROUBLE_ID = keep
+for name, kw in zip(('trouble_say', 'the post watch_trouble makes'), kept.kw):
+    am = kw.get('allowed_mentions')
+    yes('E6 %s sends with every mention off and link previews suppressed' % name,
+        isinstance(am, discord.AllowedMentions) and not am.everyone and not am.users
+        and not am.roles and kw.get('suppress_embeds') is True)
+yes('E7 both sends were made', len(kept.kw) == 2 and sent is True)
+
+# A post made before this change has the row's text as it was. The one-time
+# look for old posts must still find it, and a post made now too.
+plain = row('s-o', 'Ser_ana', 'bad ``` line')
+old = (bot.TROUBLE_HEAD + ' Ser_ana, on the main build.\nThe game crashed\n'
+       '```\nbad ``` line\n```\nThe logs are on the sessions page under that '
+       'session, and it is the red one.')
+yes('E8 an old-format post, the name and line as they were, still matches its row',
+    bot._trouble_post_matches(old, plain))
+yes('E9 and a post made now matches it too', bot._trouble_post_matches(bot._trouble_line(plain), plain))
+yes('E10 and neither matches somebody else\'s row',
+    not bot._trouble_post_matches(old, row('s-p', 'Delphine', 'bad ``` line'))
+    and not bot._trouble_post_matches(bot._trouble_line(plain), row('s-p', 'Ser_ana', 'other line')))
+
 print('')
 print('%d passed, %d failed' % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

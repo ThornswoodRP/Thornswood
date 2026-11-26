@@ -178,7 +178,7 @@ yes('P the words say what #news and #updates get: changes to the live server, an
     '#news' in P.PING_PANEL and 'live server' in P.PING_PANEL
     and '#updates' in P.PING_PANEL and 'restarts' in P.PING_PANEL)
 yes('P the hold panel has no ping button and no word of pings',
-    not any(i.startswith('thornswood:ping:') for i in H._hold_ids_wanted())
+    not any(i.startswith('thornswood:ping:') for row in H._hold_rows_wanted() for i in row)
     and 'ping' not in H.HOLD_PANEL.lower())
 hook = inspect.getsource(bot.Thornswood.setup_hook)
 ready = open(os.path.join(HERE, 'bot_ready.py'), encoding='utf-8').read()

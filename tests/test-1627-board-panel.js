@@ -91,10 +91,12 @@ function fn(name) {
   return b < 0 ? null : prop.slice(a + 1, b + 4);
 }
 
-const NAMES = ['takeGold', 'payOut', 'payHeld', 'sealed', 'nameIs', 'postWords', 'post', 'board', 'take',
+const NAMES = ['takeGold', 'payHeld', 'sealed', 'nameIs', 'postWords', 'post', 'board', 'take',
                'jobsOf', 'dropJob', 'takedown', 'unpin', 'postLetter', 'deliver', 'letterReach',
                'boardHere', 'nearestBoard', 'wallOf', 'boardPanel', 'boardsView', 'moveBoard', 'command',
-               'haulTenth', 'haulText'];
+               'haulTenth', 'haulText',
+               // Who is in the world, for the tick that pays what is owed into a pack (#4258).
+               'profileOf', 'onlineActorOf'];
 const lifted = {};
 const missing = [];
 NAMES.forEach(function (n) { lifted[n] = fn(n); if (!lifted[n]) { missing.push(n); } });
@@ -190,7 +192,7 @@ function boot(reg, w) {
   NAMES.forEach(function (n) { body.push(lifted[n]); });
   // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
   body.push(PACK_FIRST.pieces(prop));
-  body.push('return { boards: boards, funds: function () { return funds; }, ' +
+  body.push('return { packTick: packTick, boards: boards, funds: function () { return funds; }, ' +
             'notices: function () { return notices; }, command: command, boardPanel: boardPanel, ' +
             'boardsView: boardsView, wallOf: wallOf, jobsOf: jobsOf };');
   const g = { __thornswoodSocial: {}, __thornswoodTrade: { TRADE: { reach: 700 } }, __thornswoodCompany: COMPANY };
@@ -208,6 +210,8 @@ function boot(reg, w) {
     const said = [];
     const to = function (pid, m) { api.every.push(m); if (pid === p.pid) { said.push(m); } };
     const answered = api.command(parts[0].toLowerCase(), parts, p.actor, p.pid, to);
+    // What a word owes into a pack lands on the server's next tick (#4258).
+    api.packTick();
     return answered ? said.join('\n') : null;
   };
   return api;

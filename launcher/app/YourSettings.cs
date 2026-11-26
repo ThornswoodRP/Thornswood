@@ -26,15 +26,14 @@ namespace Thornswood
     /// starts, and SendBack sends them to the site once it has closed. The
     /// launcher's choices go up whenever config.json is saved (Noted) and come
     /// down as the launcher starts (TakeLauncher). What belongs to this PC is
-    /// never sent: the microphone's name (Mics writes it into Thornswood.ini
-    /// at every Play), and the screen and graphics settings.
+    /// never sent: the screen and graphics settings. The microphone's name
+    /// was the other, a line Mics wrote into Thornswood.ini for the game's
+    /// browser voice; Mics takes that line out now (#4667).
     /// </summary>
     static class YourSettings
     {
         const string Route = "/api/play/settings";
         const string LauncherName = "launcher.json";
-        // The microphone is this PC's device, so its line never leaves it.
-        static readonly string[] MachineLines = { "MicrophoneName" };
 
         /// <summary>
         /// The game's settings files, by the name the site keeps each under,
@@ -175,7 +174,7 @@ namespace Thornswood
                 string now = null;
                 try { if (File.Exists(place)) now = File.ReadAllText(place); }
                 catch (Exception ex) { Swallow.Note("YourSettings.PutInPlace, reading " + place, ex); }
-                if (now != null && Strip(now) == text) continue;
+                if (now != null && now == text) continue;
                 Directory.CreateDirectory(Path.GetDirectoryName(place));
                 File.WriteAllText(place, text, new UTF8Encoding(false));
                 put++;
@@ -186,7 +185,7 @@ namespace Thornswood
 
         /// <summary>
         /// Once the game has closed: every game setting as the game left it,
-        /// to the site, the microphone's line taken out of Thornswood.ini.
+        /// to the site.
         /// Call it off the window's thread. Throws with what went wrong.
         /// </summary>
         public static void SendBack()
@@ -198,30 +197,12 @@ namespace Thornswood
                 try
                 {
                     if (!File.Exists(kv.Value)) continue;
-                    files[kv.Key] = Strip(File.ReadAllText(kv.Value));
+                    files[kv.Key] = File.ReadAllText(kv.Value);
                 }
                 catch (Exception ex) { Swallow.Note("YourSettings.SendBack, reading " + kv.Value, ex); }
             }
             if (files.Count == 0) return;
             Put(files);
-        }
-
-        /// <summary>A settings file without the lines that belong to this PC.</summary>
-        public static string Strip(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return text ?? "";
-            var keep = new StringBuilder(text.Length);
-            foreach (string line in text.Split('\n'))
-            {
-                string t = line.TrimStart();
-                bool machine = false;
-                foreach (string k in MachineLines)
-                    if (t.StartsWith(k, StringComparison.OrdinalIgnoreCase) && t.Substring(k.Length).TrimStart().StartsWith("=")) machine = true;
-                if (machine) continue;
-                if (keep.Length > 0) keep.Append('\n');
-                keep.Append(line);
-            }
-            return keep.ToString();
         }
 
         // ------------------------------------------------------ the launcher
