@@ -119,11 +119,11 @@ yes('  and how to send it to staff if it stops again', /Build the report/.test(f
 
 console.log('\nThe join guide (site/data/site/join.md):');
 const join = read('site/data/site/join.md') || '';
-const step = section(join, '5. Press Play');
-yes('the join guide has 5. Press Play', !!step);
+const step = section(join, '6. Press Play');
+yes('the join guide has 6. Press Play', !!step);
 const fs5 = flat(step || '');
-builds('5. Press Play', fs5);
-stops('5. Press Play', fs5);
+builds('6. Press Play', fs5);
+stops('6. Press Play', fs5);
 yes('  and points at Help for what to do', /\]\(\/help\)/.test(fs5));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

@@ -18,7 +18,7 @@ anyone in the Discord can play. Being there means accepting the
 
 ## Installing it the first time
 
-You need **Skyrim Special Edition** on Steam, on build **1.6.1170**, and
+You need **Skyrim Special Edition** on Steam, on any build, and
 **Vortex** with a free Nexus Mods account. Nothing else has to be installed
 first. Anniversary Edition is not required.
 
