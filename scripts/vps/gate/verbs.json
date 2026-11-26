@@ -1294,7 +1294,8 @@
       "fixed": ["-OnBox"],
       "params": {
         "Audit": "switch",
-        "Check": "switch"
+        "Check": "switch",
+        "Posts": "switch"
       }
     },
     "Renew-BoxKey": {
