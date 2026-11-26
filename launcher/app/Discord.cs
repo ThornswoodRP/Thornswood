@@ -419,7 +419,10 @@ namespace Thornswood
 
             try
             {
-                Process_Start(Site + "/auth/discord?back=%2Flink&port=" + port + "&nonce=" + nonce);
+                // hand=code (#4701): the site answers with a one-time code,
+                // not the sign-in, so the sign-in never sits in the browser's
+                // history, or in a history synced to every other device.
+                Process_Start(Site + "/auth/discord?back=%2Flink&port=" + port + "&nonce=" + nonce + "&hand=code");
             }
             catch
             {
@@ -442,28 +445,22 @@ namespace Thornswood
                     try { ctx = listener.GetContext(); }
                     catch { return; }
 
-                    bool good = false;
+                    bool good = false, ours = false;
                     try
                     {
-                        var q = ctx.Request.QueryString;
                         var ep = ctx.Request.RemoteEndPoint;
-
                         bool local = ep != null && IPAddress.IsLoopback(ep.Address);
-                        string sawNonce = q["nonce"] ?? "";
-                        bool mine = string.Equals(sawNonce, nonce, StringComparison.Ordinal);
-                        string t = q["ticket"];
-
-                        good = local && mine && !string.IsNullOrEmpty(t);
-                        if (good)
-                        {
-                            gotTicket = t;
-                            gotName = q["name"];
-                            gotAvatar = q["avatar"] ?? "";
-                        }
+                        string why;
+                        string code = CodeFrom(ctx.Request.QueryString, local, nonce, out ours, out why);
+                        if (code != null && !Exchange(code, nonce, out gotTicket, out gotName, out gotAvatar, out why)) code = null;
+                        good = code != null;
+                        if (ours && !good) error = why;
 
                         string page = good
                             ? Page("Linked", "You can close this and go back to the launcher.")
-                            : Page("Not this one", "That did not come from the Connect Discord button, so it was ignored. Close this and press it again.");
+                            : ours
+                                ? Page("Not linked", why + " Close this and press Connect Discord again.")
+                                : Page("Not this one", "That did not come from the Connect Discord button, so it was ignored. Close this and press it again.");
                         var bytes = Encoding.UTF8.GetBytes(page);
                         ctx.Response.StatusCode = good ? 200 : 400;
                         ctx.Response.ContentType = "text/html; charset=utf-8";
@@ -473,7 +470,9 @@ namespace Thornswood
                     }
                     catch (Exception e) { if (!good) error = Failure.Why("Discord, the sign in", e); }
 
-                    if (good) { done.Set(); return; }
+                    // This attempt's own answer ends it, whether the code was
+                    // good or not: a code is spent on its first try.
+                    if (good || ours) { done.Set(); return; }
                 }
             });
             worker.IsBackground = true;
@@ -491,7 +490,7 @@ namespace Thornswood
             }
             if (string.IsNullOrEmpty(gotTicket))
             {
-                if (onDone != null) onDone(false, error ?? "No ticket came back.");
+                if (onDone != null) onDone(false, error ?? "No sign-in came back.");
                 return;
             }
 
@@ -504,6 +503,91 @@ namespace Thornswood
             var psi = new System.Diagnostics.ProcessStartInfo(url);
             psi.UseShellExecute = true;
             System.Diagnostics.Process.Start(psi);
+        }
+
+        /// <summary>
+        /// The one-time code in the site's answer to Connect Discord, or null
+        /// with why (#4701).
+        ///
+        /// The site used to send the thirty day sign-in itself in this address,
+        /// http://127.0.0.1:&lt;port&gt;/thornswood?ticket=..., and the browser
+        /// keeps every address it opens in its history, which a signed-in
+        /// browser copies to every device it syncs with. Now it sends a code
+        /// that is good once, for a minute, and only with this attempt's
+        /// nonce, and Exchange trades it for the sign-in over a POST. Nothing
+        /// but the code and the nonce is read from the address.
+        ///
+        /// ours is whether the answer came from this machine with this
+        /// attempt's nonce. One that did not is ignored and the listener keeps
+        /// waiting; one that did ends the attempt either way.
+        /// </summary>
+        public static string CodeFrom(System.Collections.Specialized.NameValueCollection q, bool local, string nonce, out bool ours, out string why)
+        {
+            ours = false;
+            why = "";
+            string saw = q == null ? "" : (q["nonce"] ?? "");
+            if (!local || string.IsNullOrEmpty(nonce) || !string.Equals(saw, nonce, StringComparison.Ordinal))
+            {
+                why = "That did not come from the Connect Discord button, so it was ignored.";
+                return null;
+            }
+            ours = true;
+            string code = q["code"] ?? "";
+            if (!Regex.IsMatch(code, "^[A-Za-z0-9_-]{20,128}$"))
+            {
+                why = "thornswood.net sent no sign-in code. The site may be older than this launcher.";
+                return null;
+            }
+            return code;
+        }
+
+        /// <summary>Where Exchange trades a code for the sign-in (#4701).</summary>
+        public const string ExchangeDoor = "/api/launcher/exchange";
+
+        /// <summary>
+        /// The POST that trades a code for the sign-in: the code and the nonce
+        /// in the body, nothing in the address.
+        /// </summary>
+        public static HttpRequestMessage ExchangeRequest(string code, string nonce)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Post, Site + ExchangeDoor);
+            req.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(
+                "{\"code\":\"" + Escape(code) + "\",\"nonce\":\"" + Escape(nonce) + "\"}"));
+            req.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+            return req;
+        }
+
+        /// <summary>
+        /// Trades the code for the sign-in, the Discord name and the picture.
+        /// False with why when the site would not; why never holds the code or
+        /// the sign-in, and neither is written anywhere but Save.
+        /// </summary>
+        static bool Exchange(string code, string nonce, out string t, out string who, out string pic, out string why)
+        {
+            t = null;
+            who = null;
+            pic = "";
+            why = "";
+            string reply;
+            int status;
+            using (HttpRequestMessage req = ExchangeRequest(code, nonce)) status = Send(req, out reply);
+            if (status == 200)
+            {
+                string got = Field(reply, "ticket");
+                if (got.Length > 0)
+                {
+                    t = got;
+                    who = Field(reply, "name");
+                    pic = Field(reply, "avatar");
+                    return true;
+                }
+                why = "thornswood.net took the sign-in code but sent no sign-in back.";
+                return false;
+            }
+            why = status == 0
+                ? "Could not reach thornswood.net to finish the sign-in."
+                : "thornswood.net would not take the sign-in code (it answered " + status + ").";
+            return false;
         }
 
         static string Page(string title, string line)
@@ -1299,26 +1383,70 @@ namespace Thornswood
         /// </summary>
         public static int Send(string method, string url, string json, out string reply)
         {
+            return Send(method, url, json, false, out reply);
+        }
+
+        /// <summary>
+        /// The same, and with signed this copy's sign-in goes in the request's
+        /// Authorization header (Signed), for the gallery doors. It never goes
+        /// in the address any more (#4701): an address is what a proxy, a
+        /// server log and a crash report all keep.
+        /// </summary>
+        public static int Send(string method, string url, string json, bool signed, out string reply)
+        {
+            reply = "";
+            HttpRequestMessage req;
+            try { req = signed ? Signed(new HttpMethod(method), url) : new HttpRequestMessage(new HttpMethod(method), url); }
+            catch (Exception ex)
+            {
+                Swallow.Note("Discord.Send, the request", ex);
+                LastFailure = ex.GetType().Name;
+                return 0;
+            }
+            using (req)
+            {
+                if (json != null)
+                {
+                    req.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(json));
+                    req.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+                }
+                return Send(req, out reply);
+            }
+        }
+
+        /// <summary>
+        /// The scheme the site's gallery doors read the sign-in under:
+        /// "Authorization: Ticket &lt;the sign-in&gt;" (#4701).
+        /// </summary>
+        public const string TicketScheme = "Ticket";
+
+        /// <summary>
+        /// A request to the site carrying this copy's sign-in in its
+        /// Authorization header, and nowhere in its address. Nothing when this
+        /// copy is not linked.
+        /// </summary>
+        public static HttpRequestMessage Signed(HttpMethod method, string url)
+        {
+            var req = new HttpRequestMessage(method, url);
+            string t = Ticket;
+            if (!string.IsNullOrEmpty(t)) req.Headers.TryAddWithoutValidation("Authorization", TicketScheme + " " + t);
+            return req;
+        }
+
+        static int Send(HttpRequestMessage req, out string reply)
+        {
             reply = "";
             LastFailure = "";
             var took = System.Diagnostics.Stopwatch.StartNew();
             try
             {
-                using (var req = new HttpRequestMessage(new HttpMethod(method), url))
+                req.Headers.TryAddWithoutValidation("User-Agent", "Thornswood");
+                using (HttpResponseMessage res = Http.Send(req, 15000))
                 {
-                    req.Headers.TryAddWithoutValidation("User-Agent", "Thornswood");
-                    if (json != null)
-                    {
-                        req.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(json));
-                        req.Content.Headers.TryAddWithoutValidation("Content-Type", "application/json");
-                    }
-                    using (HttpResponseMessage res = Http.Send(req, 15000))
-                    {
-                        // A refusal is an answer, not a failure. 403 with a
-                        // reason in it is exactly what this wants to read.
-                        reply = ReadReply(res, "Discord.Send, reading refusal body");
-                        return (int)res.StatusCode;
-                    }
+                    // A refusal is an answer, not a failure. 403 with a
+                    // reason in it is exactly what this wants to read.
+                    reply = ReadReply(res, "Discord.Send, reading refusal body");
+                    return (int)res.StatusCode;
                 }
             }
             catch (Exception ex) when (ex is HttpRequestException || ex is TimeoutException)
@@ -1381,17 +1509,23 @@ namespace Thornswood
 
         /// <summary>
         /// POST raw bytes as the request body. The gallery submit path uses
-        /// this: the body IS the file, and the ticket and note ride in the
-        /// query, matching /api/gallery/submit on the site. timeoutMs of 0
-        /// means sixty seconds, enough for a large screenshot.
+        /// this: the body IS the file, the note rides in the query, and with
+        /// signed the sign-in rides in the Authorization header (Signed,
+        /// #4701). timeoutMs of 0 means sixty seconds, enough for a large
+        /// screenshot.
         /// </summary>
         public static int PostBytes(string url, byte[] data, string contentType, int timeoutMs, out string reply)
+        {
+            return PostBytes(url, data, contentType, timeoutMs, false, out reply);
+        }
+
+        public static int PostBytes(string url, byte[] data, string contentType, int timeoutMs, bool signed, out string reply)
         {
             reply = "";
             if (data == null) data = new byte[0];
             try
             {
-                using (var req = new HttpRequestMessage(HttpMethod.Post, url))
+                using (var req = signed ? Signed(HttpMethod.Post, url) : new HttpRequestMessage(HttpMethod.Post, url))
                 {
                     req.Headers.TryAddWithoutValidation("User-Agent", "Thornswood");
                     req.Content = new ByteArrayContent(data);

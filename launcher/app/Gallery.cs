@@ -42,9 +42,14 @@ namespace Thornswood
     /// one shape is told apart from a real refusal, so an old site is reported
     /// as an old site instead of as an account that was turned down.
     ///
-    /// Waiting pictures are fetched from /up/&lt;name&gt;?ticket=... when the
-    /// site has #755 (galleryStaff on that door). Older sites refuse without
-    /// a cookie; the queue still shows Accept / Delete / name / note either way.
+    /// Waiting pictures are fetched from /up/&lt;name&gt; when the site has
+    /// #755 (galleryStaff on that door). Older sites refuse without a
+    /// cookie; the queue still shows Accept / Delete / name / note either way.
+    ///
+    /// The sign-in goes to every door in the Authorization header
+    /// (Discord.Signed), never in the address (#4701). An address is what a
+    /// proxy, the site's own request log and a crash report keep, and the
+    /// sign-in is good for thirty days.
     ///
     /// Reading fails quietly. A site that is down or a picture that will not
     /// load leaves Play's card as it was, and an empty list hides it, with
@@ -212,8 +217,9 @@ namespace Thornswood
 
         /// <summary>
         /// Blocking. Call it off the UI thread. The bytes of one waiting picture
-        /// at /up/&lt;name&gt;, with this copy's ticket in the query so staff can
-        /// see it without a browser cookie (#755). Null when the site refuses
+        /// at /up/&lt;name&gt;, with this copy's sign-in in the Authorization
+        /// header so staff can see it without a browser cookie (#755, #4701).
+        /// Null when the site refuses
         /// or the picture will not load; the card still shows Accept / Delete.
         /// </summary>
         public static Bitmap FetchPending(Pending item)
@@ -240,10 +246,7 @@ namespace Thornswood
             if (Discord.Ticket == null) return null;
             try
             {
-                string url = Discord.Site + "/up/" + Uri.EscapeDataString(name) +
-                             "?ticket=" + Uri.EscapeDataString(Discord.Ticket) +
-                             (width > 0 ? "&w=" + width : "");
-                byte[] raw = GetBytes(url, 8000);
+                byte[] raw = GetBytes(UpUrl(name, width), 8000, true);
                 if (raw == null || raw.Length == 0) return null;
 
                 using (var ms = new MemoryStream(raw)) return new Bitmap(ms);
@@ -253,6 +256,12 @@ namespace Thornswood
                 Swallow.Note(width > 0 ? "Gallery.FetchCopy" : "Gallery.FetchPending", ex);
                 return null;
             }
+        }
+
+        /// <summary>Where a waiting picture, or one smaller copy of it, is read from. No sign-in in it.</summary>
+        internal static string UpUrl(string name, int width)
+        {
+            return Discord.Site + "/up/" + Uri.EscapeDataString(name) + (width > 0 ? "?w=" + width : "");
         }
 
         /// <summary>
@@ -299,14 +308,13 @@ namespace Thornswood
             // the cut happens here rather than surprising anybody later.
             if (reason.Length > 500) reason = reason.Substring(0, 500);
 
-            string url = Discord.Site + "/api/gallery/report?ticket=" +
-                         Uri.EscapeDataString(Discord.Ticket);
+            string url = Discord.Site + "/api/gallery/report";
             string body = "{\"name\":\"" + Discord.Escape(name.Trim()) + "\"" +
                           ",\"why\":\"" + Discord.Escape(reason) + "\"}";
 
             string reply = "";
             int code;
-            try { code = Discord.PostJson(url, body, out reply); }
+            try { code = Discord.Send("POST", url, body, true, out reply); }
             catch (Exception ex)
             {
                 Swallow.Note("Gallery.Report", ex);
@@ -331,8 +339,9 @@ namespace Thornswood
         /// <summary>
         /// Blocking. Call it off the UI thread. Sends one screenshot into the
         /// site's gallery queue over /api/gallery/submit. The body IS the file;
-        /// the ticket, offered name, byline, note and description (alt, #4575)
-        /// ride in the query, matching
+        /// the offered name, byline, note and description (alt, #4575) ride in
+        /// the query and the sign-in in the Authorization header (#4701),
+        /// matching
         /// the site's receiveUpload path. What the file says about where and
         /// when it was made (Exif, XMP, GPS and the like) is taken out first,
         /// by MediaStrip, so it never leaves this machine (#3648).
@@ -403,16 +412,11 @@ namespace Thornswood
             string remark = note == null ? "" : note.Trim();
             if (remark.Length > 300) remark = remark.Substring(0, 300);
 
-            string url = Discord.Site + "/api/gallery/submit?ticket=" +
-                         Uri.EscapeDataString(Discord.Ticket) +
-                         "&name=" + Uri.EscapeDataString(offered) +
-                         "&by=" + Uri.EscapeDataString(who) +
-                         "&note=" + Uri.EscapeDataString(remark) +
-                         "&alt=" + Uri.EscapeDataString(described);
+            string url = SubmitUrl(offered, who, remark, described);
 
             string reply = "";
             int code;
-            try { code = Discord.PostBytes(url, data, ContentTypeFor(ext), 60000, out reply); }
+            try { code = Discord.PostBytes(url, data, ContentTypeFor(ext), 60000, true, out reply); }
             catch (Exception ex)
             {
                 Swallow.Note("Gallery.Submit", ex);
@@ -439,6 +443,25 @@ namespace Thornswood
 
         /// <summary>Extensions the site's GALLERY_ALLOW accepts today.</summary>
         static readonly string[] AllowExt = new string[] { ".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm" };
+
+        /// <summary>
+        /// Where a picture is sent, with the offered name, byline, note and
+        /// description in the query. The sign-in goes in the header (#4701).
+        /// </summary>
+        internal static string SubmitUrl(string offered, string by, string note, string alt)
+        {
+            return Discord.Site + "/api/gallery/submit" +
+                   "?name=" + Uri.EscapeDataString(offered) +
+                   "&by=" + Uri.EscapeDataString(by) +
+                   "&note=" + Uri.EscapeDataString(note) +
+                   "&alt=" + Uri.EscapeDataString(alt);
+        }
+
+        /// <summary>Where one smaller copy of a picture is sent. The sign-in goes in the header (#4701).</summary>
+        internal static string CopyUrl(string name, int width)
+        {
+            return Discord.Site + "/api/gallery/copy?name=" + Uri.EscapeDataString(name) + "&w=" + width;
+        }
 
         static string ContentTypeFor(string ext)
         {
@@ -528,13 +551,10 @@ namespace Thornswood
                         return "Its " + width + " pixel copy could not be made here" + Full;
                     }
 
-                    string url = Discord.Site + "/api/gallery/copy?ticket=" +
-                                 Uri.EscapeDataString(Discord.Ticket) +
-                                 "&name=" + Uri.EscapeDataString(name) +
-                                 "&w=" + width;
+                    string url = CopyUrl(name, width);
                     string reply = "";
                     int code;
-                    try { code = Discord.PostBytes(url, jpg, "image/jpeg", 60000, out reply); }
+                    try { code = Discord.PostBytes(url, jpg, "image/jpeg", 60000, true, out reply); }
                     catch (Exception ex)
                     {
                         Swallow.Note("Gallery.SendCopies send " + width, ex);
@@ -700,7 +720,7 @@ namespace Thornswood
 
         /// <summary>
         /// The three doors that are a name and nothing else, sent the one way:
-        /// this copy's ticket in the query, the name in the body, both escaped.
+        /// this copy's sign-in in the header, the name in the body, escaped.
         /// </summary>
         static string Staff(string method, string door, string name, string what)
         {
@@ -722,18 +742,17 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// One call to a staff door, with this copy's ticket in the query the
-        /// way Report sends its own. Blocking. The status code, and whatever the
-        /// site said in reply; 0 when it could not be reached at all.
+        /// One call to a staff door, with this copy's sign-in in the
+        /// Authorization header the way Report sends its own (#4701). Blocking.
+        /// The status code, and whatever the site said in reply; 0 when it
+        /// could not be reached at all.
         /// </summary>
         static int Ask(string method, string door, string body, out string reply)
         {
             reply = "";
             try
             {
-                string url = Discord.Site + door + "?ticket=" +
-                             Uri.EscapeDataString(Discord.Ticket);
-                return Discord.Send(method, url, body, out reply);
+                return Discord.Send(method, Discord.Site + door, body, true, out reply);
             }
             catch (Exception ex)
             {
@@ -803,9 +822,15 @@ namespace Thornswood
         /// <summary>The body of a GET, or null when it failed or did not answer 2xx.</summary>
         static byte[] GetBytes(string url, int ms)
         {
+            return GetBytes(url, ms, false);
+        }
+
+        /// <summary>The same, and with signed this copy's sign-in in the Authorization header (#4701).</summary>
+        static byte[] GetBytes(string url, int ms, bool signed)
+        {
             try
             {
-                using (var req = new HttpRequestMessage(HttpMethod.Get, url))
+                using (var req = signed ? Discord.Signed(HttpMethod.Get, url) : new HttpRequestMessage(HttpMethod.Get, url))
                 using (var answer = new CancellationTokenSource(ms))
                 {
                     req.Headers.TryAddWithoutValidation("User-Agent", "ThornswoodLauncher/" + Updater.Version);

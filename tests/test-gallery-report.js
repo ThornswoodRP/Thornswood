@@ -125,16 +125,16 @@ yes('and the page gate knows what a staff page is',
 // ---- Gallery.cs API ---------------------------------------------------------
 const report = body(GALLERY, 'public static string Report(string name, string why)');
 yes('Gallery.Report is there', report.length > 0);
-yes('Report posts to /api/gallery/report with ticket',
-    /"\/api\/gallery\/report\?ticket="/.test(report) &&
-    /Uri\.EscapeDataString\(Discord\.Ticket\)/.test(report));
+yes('Report posts to /api/gallery/report with the sign-in in the header, not the address (#4701)',
+    /Discord\.Site \+ "\/api\/gallery\/report";/.test(report) &&
+    /Discord\.Send\("POST", url, body, true, out reply\)/.test(report) && !/ticket=/.test(report));
 
 const submit = body(GALLERY, 'public static string Submit(string path, string by, string note, string alt, out string copies)');
 yes('Gallery.Submit is there', submit.length > 0);
-yes('Submit posts to /api/gallery/submit with ticket',
-    /"\/api\/gallery\/submit\?ticket="/.test(submit));
-yes('Submit uses Discord.PostBytes (body is the file)',
-    /Discord\.PostBytes\(url, data, ContentTypeFor\(ext\), 60000, out reply\)/.test(submit));
+yes('Submit posts to /api/gallery/submit with no sign-in in the address',
+    /"\/api\/gallery\/submit"/.test(GALLERY) && /string url = SubmitUrl\(/.test(submit) && !/ticket=/.test(GALLERY));
+yes('Submit uses Discord.PostBytes (body is the file), signed',
+    /Discord\.PostBytes\(url, data, ContentTypeFor\(ext\), 60000, true, out reply\)/.test(submit));
 yes('Submit allowlist matches the site images and recordings',
     /AllowExt = new string\[\] \{ \"\.png\", \"\.jpg\", \"\.jpeg\", \"\.webp\", \"\.gif\", \"\.mp4\", \"\.webm\" \}/.test(GALLERY));
 

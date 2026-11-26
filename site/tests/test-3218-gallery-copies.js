@@ -334,7 +334,7 @@ const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name ==
       /window\.galleryCopies\.send\(blob, b\.dataset\.galcopy\)/.test(HUB) && /Make smaller copies/.test(HUB));
   yes('the launcher sends JPEG copies to /api/gallery/copy after the picture',
       /copies = SendCopies\(data, ext, Str\(reply, "name"\)\);/.test(GALLERY) &&
-      /"\/api\/gallery\/copy\?ticket="/.test(GALLERY) && /PostBytes\(url, jpg, "image\/jpeg"/.test(GALLERY) &&
+      /"\/api\/gallery\/copy\?name="/.test(GALLERY) && !/ticket=/.test(GALLERY) && /PostBytes\(url, jpg, "image\/jpeg", 60000, true,/.test(GALLERY) &&
       /CopyWidths = new int\[\] \{ 800, 1600 \}/.test(GALLERY));
   yes('the launcher reads the queue\'s copies, fetches them for the card, and Accept names them',
       /p\.Copies = Widths\(body, "copies"\);/.test(GALLERY) && /Gallery\.FetchCopy\(holdItem, holdWidth\)/.test(SHELL) &&
