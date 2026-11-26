@@ -280,8 +280,8 @@ if (!W_DOOR || !M_DOOR) { done(); } else {
   claim(CAROL, M_DOOR);
   yes('B1 Hulda holds Whiterun\'s and Carol Markarth\'s', holder(WHITERUN_HALL) === HULDA.pid &&
       holder(MARKARTH_HALL) === CAROL.pid);
-  yes('B1 and each deed names its own hall', named(HULDA, DEED_DESC)[0] === 'Deed to Hall of the Dead, Whiterun' &&
-      named(CAROL, DEED_DESC)[0] === 'Deed to Hall of the Dead, Markarth');
+  yes('B1 and each numbered deed names its own hall', named(HULDA, DEED_DESC)[0] === 'Deed to Hall of the Dead, Whiterun (deed 1)' &&
+      named(CAROL, DEED_DESC)[0] === 'Deed to Hall of the Dead, Markarth (deed 2)');
   lock(HULDA, W_DOOR);
   lock(CAROL, M_DOOR);
   give(EVE, KEY_DESC, 1, W.keyLabel(WHITERUN_HALL));

@@ -323,6 +323,9 @@ yes('G1 the deed back to Alice: she holds it at nothing owed, and what Bob owed 
 door(STEWARD);
 say(STEWARD, '/evict');
 yes('G2 an eviction ends the claim; what Bob owes from before is his still', !claim() && owedBefore(BOB.pid) === 50);
+door(ALICE);
+yes('G2 opening the door with the ended legacy deed does not restore the claim',
+    !claim() && refs[ALICE.a].inventory.entries.some((e) => e.name === W.deedLabel(HOUSE)));
 o = owing(STEWARD);
 yes('G3 and with nobody holding it the steward still sees it, and marks it paid', o.length === 1 && o[0].pid === BOB.pid &&
     say(STEWARD, '/rent paid ' + BOB.pid + ' 50') === 'Bob paid 50 gold of rent on Breezehome. Nothing is owed now.' &&

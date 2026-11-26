@@ -396,7 +396,7 @@ tick();
 // ============================================================ D. a deed
 told = [];
 online = online.filter(function (a) { return a !== HULDA.a; });
-inv(EVE).push({ baseId: idOf(DEED_DESC), count: 1, name: W.deedLabel(HOUSE) });
+inv(EVE).push({ baseId: idOf(DEED_DESC), count: 1, name: W.deedLabel(HOUSE, W.claims()[HOUSE].deed) });
 const sentBefore = book().length;
 const PRESENTED = clock.t;
 open(EVE, DOOR);
@@ -422,7 +422,7 @@ yes('D6 and reaches her when she is back: "' + deedLine + '"',
 yes('D7 the word decided nothing: Eve still holds it', held(HOUSE).by === EVE.pid);
 // The deed is never capped by the day's limit.
 rules.perHolderPerDay = 1;
-inv(HULDA).push({ baseId: idOf(DEED_DESC), count: 1, name: W.deedLabel(HOUSE) });
+inv(HULDA).push({ baseId: idOf(DEED_DESC), count: 1, name: W.deedLabel(HOUSE, W.claims()[HOUSE].deed) });
 open(HULDA, DOOR);
 const toEve = book().filter(function (x) { return x.kind === 'deed' && x.holder === EVE.pid; });
 yes('D8 a deed is never held back by the day\'s cap: Hulda takes it back and Eve is sent word',

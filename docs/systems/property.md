@@ -78,8 +78,11 @@ The register is the record that decides the holder. It lives with the
 server, not in the pack. A deed can be stolen, and carrying it through
 one of the building's doors is presenting it: the building is the
 carrier's from then on, sold, given or stolen alike, and the server
-does not tell those apart. A book somebody renamed by hand is not a
-deed, because the server never issued it.
+keeps the same deed number when the holder changes. Each new claim gets
+its own deed number. If the claim lapses or staff evict the holder, the
+old deed loses its authority at doors, beds and key-mold presses. An
+unnumbered deed still works for an active claim made before deeds were
+numbered.
 
 A deed changing hands keeps the rent and the debt (Patrick, 27 Oct,
 #3893). The building keeps the rent its steward set, at the same amount

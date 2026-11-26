@@ -22621,6 +22621,7 @@ module.exports = {
           Number(c.master.no) > 0) {
         row.master = { for: Number(c.master.for), no: Number(c.master.no) };
       }
+      if (Number.isSafeInteger(c.deed) && c.deed > 0) { row.deed = c.deed; }
 
       out[k] = row;
       kept++;
@@ -22634,7 +22635,7 @@ module.exports = {
     try {
       var text = JSON.stringify({ claims: claims, arrears: arrears,
         funds: funds, notices: notices, boards: boards, steps: steps,
-        masters: masterCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
+        masters: masterCut, deedCut: deedCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
       if (durable === true) {
         if (registerRead.bad) { throw new Error('the property register could not be read at startup'); }
         var file = registerPath();
@@ -22651,11 +22652,21 @@ module.exports = {
   }
 
   var claims = load();
+  var deedCut = loadDeedCut();
   var arrears = loadArrears();
   var masterCut = loadMasterCut();
   var wordBook = loadWord();
   // Read with the rest, before anything can save, so no write leaves them out (#4901).
   var debits = loadDebits();
+
+  function loadDeedCut() {
+    var saved = registerRead.doc && registerRead.doc.deedCut;
+    var top = Number.isSafeInteger(saved) && saved > 0 ? saved : 0;
+    for (var building of Object.keys(claims)) {
+      top = Math.max(top, claims[building].deed || 0);
+    }
+    return top;
+  }
 
   /*
     RENT STILL OWED BY SOMEBODY WHO NO LONGER HOLDS THE PLACE (#3893), from
@@ -23662,19 +23673,15 @@ module.exports = {
       claim like any other. The deed still opens the door it names, as a
       deed does (mayPass).
     */
-    if (mine && holdsDeed(actorId, building) && (!held || held.by !== mine) &&
+    if (mine && held && held.by !== mine && holdsDeed(actorId, building) &&
         mayHold(actorId, mine, building)) {
-      var was = held ? held.name : null;
+      var was = held.name;
       var now2 = Date.now();
       var who2 = 'somebody';
       try {
         var ap = mp.get(actorId, 'appearance');
         if (ap && ap.name) { who2 = String(ap.name); }
       } catch (e2) { }
-      // The ground goes with the house, because a home and its farm are one
-      // claim. Kept from the old record when there is one, so a transfer does
-      // not quietly drop the field behind the house.
-      var keepGround = held ? held.ground : groundHere(actorId);
       /*
         THE RENT STAYS ON THE BUILDING, AND WHAT WAS OWED STAYS OWED (#3893,
         Patrick, 27 Oct). This record used to be written with no rent on it,
@@ -23685,14 +23692,15 @@ module.exports = {
         holder owed, counted up to now first, stays theirs in arrears.
       */
       var keepRent = null;
-      if (held && held.rent) {
+      if (held.rent) {
         keepOwed(building, held, now2);
         keepRent = { amount: Number(held.rent.amount) || 0, everyDays: Number(held.rent.everyDays) || 7,
                      owed: 0, since: Number(held.rent.since) || now2 };
       }
+      // Keep the field and deed number with the building when it changes hands.
       claims[building] = { by: mine, name: who2, at: now2, touched: now2,
-                           locked: held ? !!held.locked : false,
-                           ground: keepGround };
+                           locked: !!held.locked, ground: held.ground };
+      if (held.deed) { claims[building].deed = held.deed; }
       if (keepRent) { claims[building].rent = keepRent; }
       save();
       pushAll();
@@ -23705,17 +23713,16 @@ module.exports = {
       */
       var master2 = issueMaster(actorId, building, claims[building]);
       plog(who2, 'presented the deed at', nameOf(building), 'and now holds it',
-           was ? '(it was ' + was + '\'s)' : '(it was nobody\'s)',
+           '(it was ' + was + '\'s)',
            master2 ? 'with master key no. ' + master2 : '');
-      // The old holder is sent word of it (#2680). A lapsed claim is no
-      // claim, so its holder had already lost the place and is not.
-      if (held && held.by && held.by !== mine) {
+      // The old holder is sent word of it (#2680).
+      if (held.by) {
         var wordSaid = recordWord('deed', building, held.by, actorId, mine, now2);
         plog('word: the deed to', nameOf(building), 'presented by', who2, '(profile ' + mine + '), for',
              was, '(profile ' + held.by + '):', WORD_SAID[wordSaid] || wordSaid);
       }
       var told = 'You present the deed at ' + nameOf(building) +
-                 '. It is yours now' + (was ? ', and no longer ' + was + '\'s' : '') + '.' +
+                 '. It is yours now, and no longer ' + was + '\'s.' +
                  (master2 ? ' ' + masterHandedLine(building) : '');
       notify(actorId, told);
       say(actorId, told);
@@ -23887,6 +23894,8 @@ module.exports = {
     two, because then neither of them says which house it is.
   */
   function giveDeed(actorId, building) {
+    var held = holderOf(building);
+    if (!held) { return false; }
     var baseId = idOf(DEED);
     if (!baseId) {
       plog('no deed record in this load order, so nothing was handed over');
@@ -23895,7 +23904,7 @@ module.exports = {
     var inv = null;
     try { inv = mp.get(actorId, 'inventory'); } catch (e) { inv = null; }
     var entries = (inv && inv.entries) || [];
-    entries.push({ baseId: baseId, count: 1, name: deedLabel(building) });
+    entries.push({ baseId: baseId, count: 1, name: deedLabel(building, held.deed) });
     try {
       mp.set(actorId, 'inventory', { entries: entries });
     } catch (e) {
@@ -23984,9 +23993,21 @@ module.exports = {
       outside an inn's landing.
     */
     var ground = groundHere(actorId);
+    var deed = deedCut + 1;
+    if (!Number.isSafeInteger(deed)) {
+      plog('could not number a new deed for', nameOf(building));
+      toProfile(profileId, 'The register could not number the deed. Ask staff to check it.');
+      return true;
+    }
     claims[building] = { by: profileId, name: who, at: now, touched: now,
-                         locked: false, ground: ground };
-    save();
+                         locked: false, ground: ground, deed: deed };
+    deedCut = deed;
+    if (!save()) {
+      delete claims[building];
+      deedCut--;
+      toProfile(profileId, 'The register could not save your claim. Ask staff to check it.');
+      return true;
+    }
     // A new claim is not locked, so nothing anybody sees changes yet. The push
     // is here anyway because the claim is the moment the building stops being
     // nobody's, and a view that is right from the first second costs one write.
@@ -24261,11 +24282,16 @@ module.exports = {
 
   function keyLabel(building) { return 'Key to ' + placeOf(building); }
   function moldLabel(building) { return 'Key mold for ' + placeOf(building); }
-  function deedLabel(building) { return 'Deed to ' + placeOf(building); }
+  // A transfer keeps the deed number. Lapse and eviction end its use. Old
+  // unnumbered deeds still work for a claim issued before numbers were added.
+  function deedLabel(building, deed) { return 'Deed to ' + placeOf(building) + (deed ? ' (deed ' + deed + ')' : ''); }
 
   function holdsKey(actorId, building) { return holdsNamed(actorId, KEY, keyLabel(building)); }
   function holdsMold(actorId, building) { return holdsNamed(actorId, MOLD, moldLabel(building)); }
-  function holdsDeed(actorId, building) { return holdsNamed(actorId, DEED, deedLabel(building)); }
+  function holdsDeed(actorId, building) {
+    var held = holderOf(building);
+    return !!held && holdsNamed(actorId, DEED, deedLabel(building, held.deed));
+  }
 
   /** A named item into the pack, never stacked. See giveDeed for why. */
   function giveNamed(actorId, baseDesc, label) {

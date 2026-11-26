@@ -274,7 +274,7 @@ open(ALICE, DOOR_OUT);
   const held = W.holderOf(HOME);
   yes('D2 the claim the key sends is answered by the property block', r.handled === true);
   yes('D2 and Honeyside is Alice\'s, with the deed in her pack',
-      !!held && held.by === ALICE.pid && holds(ALICE, DEED_DESC, W.deedLabel(HOME)));
+      !!held && held.by === ALICE.pid && holds(ALICE, DEED_DESC, W.deedLabel(HOME, held.deed)));
   yes('D2 and the line at the door says Lock now, as a new write',
       lineOf(ALICE).x === 'lock' && lineOf(ALICE).at > was);
 }
@@ -327,7 +327,8 @@ yes('D4 Bob at his own shop is offered Lock', lineOf(BOB).x === 'lock' && lineOf
 // D7: the deed carried to the door moves the place, and the line follows.
 {
   const entries = pack(ALICE);
-  const at = entries.findIndex(function (e) { return e.name === W.deedLabel(HOME); });
+  const deed = W.deedLabel(HOME, W.holderOf(HOME).deed);
+  const at = entries.findIndex(function (e) { return e.name === deed; });
   pack(CAROL).push(entries.splice(at, 1)[0]);
   open(CAROL, DOOR_OUT);
   yes('D7 Carol carries the deed through the door and holds Honeyside', W.holderOf(HOME).by === CAROL.pid);
