@@ -792,6 +792,15 @@ foreach ($scan in @(1,23,36)) {
   }
 }
 
+// The inventory closes with Tab, as its key hints say: a second I left it
+// open and failed the 3:40 PM run on 26 Nov at its close wait.
+{
+  let list = [];
+  try { list = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json')) || '{}').steps || []; } catch (e) { list = []; }
+  const shut = list.findIndex(function (x) { return x.do === 'wait' && x.menu === 'InventoryMenu' && x.open === false; });
+  yes('the key before the inventory close wait is Tab (15), not I', shut > 0 && list[shut - 1].do === 'key' && list[shut - 1].code === 15);
+}
+
 // The game's own logs are kept with the run, since the next game start
 // writes over them (26 Nov: #6619's "Owner outfit" lines were gone).
 {

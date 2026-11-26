@@ -175,7 +175,8 @@
     },
     {
       "do": "key",
-      "code": 23
+      "code": 15,
+      "why": "Tab closes the inventory, as its own key hints say (Tab Exit); a second I leaves it open (26 Nov, 3:43 PM run on One)"
     },
     {
       "do": "wait",
