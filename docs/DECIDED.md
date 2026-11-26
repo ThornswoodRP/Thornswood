@@ -321,6 +321,10 @@ link, and the old line goes.
   build on the box, then its audit.** (dec_AI3xaYcXj92oD1D47l-3HQ) 9 Nov
   2026,
   [#5679](https://github.com/ThornswoodRP/Thornswood/issues/5679#issuecomment-6759369249).
+- **#6982's one plan change, Member shown in its own group in the member
+  list, goes to the live Discord by one Apply-Discord run from main at or
+  after 70ab147.** (dec_d_5rX_xghzGiRopCW_BRvw) 26 Nov 2026,
+  [#6996](https://github.com/ThornswoodRP/Thornswood/issues/6996#issuecomment-7203927474).
 - **Djinn's one-line crash log (fork #89) rides the next engine pin.** 22
   Oct 2026,
   [#2025](https://github.com/EvilPatrick06/Thornswood/issues/2025#issuecomment-6335269045).
