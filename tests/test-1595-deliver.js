@@ -68,10 +68,12 @@ function fn(name) {
   const b = prop.indexOf('\n  }\n', a + 1);
   return b < 0 ? null : prop.slice(a + 1, b + 4);
 }
-const NAMES = ['takeGold', 'payOut', 'payHeld', 'sealed', 'nameIs', 'postWords', 'post', 'board', 'take',
+const NAMES = ['takeGold', 'payHeld', 'sealed', 'nameIs', 'postWords', 'post', 'board', 'take',
                'jobsOf', 'dropJob', 'takedown', 'unpin', 'postLetter', 'deliver', 'letterReach', 'lettersCarried',
                'boardHere', 'nearestBoard', 'wallOf', 'boardPanel', 'boardsView', 'moveBoard', 'command',
-               'haulTenth', 'haulText'];
+               'haulTenth', 'haulText',
+               // Who is in the world, for the tick that pays what is owed into a pack (#4258).
+               'profileOf', 'onlineActorOf'];
 const lifted = {};
 const missing = [];
 NAMES.forEach(function (n) { lifted[n] = fn(n); if (!lifted[n]) { missing.push(n); } });
@@ -176,7 +178,7 @@ function boot(w) {
   NAMES.forEach(function (n) { body.push(lifted[n]); });
   // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
   body.push(PACK_FIRST.pieces(prop));
-  body.push('return { boards: boards, notices: function () { return notices; }, command: command, ' +
+  body.push('return { packTick: packTick, boards: boards, notices: function () { return notices; }, command: command, ' +
             'lettersCarried: lettersCarried, funds: function () { return funds; } };');
   const make = new Function('reg', 'mp', 'plog', 'loadPart', 'PASSAGES', 'g', 'isSteward', body.join('\n'));
   const api = make(reg, w.mp, function () { }, function (k, fb) { return fb; }, PASSAGES, ctx, function () { return false; });
@@ -188,6 +190,8 @@ function boot(w) {
     const said = [];
     const to = function (pid, m) { api.every.push(m); if (pid === p.pid) { said.push(m); } };
     const answered = api.command(parts[0].toLowerCase(), parts, p.actor, p.pid, to);
+    // What a word owes into a pack lands on the server's next tick (#4258).
+    api.packTick();
     return answered ? said.join('\n') : null;
   };
   /* What the near list tells `p` about `them`, after one tick. */

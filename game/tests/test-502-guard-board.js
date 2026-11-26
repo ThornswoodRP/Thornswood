@@ -124,7 +124,8 @@ const mp = {
 let tick = null;
 const box = {
   console: { log: function () { logged.push(Array.prototype.join.call(arguments, ' ')); } },
-  require: require, mp: mp, Date: FakeDate,
+  // A payout lands in a pack through packFirst, with receipts (#4258).
+  require: require, mp: require('../../tests/fixtures/pack-first').receipts(mp), Date: FakeDate,
   BUILDING_BY_DOOR: {}, BUILDING_NAME: {}, WAY_OUT: {}, BENCH_BY_BASE: {},
   idOf: function (d) { const m = /^([0-9a-f]+):Skyrim\.esm$/i.exec(String(d || '')); return m ? parseInt(m[1], 16) : 0; },
   notify: function (a, m) { toasts.push([a, m]); }, say: function () { },
@@ -138,6 +139,7 @@ const box = {
              guard: pid === GUARD_W.pid ? ['whiterun'] : (pid === GUARD_R.pid ? ['riften'] : []) };
   }
 };
+box.__thornswoodMerchantTrade = { withQuestInventoryMutation: box.mp.admitPackDebit };
 box.globalThis = box;
 inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js property' }); });
 const W = box.__thornswoodProperty;
@@ -158,6 +160,8 @@ function word(p, w, args) {
   const by = {};
   inDir(function () {
     W.command(w, [w].concat(args || []), p.a, p.pid, function (pid, m) { (by[pid] = by[pid] || []).push(m); });
+    // What a word owes into a pack lands on the server's next tick (#4258).
+    W.settlePacks();
   });
   return { mine: (by[p.pid] || []).join(' '), by: by };
 }
@@ -247,7 +251,7 @@ yes('A1 Carol is away, so her letter\'s 15 is held for her: "' + r.mine + '"',
     W.funds().whiterun === fundsBefore - 40);
 yes('A2 and the ledger keeps it held, so nothing else spends it', W.heldOn('whiterun') >= 15 + 50);
 online.push(CAROL.a);
-inDir(function () { W.haulTick(); });
+inDir(function () { W.haulTick(); W.settlePacks(); });
 yes('A3 when Carol is back in the world it is in her pack and off the ledger',
     gold(CAROL) === 115 && Number(list('whiterun')[3].owed) === 0 && W.funds().whiterun === fundsBefore - 55);
 yes('A4 and she is told why', toasts.some(function (t) {

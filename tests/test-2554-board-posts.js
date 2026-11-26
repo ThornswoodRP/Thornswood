@@ -146,6 +146,8 @@ function say(p, line) {
       const payload=JSON.parse(line.slice('/board-post-v1 '.length));
       W.postExact(payload[0],payload[1],payload[2],payload[3],payload[4],p.a,p.pid,tell);
     } else W.command(parts[0].toLowerCase(), parts, p.a, p.pid, tell);
+    // What a word owes into a pack lands on the server's next tick (#4258).
+    W.settlePacks();
   });
   return { mine: (by[p.pid] || []).join(' '), by: by };
 }
@@ -319,17 +321,17 @@ attempt('take downs', function () {
       list()[cat - 1].owed === 40 && list()[cat - 1].owedFor === 'job' && ledger() === f1 && W.heldOn('whiterun') >= 40);
   yes('T2 and Bob is told it is off his list', (g.by[BOB.pid] || []).join(' ') ===
       'The job in whiterun you took was taken down by a guard. It is off your list.');
-  inDir(function () { W.haulTick(); });
+  inDir(function () { W.haulTick(); W.settlePacks(); });
   yes('T3 while Carol is away nothing is handed over', gold(CAROL) === c0 - 70 && ledger() === f1);
   online.push(CAROL.a);
-  inDir(function () { W.haulTick(); });
+  inDir(function () { W.haulTick(); W.settlePacks(); });
   yes('T4 back in the world, the reward is in her pack and off the ledger, once',
       gold(CAROL) === c0 - 30 && ledger() === f1 - 40 && Number(list()[cat - 1].owed) === 0);
   yes('T4 and she is told why', toasts.some(function (t) {
     return t[0] === CAROL.a && t[1] === 'While you were away, a guard took your job in whiterun down: Guard the gate. ' +
       'The 40 gold reward is back in your pack. The fee stays with whiterun.';
   }));
-  inDir(function () { W.haulTick(); });
+  inDir(function () { W.haulTick(); W.settlePacks(); });
   yes('T4 a second tick pays nothing more', gold(CAROL) === c0 - 30 && ledger() === f1 - 40);
 
   // Bob away when Alice says done: the reward waits for him.
@@ -343,7 +345,7 @@ attempt('take downs', function () {
       d.mine === 'Done: Sweep the hall. Bob is away, so the 25 gold reward is held for them until they are next in the world.' &&
       !!list()[sat - 1].down && list()[sat - 1].owed === 25 && list()[sat - 1].owedFor === 'reward' && ledger() === f2);
   online.push(BOB.a);
-  inDir(function () { W.haulTick(); });
+  inDir(function () { W.haulTick(); W.settlePacks(); });
   yes('T6 back in the world, he has it and is told who said it was done',
       gold(BOB) === b0 + 25 && ledger() === f2 - 25 && toasts.some(function (t) {
         return t[0] === BOB.a && t[1] === 'While you were away, Alice said the job you took in whiterun is done: Sweep the hall. ' +
