@@ -113,6 +113,8 @@ function game(opts) {
     files: files, handlers: handlers, world: world, pageRuns: pageRuns, lines: lines, box: sandbox, fire: fire,
     // A frame: time moves on by ms, then update and tick, as the game sends them.
     frame: function (ms) { now += ms || 16; fire('update'); fire('tick'); },
+    // A frame of a paused game: tick comes, update does not.
+    tickOnly: function (ms) { now += ms || 16; fire('tick'); },
     menu: function (name, open) { fire(open ? 'menuOpen' : 'menuClose', { name: name }); },
     button: function (ev) { fire('buttonEvent', ev); },
     page: function () { fire('browserMessage', { arguments: [].slice.call(arguments) }); },
@@ -920,6 +922,54 @@ foreach ($scan in @(1,23,36)) {
 {
   const FRONT_SRC = read(path.join('game', 'plugins', 'thornswood-front.js'));
   yes('front shares its bed rule as Thornswood.isBedRef, the one the face step uses', /T\.isBedRef = isBedRef;/.test(FRONT_SRC) && /T\.isBedRef\(ref\)/.test(PLUGIN));
+}
+
+// Test tasks (#5197): a failing step ends its task, not the run, after its
+// screenshot; the next task runs; each task gets one results line; the run
+// ends failed and names the failed tasks.
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'Nope', open: true, timeout: 100, task: 101 },
+    { do: 'shot', name: 'never', task: 101 },
+    { do: 'wait', for: 'time', ms: 10, task: 202 },
+    { do: 'wait', for: 'time', ms: 10, task: 202 },
+    { do: 'end' }
+  ] });
+  for (let i = 0; i < 12; i++) { g.frame(50); g.ack({ ok: true }); }
+  const L = g.lines();
+  const tasks = L.filter(function (l) { return l.t === 'task'; });
+  const shots = L.filter(function (l) { return l.t === 'ask' && l.do === 'shot'; }).map(function (l) { return l.arg; });
+  const done = L.filter(function (l) { return l.t === 'done'; })[0];
+  yes('a failing step of a task takes its fail shot and fails only that task', shots.indexOf('fail-0') >= 0 && shots.indexOf('never') < 0 &&
+      tasks.length === 2 && tasks[0].task === '101' && tasks[0].ok === false && /waited 100 ms for Nope/.test(tasks[0].note));
+  yes('  the next task runs and passes', tasks[1].task === '202' && tasks[1].ok === true);
+  yes('  and the run ends failed, naming the failed task', !!done && done.ok === false && /test task\(s\) failed: #101/.test(done.note));
+}
+// The test-task list starts as the dev-release run does, up to the world,
+// and every step after that belongs to a test task.
+{
+  const dev = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json'))).steps;
+  const tt = JSON.parse(read(path.join('tests', 'real-client', 'test-tasks.json'))).steps;
+  const cut = dev.findIndex(function (x) { return x.do === 'shot' && x.name === 'in-world'; });
+  yes('test-tasks.json joins the world with dev-release.json\'s own steps', cut > 0 && JSON.stringify(tt.slice(0, cut + 1)) === JSON.stringify(dev.slice(0, cut + 1)));
+  yes('  and every step after that carries its test task, but the end', tt.slice(cut + 1, -1).every(function (x) { return x.task !== undefined; }) && tt[tt.length - 1].do === 'end');
+  const tp = read(path.join('game', 'gamemode', 'teleport.ts'));
+  yes('  its dice check reads the lines the server writes', /rwho \+ ' rolls ' \+ rsides \+ ': ' \+ total/.test(tp) && /rwho \+ ' rolls ' \+ rcount \+ 'x' \+ rsides \+ ': ' \+ rolls\.join\(' \+ '\) \+ ' = ' \+ total/.test(tp) && /'The number is the sides: /.test(tp));
+}
+// The world-runs wait: passes while updates keep coming, fails on a pause.
+{
+  const g = game({ steps: [{ do: 'wait', for: 'running', ms: 300, task: 7 }, { do: 'end' }] });
+  for (let i = 0; i < 10; i++) { g.frame(50); }
+  const ran = g.lines().filter(function (l) { return l.t === 'task'; });
+  yes('the world-runs wait passes while updates keep coming', ran.length === 1 && ran[0].task === '7' && ran[0].ok === true);
+}
+{
+  const g = game({ steps: [{ do: 'wait', for: 'running', ms: 5000, task: 8 }, { do: 'end' }] });
+  g.frame(16);
+  // Ticks for 1.6 s with no update between them.
+  for (let i = 0; i < 4; i++) { g.tickOnly(400); }
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('  and fails when the game stops sending updates (a paused world)', st.length && st[0].ok === false && /sent no update for \d+ ms/.test(st[0].note));
 }
 
 // The inventory is closed with a second I, the way Patrick wants it to
