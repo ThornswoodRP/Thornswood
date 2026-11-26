@@ -14,6 +14,12 @@ release: Play from the launcher, the scroll and the choice page, creation
 when the character is new, the world, our journal, the inventory and the
 game's menu, with a screenshot of each.
 
+The run plays its own character: the slot named Adventurer, the name
+creation gives it. It picks that slot by its name, never the slot the page
+picks by itself, which is the last played: on 26 Nov a run that took the
+page's pick joined as a person's own character. With no slot of that name the
+run stops at the choice page and says so.
+
 Creation comes only for a character the server has not got. The launcher
 keeps one list of characters for both servers, so a character made on main
 reads "not on this server" on dev, and playing it makes a new one there. The
