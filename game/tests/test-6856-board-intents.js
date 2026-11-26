@@ -2,6 +2,8 @@
 // Scenario: systems/noticeboards.md
 // Real board/front bridge -> authenticated queue -> whole canonical unpin.
 const fs=require('fs'),path=require('path'),standIn=require('../../tests/stand-in-server'),makePage=require('../../tests/fixtures/panel-page');
+// A refund is owed into a pack and paid through packFirst, which needs the inventory reservation (#4258).
+const {attachScenarioReservation}=require('../../tests/fixtures/pack-first');
 const root=path.join(__dirname,'../..'),t=standIn.checks(),yes=t.yes;
 const posts=[
  {by:1000,title:'Target'}, {by:1000,title:'Own job',job:true,pay:15}, {by:1000,title:'Taken job',job:true,pay:25,taken:1001,takenName:'Brenna'},
@@ -15,7 +17,7 @@ const w=standIn.world({name:'6856-board-intents',settings:{thornswoodServer:'mai
 }});
 const actors=[1000,1001,2000,3000,4000,5000].map((pid,i)=>w.person(0xff006856+i,{profileId:pid,name:['Aldis','Brenna','Guard','Steward','Jarl','Stranger'][i],inventory:{entries:[{baseId:15,count:100}]}}));
 const [a,b,guard,steward,jarl,stranger]=actors;
-yes('whole gamemode loads',w.boot());if(!w.loaded())t.done(w);actors.forEach(w.arrive);w.run(30000);
+yes('whole gamemode loads',w.boot());if(!w.loaded())t.done(w);attachScenarioReservation(w);actors.forEach(w.arrive);w.run(30000);
 const prop=()=>w.box().__thornswoodProperty,doc=()=>w.readPrivate('property.json'),row=n=>doc().notices.windhelm[n-1],site=h=>prop().boards()[h];
 function move(actor,h='windhelm'){const p=site(h);w.moveTo(actor,p.cell,p.pos);}
 function wire(h,n,at){return '/board-unpin-v1 '+JSON.stringify([h,n,at]);}
@@ -27,8 +29,8 @@ function firstWire(){return pageWire(1);}
 let line=firstWire();yes('actual page emits exact board/index/creation payload',line===wire('windhelm',1,1000));
 queued(line,()=>move(a,'whiterun'));yes('old queued board intent cannot remove either board after movement',!row(1).down&&!doc().notices.whiterun[0].down);
 move(a);line=firstWire();queued(line,()=>{const d=doc();d.notices.windhelm[0]={by:1000,name:'Aldis',title:'Replacement book',text:'New creation',at:3000};w.writePrivate('property.json',d);w.reload();});
-yes('old queued intent cannot remove a same-index replacement after reload',!row(1).down&&row(1).at===3000);
-const withMore=doc(),capturedFirst=withMore.notices.windhelm[0];withMore.notices.windhelm=posts;withMore.notices.windhelm[0]=capturedFirst;w.writePrivate('property.json',withMore);yes('additional canonical saved fixtures load',w.reload());
+attachScenarioReservation(w);yes('old queued intent cannot remove a same-index replacement after reload',!row(1).down&&row(1).at===3000);
+const withMore=doc(),capturedFirst=withMore.notices.windhelm[0];withMore.notices.windhelm=posts;withMore.notices.windhelm[0]=capturedFirst;w.writePrivate('property.json',withMore);yes('additional canonical saved fixtures load',w.reload());attachScenarioReservation(w);
 move(a);const before=JSON.stringify(doc()),inventory=JSON.stringify(w.row(a).inventory);
 for(const payload of [[],['windhelm',1],['windhelm',1,3000,'extra'],[null,1,3000],['unknown',1,3000],['windhelm',0,3000],['windhelm',1.5,3000],['windhelm','1',3000],['windhelm',1,'3000'],['windhelm',1,null],['windhelm',1,-1],['windhelm',1,1.5],['windhelm',9007199254740992,3000],['windhelm',1,9007199254740992],['whiterun',1,2000],['windhelm',1,1000]]){
  say(a,'/board-unpin-v1 '+JSON.stringify(payload));yes('malformed/mismatched intent changes no register or pack',JSON.stringify(doc())===before&&JSON.stringify(w.row(a).inventory)===inventory);
@@ -46,9 +48,13 @@ say(jarl,wire('windhelm',7,1006));yes('canonical local Jarl can take another per
 const haulGold=w.count(b,15);say(steward,wire('windhelm',5,1004));yes('canonical Steward cancellation of taken haul returns owner pay',!!row(5).down&&w.count(b,15)===haulGold+30);
 const letterGold=w.count(a,15);say(a,wire('windhelm',6,1005));yes('letter courier pay returns through unchanged canonical rules',!!row(6).down&&w.count(a,15)===letterGold+15);
 say(a,wire('windhelm',9,0));yes('actual numeric zero legacy creation is accepted',!!row(9).down);
-const failedGold=w.count(a,15),failedFunds=doc().funds.windhelm,mp=w.mp(),originalSet=mp.set;
-try{mp.set=function(actor,name,value){if(actor===a&&name==='inventory')throw Error('before pack commit fixture');return originalSet.call(mp,actor,name,value);};say(a,wire('windhelm',12,1011));}finally{mp.set=originalSet;}
-yes('failed canonical refund preserves post, held pay, ledger and pack',!row(12).down&&row(12).pay===12&&doc().funds.windhelm===failedFunds&&w.count(a,15)===failedGold);
+// A refund writes no pack (#4258): it is owed in the register, and the pack tick pays it once the pack takes it.
+const failedGold=w.count(a,15),failedFunds=doc().funds.windhelm,mp=w.mp(),originalCas=mp.compareAndSetInventoryAndProperty;
+const owedTo=pid=>((doc().owing||{})[pid]||[]).reduce((n,r)=>n+r.entries.reduce((m,e)=>m+(e.baseId===15?e.count:0),0),0);
+try{mp.compareAndSetInventoryAndProperty=function(actor,...rest){if(actor===a)throw Error('before pack commit fixture');return originalCas.call(mp,actor,...rest);};say(a,wire('windhelm',12,1011));}finally{mp.compareAndSetInventoryAndProperty=originalCas;}
+yes('a refund the pack will not take stays owed in the register, the post down and off the ledger, and the pack untouched',!!row(12).down&&row(12).pay===0&&doc().funds.windhelm===failedFunds-12&&owedTo(1000)===12&&w.count(a,15)===failedGold);
+w.run(4200);
+yes('and the pack tick pays it once the pack takes it, once',owedTo(1000)===0&&w.count(a,15)===failedGold+12);
 say(a,'/unpin 8');yes('the legacy four-argument route still works',!!row(8).down);
 const complete=JSON.stringify(doc());say(a,wire('windhelm',2,1001));yes('accepted intent replay cannot refund or mutate twice',JSON.stringify(doc())===complete);
 // Instrument the real canonical operation: a second board lookup would now

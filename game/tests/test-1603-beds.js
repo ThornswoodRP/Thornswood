@@ -9,7 +9,8 @@
 // the property page of the K panel. A night is 8 hours. The server sells no
 // night: "they pay from a regular trade and then the owner can grant bed
 // access", so /bed, its price and the two-step /rest bed payment are gone,
-// and gold #1392 kept for a holder who was away is handed over once. And the
+// and so is the gold #1392 kept for a holder who was away, which was paid
+// into a pack from a second file with nothing tying the two (#4258). And the
 // rest ladder, "use some common sense": a seat 20, a bed or bedroll nobody
 // can lend you 25, a seat by a fire 35, that bed by a fire 45, a bed you are
 // allowed in 50, your own bed 80. A key or the deed still counts as allowed.
@@ -224,10 +225,10 @@ fs.writeFileSync(path.join(dir, 'private', 'property.json'), JSON.stringify({ cl
   [HOME]: { by: ALICE.pid, name: 'Alice', at: clock.t, touched: clock.t }
 } }));
 /*
-  THE BOOK. Eve a guest at the inn an hour ago, of its holder Hulda, and 20
-  gold kept for Hulda while she was away. And the prices and paid nights
-  #1392's book held, which are not read (#3265): Carol's night there would
-  have made her a guest. Read by the first boot below.
+  THE BOOK. Eve a guest at the inn an hour ago, of its holder Hulda. And
+  the prices, paid nights and kept takings #1392's book held, which are not
+  read (#3265, #4258): Carol's night there would have made her a guest, and
+  the 20 would have been paid to Hulda. Read by the first boot below.
 */
 const BOOK = path.join(dir, 'private', 'beds.json');
 const BOOK_TEXT = JSON.stringify({
@@ -363,7 +364,7 @@ function up(p) { return rest(p, 'up'); }
   yes('O1 the book is read as written: Eve is a guest of Hulda at the inn, to the same end',
       !!book.guests[INN] && !!book.guests[INN][EVE.pid] && book.guests[INN][EVE.pid].by === HULDA.pid &&
       book.guests[INN][EVE.pid].at === clock.t - HOUR);
-  yes('O1 the gold kept for Hulda is still kept, for her', book.takings[HULDA.pid] === 20);
+  yes('O1 the takings #1392 kept for Hulda are not read (#4258)', !('takings' in book));
   yes('O1 a paid night of #1392\'s book is not read: Carol is no guest (#3265)', !book.guests[INN][CAROL.pid]);
   yes('O1 and the book is not written over as it is read', fs.readFileSync(BOOK, 'utf8') === BOOK_TEXT);
 }
@@ -698,16 +699,12 @@ function up(p) { return rest(p, 'up'); }
   yes('C1 and Alice is a stranger there now', /have not let you sleep there/.test(rest(ALICE, 'bed')));
 }
 
-// -------------------------------------------- the gold #1392 kept, once --
+// ------------------------------------------ the gold #1392 kept, never --
 
 {
-  // Hulda has been in the world all along in this test, so the first tick
-  // already handed it over. Count from a fresh boot instead, below.
-  yes('M1 the takings are handed to the holder on the first tick she is in the world',
-      !beds().book().takings[HULDA.pid] && goldOf(HULDA) === 20);
-  yes('M1 and she is told', told.some(function (t) {
-    return t.id === HULDA.a && /20 gold was paid for nights in your beds/.test(t.text);
-  }));
+  // Hulda has been in the world all along in this test, through every tick.
+  yes('M1 the takings #1392 kept are never handed to the holder (#4258)',
+      goldOf(HULDA) === 0 && !told.some(function (t) { return /paid for nights in your beds/.test(t.text); }));
 }
 
 // ------------------------------------------------------- a restart --
