@@ -161,6 +161,23 @@ node game/tests/test-npc-shared-native.js <built addon .node> <installed record 
 - `test-npc-shared-native.js` verifies shared NPC runtime population batches,
   callback limits, and memory usage against the built server addon.
 
+The compiled seasoning check reads the locally built
+`game/content/Thornswood-Content.esp` and `game/content/Thornswood-Last.esp`,
+with `game/data/recipes.json` and `game/data/last-plugin.json` generated from
+the same source and load order. Run it after the normal content compiler
+has built both plugins:
+
+```
+python tests/test-4610-compiled-records.py
+```
+
+It checks all the garlic and salt recipe overrides, their ingredients,
+yields, conditions and unique identifiers, the five Content masters, and
+the disabled shells left without Last. This runs on a machine with those
+built plugins because releases distribute Last only as its recipe and
+manifest. The hosted source-stage and generated-table checks remain on
+the gate.
+
 ## A harness that runs box code, or needs Windows
 
 The box runs its scripts in PowerShell 7 (#5356), the same pwsh that runs the
