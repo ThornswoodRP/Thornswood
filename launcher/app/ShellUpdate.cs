@@ -122,6 +122,34 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// The server runs a plugin of ours this install's release does not
+        /// carry (Verify.ServerAheadOfRelease, #7045), which only a newer
+        /// Release brings: the channel is asked for it now, whatever the
+        /// half hourly clock says, and the answer goes where every check's
+        /// does (LauncherAnswer), so Play, Fix and the card above Play judge
+        /// the update on it. Awaited on the window's thread. Until #7045
+        /// Play and Fix judged it on the last half hourly answer, up to 30
+        /// minutes old, and refused a launcher whose update was already out.
+        /// </summary>
+        static async Task AskForServersRelease(string plugin)
+        {
+            lock (launcherAskGate) launcherAskedAt = DateTime.UtcNow;
+            Log("The server runs a " + plugin + " this launcher's release does not have. Asking GitHub for this channel's newest release.");
+            Updater.LauncherUpdate launcher = null;
+            string why = null;
+            bool asked = false;
+            string note = null;
+            await OffThread(delegate
+            {
+                try { launcher = Updater.CheckLauncher(cfg); asked = true; }
+                catch (Exception ex) { why = Failure.Why("ShellUpdate, the release the server runs", ex); }
+                note = Updater.LastLauncherCheck;
+            });
+            launcherCheckFailed = why != null;
+            LauncherAnswer(asked, launcher, note, why, false);
+        }
+
+        /// <summary>
         /// What the launcher check found, on the window's thread: kept for
         /// Install now and the card, said in launcher.log once and again
         /// whenever it changes, and drawn on the card above Play.

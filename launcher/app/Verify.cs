@@ -717,8 +717,13 @@ namespace Thornswood
         /// <summary>A plugin of the collection that is not in the game folder and Vortex has no copy of.</summary>
         const string VortexDeploys = "Vortex has to deploy it: in Vortex, enable the Thornswood profile and press Deploy, or install the collection if you have not, then press Scan.";
 
-        /// <summary>A plugin of ours whose server copy the release does not have (#3386).</summary>
-        const string NotInRelease = "Fix takes Thornswood's own plugins from the latest release, and that release does not have the copy the server runs yet, or could not be reached. The next update brings it: take it when it is waiting, then press Scan.";
+        /// <summary>
+        /// A plugin of ours whose server copy this install's release does not
+        /// have (#3386). Said after Fix has asked GitHub for the channel's
+        /// Release at that moment (#7045), so it says what that ask found
+        /// rather than "the latest release", which it never read.
+        /// </summary>
+        const string NotInRelease = "Fix takes Thornswood's own plugins from the release this launcher is on, and it does not have the copy the server runs. Fix asked GitHub for this channel's newest release just now: when one is waiting it is on the card above Play, and Install now brings the server's copy; when none is, the server runs a copy no release has, and staff deploy the server again.";
 
         /// <summary>Thornswood-Last.esp made from this release's recipe, and the server holding another (#2791).</summary>
         const string OtherBuild = "The server and this release are of two builds: take the update when one is waiting; when none is, the server is behind, and staff deploy it again.";
@@ -1152,6 +1157,49 @@ namespace Thornswood
             while ((n = s.Read(buf, 0, buf.Length)) > 0)
                 for (int i = 0; i < n; i++) crc = crcTable[(crc ^ buf[i]) & 0xFF] ^ (crc >> 8);
             return (int)(crc ^ 0xFFFFFFFFu);
+        }
+
+        /// <summary>
+        /// The plugin of ours, among <paramref name="issues"/>, that the
+        /// server runs and this install's release does not carry (#7045), or
+        /// null: a line whose answer is NotInRelease, held to the release's
+        /// own copy where the line is about bytes. Such a server is on a newer Release than this launcher:
+        /// the box deploy agent puts a Release's own Thornswood-Content.esp
+        /// on its server a few minutes after the Release is published
+        /// (#6176), and an open launcher had only its half hourly check to
+        /// learn of that Release. So Play and Fix refused, and Fix said the
+        /// release "does not have the copy the server runs yet", while the
+        /// Release that has it was already on GitHub (Patrick, 26 Nov,
+        /// 4:40 PM: build-1.3.134's content plugin on Dev, launcher 1.3.132).
+        /// The caller asks the channel for that Release before it decides
+        /// (Shell.AskForServersRelease). A copy the release does carry is
+        /// Fix's to put in, and is not named here.
+        /// </summary>
+        public static string ServerAheadOfRelease(Config cfg, List<Issue> issues)
+        {
+            if (issues == null) return null;
+            Func<string, byte[]> release = null;
+            foreach (Issue i in issues)
+            {
+                if (i == null || i.WhatWill != NotInRelease) continue;
+                // The order's line: the server has a plugin of ours in a place
+                // where this release's list has none (OrderWhatWill).
+                if (string.IsNullOrEmpty(i.Plugin) || i.WantSize <= 0) return string.IsNullOrEmpty(i.Plugin) ? "a plugin of Thornswood's" : i.Plugin;
+                if (release == null)
+                {
+                    try { release = Updater.ReleaseCopy(cfg); }
+                    catch (Exception ex) { Swallow.Note("Verify.ServerAheadOfRelease, opening the installed release", ex); return null; }
+                    if (release == null) return null;   // not installed by setup: it has no channel to ask
+                }
+                byte[] bytes;
+                try { bytes = release(i.Plugin); }
+                catch (Exception ex) { Swallow.Note("Verify.ServerAheadOfRelease, the release's copy of " + i.Plugin, ex); continue; }
+                if (bytes == null) return i.Plugin;
+                int crc;
+                using (var ms = new MemoryStream(bytes)) crc = Crc32Of(ms);
+                if (bytes.LongLength != i.WantSize || crc != i.WantCrc) return i.Plugin;
+            }
+            return null;
         }
 
         /// <summary>

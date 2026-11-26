@@ -448,6 +448,14 @@ namespace Thornswood
             // Scan again: this is the answer, not what Fix did.
             List<Issue> plugins = await Rescan();
 
+            // A plugin of ours the server runs and this release does not
+            // carry comes only with a newer Release (#7045): the channel is
+            // asked for it now, so the update taken last below is judged on
+            // GitHub's answer of this moment, not on the half hourly one.
+            string ahead = null;
+            await OffThread(delegate { ahead = Verify.ServerAheadOfRelease(cfg, plugins); });
+            if (ahead != null) await AskForServersRelease(ahead);
+
             // The shortcuts still not right after Ensure: Windows' own pictures,
             // which only an Explorer restart clears. Asked first, because the
             // desktop and taskbar vanish for a second.
