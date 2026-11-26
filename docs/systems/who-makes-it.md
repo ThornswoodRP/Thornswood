@@ -38,16 +38,16 @@ What the world hands out and who makes it both come from [Where every item comes
 | Hunting Bow | Dungeon and body loot | 0 | #4644 | Woodwright work with no recipe yet |
 | Long Bow | Dungeon and body loot | 0 | #4644 | Woodwright work with no recipe yet |
 | Lockpick | Dungeon and body loot | 0 | #4646 | Smith work with no recipe yet |
-| Eidar Cheese Wheel | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
+| Eidar Cheese Wheel | Asked for by a recipe | 3 | #4648 | Cook work with no recipe yet |
 | Honey | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
-| Mammoth Cheese Bowl | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
-| Sliced Goat Cheese Wheel | Asked for by a recipe | 1 | #4648 | Cook work with no recipe yet |
-| White Wine | Asked for by a recipe | 3 | #4648 | Cook work with no recipe yet |
+| Mammoth Cheese Bowl | Asked for by a recipe | 3 | #4648 | Cook work with no recipe yet |
+| Sliced Goat Cheese Wheel | Asked for by a recipe | 3 | #4648 | Cook work with no recipe yet |
+| White Wine | Asked for by a recipe | 9 | #4648 | Cook work with no recipe yet |
 | Ale | Dungeon and body loot | 0 | #4648 | Cook work with no recipe yet |
 | Bread | Dungeon and body loot | 0 | #4648 | Cook work with no recipe yet |
 | Eidar Cheese Wedge | Dungeon and body loot | 0 | #4648 | Cook work with no recipe yet |
 | Goat Cheese Wedge | Dungeon and body loot | 0 | #4648 | Cook work with no recipe yet |
-| Boar Meat | Asked for by a recipe | 2 | #4649 | an animal part no hunt gives yet |
+| Boar Meat | Asked for by a recipe | 6 | #4649 | an animal part no hunt gives yet |
 | Small Antlers | Asked for by a recipe | 1 | #4649 | an animal part no hunt gives yet |
 | Spider Egg | Asked for by a recipe | 4 | #4649 | an animal part no hunt gives yet |
 | Werewolf Pelt | Asked for by a recipe | 1 | #4649 | an animal part no hunt gives yet; Werewolf's Bane, from Cheddar's Mashups in collection revision 5, asks for it |
@@ -150,7 +150,7 @@ Distinct items, open book only. A profession half that makes nothing from a reci
 | Mage | 0 | a mage has no halves. classes.md gives the Mage two schools and two starting spells, and none of it is a crafting recipe. What a mage knows is written by `scripts\dev\Build-SpellTable.ps1`. |
 | Alchemist/Blightbrewer | 0 | brews poisons in the alchemy lab's menu, which has no recipe rows |
 | Alchemist/Physicker | 12 | also brews medicine in the alchemy lab's menu, which has no recipe rows |
-| Cook/Hearthcook | 65 |  |
+| Cook/Hearthcook | 153 |  |
 | Cook/Confectioner | 12 |  |
 | Smith/Platewright | 252 |  |
 | Smith/Edgewright | 86 |  |
