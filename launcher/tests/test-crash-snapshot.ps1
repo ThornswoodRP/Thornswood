@@ -198,7 +198,9 @@ try {
     Yes 'the check in sends the sessions held and takes the site''s lookedAt only from an answer that carried it' ($discord -match 'string held = CrashDump\.HeldSessions\(\);' -and $discord -match '",\\"snapshots\\":\\"" \+ Escape\(held\)' -and $discord -match 'if \(st\.Ok && reply\.Contains\("\\"lookedAt\\""\)\) CrashDump\.NoteLookedAt\(Field\(reply, "lookedAt"\)\);')
     Yes 'the session logs remember the crash''s session before they go up' ($discord -match 'CrashDump\.Remember\(want\[1\]\[1\], session\);' -and $discord.IndexOf('CrashDump.Remember(') -lt $discord.IndexOf('/api/play/logs", sb.ToString()'))
     Yes 'the person is told at the prompt that a kept snapshot waits for staff, two at most' ($shell -match 'Yes keeps it until staff mark this crash looked at on the sessions page' -and $shell -match 'Two are kept at most')
-    Yes 'and the setting says so before it is ticked' ($ui -match 'Each is kept until staff have looked at that crash, two at most\.' -and $src -match 'Each is kept until staff have looked at that crash, two at most\.')
+    # The words people read are MainWindow.axaml's, the one copy (#4632 took
+    # out a second copy in CrashDump.cs that nothing showed).
+    Yes 'and the setting says so before it is ticked' ($ui -match 'Each is kept until staff have looked at that crash, two at most\.')
 
     # ------------------------------------------- driven, on Windows
     if (-not $OnWindows) {
