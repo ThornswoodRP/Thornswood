@@ -280,6 +280,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/Sign-OnGitHub.ps1](release/Sign-OnGitHub.ps1) | Signs the release manifest's catalog on GitHub's runner in the public engine fork, and checks it the way every installed launcher checks a launcher (#2903, Patrick's A of 20 Oct). |
 | [release/Sign-OnRunner.ps1](release/Sign-OnRunner.ps1) | Signs files with ThornswoodRelease on GitHub's Windows runner, in a run of main's own workflow, and holds each to the launcher's own check before it says yes (#5180). |
 | [release/Sign-ReleaseCatalog.ps1](release/Sign-ReleaseCatalog.ps1) | Signs the release manifest's catalog with ThornswoodRelease and checks it the way every installed launcher checks a launcher (#2163, phase B). |
+| [release/SliderSets.ps1](release/SliderSets.ps1) | What BodySlide's slider set files in a layout say, as metadata only (#5888). |
 | [release/Source-Notice.ps1](release/Source-Notice.ps1) | The note and licence texts that go inside every download on the update feed that carries SkyMP files. |
 | [release/Sync-Client.ps1](release/Sync-Client.ps1) | Puts the client runtime built from the fork into the game folder, and refuses any file that is not the recorded build. |
 | [release/Test-LauncherStarts.ps1](release/Test-LauncherStarts.ps1) | Starts a published Thornswood.exe for real and holds it to opening its window and staying up (#5524). |

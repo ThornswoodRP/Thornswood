@@ -152,7 +152,7 @@ try {
     Yes '  and the stamps are saved for the archives this revision uses' ($inrText -match 'Save-HashStamps \(Join-Path \$Cache ''md5-passed\.tsv''\)')
     Yes 'the old layout''s check reads placed.tsv and passes files through Test-HashAsRecorded' ($inrText -match "Read-HashStamps \(Join-Path \`$recDir 'placed\.tsv'\)" -and $inrText -match 'Test-HashAsRecorded \$placedStamps')
     Yes '  and no longer reads every old file for its sha256 itself' ($inrText -notmatch '\[Thornswood\.Layout\.NexusLayout\]::Sha256Of\(\$f\) -ne \$o\.Sha256')
-    Yes 'placed.tsv is taken out with the old layout' ($inrText -match "foreach \(\`$n in 'layout\.json', 'files\.txt', 'plugins\.txt', 'loadorder\.txt', 'placed\.tsv'\)")
+    Yes 'placed.tsv is taken out with the old layout' ($inrText -match "foreach \(\`$n in 'layout\.json', 'files\.txt', 'plugins\.txt', 'loadorder\.txt', 'slidersets\.json', 'placed\.tsv'\)")
     Yes '  and written when the layout is whole, from the sha256 files.txt has' ($inrText -match 'Set-HashStamp \$placedNow' -and $inrText -match "Save-HashStamps \(Join-Path \`$recDir 'placed\.tsv'\) \`$placedNow")
 } finally {
     Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue
