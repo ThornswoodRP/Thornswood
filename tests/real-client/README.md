@@ -62,6 +62,11 @@ takes that channel's package at its next start. With automatic updates off
 (Settings, Updates) the launcher never takes dev's package, and the run stops
 at the Play wait and says so.
 
+A Play the launcher could not start leaves it open with no game. The run
+reads launcher.log from where it began, stops at the launcher's own "Failed
+to start" line with its reason, and closes the launcher it started, instead of
+waiting the whole `-Minutes` for a game that is not coming (26 Nov).
+
 ## How a step is written
 
 One object per step, in order. Each takes `timeout` in milliseconds (30000

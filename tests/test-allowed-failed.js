@@ -93,7 +93,7 @@ async function ask(linked, standings, devDoor) {
   const run = new Function(
     'route', 'devDoor', 'req', 'res', 'cfg', 'url', 'sameSecret', 'sendJson',
     'jsonFile', 'LINKED', 'standingCached', 'keyInAddress', 'standingsForDoor', 'activeBans', 'pkProfiles',
-    'officesForDoor',
+    'officesForDoor', 'chars',
     'return (async function () {\n' + route + '\n})();');
   await run(
     devDoor ? '/dev/api/allowed' : '/api/allowed', !!devDoor,
@@ -107,7 +107,9 @@ async function ask(linked, standings, devDoor) {
     // Nobody killed for good here (#1010); test-bans-pk.js runs that.
     function () { return []; },
     // No hold offices here (#2551); test-2551-hold-offices.js runs them.
-    async function () { return []; });
+    async function () { return []; },
+    // Each door's characters from its own server's list (#6906).
+    require('../site/lib/characters'));
   return sent;
 }
 
@@ -167,13 +169,14 @@ function refreshWith(before, answer, status) {
 
 // ---- the people -------------------------------------------------------------
 // Five linked accounts, the shape the entry's done-when asks for: one in five
-// rate limited. d3 holds two characters.
+// rate limited. d3 holds two characters. d1 and d3 have characters on the
+// dev server as well, which only the dev door lets in (#6906).
 const linked = {
-  d1: { name: 'one', profiles: [101] },
-  d2: { name: 'two', profiles: [102] },
-  d3: { name: 'three', profiles: [103, 113] },
-  d4: { name: 'four', profiles: [104] },
-  d5: { name: 'five', profiles: [105] },
+  d1: { name: 'one', profiles: [101, 201], chars: [{ id: 101, slot: 1 }], dev: { chars: [{ id: 201, slot: 1 }] } },
+  d2: { name: 'two', profiles: [102], chars: [{ id: 102, slot: 1 }] },
+  d3: { name: 'three', profiles: [103, 113, 203], chars: [{ id: 103, slot: 1 }, { id: 113, slot: 2 }], dev: { chars: [{ id: 203, slot: 1 }] } },
+  d4: { name: 'four', profiles: [104], chars: [{ id: 104, slot: 1 }] },
+  d5: { name: 'five', profiles: [105], chars: [{ id: 105, slot: 1 }] },
   d6: { name: 'no characters yet', profiles: [] }
 };
 const ok = (name, extra) => Object.assign({ play: true, banned: false, dev: false, admin: false, name: name }, extra || {});
@@ -217,8 +220,9 @@ const RATE = 'rate limited by Discord';
     d1: ok('one', { dev: true, devBuild: true }), d2: ok('two'), d3: { lookupFailed: RATE }, d4: ok('four'), d5: ok('five')
   }, true);
   const dv = devSide ? devSide.body : {};
-  yes('the dev door lists only dev people', same(dv.profiles, [101]));
-  yes('and names the failed account there as well, since nobody knows if they are dev', same(sorted(dv.failedProfiles), [103, 113]));
+  yes('the dev door lists only dev people, and only their dev characters', same(dv.profiles, [201]));
+  yes('and names the failed account\'s dev characters there as well, since nobody knows if they are dev', same(sorted(dv.failedProfiles), [203]));
+  yes('the main door never lists a dev character (#6906)', (g.profiles || []).every((n) => n < 200) && (f.failedProfiles || []).every((n) => n < 200));
 
   // ================================================================ the door
   // What the door wrote five minutes ago: d1 to d4 were all allowed, d3 was a

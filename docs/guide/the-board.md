@@ -98,10 +98,14 @@ How to use it:
   are gone. To see the cards, `pwsh scripts/ops/Read-Board.ps1` starts
   `.github\workflows\board-read.yml`, which reads every card's Status and
   Order and changes nothing, and writes them to board.json (#3192).
-- A pull request that finishes an issue says `Closes #N`, so merging closes
-  it and its card goes to Done. Say in the pull request which issues moved.
-- A fix people would notice is the exception: its pull request says `Refs #N`,
-  and the issue stays open until the fix reaches main (Patrick, 11 Oct: dev
+- A pull request that finishes an issue says one of two things, and which
+  one depends on whether anybody would notice the change. Only a change
+  nobody would notice in the game, the launcher, the site, Discord or the
+  staff tools (a test, a workflow, a doc, a script only the team runs) says
+  `Closes #N`, so merging closes it and its card goes to Done. Say in the
+  pull request which issues moved.
+- Every other fix says `Refs #N` and carries its test task, and the issue
+  stays open until the fix reaches main (Patrick, 11 Oct: dev
   is where the team checks that nothing breaks the game, and main is where
   testers test, since we are in alpha). The pull request carries the test
   task as `Test task for #N: <a title of at most 45 characters>`, then

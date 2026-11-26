@@ -249,7 +249,9 @@ try {
     const a = LF.indexOf("  if ((route === '/api/roster' || route === '/dev/api/roster') && req.method === 'POST') {");
     const b = a < 0 ? -1 : LF.indexOf('\n  }\n', a);
     yes('server.js has the /api/roster route', a >= 0 && b > a);
-    const ROUTE = new Function('route', 'o_body', 'ROSTER', 'fs',
+    // The one-time dev carry (#6904) reads linked.json once both books are
+    // here; this harness is about deletions, so it is handed no such file.
+    const ROUTE = new Function('route', 'o_body', 'ROSTER', 'fs', 'LINKED', 'chars',
       'const req = { method: "POST" }, res = {}, cfg = { botKey: "k" };\n' +
       'function body() { return Promise.resolve(o_body); }\n' +
       'function passBodyFailure() {}\n' +
@@ -259,7 +261,8 @@ try {
       'function sendJson(r, code, obj) { r.code = code; r.obj = obj; return r; }\n' +
       'return (async function () {\n' + LF.slice(a, b + 4) + '\n return null; })();');
     const RO = path.join(D, 'roster.json');
-    const push = (srv, o) => ROUTE(srv === 'dev' ? '/dev/api/roster' : '/api/roster', JSON.stringify(Object.assign({ key: 'k', server: srv }, o)), RO, fs);
+    const push = (srv, o) => ROUTE(srv === 'dev' ? '/dev/api/roster' : '/api/roster', JSON.stringify(Object.assign({ key: 'k', server: srv }, o)), RO, fs,
+      path.join(D, 'no-linked.json'), require('../site/lib/characters'));
     const T = mk[P1] ? mk[P1].at : 0;
     let r = await push('main', { who: { [P1]: { name: 'Mine', at: T - 1000 }, [PY]: { name: 'Yours', at: T - 500 }, 5003: { name: 'Mine too' } },
       checked: [P1, PY, 5003], held: [P1, PY, 5003] });

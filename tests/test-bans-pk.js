@@ -113,16 +113,19 @@ fs.mkdirSync(path.join(dir, 'feed', 'version'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'feed', 'version', '00000001.json'), JSON.stringify({ launcherVersion: '1.1.200', minLauncher: '1.1.200' }));
 const DATA = path.join(dir, 'data');
 fs.writeFileSync(path.join(DATA, 'linked.json'), JSON.stringify({
-  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001] },
-  [STAFF2_D]: { id: STAFF2_D, name: 'Brynja', profiles: [1002] },
-  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002, 2003] },
-  [CARA_D]: { id: CARA_D, name: 'Cara', profiles: [4001, 4002] },
-  [NOBODY_D]: { id: NOBODY_D, name: 'Nobody', profiles: [3003] }
+  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001], chars: [{ id: 1001, slot: 1 }] },
+  [STAFF2_D]: { id: STAFF2_D, name: 'Brynja', profiles: [1002], chars: [{ id: 1002, slot: 1 }] },
+  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002, 2003], chars: [{ id: 2002, slot: 1 }, { id: 2003, slot: 2 }] },
+  [CARA_D]: { id: CARA_D, name: 'Cara', profiles: [4001, 4002], chars: [{ id: 4001, slot: 1 }, { id: 4002, slot: 2 }] },
+  [NOBODY_D]: { id: NOBODY_D, name: 'Nobody', profiles: [3003], chars: [{ id: 3003, slot: 1 }] }
 }));
-fs.writeFileSync(path.join(DATA, 'roster.json'), JSON.stringify({ who: {
+// who is every server's rows merged, which staff pages name a profile by;
+// books.main is the live server's own, which its launchers' menus read (#6904).
+const ROWS = {
   2002: { name: 'Bjorn Iron-Hand' }, 2003: { name: 'Hrefna the Bold', race: 'Nord' },
   4001: { name: 'Cara' }, 4002: { name: 'Dara' }
-} }));
+};
+fs.writeFileSync(path.join(DATA, 'roster.json'), JSON.stringify({ who: ROWS, books: { main: ROWS } }));
 const readData = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')); } catch (e) { return d; } };
 
 const gameDir = path.join(dir, 'game');
@@ -324,15 +327,16 @@ async function adminRoleOnly() {
   }, null, 2));
   const D2 = path.join(d2, 'data');
   fs.writeFileSync(path.join(D2, 'linked.json'), JSON.stringify({
-    [ids.owner]: { id: ids.owner, name: 'Owner', profiles: [8001] },
-    [ids.mod]: { id: ids.mod, name: 'Gamemaster', profiles: [8002] },
-    [ids.tova]: { id: ids.tova, name: 'Tova', profiles: [8101, 8102, 8103] },
-    [ids.mira]: { id: ids.mira, name: 'Mira', profiles: [8201, 8202, 8203] }
+    [ids.owner]: { id: ids.owner, name: 'Owner', profiles: [8001], chars: [{ id: 8001, slot: 1 }] },
+    [ids.mod]: { id: ids.mod, name: 'Gamemaster', profiles: [8002], chars: [{ id: 8002, slot: 1 }] },
+    [ids.tova]: { id: ids.tova, name: 'Tova', profiles: [8101, 8102, 8103], chars: [{ id: 8101, slot: 1 }, { id: 8102, slot: 2 }, { id: 8103, slot: 3 }] },
+    [ids.mira]: { id: ids.mira, name: 'Mira', profiles: [8201, 8202, 8203], chars: [{ id: 8201, slot: 1 }, { id: 8202, slot: 2 }, { id: 8203, slot: 3 }] }
   }));
-  fs.writeFileSync(path.join(D2, 'roster.json'), JSON.stringify({ who: {
+  const ROWS2 = {
     8101: { name: 'Tova One' }, 8102: { name: 'Tova Two' }, 8103: { name: 'Tova Dead' },
     8201: { name: 'Mira One' }, 8202: { name: 'Mira Two' }, 8203: { name: 'Mira Dead' }
-  } }));
+  };
+  fs.writeFileSync(path.join(D2, 'roster.json'), JSON.stringify({ who: ROWS2, books: { main: ROWS2 } }));
   fs.writeFileSync(path.join(D2, 'pk.json'), JSON.stringify({
     8103: { at: 1, by: 'Gamemaster', why: 'thought it was agreed', name: 'Tova Dead', account: ids.tova, from: 'the hub' },
     8203: { at: 1, by: 'Gamemaster', why: 'wrong character', name: 'Mira Dead', account: ids.mira, from: 'the hub' }
@@ -1103,7 +1107,7 @@ async function adminRoleOnly() {
     // what it is told; test-play-characters.js runs the site's half whole.
     const chars = require('../site/lib/characters');
     const L = { '101': { id: '101', profiles: [11, 12], spare: 99, chars: [{ id: 11, slot: 1 }, { id: 12, slot: 2 }] } };
-    const said = chars.settle(L, '101', { slots: 2, pk: (id) => id === 12, revived: () => false });
+    const said = chars.settle(L, '101', 'main', { slots: 2, pk: (id) => id === 12, revived: () => false });
     yes('the site moves a dead character out of its slot to the dead slot, and Chars knows that slot',
         L['101'].chars.find((c) => c.id === 12).slot === chars.DEAD && chars.DEAD === -1 &&
         /const int DeadSlot = -1;/.test(charsCs) && said.length === 1);
@@ -1111,8 +1115,8 @@ async function adminRoleOnly() {
     yes('before the id played last is chosen: Prepare asks the site for the list after the roster',
         prep.indexOf('Roster.Refresh(cfg)') > 0 && prep.indexOf('Ask("", 0, 0, out fetched)') > prep.indexOf('Roster.Refresh(cfg)') &&
         prep.indexOf('Ask("", 0, 0, out fetched)') < prep.indexOf('LastPlayedId(rows)'));
-    yes('a dead character is never picked', chars.choose(L, '101', 12, 1) !== null);
-    yes('and can be forgotten with the bin', chars.forget(L, '101', 12) === null && L['101'].retired.indexOf(12) >= 0);
+    yes('a dead character is never picked', chars.choose(L, '101', 'main', 12, 1) !== null);
+    yes('and can be forgotten with the bin', chars.forget(L, '101', 'main', 12) === null && L['101'].retired.indexOf(12) >= 0);
     const write = lift(charsCs, 'static string CharactersJson(List<Row> rows, int last, int spare, int slots)') || '';
     yes('the menu list carries the dead with "pk":true in slot 0, and a banned character with "banned":true',
         /all\.AddRange\(DeadRows\(rows\)\)/.test(write) && /,\\"pk\\":true/.test(write) &&
@@ -1124,10 +1128,10 @@ async function adminRoleOnly() {
         /return revived\.Contains\(profileId\) && !dead\.Contains\(profileId\);/.test(rosterCs));
     const R = { '101': { id: '101', profiles: [11, 12, 13], spare: 99,
                      chars: [{ id: 11, slot: 1 }, { id: 12, slot: -1 }, { id: 13, slot: -1 }] } };
-    const none = chars.settle(R, '101', { slots: 2, pk: () => false, revived: () => false });
+    const none = chars.settle(R, '101', 'main', { slots: 2, pk: () => false, revived: () => false });
     yes('the site moves nobody back when nobody was revived',
         none.length === 0 && R['101'].chars.find((c) => c.id === 12).slot === -1);
-    const back = chars.settle(R, '101', { slots: 2, pk: () => false, revived: (id) => id === 12 });
+    const back = chars.settle(R, '101', 'main', { slots: 2, pk: () => false, revived: (id) => id === 12 });
     yes('and puts the one an admin revived into the lowest free slot, and leaves the other dead',
         R['101'].chars.find((c) => c.id === 12).slot === 2 && R['101'].chars.find((c) => c.id === 13).slot === -1 &&
         back.some((l) => l === 'An admin undid the PK of a character, so it can be played again: character 12 to slot 2.'));

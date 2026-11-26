@@ -28,7 +28,9 @@
   WHAT IT PRINTS. For each set written in the window that holds any of
   them: the set's day and the launcher version its log names, then the
   cursor lines, the browser focus lines and the page's "mouse first moved"
-  line, in the order the logs have them, at most 40 of each set. Then how
+  line, in the order the logs have them, then the input log's line saying
+  how much mouse motion made during the load was left out (DInputHook.cpp,
+  ForgetMouseMotion), at most 40 of each set. Then how
   many focus-taken lines put the game's cursor within 12 pixels of an edge
   of the window. No account, name, session key or address is printed: the
   lines it takes hold only times, positions, sizes and menu names.
@@ -51,11 +53,14 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-# SkyrimPlatform's words (BrowserApiTilted.cpp, LogCursor and SetFocusedImpl)
-# and the choice page's (game\ui\thornswood-select.js). Change them together.
+# SkyrimPlatform's words (BrowserApiTilted.cpp, LogCursor and SetFocusedImpl;
+# DInputHook.cpp, ForgetMouseMotion) and the choice page's
+# (game\ui\thornswood-select.js). Change them together.
 $CursorLine = 'cursor, (?:game data loaded|focus taken|Cursor Menu opening|Cursor Menu closing): the game''s menu cursor at (-?\d+),(-?\d+), Cursor Menu (?:open|closed), the Windows pointer at -?\d+,-?\d+ of the window in front(?: \(unknown\))? \((-?\d+)x(-?\d+)\)\s*$'
 $FocusLine = '\] browser: focus (?:taken|let go)'
 $MovedLine = 'choice page: mouse first moved at -?\d+,-?\d+ '
+# DInputHook.cpp, ForgetMouseMotion: the motion made while the game loaded.
+$DroppedLine = '^\[mouse\] the first read after the game''s data loaded held -?\d+,-?\d+ \(wheel -?\d+\) of motion made while it loaded; left out\s*$'
 $Edge = 12
 $Most = 40
 
@@ -97,6 +102,12 @@ foreach ($f in @(Get-ChildItem -LiteralPath $Folder -Filter '*.json' -File | Whe
     if ($front -and $front.Value) {
         foreach ($line in ([string]$front.Value -split "`r?`n")) {
             if ($line -match $MovedLine) { $lines.Add($line.Trim()) }
+        }
+    }
+    $inputLog = $set.logs.PSObject.Properties['thornswood-input.log']
+    if ($inputLog -and $inputLog.Value) {
+        foreach ($line in ([string]$inputLog.Value -split "`r?`n")) {
+            if ($line -match $DroppedLine) { $lines.Add($line.Trim()) }
         }
     }
     if (-not $lines.Count) { continue }

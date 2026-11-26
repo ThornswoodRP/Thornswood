@@ -636,7 +636,7 @@ There is no class called Creation: the person picks or makes a character at
 the game's own main menu, and these three prepare that menu and read its
 answer. The account's character list (each character's slot, last played
 and play time, the spare id for New character, the ids forgotten) is the
-site's, kept under the Discord account (`/api/play/characters`, #5938);
+site's, kept under the Discord account, one list for each game server (`/api/play/characters`, #5938, #6904);
 `Chars.cs:895 Prepare()` asks for it at every Play and holds the answer in
 memory, and owns the saves folder `Profile\Characters\saves`, the menu's list
 `Game\Data\Platform\thornswood-characters.json` and

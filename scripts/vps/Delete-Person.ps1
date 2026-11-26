@@ -660,8 +660,11 @@ for (const person of people) {
   if (isObj(L[id]) && Array.isArray(L[id].profiles)) for (const n of L[id].profiles) if (Number(n) > 0) P.add(Number(n));
   // The site's list of their characters (#5938), and the ones they deleted at
   // the menu, which stay on the game server and drop off the door's list.
-  if (isObj(L[id]) && Array.isArray(L[id].chars)) for (const c of L[id].chars) if (isObj(c) && Number(c.id) > 0) P.add(Number(c.id));
-  if (isObj(L[id]) && Array.isArray(L[id].retired)) for (const n of L[id].retired) if (Number(n) > 0) P.add(Number(n));
+  // Main's list is on the row and dev's under dev (#6904): both are theirs.
+  for (const l of (isObj(L[id]) ? [L[id], isObj(L[id].dev) ? L[id].dev : {}] : [])) {
+    if (Array.isArray(l.chars)) for (const c of l.chars) if (isObj(c) && Number(c.id) > 0) P.add(Number(c.id));
+    if (Array.isArray(l.retired)) for (const n of l.retired) if (Number(n) > 0) P.add(Number(n));
+  }
   for (const other of Object.keys(L)) {
     if (other === id || !isObj(L[other]) || !Array.isArray(L[other].profiles)) continue;
     for (const n of L[other].profiles) if (P.has(Number(n))) { P.delete(Number(n)); r.skipped.push(Number(n)); }

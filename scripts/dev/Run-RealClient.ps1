@@ -382,6 +382,48 @@ Say "Run $runId, $($stepsJson.steps.Count) steps from $Steps, into $Out"
 
 $launcherLog = Join-Path $Root 'Profile\launcher.log'
 $launcherLogStart = if (Test-Path -LiteralPath $launcherLog) { (Get-Item -LiteralPath $launcherLog).Length } else { 0 }
+$script:launcherLogReadAt = $launcherLogStart
+
+# The launcher's own word that Play went wrong. A Play that fails writes
+# "Failed to start: <why>" to launcher.log and leaves the launcher open with
+# no game, and the run waited the whole -Minutes for a game that was never
+# coming, with the launcher sitting there (26 Nov, 10:59 AM: "Could not
+# redirect ... Skyrim Special Edition"). Read from where the run began, whole
+# lines only, sharing the file as the launcher writes it. A reason of several
+# lines comes in one write, so its lines that carry no time stamp are its own.
+function Read-LauncherFailure {
+    if (-not (Test-Path -LiteralPath $launcherLog)) { return '' }
+    $fs = [IO.File]::Open($launcherLog, 'Open', 'Read', 'ReadWrite, Delete')
+    try {
+        # The launcher starts the log afresh past its size limit.
+        if ($fs.Length -lt $script:launcherLogReadAt) { $script:launcherLogReadAt = 0 }
+        $have = $fs.Length - $script:launcherLogReadAt
+        if ($have -le 0) { return '' }
+        [void]$fs.Seek($script:launcherLogReadAt, 'Begin')
+        $buf = New-Object byte[] $have
+        $n = 0
+        while ($n -lt $buf.Length) {
+            $got = $fs.Read($buf, $n, $buf.Length - $n)
+            if ($got -le 0) { break }
+            $n += $got
+        }
+        if ($n -le 0) { return '' }
+        $end = [Array]::LastIndexOf($buf, [byte]10, $n - 1)
+        if ($end -lt 0) { return '' }
+        $script:launcherLogReadAt += $end + 1
+        $lines = [Text.Encoding]::UTF8.GetString($buf, 0, $end + 1) -split "`n" | ForEach-Object { $_.TrimEnd("`r") }
+        $stamp = '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ  '
+        $why = $null
+        foreach ($l in $lines) {
+            if ($null -eq $why) {
+                if ($l -match ($stamp + 'Failed to start: (.*)$')) { $why = $Matches[1] }
+            } elseif ($l -match $stamp) { break }
+            elseif ($l.Trim()) { $why += ' ' + $l.Trim() }
+        }
+        if ($null -eq $why) { return '' }
+        return $why.Trim()
+    } finally { $fs.Dispose() }
+}
 
 $launcher = $null
 $switched = $false
@@ -408,8 +450,40 @@ try {
     $toldWaiting = $false
     $toldChannel = ''
     $launcherGoneSince = $null
+    $sawPlay = ''
+    # What the loop saw, said each time it changes: the window it looks in and
+    # Play in it (26 Nov: launcher 1.3.125 was Ready with a clean scan, and
+    # for 15 minutes Play was never pressable, with nothing to say whether
+    # the window, the button or its enabled state was missing).
+    function Get-PlayState($h, $btn) {
+        if ($h -eq [IntPtr]::Zero) { return 'no main window' }
+        $title = ''
+        try { $title = $ae::FromHandle($h).Current.Name } catch { $title = '(unreadable)' }
+        $w = 'window ' + $h + ' "' + $title + '"'
+        if (-not $btn) { return $w + ', no BtnPlay in it' }
+        $w + ', BtnPlay "' + $btn.Current.Name + '" ' + $(if ($btn.Current.IsEnabled) { 'enabled' } else { 'disabled' }) +
+            $(if ($btn.Current.IsOffscreen) { ', off screen' } else { '' })
+    }
+    # The launcher's top-level windows, for when Play never came.
+    function Get-LauncherWindows($procId) {
+        $byProc = New-Object System.Windows.Automation.PropertyCondition ($ae::ProcessIdProperty, [int]$procId)
+        @($ae::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $byProc) | ForEach-Object {
+            '"' + $_.Current.Name + '" (' + $_.Current.ClassName + ', ' + $_.Current.NativeWindowHandle + ')'
+        }) -join '; '
+    }
     while (-not $pressed) {
         if ((Get-Date) -gt $deadline) {
+            # A fresh read of the process, not a refresh of the one followed:
+            # tests\test-real-client-restart-grace.ps1 runs this loop's start,
+            # up to its first refresh, against doubles.
+            $now = Get-Process -Id $launcher.Id -ErrorAction SilentlyContinue
+            if ($now) {
+                Say ('At the end, the launcher''s windows: ' + (Get-LauncherWindows $now.Id))
+                if ($now.MainWindowHandle -ne [IntPtr]::Zero) {
+                    $how = [ThornswoodRealClient.Win]::Shot($now.MainWindowHandle, (Join-Path $Out 'launcher-no-play.png'))
+                    Say "shot launcher-no-play ($how)"
+                }
+            }
             $ch = Get-InstalledChannel
             if ($ch -and $ch -ne 'dev') { throw "The launcher was still $ch's after $PlayMinutes minutes, so it never took dev's package: is Settings, Updates, automatic updates off?" }
             throw "Play was not there to press in $PlayMinutes minutes"
@@ -436,9 +510,14 @@ try {
             Start-Sleep -Milliseconds 500
             continue
         }
+        $btn = $null
         if ($h -ne [IntPtr]::Zero) {
             $win = $ae::FromHandle($h)
             $btn = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+        }
+        $state = Get-PlayState $h $btn
+        if ($state -ne $sawPlay) { Say ('Launcher ' + $launcher.Id + ': ' + $state); $sawPlay = $state }
+        if ($h -ne [IntPtr]::Zero) {
             if ($btn -and $btn.Current.IsEnabled) {
                 $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
                 $pressed = $true
@@ -457,6 +536,10 @@ try {
     while ($true) {
         if ((Get-Date) -gt $deadline) { $result = 'timeout'; $note = "no end in $Minutes minutes"; break }
         $proc = Get-GameProcess
+        if (-not $proc -and -not $sawGame) {
+            $failed = Read-LauncherFailure
+            if ($failed) { throw "The launcher could not start the game: $failed" }
+        }
         if ($proc) {
             if (-not $sawGame) {
                 Say "The game is up, process $($proc.Id)"

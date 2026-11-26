@@ -230,7 +230,7 @@ async function roster(table, store, discordId) {
       if (f === 'roster.json') return clone(store);
       return fallback;
     },
-    LINKED: 'linked.json', ROSTER: 'roster.json',
+    LINKED: 'linked.json', ROSTER: 'roster.json', chars: require('../site/lib/characters'),
     // Nobody killed for good or banned by character here (#1010);
     // test-bans-pk.js runs those.
     characterBar: function () { return null; },
@@ -259,6 +259,7 @@ async function allowed(table, over) {
     pkProfiles: function () { return []; },
     // The hold offices (#2551); none here. test-2551-hold-offices.js runs them.
     officesForDoor: async function () { return []; },
+    chars: require('../site/lib/characters'),
     sendJson: null
   });
 }
@@ -415,7 +416,8 @@ const PID = 1893288986;
   {
     const OLD_SPARE = 555, NEW_SPARE = 556, NEXT_SPARE = 557;
     const home = {};
-    home[A] = { id: A, name: 'name-' + A, first: 1, seen: 1, played: 1, roles: [], profiles: [PID, 42, OLD_SPARE] };
+    home[A] = { id: A, name: 'name-' + A, first: 1, seen: 1, played: 1, roles: [], profiles: [PID, 42, OLD_SPARE],
+               chars: [{ id: PID, slot: 1 }, { id: 42, slot: 2 }], spare: OLD_SPARE };
     let table = clone(home);
     const answers = [];
     async function checkInAll(ids) {
@@ -449,16 +451,22 @@ const PID = 1893288986;
     yes('and still calls the first account\'s character somebody else\'s',
         notMine && notMine.code === 200 && notMine.obj.ok === false && notMine.obj.why === 'somebody else');
 
-    const store = { who: {} };
+    // The live server's own book, which the main menu reads (#6904).
+    const store = { who: {}, books: { main: {} } };
     store.who[String(NEW_SPARE)] = { name: 'Bryn', race: 'Nord', trade: 'smith', town: 'Karthwasten' };
     store.who['42'] = { name: 'Arven', race: 'Breton', trade: 'hunter', town: 'Dragon Bridge' };
     store.who[String(PID)] = { name: 'Ilsa', race: 'Imperial', trade: 'cook', town: 'Karthwasten' };
+    store.books.main = clone(store.who);
     const r = await roster(table, store, B);
     yes('/roster gives the menu card for the second account\'s character its name',
         r && r.code === 200 && r.obj.rows[String(NEW_SPARE)] && r.obj.rows[String(NEW_SPARE)].name === 'Bryn');
     yes('and hands back nothing about the first account\'s characters',
         r && !r.obj.rows['42'] && !r.obj.rows[String(PID)]);
 
+    // What /api/play/characters wrote meanwhile (test-play-characters.js runs
+    // it): B picked its spare, which became a character, and the next spare
+    // was minted. The door lets in what the lists hold (#6906).
+    Object.assign(table[B], { chars: [{ id: NEW_SPARE, slot: 1 }], spare: NEXT_SPARE });
     const banA = {};
     banA[A] = { banned: true };
     const door = await allowed(table, banA);
@@ -494,7 +502,7 @@ const PID = 1893288986;
     const two = {};
     two[A] = { id: A, profiles: [PID, OLD_SPARE], spare: OLD_SPARE, chars: [{ id: PID, slot: 1 }] };
     two[B] = { id: B, profiles: [] };
-    C.settle(two, B, { slots: 2, pk: () => false, revived: () => false });
+    C.settle(two, B, 'main', { slots: 2, pk: () => false, revived: () => false });
     yes('which is why the site mints the second account a spare of its own, never the first account\'s',
         two[B].spare > 0 && two[B].spare !== OLD_SPARE && two[B].spare !== PID);
   }
@@ -581,7 +589,8 @@ const PID = 1893288986;
     linked.json to get them back.
   */
   const changer = {};
-  changer[A] = { id: A, name: 'name-' + A, first: 1, seen: 1, played: 1, roles: [], profiles: [700, 701, 900] };
+  changer[A] = { id: A, name: 'name-' + A, first: 1, seen: 1, played: 1, roles: [], profiles: [700, 701, 900],
+                 chars: [{ id: 700, slot: 1 }, { id: 701, slot: 2 }], spare: 900 };
   // One Play by B the launcher's way: Door.Check with 700, the id played
   // last, then Prepare mints B its own spare 901, then every known id.
   async function playAsB(start, world) {
