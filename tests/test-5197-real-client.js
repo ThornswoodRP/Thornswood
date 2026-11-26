@@ -414,6 +414,17 @@ function game(opts) {
       const actRx = /data-act=\\?"([a-z]+)\\?"/g;
       while ((t = actRx.exec(s.js))) { if (SKILLS.indexOf('data-act="' + t[1] + '"') < 0) lost.push('button ' + t[1]); }
     });
+    // The run plays its own character, by the name on its slot, and never
+    // the slot the page picks by itself, which is the last played: at 2:08
+    // PM on 26 Nov the run joined as somebody's own character.
+    if (doc && Array.isArray(doc.steps)) {
+      const sel = read(path.join('game', 'ui', 'thornswood-select.js'));
+      const picks = doc.steps.filter(function (s) { return s.do === 'page' && /#ts-select/.test(s.js || '') && /onclick\(\)|play\(\)/.test(s.js || ''); });
+      yes(n + ': its character is picked by the name on its slot, never by Play on whatever is picked',
+          picks.length > 0 && picks.every(function (s) { return !/thornswoodSelect\.play\(\)/.test(s.js) && /\.name'\)/.test(s.js) && /textContent==='[^']+'/.test(s.js); }));
+      yes(n + ': the slot card, its name and its click are where the page draws them',
+          /el\('div', 'slot'/.test(sel) && /el\('div', 'name'/.test(sel) && /card\.onclick = function/.test(sel));
+    }
     // After the face the K panel's view still says not creating until the
     // server's answer comes, so the run waits for creating before the step
     // that tells a new character from a placed one, inside the race menu's

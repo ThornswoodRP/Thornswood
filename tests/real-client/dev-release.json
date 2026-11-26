@@ -29,9 +29,9 @@
     },
     {
       "do": "page",
-      "why": "Play on the slot the page has picked, until the page says it is joining",
+      "why": "Play the run's own character, the slot named Adventurer that the run made (26 Nov, 8:48 AM), never the last played: at 2:08 PM on 26 Nov the run joined as Pattie, Patrick's own dev character, because the page picks the last played slot. Until the page says it is joining",
       "timeout": 120000,
-      "js": "(function(){var t=document.querySelector('#ts-select .status');var w=t?t.textContent:'';if(/seat|Joining|creation hall|loading|line/i.test(w))return w;window.thornswoodSelect.play();return '';})()"
+      "js": "(function(){var t=document.querySelector('#ts-select .status');var w=t?t.textContent:'';if(/seat|Joining|creation hall|loading|line/i.test(w))return w;var cs=document.querySelectorAll('#ts-select .slot');for(var i=0;i<cs.length;i++){var n=cs[i].querySelector('.name');if(n&&n.textContent==='Adventurer'){cs[i].onclick();return '';}}return '!no slot holds the run\\'s own character, Adventurer';})()"
     },
     {
       "do": "wait",
