@@ -2,9 +2,12 @@
 // Gate entry for the actual Python compiler-stage regression controls.
 const assert = require('node:assert/strict');
 const cp = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 let result;
 for (const command of ['python', 'python3']) {
+  fs.writeSync(1, JSON.stringify({ event: 'compiler_stage',
+    entrypoint: 'test-4610-compiler-stages', phase: 'spawn', command }) + '\n');
   result = cp.spawnSync(command, [path.join(__dirname, 'test-4610-compiler-stages.py')], {
     cwd: path.join(__dirname, '..'), encoding: 'utf8', timeout: 30000,
   });
