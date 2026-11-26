@@ -5288,12 +5288,15 @@
   // Private posting evidence, never the public wall or letter body. Each of
   // the ten ledgers contributes at most its last 32 slots, including down
   // posts. Missing older evidence is uncertainty, not a failed posting.
+  // profileId is the one the social tick read for this actor in this pass;
+  // reading it again here, before and after the scan, doubled the tick's
+  // profile reads (#6879). The character is still checked on both sides of
+  // the scan by its desc and runtime identity.
   function boardSubmissions(actorId, profileId) {
     try {
-      var actualProfile = mp.get(actorId, 'profileId');
       var desc = mp.getDescFromId(actorId);
       var runtime = mp.getActorRuntimeIdentity(actorId);
-      if (!Number.isSafeInteger(profileId) || profileId < 1 || actualProfile !== profileId ||
+      if (!Number.isSafeInteger(profileId) || profileId < 1 ||
           typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) return null;
       var found = [];
       for (var h = 0; h < LEDGER_HOLDS.length; h++) {
@@ -5313,8 +5316,7 @@
       var results = found.filter(function (r) { return counts[r.kind]++ < 16; }).map(function (r) {
         return { id: r.id, kind: r.kind, hold: r.hold, status: r.status };
       });
-      if (mp.get(actorId, 'profileId') !== actualProfile || mp.getDescFromId(actorId) !== desc ||
-          mp.getActorRuntimeIdentity(actorId) !== runtime) return null;
+      if (mp.getDescFromId(actorId) !== desc || mp.getActorRuntimeIdentity(actorId) !== runtime) return null;
       return { owner: { profileId: profileId, actorDesc: desc, runtime: runtime }, results: results };
     } catch (e) {
       plog('could not read private board posting evidence:', e);
