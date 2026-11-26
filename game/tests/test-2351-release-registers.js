@@ -88,6 +88,12 @@ const parts = {
   stalls: slice('// ==== thornswood market stalls ====', '// ==== end thornswood market stalls ===='),
   carts: slice('// ==== thornswood trade carts ====', '// ==== end thornswood trade carts ===='),
   books: slice('/* BOOKS-START */', '// ==== thornswood chat commands ===='),
+  // The staff block asks for the restraints part (#6845): freezes and
+  // silences of a released character. It loads on the chat commands and the
+  // actor placing helpers, as test-4932-no-self-lift.js loads it.
+  places: slice('\nfunction serverRunId(', '\n  return { made: made, why: why };\n}', true),
+  commands: slice('const WORDS = [', '// ==== end thornswood chat commands ====', true),
+  staff: slice('// ==== thornswood staff ====', '// ==== end thornswood staff ====', true),
   purses: slice('function npcMerchantManifest(', '// NPC MERCHANT PURSES END'),
   startup: slice('// NPC SERVER STARTUP BEGIN', '// NPC SERVER STARTUP END', true),
   waiting: slice('// NPC SERVER STARTUP END', '// ==== thornswood custom quests ====')
@@ -301,6 +307,10 @@ function registers(dir) {
                         lines: [{ n: 2, entry: { baseId: 0x5ace4 }, count: 4, price: { gold: 2 } }] } } } });
   w('trade-carts.json', JSON.parse(cartsRegister()));
   // Its saves already taken by server-log.js before the engine started (#2758).
+  // The staff block's restraint book (#6845): a freeze and a silence of theirs, and of somebody else's.
+  w('staff-restraints.json', { version: 1, revision: 3, clearedWipes: [],
+    frozen: { [P1]: { desc: '3c:Skyrim.esm', pos: [1, 2, 3], rot: [0, 0, 0], by: PZ }, [PY]: { desc: '3c:Skyrim.esm', pos: [4, 5, 6], rot: [0, 0, 0], by: PZ } },
+    silenced: { [P2]: { until: NOW + 3600000, by: PZ }, [PY]: { until: NOW + 3600000, by: PZ } } });
   w('deleted-characters.json', { profiles: [P1, P2], actors: [A1, A2], done: { saves: NOW } });
   return P;
 }
@@ -327,7 +337,11 @@ function start(dir, opt) {
     lookupEspmRecordById: function () { return null; },
     getNeighborsByPosition: function () { return []; },
     callPapyrusFunction: function () { return null; },
-    getServerSettings: function () { return { thornswoodServer: 'dev', privDir: 'private', dataDir: 'data' }; }
+    getServerSettings: function () { return { thornswoodServer: 'dev', privDir: 'private', dataDir: 'data' }; },
+    // WholeFileWrite.h: the whole file is written beside it and renamed over it.
+    writeFileWhole: function (file, text) { fs.writeFileSync(file + '.whole', text); fs.renameSync(file + '.whole', file); },
+    getUserByActor: function () { return -1; }, kick: function () { }, place: function () { return 0; },
+    destroyActor: function () { }
   };
   const tstart = gm.indexOf('    farming: {');
   const tend = gm.indexOf('\n    }', tstart);
@@ -358,15 +372,29 @@ function start(dir, opt) {
     },
     __thornswoodAccountOf: function (pid) { return pid === PY ? YOU : (pid === P1 || pid === P2 ? ME : ''); }
   };
+  // What the chat commands and the staff block read as they load, as
+  // test-4932-no-self-lift.js gives them.
+  Object.assign(box, {
+    voicePort: function () { return 7778; },
+    ORES_BY_BASE: {}, HARVESTS_BY_BASE: {}, CROPS_BY_BASE: {}, FISH_BY_BASE: {}, HUNTS_BY_BASE: {}, GAME_BY_BASE: {},
+    ITEM_NAMES: {}, ITEMS: {}, ADMIN_ACTORS: {}, HALL: { desc: 'Hall:0', pos: [0, 0, 0], rot: [0, 0, 0] },
+    PASSAGES: {}, DATA: { cellToHold: {}, capitals: {} },
+    __thornswoodIsDev: function () { return false; }, __thornswoodIsAdmin: function () { return false; },
+    __thornswoodIsAllowed: function () { return true; }, __thornswoodPassSeen: { passes: {}, online: {}, said: {} },
+    __thornswoodSocial: { findPerson: function () { return { actorId: 0, why: 'Nobody here by that name.' }; } }
+  });
   if (opt.before) { opt.before(box); }
   box.globalThis = box;
   vm.createContext(box);
   const was = process.cwd();
   process.chdir(dir);
   try {
-    for (const k of ['release', 'crops', 'farming', 'property', 'embassy', 'ledger', 'dungeon', 'ships', 'stalls', 'carts', 'books', 'purses']) {
+    for (const k of ['release', 'crops', 'farming', 'property', 'embassy', 'ledger', 'dungeon', 'ships', 'stalls', 'carts', 'books']) {
       vm.runInContext(parts[k], box, { filename: 'gamemode.js (' + k + ')' });
     }
+    vm.runInContext(parts.places + '\n' + parts.commands.split('const WORDS').join('var WORDS').split('const PLAYER_WORDS').join('var PLAYER_WORDS') +
+                    '\n' + parts.staff, box, { filename: 'gamemode.js (commands and staff)' });
+    vm.runInContext(parts.purses, box, { filename: 'gamemode.js (purses)' });
     // The NPC startup as far as its part (#2652): the real purse service on
     // the real ledger file, asking as the startup does (R2 checks the line).
     vm.runInContext(MERCHANT_START, box, { filename: 'NPC startup (merchant purses)' });
@@ -413,13 +441,19 @@ try {
   const L = run.logged.filter(function (l) { return /^release: /.test(l); });
 
   yes('R5 the list is read once and every part is let go at this start (' + L.length + ' lines)',
-      L.length === 11 && /a list of 2 profile\(s\) and 2 character\(s\) to let go, at server start/.test(L[0]));
-  yes('R6 in the order the blocks load', ['farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'merchants'].every(function (p, i) {
+      L.length === 12 && /a list of 2 profile\(s\) and 2 character\(s\) to let go, at server start/.test(L[0]));
+  yes('R6 in the order the blocks load', ['farms', 'property', 'embassy', 'dungeon', 'cargo', 'stalls', 'carts', 'books', 'restraints', 'merchants'].every(function (p, i) {
     return new RegExp('^release: ' + p + ': ').test(L[i + 1]);
   }));
-  yes('R7 and then the list is gone, taken and all (#4920)', /every part is done, and the list is gone/.test(L[10]) &&
+  yes('R7 and then the list is gone, taken and all (#4920)', /every part is done, and the list is gone/.test(L[11]) &&
       !fs.existsSync(path.join(dir, 'private', 'deleted-characters.json')) &&
       !fs.existsSync(path.join(dir, 'private', 'deleted-characters.taken.json')));
+
+  // ---- Q, the staff restraints (#6845)
+  const book = j(dir, 'staff-restraints.json');
+  yes('Q1 their freeze and silence are let go, somebody else\'s stay',
+      !book.frozen[P1] && !book.silenced[P2] && !!book.frozen[PY] && !!book.silenced[PY] && book.revision === 4);
+  yes('Q2 the log says counts: ' + (L[9] || '').replace('release: restraints: ', ''), L[9] === 'release: restraints: freezes 1, silences 1');
 
   // ---- F
   const farm = j(dir, 'farm-claims.json');
@@ -518,7 +552,7 @@ try {
   yes('M3 a trade waiting on somebody else is as it was',
       JSON.stringify(ml.entries['8:Skyrim.esm']) === JSON.stringify(mWas.entries['8:Skyrim.esm']));
   yes('M4 the ledger still verifies', ml.sha256 === checksum(ml));
-  yes('M5 the log says counts: ' + (L[9] || '').replace('release: merchants: ', ''), L[9] === 'release: merchants: merchants 1, supply 2, trades 1');
+  yes('M5 the log says counts: ' + (L[10] || '').replace('release: merchants: ', ''), L[10] === 'release: merchants: merchants 1, supply 2, trades 1');
 
   // ---- V (#3160)
   const st = j(dir, 'market-stalls.json').state;
@@ -578,7 +612,7 @@ try {
       w1.logged.some(function (l) { return l === 'release: embassy could not write what it let go, so its part waits for the next start'; }) &&
       w1.logged.some(function (l) { return l === 'release: embassy did not let go at this start, so the list waits for the next one'; }));
   yes('W2 the list stays with every other part marked done',
-      JSON.stringify(Object.keys(list1.done).sort()) === JSON.stringify(['books', 'cargo', 'carts', 'dungeon', 'farms', 'merchants', 'property', 'saves', 'stalls']) &&
+      JSON.stringify(Object.keys(list1.done).sort()) === JSON.stringify(['books', 'cargo', 'carts', 'dungeon', 'farms', 'merchants', 'property', 'restraints', 'saves', 'stalls']) &&
       JSON.stringify(list1.profiles) === JSON.stringify([P1, P2]));
   // A claim made by a listed profile after the first start is not a released one.
   const p2 = j(dir2, 'property.json');
@@ -640,7 +674,7 @@ try {
   const s1 = start(dir4);
   const list4 = j(dir4, 'deleted-characters.taken.json');
   yes('S1 with the saves not taken, every register part is done and the list stays',
-      JSON.stringify(Object.keys(list4.done).sort()) === JSON.stringify(['books', 'cargo', 'carts', 'dungeon', 'embassy', 'farms', 'merchants', 'property', 'stalls']));
+      JSON.stringify(Object.keys(list4.done).sort()) === JSON.stringify(['books', 'cargo', 'carts', 'dungeon', 'embassy', 'farms', 'merchants', 'property', 'restraints', 'stalls']));
   yes('S2 and the log says the saves wait for the next start',
       s1.logged.some(function (l) { return l === 'release: saves did not let go at this start, so the list waits for the next one'; }));
   // ============================================================ C: characters only (#2668)
@@ -712,8 +746,10 @@ try {
   // ============================================================ X: a wipe's list (#2668)
   const x = charactersOnly('wipe-list', { profiles: [], actors: [A1],
     done: { saves: NOW, farms: NOW, property: NOW, embassy: NOW, dungeon: NOW, cargo: NOW, stalls: NOW, carts: NOW, books: NOW } });
-  yes('X1 only the merchants\' part runs, and then the list is gone (' + x.lines.join(' / ') + ')',
-      x.lines.length === 3 && /^release: merchants: /.test(x.lines[1]) && /the list is gone/.test(x.lines[2]) &&
+  // Wipe-Saves.ps1 leaves restraints undone (#6845): its part runs and, with
+  // no freeze or silence of the character's, writes nothing.
+  yes('X1 only the restraints\' and the merchants\' parts run, and then the list is gone (' + x.lines.join(' / ') + ')',
+      x.lines.length === 4 && x.lines[1] === 'release: restraints: nothing of theirs' && /^release: merchants: /.test(x.lines[2]) && /the list is gone/.test(x.lines[3]) &&
       !fs.existsSync(path.join(x.dir, 'private', 'deleted-characters.json')) &&
       !fs.existsSync(path.join(x.dir, 'private', 'deleted-characters.taken.json')));
   yes('X2 only the merchant ledger is written (' + x.changed.join(', ') + ')', JSON.stringify(x.changed) === JSON.stringify(['merchant-ledger.json']));
