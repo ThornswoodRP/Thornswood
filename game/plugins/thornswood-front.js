@@ -6454,7 +6454,45 @@
     if (!T.ready) { lockShown = ''; return; }
     const now = lockKeyNow();
     if (now && now.plot) { askPlot(now.hex); } else { plotLookHex = ''; }
+    if (!now) { askDoor(doorLookedAt()); } else { doorLookHex = ''; }
     drawLock(now);
+  }
+
+  /*
+    A DOOR LOOKED AT FROM OUTSIDE (#6980). The line is the server's, written
+    for the door somebody just opened, and a front door opened from the
+    street is a load door that takes them inside first. So a door under the
+    crosshair that no line covers is asked about, /doorlook and its id, on
+    the second look at it and again every DOOR_ASK_MS while it stays there,
+    the way a crop is. The server writes the line if it is a building's door
+    and they stand at it (lookedAtDoor in the property block), and the next
+    look draws it. A door swept past is never asked about.
+  */
+  const DOOR_ASK_MS = 20000;
+  let doorLookHex = '';
+  let doorAskedFor = '';
+  let doorAskedAt = 0;
+
+  /** The door under the crosshair, in hex, or ''. */
+  function doorLookedAt() {
+    let ref = null;
+    try { ref = sp.Game.getCurrentCrosshairRef(); } catch (e) { ref = null; }
+    if (!ref) { return ''; }
+    try {
+      const b = ref.getBaseObject();
+      if (!b || b.getType() !== DOOR_TYPE) { return ''; }
+      return (ref.getFormID() >>> 0).toString(16);
+    } catch (e) { return ''; }
+  }
+
+  function askDoor(hex) {
+    if (!hex || anyClaim() || busyMenuOpenNow()) { doorLookHex = ''; return; }
+    if (hex !== doorLookHex) { doorLookHex = hex; return; }
+    const t = Date.now();
+    if (hex === doorAskedFor && t - doorAskedAt < DOOR_ASK_MS) { return; }
+    doorAskedFor = hex;
+    doorAskedAt = t;
+    tellServer('/doorlook ' + hex);
   }
 
   /*

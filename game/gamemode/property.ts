@@ -1240,19 +1240,21 @@
     doorLine(actorId, mine);
   }
 
-  function openedDoor(actorId, doorDesc) {
-    var building = buildingOf(doorDesc);
-    if (!building) { return; }
-    /*
-      The ground the door stands on goes down with the door, because a home and
-      its farm are ONE claim and the farm is the ground outside the front door.
-      Patrick: "home and farm are the same property claim remember".
+  /*
+    THE DOOR THEY ARE AT, written on them with the ground it stands on: what
+    /claim, the lock key and the Office page read back (here, groundHere).
+    Opening a door writes it, and so does standing at one and looking at it
+    (lookedAtDoor), which is the only way it is written from the outside.
 
-      It is read at the moment the door is opened rather than at the moment
-      /claim is said, because by then the person may have walked inside and the
-      position would be the hallway. groundOf is the farming block's own, so the
-      two halves of one claim are measured the same way.
-    */
+    The ground the door stands on goes down with the door, because a home and
+    its farm are ONE claim and the farm is the ground outside the front door.
+    Patrick: "home and farm are the same property claim remember". It is read
+    from the door, not from where the person stands when /claim is said,
+    because by then they may have walked inside and the position would be the
+    hallway. groundOf is the farming block's own, so the two halves of one
+    claim are measured the same way.
+  */
+  function noteDoor(actorId, doorDesc) {
     var ground = null;
     var F = g.__thornswoodFarming;
     if (F && F.groundOf) {
@@ -1263,6 +1265,44 @@
     } catch (e) {
       plog('could not write the door for', actorId.toString(16) + ':', e);
     }
+  }
+
+  /*
+    A DOOR LOOKED AT FROM WHERE THEY STAND (#6980). Patrick, 26 Nov: "buildings
+    arent claimable from the outside". The door was only written when it was
+    opened, and opening a front door from the street is a load door: it takes
+    them inside before they can press anything. So outside a building nobody
+    holds, the line never said Claim. Coming out through the same door was the
+    one way to get it outside.
+
+    So the front plugin sends /doorlook and the id of the door under the
+    crosshair, on the second look at it, the way it asks about a crop. The id
+    is a hint and this is the gate, as for /moldhere: a door of a building
+    this block knows, and the person standing at that very door by the
+    server's own reckoning, MOLD_REACH, for the reasons given over it. Then
+    the door is written as the one they are at and the line drawn for it.
+    Only that: a look keeps no claim alive and presents no deed, which stay
+    the acts of opening the door (openedDoor). Anything else is answered with
+    nothing, which leaves the line as it was.
+  */
+  function lookedAtDoor(parts, actorId, profileId) {
+    var raw = String((parts && parts[1]) || '');
+    if (!/^[0-9a-f]{1,8}$/i.test(raw)) { return true; }
+    var refrId = parseInt(raw, 16);
+    var desc = '';
+    try { desc = String(mp.getDescFromId(refrId) || ''); } catch (e) { desc = ''; }
+    if (!desc || !buildingOf(desc)) { return true; }
+    var far = distanceTo(actorId, refrId);
+    if (far < 0 || far > MOLD_REACH) { return true; }
+    noteDoor(actorId, desc);
+    doorLine(actorId, profileId);
+    return true;
+  }
+
+  function openedDoor(actorId, doorDesc) {
+    var building = buildingOf(doorDesc);
+    if (!building) { return; }
+    noteDoor(actorId, doorDesc);
     /*
       AND TELL THEM WHICH DOORS ARE SHUT TO THEM, here and not on a tick.
 
@@ -8043,6 +8083,8 @@
     }
     if (word === '/mold') { return mold(actorId, profileId, toProfile); }
     if (word === '/moldhere') { return moldHere(parts, actorId, profileId, toProfile); }
+    // The door under the crosshair, asked about by the front plugin (#6980). See lookedAtDoor.
+    if (word === '/doorlook') { return lookedAtDoor(parts, actorId, profileId); }
     // The lock key at a forge, with the forge's id (#1637). See forgeHere.
     if (word === '/key') { return cutKey(actorId, profileId, toProfile, parts); }
     if (word === '/claim') {

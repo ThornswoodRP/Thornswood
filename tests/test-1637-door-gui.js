@@ -628,7 +628,10 @@ try {
       w.door('claim', 'Honeyside', ['1002', '1004']);
       w.crosshair = null;
       w.tick();
-      yes('C4 nothing under the crosshair, nothing', w.lineText() === '' && w.api.lockPress() === false && w.sent.length === 0);
+      // The looks at doors no line covered above asked about them (#6980,
+      // /doorlook); no key press sent anything.
+      yes('C4 nothing under the crosshair, nothing', w.lineText() === '' && w.api.lockPress() === false &&
+          w.sent.filter(function (l) { return l.indexOf('/doorlook ') !== 0; }).length === 0);
     }
     // C5: never over a menu or the chat.
     {

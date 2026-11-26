@@ -1953,7 +1953,7 @@
     */
     if (word === '/plant' || word === '/claim' || word === '/plot' ||
         word === '/deed' || word === '/deeds' || word === '/lock' ||
-        word === '/unlock' || word === '/mold' || word === '/moldhere' || word === '/key' ||
+        word === '/unlock' || word === '/mold' || word === '/moldhere' || word === '/doorlook' || word === '/key' ||
         word === '/companyterms' ||
         word === '/office' || word === '/evict' || word === '/dropbox' ||
         word === '/rent' || word === '/sleephere' || word === '/notice' || word === '/job' ||

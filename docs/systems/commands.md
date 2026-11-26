@@ -184,7 +184,8 @@ is written as typed.
 | `/tspicks <n>` | The front plugin | Lockpicks that broke | `gamemode.js:word === '/tspicks'` |
 | `/tspicked <id>` | The front plugin | A property door shut to you opened on its lock, a pick, so its holder is sent word (#2680) | `gamemode.js:word === '/tspicked'` |
 | `/moldhere <id>` | U at a door | A key mold pressed into that door | `gamemode.js:word === '/moldhere'` |
-| `/claim <id>`, `/lock <id>`, `/unlock <id>`, `/key <id>` | X at a door just opened, or at a forge (#1637) | Claims, locks or unlocks the building of the door just opened; cuts a key from the mold in the pack | The property block's `command`, `forgeHere` |
+| `/doorlook <id>` | A door under the crosshair that no line covers (#6980) | Asks for the lock key's line at that door, so a building can be claimed from outside | `gamemode.js:word === '/doorlook'` |
+| `/claim <id>`, `/lock <id>`, `/unlock <id>`, `/key <id>` | X at a door looked at or just opened, or at a forge (#1637, #6980) | Claims, locks or unlocks the building of that door; cuts a key from the mold in the pack | The property block's `command`, `forgeHere` |
 | `/plot <id>`, `/claim <id>` at a crop | A crop under the crosshair, and X at it (#1636) | Asks for the line at that plot; claims the farm around it | The farming block's `command`, `plotLine` and `claim` |
 | `/rest bed`, `/rest sit`, `/rest up` | Lying down, sitting down and getting up | Resting in a bed or on a seat, as the server measures it | `bedRest` in the property block's beds |
 | `/sleephere <id>`, `/sleephere stop <profile> <building>` | U on a person inside a building you hold, and Stop on the K panel's property page | Lets them sleep there for a night, or ends their night (#1603) | `sleepHere` in the property block's beds |

@@ -25,11 +25,13 @@ court's, and the server does not pick a side.
 
 ## A claim
 
-Open the door. For the next minute, while one of that building's doors
-is under the crosshair, a line names the lock key, X unless you changed
-it, and says what it will do there. At a building nobody holds it says
-Claim, and pressing it claims the building. Nothing is typed. The door
-you opened is the building. A door opened more than a minute ago does
+Stand at the door and look at it, or open it. From the street there is
+no need to go in: a front door looked at from where you stand counts.
+For the next minute, while one of that building's doors is under the
+crosshair, a line names the lock key, X unless you changed it, and says
+what it will do there. At a building nobody holds it says Claim, and
+pressing it claims the building. Nothing is typed. The door you are at
+is the building. A door looked at or opened more than a minute ago does
 not count, so a door you passed on the way across town is not the one
 you claim from a field.
 
@@ -451,7 +453,14 @@ Claiming, locking, unlocking and cutting a key are the lock key, with
 nothing typed (#1637). The server writes the door's word, Claim, Lock or
 Unlock, and that building's doors to the person on every door of a
 building they open and again after every press, and the front plugin
-draws the line while one of those doors is under the crosshair. The key
+draws the line while one of those doors is under the crosshair. A door
+under the crosshair that no line covers is asked about (#6980): the
+front plugin sends its id on the second look, and the server writes the
+line when it is a building's door and the person stands within 400 units
+of it, in the same cell or world, as it checks a door for the mold key.
+Opening a front door from the street takes you inside, so until then the
+line never came up outside a building. A look keeps no claim alive and
+presents no deed; opening the door still does both. The key
 sends the server what the line said and the door's id. At a forge it
 sends the forge's id, and the server checks that it is one of the
 forges the bench table knows and that the smith is standing at it, as
