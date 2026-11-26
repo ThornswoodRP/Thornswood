@@ -4,14 +4,14 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const makePage=require('../../tests/fixtures/panel-page'),root=path.join(__dirname,'../..');let pass=0,fail=0;
 function test(name,fn){try{fn();pass++;console.log('PASS '+name);}catch(e){fail++;console.log('FAIL '+name+': '+e.message);}}
 function rig(){const p=makePage();p.win.crypto={getRandomValues:a=>require('node:crypto').randomFillSync(a)};for(const f of ['bridge','board'])p.run(f,fs.readFileSync(f==='board'&&process.env.BOARD_UI||path.join(root,'game/ui/thornswood-'+f+'.js'),'utf8'));
- p.state={me:1000,board:{hold:'windhelm',where:'Windhelm',here:true,x:1,y:2,z:3,wall:[],jobs:[],dests:[{hold:'whiterun',where:'Whiterun'}],arrivals:[],submit:[]}};
+ p.state={me:1000,boardSubmissions:{owner:{profileId:1000,actorDesc:'letter-fixture',runtime:'1'},results:[]},board:{hold:'windhelm',where:'Windhelm',here:true,x:1,y:2,z:3,wall:[],jobs:[],dests:[{hold:'whiterun',where:'Whiterun'}],arrivals:[],submit:[]}};
  p.api=p.win.thornswoodBoard;p.field=id=>p.doc.getElementById('ts-board-'+id);p.prepare=()=>{for(const f of p.doc.querySelectorAll('input,select'))if(!f.setCustomValidity){f.validationMessage='';f.validity={customError:false};f.reports=0;f.setCustomValidity=t=>{f.validationMessage=String(t);f.validity.customError=!!t;};f.reportValidity=()=>{f.reports++;return !f.validity.customError;};}};
  p.feed=()=>{p.api.setData(JSON.parse(JSON.stringify(p.state)));p.prepare();};p.feed();p.api.open();p.prepare();
  p.button=verb=>p.doc.querySelector('[data-do="'+(verb||'letter')+'"]');p.press=b=>{assert(b,'current control exists');b.focus();const e=p.fire(b,'click','');if(!e.defaultPrevented&&b.onclick)b.onclick.call(b,e);p.prepare();};
  p.values=()=>['to','letter','pay','dest','haul'].map(id=>p.field(id)?.value);
  for(const[id,value]of [['to','Brenna'],['letter','A private draft'],['pay','25'],['dest','whiterun'],['haul','Timber']])p.field(id).value=value;
  return p;}
-function packets(lines){return lines.map(line=>{assert(line.startsWith('/board-submit-v1 '));const p=JSON.parse(line.slice('/board-submit-v1 '.length));assert.match(p[1],/^[0-9a-f]{32}$/);return[p[0],...p.slice(2)];});}
+function packets(lines){return lines.map(line=>{assert(line.startsWith('/board-submit-v1 '));const p=JSON.parse(line.slice('/board-submit-v1 '.length));assert.match(p[1],/^[0-9a-f]{32}$/);assert.deepEqual(p[3],[1000,'letter-fixture','1']);return[p[0],p[2],...p.slice(4)];});}
 for(const id of ['to','letter'])for(const blank of ['', '   ']){
  const p=rig(),f=p.field(id);f.value=blank;const values=p.values(),state=JSON.stringify(p.state);p.press(p.button());
  test(id+JSON.stringify(blank)+' refuses without sending or changing any input',()=>{assert.equal(p.sent.length,0);assert.deepEqual(p.values(),values);assert.equal(JSON.stringify(p.state),state);});

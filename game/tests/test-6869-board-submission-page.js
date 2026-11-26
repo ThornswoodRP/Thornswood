@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const standIn=require('../../tests/stand-in-server'),makePage=require('../../tests/fixtures/panel-page');
 const {attachScenarioReservation}=require('../../tests/fixtures/pack-first');
 const t=standIn.checks(),yes=t.yes,root=path.join(__dirname,'../..');
-const w=standIn.world({name:'6869-page',settings:{thornswoodServer:'main'}});
+const w=standIn.world({name:'6869-page',gm:process.env.GM,settings:{thornswoodServer:'main'}});
 const cell='1691d:Skyrim.esm',pos=[134265.1,35842.3,-12397.5];
 w.record('593b:Thornswood-Content.esp','ACTI');w.ref(w.idOf('23592:Skyrim.esm'),{base:'1a2b3:Skyrim.esm',cell,pos:[pos[0]+876,pos[1],pos[2]]});
 const sender=w.person(0xff006869,{profileId:1000,name:'Brenna',cell,pos,inventory:{entries:[{baseId:15,count:10000}]}});
@@ -142,9 +142,15 @@ try{
   {
    const p=page();p.fill('haul',{pay:'15'+'x'.repeat(8300),dest:'whiterun',haul:'Snapshot bound'});const before=p.values('haul');p.press('haul');
    const sent=p.sent.length===1&&JSON.parse(p.sent[0].slice('/board-submit-v1 '.length));p.flush();feed(p);
-   yes('oversized raw snapshot sends valid derived pay once untracked and retains its draft',!!sent&&sent[3]==='15'&&JSON.stringify(p.values('haul'))===JSON.stringify(before)&&/unconfirmed/.test(p.field('action-status').textContent));
+   yes('oversized raw snapshot sends valid derived pay once untracked and retains its draft',!!sent&&sent[4]==='15'&&JSON.stringify(p.values('haul'))===JSON.stringify(before)&&/unconfirmed/.test(p.field('action-status').textContent));
    p.fill('haul',{pay:'15',haul:'Normal tracking resumes'},true);p.press('haul');p.flush();feed(p);
    yes('normal correlation tracking still works after oversized raw input is corrected',p.field('pay').value===''&&p.field('haul').value==='');
+  }
+  {
+   const p=ready('Missing current owner'),missing=actual();missing.boardSubmissions=null;feed(p,missing);p.press('letter');
+   yes('missing owner evidence keeps the draft with a mounted refusal and no send',p.sent.length===0&&p.field('letter').value==='Missing current owner'&&/Nothing was sent/.test(p.field('action-status').textContent));
+   const q=ready('Changed owner data');feed(q);q.win.thornswoodSocialView.boardSubmissions.owner.runtime='999994';q.press('letter');
+   yes('an owner tuple changed outside an accepted view cannot prepare a send',q.sent.length===0&&q.field('letter').value==='Changed owner data'&&/Nothing was sent/.test(q.field('action-status').textContent));
   }
  }
 }finally{t.done(w);}

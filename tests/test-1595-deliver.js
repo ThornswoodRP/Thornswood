@@ -384,14 +384,14 @@ attempt('Write a letter', function () {
   const carry=require('./fixtures/chat-relay-cut')(voice);
   yes('B4 the longest encoded form fits the unchanged relay command bound ('+cap+')',longest.length<=cap&&carry(longest)===longest);
   yes('B4 ordinary legacy letter commands keep the original bound',carry('/letter '+'x'.repeat(cap)).length===cap);
-  const privateLongest='/board-submit-v1 '+JSON.stringify(['letter','a'.repeat(32),'windhelm','雪'.repeat(60),'雪'.repeat(300)]);
+  const privateLongest='/board-submit-v1 '+JSON.stringify(['letter','a'.repeat(32),'windhelm',[1000,'delivery-fixture','1'],'雪'.repeat(60),'雪'.repeat(300)]);
   yes('B4 the current private JSON letter also fits the unchanged relay bound',privateLongest.length<=cap&&carry(privateLongest)===privateLongest);
   if (branch) {
     const mounted=require('./fixtures/panel-page')();
     mounted.win.crypto={getRandomValues:a=>require('node:crypto').randomFillSync(a)};
     mounted.run('bridge',read('game/ui/thornswood-bridge.js'));
     mounted.run('board',page);
-    mounted.win.thornswoodBoard.setData({me:1000,board:{hold:'windhelm',where:'Windhelm',here:true,
+    mounted.win.thornswoodBoard.setData({me:1000,boardSubmissions:{owner:{profileId:1000,actorDesc:'delivery-fixture',runtime:'1'},results:[]},board:{hold:'windhelm',where:'Windhelm',here:true,
       x:1,y:2,z:3,wall:[],jobs:[],dests:[],arrivals:[],submit:[]}});
     mounted.win.thornswoodBoard.open();
     const recipient='  "Lydia   Stormblade" ';
@@ -405,7 +405,7 @@ attempt('Write a letter', function () {
       if(!event.defaultPrevented&&button.onclick)button.onclick.call(button,event);
     }
     const sent=mounted.sent.length===1&&mounted.sent[0].startsWith('/board-submit-v1 ')?JSON.parse(mounted.sent[0].slice('/board-submit-v1 '.length)):null;
-    yes('B5 quotes and actual spaces remain in the private recipient and body',!!sent&&sent[0]==='letter'&&/^[0-9a-f]{32}$/.test(sent[1])&&sent[2]==='windhelm'&&sent[3]===recipient&&sent[4]===WORDS_OF_IT);
+    yes('B5 quotes and actual spaces remain in the private recipient and body',!!sent&&sent[0]==='letter'&&/^[0-9a-f]{32}$/.test(sent[1])&&sent[2]==='windhelm'&&JSON.stringify(sent[3])===JSON.stringify([1000,'delivery-fixture','1'])&&sent[4]===recipient&&sent[5]===WORDS_OF_IT);
   }
 });
 

@@ -6906,18 +6906,38 @@
     catch (e) { return false; }
   }
 
+  var BOARD_OWNER_CHANGED = 'Your character changed before this post was handled. Nothing was posted or taken; keep your draft.';
+  function boardOwnerMatches(actorId, profileId, expected) {
+    if (!Array.isArray(expected) || expected.length !== 3 || !Number.isSafeInteger(expected[0]) ||
+        expected[0] < 1 || expected[0] !== profileId || typeof expected[1] !== 'string' || !expected[1] ||
+        typeof expected[2] !== 'string' || !/^[1-9][0-9]{0,19}$/.test(expected[2])) return false;
+    try {
+      return mp.get(actorId, 'profileId') === profileId && mp.getDescFromId(actorId) === expected[1] &&
+        mp.getActorRuntimeIdentity(actorId) === expected[2] && mp.get(actorId, 'profileId') === profileId &&
+        mp.getDescFromId(actorId) === expected[1] && mp.getActorRuntimeIdentity(actorId) === expected[2];
+    } catch (e) { return false; }
+  }
+  function boardSubmissionCut(actorId, profileId, submission, cut) {
+    // Runs inside the existing native admission, immediately before any
+    // debit intent. Its captured runtime/life proof still guards the CAS.
+    return function (entries) {
+      return boardOwnerMatches(actorId, profileId, submission.expectedOwner) ? cut(entries) : BOARD_OWNER_CHANGED;
+    };
+  }
+
   // One private UI boundary. The request ID correlates a saved posting only;
   // it is not authorization or an exactly-once/retry key. Legacy routes stay.
   function submitBoard(payload, actorId, profileId, toProfile) {
     var kind = payload && payload[0];
     if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul') ||
-        payload.length !== (kind === 'letter' ? 5 : 6) ||
+        payload.length !== (kind === 'letter' ? 6 : 7) ||
         typeof payload[1] !== 'string' || !/^[0-9a-f]{32}$/.test(payload[1]) ||
         typeof payload[2] !== 'string' || LEDGER_HOLDS.indexOf(payload[2]) < 0 ||
-        payload.slice(3).some(function (field) { return typeof field !== 'string'; }) ||
-        (kind === 'letter' && !validLetterText(payload[3], payload[4]))) {
+        payload.slice(4).some(function (field) { return typeof field !== 'string'; }) ||
+        (kind === 'letter' && !validLetterText(payload[4], payload[5]))) {
       toProfile(profileId, 'That board submission is invalid. Nothing was posted or taken.'); return true;
     }
+    if (!boardOwnerMatches(actorId, profileId, payload[3])) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     var desc;
     try {
       desc = mp.getDescFromId(actorId);
@@ -6927,15 +6947,19 @@
       toProfile(profileId, 'That posting owner could not be checked. Nothing was posted or taken.'); return true;
     }
     var meta = { version: 1, id: payload[1], kind: kind, actorDesc: desc };
+    var expectedOwner = payload[3].slice();
     if (kind === 'letter') return postLetter([], actorId, profileId, toProfile,
-      { to: payload[3], words: payload[4], hold: payload[2], submission: meta });
+      { to: payload[4], words: payload[5], hold: payload[2], submission: meta, expectedOwner: expectedOwner });
     // Match the old /haul word boundary, including its whitespace joining.
-    var parts = ['/haul', payload[3], payload[4]].concat(payload[5].trim().split(/\s+/));
-    return postHaul(parts, actorId, profileId, toProfile, { hold: payload[2], submission: meta });
+    var parts = ['/haul', payload[4], payload[5]].concat(payload[6].trim().split(/\s+/));
+    return postHaul(parts, actorId, profileId, toProfile, { hold: payload[2], submission: meta, expectedOwner: expectedOwner });
   }
 
   function postLetter(parts, actorId, profileId, toProfile, written) {
+    var submission = written && written.submission ? written : null;
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     var hold = boardHere(actorId);
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to write a letter there.');
       return true;
@@ -6977,7 +7001,9 @@
                  job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 };
     if (written && written.submission) made.boardSubmission = written.submission;
     // On the board only once the pack's take is saved (#4901): landLetter.
-    var r = packs.begin(actorId, goldCut(cost, 'A letter costs ' + cost + ' gold and you do not have it.'),
+    var postingCut = goldCut(cost, 'A letter costs ' + cost + ' gold and you do not have it.');
+    if (submission) postingCut = boardSubmissionCut(actorId, profileId, submission, postingCut);
+    var r = packs.begin(actorId, postingCut,
                         'letter', { hold: hold, made: made, cost: cost });
     toProfile(profileId, r.why || r.line ||
       ('Your letter for ' + to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
@@ -7234,7 +7260,9 @@
   }
 
   function postHaul(parts, actorId, profileId, toProfile, submission) {
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     var hold = boardHere(actorId);
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     if (!hold) {
       toProfile(profileId, 'Stand at the board of the hold you are sending from to post a haul.');
       return true;
@@ -7286,7 +7314,9 @@
                               job: true, haul: true, dest: dest, pay: pay, taken: 0 });
     if (submission) made.boardSubmission = submission.submission;
     // On the board only once the pack's take is saved (#4901): landHaul.
-    var r = packs.begin(actorId, goldCut(cost, short), 'haul',
+    var postingCut = goldCut(cost, short);
+    if (submission) postingCut = boardSubmissionCut(actorId, profileId, submission, postingCut);
+    var r = packs.begin(actorId, postingCut, 'haul',
                         { hold: hold, made: made, cost: cost, fee: fee, pay: pay, dest: dest });
     toProfile(profileId, r.why || r.line ||
       ('Your haul to ' + dest + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));

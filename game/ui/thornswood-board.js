@@ -282,18 +282,22 @@
     rememberSubmissions();
     var board = data && data.board;
     if (!board || !board.here || typeof board.hold !== 'string') return;
+    var owner = submissionOwnerOf(data);
+    if (!owner || owner !== submissionOwner) {
+      submissionSaid = 'Your character could not be checked. Nothing was sent; your draft is kept.'; showSubmissionStatus(); return;
+    }
     var id = '', line;
     try {
       if (!window.crypto || !window.crypto.getRandomValues) throw new Error('no request identity');
       var bytes = new Uint8Array(16); window.crypto.getRandomValues(bytes);
       for (var n = 0; n < bytes.length; n++) id += ('0' + bytes[n].toString(16)).slice(-2);
       if (submissions.some(function (sent) { return sent.id === id; })) throw new Error('request identity repeated');
-      line = '/board-submit-v1 ' + JSON.stringify([kind, id, board.hold].concat(fields));
+      line = '/board-submit-v1 ' + JSON.stringify([kind, id, board.hold, JSON.parse(owner)].concat(fields));
       if (line.length > 8200) throw new Error('post too long');
     } catch (e) {
       submissionSaid = 'This post could not be prepared. Nothing was sent; your draft is kept.'; showSubmissionStatus(); return;
     }
-    var owner = submissionOwnerOf(data), draft = submissionDrafts[kind], sent = null;
+    var draft = submissionDrafts[kind], sent = null;
     var snapshot = JSON.stringify(draft.values);
     // The canonical wire may be short even when discarded pay formatting
     // is huge. Bound retained correlation data without blocking that post.

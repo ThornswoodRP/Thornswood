@@ -1078,7 +1078,7 @@
 
     if (word === '/board-submit-v1') {
       if (!needCharacter()) return;
-      var submitPayload = savedTextPayload(cmd.text, word, 8200, 5) || savedTextPayload(cmd.text, word, 8200, 6);
+      var submitPayload = savedTextPayload(cmd.text, word, 8200, 6) || savedTextPayload(cmd.text, word, 8200, 7);
       var submitProperty = g.__thornswoodProperty;
       if (!submitPayload || !submitProperty || !submitProperty.submitBoard) {
         toProfile(profileId, 'That board submission is invalid or unavailable. Keep your draft.'); return;

@@ -22,7 +22,7 @@ function post(to,body){const p=makePage();p.win.crypto={getRandomValues:a=>requi
 for(const [name,body]of [['Lydia "Red" Stone','SEALED-4412-QUOTED'],['Lydia Red Stone','SEALED-4412-ORDINARY']]){
  const target=name.includes('"')?recipient:wrong,prior=w.count(sender,15),p=post(name,body),row=rows().at(-1),index=rows().length;
  const sent=p.sent.length===1&&p.sent[0].startsWith('/board-submit-v1 ')?JSON.parse(p.sent[0].slice('/board-submit-v1 '.length)):null;
- yes('the actual board uses a distinct private letter request for '+name,!!sent&&sent[0]==='letter'&&/^[0-9a-f]{32}$/.test(sent[1])&&sent[2]==='windhelm'&&sent[3]===name&&sent[4]===body);
+ yes('the actual board uses a distinct private letter request for '+name,!!sent&&sent[0]==='letter'&&/^[0-9a-f]{32}$/.test(sent[1])&&sent[2]==='windhelm'&&JSON.stringify(sent[3])===JSON.stringify([1000,w.mp().getDescFromId(sender),w.mp().getActorRuntimeIdentity(sender)])&&sent[4]===name&&sent[5]===body);
  yes('posting retains the exact intended recipient '+name,row&&row.to===name&&row.text===body);
  yes('posting uses the ordinary single letter fee '+name,w.count(sender,15)===prior-35);
  command(courier,'/take '+index);

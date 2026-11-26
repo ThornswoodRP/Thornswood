@@ -5,7 +5,7 @@ const makePage=require('../../tests/fixtures/panel-page'),root=path.join(__dirna
 let pass=0,fail=0;function test(name,fn){try{fn();pass++;console.log('PASS '+name);}catch(e){fail++;console.log('FAIL '+name+': '+e.message);}}
 function rig(){
  const p=makePage();p.win.crypto={getRandomValues:a=>require('node:crypto').randomFillSync(a)};for(const f of ['bridge','board'])p.run(f,fs.readFileSync(f==='board'&&process.env.BOARD_UI||path.join(root,'game/ui/thornswood-'+f+'.js'),'utf8'));
- p.state={me:1000,board:{hold:'windhelm',where:'Windhelm',here:true,x:1,y:2,z:3,wall:[],jobs:[],dests:[{hold:'whiterun',where:'Whiterun'}],arrivals:[],submit:[]}};
+ p.state={me:1000,boardSubmissions:{owner:{profileId:1000,actorDesc:'haul-fixture',runtime:'1'},results:[]},board:{hold:'windhelm',where:'Windhelm',here:true,x:1,y:2,z:3,wall:[],jobs:[],dests:[{hold:'whiterun',where:'Whiterun'}],arrivals:[],submit:[]}};
  p.api=p.win.thornswoodBoard;p.field=id=>p.doc.getElementById('ts-board-'+id);
  p.prepare=()=>{for(const field of p.doc.querySelectorAll('input,select'))if(!field.setCustomValidity){
   field.validationMessage='';field.validity={customError:false};field.reports=0;
@@ -18,7 +18,7 @@ function rig(){
  p.field('pay').value=' 25 ';p.field('dest').value='whiterun';p.field('haul').value=' timber ';p.field('to').value='Brenna';p.field('letter').value='A private draft';
  return p;
 }
-function packets(lines){return lines.map(line=>{assert(line.startsWith('/board-submit-v1 '));const p=JSON.parse(line.slice('/board-submit-v1 '.length));assert.match(p[1],/^[0-9a-f]{32}$/);return[p[0],...p.slice(2)];});}
+function packets(lines){return lines.map(line=>{assert(line.startsWith('/board-submit-v1 '));const p=JSON.parse(line.slice('/board-submit-v1 '.length));assert.match(p[1],/^[0-9a-f]{32}$/);assert.deepEqual(p[3],[1000,'haul-fixture','1']);return[p[0],p[2],...p.slice(4)];});}
 for(const id of ['pay','dest','haul'])for(const blank of ['', '   ']){
  const p=rig(),field=p.field(id);field.value=blank;const before=p.values(),state=JSON.stringify(p.state);p.press(p.button());
  test(id+' blank '+JSON.stringify(blank)+' sends nothing and preserves all values',()=>{assert.equal(p.sent.length,0);assert.deepEqual(p.values(),before);assert.equal(JSON.stringify(p.state),state);});

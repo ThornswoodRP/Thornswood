@@ -8,7 +8,7 @@ fixture._compile(prefix+'\nmodule.exports={folder,engine,boot,inDir,settle,regis
 const h=fixture.exports;let pass=0,fail=0;
 function yes(name,ok){console.log((ok?'PASS ':'FAIL ')+name);ok?pass++:fail++;}
 function receipt(W){return W.boardSubmissions?.(h.ALICE.a,h.ALICE.pid)?.results||[];}
-function submit(dir,W,kind,id){h.inDir(dir,()=>W.submitBoard?.(kind==='letter'?['letter',id,h.HOLD,'Lydia','SEALED-RESTART']:['haul',id,h.HOLD,'50','riften','a crate of mead'],h.ALICE.a,h.ALICE.pid,()=>{}));}
+function submit(dir,W,kind,id){const o=W.boardSubmissions?.(h.ALICE.a,h.ALICE.pid)?.owner,owner=o&&[o.profileId,o.actorDesc,o.runtime];h.inDir(dir,()=>W.submitBoard?.(kind==='letter'?['letter',id,h.HOLD,owner,'Lydia','SEALED-RESTART']:['haul',id,h.HOLD,owner,'50','riften','a crate of mead'],h.ALICE.a,h.ALICE.pid,()=>{}));}
 try{
  for(const kind of ['letter','haul'])for(const stage of ['before-pack-save','after-pack-save','after-register-save']){
   const dir=h.folder(),e=h.engine(),W=h.boot(dir,e),id=(kind==='letter'?'a':'b').repeat(32);

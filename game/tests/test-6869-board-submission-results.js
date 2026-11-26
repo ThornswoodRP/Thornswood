@@ -13,8 +13,9 @@ const b=w.person(0xff00686a,{profileId:1001,name:'Corvin',cell,pos:[pos[0]+100,p
 let mp;
 const id=n=>n.toString(16).padStart(32,'0');
 const wire=p=>'/board-submit-v1 '+JSON.stringify(p);
-const letter=(n,hold='windhelm',to='Lydia "Red" Stone',body='SEALED-6869-'+n)=>['letter',id(n),hold,to,body];
-const haul=(n,hold='windhelm',pay='15',dest='whiterun',cargo='Full crates  with "labels"')=>['haul',id(n),hold,pay,dest,cargo];
+const owner=()=>[1000,mp.getDescFromId(a),mp.getActorRuntimeIdentity(a)];
+const letter=(n,hold='windhelm',to='Lydia "Red" Stone',body='SEALED-6869-'+n)=>['letter',id(n),hold,owner(),to,body];
+const haul=(n,hold='windhelm',pay='15',dest='whiterun',cargo='Full crates  with "labels"')=>['haul',id(n),hold,owner(),pay,dest,cargo];
 function send(payload,actor=a){w.say(actor,wire(payload));w.run(2200);}
 const doc=()=>w.readPrivate('property.json');
 const rows=()=>doc().notices.windhelm||[];
@@ -52,7 +53,7 @@ try{
   const unicodeGold=w.count(a,15);send(letter(18,'windhelm','Lydia "Red" Stone','Good \ud83d\ude00\nSecond line'));
   yes('well-formed emoji newline quotes and spaces retain canonical posting',rows().at(-1)?.text==='Good \ud83d\ude00\nSecond line'&&rows().at(-1)?.to==='Lydia "Red" Stone'&&w.count(a,15)===unicodeGold-35&&!!result(id(18)));
   const saved=JSON.stringify(doc()),funds=doc().funds.windhelm,priorGold=w.count(a,15);
-  const bad=[[],letter(4).slice(0,4),[...letter(4),'extra'],['job',id(4),'windhelm','A','B'],letter(4).map((x,i)=>i===1?'bad':x),letter(4).map((x,i)=>i===2?'unknown':x),letter(4).map((x,i)=>i===3?3:x),letter(4,'windhelm','A'.repeat(61)),letter(4,'windhelm','Lydia','B'.repeat(301)),letter(4,'windhelm','Bad\nName'),haul(4,'windhelm','1.5'),haul(4,'windhelm','15 whiterun forged'),haul(4,'windhelm','9007199254740992'),haul(4,'windhelm','15','windhelm'),haul(4,'windhelm','15','whiterun','   ')];
+  const bad=[[],letter(4).slice(0,4),[...letter(4),'extra'],['job',id(4),'windhelm','A','B'],letter(4).map((x,i)=>i===1?'bad':x),letter(4).map((x,i)=>i===2?'unknown':x),letter(4).map((x,i)=>i===4?3:x),letter(4,'windhelm','A'.repeat(61)),letter(4,'windhelm','Lydia','B'.repeat(301)),letter(4,'windhelm','Bad\nName'),haul(4,'windhelm','1.5'),haul(4,'windhelm','15 whiterun forged'),haul(4,'windhelm','9007199254740992'),haul(4,'windhelm','15','windhelm'),haul(4,'windhelm','15','whiterun','   ')];
   for(const p of bad){send(p);yes('invalid private payload never changes notice ledger or pack '+JSON.stringify(p).slice(0,70),JSON.stringify(doc())===saved&&w.count(a,15)===priorGold);}
   for(const text of [' '+wire(letter(4)),wire(letter(4))+' extra','/board-submit-v1 nope',wire(letter(4))+' '.repeat(8200)]){w.say(a,text);w.run(2200);yes('invalid private outer boundary is refused whole',JSON.stringify(doc())===saved&&w.count(a,15)===priorGold);}
   const run=w.run;w.run=()=>{};try{w.say(a,wire(letter(5)));}finally{w.run=run;}
