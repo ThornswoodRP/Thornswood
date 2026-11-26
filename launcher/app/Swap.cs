@@ -25,9 +25,8 @@ namespace Thornswood
             catch { return false; }
         }
 
-        static bool MakeLink(string link, string target)
+        static bool MakeLink(string link, string target, out string why)
         {
-            string why;
             return Junction.Create(link, target, out why);
         }
 
@@ -205,16 +204,29 @@ namespace Thornswood
             for (int i = 0; i < wins.Length; i++)
             {
                 string win = wins[i], bak = win + ".st-backup";
-                if (IsLink(win)) DropLink(win);
+                string found;
+                if (IsLink(win)) { DropLink(win); found = "a link there, taken off"; }
                 else if (Directory.Exists(win))
                 {
+                    found = "a folder there, moved aside";
                     if (Directory.Exists(bak))
-                        try { Directory.Move(bak, bak + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss")); } catch (Exception ex) { Swallow.Note("Swap.Apply, renaming leftover backup", ex); }
+                    {
+                        string aside = bak + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                        try { Directory.Move(bak, aside); found += " after the backup left from before went to " + Path.GetFileName(aside); }
+                        catch (Exception ex) { Swallow.Note("Swap.Apply, renaming leftover backup", ex); }
+                    }
                     MoveAside(win, bak);
                 }
+                else found = "nothing there";
+                if (Directory.Exists(win)) found += ", and a folder is there again";
                 Directory.CreateDirectory(Path.GetDirectoryName(win));
-                if (!MakeLink(win, ours[i]))
-                    throw new Exception("Could not redirect " + win);
+                // What Windows said goes with it, and what was found there.
+                // Until 26 Nov the reason Junction gave was dropped here, and
+                // a Play that failed on One left "Could not redirect" and
+                // nothing to say why, or which way it had gone (#5197).
+                string why;
+                if (!MakeLink(win, ours[i], out why))
+                    throw new Exception("Could not redirect " + win + " (" + why + "; found " + found + ")");
             }
             File.WriteAllText(Paths.StateFile, "{\"swappedAt\":\"" + DateTime.Now.ToString("o") + "\"}");
         }

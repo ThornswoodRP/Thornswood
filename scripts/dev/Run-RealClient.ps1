@@ -382,6 +382,48 @@ Say "Run $runId, $($stepsJson.steps.Count) steps from $Steps, into $Out"
 
 $launcherLog = Join-Path $Root 'Profile\launcher.log'
 $launcherLogStart = if (Test-Path -LiteralPath $launcherLog) { (Get-Item -LiteralPath $launcherLog).Length } else { 0 }
+$script:launcherLogReadAt = $launcherLogStart
+
+# The launcher's own word that Play went wrong. A Play that fails writes
+# "Failed to start: <why>" to launcher.log and leaves the launcher open with
+# no game, and the run waited the whole -Minutes for a game that was never
+# coming, with the launcher sitting there (26 Nov, 10:59 AM: "Could not
+# redirect ... Skyrim Special Edition"). Read from where the run began, whole
+# lines only, sharing the file as the launcher writes it. A reason of several
+# lines comes in one write, so its lines that carry no time stamp are its own.
+function Read-LauncherFailure {
+    if (-not (Test-Path -LiteralPath $launcherLog)) { return '' }
+    $fs = [IO.File]::Open($launcherLog, 'Open', 'Read', 'ReadWrite, Delete')
+    try {
+        # The launcher starts the log afresh past its size limit.
+        if ($fs.Length -lt $script:launcherLogReadAt) { $script:launcherLogReadAt = 0 }
+        $have = $fs.Length - $script:launcherLogReadAt
+        if ($have -le 0) { return '' }
+        [void]$fs.Seek($script:launcherLogReadAt, 'Begin')
+        $buf = New-Object byte[] $have
+        $n = 0
+        while ($n -lt $buf.Length) {
+            $got = $fs.Read($buf, $n, $buf.Length - $n)
+            if ($got -le 0) { break }
+            $n += $got
+        }
+        if ($n -le 0) { return '' }
+        $end = [Array]::LastIndexOf($buf, [byte]10, $n - 1)
+        if ($end -lt 0) { return '' }
+        $script:launcherLogReadAt += $end + 1
+        $lines = [Text.Encoding]::UTF8.GetString($buf, 0, $end + 1) -split "`n" | ForEach-Object { $_.TrimEnd("`r") }
+        $stamp = '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ  '
+        $why = $null
+        foreach ($l in $lines) {
+            if ($null -eq $why) {
+                if ($l -match ($stamp + 'Failed to start: (.*)$')) { $why = $Matches[1] }
+            } elseif ($l -match $stamp) { break }
+            elseif ($l.Trim()) { $why += ' ' + $l.Trim() }
+        }
+        if ($null -eq $why) { return '' }
+        return $why.Trim()
+    } finally { $fs.Dispose() }
+}
 
 $launcher = $null
 $switched = $false
@@ -494,6 +536,10 @@ try {
     while ($true) {
         if ((Get-Date) -gt $deadline) { $result = 'timeout'; $note = "no end in $Minutes minutes"; break }
         $proc = Get-GameProcess
+        if (-not $proc -and -not $sawGame) {
+            $failed = Read-LauncherFailure
+            if ($failed) { throw "The launcher could not start the game: $failed" }
+        }
         if ($proc) {
             if (-not $sawGame) {
                 Say "The game is up, process $($proc.Id)"
