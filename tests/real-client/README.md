@@ -19,9 +19,13 @@ keeps one list of characters for both servers, so a character made on main
 reads "not on this server" on dev, and playing it makes a new one there. The
 race menu then opens in the hall. The run presses R, the menu's Done,
 answers its question with Enter, accepts the name with Enter (the name box is
-inside the race menu and says no menu of its own), then takes the Starting Location on the K panel the way a person does (Whiterun, Review, Confirm),
-and waits for the trip to the town. For a character the server has, the race
-menu never opens, and those steps are skipped.
+inside the race menu and says no menu of its own). For a character the server
+has, the race menu never opens, and those steps are skipped. Then a character
+still in the hall, new or made by an earlier run that stopped there, takes
+the Starting Location on the K panel the way a person does (Whiterun, Review,
+Confirm) and waits for the trip to the town. The panel's
+`thornswoodSkills.isCreating()` says which: a character the server has
+already placed answers `placed`, and the shot and the trip are skipped.
 
 ## On your machine
 
@@ -62,6 +66,7 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"page","js":"<expression>"}` | the expression, run in the game's page every half second, gives true, a number other than 0 or a word. It may click things on the way, as a person would. |
 | `{"do":"wait","for":"world"}` | the character stands in a cell with no loading screen or main menu up. |
 | `{"do":"wait","for":"menu","menu":"InventoryMenu","open":true}` | the menu is open, or the game said it opened since the step before this one began (`"open":false`: closed). A loading screen can open and close between two of the plugin's ticks, which do not come while it is up. |
+| `{"do":"page",...,"skip":2,"skipIf":"placed"}` | as a page step, but when the page answers exactly the `skipIf` word the next 2 steps, which deal with what is not there, are skipped. |
 | `{"do":"wait",...,"skip":8}` | any wait with `skip` passes too when what it waits for does not come in its time, and the next 8 steps, which deal with it, are skipped. For what comes only sometimes, like creation. |
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
 | `{"do":"key","code":36}` | Windows accepted a scan-code down, a 120 ms hold and a separate up, with game-window focus checks before and after (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
@@ -77,7 +82,9 @@ the old runner's numeric reply cannot pass a key step. Accepted input alone
 does not prove the game or browser handled the key; follow it with a menu,
 message or page check for the expected result. The focus checks and
 Windows input are separate calls, so a focus change between those calls
-cannot be ruled out by a successful acknowledgement.
+cannot be ruled out by a successful acknowledgement. When the game window is
+not in front, the note names the process and the title of the window that is
+(26 Nov: Windows refused the focus at step 20 and nothing said what had it).
 
 Keys stay down for 120 ms, a short human press below the repeat delay.
 The pinned engine sends its browser listener changes in current keyboard

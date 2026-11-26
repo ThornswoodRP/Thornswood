@@ -57,7 +57,8 @@
   already match the record. The draft must change only those tags and their
   ordering references, verified from its downloaded archive before publish.
 
-  -Replicate gives the named patched mods the list of the files they install
+  -Replicate gives the patched entries named by their Nexus file ids the list
+  of the files they install
   (New-NexusRevision.ps1, THE FILES A PATCHED MOD INSTALLS, #6888), when the
   published files already match the record. The draft must change only those
   entries, each only by its list in place of its installer answers, verified
@@ -107,8 +108,8 @@ if ($repairRequested -and (-not $RefreshTag.Count -or @($RefreshTag | Where-Obje
 }
 $replicateRequested = $PSBoundParameters.ContainsKey('Replicate')
 $Replicate = @($Replicate | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() })
-if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Object { $_ -notmatch '^[1-9][0-9]{0,8}$' }).Count -or @($Replicate | Select-Object -Unique).Count -ne $Replicate.Count)) {
-    Stop-Record '-Replicate needs a nonempty list of distinct positive Nexus mod numbers.'
+if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Object { $_ -notmatch '^[1-9][0-9]{0,11}$' }).Count -or @($Replicate | Select-Object -Unique).Count -ne $Replicate.Count)) {
+    Stop-Record '-Replicate needs a nonempty list of distinct positive Nexus file ids.'
 }
 if ($RefreshTag.Count -and $Replicate.Count) { Stop-Record '-RefreshTag and -Replicate each go in a revision of their own.' }
 
@@ -193,7 +194,7 @@ if ($RefreshTag.Count) {
 if ($Replicate.Count) {
     if (-not $cs.Empty) { Stop-Record '-Replicate lists the files of patched mods only while the record already matches the published files.' }
     foreach ($m in $Replicate) {
-        if (@($want.mods | Where-Object { [string]$_.modId -eq $m }).Count -ne 1) { Stop-Record ('There is no one recorded entry for mod ' + $m + ' to list the files of.') }
+        if (@($want.mods | Where-Object { [string]$_.fileId -eq $m }).Count -ne 1) { Stop-Record ('There is no one recorded entry for Nexus file ' + $m + ' to list the files of.') }
     }
     Say ('  list the files each of these mods installs, so Vortex patches its own copy (#6888): ' + ($Replicate -join ', '))
 }

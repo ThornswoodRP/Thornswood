@@ -755,15 +755,17 @@ function applyReplicate(collection, rp, lines) {
 // published revision, only the named entries may differ, and each only by its
 // file hashes in place of its FOMOD answers; the archive's other files are the
 // same (checkRepairFiles).
+// ids are the Nexus file ids of the entries, which a mod with two entries
+// (More Craftable Equipment) needs: its number names neither alone.
 function checkReplicated(before, after, ids) {
-  if (!Array.isArray(ids) || !ids.length || new Set(ids.map(String)).size !== ids.length) stop('Say distinct mod numbers to check.');
+  if (!Array.isArray(ids) || !ids.length || new Set(ids.map(String)).size !== ids.length) stop('Say distinct file ids to check.');
   const expected = JSON.parse(JSON.stringify(before));
   if (!Array.isArray(expected.mods) || !Array.isArray(after.mods)) stop('A file hash check needs two collection mod lists.');
   for (const id of ids) {
-    if (!/^[1-9][0-9]{0,8}$/.test(String(id))) stop('A file hash check has an invalid mod number.');
-    const matches = c => c.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.modId) === String(id));
+    if (!/^[1-9][0-9]{0,11}$/.test(String(id))) stop('A file hash check has an invalid file id.');
+    const matches = c => c.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.fileId) === String(id));
     const old = matches(expected), next = matches(after);
-    if (old.length !== 1 || next.length !== 1) stop('The file hash check has no one entry for mod ' + id + '.');
+    if (old.length !== 1 || next.length !== 1) stop('The file hash check has no one entry for Nexus file ' + id + '.');
     if (Array.isArray(old[0].hashes) && old[0].hashes.length) stop(old[0].name + ' carried file hashes already.');
     const bad = hashesProblem(old[0], next[0].hashes);
     if (bad) stop('The draft\'s file hashes for ' + old[0].name + ' have ' + bad + '.');
@@ -936,7 +938,7 @@ function main(argv) {
     return;
   }
   if (argv[0] === '--check-replicate') {
-    if (argv.length !== 4) stop('usage: nexus-collection.js --check-replicate <published folder> <draft folder> <mod numbers>');
+    if (argv.length !== 4) stop('usage: nexus-collection.js --check-replicate <published folder> <draft folder> <file ids>');
     const path = require('path');
     checkRepairFiles(argv[1], argv[2]);
     checkReplicated(JSON.parse(fs.readFileSync(path.join(argv[1], 'collection.json'), 'utf8')), JSON.parse(fs.readFileSync(path.join(argv[2], 'collection.json'), 'utf8')), argv[3].split(','));

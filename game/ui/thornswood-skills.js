@@ -63,7 +63,7 @@
   cursor rule restyles nothing.
 
   THE CONTRACT with thornswood-front.js, unchanged from the first cut:
-    window.thornswoodSkills = { open, close, toggle, isOpen, setData, takeOn, setKey }
+    window.thornswoodSkills = { open, close, toggle, isOpen, isCreating, setData, takeOn, setKey }
     setKey(name)    SkillsKey's name, K unless it is bound elsewhere (#1919)
     page -> plugin  'skills:ready' | 'skills:opened' | 'skills:closed' |
                     'skills:refresh' | 'skills:pick <words>' |
@@ -4506,6 +4506,10 @@
       if (root.className === 'gone') { api.open(); } else { closeByHand(); }
     },
     isOpen: function () { return root.className !== 'gone'; },
+    // Whether the server says this character is still being made: true in
+    // the hall until a Starting Location is confirmed, false once placed,
+    // null before the server has said anything (the real game run, #5197).
+    isCreating: function () { return mine ? !!mine.creating : null; },
     /*
       SkillsKey's name, handed over by the front when this page says it is
       ready. A key the front has no name for (#57, say) is not one this page
