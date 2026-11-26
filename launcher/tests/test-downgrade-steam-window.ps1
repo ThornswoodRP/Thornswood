@@ -37,6 +37,14 @@
   MainWindow and the clipboard lines, not a copy of them.
 
   Read only apart from files under its own temp folder.
+
+  #4700. The main window was the biggest visible Steam window, so a chat or
+  the Friends list drawn bigger than it was taken for it, and only one check
+  stood between the click and the whole line with two Enters. It is now the
+  one window of class SDL_app titled exactly "Steam", none when two match,
+  and every key step and every character checks Steam is still in front.
+  On main before #4700 the new cases fail: the bigger chat and Friends list
+  are taken, two matching windows give one, and Type(h, text) is not there.
 #>
 [CmdletBinding()]
 param([string]$AppPath)
@@ -114,6 +122,8 @@ $wanted = [ordered]@{
     'WindowSearch'      = 'sealed class WindowSearch'
     # The callback EnumWindows calls, from its attribute on (#4823).
     'OnWindow'          = '[UnmanagedCallersOnly]'
+    'IsMainWindow'      = 'static unsafe bool IsMainWindow(IntPtr h)'
+    'Type'              = 'static bool Type(IntPtr h, string text)'
     'IsSteam'           = 'static bool IsSteam(string processName)'
     'SteamNames'        = 'static readonly string[] SteamNames ='
     'SayWindow'         = 'static void SayWindow(IntPtr h, Action<string> log)'
@@ -137,6 +147,8 @@ $said = [regex]::Match($text, '(?m)^\s*static string saidWindow;\s*$')
 Yes 'Downgrade.cs keeps the window it last named in saidWindow' $said.Success
 $appId = [regex]::Match($text, '(?m)^\s*const int AppId = \d+;\s*$')
 Yes 'Downgrade.cs has AppId' $appId.Success
+$mainNames = [regex]::Matches($text, '(?m)^\s*const string Main(Class|Title) = "[^"]*";\s*$')
+Yes 'Downgrade.cs names the main window''s class and title' ($mainNames.Count -eq 2)
 
 # ---- the stand-in desktop ----------------------------------------------------
 $probe = @'
@@ -180,7 +192,11 @@ namespace Probe
     public class Win
     {
         public IntPtr Handle; public uint Pid; public bool Visible; public int Width, Height; public string Title; public IntPtr Root;
+        public string Class = "SDL_app";
     }
+
+    // Stands in for System.Threading.Thread, whose Sleep the lifted Type calls.
+    static class Thread { public static void Sleep(int ms) { } }
 
     public static class Downgrade
     {
@@ -192,6 +208,7 @@ namespace Probe
         public static void Reset()
         {
             Process.All.Clear(); Desktop.Clear(); Foreground = IntPtr.Zero; Clipboard.Clear(); Flashes = 0; ClipboardTakes = true;
+            Typed.Clear(); StealAfter = -1; StealTo = IntPtr.Zero;
             System.Reflection.FieldInfo f = typeof(Downgrade).GetField("saidWindow", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
             if (f != null) f.SetValue(null, null);
         }
@@ -202,6 +219,37 @@ namespace Probe
             Desktop.Add(w);
         }
         public static void SetForeground(long h) { Foreground = new IntPtr(h); }
+        public static void SetClass(long h, string cls) { Win w = Find(new IntPtr(h)); if (w != null) w.Class = cls; }
+
+        // Keys typed, and the window the foreground moves to once that many
+        // have gone: a chat taking the front part way through a line.
+        public static StringBuilder Typed = new StringBuilder();
+        public static int StealAfter = -1;
+        public static IntPtr StealTo = IntPtr.Zero;
+        public static bool TypeNow(long h, string text) { return Type(new IntPtr(h), text); }
+
+        static unsafe int GetClassNameW(IntPtr h, char* b, int max) { Win w = Find(h); return w == null ? 0 : Copy(w.Class, b, max); }
+        static unsafe int GetWindowTextW(IntPtr h, char* b, int max) { Win w = Find(h); return w == null ? 0 : Copy(w.Title, b, max); }
+        static unsafe int Copy(string s, char* b, int max)
+        {
+            if (s == null) return 0;
+            int n = Math.Min(s.Length, max - 1);
+            for (int i = 0; i < n; i++) b[i] = s[i];
+            b[n] = '\0';
+            return n;
+        }
+
+        public struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+        [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION { [FieldOffset(0)] public KEYBDINPUT ki; }
+        public struct INPUT { public uint type; public INPUTUNION u; }
+        const uint INPUT_KEYBOARD = 1, KEYEVENTF_KEYUP = 2, KEYEVENTF_UNICODE = 4;
+        static uint SendInput(uint n, INPUT[] inputs, int size)
+        {
+            foreach (INPUT i in inputs)
+                if ((i.u.ki.dwFlags & KEYEVENTF_KEYUP) == 0) Typed.Append((char)i.u.ki.wScan);
+            if (StealAfter >= 0 && Typed.Length >= StealAfter) Foreground = StealTo;
+            return n;
+        }
         // A window inside another: GetAncestor(GA_ROOT) answers the outer one.
         public static void SetRoot(long h, long root) { Win w = Find(new IntPtr(h)); if (w != null) w.Root = new IntPtr(root); }
 
@@ -240,6 +288,7 @@ $body = New-Object System.Text.StringBuilder
 foreach ($k in $lifted.Keys) { [void]$body.AppendLine($lifted[$k]) }
 if ($said.Success) { [void]$body.AppendLine($said.Value) }
 if ($appId.Success) { [void]$body.AppendLine($appId.Value) }
+foreach ($m in $mainNames) { [void]$body.AppendLine($m.Value) }
 $probe = $probe.Replace('__LIFTED__', $body.ToString())
 
 Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
@@ -317,6 +366,45 @@ try {
     Call 'AddWindow' @([long]0x91, 300, $true, 3840, 2160, 'Program Manager') | Out-Null
     Call 'AddWindow' @([long]0x92, 501, $true, 600, 400, 'Steam - Error') | Out-Null
     Yes 'with no steam or steamwebhelper running, nothing is found, not even a window of another steam-something' ((Hwnd (Call 'MainWindow' @())) -eq 0)
+
+    # ---- #4700: by class and title, never by size --------------------------------
+    # A chat window is titled with the friend's name, and the Friends list and a
+    # chat are both drawn by steamwebhelper. Bigger than the main window, the
+    # biggest-window rule took them, and the console line and two Enters went
+    # into a chat.
+    Measured
+    Call 'AddWindow' @([long]0x94, 200, $true, 3500, 1900, 'A friend') | Out-Null
+    Yes 'a chat window bigger than the main window is not taken for it' ((Hwnd (Call 'MainWindow' @())) -eq 0x21)
+    Measured
+    Call 'AddWindow' @([long]0x95, 200, $true, 3400, 1800, 'Friends List') | Out-Null
+    Yes 'nor is a Friends list bigger than it' ((Hwnd (Call 'MainWindow' @())) -eq 0x21)
+    Measured
+    Call 'AddWindow' @([long]0x97, 100, $true, 3000, 2000, 'Steam') | Out-Null
+    Call 'SetClass' @([long]0x97, 'vguiPopupWindow') | Out-Null
+    Yes 'a window titled Steam of another class is not taken for it' ((Hwnd (Call 'MainWindow' @())) -eq 0x21)
+    Measured
+    Call 'AddWindow' @([long]0x96, 200, $true, 900, 700, 'Steam') | Out-Null
+    Yes 'two windows that both look like the main window: neither is taken, so nothing is typed' ((Hwnd (Call 'MainWindow' @())) -eq 0)
+    Measured
+    Call 'AddWindow' @([long]0x98, 200, $true, 900, 700, 'Steam ') | Out-Null
+    Yes 'the title has to be Steam exactly' ((Hwnd (Call 'MainWindow' @())) -eq 0x21)
+
+    # ---- #4700: input stops the moment Steam is not in front ----------------------
+    Measured
+    Call 'AddWindow' @([long]0x94, 200, $true, 600, 800, 'A friend') | Out-Null
+    Call 'SetForeground' @([long]0x21) | Out-Null
+    $line = 'download_depot 489830 489831 1234'
+    $all = [bool](Call 'TypeNow' @([long]0x21, $line))
+    Yes 'with Steam in front the whole line is typed' ($all -and $T.GetField('Typed').GetValue($null).ToString() -ceq $line)
+    Call 'Reset' @() | Out-Null
+    Measured
+    Call 'AddWindow' @([long]0x94, 200, $true, 600, 800, 'A friend') | Out-Null
+    Call 'SetForeground' @([long]0x21) | Out-Null
+    $T.GetField('StealAfter').SetValue($null, 5)
+    $T.GetField('StealTo').SetValue($null, [IntPtr]0x94)
+    $cut = [bool](Call 'TypeNow' @([long]0x21, $line))
+    $sent = $T.GetField('Typed').GetValue($null).ToString()
+    Yes ('a chat taking the front part way through stops the typing there (' + $sent.Length + ' of ' + $line.Length + ' sent)') (-not $cut -and $sent.Length -eq 5)
 
     # ---- whether Steam is in front --------------------------------------------
     # Nothing is clicked or typed unless this says yes, so both directions matter.
@@ -519,7 +607,7 @@ if ($type) {
     # The trap in the entry: never type or click unless Steam's window is
     # really in front, exactly as before. Three checks, and the click and the
     # keys each come after one.
-    Yes 'Steam being in front is still checked three times, each time for the window brought forward' (([regex]::Matches($type, 'SteamInFront\(h\)')).Count -eq 3)
+    Yes 'Steam being in front is checked for the window brought forward, before the click and before each key step' (([regex]::Matches($type, 'SteamInFront\(h\)')).Count -ge 6)
     Yes 'and the click goes to that same window' ($type -match 'ClickCommandLine\(h\);')
     # Right after one: nothing but comments and Thread.Sleep between the check
     # and the click, and between the next check and the keys.
@@ -537,6 +625,32 @@ if ($type) {
     Yes 'the click comes straight after a check that Steam is in front' (Guarded $type 'ClickCommandLine(')
     Yes 'and the keys come straight after another' (Guarded $type 'Chord(')
     Yes 'and the two checks are not the same one' ($type.LastIndexOf('if (!SteamInFront(h)) return false;', $type.IndexOf('Chord(')) -gt $type.IndexOf('ClickCommandLine('))
+    # #4700: every step after Ctrl+A is checked again, and Type checks each
+    # character itself.
+    function GuardedAll([string]$in, [string]$act) {
+        $check = 'if (!SteamInFront(h)) return false;'
+        $at = $in.IndexOf($act)
+        if ($at -lt 0) { return $false }
+        while ($at -ge 0) {
+            $iChk = $in.LastIndexOf($check, $at)
+            if ($iChk -lt 0) { return $false }
+            $between = $in.Substring($iChk + $check.Length, $at - $iChk - $check.Length)
+            $between = [regex]::Replace($between, '//[^\n]*', '')
+            $between = [regex]::Replace($between, 'Thread\.Sleep\(\d+\);', '')
+            if ($between.Trim() -ne '') { return $false }
+            $at = $in.IndexOf($act, $at + $act.Length)
+        }
+        return $true
+    }
+    Yes 'the delete comes straight after its own check' (GuardedAll $type 'Key(VK_BACK);')
+    Yes 'and so does each Enter' (GuardedAll $type 'Key(VK_RETURN);' -and ([regex]::Matches($type, 'Key\(VK_RETURN\);')).Count -eq 2)
+    Yes 'and the line is typed into that window, stopping when it is not in front' ($type.Contains('if (!Type(h, cmd)) return false;'))
+    $typeBody = Get-Member $text 'static bool Type(IntPtr h, string text)'
+    Yes 'Type checks Steam is in front before each character' ($null -ne $typeBody -and $typeBody -match 'foreach \(char c in text\)\s*\{\s*if \(!SteamInFront\(h\)\) return false;')
+    $main = Get-Member $text 'static IntPtr MainWindow()'
+    $onw = Get-Member $text '[UnmanagedCallersOnly]'
+    Yes 'MainWindow ranks nothing by size any more' ($null -ne $main -and $null -ne $onw -and ($main + $onw) -notmatch 'Area|GetWindowRect')
+    Yes 'and takes a window only when exactly one matches' ($main -match 'search\.Matches == 1 \? search\.Found : IntPtr\.Zero')
 }
 $flash = Get-Member $text 'static void FlashLauncher()'
 Yes 'FlashLauncher is found' ($null -ne $flash)
