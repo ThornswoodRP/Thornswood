@@ -67,6 +67,12 @@ reads launcher.log from where it began, stops at the launcher's own "Failed
 to start" line with its reason, and closes the launcher it started, instead of
 waiting the whole `-Minutes` for a game that is not coming (26 Nov).
 
+At the end the run closes the game, waits for the launcher's "Game closed
+after" line, which it writes once it has put Windows' Skyrim folders back,
+and then closes the launcher's window as a person does. A launcher ended by
+force puts nothing back. If either folder still points at the build after
+the run, the run fails and names it.
+
 ## How a step is written
 
 One object per step, in order. Each takes `timeout` in milliseconds (30000

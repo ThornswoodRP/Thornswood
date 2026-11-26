@@ -702,7 +702,7 @@ foreach ($scan in @(1,23,36)) {
 {
   const cp = require('child_process');
   const os = require('os');
-  const fn = /function Read-LauncherFailure \{[\s\S]*?\n\}\n/.exec(RUNNER);
+  const fn = /function Read-LauncherLines \{[\s\S]*?\nfunction Read-LauncherFailure \{[\s\S]*?\n\}\n/.exec(RUNNER);
   yes('the runner reads the launcher log for a failed Play', !!fn);
   const loop = RUNNER.indexOf('$sawGame = $false');
   const check = RUNNER.indexOf('$failed = Read-LauncherFailure', loop);
@@ -710,6 +710,22 @@ foreach ($scan in @(1,23,36)) {
   yes('the game wait stops on it before any game is up',
       loop > 0 && check > loop && game > check &&
       /if \(\$failed\) \{ throw "The launcher could not start the game: \$failed" \}/.test(RUNNER));
+  // The run closes the game, waits for the launcher's own line that it saw
+  // the game close (which is when it puts Windows' Skyrim folders back), and
+  // then closes the launcher's window as a person does. Ending the launcher
+  // by force first left both folders pointing into Profile after every run
+  // (26 Nov, 12:42 PM on One).
+  const fin = RUNNER.slice(RUNNER.indexOf('} finally {', RUNNER.indexOf('$sawGame = $false')));
+  const killGame = fin.indexOf("Get-Process -Name SkyrimSE");
+  const sawClose = fin.indexOf("'Game closed after '");
+  const closeWin = fin.indexOf('CloseMainWindow()');
+  const forced = fin.indexOf('$lp | Stop-Process -Force');
+  yes('after the run the game closes first, then the launcher says the folders are back, then its window is closed',
+      killGame >= 0 && sawClose > killGame && closeWin > sawClose && forced > closeWin);
+  yes('the launcher is not ended by force before its window was asked to close',
+      !/\$ours \| Stop-Process/.test(fin) && /if \(\$lp\.WaitForExit\(30000\)\)/.test(fin));
+  yes('folders still pointing at the build after the run fail it and are named',
+      /\$left = @\(Get-StillRedirected\)/.test(fin) && /if \(\$result -eq 'passed'\) \{ \$result = 'failed' \}/.test(fin));
   // And the launcher says why. "Could not redirect" alone, with Junction's
   // reason dropped, is all One's log had to go on.
   const swap = read(path.join('launcher', 'app', 'Swap.cs'));
