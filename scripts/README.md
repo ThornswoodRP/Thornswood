@@ -340,6 +340,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [vps/Prove-SecretOffCommandLines.ps1](vps/Prove-SecretOffCommandLines.ps1) | Proves, on one real run, that a secret-sending script keeps the value off every command line on the VPS (issue #1212, the person check of #451). |
 | [vps/Read-Availability.ps1](vps/Read-Availability.ps1) | Says how many minutes each service was down over a window, and what share of the window it was up, from the down and back lines the watchdog writes into alerts.jsonl. |
 | [vps/Read-CursorLines.ps1](vps/Read-CursorLines.ps1) | Says where the cursor came up when the game's page took focus, in the sessions people really played. |
+| [vps/Read-MiningLines.ps1](vps/Read-MiningLines.ps1) | Prints what the game wrote about mining, in the sessions people really played. |
 | [vps/Read-LauncherStarts.ps1](vps/Read-LauncherStarts.ps1) | Says how long the launcher took to start on the machines of the people who played, per launcher version: how many starts, the middle one, the one slower than nine in ten, the slowest, and how much of the middle start the mod check took. |
 | [vps/Read-Load.ps1](vps/Read-Load.ps1) | Says which service is using the box, from the record vps-load.ps1 keeps on it. |
 | [vps/Read-Online.ps1](vps/Read-Online.ps1) | Says how many people are on each game server, live and dev, from the online.json each server announces on its resources port (3000 live, 7788 dev), the same file Restart-Server.ps1 and the launcher read. |
