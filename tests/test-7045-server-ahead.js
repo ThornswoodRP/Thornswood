@@ -56,14 +56,14 @@ function body(src, sig) {
 }
 
 // 1. Which plugin of ours the release does not carry.
-const ahead = body(verify, 'public static string ServerAheadOfRelease(Config cfg, List<Issue> issues)');
+const ahead = body(verify, 'public static string ServerAheadOfRelease(List<Issue> issues, Func<string, byte[]> release)');
 yes('1. Verify.ServerAheadOfRelease is there', ahead !== '');
 yes('1. it reads only lines answered NotInRelease', /i\.WhatWill != NotInRelease\) continue;/.test(ahead));
-yes('1. it takes the bytes from the installed release, nowhere else', /Updater\.ReleaseCopy\(cfg\)/.test(ahead) && !/Http\./.test(ahead));
+yes('1. it takes the bytes from the installed release, nowhere else', /bytes = release\(i\.Plugin\)/.test(ahead) && !/Http\./.test(ahead));
 yes('1. a release with no copy of it is ahead', /if \(bytes == null\) return i\.Plugin;/.test(ahead));
 yes('1. a release copy that is not the server\'s by size or crc32 is ahead',
   /bytes\.LongLength != i\.WantSize \|\| crc != i\.WantCrc\) return i\.Plugin;/.test(ahead));
-yes('1. a launcher setup did not install has no channel to ask', /if \(release == null\) return null;/.test(ahead));
+yes('1. a launcher setup did not install has no channel to ask', /if \(issues == null \|\| release == null\) return null;/.test(ahead));
 
 // 2. The ask.
 const ask = body(upd, 'static async Task AskForServersRelease(string plugin)');
@@ -78,7 +78,7 @@ const blockAt = play.indexOf('if (blockers > 0)');
 const notLaunching = play.indexOf('Log("Not launching. " + blockers', blockAt);
 const block = play.slice(blockAt, notLaunching);
 yes('3. Play asks before its refusal', blockAt >= 0 && notLaunching > blockAt &&
-  /Verify\.ServerAheadOfRelease\(cfg, found\)/.test(block) && /await AskForServersRelease\(ahead\);/.test(block));
+  /Verify\.ServerAheadOfRelease\(found, Updater\.ReleaseCopy\(cfg\)\)/.test(block) && /await AskForServersRelease\(ahead\);/.test(block));
 yes('3. and takes the waiting update when updates go in by themselves', /if \(cfg\.AutoUpdate\) UpdateBySelf\(\);/.test(block));
 yes('3. or says Install now when they do not', /Press Install now on the card above Play, then Play\./.test(block));
 yes('3. and does not then send anybody to Fix', /return;\s*\}\s*\}\s*$/.test(block.trimEnd()) && !/Press Fix/.test(block));
@@ -89,7 +89,7 @@ const rescanAt = rest.indexOf('List<Issue> plugins = await Rescan();');
 const askAt = rest.indexOf('await AskForServersRelease(ahead)');
 const updAt = rest.indexOf('if (Has(Upkeep.LastIssues, IssueKind.Update))');
 yes('4. Fix asks after its rescan and before the update it takes last', rescanAt >= 0 && askAt > rescanAt && updAt > askAt);
-yes('4. on the rescan\'s own lines', /Verify\.ServerAheadOfRelease\(cfg, plugins\)/.test(rest));
+yes('4. on the rescan\'s own lines', /Verify\.ServerAheadOfRelease\(plugins, Updater\.ReleaseCopy\(cfg\)\)/.test(rest));
 
 // 5. What Fix says.
 const m = /const string NotInRelease = "([^"]*)";/.exec(verify);

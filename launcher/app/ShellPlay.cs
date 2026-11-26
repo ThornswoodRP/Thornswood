@@ -261,7 +261,7 @@ namespace Thornswood
                     // that carries it is asked for now and taken, rather than
                     // sending anybody to a Fix that cannot have it.
                     string ahead = null;
-                    await OffThread(delegate { ahead = Verify.ServerAheadOfRelease(cfg, found); });
+                    await OffThread(delegate { ahead = Verify.ServerAheadOfRelease(found, Updater.ReleaseCopy(cfg)); });
                     if (ahead != null)
                     {
                         await AskForServersRelease(ahead);

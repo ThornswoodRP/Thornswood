@@ -1175,22 +1175,19 @@ namespace Thornswood
         /// (Shell.AskForServersRelease). A copy the release does carry is
         /// Fix's to put in, and is not named here.
         /// </summary>
-        public static string ServerAheadOfRelease(Config cfg, List<Issue> issues)
+        /// <param name="release">Thornswood's own plugins from the installed
+        /// launcher's package (Updater.ReleaseCopy), as Fix is given them.
+        /// Null when Velopack did not install this launcher, which has no
+        /// channel to ask.</param>
+        public static string ServerAheadOfRelease(List<Issue> issues, Func<string, byte[]> release)
         {
-            if (issues == null) return null;
-            Func<string, byte[]> release = null;
+            if (issues == null || release == null) return null;
             foreach (Issue i in issues)
             {
                 if (i == null || i.WhatWill != NotInRelease) continue;
                 // The order's line: the server has a plugin of ours in a place
                 // where this release's list has none (OrderWhatWill).
                 if (string.IsNullOrEmpty(i.Plugin) || i.WantSize <= 0) return string.IsNullOrEmpty(i.Plugin) ? "a plugin of Thornswood's" : i.Plugin;
-                if (release == null)
-                {
-                    try { release = Updater.ReleaseCopy(cfg); }
-                    catch (Exception ex) { Swallow.Note("Verify.ServerAheadOfRelease, opening the installed release", ex); return null; }
-                    if (release == null) return null;   // not installed by setup: it has no channel to ask
-                }
                 byte[] bytes;
                 try { bytes = release(i.Plugin); }
                 catch (Exception ex) { Swallow.Note("Verify.ServerAheadOfRelease, the release's copy of " + i.Plugin, ex); continue; }

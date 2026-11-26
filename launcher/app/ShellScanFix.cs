@@ -453,7 +453,7 @@ namespace Thornswood
             // asked for it now, so the update taken last below is judged on
             // GitHub's answer of this moment, not on the half hourly one.
             string ahead = null;
-            await OffThread(delegate { ahead = Verify.ServerAheadOfRelease(cfg, plugins); });
+            await OffThread(delegate { ahead = Verify.ServerAheadOfRelease(plugins, Updater.ReleaseCopy(cfg)); });
             if (ahead != null) await AskForServersRelease(ahead);
 
             // The shortcuts still not right after Ensure: Windows' own pictures,
