@@ -80,6 +80,8 @@ const SITES = {
   "'/burn 0'": { n: 1, kind: 'report', lines: ['/burn 0'] },
   "'/moldhere ' + hex": { n: 1, kind: 'kept', lines: ['/moldhere ff00a1b2'] },
   "'/plot ' + hex": { n: 1, kind: 'kept', lines: ['/plot ff00c3d4'] },
+  // The ask at a door no line covers (#6980): the plugin's own, on a look.
+  "'/doorlook ' + hex": { n: 1, kind: 'report', lines: ['/doorlook ff00a1b2'] },
   // the lock key and the mold key at a forge
   "'/' + sig": { n: 2, kind: 'kept', lines: ['/lock ff001234', '/unlock ff001234', '/claim ff001234', '/key ff001234 master'] },
   "'/repair'": { n: 1, kind: 'kept', lines: ['/repair'] },

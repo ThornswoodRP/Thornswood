@@ -507,6 +507,8 @@ const PLUGIN_REPORTS = [
   /^\/tspicks \d+$/,
   /^\/tspicked [0-9a-f]+$/,
   /^\/furniture look$/,
+  // The door under the crosshair, asked about on a look (#6980), as a crop is.
+  /^\/doorlook [0-9a-f]+$/,
   /^\/modset(?: [A-Za-z0-9_]+=-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)+$/
 ];
 function pluginReport(text) {
