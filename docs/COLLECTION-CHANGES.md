@@ -203,8 +203,9 @@ the card comes down by itself and Scan and Fix run (#5200).
 
 ## Not done by the record yet
 
-- Switching a plugin's light flag, or switching a plugin off: the draft is
-  not made from these, so the merge discards a draft that would need them.
+- Switching a plugin off: the draft is not made from this, so the merge
+  discards a draft that would need it. (Switching a plugin's light flag is
+  automated through `SetLight` and `ClearLight`.)
 - The records that follow a publish and the box rebuild of the Last plugin
   are not started by the publish yet. The rebuild issue it files says what
   to run.

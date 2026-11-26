@@ -12,7 +12,8 @@
 //   - it takes the run file and deletes it, so the next ordinary Play does
 //     not run it again;
 //   - each kind of step passes on what it waits for, asks the runner and
-//     waits for its answer, and the run ends with a done line and an end ask;
+//     waits for its answer (a menu wait also on a menu that opened and closed
+//     between two ticks, as a loading screen does), and the run ends with a done line and an end ask;
 //   - a step that times out fails, asks for a screenshot named after it, and
 //     ends the run as failed, unless it is a wait with skip, which passes
 //     over the steps that deal with what it waited for (creation, for a
@@ -239,6 +240,41 @@ function game(opts) {
   g.frame();
   const asks = g.lines().filter(function (l) { return l.t === 'ask'; });
   yes('when it comes, the steps after it run', asks.length === 1 && asks[0].do === 'key' && asks[0].arg === 19);
+}
+
+// ----------------------------------- a menu seen only between two ticks ----
+// Tick does not come while a loading screen is up, so the trip from the hall
+// to the town (16 Nov) opened and closed the Loading Menu between two ticks.
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'Loading Menu', open: true, timeout: 5000 },
+    { do: 'end' }
+  ] });
+  g.frame();
+  g.menu('Loading Menu', true);
+  g.menu('Loading Menu', false);
+  g.frame();
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('a menu that opened and closed between two ticks passes its wait', st.length >= 1 && st[0].ok === true && /opened and closed again/.test(st[0].note));
+}
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'InventoryMenu', open: true },
+    { do: 'wait', for: 'menu', menu: 'InventoryMenu', open: false },
+    { do: 'wait', for: 'menu', menu: 'Loading Menu', open: true, timeout: 1000 },
+    { do: 'end' }
+  ] });
+  g.frame(100);
+  g.menu('Loading Menu', true);
+  g.menu('Loading Menu', false);
+  g.frame(100);
+  g.menu('InventoryMenu', true);
+  g.frame(100);
+  g.menu('InventoryMenu', false);
+  g.frame(100);
+  g.frame(500); g.frame(600); g.frame(); g.frame();
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('  and one that came and went before the step before it began does not', st.length >= 3 && st[0].ok && st[1].ok && st[2].ok === false);
 }
 
 // ------------------------------------------------------ a failing step ----
