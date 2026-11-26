@@ -82,6 +82,17 @@ and then closes the launcher's window as a person does. A launcher ended by
 force puts nothing back. If either folder still points at the build after
 the run, the run fails and names it.
 
+## After each dev release, by itself
+
+On One, `pwsh scripts\dev\Watch-RealClient.ps1 -Install`, run once from
+`C:\Thornswood-Repo` as the person signed in, makes a task that looks every
+five minutes. It starts one run for the newest Dev Deployment that has
+succeeded and has no "Real game run:" line yet, from that Deployment's own
+commit, when no launcher or game is open, the PC is not on the lock screen
+and nobody has used the keyboard or mouse for ten minutes. Each Deployment is
+run once, pass or fail. Every look is a line in
+`temp\real-client\watch.log`; `-Uninstall` takes the task off.
+
 ## How a step is written
 
 One object per step, in order. Each takes `timeout` in milliseconds (30000

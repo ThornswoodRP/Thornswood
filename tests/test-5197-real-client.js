@@ -792,6 +792,48 @@ foreach ($scan in @(1,23,36)) {
   }
 }
 
+// The watcher starts a run by itself after a dev release (#5197's Done when:
+// nobody at the PC), once per Deployment, and never over somebody's game,
+// on a locked PC, or while somebody is using it.
+{
+  const cp = require('child_process');
+  const WATCH = read(path.join('scripts', 'dev', 'Watch-RealClient.ps1')) || '';
+  yes('the watcher is there and names its rule', /function Get-WatchVerdict/.test(WATCH));
+  yes('it makes the run from the Deployment\'s own commit, in a worktree that goes afterwards',
+      /worktree add -q --detach \$tree \$dep\.sha/.test(WATCH) && /finally \{\s*git -C \$repoRoot worktree remove --force \$tree/.test(WATCH));
+  yes('it marks a Deployment started before the run, so a run that stops early is not started again',
+      WATCH.indexOf('Add-Content -LiteralPath $startedFile') > 0 && WATCH.indexOf('Add-Content -LiteralPath $startedFile') < WATCH.indexOf("Run-RealClient.ps1'), '-Publish'"));
+  const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+  if (ver.status === 0) {
+    const file = path.join(REPO_DIR, 'scripts', 'dev', 'Watch-RealClient.ps1').replace(/'/g, "''");
+    const script = "$ErrorActionPreference = 'Stop'\n. '" + file + "'\n" +
+      "$d = [pscustomobject]@{ id = '7'; state = 'success'; lines = @('Deployed build-1.3.130') }\n" +
+      "function V($dep, $started, $open, $locked, $idle, $going) { Get-WatchVerdict $dep $started $open $locked $idle 10 $going }\n" +
+      "'A ' + (V $d @() $false $false 30 $false)\n" +
+      "'B ' + (V ([pscustomobject]@{ id = '7'; state = 'success'; lines = @('Real game run: failed. 22 of 38 steps passed.', 'Deployed') }) @() $false $false 30 $false)\n" +
+      "'C ' + (V $d @('7') $false $false 30 $false)\n" +
+      "'D ' + (V $d @() $true $false 30 $false)\n" +
+      "'E ' + (V $d @() $false $true 30 $false)\n" +
+      "'F ' + (V $d @() $false $false 3 $false)\n" +
+      "'G ' + (V $d @() $false $false 30 $true)\n" +
+      "'H ' + (V ([pscustomobject]@{ id = '8'; state = 'in_progress'; lines = @() }) @() $false $false 30 $false)\n" +
+      "'I ' + (V $null @() $false $false 30 $false)\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const out = (r.stdout || '') + (r.stderr || '');
+    const said = function (k) { const m = new RegExp('^' + k + ' (.*)$', 'm').exec(out); return m ? m[1].trim() : ''; };
+    yes('a new successful Deployment, nothing open, unlocked, idle: it runs', said('A') === 'run');
+    yes('a Deployment that has had its run is not run again', /has had its run/.test(said('B')));
+    yes('nor one it started a run for already', /was started for the newest Dev Deployment already/.test(said('C')));
+    yes('not over an open launcher or game', /launcher or the game is open/.test(said('D')));
+    yes('not on the lock screen', /lock screen/.test(said('E')));
+    yes('not while somebody is using the PC', /somebody used the PC 3 minute/.test(said('F')));
+    yes('not while its own run is going', /still going/.test(said('G')));
+    yes('not before the Deployment has succeeded', /in_progress, not success/.test(said('H')));
+    yes('and not with no Deployment', said('I') === 'no Dev Deployment');
+    if (said('A') !== 'run') { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+  }
+}
+
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;
