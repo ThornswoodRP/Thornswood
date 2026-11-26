@@ -448,6 +448,17 @@ try {
         $switched = $true
         Say "The install was on the $($leftOn.UpdateBranch) channel; put it on dev for the run, as the launcher's Server card does. It goes back when the run ends."
     }
+    # The game reads the keyboard only while its window is the one in front,
+    # and behind the lock screen no window of the session is: the 12:41 PM
+    # run on 26 Nov failed its first key with LockApp in front, and a key
+    # tapped inside the game at 2:09 PM was dropped as the game saw itself
+    # minimised. LogonUI runs in a session only while it is locked or at the
+    # sign-in screen. So a locked PC is said at once, on the Deployment, and
+    # the launcher is not started for a run that cannot press a key.
+    $mySession = (Get-Process -Id $PID).SessionId
+    if (@(Get-Process -Name LogonUI -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySession }).Count) {
+        throw 'This PC is on the lock screen, and Windows gives the keyboard to no window behind it, so the run did not start the game.'
+    }
     $launcher = Start-Process -FilePath $launcherExe -WorkingDirectory (Split-Path $launcherExe) -PassThru
     Say "Started the launcher, process $($launcher.Id)"
 

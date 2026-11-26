@@ -91,10 +91,8 @@ function game(opts) {
     printConsole: function () { },
     getPlatformVersion: function () { return 'test'; },
     browser: { executeJavaScript: function (src) { pageRuns.push(src); } },
-    Game: { getPlayer: function () { return { getParentCell: function () { return world.cell; } }; } },
-    Input: { tapKey: function (code) { if (world.tapThrows) { throw new Error('no SKSE'); } world.taps.push(code); } }
+    Game: { getPlayer: function () { return { getParentCell: function () { return world.cell; } }; } }
   };
-  world.taps = [];
   const FakeDate = { now: function () { return now; }, parse: Date.parse };
   const sandbox = {
     skyrimPlatform: sp,
@@ -332,25 +330,6 @@ function game(opts) {
   const done = g.lines().filter(function (l) { return l.t === 'done'; });
   yes('once it is taken the run ends failed, 0 of 2, without the steps after it',
       done.length === 1 && done[0].ok === false && done[0].passed === 0);
-}
-
-// A key "via": "game" is tapped inside the game on update, once, with no
-// ask to the runner: Windows gives the keyboard to nothing behind the lock
-// screen, which is how One sits with nobody at it (26 Nov).
-{
-  const g = game({ steps: [{ do: 'key', code: 19, via: 'game' }, { do: 'end' }] });
-  g.frame(); g.frame(); g.frame(); g.frame();
-  const step = g.lines().find(function (l) { return l.t === 'step'; });
-  yes('a key via the game is tapped once, on update', g.world.taps.length === 1 && g.world.taps[0] === 19);
-  yes('and passes saying how, with nothing asked of the runner',
-      !!step && step.ok === true && /Input\.tapKey/.test(step.note) && !g.lines().some(function (l) { return l.t === 'ask' && l.do === 'key'; }));
-}
-{
-  const g = game({ steps: [{ do: 'key', code: 19, via: 'game' }, { do: 'end' }] });
-  g.world.tapThrows = true;
-  g.frame(); g.frame(); g.frame();
-  const step = g.lines().find(function (l) { return l.t === 'step'; });
-  yes('a tap that throws fails its step with the reason', !!step && step.ok === false && /Input\.tapKey threw: Error: no SKSE/.test(step.note));
 }
 
 // -------------------------------------------- the lists and the runner ----
@@ -772,6 +751,14 @@ foreach ($scan in @(1,23,36)) {
       !/\$ours \| Stop-Process/.test(fin) && /if \(\$lp\.WaitForExit\(30000\)\)/.test(fin));
   yes('folders still pointing at the build after the run fail it and are named',
       /\$left = @\(Get-StillRedirected\)/.test(fin) && /if \(\$result -eq 'passed'\) \{ \$result = 'failed' \}/.test(fin));
+  // A locked PC stops the run before the launcher starts, with its reason.
+  {
+    const lock = RUNNER.indexOf("Get-Process -Name LogonUI");
+    const start = RUNNER.indexOf('$launcher = Start-Process -FilePath $launcherExe');
+    const tryAt = RUNNER.indexOf('\ntry {', RUNNER.indexOf('$launcherLogStart'));
+    yes('a PC on the lock screen stops the run inside its try, before the launcher starts',
+        lock > tryAt && tryAt > 0 && start > lock && /\$_\.SessionId -eq \$mySession/.test(RUNNER) && /throw 'This PC is on the lock screen/.test(RUNNER));
+  }
   // And the launcher says why. "Could not redirect" alone, with Junction's
   // reason dropped, is all One's log had to go on.
   const swap = read(path.join('launcher', 'app', 'Swap.cs'));

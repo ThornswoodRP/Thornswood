@@ -31,7 +31,6 @@
 //   {"do":"page","js":"<an expression>"}   true, a number or a word passes
 //   {"do":"shot","name":"journal-open"}
 //   {"do":"key","code":36}                 a DirectInput scan code (J is 36)
-//   {"do":"key","code":36,"via":"game"}    the same, tapped inside the game
 //   {"do":"end"}
 // Each takes "timeout" in milliseconds (30000 when not given). The run stops
 // at the first step that fails, after a screenshot named fail-<step>, and
@@ -120,24 +119,6 @@ sp.on('update', function () {
   let cell = null;
   try { const pc = sp.Game.getPlayer(); cell = pc ? pc.getParentCell() : null; } catch (e) { cell = null; }
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
-});
-
-// A key tapped inside the game, for a step that says "via": "game". A key
-// through Windows needs the game window in front with the keyboard, and
-// Windows gives the keyboard to nothing behind the lock screen: on One,
-// locked since 24 Nov, the key steps failed with LockApp.exe in front (26
-// Nov, 12:42 PM). Input.tapKey is SKSE's tap into the game's own input, so it
-// does not ask Windows for the keyboard. It is a game call, so it is made on
-// update, where those run; the step after it must show that it worked.
-let tapWanted = null;   // { step, code } for the next update
-let tapAskedFor = -1;   // the step that asked, so a key is tapped once
-let tapDone = null;     // { step, ok, why } once it was made
-sp.on('update', function () {
-  if (!tapWanted) { return; }
-  const t = tapWanted;
-  tapWanted = null;
-  try { sp.Input.tapKey(t.code); tapDone = { step: t.step, ok: true }; }
-  catch (e) { tapDone = { step: t.step, ok: false, why: String(e) }; }
 });
 
 // Every message the page sends, kept with when it came, so a step can look
@@ -312,20 +293,8 @@ sp.on('tick', function () {
       }
       return;
     }
-    case 'key':
-      if (s.via === 'game') {
-        if (tapDone && tapDone.step === at) {
-          const d = tapDone;
-          tapDone = null;
-          if (d.ok) { pass('tapped in the game (Input.tapKey)'); } else { fail('Input.tapKey threw: ' + d.why); }
-          return;
-        }
-        if (tapAskedFor !== at) { tapAskedFor = at; tapWanted = { step: at, code: Number(s.code) }; return; }
-        if (late) { fail('no game update came in ' + limit + ' ms to tap the key in'); }
-        return;
-      }
-      // falls through: a key through Windows, which the runner presses
-    case 'shot': {
+    case 'shot':
+    case 'key': {
       if (!waitingAsk) { waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) : Number(s.code)); return; }
       const reply = readAck(waitingAsk);
       if (reply) {

@@ -48,7 +48,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 19,
       "why": "R, the race menu's Done"
     },
@@ -63,7 +62,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 28,
       "why": "Enter takes the box's first answer"
     },
@@ -83,7 +81,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 28,
       "why": "Enter accepts the name the box holds"
     },
@@ -131,7 +128,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 36,
       "why": "J, our journal"
     },
@@ -150,7 +146,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 36,
       "why": "J again closes it"
     },
@@ -164,7 +159,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 23,
       "why": "I, the inventory"
     },
@@ -181,7 +175,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 23
     },
     {
@@ -193,7 +186,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 15,
       "why": "Tab, the game's menu"
     },
@@ -210,7 +202,6 @@
     },
     {
       "do": "key",
-      "via": "game",
       "code": 15
     },
     {
