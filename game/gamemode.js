@@ -18775,8 +18775,11 @@ log('gamemode loaded:',
   function pushSky(actorId, id) {
     id = Number(id) || 0;
     if (pushed[actorId] === id) { return; }
+    // Remember only a value the server accepted, so the next sky update can
+    // publish the same roll or release if this write was refused.
+    try { mp.set(actorId, SKY_PROPERTY, { id: id, at: Date.now() }); }
+    catch (e) { return; }
     pushed[actorId] = id;
-    try { mp.set(actorId, SKY_PROPERTY, { id: id, at: Date.now() }); } catch (e) { }
   }
 
   function skyAdjust(actorId, n) {
