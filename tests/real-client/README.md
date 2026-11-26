@@ -122,6 +122,11 @@ first step that fails, after a screenshot named `fail-<step>`.
 `tests\test-5197-real-client.js` runs the plugin against a fake game and
 checks every list here only uses these steps.
 
+The two inventory key steps set `inventoryTrace` to record whether Skyrim
+reported the scripted keyboard down and up. The result records menu state
+and whether the game named the Inventory action. The Windows input receipt
+and the following inventory open or close check are reported separately.
+
 The runner replies with the request number, `ok` and `note` in
 `thornswood-test-ack.txt`. Use the runner and plugin from the same checkout:
 the old runner's numeric reply cannot pass a key step. Accepted input alone
