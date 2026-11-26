@@ -62,6 +62,7 @@ const file = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'food-gr
 const recipes = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'recipes.json'), 'utf8')).recipes;
 const Q = (GROUPS && GROUPS.quality) || {};
 const FINE = Q.fine || {};
+const SEASONED = (GROUPS && GROUPS.season && GROUPS.season.dishes) || {};
 
 // ------------------------------------------------------------ 1. the table --
 yes('1 the gamemode\'s FOOD_GROUPS is game/data/food-groups.json exactly', JSON.stringify(GROUPS) === JSON.stringify(file));
@@ -74,7 +75,8 @@ for (const k in recipes) {
   if (g === 'cooked' || g === 'soup' || g === 'feast') { dishes[r.out] = r.name; }
 }
 yes('1 every dish the Cook makes at the pot and the oven has a fine record (' + Object.keys(dishes).length + ')',
-  Object.keys(dishes).length === 67 && Object.keys(dishes).every(function (d) { return !!FINE[d]; }));
+  Object.keys(dishes).filter(function (d) { return !SEASONED[d]; }).length === 67 &&
+  Object.keys(dishes).every(function (d) { return !!FINE[d]; }));
 yes('1 and nothing else has one', Object.keys(FINE).every(function (d) { return !!dishes[d]; }));
 const fineIds = Object.values(FINE);
 yes('1 each fine record is the content plugin\'s own, one record each',
@@ -367,7 +369,7 @@ const MAKE = [
 try {
   // Stand-in masters: each dish in the file that made it, and the burnt meal's look.
   const byFile = {};
-  const looks = Object.keys(FINE).concat(['721e8:Skyrim.esm']);
+  const looks = Object.keys(FINE).filter(function (d) { return !SEASONED[d]; }).concat(['721e8:Skyrim.esm']);
   looks.forEach(function (d, i) { const f = d.split(':')[1]; (byFile[f] = byFile[f] || []).push([d, i]); });
   const masters = path.join(dir, 'Data');
   fs.mkdirSync(masters);
@@ -392,7 +394,7 @@ try {
   yes('5 python is on this machine', run !== null);
   if (run) {
     yes('5 the tool makes the records from the masters, every one of them', run.status === 0 &&
-      /^68 made$/m.test(run.stdout) && !/PROBLEM/.test(run.stdout));
+      run.stdout.split(/\r?\n/).includes((Object.keys(FINE).length + 1) + ' made') && !/PROBLEM/.test(run.stdout));
     if (run.status !== 0 || /PROBLEM/.test(run.stdout)) { console.log(run.stdout + run.stderr); }
     const made = readPlugin(fs.readFileSync(out));
     const by = checkRecords(made, '5');
@@ -414,7 +416,9 @@ try {
     // Gourmet.esp, so it cannot point at it, and the tool names every such dish.
     writeMasters(0x01000801);
     const stop = python(['-c', MAKE, TOOL, masters, out]);
-    const gourmetCount = Object.keys(FINE).filter(function (d) { return /Gourmet\.esp$/.test(d); }).length;
+    const gourmetCount = Object.keys(FINE).filter(function (d) {
+      return /Gourmet\.esp$/.test(SEASONED[d] ? SEASONED[d].of : d);
+    }).length;
     const named = stop && stop.status === 0 ? stop.stdout.split(/\r?\n/).filter(function (l) { return /^PROBLEM .*Gourmet\.esp.* which this plugin does not master$/.test(l); }).length : -1;
     yes('5 a dish whose look names Gourmet.esp\'s own record is a problem the tool names, every such dish (' + gourmetCount + ')',
       named === gourmetCount);

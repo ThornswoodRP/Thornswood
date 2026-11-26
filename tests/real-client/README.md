@@ -19,7 +19,7 @@ keeps one list of characters for both servers, so a character made on main
 reads "not on this server" on dev, and playing it makes a new one there. The
 race menu then opens in the hall. The run presses R, the menu's Done,
 answers its question with Enter, accepts the name with Enter (the name box is
-inside the race menu and says no menu of its own), then takes Home on the K panel the way a person does (Whiterun, Review, Confirm),
+inside the race menu and says no menu of its own), then takes the Starting Location on the K panel the way a person does (Whiterun, Review, Confirm),
 and waits for the trip to the town. For a character the server has, the race
 menu never opens, and those steps are skipped.
 

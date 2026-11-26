@@ -51,18 +51,23 @@ yes('the three frost foods are exempt from whole-record scaling',
 // A fine dish (#2906) is in its plain dish's group, so it loses its own
 // magic with it; it is counted on its own.
 const FINE = new Set(Object.values((GROUPS && GROUPS.quality && GROUPS.quality.fine) || {}));
-let stripCount = 0, fineStripped = 0;
+const SEASONED = (season && season.dishes) || {};
+let stripCount = 0, fineStripped = 0, seasonedStripped = 0;
 if (strip && GROUPS) {
   for (const d in GROUPS.items) {
     if ((strip.groups || []).indexOf(GROUPS.items[d]) !== -1 && !strip.keep[d]) {
-      if (FINE.has(d)) { fineStripped++; } else { stripCount++; }
+      if (SEASONED[d]) { seasonedStripped++; }
+      else if (FINE.has(d)) { fineStripped++; }
+      else { stripCount++; }
     }
   }
 }
 yes('118 records lose their own magic, the list in the design comment', stripCount === 118);
 // The four fine feasts (#3152) are in the feast group, which keeps its own
 // magic: a feast carries only the effect that says what the server does.
-yes('and so do the 63 fine dishes, which are in their plain dishes\' groups (#2906)', FINE.size === 67 && fineStripped === 63);
+yes('and so do the 63 original fine dishes (#2906)', [...FINE].filter(function (d) { return !SEASONED[d]; }).length === 67 &&
+  fineStripped === 63);
+yes('every seasoned dish loses its own magic before the server applies the extra', seasonedStripped === Object.keys(SEASONED).length);
 yes('a soup warms by default, and nothing else does', !!season && JSON.stringify(season.plain) === JSON.stringify({ soup: 'warm' }));
 yes('garlic gives the guard and salt gives stamina',
   !!season && !!season.extras && season.extras['34d22:Skyrim.esm'] === 'guard' &&

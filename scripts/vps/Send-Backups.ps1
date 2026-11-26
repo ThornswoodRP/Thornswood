@@ -83,7 +83,21 @@ function Tool($n) {
 
 if ($Status) {
   if (-not (Test-Path -LiteralPath $Cfg)) { Say 'not set up: there is no vm.json (Send-Backups.ps1 -Install -VmHost <address>)' }
-  else { Say ('sends to   tw-boxdrop@' + (Get-Content -LiteralPath $Cfg -Raw | ConvertFrom-Json).host) }
+  else {
+    $vmHost = '' + (Get-Content -LiteralPath $Cfg -Raw | ConvertFrom-Json).host
+    Say ('sends to   tw-boxdrop@' + $vmHost)
+    # The address the box sends from, as Windows picks it for the VM. The VM
+    # takes the key only from one address, TWHermesAgents' policy
+    # backups.offsite.box_address (the from= on its authorized_keys line), so
+    # this has to be that one. On 18 Nov 2026 the box moved to a new address
+    # and the policy did not, and every nightly from 19 Nov ended
+    # "Permission denied (publickey)" with nothing here saying why (#6895).
+    try {
+      $to = @([Net.Dns]::GetHostAddresses($vmHost) | Where-Object { $_.AddressFamily -eq 'InterNetwork' })[0]
+      $from = @(Find-NetRoute -RemoteIPAddress $to.IPAddressToString -ErrorAction Stop | Where-Object { $_.PSObject.Properties['IPAddress'] -and $_.IPAddress } | ForEach-Object { $_.IPAddress })[0]
+      Say ('sends from ' + $(if ($from) { $from + ', which has to be backups.offsite.box_address in TWHermesAgents'' policy, the only address the VM takes this key from' } else { 'no address: Windows has no route to the VM' }))
+    } catch { Say ('sends from could not be read: ' + $_.Exception.Message) }
+  }
   if (Test-Path -LiteralPath ($Key + '.pub')) { Say ('its key    ' + (Get-Content -LiteralPath ($Key + '.pub') -Raw).Trim()) }
   # Why the VM refuses the key. On 11 Nov 2026 at 8:25 PM every file came
   # back "Permission denied (publickey)" while the VM held this key's public

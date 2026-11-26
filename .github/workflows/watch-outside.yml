@@ -8,12 +8,13 @@
 # this a median 11 minutes apart (once 110) in October, and from 2 to 12 Nov
 # 2026 3 to 5 times a day, 6 to 8 hours apart. So one run checks every 5
 # minutes by its own clock for 55 minutes (Watch-Outside.ps1 -For 55; the
-# runners' App token minted at its start lasts an hour), keeps what it
-# remembers, and starts the next run with workflow_dispatch, which GitHub
-# starts for the run's own token. The concurrency group holds that next run
-# until this one ends, so one watches at a time. The schedule below only
-# starts the chain again when it breaks (a failed run, GitHub losing a
-# dispatch), and the first check after more than 15 minutes without one
+# runners' App token minted at its start lasts an hour) and keeps what it
+# remembers. Before it watches it asks for the next run with
+# workflow_dispatch, which GitHub starts for the run's own token, and the
+# concurrency group holds that next run until this one ends, however it ends
+# (#6896), so one watches at a time. The schedule below only starts the
+# chain again when it breaks (GitHub losing a dispatch), and the first check
+# after more than 15 minutes without one
 # tells staff the watcher was not checking, with both times. On this public
 # repository GitHub's hosted runners cost nothing (docs/DECIDED.md, No paid
 # Actions usage, is about the private ones); the price is one of the
@@ -118,6 +119,21 @@ jobs:
           repositories: Thornswood-Ops
           permission-administration: read
 
+      # The next run, asked for before this one watches: the concurrency
+      # group holds it until this run ends, however it ends. On 23 Nov 2026
+      # the watch step of run 45217985841 was still going when GitHub ended
+      # the job at its time limit; the next run was asked for only after the
+      # watch, so it never was, and nothing watched for six hours and 22
+      # minutes until the schedule started the chain again. Asked for here,
+      # a run that hangs, times out or loses its runner still has its next
+      # one waiting. Never after a test post. To stop the watching, set the
+      # repository variable WATCH_OUTSIDE to anything but "here".
+      - name: Start the next run
+        if: ${{ !inputs.test }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run watch-outside.yml --ref main --repo "$GITHUB_REPOSITORY"
+
       - name: Watch
         if: ${{ !inputs.test }}
         shell: pwsh
@@ -127,18 +143,13 @@ jobs:
           WATCH_DEPLOY_TOKEN: ${{ github.token }}
         run: ./scripts/vps/Watch-Outside.ps1 -Run -Folder state -Minutes 5 -For 55
 
+      # Whatever the watch did, a time limit included, so the next run reads
+      # what this one saw and which check it was asking when it stopped
+      # (Watch-Outside.ps1, Read-Asking).
       - name: Keep what it remembers
-        if: ${{ !inputs.test }}
+        if: ${{ always() && !inputs.test }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: state
           key: watch-outside-${{ github.run_id }}-${{ github.run_attempt }}
 
-      # The next run, which the concurrency group holds until this one ends.
-      # Even after a failed watch, so one bad hour does not stop the watching;
-      # never after a test post, and never when somebody cancelled the run.
-      - name: Start the next run
-        if: ${{ !cancelled() && !inputs.test }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run watch-outside.yml --ref main --repo "$GITHUB_REPOSITORY"

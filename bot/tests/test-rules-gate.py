@@ -29,6 +29,13 @@ So this checks:
   F  with no Member role, or the bot's own role under it, nothing is given or
      taken and the log says why; a failure reading #rules leaves Member as it
      is
+  M  the message sits under the rules (Patrick, 26 Nov 2026, B on
+     q-6891-rules-reaction-move): when the rules' words are newer, its start
+     sends it again under them and takes the old one down, and everybody who
+     reacted to the old one keeps Member, written down before the old one
+     goes; a second start moves nothing; a carried person who reacts on the
+     new one and takes it off loses Member and is carried no more; and an
+     unreadable rules-carried.json leaves Member as it is
 
 bot.py is imported for real. Every guild, member and message is a stand-in.
 Never connects to anything.
@@ -133,7 +140,11 @@ class Message(object):
         self.channel = ch
         self.reactions = []
         self.type = discord.MessageType.default
+        self.components = []
         self.edits = 0
+
+    async def delete(self):
+        self.channel.messages.remove(self)
 
     async def edit(self, content=None):
         self.content = content
@@ -204,6 +215,9 @@ def server(bot_above=True, member_role=True, broken=False):
 
 
 SERVERS = {}
+import tempfile  # noqa: E402
+_tmp = tempfile.mkdtemp()
+G.CARRIED = os.path.join(_tmp, 'rules-carried.json')
 G.client = types.SimpleNamespace(user=ME, get_guild=lambda gid: SERVERS.get(gid))
 
 
@@ -388,6 +402,55 @@ del SAID[:]
 run(G.ensure_rules_gate(gn))
 yes('F with no #rules it says which setting to change and changes nothing',
     has(gn.hand, gn) and any('RULES_CHANNEL' in s for s in SAID))
+
+# ------------------------------------------------------------------- M --
+gm = server()
+SERVERS[gm.id] = gm
+old_gate = Message(ME, G.GATE_TEXT, gm.rules)
+gm.rules.messages.append(old_gate)
+run(old_gate.add_reaction(MARK))  # the mark an earlier start left
+old_gate.react(gm.hand)
+old_gate.react(gm.tester_p)
+words = Message(ME, '# Rules\n\nThe rules, sent after the message.', gm.rules)
+gm.rules.messages.append(words)
+del SAID[:]
+del PUSHED[:]
+run(G.ensure_rules_gate(gm))
+new_gate = gm.rules.messages[-1]
+yes('M with the rules newer than it, the message is sent again under them and the old one is gone',
+    old_gate not in gm.rules.messages and new_gate is not old_gate
+    and new_gate.content == G.GATE_TEXT and gm.rules.messages.index(words) == 0
+    and G.GATE_IDS.get(gm.id) == new_gate.id)
+yes('  the new one has the mark to press', any(r.emoji == MARK and r.me for r in new_gate.reactions))
+yes('  everybody who reacted to the old one keeps Member, and nothing is recorded for them',
+    has(gm.hand, gm) and has(gm.tester_p, gm) and not pushed_for(gm.hand) and not pushed_for(gm.tester_p))
+yes('  staff who never reacted still lose it', not has(gm.staff_p, gm))
+yes('  they are written down in rules-carried.json',
+    G.carried(gm.id) == {gm.hand.id, gm.tester_p.id})
+yes('  and the log says so', any('sent again under the rules' in x and '2 who reacted' in x for x in SAID))
+before = [list(p.roles) for p in gm.members]
+run(G.ensure_rules_gate(gm))
+yes('M a second start moves nothing and changes nobody',
+    gm.rules.messages[-1] is new_gate and len(gm.rules.messages) == 2
+    and [list(p.roles) for p in gm.members] == before)
+gm.gate = new_gate
+new_gate.react(gm.hand)
+run(G.on_raw_reaction_add(payload(gm, gm.hand)))
+yes('M a carried person who reacts on the new one is carried no more, the reaction is their record',
+    gm.hand.id not in G.carried(gm.id) and has(gm.hand, gm))
+run(G.on_raw_reaction_remove(payload(gm, gm.hand)))
+yes('  and taking it off takes Member off', not has(gm.hand, gm))
+run(G.on_raw_reaction_remove(payload(gm, gm.tester_p)))
+yes('M a carried person who takes a reaction off loses Member and is carried no more',
+    not has(gm.tester_p, gm) and G.carried(gm.id) == set())
+with open(G.CARRIED, 'w') as f:
+    f.write('not json')
+gu = server()
+SERVERS[gu.id] = gu
+del SAID[:]
+run(G.ensure_rules_gate(gu))
+yes('M an unreadable rules-carried.json leaves Member as it is, and says so',
+    has(gu.hand, gu) and has(gu.staff_p, gu) and any('left as it is' in x for x in SAID))
 
 print('')
 print('%d passed, %d failed' % (len(PASS), len(FAIL)))
