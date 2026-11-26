@@ -99,6 +99,9 @@ Yes 'an enum value outside its list is refused' ((Words 'Deploy-DevGamemode -Npc
 # nothing else, never the folder it reads.
 Yes 'Read-LauncherStarts takes -Days, a number, and nothing else' ((Words 'Read-LauncherStarts -Days 7') -eq '-Days|7' -and (Words 'Read-LauncherStarts') -eq '' -and
     (Words 'Read-LauncherStarts -Days week') -eq 'REFUSED' -and (Words 'Read-LauncherStarts -Folder x') -eq 'REFUSED')
+# Where the cursor came up (#6200): the same, a number of days and nothing else.
+Yes 'Read-CursorLines takes -Days, a number, and nothing else' ((Words 'Read-CursorLines -Days 7') -eq '-Days|7' -and (Words 'Read-CursorLines') -eq '' -and
+    (Words 'Read-CursorLines -Days week') -eq 'REFUSED' -and (Words 'Read-CursorLines -Folder x') -eq 'REFUSED')
 # The box's read only checks, which only One could run before (the cloud
 # reaches neither game port nor the box's shell): each takes nothing a caller
 # could steer, and Check-ProdParity sends its facts and report back.

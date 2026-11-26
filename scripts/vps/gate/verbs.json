@@ -430,6 +430,15 @@
         "Days": "^[0-9]{1,3}$"
       }
     },
+    "Read-CursorLines": {
+      "script": "scripts/vps/Read-CursorLines.ps1",
+      "timeoutMinutes": 10,
+      "onlyReads": true,
+      "fixed": [],
+      "params": {
+        "Days": "^[0-9]{1,3}$"
+      }
+    },
     "Load-Test": {
       "script": "scripts/bot/Load-Box.ps1",
       "reads": [
