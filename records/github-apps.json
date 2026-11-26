@@ -173,12 +173,14 @@
    ],
    "permissions": {
     "contents": "write",
+    "issues": "write",
     "metadata": "read",
     "pull_requests": "write"
    },
    "events": [],
    "why": {
     "contents": "Force pushes the one branch engine-pin/next, which changes only the pin's paths, never a workflow; and turning auto-merge on, which GitHub holds to contents write.",
+    "issues": "Closes the issues a pull request it put in the merge queue names with Closes, Fixes or Resolves: GitHub closes them at the queue's merge as whoever queued it, and without this it closed none (#6957; six of six left open on 26 Nov 2026). It writes no comment, label or issue.",
     "metadata": "Every App holds it; GitHub gives it read and nothing else.",
     "pull_requests": "Opens or updates the pin's pull request (Open-EnginePinPr.ps1), and turns auto-merge on for a ready pull request (scripts/ops/Auto-Merge.js), so its queue entry starts its checks."
    }
