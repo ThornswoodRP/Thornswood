@@ -43,6 +43,7 @@ function Yes([string]$what, [bool]$cond) {
 # Files that move a checkout and need not move its submodules, with why.
 $Exempt = [ordered]@{
     'scripts/dev/Trace-HarnessReads.js' = 'checks out a clone it made itself a moment before, whose submodules it never fetches'
+    'scripts/dev/Watch-RealClient.ps1'  = 'moves only its own watcher worktree, which runs scripts and never builds, and whose engine\skymp is never fetched'
     'scripts/oneoff/Reset-History.ps1'  = 'only tells people what to run after the history rewrite, which keeps every pin as it was'
     'scripts/release/Ship-OnBox.ps1'    = 'puts the gate''s checkout on the branch main at the commit GateBroker.ps1 has just moved it to, submodules and all'
     'scripts/release/Update-EnginePin.ps1' = 'names git switch only in its example, and then moves engine\skymp to the new pin itself'
