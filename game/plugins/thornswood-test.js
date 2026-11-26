@@ -64,6 +64,7 @@ const OUT = 'Data/Platform/thornswood-test-results.jsonl';
 const ACK = 'Data/Platform/thornswood-test-ack.txt';
 const DEV = '../Profile/dev-allowed.txt';
 const TIMEOUT = 30000;
+const INVENTORY_TRACE_MS = 5000;
 
 function log() {
   try { sp.printConsole('[test] ' + Array.prototype.slice.call(arguments).join(' ')); } catch (e) { }
@@ -185,7 +186,7 @@ let inventoryKey = null;
 // Only explicitly traced script steps can log their own requested key.
 if (steps.some(s => s && s.do === 'key' && s.inventoryTrace === true)) {
   sp.on('buttonEvent', function (e) {
-    if (finished || failing || !inventoryKey || at > inventoryKey.i + 1 ||
+    if (finished || failing || !inventoryKey || Date.now() > inventoryKey.until ||
         !e || e.device !== 0 || e.code !== inventoryKey.code || e.isRepeating || e.isHeld) return;
     const phase = e.isDown && !e.isUp ? 'down' : e.isUp && !e.isDown ? 'up' : '';
     if (!phase || inventoryKey[phase]) return;
@@ -313,7 +314,9 @@ sp.on('tick', function () {
     case 'key': {
       if (!waitingAsk) {
         if (s.do === 'key') {
-          inventoryKey = s.inventoryTrace === true ? { i: at, code: Number(s.code), down: false, up: false } : null;
+          inventoryKey = s.inventoryTrace === true
+            ? { i: at, code: Number(s.code), until: now + INVENTORY_TRACE_MS, down: false, up: false }
+            : null;
         }
         waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) : Number(s.code));
         return;

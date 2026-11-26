@@ -142,6 +142,7 @@ function game(opts) {
   const g = game({ steps: [
     { do: 'key', code: 23, inventoryTrace: true },
     { do: 'wait', for: 'menu', menu: 'InventoryMenu', open: false },
+    { do: 'shot', name: 'inventory-closed' },
     { do: 'key', code: 23 },
     { do: 'end' }
   ] });
@@ -154,21 +155,36 @@ function game(opts) {
   g.button({ ...event, code: 36 });
   g.button({ ...event, device: 2 });
   g.button({ ...event, isRepeating: true });
+  g.button({ ...event, isHeld: true });
   g.button({ ...event, userEventName: '' });
   g.button(event);
   g.ack();
   g.frame(300);
-  g.button({ ...event, isDown: false, isUp: true, userEventName: 'ignored event name' });
-  const got = receipts();
-  yes('records one physical down and up, even if the up arrives after the Windows receipt',
-    got.length === 2 && got[0].phase === 'down' && got[1].phase === 'up' && got.every(l => l.i === 0 && l.inventoryOpen));
-  yes('receipts distinguish no action and another action without storing raw action values',
-    got.length === 2 && got[0].action === 'none' && got[1].action === 'other' && !JSON.stringify(got).includes('ignored event name'));
   g.menu('InventoryMenu', false);
   g.frame();
+  g.button({ ...event, isDown: false, isUp: true, userEventName: 'ignored event name' });
+  const got = receipts();
+  yes('records one physical down and later up even after the release wait has already passed',
+    got.length === 2 && got[0].phase === 'down' && got[1].phase === 'up' && got.every(l => l.i === 0) && got[0].inventoryOpen && !got[1].inventoryOpen);
+  yes('receipts distinguish no action and another action without storing raw action values',
+    got.length === 2 && got[0].action === 'none' && got[1].action === 'other' && !JSON.stringify(got).includes('ignored event name'));
+  g.frame();
+  g.ack();
+  g.frame(300);
   g.frame();
   g.button(event);
   yes('an untraced key step retires the inventory probe', receipts().length === 2);
+}
+{
+  const g = game({ steps: [{ do: 'key', code: 23, inventoryTrace: true }, { do: 'end' }] });
+  const event = { device: 0, code: 23, isDown: true, userEventName: 'Quick Inventory' };
+  g.frame();
+  g.button(event);
+  g.frame(6000);
+  g.button({ ...event, isDown: false, isUp: true });
+  const receipts = g.lines().filter(l => l.t === 'inventory-key');
+  yes('a named Inventory action is reported and releases past the trace deadline are ignored',
+    receipts.length === 1 && receipts[0].action === 'inventory');
 }
 
 // --------------------------------------------------------- a whole run ----
