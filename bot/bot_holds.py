@@ -134,10 +134,6 @@ class HoldPanel(discord.ui.View):
             self.add_item(HoldButton(hold, i // HOLDS_PER_ROW))
 
 
-def _hold_ids_wanted():
-    return ['thornswood:hold:' + h.lower() for h in HOLDS]
-
-
 def _hold_rows_wanted():
     """The panel's buttons by row, as Discord gives a posted message back."""
     ids = ['thornswood:hold:' + h.lower() for h in HOLDS]
