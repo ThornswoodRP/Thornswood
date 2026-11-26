@@ -63,16 +63,6 @@ function liftFrom(src, first, indent) {
   const b = src.indexOf(end, a + 1);
   return b < 0 ? null : src.slice(a + 1, b + end.length);
 }
-/* From one line to the end of the handler that starts at another. */
-function liftSpan(src, first, lastOpen) {
-  const a = src.indexOf(first);
-  if (a < 0) { return null; }
-  const c = src.indexOf(lastOpen, a);
-  if (c < 0) { return null; }
-  const SHUT = '\n  }));\n';
-  const b = src.indexOf(SHUT, c);
-  return b < 0 ? null : src.slice(a, b + SHUT.length);
-}
 
 const propBlock = slice(gm, '// ==== thornswood property ====', '// ==== end thornswood property ====');
 const charBlock = slice(gm, '// ==== thornswood character ====', '// ==== end thornswood character ====');
@@ -112,7 +102,6 @@ const BENCH_BY_BASE = {};
 BENCH_BY_BASE[FORGE_BASE] = '88105:Skyrim.esm';
 BENCH_BY_BASE[BLOCK_BASE] = 'a5cb3:Skyrim.esm';
 const FORGE_REF = 0x00a00010, BLOCK_REF = 0x00a00011;
-const INGOT = '5ace4:Skyrim.esm';
 
 const ids = {};
 let nextId = 0x05000000;
@@ -210,17 +199,7 @@ function word(p, w, args) {
   out.forEach(function (m) { every.push(m); });
   return { handled: handled, told: out.join('\n') };
 }
-function open(p, door) { inDir(function () { W.touched(p.a, door); }); }
 function lineOf(p) { return refs[p.a].thornswoodDoorLine || null; }
-function pack(p) { return refs[p.a].inventory.entries; }
-function holds(p, baseDesc, name) {
-  return pack(p).some(function (e) { return e.baseId === idOf(baseDesc) && e.count > 0 && (name === undefined || e.name === name); });
-}
-function count(p, baseDesc) {
-  let n = 0;
-  pack(p).forEach(function (e) { if (e.baseId === idOf(baseDesc) && !e.name) { n += e.count; } });
-  return n;
-}
 
 
 
