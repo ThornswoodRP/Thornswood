@@ -13,8 +13,13 @@
   can add a file and do nothing else: no list, read, rename, overwrite or
   delete, and its key works only from this box's address (Thornswood-Hermes,
   deploy/sshd/51-tw-boxdrop.conf). So a stolen box cannot reach a copy it
-  already sent, on the VM or on Drive. After each file it sends <name>.done
-  holding "<sha256> <size>", which the VM checks before it takes the file.
+  already sent, on the VM or on Drive. After each file it sends an empty
+  marker named <name>.<sha256>.<size>.done, which the VM checks the file
+  against before it takes it. What it says is in its name, so it is whole
+  the moment the VM sees it: a marker that held "<sha256> <size>" in its
+  body was read by the VM before sftp had written the body, on 26 Nov 2026,
+  and a whole backup was set aside (#6895). The jail allows no rename, so
+  the marker cannot be sent under another name and renamed.
 
   WHAT GOES. Only thornswood-<date>-<time>.zip.enc, encrypted with the
   passphrase, which never leaves this box, from the last seven days and not
@@ -253,10 +258,11 @@ foreach ($f in $todo) {
   $check = & pwsh -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $restore -Backup $f.FullName -KeyFile $keyFile -CheckOnly -NoPause 2>&1
   if ($LASTEXITCODE -ne 0) { Note ("  NOT SENT $($f.Name): it does not open with the passphrase. " + ("$check" -replace '\s+', ' ')); $failed++; continue }
   $sha = (Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-  $mark = Join-Path $Box ($f.Name + '.done')
-  [IO.File]::WriteAllText($mark, ($sha + ' ' + $f.Length + "`n"), (New-Object Text.ASCIIEncoding))
+  $markName = $f.Name + '.' + $sha + '.' + $f.Length + '.done'
+  $mark = Join-Path $Box $markName
+  [IO.File]::WriteAllBytes($mark, [byte[]]@())
   $batch = Join-Path $Box 'batch.txt'
-  [IO.File]::WriteAllLines($batch, [string[]]@(('put "' + $f.FullName + '" "' + $f.Name + '"'), ('put "' + $mark + '" "' + $f.Name + '.done"')))
+  [IO.File]::WriteAllLines($batch, [string[]]@(('put "' + $f.FullName + '" "' + $f.Name + '"'), ('put "' + $mark + '" "' + $markName + '"')))
   $out = & $sftp -b $batch @Login ($vm.user + '@' + $vm.host) 2>&1
   $code = $LASTEXITCODE
   Remove-Item -LiteralPath $mark, $batch -Force -ErrorAction SilentlyContinue
