@@ -1319,6 +1319,11 @@ which Thornswood's help panel replaced; and Creations and Installed Content,
 the Creation Club, since Thornswood is Special Edition only. It ships no more
 than the five above do, and `$ShipMadeFromMods` keeps it out the same way.
 
+The SkyUI Team's inventory menu (`interface\inventorymenu.swf` in
+`SkyUI_SE.bsa`) uses the mapped inventory key to close (#7008). The launcher
+applies the recipe to the original from SkyUI 6.11 SE (Nexus Mods file 749043).
+`$ShipMadeFromMods` keeps the movie out of packs.
+
 `Data\SKSE\Plugins\QuickLootIE.json` does ship: QuickLoot IE 4.1.3's own
 settings file (Nexus Mods mod 120075, file 806802, which revisions 4 and 5
 both install) with one line added, which sets its loot menu's columns to

@@ -35,7 +35,7 @@
        scripts\release\Go.ps1 loads with Add-Type, and that Add-Type takes
        them in pwsh 7, where Go.ps1 runs (tests\Launcher-Csc.ps1
        Test-ScriptAddType, #5968).
-    7. By the source: the three, then the collection's six menus, are
+    7. By the source: the three, then the collection's menus, are
        FromGame.Files, Ship-Rules.ps1 $ShipMadeFromGame then
        $ShipMadeFromMods, and OwnGameKinds.cs MadeInGame alike; no release list
        ships them and no file at their paths is in the repository; Play, Scan
@@ -43,10 +43,10 @@
        them before it judges the plugin list, and a Thornswood-Last.esp not
        made yet is Fix's to make there, never a mod that is not installed
        (#6181).
-    8. The collection's menus with no gold values (#3113) and the journal (#3127, FromGameModMenus.cs,
+    8. The collection's menus made from recipes (FromGameModMenus.cs,
        written by scripts\mods\Build-ModMenus.py from the mods' own archives,
        which no test machine has): on the made-up game, which has none of the
-       mods, each of the six says which archive it needs and nothing is made;
+       mods, each menu says which archive it needs and nothing is made;
        each names its mod and both sha256s; a recipe for a file that is not a
        SWF takes its edits on the bytes as they are; and a mod file that is not
        the pinned one names the mod.
@@ -245,9 +245,8 @@ namespace Thornswood
             File.WriteAllBytes(Path.Combine(gone, FromGame.MenuFile), menu.Bytes);
             Yes("nor is one with other bytes", !FromGame.IsCurrent(gone, FromGame.MenuFile));
 
-            // The collection's menus with no gold values (#3113) and the journal
-            // (#3127). The made-up game has none of the mods' archives, so each of the six says
-            // which one it could not read, and nothing is made.
+            // The made-up game has none of the mods' archives, so each recipe
+            // says which one it could not read, and nothing is made.
             List<FromGameFile> all = FromGame.Build(game);
             int mods = 0; bool named = true, pinned = true;
             foreach (MenuRecipe m in MenuRecipe.Mods)
@@ -258,8 +257,10 @@ namespace Thornswood
                 if (f.Bytes != null || f.Problem == null || f.Problem.IndexOf(m.Archive, StringComparison.OrdinalIgnoreCase) < 0) named = false;
                 if (string.IsNullOrEmpty(m.Mod) || FromGame.Expected(m.Path) != m.Sha256 || m.Sha256.Length != 64 || m.SourceSha256.Length != 64 || m.Edits.Length == 0) pinned = false;
             }
-            Yes("a game with none of the collection's mods makes none of their six menus, and each reason names the archive it needs", mods == 6 && named);
-            Yes("each of the six names its mod, the sha256 of the mod's own file it is made from, and the sha256 it must come out at", pinned);
+            Yes("without the mods, each menu names the archive it needs", mods == MenuRecipe.Mods.Length && named);
+            Yes("each recipe names its mod and the pinned source and output hashes", pinned);
+            Yes("the mapped inventory recipe must be made from SkyUI on this machine",
+                Get(all, @"Data\Interface\inventorymenu.swf")?.Problem?.Contains("SkyUI_SE.bsa") == true);
 
             // A recipe for a file that is not a SWF (SkyUI's config.txt) takes
             // its edits on the bytes as they are. Tried on the made-up game's

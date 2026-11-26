@@ -18,7 +18,8 @@
   values since #3113 (SkyUI's config.txt and itemcard.swf, SkyHUD's
   hudmenu.swf, moreHUD's AHZHudInfo.swf twice), and SkyUI's quest_journal.swf
   with no saving, loading, help or Creation Club since #3127, from the recipes
-  in FromGameModMenus.cs that scripts\mods\Build-ModMenus.py writes: they are
+  in FromGameModMenus.cs that scripts\mods\Build-ModMenus.py writes. SkyUI's
+  inventory recipe uses the same process to close with its mapped key (#7008). They are
   their authors' files, made from the mods' own archives in -Data.
 
   Reads the archives and writes nothing, unless -Out names a folder to write
