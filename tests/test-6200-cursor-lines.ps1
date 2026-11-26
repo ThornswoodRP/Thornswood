@@ -13,12 +13,12 @@
   What it checks:
     1. the reader's words are the engine's: the fork's BrowserApiTilted.cpp
        writes the cursor line in the shape the reader reads, when the engine
-       checkout is here, the input log's line for the motion left out at the
-       load (DInputHook.cpp) too, and the choice page writes "mouse first
+       checkout is here, the input log's mouse trace and cooperative level
+       lines (DInputHook.cpp) too, and the choice page writes "mouse first
        moved at";
     2. the reader, run against session log sets made here: it prints a set's
-       cursor, focus and first move lines in order, and the input log's line
-       for the motion left out at the load and none of the rest of it, leaves out a set written
+       cursor, focus and first move lines in order, and the input log's
+       mouse lines in order and none of the rest of it, leaves out a set written
        before the window and a set with none of them, counts a set that will
        not read and goes on, counts a focus at an edge (and one away from it),
        prints no account or session key, and says so when there are no lines.
@@ -62,8 +62,10 @@ if (Test-Path -LiteralPath $tilted) {
     $hook = Join-Path $repo 'engine/skymp/skyrim-platform/src/tilted/hooks/DInputHook.cpp'
     if (Test-Path -LiteralPath $hook) {
         $hookText = [IO.File]::ReadAllText($hook)
-        Yes '  and the input log says how much motion it left out, in the reader''s words' ($hookText.Contains('"[mouse] the first read after the game''s data loaded held "') -and
-            $hookText.Contains('"%ld,%ld (wheel %ld) of motion made while it loaded; left out'))
+        Yes '  and the input log''s mouse trace starts each line with the reader''s mark' ($hookText.Contains('"[mouse] the first read after the game''s data loaded held "') -and
+            $hookText.Contains('"[mouse] [%02u:%02u:%02u:%03u] "') -and $hookText.Contains('"read %d after the data load: 0x%08lX, motion %ld,%ld, wheel "') -and
+            $hookText.Contains('"the game %s the mouse: 0x%08lX, %s in front\n"'))
+        Yes '  and its cooperative level line names the mouse as the reader reads it' ($hookText.Contains('"[coop] %-40s asked'))
     }
 } else {
     Write-Host 'SKIP  the engine checkout is not here, so its words are not read'
@@ -87,13 +89,16 @@ try {
     $corner = "[09:34:00:766] cursor, focus taken: the game's menu cursor at 3429,0, Cursor Menu closed, the Windows pointer at 2286,0 of the window in front (3440x1440)"
     $opening = "[09:34:00:801] cursor, Cursor Menu opening: the game's menu cursor at 3429,0, Cursor Menu open, the Windows pointer at -1,-1 of the window in front (unknown) (3440x1440)"
     $middle = "[10:00:00:000] cursor, focus taken: the game's menu cursor at 1720,720, Cursor Menu open, the Windows pointer at 1146,480 of the window in front (3440x1440)"
-    $dropped = "[mouse] the first read after the game's data loaded held -2210,-1302 (wheel 0) of motion made while it loaded; left out"
+    $coopMouse = '[coop] Mouse                                    asked 0x00000005 EXCLUSIVE foreground  ->  used 0x00000005'
+    $acquired = '[mouse] [09:33:40:100] the game acquired the mouse: 0x00000000, the game in front'
+    $read1 = '[mouse] [09:33:57:710] read 1 after the data load: 0x00000000, motion -2210,-1302, wheel 0, left button up, the game in front'
+    $dropped = "[mouse] the first read after the game's data loaded held -2210,-1302 (wheel 0) of motion; left out"
     $moved = '[front] 09:34:01.456 choice page: mouse first moved at 3429,0 vis=visible panel=flex/1/visible top=div.slot size=3440x1440 scale=1.33'
     Set-Logs 'key-one-secret' 'Someone Secret' @{
         'skyrim-platform.log' = ("[09:33:36:625] platform_se v2.9.0`n" + $loaded + "`n[09:33:58:195] registering browser api`n" + $taken + "`n" + $corner + "`n" + $opening + "`n" + $middle)
         'thornswood-front.log' = ("[front] 09:34:00.732 choice page: ready 3 slots`n" + $moved)
         'launcher.log' = '2026-11-16 09:33:33  Starting the game on launcher 1.3.115, game files of build-1.3.115, borderless.'
-        'thornswood-input.log' = ("[coop] Mouse  asked 0x00000006 nonexclusive foreground  ->  used 0x0000000A`n" + $dropped + "`n[input] +5000ms  getData 250")
+        'thornswood-input.log' = ("[coop] Keyboard                                 asked 0x00000015 EXCLUSIVE foreground  ->  used 0x0000001A`n" + $coopMouse + "`n" + $acquired + "`n" + $read1 + "`n" + $dropped + "`n[input] +5000ms  getData 250")
     } 2
     Set-Logs 'key-old' 'Old Person' @{ 'skyrim-platform.log' = $corner } (24 * 30)
     Set-Logs 'key-quiet' 'Quiet Person' @{ 'skyrim-platform.log' = '[09:00:00:000] game data loaded' } 3
@@ -105,8 +110,11 @@ try {
     Yes 'it prints the cursor, focus and first move lines of the set' ($out.Contains($loaded) -and $out.Contains($taken) -and $out.Contains($corner) -and
         $out.Contains($opening) -and $out.Contains($middle) -and $out.Contains($moved))
     Yes '  in the order the logs have them' ($out.IndexOf($loaded) -lt $out.IndexOf($taken) -and $out.IndexOf($taken) -lt $out.IndexOf($corner) -and $out.IndexOf($corner) -lt $out.IndexOf($moved))
-    Yes 'it prints how much motion made during the load was left out' ($out.Contains($dropped))
-    Yes '  and leaves out the rest of the input log' (-not $out.Contains('[coop]') -and -not $out.Contains('getData 250'))
+    Yes 'it prints the mouse''s cooperative level, its acquiring, its reads and what was left out' ($out.Contains($coopMouse) -and $out.Contains($acquired) -and
+        $out.Contains($read1) -and $out.Contains($dropped))
+    Yes '  in the order the input log has them' ($out.IndexOf($coopMouse) -lt $out.IndexOf($acquired) -and $out.IndexOf($acquired) -lt $out.IndexOf($read1) -and
+        $out.IndexOf($read1) -lt $out.IndexOf($dropped))
+    Yes '  and leaves out the rest of the input log' (-not $out.Contains('[coop] Keyboard') -and -not $out.Contains('getData 250'))
     Yes '  and leaves out the lines that are not about the cursor' (-not $out.Contains('platform_se v2.9.0') -and -not $out.Contains('registering browser api') -and -not $out.Contains('ready 3 slots'))
     Yes 'it names the launcher the set ran on' ($out.Contains('on launcher 1.3.115'))
     Yes 'it leaves out a set written before the window' (([regex]::Matches($out, '(?m)^Session \d+,')).Count -eq 1)

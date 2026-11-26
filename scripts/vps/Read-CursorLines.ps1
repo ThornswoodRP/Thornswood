@@ -28,9 +28,11 @@
   WHAT IT PRINTS. For each set written in the window that holds any of
   them: the set's day and the launcher version its log names, then the
   cursor lines, the browser focus lines and the page's "mouse first moved"
-  line, in the order the logs have them, then the input log's line saying
-  how much mouse motion made during the load was left out (DInputHook.cpp,
-  ForgetMouseMotion), at most 40 of each set. Then how
+  line, in the order the logs have them, then the input log's lines about
+  the mouse (DInputHook.cpp): the cooperative level the game asked for it,
+  the times it acquired the mouse or let go of it, the reads after the data
+  load and how much motion the first of them held and left out, at most 120
+  lines of each set. Then how
   many focus-taken lines put the game's cursor within 12 pixels of an edge
   of the window. No account, name, session key or address is printed: the
   lines it takes hold only times, positions, sizes and menu names.
@@ -54,15 +56,16 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 # SkyrimPlatform's words (BrowserApiTilted.cpp, LogCursor and SetFocusedImpl;
-# DInputHook.cpp, ForgetMouseMotion) and the choice page's
+# DInputHook.cpp, LogCoop and the mouse trace) and the choice page's
 # (game\ui\thornswood-select.js). Change them together.
 $CursorLine = 'cursor, (?:game data loaded|focus taken|Cursor Menu opening|Cursor Menu closing): the game''s menu cursor at (-?\d+),(-?\d+), Cursor Menu (?:open|closed), the Windows pointer at -?\d+,-?\d+ of the window in front(?: \(unknown\))? \((-?\d+)x(-?\d+)\)\s*$'
 $FocusLine = '\] browser: focus (?:taken|let go)'
 $MovedLine = 'choice page: mouse first moved at -?\d+,-?\d+ '
-# DInputHook.cpp, ForgetMouseMotion: the motion made while the game loaded.
-$DroppedLine = '^\[mouse\] the first read after the game''s data loaded held -?\d+,-?\d+ \(wheel -?\d+\) of motion made while it loaded; left out\s*$'
+# DInputHook.cpp: every line of the mouse trace, and the mouse's cooperative level.
+$MouseLine = '^\[mouse\] '
+$CoopMouseLine = '^\[coop\] Mouse\s'
 $Edge = 12
-$Most = 40
+$Most = 120
 
 if (-not (Test-Path -LiteralPath $Folder)) {
     Write-Host "STOP. There is no $Folder, so there are no session logs to read here."
@@ -107,7 +110,7 @@ foreach ($f in @(Get-ChildItem -LiteralPath $Folder -Filter '*.json' -File | Whe
     $inputLog = $set.logs.PSObject.Properties['thornswood-input.log']
     if ($inputLog -and $inputLog.Value) {
         foreach ($line in ([string]$inputLog.Value -split "`r?`n")) {
-            if ($line -match $DroppedLine) { $lines.Add($line.Trim()) }
+            if ($line -match $MouseLine -or $line -match $CoopMouseLine) { $lines.Add($line.Trim()) }
         }
     }
     if (-not $lines.Count) { continue }
