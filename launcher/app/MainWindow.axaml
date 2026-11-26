@@ -1090,7 +1090,7 @@
                 <TextBlock x:Name="TxtThemeNote" Theme="{StaticResource Small}" Margin="0,0,0,18"/>
                 <StackPanel x:Name="ThemeEditor" Margin="0,0,0,30"/>
 
-                <TextBlock Text="Voice" Theme="{StaticResource Eyebrow}"/>
+                <TextBlock Text="Audio" Theme="{StaticResource Eyebrow}"/>
                 <StackPanel Margin="0,0,0,30">
                   <TextBlock Text="Microphone" Theme="{StaticResource Body}"/>
                   <ComboBox x:Name="BoxMicrophone" Theme="{StaticResource SelectField}"
@@ -1099,7 +1099,14 @@
                             MinWidth="340" MaxWidth="640" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
                   <TextBlock x:Name="TxtMicrophoneNote" Theme="{StaticResource Small}" Margin="0,8,0,0" TextWrapping="Wrap"
                              Text="Windows default uses your communications microphone, or the default recording input if none is set. Changes take effect after you restart the launcher."/>
-                  <Button x:Name="BtnRefreshMicrophones" Theme="{StaticResource Ghost}" Content="Refresh microphones"
+                  <TextBlock Text="Audio output" Theme="{StaticResource Body}" Margin="0,18,0,0"/>
+                  <ComboBox x:Name="BoxAudioOutput" Theme="{StaticResource SelectField}"
+                            AutomationProperties.Name="Audio output"
+                            AutomationProperties.HelpText="Choose the speakers or headphones. Changes take effect after restarting Thornswood and Skyrim."
+                            MinWidth="340" MaxWidth="640" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
+                  <TextBlock Theme="{StaticResource Small}" Margin="0,8,0,0" TextWrapping="Wrap"
+                             Text="Changes take effect after restarting Thornswood and Skyrim."/>
+                  <Button x:Name="BtnRefreshMicrophones" Theme="{StaticResource Ghost}" Content="Refresh audio devices"
                           HorizontalAlignment="Left" Margin="0,10,0,0"/>
                 </StackPanel>
 

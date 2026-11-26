@@ -100,7 +100,7 @@ if (readme !== null) {
 // Kept while it shipped: the old installer's Package-Thornswood.ps1 copied it
 // into every installer until #4824. Velopack's Setup.exe carries no loose
 // page and opens the launcher, whose install window says each step, so it
-// went with the batch files it named, and a copy of the join guide that
+// went with the batch files it named (#4752, #4824), and a copy of the join guide that
 // nothing ships cannot drift from it. installer\README.md says so and points
 // at the join guide, which is what a person reads now.
 const RMF = 'installer/READ ME FIRST.txt';
@@ -112,7 +112,7 @@ try {
 } catch (e) {
   console.log('SKIP  git ls-files did not answer, so the tracked-file checks are left out: ' + e.message);
 }
-if (tracked) yes(RMF + ' is not tracked (#4824)', tracked.indexOf(RMF) < 0);
+if (tracked) yes(RMF + ' is not tracked (#4752, #4824)', tracked.indexOf(RMF) < 0);
 yes(RMF + ' is gone', read(RMF) === null);
 const instReadme = read('installer/README.md') || '';
 yes('installer/README.md says what a person reads is the join guide on the site',
@@ -132,21 +132,18 @@ if (cfgText === null) {
   const cs = read('launcher/app/Config.cs') || '';
   const m1 = /public string ServerAddress = "([^"]+)"/.exec(cs);
   const m2 = /public string ServerPort = "([^"]+)"/.exec(cs);
-  // The site feed, the only update source since #907 (it was the GitHub
-  // repository Thornswood-Releases until then).
-  const m3 = /:\s*"(https:\/\/[^"]+\/feed\/version\.json)"/.exec(cs);
-  yes('Config.cs defaults can be read (address, port, update feed)', !!(m1 && m2 && m3));
-  if (cfg && m1 && m2 && m3) {
+  const mTheme = /public string Theme = "([^"]+)"/.exec(cs);
+  yes('Config.cs defaults can be read (address, port, theme)', !!(m1 && m2 && mTheme));
+  if (cfg && m1 && m2 && mTheme) {
     yes('config.example.json ServerAddress ' + cfg.ServerAddress + ' is the launcher default ' + m1[1],
         cfg.ServerAddress === m1[1]);
     yes('config.example.json ServerPort ' + cfg.ServerPort + ' is the launcher default ' + m2[1],
         String(cfg.ServerPort) === m2[1]);
-    yes('config.example.json UpdateFeedUrl ' + cfg.UpdateFeedUrl + ' is the launcher default ' + m3[1],
-        cfg.UpdateFeedUrl === m3[1]);
-    yes('config.example.json names no GitHub repository to update from (#907)', !('UpdateRepo' in cfg));
+    yes('config.example.json Theme ' + cfg.Theme + ' is the launcher default ' + mTheme[1],
+        cfg.Theme === mTheme[1]);
+    yes('config.example.json carries no update feed address, repository or token (#5608)',
+        !('UpdateFeedUrl' in cfg) && !('UpdateRepo' in cfg) && !('UpdateToken' in cfg));
   }
-  yes('config.example.json carries an empty UpdateToken, never a real one',
-      cfg !== null && cfg.UpdateToken === '');
   yes('config.example.json does not name the old product or its box',
       !/skyrim\s*-?\s*together|25565|192\.135\.119\.166/i.test(cfgText));
 }
@@ -174,6 +171,11 @@ if (tracked) {
       yes(rel + ' does not list SETUP.md, which is gone' + where(t, /SETUP\.md/), !/SETUP\.md/.test(t));
     }
   });
+  const devGuide = read('Developer-Guide.md') || '';
+  yes('Developer-Guide.md contents link to "The version comes from the build" (#5285)',
+      /\[The version comes from the build\]\(docs\/guide\/release-to-main\.md#the-version-comes-from-the-build\)/.test(devGuide));
+  yes('Developer-Guide.md does not link to "Move the version first"',
+      !/Move the version first/i.test(devGuide));
   const TEXT = /\.(js|mjs|cjs|ps1|psm1|psd1|py|cs|xaml|md|json|html|htm|css|txt|yml|yaml|toml|cmd|bat|sh|ini|xml)$/i;
   const drive = [];
   tracked.filter(function (f) { return TEXT.test(f); }).forEach(function (rel) {

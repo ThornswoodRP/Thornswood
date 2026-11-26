@@ -65,8 +65,9 @@ function Get-FunctionText([string]$text, [string]$name) {
     return $null
 }
 
-$readFn = Get-FunctionText $src 'Read-PluginHeader'
-$sortFn = Get-FunctionText $src 'Sort-MastersFirst'
+$readFn  = Get-FunctionText $src 'Read-PluginHeader'
+$bytesFn = Get-FunctionText $src 'Read-PluginHeaderBytes'
+$sortFn  = Get-FunctionText $src 'Sort-MastersFirst'
 Yes 'Read-PluginHeader is in Deploy-Gamemode.ps1' ($null -ne $readFn)
 Yes 'Sort-MastersFirst is in Deploy-Gamemode.ps1' ($null -ne $sortFn)
 if ($null -eq $readFn -or $null -eq $sortFn) {
@@ -74,6 +75,7 @@ if ($null -eq $readFn -or $null -eq $sortFn) {
     Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)
     exit 1
 }
+if ($bytesFn) { . ([scriptblock]::Create($bytesFn)) }
 . ([scriptblock]::Create($readFn))
 . ([scriptblock]::Create($sortFn))
 
@@ -166,14 +168,20 @@ try {
             if ($t.StartsWith('*')) { $enabled += $t.Substring(1).Trim() }
         }
         $odd = @()
+        $checked = 0
         foreach ($n in $enabled) {
             $f = Join-Path $realData $n
             if (-not (Test-Path -LiteralPath $f)) { continue }
+            $checked++
             $hh = Read-PluginHeader $f
             if ($hh.Master -and -not $hh.Light -and $n -notmatch '\.esm$') { $odd += $n }
         }
-        Yes 'no .esp in the live load order carries the master flag' ($odd.Count -eq 0)
-        if ($odd.Count) { foreach ($o in $odd) { Write-Host "      $o" -ForegroundColor Yellow } }
+        if ($checked -eq 0) {
+            Write-Host 'SKIP  the live plugins are not in Data to check' -ForegroundColor DarkGray
+        } else {
+            Yes 'no .esp in the live load order carries the master flag' ($odd.Count -eq 0)
+            if ($odd.Count) { foreach ($o in $odd) { Write-Host "      $o" -ForegroundColor Yellow } }
+        }
     } else {
         Write-Host 'SKIP  the live load order is not on this machine' -ForegroundColor DarkGray
     }

@@ -9,6 +9,7 @@
       main, take -Survey and nothing else, and main's is a live verb that
       never runs on its own after a deploy, where dev's may;
     - a survey carries no stop and no hold;
+    - startup accepts fresh UTC and legacy MongoDB records, and ignores stale or malformed records;
     - its box step, built as the script builds it and run in pwsh, refuses a
       folder whose server-settings.json names another server, with nothing
       touched.
@@ -162,6 +163,44 @@ $env:TW_WORLDJS = P 'scripts/vps/world.js'
 $null = New-Item -ItemType Directory -Path (Join-Path $tmp 'watch/holds') -Force
 
 try {
+    # Exercise the actual restart check with a loopback listener and a fixed
+    # clock. No task or database is needed to check the log's freshness.
+    $startAt = $mw.IndexOf('# Starts the task and waits for both ports;')
+    $startEnd = $mw.IndexOf('# Back to its files:', $startAt)
+    $startScript = [scriptblock]::Create($mw.Substring($startAt, $startEnd - $startAt))
+    & {
+        . $startScript
+        $Root = New-Root 'log-clock'
+        $Task = 'Fixture only'
+        $Db = 'fixture'
+        $port = 0
+        $log = Join-Path $Root 'server.log'
+        $fixtureNow = [DateTime]::new(2026, 11, 25, 12, 0, 0, [DateTimeKind]::Utc).ToLocalTime()
+        $inv = [Globalization.CultureInfo]::InvariantCulture
+        function Get-Date { return $fixtureNow }
+        function Get-PortPids { return 1 }
+        function Start-ScheduledTask { param($TaskName, $ErrorAction) }
+        function Clear-ThornswoodHold { param($Target) }
+        function Get-ThornswoodServerReadyWait { return -1 }
+        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+        try {
+            $listener.Start()
+            $resPort = $listener.LocalEndpoint.Port
+            $expected = 'LOADED|4|0|' + $resPort
+            $utc = $fixtureNow.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", $inv)
+            $legacy = $fixtureNow.ToString('yyyy-MM-dd HH:mm:ss.fff', $inv)
+            $staleUtc = $fixtureNow.ToUniversalTime().AddSeconds(-2).ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", $inv)
+            $staleLegacy = $fixtureNow.AddSeconds(-2).ToString('yyyy-MM-dd HH:mm:ss.fff', $inv)
+            [IO.File]::WriteAllLines($log, @("[$utc] [info] MongoDB: loaded 4 forms"))
+            Yes 'restart sees the new UTC receipt stamp and proves the loaded count' ((Start-AndWait 4) -eq $expected)
+            [IO.File]::WriteAllLines($log, @("[$legacy] [info] MongoDB: loaded 4 forms"))
+            Yes 'restart still sees a fresh legacy local MongoDB load' ((Start-AndWait 4) -eq $expected)
+            [IO.File]::WriteAllLines($log, @("[$staleUtc] [info] MongoDB: loaded 4 forms", "[$staleLegacy] [info] MongoDB: loaded 4 forms",
+                '[2026-02-31T12:00:00.000Z] [info] MongoDB: loaded 4 forms', '[2026-02-31 12:00:00.000] [info] MongoDB: loaded 4 forms'))
+            Yes 'both stale clock formats and invalid timestamps cannot prove this restart loaded' ((Start-AndWait 4) -like 'NOTLOADED|*')
+        } finally { $listener.Stop() }
+    }
+
     # ---- a folder that is another server's ----------------------------------
     $other = New-Root 'other'
     $text = [IO.File]::ReadAllText((Join-Path $other 'server-settings.json'))

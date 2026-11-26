@@ -22,7 +22,7 @@
   Brenna and Aldis are in Windhelm, indoors. Corvin goes swimming.
 
     A  They come in and the needs record is full. An hour indoors: hunger
-       falls by the page's 41.67 an hour, thirst by its 83.33 and rest by
+       falls by the page's 33.33 an hour, thirst by its 66.67 and rest by
        its 12.5, and Brenna is told when thirst gets worse.
     B  She eats bread: one leaves her pack, hunger rises by the page's 15,
        and the engine is told to apply none of the bread's own magic (food
@@ -88,8 +88,8 @@ const t0 = w.now();
 w.run(60 * 60 * 1000);
 const hours = (w.now() - t0) / 3600000;
 const a1 = m(BRENNA);
-yes('A2 an hour indoors: hunger fell by about 41.67 (' + f1(a0.food) + ' to ' + f1(a1.food) + ')', about(a0.food - a1.food, 41.67 * hours, 1.5));
-yes('A2 and thirst by about 83.33 (' + f1(a0.drink) + ' to ' + f1(a1.drink) + ')', about(a0.drink - a1.drink, 83.33 * hours, 1.5));
+yes('A2 an hour indoors: hunger fell by about 33.33 (' + f1(a0.food) + ' to ' + f1(a1.food) + ')', about(a0.food - a1.food, (100 / 3) * hours, 1.5));
+yes('A2 and thirst by about 66.67 (' + f1(a0.drink) + ' to ' + f1(a1.drink) + ')', about(a0.drink - a1.drink, (100 / 1.5) * hours, 1.5));
 yes('A2 and rest by about 12.5 (' + f1(a0.rest) + ' to ' + f1(a1.rest) + ')', about(a0.rest - a1.rest, 12.5 * hours, 1));
 yes('A2 she was told when thirst got worse (' + w.heardSince(BRENNA, heardAt).join(' | ') + ')',
     w.heardSince(BRENNA, heardAt).some(function (l) { return /thirst/i.test(l); }));

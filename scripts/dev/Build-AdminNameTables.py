@@ -30,13 +30,18 @@ WHAT IS IN IT
 
 WHEN TWO RECORDS SHARE A NAME the one from the earliest plugin wins, in load
 order with the five masters first, which is the record people mean when they
-type the vanilla name. Between records of one plugin an actor with its own
-traits wins over one built from a template (a template pointing at a levelled
-list is a different creature every time), and then the lowest form id. Any
+type the vanilla name. Between items of one plugin, the canonical recipe
+name in ITEM_NAMES wins before the lowest form id. This keeps a quest
+placeholder from displacing the ordinary item recipes actually use.
+Between actors of one plugin, its own traits win over a template (a template
+pointing at a levelled list is a different creature every time), then the
+lowest form id. Any
 record at all can still be reached by its form id: /spawn 23ab7 or
 /give 12eb7:Skyrim.esm.
 
 Read only except for those two files.
+Run after Build-ItemNameTable.js. The tables folder must contain its current
+ITEM_NAMES.json; missing or malformed preferences stop before either output.
 
 Usage:
   python scripts\\dev\\Build-AdminNameTables.py
@@ -48,6 +53,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import struct
 import sys
 
@@ -147,8 +153,24 @@ def actor_name(recs, d):
     return ''
 
 
-def table(recs, rank, pick_items, creation=frozenset()):
+def item_preferences(folder=None):
+    """Validated output of the preceding canonical recipe-name builder."""
+    names = gamemode_tables.read('ITEM_NAMES', folder)
+    if not isinstance(names, dict) or not names:
+        raise ValueError('ITEM_NAMES must be a nonempty object')
+    for key, row in names.items():
+        if (not isinstance(key, str) or not isinstance(row, list) or len(row) != 2
+                or not all(isinstance(value, str) and value.strip() for value in row)
+                or key != row[0].lower()
+                or not re.fullmatch(r'[0-9a-f]{1,8}:[^:\x00-\x1f]+\.(?:esm|esp|esl)', row[1], re.I)
+                or int(row[1].split(':', 1)[0], 16) == 0):
+            raise ValueError('Invalid ITEM_NAMES entry')
+    return {key: row[1] for key, row in names.items()}
+
+
+def table(recs, rank, pick_items, creation=frozenset(), preferences=None):
     best = {}
+    preferences = preferences or {}
     for d, r in recs.items():
         if pick_items != (r['type'] in ITEM_TYPES):
             continue
@@ -158,14 +180,15 @@ def table(recs, rank, pick_items, creation=frozenset()):
             if r['type'] in (b'ARMO', b'WEAP') and r['flags'] & NON_PLAYABLE:
                 continue
             name = r.get('name', '')
-            templated = 0
+            # Descriptor case and optional zero padding do not change a form.
+            preferred = 0 if preferences.get(name.lower(), '').lower().lstrip('0') == d.lower().lstrip('0') else 1
         else:
             name = actor_name(recs, d)
-            templated = 1 if (r.get('uses', 0) & USE_TRAITS and r.get('template')) else 0
+            preferred = 1 if (r.get('uses', 0) & USE_TRAITS and r.get('template')) else 0
         if not name or name.lower() == '__proto__':
             continue
         key = name.lower()
-        score = (rank.get(r['owner'].lower(), 10 ** 6), templated, r['fid'])
+        score = (rank.get(r['owner'].lower(), 10 ** 6), preferred, r['fid'])
         if key not in best or score < best[key][0]:
             best[key] = (score, name, d)
     return dict((k, (v[1], v[2])) for k, v in best.items())
@@ -180,7 +203,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data', default=r'C:\Thornswood\Game\Data')
     ap.add_argument('--plugins', default=r'C:\Thornswood\Profile\OwnGame\plugins.txt')
-    ap.add_argument('--tables', default=None, help='the folder of gamemode tables (game/gamemode-tables)')
+    ap.add_argument('--tables', default=None, help='the folder containing ITEM_NAMES and receiving the admin tables (game/gamemode-tables)')
     a = ap.parse_args()
 
     order = own_plugins.load_order(a.plugins)
@@ -199,7 +222,12 @@ def main():
         read(pl, rank, recs)
 
     creation = creation_records()
-    items = table(recs, rank, True, creation)
+    try:
+        preferences = item_preferences(a.tables)
+    except (OSError, ValueError) as exc:
+        print('STOP. Could not read canonical ITEM_NAMES (%s). Nothing was written.' % type(exc).__name__)
+        return 1
+    items = table(recs, rank, True, creation, preferences)
     actors = table(recs, rank, False, creation)
     print('%d plugins, %d records read' % (len(order), len(recs)))
     print('%d item names, %d actor names' % (len(items), len(actors)))

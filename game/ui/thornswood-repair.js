@@ -9,7 +9,7 @@
 
     window.thornswoodRepair = { open, close, isOpen, setData }
     page -> plugin  'repair:ready' | 'repair:opened' | 'repair:closed'
-    page -> server  '/repair mend <base in hex> <condition> <name>', through
+    page -> server  '/repair mend-name-v1 <base in hex> <condition> <encoded name>', through
                     window.thornswoodNet.say, the one line a button sends
 
   The server owns the pack, the kits and the numbers. This page only draws
@@ -34,8 +34,7 @@
   function net(line) {
     try {
       if (window.thornswoodNet && window.thornswoodNet.say) {
-        window.thornswoodNet.say(line);
-        return true;
+        return window.thornswoodNet.say(line) !== false;
       }
     } catch (e) { }
     return false;
@@ -158,8 +157,15 @@
   function onMend() {
     var row = ((data && data.rows) || [])[Number(this.getAttribute('data-n'))];
     if (!row) { return; }
+    var encoded;
+    try { encoded = encodeURIComponent(row.name); } catch (e) { encoded = ''; }
+    // Keep the entire ASCII request below the transport's command limit.
+    if (!encoded || encoded.length > 8000) {
+      this.textContent = 'Cannot send this name';
+      return;
+    }
     this.disabled = true;
-    net('/repair mend ' + row.base + ' ' + row.cond + ' ' + row.name);
+    if (!net('/repair mend-name-v1 ' + row.base + ' ' + row.cond + ' ' + encoded)) { this.disabled = false; }
   }
 
   function open() {
@@ -168,6 +174,7 @@
     if (shown) { return; }
     shown = true;
     root.className = 'on';
+    if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
 

@@ -140,6 +140,35 @@ jobs:
           ./scripts/dev/Launcher-Reach.ps1 -Base $env:BASE
           exit $LASTEXITCODE
 
+  # BOT HARNESSES (#5958). Run the entire suite on every change, alongside
+  # the existing gate. Nightly uses the same runner; no path-selection skip.
+  bot:
+    name: Bot harnesses
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Run the bot harnesses
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP 'bot-venv'
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $py = Join-Path $venv 'Scripts\python.exe'
+          if (-not (Test-Path $py)) { throw 'could not make the bot harness venv' }
+          & $py -m pip install --quiet --disable-pip-version-check --require-hashes --only-binary :all: -r bot\requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./scripts/dev/Run-BotHarnesses.ps1 -Python $py
+
   # Each share runs its part of the pick's plan. A share of what a change can
   # reach says so in its name, and scripts\dev\Tested-Tree.js counts a pull
   # request's tree as tested only when every share of its run passed and was
@@ -446,6 +475,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
 
       # What the box's content build writes is never committed (#5191,
       # stage 4e): the plugin and table checks below read the newest a merge
@@ -589,13 +620,13 @@ jobs:
       - name: Check inactive merchant role data
         shell: pwsh
         run: |
-          & python tests/test-merchant-role-data.py
+          & python tests/test-merchant-role-candidate.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & python scripts/dev/Check-MerchantRoleCandidate.py --allow-candidate
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python tests/test-merchant-roster.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & python tests/test-merchant-roster-activation.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & python scripts/dev/Build-MerchantRoleTables.py --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Check the bot's keeping times
@@ -1012,15 +1043,16 @@ jobs:
   # Build-PrWorkflow.js, which says why.
   result:
     name: Build check result
-    needs: [pick, checks, launcher, gate, gate-linux]
+    needs: [pick, checks, launcher, gate, gate-linux, bot]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: The tree checks, the launcher build and the gate passed
+      - name: The tree checks, bot harnesses, launcher build and gate passed
         env:
           PICK: ${{ needs.pick.result }}
           CHECKS: ${{ needs.checks.result }}
+          BOT: ${{ needs.bot.result }}
           BUILD: ${{ needs.launcher.result }}
           GATE: ${{ needs.gate.result }}
           GATE_LINUX: ${{ needs['gate-linux'].result }}
@@ -1030,12 +1062,14 @@ jobs:
         run: |
           echo "Pick the gate harnesses: $PICK"
           echo "Tree checks: $CHECKS"
+          echo "Bot harnesses: $BOT"
           echo "Launcher builds: $BUILD (the change reaches it: $REACHES_LAUNCHER)"
           echo "Gate harnesses, every share: $GATE (shares: $SHARES)"
           echo "Gate harnesses on Linux, every share: $GATE_LINUX (shares: $LINUX_SHARES)"
           ok=1
           [ "$PICK" = success ] || ok=0
           [ "$CHECKS" = success ] || ok=0
+          [ "$BOT" = success ] || ok=0
           [ "$BUILD" = success ] || ok=0
           if [ "$GATE" != success ]; then
             if [ "$GATE" = skipped ] && [ "$PICK" = success ] && [ "$SHARES" = "[]" ]; then echo "The gate was skipped: the change reaches no gate harness (#5292)"; else ok=0; fi
@@ -1044,5 +1078,5 @@ jobs:
             if [ "$GATE_LINUX" = skipped ] && [ "$PICK" = success ] && [ "$LINUX_SHARES" = "[]" ]; then echo "The gate on Linux was skipped: the change reaches no harness that runs there (#5293)"; else ok=0; fi
           fi
           if [ "$ok" = 1 ]; then exit 0; fi
-          echo "::error::the pick, the tree checks, the launcher build or a share of the gate did not pass, so this pull request may not merge"
+          echo "::error::the pick, the tree checks, the bot harnesses, the launcher build or a share of the gate did not pass, so this pull request may not merge"
           exit 1

@@ -62,6 +62,9 @@ function door(doc) {
 function rig(settings) {
   const r = { told: [], logged: [], kicked: [], timers: [], online: [] };
   const box = {
+    // This harness isolates login proof from the separately tested durable
+    // staff authority. #4488's real staff+login tests cover unavailable books.
+    __thornswoodStaff: { restraintAdmission: function () { return true; } },
     console: { log: function () { r.logged.push(Array.prototype.join.call(arguments, ' ')); } },
     require: require, Buffer: Buffer,
     Date: Date, Math: Math, Number: Number, String: String, Array: Array, Object: Object, JSON: JSON,

@@ -121,6 +121,9 @@ class Answer(object):
         self.said.append((text, ephemeral))
         self.options.append(k)
 
+    async def send(self, text=None, ephemeral=False, **k):
+        return await self.send_message(text=text, ephemeral=ephemeral, **k)
+
     def is_done(self):
         return bool(self.said)
 
@@ -282,6 +285,34 @@ ask = run(by_command, thread, Person(['Content Creator'], uid=502))
 yes('a Content Creator in a real ticket meets the staff gate, not the ticket one',
     len(ask.response.said) == 1 and 'Staff close these' in ask.response.said[0][0]
     and not thread.edited and not BOOK)
+
+
+# --------------------------------------------- archiving fails (#4237) --
+class FailingThread(Thread):
+    async def edit(self, **k):
+        raise discord.HTTPException(discord.Object(500), 'Cannot archive thread')
+
+
+del BOOK[:]
+fail_thread = FailingThread('Failing archive ticket', Channel(bot.TICKETS[0]))
+fail_closer = Person(['Moderator'])
+fail_closer.display_name = 'Mod_Bob'
+fail_ask = run(by_command, fail_thread, fail_closer)
+
+# 1. Told to whoever ran /close
+yes('a failed archive is told to whoever ran /close (ephemeral)',
+    len(fail_ask.response.said) >= 2
+    and any('could not archive' in s[0].lower() and s[1] is True for s in fail_ask.response.said))
+
+# 2. Corrected in the ticket
+yes('a failed archive is corrected in the ticket thread',
+    len(fail_thread.sent) >= 1
+    and any('still open' in s[0].lower() or 'archive failed' in s[0].lower() for s in fail_thread.sent))
+
+# 3. Corrected in the staff log
+yes('a failed archive is corrected in the staff log',
+    len(BOOK) >= 2
+    and any('still open' in b[0].lower() or 'archive failed' in b[0].lower() for b in BOOK))
 
 
 # ------------------------------------------------------------- the words --

@@ -57,17 +57,27 @@ const fakeMp = {
   }
 };
 
+let siteReads = 0;
+const trackedFs = Object.assign({}, fs, {readFileSync(file, ...args) {
+  if (/server-settings\.json|door\.json/.test(String(file))) siteReads++;
+  return fs.readFileSync(file, ...args);
+}});
+const trackedRequire = name => name === 'fs' ? trackedFs : require(name);
 const g = {};
 const S = block ? new Function('mp', 'require', 'globalThis', 'console', 'URL', 'Buffer',
-  block + '\nreturn globalThis.__thornswoodAskStaff;')(fakeMp, require, g, { log() { } }, URL, Buffer) : null;
+  block + '\nreturn globalThis.__thornswoodAskStaff;')(fakeMp, trackedRequire, g, { log() { } }, URL, Buffer) : null;
 yes('the block hands out its ask', !!(S && typeof S.ask === 'function'));
 
 // No door.json where it runs, so the site answers at once that it was not reached.
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-4922-'));
 const home = process.cwd();
 
-function report(line) {
-  g.__thornswoodAskSeen.by = {}; g.__thornswoodAskSeen.all = [];
+function report(line, resetLimits = true) {
+  siteReads = 0;
+  if (resetLimits) {
+    g.__thornswoodAskSeen.by = {};
+    g.__thornswoodAskSeen.all = [];
+  }
   const said = [];
   process.chdir(scratch);
   try {
@@ -82,8 +92,11 @@ function report(line) {
 if (S) {
   world(EVERYONE);
   let r = report('lydia shoved me off the bridge');
-  yes('a shared first name: neither Lydia is told, the other staff are (told ' + r.staff.join(',') + ')',
-      r.told(12) === 0 && r.told(13) === 0 && r.told(14) === 1 && r.told(15) === 1);
+  yes('a shared first name asks for the full name before telling any staff',
+      r.staff.length === 0 && /full name/i.test(r.reply));
+  yes('an unclear report consumes no report cooldown or submission slot',
+      g.__thornswoodAskSeen.all.length === 0 && Object.keys(g.__thornswoodAskSeen.by).length === 0);
+  yes('an unclear report does not even look up the site delivery configuration', siteReads === 0);
 
   r = report('Brynj took my sword');
   yes('a short form of a name: Brynjolf is not told (told ' + r.staff.join(',') + ')',
@@ -117,7 +130,22 @@ if (S) {
   r = report('lydia shoved me');
   yes('with only the two Lydias on staff in the world, neither is told', r.staff.length === 0);
   yes('  and the reply does not say there are no staff in the world (' + r.reply + ')',
-      !/[Nn]obody from staff is in the world/.test(r.reply) && /[Nn]o member of staff in the world was told/.test(r.reply));
+      !/[Nn]obody from staff is in the world/.test(r.reply) && /full name/i.test(r.reply));
+  world([[11, 'Aela'], [12, 'Lydia Stormblade'], [13, 'Lydia Stormblade'], [14, 'Brynjolf']]);
+  r = report('Lydia Stormblade shoved me');
+  yes('identical full names never pick the first character by accident',
+      r.staff.length === 0 && /more than one person/i.test(r.reply));
+
+  world([[11, 'Aela'], [12, 'Lydia'], [13, 'Lydia Stormblade'], [14, 'Brynjolf']]);
+  r = report('Lydia shoved me');
+  yes('a one-word character name cannot resolve a shared first name',
+      r.staff.length === 0 && /full name/i.test(r.reply));
+  yes('the ambiguous one-word name does not check delivery or consume a slot',
+      siteReads === 0 && g.__thornswoodAskSeen.all.length === 0 && Object.keys(g.__thornswoodAskSeen.by).length === 0);
+  r = report('Lydia Stormblade shoved me', false);
+  yes('the longer full name can be reported immediately to the correct staff',
+      r.staff.join(',') === '14' &&
+      r.said.some(s => s.pid === 14 && /Aela reported Lydia Stormblade: shoved me/.test(s.text)));
 }
 
 fs.rmSync(scratch, { recursive: true, force: true });

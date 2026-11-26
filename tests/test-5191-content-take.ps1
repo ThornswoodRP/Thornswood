@@ -192,6 +192,26 @@ try {
     $r = Run @('-Repo', $repo, '-Newest', '-Take', '-Output', '')
     Check '3 -Newest goes without -Take and -Ask' ($r.Code -eq 1 -and $r.Text -match '-Newest takes the newest build main released')
 
+    $oldSpotPath = 'docs/HUNTING-SPOTS.csv'
+    $newSpotPath = 'game/data/HUNTING-SPOTS.csv'
+    $spotFile = Join-Path $repo $newSpotPath
+    $spots = @{ $oldSpotPath = $enc.GetBytes('the older signed build data') }
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $spots), '-Output', '')
+    Check '3 -Newest lays verified legacy spot bytes at the new path' (
+        $r.Code -eq 0 -and (Test-Path -LiteralPath $spotFile) -and
+        (Sha ([IO.File]::ReadAllBytes($spotFile))) -ceq (Sha $spots[$oldSpotPath]) -and
+        -not (Test-Path -LiteralPath (Join-Path $repo $oldSpotPath)))
+    $spots[$newSpotPath] = $enc.GetBytes('new location in the build')
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $spots), '-Output', '')
+    Check '3 -Newest prefers the verified current path when both are present' (
+        $r.Code -eq 0 -and (Sha ([IO.File]::ReadAllBytes($spotFile))) -ceq (Sha $spots[$newSpotPath]))
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
+    $badSpot = @{ $oldSpotPath = ('0' * 64); $newSpotPath = (Sha $spots[$newSpotPath]) }
+    $r = Run @('-Repo', $repo, '-Newest', '-ArtifactDir', (Plant $spots $badSpot), '-Output', '')
+    Check '3 -Newest refuses a wrong hash before laying either spot file' (
+        $r.Code -eq 1 -and $r.Text -match 'is not the sha256' -and -not (Test-Path -LiteralPath $spotFile))
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
+
     # 3d. In a workflow GitHub's download step takes the build (#6359):
     # -Find names it, and the script's own download refuses.
     @{ artifacts = @(
@@ -283,10 +303,19 @@ try {
             Check "6 $f`: $j lays the pick's build before it runs the gate, with no token" ($body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?Run-Gate\.ps1 -Shard' -and $body -notmatch 'github\.token|GH_TOKEN')
         }
     }
+    # Checkout options may follow persist-credentials. They are still part of
+    # checkout, not an intervening step that could read stale content tables.
+    $laysNewest = '(?s)actions: read.*?persist-credentials: false\n(?:[ \t]*\n|        [^\n]*\n|      #[^\n]*\n)*      - name: Lay the newest content build\n        uses: \./\.github/actions/lay-content\s*\n'
     foreach ($w in @(@('build.yml', 'checks'), @('build-pr.yml', 'checks'), @('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
         $b = ([IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])")) -replace "`r`n", "`n")
         $at = $b.IndexOf("`n  $($w[1]):"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
-        Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match '(?s)actions: read.*?persist-credentials: false\s+(#[^\n]*\n\s+)*- name: Lay the newest content build\s+uses: \./\.github/actions/lay-content\s*\n')
+        Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match $laysNewest)
+        if ($w[0] -eq 'build-pr.yml') {
+            $late = $body.Replace('      - name: Lay the newest content build', "      - name: Read stale tables`n        run: node stale.js`n      - name: Lay the newest content build")
+            Check '6 a step between checkout and laying content is still refused' ($late -notmatch $laysNewest)
+            Check '6 keeping checkout credentials is still refused' ($body.Replace('persist-credentials: false', 'persist-credentials: true') -notmatch $laysNewest)
+            Check '6 another action cannot stand in for laying content' ($body.Replace('uses: ./.github/actions/lay-content', 'uses: ./another-action') -notmatch $laysNewest)
+        }
     }
     # 7. No job downloads the build itself (#6359): every lay in a workflow
     # is the action's, which names the build, has GitHub's download step take

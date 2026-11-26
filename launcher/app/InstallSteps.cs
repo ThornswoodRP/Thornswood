@@ -83,6 +83,10 @@ namespace Thornswood
     /// loses that name first, so the write does not go through to the other
     /// name.
     ///
+    /// A Profile\Payload an earlier install left is taken out before anything
+    /// is copied, whatever this run's shape, so only this build's files wait
+    /// there for the folder (#4180, DropOldPayload).
+    ///
     /// Bethesda's own files are never renamed or deleted.
     ///
     /// WHAT THE SCRIPT DID THAT THIS DOES NOT, and why. The script had a
@@ -330,8 +334,8 @@ namespace Thornswood
 
             // ------------------------------------------------- the files
             Head("Installing the mods");
+            DropOldPayload();
             List<string> files = PayloadFiles(payload);
-            RecordIntoGame(files);
             if (madeOwn) RemoveSharedNames(payload, files, gameDir);
             CopyPayload(payload, files, gameDir);
             Say("  Done");
@@ -366,6 +370,69 @@ namespace Thornswood
             return list;
         }
 
+        // ---- Profile\Payload holds this build's files and nothing else -----
+        //
+        // With Thornswood's own folder chosen and not made, its own files wait
+        // in Profile\Payload, and the launcher's Make takes every file in it
+        // into the folder as Thornswood's own (OwnGame.WithPayload). Its being
+        // there at all is what tells the launcher the folder was chosen
+        // (Paths.OwnFirst). A Root an earlier install used keeps its Profile
+        // when Velopack's own uninstall takes the launcher off (#5820), so an
+        // install can find an older Payload here. Copying over it kept every
+        // file the newer build no longer has, for Make to take into the game,
+        // and with the folder not chosen this time the launcher still ran from
+        // the old Payload (#4180). So it goes before anything is copied,
+        // whatever this run's shape, and only this build's files go back in.
+        //
+        // A link inside it is removed as a link and nothing it points at is
+        // touched (RemoveTree). Directory.Delete(dir, true) is not used: on
+        // Windows it asks DeleteVolumeMountPoint about every junction it meets,
+        // and a junction that is not a volume's answers "The parameter is
+        // incorrect", which stopped the whole removal.
+        void DropOldPayload()
+        {
+            string dir = Path.Combine(ProfileDir, "Payload");
+            if (!Directory.Exists(dir)) return;
+            try
+            {
+                RemoveTree(dir);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                throw Die("Could not take the older " + dir + " out of the way (" + Failure.Why("InstallSteps, the older Payload", e, dir) + "). " +
+                          "Close Skyrim, Vortex and the launcher, then run this again.");
+            }
+            Say("  An older " + dir + " was here from an earlier install and was taken out,");
+            Say("  so no file an older build had is left in it.");
+        }
+
+        /// <summary>
+        /// Removes a folder and everything in it. A link (a junction or a
+        /// symbolic link, to a file or a folder) loses only its own name; what
+        /// it points at is never opened. A read-only file or folder loses that
+        /// attribute first, as RemoveSharedNames does before a delete.
+        /// </summary>
+        static void RemoveTree(string dir)
+        {
+            FileAttributes self = File.GetAttributes(dir);
+            if ((self & FileAttributes.ReparsePoint) == 0)
+            {
+                foreach (string p in Directory.EnumerateFileSystemEntries(dir))
+                {
+                    FileAttributes at = File.GetAttributes(p);
+                    if ((at & FileAttributes.Directory) != 0 && (at & FileAttributes.ReparsePoint) == 0) { RemoveTree(p); continue; }
+                    if ((at & FileAttributes.ReadOnly) != 0) File.SetAttributes(p, at & ~FileAttributes.ReadOnly);
+                    // A link to a folder is a directory entry on Windows and a
+                    // file name everywhere else; either way only the name goes.
+                    if ((at & FileAttributes.Directory) != 0 && OperatingSystem.IsWindows()) Directory.Delete(p);
+                    else File.Delete(p);
+                }
+            }
+            if ((self & FileAttributes.ReadOnly) != 0) File.SetAttributes(dir, self & ~FileAttributes.ReadOnly);
+            if ((self & FileAttributes.ReparsePoint) != 0 && !OperatingSystem.IsWindows()) File.Delete(dir);
+            else Directory.Delete(dir);
+        }
+
         // ---- a record of what we put in somebody else's game ----------------
         //
         // An install into the Steam copy of Skyrim writes into somebody
@@ -379,14 +446,100 @@ namespace Thornswood
         // copy then, and a list an earlier install left stays as it is,
         // because it is what the launcher takes back out of the Steam copy
         // once the folder is made (OwnGame.CleanSteamCopy).
-        void RecordIntoGame(List<string> files)
+        static SortedSet<string> ReadOwnership(string manifest, string game)
         {
-            if (ownFirst || madeOwn || files.Count == 0) return;
-            Directory.CreateDirectory(ProfileDir);
-            string manifest = Path.Combine(ProfileDir, "installed-into-game.txt");
-            File.WriteAllLines(manifest, files, new UTF8Encoding(false));
-            Say("  " + files.Count.ToString("n0", CultureInfo.InvariantCulture) + " files recorded, so uninstalling can take them back out");
+            var owned = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (File.Exists(manifest))
+                foreach (string rel in SetupOwnership.PathsIn(manifest, game))
+                    owned.Add(rel.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar));
+            return owned;
         }
+
+        void SaveOwnership(string manifest, IEnumerable<string> owned)
+        {
+            string staged = manifest + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                using (var stream = new FileStream(staged, FileMode.CreateNew, FileAccess.Write))
+                {
+                    using (var text = new StreamWriter(stream, new UTF8Encoding(false), 4096, true))
+                        foreach (string entry in owned) text.WriteLine(entry);
+                    stream.Flush(true);
+                }
+                File.Move(staged, manifest, true);
+            }
+            finally { if (File.Exists(staged)) File.Delete(staged); }
+        }
+
+        void SaveSetupList(string manifest, IEnumerable<string> lines)
+        {
+            try { SaveOwnership(manifest, lines); }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+            {
+                throw Die("Could not write the setup ownership list " + manifest + " (" +
+                          Failure.Why("InstallSteps, writing the setup ownership list", e, manifest) + ").");
+            }
+        }
+
+        // Remove staging only after its records are no longer in the list.
+        // In particular, deleting an unpublished source is never evidence of a move.
+        static void RemovePrepared(string stage)
+        {
+            if (File.Exists(stage))
+            {
+                FileAttributes attributes = File.GetAttributes(stage);
+                if ((attributes & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(stage, attributes & ~FileAttributes.ReadOnly);
+                File.Delete(stage);
+            }
+            string dir = Path.GetDirectoryName(stage);
+            if (Directory.Exists(dir)) Directory.Delete(dir, false);
+        }
+
+        void PublishPrepared(string manifest, string game, SortedSet<string> owned, List<string> prepared)
+        {
+            var lines = new List<string>(owned);
+            lines.AddRange(prepared);
+            bool listed = false;
+            try
+            {
+                // A new destination cannot appear before the record of its
+                // completed staging copy is durable.
+                SaveSetupList(manifest, lines);
+                listed = true;
+                try
+                {
+                    foreach (string line in prepared)
+                    {
+                        if (!SetupOwnership.TryPrepared(game, line, out string rel, out string stage, out _))
+                            throw Die("Invalid setup ownership record: " + line);
+                        string dest = Path.Combine(game, rel);
+                        try { File.Move(stage, dest, false); }
+                        catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                        { throw CopyFailed(stage, dest, e); }
+                        owned.Add(rel);
+                    }
+                }
+                finally
+                {
+                    // Compact the records to plain paths. If this write fails,
+                    // the prepared records still distinguish moves from failures.
+                    SaveSetupList(manifest, owned);
+                    listed = false;
+                }
+            }
+            finally
+            {
+                if (!listed)
+                    foreach (string line in prepared)
+                        if (SetupOwnership.TryPrepared(game, line, out _, out string stage, out _)) RemovePrepared(stage);
+            }
+            Say("  " + owned.Count.ToString("n0", CultureInfo.InvariantCulture) + " files recorded, so uninstalling can take them back out");
+        }
+
+        Exception CopyFailed(string from, string dest, Exception e) =>
+            Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
+                "Check the disk has room and nothing has those files open, then run this again.");
 
         // A hard link is one file under two names. A copy writes into the file
         // it finds, so copying over a linked name in the made folder would
@@ -420,6 +573,28 @@ namespace Thornswood
         /// </summary>
         void CopyPayload(string payload, List<string> files, string to)
         {
+            string manifest = Path.Combine(ProfileDir, "installed-into-game.txt");
+            SortedSet<string> owned = ownFirst || madeOwn ? null : ReadOwnership(manifest, to);
+            if (owned != null && File.Exists(manifest))
+            {
+                var previous = new List<string>();
+                foreach (string line in File.ReadAllLines(manifest))
+                    if (SetupOwnership.TryPrepared(to, line, out _, out string stage, out _)) previous.Add(stage);
+                if (previous.Count != 0)
+                {
+                    SaveSetupList(manifest, owned);
+                    foreach (string stage in previous) RemovePrepared(stage);
+                }
+            }
+            if (owned != null)
+                foreach (string rel in files)
+                {
+                    string dest = Path.Combine(to, rel);
+                    if (!owned.Contains(rel) && (File.Exists(dest) || Directory.Exists(dest)))
+                        throw Die("Setup will not replace " + dest + " because Thornswood did not install it. " +
+                                  "Choose Thornswood's own folder in setup to leave this Skyrim file in place.");
+                }
+
             long total = 0;
             foreach (string rel in files) total += new FileInfo(Path.Combine(payload, rel)).Length;
             // What is about to be copied, counted in the package itself, so it
@@ -429,24 +604,46 @@ namespace Thornswood
             long done = 0;
             var clock = Stopwatch.StartNew();
             Directory.CreateDirectory(to);
-            foreach (string rel in files)
+            var prepared = new List<string>();
+            try
             {
-                string from = Path.Combine(payload, rel);
-                string dest = Path.Combine(to, rel);
-                try
+                foreach (string rel in files)
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                    File.Copy(from, dest, true);
+                    string from = Path.Combine(payload, rel);
+                    string dest = Path.Combine(to, rel);
+                    try
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                        if (owned == null || owned.Contains(rel)) File.Copy(from, dest, true);
+                        else
+                        {
+                            string id = Guid.NewGuid().ToString("N");
+                            string stage = Path.Combine(Path.GetDirectoryName(dest), ".tw-setup-" + id, "payload");
+                            Directory.CreateDirectory(Path.GetDirectoryName(stage));
+                            try
+                            {
+                                File.Copy(from, stage, false);
+                                string identity = SetupOwnership.Identity(stage) ?? throw new IOException("The staging copy is not a regular file.");
+                                prepared.Add("setup|" + id + "|" + identity + "|" + rel);
+                            }
+                            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                            { RemovePrepared(stage); throw; }
+                        }
+                    }
+                    catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                    {
+                        throw CopyFailed(from, dest, e);
+                    }
+                    done += new FileInfo(from).Length;
+                    // The copy is nearly all of the time an install takes, so it
+                    // is nearly all of the bar: 5 to 90 percent, by bytes.
+                    progress(0.05 + 0.85 * (total > 0 ? (double)done / total : 1));
                 }
-                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
-                {
-                    throw Die("Could not copy " + from + " to " + dest + " (" + Failure.Why("InstallSteps, copying " + from, e, dest) + "). " +
-                              "Check the disk has room and nothing has those files open, then run this again.");
-                }
-                done += new FileInfo(from).Length;
-                // The copy is nearly all of the time an install takes, so it
-                // is nearly all of the bar: 5 to 90 percent, by bytes.
-                progress(0.05 + 0.85 * (total > 0 ? (double)done / total : 1));
+            }
+            finally
+            {
+                // A later staging failure does not lose the earlier completed copies.
+                if (prepared.Count != 0) PublishPrepared(manifest, to, owned, prepared);
             }
             Say(string.Format(CultureInfo.InvariantCulture, "  installing the mods, {0:mm\\:ss}", clock.Elapsed));
         }
@@ -532,7 +729,7 @@ namespace Thornswood
         internal static readonly string[] LicenceFiles =
         {
             "GPL-3.0.txt", "AGPL-3.0.txt",
-            "Concentus-LICENSE.txt", "SharpSRTP-LICENSE.txt", "BouncyCastle-LICENSE.txt",
+            "Concentus-LICENSE.txt", "SharpSRTP-LICENSE.txt", "SharpDTLS-LICENSE.txt", "BouncyCastle-LICENSE.txt",
             "dotnet-LICENSE.txt", "dotnet-THIRD-PARTY-NOTICES.txt",
             "Avalonia-LICENSE.txt", "MicroCom-LICENSE.txt", "Tmds.DBus-LICENSE.txt",
             "SkiaSharp-LICENSE.txt", "SkiaSharp-THIRD-PARTY-NOTICES.txt", "ANGLE-LICENSE.txt",
@@ -594,13 +791,9 @@ namespace Thornswood
         // ---------------------------------------------------------------- config.json
 
         /// <summary>
-        /// config.json is merged rather than copied over. The one in the
-        /// package is deliberately blank where the credentials go, so a
-        /// straight copy would wipe a working install's password on every
-        /// upgrade. Anything the package does not name is left exactly as it
-        /// was, and a blank field in the package never overwrites a filled one
-        /// on the disk. The own folder card's answer is this run's, so it goes
-        /// over whatever was there.
+        /// The package owns only the channel and its feed fields. Everything
+        /// else comes from the existing install or the launcher's own defaults,
+        /// except for choices made on this setup's folder card.
         /// </summary>
         void MergeConfig(Dictionary<string, JsonNode> ownCard)
         {
@@ -616,10 +809,9 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The merge on its own: what was on the disk, then each field of the
-        /// package's that is not blank or not there yet, then the card's.
-        /// Blank is what PowerShell's "$value" made an empty string of: no
-        /// value, an empty string, or an empty list.
+        /// Keep disk settings, update the fields emitted by Build-SetupFiles,
+        /// then apply the folder card. The empty Channel string means Main;
+        /// other blank feed fields do not replace a value already on disk.
         /// </summary>
         internal static JsonObject Merge(JsonObject old, JsonObject neu, Dictionary<string, JsonNode> ownCard)
         {
@@ -629,7 +821,11 @@ namespace Thornswood
             {
                 foreach (KeyValuePair<string, JsonNode> kv in neu)
                 {
-                    if (!Blank(kv.Value) || !outObj.ContainsKey(kv.Key))
+                    if (kv.Key is not ("ServerAddress" or "ServerPort" or "UpdateFeedUrl" or "VoicePort" or
+                        "VoiceUrl" or "DiscordAppId" or "SiteUrl" or "PresenceImage" or "CollectionUrl" or "Channel")) continue;
+                    bool mainChannel = kv.Key == "Channel" && kv.Value is JsonValue channel &&
+                        channel.TryGetValue<string>(out string name) && name == "";
+                    if (mainChannel || !Blank(kv.Value) || !outObj.ContainsKey(kv.Key))
                         outObj[kv.Key] = kv.Value == null ? null : kv.Value.DeepClone();
                 }
             }
@@ -790,16 +986,23 @@ namespace Thornswood
                 Say(Bad + " check" + (Bad == 1 ? "" : "s") + " failed. Send staff a screenshot of this window in the Discord.");
                 return;
             }
-            if (Later > 0) Say("Installed. " + Later + " thing" + (Later == 1 ? "" : "s") + " still to come from the collection, which is the next step.");
-            else Say("Installed.");
+            Say("Installed.");
             Say("");
-            Say("Make a character named after yourself, save once, then connect.");
-            Say("");
-            Say("The launcher opens on the collection if your mods are not in yet.");
-            Say("Install it in Vortex and switch to the profile it makes. Without");
-            Say("that you have a launcher and no mods.");
+            // The same steps in the same order as the launcher, the help page
+            // and the join page (#4496): the launcher holds the collection
+            // card until Downgrade is done, so a wrong build is its own first
+            // step, never "the collection is next".
+            bool downgrade = !checks[0].Value;   // "Game 1.6.1170", read above
+            int step = 1;
+            Say("Next, in the launcher:");
+            if (downgrade)
+                Say("  " + step++ + ". Press Downgrade on the front page. Skyrim is not build 1.6.1170, and Steam downloads that build under your account.");
+            Say("  " + step++ + ". Install the collection in Vortex from the card the launcher shows, and switch to the profile it makes. The script extender and the address library come with it.");
+            Say("  " + step++ + ". Press Connect Discord at the bottom of the left sidebar.");
+            Say("  " + step + ". Press Play.");
             if (choice.MakeOwnGame)
             {
+                Say("");
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
                 Say("Skyrim folder by itself, then makes the rest from your game:");
                 Say("Thornswood-Last.esp, the plugin order, and the animation and body");

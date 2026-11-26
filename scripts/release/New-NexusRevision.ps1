@@ -1,11 +1,14 @@
 <#
-  New-NexusRevision.ps1
+.SYNOPSIS
+  Makes the next revision of the Thornswood collection on Nexus Mods (slug 7essxf), as a draft, from the revision published now with mods moved to a new Nexus file (-Mod), added (-Add), given new installer answers (-Answers), given fresh reference tags (-RefreshTag), given the list of files they install (-Replicate) or taken out (-Remove), plugins given a new load rule (-Rule) or their light flag set or cleared (-SetLight, -ClearLight); and publishes a checked draft (-Publish) or discards one (-Discard) (#2914).
 
+.DESCRIPTION
   Makes the next revision of the Thornswood collection on Nexus Mods (slug
   7essxf), as a draft, from the revision published now with mods moved to a
   new Nexus file (-Mod), added (-Add), given new installer answers (-Answers),
-  given fresh reference tags (-RefreshTag) or taken out (-Remove), plugins given a new load rule (-Rule) or their light
-  flag set or cleared (-SetLight, -ClearLight); and publishes a checked draft
+  given fresh reference tags (-RefreshTag), given the list of files they
+  install (-Replicate) or taken out (-Remove), plugins given a new load rule
+  (-Rule) or their light flag set or cleared (-SetLight, -ClearLight); and publishes a checked draft
   (-Publish) or discards one (-Discard) (#2914).
 
       .\scripts\release\New-NexusRevision.ps1 -Mod 192762 -FileId <new file id> -Archive <the archive uploaded> -WhatIf
@@ -15,7 +18,8 @@
       pwsh scripts/release/New-NexusRevision.ps1 -Rule <plugin rules>.json -WhatIf
       pwsh scripts/release/New-NexusRevision.ps1 -Remove 24104 -WhatIf
       pwsh scripts/release/New-NexusRevision.ps1 -Answers <installer answers>.json -WhatIf
-      pwsh scripts/release/New-NexusRevision.ps1 -SetLight RaceMenu.esp,XPMSE.esp -Layout <the -Record folder> -WhatIf
+      pwsh scripts/release/New-NexusRevision.ps1 -SetLight RaceMenu.esp,XPMSE.esp -Replicate 743640,469854 -Layout <the -Record folder> -WhatIf
+      pwsh scripts/release/New-NexusRevision.ps1 -Replicate 536557,244865 -WhatIf
       .\scripts\release\New-NexusRevision.ps1 -Publish 3 -WhatIf
       .\scripts\release\New-NexusRevision.ps1 -Publish 3
       pwsh scripts/release/New-NexusRevision.ps1 -Discard 6 -WhatIf
@@ -178,6 +182,31 @@
   starts from (#4279). Lay the new archive out with Install-NexusRevision.ps1
   -CollectionArchive ... -Record to check it end to end.
 
+  THE FILES A PATCHED MOD INSTALLS (#6888). Vortex applies a collection's
+  patch only to a copy it installs while it installs the collection (the
+  collections extension's did-install-mod handler). Before that it asks
+  whether a copy it already has is the collection's, and up to 1.15 a copy of
+  the same Nexus file installed by hand, or by another collection, passes when
+  the entry has no file list. That copy is never patched, so its plugin is the
+  author's and not the servers': on 25 November a tester had to mark
+  DeadlySpellImpacts.esp and BetterContainerControls.esp light by hand.
+  The file list check is strict in every version, so an entry that carries
+  "hashes", the files it puts in its folder each with the md5 of the archive's
+  own copy, is never matched by a copy that was not installed from it: Vortex
+  installs the entry itself, by that list, and patches it.
+  -Replicate names entries, by the Nexus file id each installs, that get that
+  list: a file id, because a mod may have more than one entry (More Craftable
+  Equipment has two). Each
+  entry's archive is downloaded and held to its md5 and size, its installer is
+  run with the entry's own answers (NexusModPlan.ps1, NexusLayout.cs, as
+  Install-NexusRevision.ps1 runs it), and the list is the files that run puts
+  in the mod's folder. The list takes the place of the installer and its
+  answers, as in an entry Vortex writes as "replicate", so the same files are
+  installed. A patch is refused on an entry with no list, so -SetLight and
+  -ClearLight on such an entry need its -Replicate in the same run.
+  An entry with a list is not moved to a new file with -Mod
+  (nexus-collection.js refuses it, as it does one with answers).
+
   WHAT EACH MOD'S PAGE ALLOWS (#3649). Before a revision is made, and before
   a draft is published, every mod in it is held to
   records\collection-permissions.json, the reading of each mod's Permissions
@@ -256,6 +285,11 @@
   archive in Vortex. Keeps every file, choice and plugin unchanged; not mixed
   with other changes. The collection-record publisher verifies the draft.
 
+.PARAMETER Replicate
+  Entries, by the Nexus file id each installs, that get the list of files
+  they install, as THE FILES A PATCHED MOD INSTALLS above says. The
+  collection-record publisher verifies the draft.
+
 .PARAMETER Remove
   Mods to take out of the revision, by their numbers on the website, as
   TAKING A MOD OUT above says.
@@ -332,6 +366,7 @@ param(
   [string]$Rule,
   [string[]]$Remove = @(),
   [string[]]$RefreshTag = @(),
+  [string[]]$Replicate = @(),
   [string[]]$SetLight = @(),
   [string[]]$ClearLight = @(),
   [string]$Layout,
@@ -518,6 +553,11 @@ $RefreshTag = @($RefreshTag | ForEach-Object { ([string]$_).Split(',') } | ForEa
 if ($refreshRequested -and (-not $RefreshTag.Count -or @($RefreshTag | Where-Object { $_ -notmatch '^[1-9][0-9]{0,8}$' }).Count -or @($RefreshTag | Select-Object -Unique).Count -ne $RefreshTag.Count)) {
   Die '-RefreshTag needs a nonempty list of distinct positive Nexus mod numbers.'
 }
+$replicateRequested = $PSBoundParameters.ContainsKey('Replicate')
+$Replicate = @($Replicate | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() })
+if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Object { $_ -notmatch '^[1-9][0-9]{0,11}$' }).Count -or @($Replicate | Select-Object -Unique).Count -ne $Replicate.Count)) {
+  Die '-Replicate needs a nonempty list of distinct positive Nexus file ids.'
+}
 [void](Step { Read-NexusKey })
 Say ('  key from ' + $script:NexusKeyFrom) 'DarkGray'
 
@@ -532,7 +572,7 @@ Say ('  "' + (Get-NexusField $col 'name') + '", id ' + $colId + ', revision ' + 
 
 # --------------------------------------------------------------- publish ---
 if ($Publish) {
-  if ($Discard -or $Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count -or $RefreshTag.Count) { Die '-Publish publishes a draft that is already there, so it takes no -Discard, -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight, -RefreshTag or -From.' }
+  if ($Discard -or $Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count -or $RefreshTag.Count -or $Replicate.Count) { Die '-Publish publishes a draft that is already there, so it takes no -Discard, -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight, -RefreshTag, -Replicate or -From.' }
   $rq = '{ collectionRevision(slug: "' + $Slug + '", revision: ' + $Publish + ', domainName: "' + $Game + '") { id revisionNumber status downloadLink } }'
   $rev = Get-NexusField (Step { Invoke-NexusGraph $rq $null ('Reading revision ' + $Publish) }) 'collectionRevision'
   $revId = [string](Get-NexusField $rev 'id')
@@ -581,7 +621,7 @@ if ($Publish) {
 
 # --------------------------------------------------------------- discard ---
 if ($Discard) {
-  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count -or $RefreshTag.Count) { Die '-Discard throws away a draft that is already there, so it takes no -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight, -RefreshTag or -From.' }
+  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $From -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count -or $RefreshTag.Count -or $Replicate.Count) { Die '-Discard throws away a draft that is already there, so it takes no -Mod, -FileId, -Archive, -DropPatch, -Add, -Answers, -Rule, -Remove, -SetLight, -ClearLight, -RefreshTag, -Replicate or -From.' }
   $rq = '{ collectionRevision(slug: "' + $Slug + '", revision: ' + $Discard + ', domainName: "' + $Game + '") { id revisionNumber status } }'
   $rev = Get-NexusField (Step { Invoke-NexusGraph $rq $null ('Reading revision ' + $Discard) }) 'collectionRevision'
   $revId = [string](Get-NexusField $rev 'id')
@@ -654,7 +694,7 @@ function Get-NexusFileExpression([string]$M, [string]$Fid) {
 }
 
 # ------------------------------------------------------- refused up front ---
-if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count -and -not $RefreshTag.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
+if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count -and -not $RefreshTag.Count -and -not $Replicate.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which get the list of files they install with -Replicate, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
 $Mod = @($Mod | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $FileId = @($FileId | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($Mod.Count -ne $FileId.Count -or $Mod.Count -ne $Archive.Count) { Die ('-Mod, -FileId and -Archive go together, one of each for every mod: ' + $Mod.Count + ', ' + $FileId.Count + ' and ' + $Archive.Count + ' were given.') }
@@ -670,7 +710,7 @@ foreach ($m in $Remove) {
 # A tag repair retains every published file and is never mixed with a move.
 
 if ($RefreshTag.Count) {
-  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count) { Die '-RefreshTag repairs identities alone; it takes no file, installer, plugin or rule changes.' }
+  if ($Mod.Count -or $FileId.Count -or $Archive.Count -or $DropPatch.Count -or $Add -or $Answers -or $Rule -or $Remove.Count -or $SetLight.Count -or $ClearLight.Count -or $Replicate.Count) { Die '-RefreshTag repairs identities alone; it takes no file, installer, plugin or rule changes.' }
   foreach ($m in $RefreshTag) {
     if ($m -notmatch '^[1-9][0-9]{0,8}$' -or @($RefreshTag | Where-Object { $_ -eq $m }).Count -ne 1) { Die '-RefreshTag needs distinct positive Nexus mod numbers.' }
   }
@@ -796,6 +836,14 @@ if ($Mod.Count) { Head 'The new files' }
 $swaps = New-Object System.Collections.Generic.List[object]
 $baseCol = Step { ConvertFrom-Json ([IO.File]::ReadAllText($baseJson)) }
 $dropped = @()
+# An entry -Replicate names is not also moved, taken out or answered: its
+# list is of the files it installs as it is (THE FILES A PATCHED MOD INSTALLS).
+foreach ($rf in $Replicate) {
+  foreach ($e in @($baseCol.mods | Where-Object { $_.source -and [string]$_.source.type -eq 'nexus' -and [string]$_.source.fileId -eq $rf })) {
+    $m = [string]$e.source.modId
+    if ($Mod -contains $m -or $Remove -contains $m -or @($answerSet | Where-Object { [string]$_.modId -eq $m }).Count) { Die ('File ' + $rf + ' is named in -Replicate and its mod ' + $m + ' in -Mod, -Remove or -Answers.') }
+  }
+}
 foreach ($m in $RefreshTag) { $swaps.Add([ordered]@{ refreshTag = $true; modId = $m }) }
 for ($i = 0; $i -lt $Mod.Count; $i++) {
   $m = $Mod[$i]; $fid = $FileId[$i]
@@ -933,6 +981,52 @@ foreach ($m in $Remove) {
   $swaps.Add($rm)
 }
 
+# ------------------------------------------------- the files they install ---
+# THE FILES A PATCHED MOD INSTALLS above: each entry's archive downloaded and
+# held to the revision, its installer run with the entry's answers, and the
+# files that run puts in the mod's folder listed with the archive copy's md5.
+$replicated = @{}
+if ($Replicate.Count) {
+  Head 'The files they install'
+  foreach ($rf in $Replicate) {
+    $hits = @($baseCol.mods | Where-Object { $_.source -and [string]$_.source.type -eq 'nexus' -and [string]$_.source.fileId -eq $rf })
+    if ($hits.Count -ne 1) { Die ('Revision ' + $BaseRevision + ' has ' + $hits.Count + ' entries for Nexus file ' + $rf + ', so there is no one entry to give the list of files it installs.') }
+    $e = $hits[0]
+    $m = [string]$e.source.modId
+    if ($e.PSObject.Properties['hashes'] -and @($e.hashes).Count) { Die ($e.name + ' already carries the list of files it installs.') }
+    if ($e.PSObject.Properties['fileOverrides'] -and @($e.fileOverrides).Count) { Die ($e.name + ' carries fileOverrides, which a list of files would not keep.') }
+    $type = if ($e.details -and $e.details.PSObject.Properties['type']) { [string]$e.details.type } else { '' }
+    if ($type) { Die ($e.name + ' is mod type "' + $type + '", which Install-NexusRevision.ps1 does not lay out, so its files cannot be checked.') }
+    $fid = [string]$e.source.fileId
+    $got = Step { Get-NexusFileArchive $Game $fid (Join-Path $scratch 'replicate') }
+    if ($got.Size -ne [long]$e.source.fileSize -or $got.Md5Hex -ne [string]$e.source.md5) { Die ('The download of ' + $e.name + ' is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and revision ' + $BaseRevision + ' says ' + $e.source.fileSize + ' bytes, md5 ' + $e.source.md5 + '.') }
+    $choices = if ($e.PSObject.Properties['choices'] -and $null -ne $e.choices) { $e.choices } else { $null }
+    if ($null -ne $choices) {
+      $bad = @(Get-NexusChoicesProblems $choices)
+      if ($bad.Count) { Die ('The choices ' + $e.name + ' carries are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
+    }
+    $work = Join-Path $scratch ('replicate-' + $rf)
+    if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $work | Out-Null
+    $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $got.Path -Work $work -Choices $choices }
+    if ($mp.Plan.Stop) { Die ($e.name + ' cannot be installed unattended as revision ' + $BaseRevision + ' gives it: ' + $mp.Plan.Stop + '.') }
+    if (@($mp.Plan.Warnings).Count) { Die ($e.name + '''s installer did not run cleanly: ' + (@($mp.Plan.Warnings) -join '; ') + '.') }
+    $hashes = @($mp.Plan.Files.Values | Sort-Object { $_.Rel.ToLowerInvariant() } | ForEach-Object { [ordered]@{ path = [string]$_.Rel; md5 = (Get-FileHash -LiteralPath $_.Full -Algorithm MD5).Hash.ToLowerInvariant() } })
+    $installer = [string]$mp.Plan.Installer
+    [Thornswood.Layout.NexusLayout]::Forget($mp.Unpacked)
+    Remove-Item -LiteralPath $work -Recurse -Force
+    [IO.File]::Delete($got.Path)
+    if (-not $hashes.Count) { Die ($e.name + '''s installer puts no files in its folder.') }
+    $patchedKeys = if ($e.PSObject.Properties['patches'] -and $e.patches) { @($e.patches.PSObject.Properties | ForEach-Object { $_.Name }) } else { @() }
+    foreach ($k in $patchedKeys) {
+      if (-not @($hashes | Where-Object { $_.path -ieq $k.Replace('/', '\') }).Count) { Die ($e.name + ' patches ' + $k + ', and its installer puts no such file in its folder.') }
+    }
+    Say ('  ' + $e.name + ', file ' + $fid + ': ' + $hashes.Count + ' file' + $(if ($hashes.Count -ne 1) { 's' } else { '' }) + ', by its ' + $installer + ' installer' + $(if ($null -ne $choices) { ' with the answers it carries' } else { '' }) + $(if ($patchedKeys.Count) { '; patches ' + ($patchedKeys -join ', ') } else { '' }))
+    $swaps.Add([ordered]@{ replicate = $true; modId = $m; fileId = $fid; hashes = [object[]]$hashes })
+    $replicated[$fid] = $true
+  }
+}
+
 # ------------------------------------------------------- the light flags ---
 # LIGHT FLAGS above: each plugin found by the layout, its archive downloaded
 # and held to the revision, the patch made, read back and staged.
@@ -974,6 +1068,9 @@ if ($lights.Count) {
     # is its path in Data.
     $type = if ($e.details -and $e.details.PSObject.Properties['type']) { [string]$e.details.type } else { '' }
     if ($type) { Die ($e.name + ' is mod type "' + $type + '", which does not deploy into Data, so its patch path is not ' + $l.Name + '.') }
+    # THE FILES A PATCHED MOD INSTALLS above: without its list, Vortex can
+    # take a copy somebody already had as the collection's and never patch it.
+    if (-not ($e.PSObject.Properties['hashes'] -and @($e.hashes).Count) -and -not $replicated.ContainsKey([string]$e.source.fileId)) { Die ($e.name + ' carries no list of the files it installs, so Vortex would take a copy somebody already had as the collection''s and never apply the patch (#6888). Give it its list in the same run: -Replicate ' + $e.source.fileId + '.') }
     if (([string]$e.name).IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { Die ('The entry name "' + $e.name + '" cannot be a folder under patches.') }
     if ($e.PSObject.Properties['patches'] -and $e.patches -and @($e.patches.PSObject.Properties | Where-Object { $_.Name -ieq $l.Name }).Count) { Die ($e.name + ' already patches ' + $l.Name + ' in revision ' + $BaseRevision + '.') }
     $fid = [string]$row.FileId

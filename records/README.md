@@ -68,6 +68,13 @@ folder here is named below, under the heading it belongs to.
   on this list, so a mod put into the Steam copy by hand never gets in. Run
   the script again in the same pull request as a pin move;
   `launcher\tests\test-skyrim-pin.ps1` fails while the two disagree.
+- `npc-habitats.json`: versioned authored CELL and LCTN habitats for rooms
+  whose location records lack a usable underground type. Each entry names
+  an existing record and explains its habitat; a shared group must be that
+  room's actual location or a parent. `scripts/dev/Build-NpcPopulation.py`
+  validates and reads it before writing the catalogue. No script writes it:
+  annotations change in a reviewed pull request, with admission, cap and
+  existing kill-target compatibility checks.
 - `recipe-owners.json`: the recipes whose owner or rank is a decision rather
   than a reading, each with the measured reason it cannot be derived:
   `"owner"` is RECIPE_OWNER and `"rank"` is RECIPE_RANK in
@@ -282,6 +289,9 @@ folder here is named below, under the heading it belongs to.
   running server loads, and only while the two name the same revision.
   Changed by hand in the pull request that moves the records to a new
   revision.
+- `collection-revision-6-rule.json`: the plugin rule passed to
+  `New-NexusRevision -Rule` for collection revision 6, putting cheddars_mashups.esl
+  after RaceCompatibility.esm (#3649, #4070, #6299).
 - `load-order.json`: the load order the servers run and every content
   build reads, at the revision `collection-plugins.json` names, the five
   masters first and `Thornswood-Last.esp` last (issue #5191). A plugin a
@@ -331,9 +341,11 @@ named. Names only: no secret or token is in any of them.
   #2165).
 - `github-apps.json`: what each GitHub App that works on Thornswood's
   repositories may do, permission by permission and event by event, each
-  with its reason. Every night `scripts\dev\Check-AppPermissions.js` reads
-  each App from GitHub and names any difference. Only Patrick changes an
-  App's permissions; the change is a pull request to this file first.
+  with its reason. Every night `scripts\dev\Check-AppPermissions.js` checks
+  the full catalog and reads every public registration from GitHub.
+  Patrick can run it with `-Private` and his local GitHub sign-in to
+  check private registrations. He changes App permissions after a pull
+  request updates this file.
 - `github-repo-settings.json`: the rulesets, vulnerability reporting,
   immutable releases, secret scanning, auto-merge and merge methods of this
   repository, the engine fork and the ops repository (#3683, #3691). After a

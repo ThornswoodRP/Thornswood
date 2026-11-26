@@ -35,6 +35,8 @@
   var data = null;
   var shown = false;
   var root = null;
+  // trade-cargo.js ID_RE: the first character is a letter or digit too.
+  var KEY_RULE = 'Start with a lowercase letter or digit. Use 1 to 64 lowercase letters, digits, : _ . or - with no spaces.';
 
   /* The word every line goes out under: the view's, or the ships' when it names none. */
   function word() { return data && data.word === '/cart' ? '/cart' : '/ship'; }
@@ -72,7 +74,7 @@
     '#' + ID + ' .note{color:rgba(217,207,180,.8);font-style:italic;margin:0 0 10px}',
     '#' + ID + ' .line{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;',
     '  border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);margin-bottom:6px}',
-    '#' + ID + ' .nm{flex:1;min-width:160px}',
+    '#' + ID + ' .nm{flex:1;min-width:160px;overflow-wrap:anywhere}',
     '#' + ID + ' select,#' + ID + ' input{font:inherit;color:#f6e9c8;background:#17140f;border:1px solid #ac9564;padding:5px}',
     '#' + ID + ' input[type=number]{width:5em}',
     '#' + ID + ' button{font-family:inherit;cursor:pointer;border:1px solid rgba(198,170,109,.55);',
@@ -93,9 +95,27 @@
     document.body.appendChild(root);
     root.querySelector('#' + ID + '-close').onclick = function () { net(word() + ' close'); close(); };
     root.addEventListener('click', onClick);
+    root.addEventListener('input', clearValidity);
+    root.addEventListener('change', clearValidity);
     return root;
   }
 
+  function clearValidity(ev) {
+    var field = ev.target;
+    if (field && field.setCustomValidity) { field.setCustomValidity(''); }
+    if (field && (field.id === ID + '-rfrom' || field.id === ID + '-rto')) {
+      var to = document.getElementById(ID + '-rto');
+      if (to && to.setCustomValidity) { to.setCustomValidity(''); }
+    }
+  }
+  function refuse(id, reason) {
+    var field = document.getElementById(id);
+    if (field) {
+      field.setCustomValidity(reason);
+      field.focus();
+      field.reportValidity();
+    }
+  }
   function val(id) { var el = document.getElementById(id); return el ? plain(el.value) : ''; }
   function count(id) {
     var el = document.getElementById(id);
@@ -130,12 +150,15 @@
     }
     if (a === 'port') {
       var key = val(ID + '-pkey').toLowerCase(), hold = val(ID + '-phold'), name = val(ID + '-pname');
+      if (!/^[a-z0-9][a-z0-9:_.-]{0,63}$/.test(key)) { refuse(ID + '-pkey', 'The key is not valid. ' + KEY_RULE); return; }
       if (key && hold && name) { net(w + 'draft port ' + key + ' ' + hold + ' ' + name); }
       return;
     }
     if (a === 'route') {
       var m = count(ID + '-rmin');
-      if (m) { net(w + 'draft route ' + val(ID + '-rfrom') + ' ' + val(ID + '-rto') + ' ' + m); }
+      var from = val(ID + '-rfrom'), to = val(ID + '-rto');
+      if (m && from === to) { refuse(ID + '-rto', 'Choose two different ' + places().places + ' for this ' + places().route + '.'); return; }
+      if (m) { net(w + 'draft route ' + from + ' ' + to + ' ' + m); }
       return;
     }
     if (a === 'minutes') {
@@ -152,8 +175,9 @@
   function line(inner) { return '<div class="line">' + inner + '</div>'; }
   function btn(text, attrs) { return '<button ' + attrs + '>' + esc(text) + '</button>'; }
   function say(text, l) { return btn(text, 'data-act="say" data-line="' + esc(l) + '"'); }
-  function options(list, valueOf, textOf) {
-    return list.map(function (x) { return '<option value="' + esc(valueOf(x)) + '">' + esc(textOf(x)) + '</option>'; }).join('');
+  function options(list, valueOf, textOf, selected) {
+    return list.map(function (x) { return '<option value="' + esc(valueOf(x)) + '"' +
+      (selected !== undefined && valueOf(x) === selected ? ' selected' : '') + '>' + esc(textOf(x)) + '</option>'; }).join('');
   }
 
   function drawDock() {
@@ -245,10 +269,11 @@
       b += data.crate.dockOf
         ? '<p class="note">The container you just opened is the ' + esc(P.crate) + ' of ' + esc(data.crate.dockOf) + '.</p>'
         : line('<span class="nm">The container you just opened, as a new ' + esc(P.place) + ':</span>' +
-          '<input id="' + ID + '-pkey" type="text" maxlength="64" placeholder="key" aria-label="Key">' +
+          '<input id="' + ID + '-pkey" type="text" maxlength="64" placeholder="key" aria-label="Key" aria-describedby="' + ID + '-key-rule">' +
           '<select id="' + ID + '-phold" aria-label="Hold">' + options(data.holdKeys || [], function (x) { return x; }, function (x) { return x; }) + '</select>' +
           '<input id="' + ID + '-pname" type="text" maxlength="64" placeholder="name people read" aria-label="Name">' +
-          btn('Add ' + P.place, 'data-act="port"'));
+          btn('Add ' + P.place, 'data-act="port"')) +
+          '<p class="note" id="' + ID + '-key-rule">' + esc(KEY_RULE) + '</p>';
     } else {
       b += '<p class="note">Open a crate ' + esc(P.at) + ', then this page within a minute, to make it a ' + esc(P.place) +
         ' or move a ' + esc(P.place) + '\'s crate.</p>';
@@ -274,9 +299,11 @@
       var keys = draft.ports.map(function (p) { return p.key; });
       b += line('<span class="nm">A new ' + esc(P.route) + '</span>' +
         '<select id="' + ID + '-rfrom" aria-label="From">' + options(keys, function (x) { return x; }, function (x) { return x; }) + '</select>' +
-        '<select id="' + ID + '-rto" aria-label="To">' + options(keys, function (x) { return x; }, function (x) { return x; }) + '</select>' +
+        '<select id="' + ID + '-rto" aria-label="To">' + options(keys, function (x) { return x; }, function (x) { return x; }, keys[1]) + '</select>' +
         '<input id="' + ID + '-rmin" type="number" min="1" max="10080" step="1" value="60" aria-label="Minutes">' +
         btn('Add ' + P.route, 'data-act="route"'));
+    } else {
+      b += '<p class="note">A ' + esc(P.route) + ' needs two different ' + esc(P.places) + '.</p>';
     }
     b += '<h3>If you confirm</h3>';
     var ch = data.changes || [], st = data.strands || [];
@@ -364,7 +391,10 @@
       ((data.port && data.port.name) || 'The dock');
     root.querySelector('#' + ID + '-body').innerHTML = data.mode === 'staff' ? drawStaff() :
       data.mode === 'stop' ? drawStop() : data.mode === 'raid' ? drawRaid() : drawDock();
-    if (!was) { tell('opened'); }
+    if (!was) {
+      if (window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
+      tell('opened');
+    }
   }
 
   function open() { draw(); }

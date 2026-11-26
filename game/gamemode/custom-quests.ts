@@ -257,7 +257,7 @@
       });
       return next;
     }
-    function keep(actor, b, changes, eligible) {
+    function keep(actor, b, changes, eligible, abandoned) {
       try {
         if (!active || deps.available && !deps.available() || deps.identity(actor)!==b.owner) return false;
         var after={open:b.open,cool:b.cool};
@@ -271,7 +271,7 @@
         // Only the captured callback-free session check follows that read.
         if(eligible)admission=function(){return admitted(original) && eligible() && admitted(finalSession);};
         if(!admitted(admission))return false;
-        return deps.commit(actor, b.expected, next, changes || [],admission).ok === true;
+        return deps.commit(actor, b.expected, next, changes || [],admission,abandoned).ok === true;
       } catch (e) {
         note('could not write the quests of', actor + ', so nothing changed:', e);
         return false;
@@ -586,15 +586,21 @@
       }
       var open = b.open[id];
       if (!open) return { ok: false, why: 'none' };
+      var hours=byId[id] && byId[id].hours, now=deps.now(), until=now+hours*3600000;
+      // Use only this work's existing normal duration. A partial collection
+      // with unavailable terms must fail closed inside the locked snapshot.
+      var abandoned={quest:id,until:typeof hours==='number' && isFinite(hours) && hours>0 &&
+        Number.isSafeInteger(until) && until>now ? until : null};
       if(id==='mammoth') {
-        var abandoned=huntBundles && huntBundles.mammothAbandon(open);
-        if(!abandoned || !abandoned.ok)return {ok:false,why:'unavailable'};
+        var bundle=huntBundles && huntBundles.mammothAbandon(open);
+        if(!bundle || !bundle.ok)return {ok:false,why:'unavailable'};
+        var changes=bundle.changes.map(function(change){return Object.assign({},change,{upTo:true});});
         delete b.open[id];
-        return keep(actor,b,abandoned.changes) ? {ok:true} : {ok:false,why:'unwritten'};
+        return keep(actor,b,changes,undefined,changes.length?abandoned:undefined) ? {ok:true} : {ok:false,why:'unwritten'};
       }
-      var changes = open.drawn > 0 ? [{item: open.itemDesc, count: -open.drawn}] : [];
+      var changes = open.drawn > 0 ? [{item: open.itemDesc, count: -open.drawn, upTo: true}] : [];
       delete b.open[id];
-      if (!keep(actor, b, changes)) return { ok: false, why: 'unwritten' };
+      if (!keep(actor, b, changes, undefined, changes.length?abandoned:undefined)) return { ok: false, why: 'unwritten' };
       return { ok: true };
     }
     function offer(actor,id,opts,held) {

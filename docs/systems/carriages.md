@@ -30,6 +30,11 @@ If the gold is not in the pack, you do not move and nothing is taken.
 The panel says so and stays open. Dying does not refund a fare already
 paid.
 
+A dead person or someone frozen by staff cannot ride. The refusal takes
+no fare and does not move them, including when they opened the panel
+before dying or being frozen. Rides are refused when the server cannot
+verify the current character's state.
+
 The driver is a worker of the hold the stop sits in. The fare is that
 hold's, counted the way a notice fee is counted. See [Gold](gold.md)
 and [Property](property.md).

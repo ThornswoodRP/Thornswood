@@ -124,7 +124,7 @@ $sources = @($sources | Where-Object { $_.Name -notlike 'test-*' })
 $naming = @($sources | Where-Object {
     ($keepsItOut -notcontains (RepoRel $_)) -and
     ([IO.File]::ReadAllText($_.FullName)).IndexOf($name, [StringComparison]::OrdinalIgnoreCase) -ge 0 })
-Yes ("no script, launcher source or plugin names it but the two rules that keep it out ({0} files read)" -f $sources.Count) ($naming.Count -eq 0)
+Yes ("no script, launcher source or plugin names it but the two rules that keep it out ({0} files read)" -f $sources.Count) ($sources.Count -gt 0 -and $naming.Count -eq 0)
 foreach ($n in $naming) { Write-Host ('      still named in ' + (RepoRel $n)) }
 
 # Not $keep: the Go.ps1 block lifted below has a $keep of its own.
@@ -294,7 +294,7 @@ $lifted = [ordered]@{
     'OwnGame.UiHashedName'     = Get-CsLine $og '(?m)^\s*static readonly Regex UiHashedName = [^\r\n]*;'
     'OwnGame.uiHashedOursField' = Get-CsLine $og '(?m)^\s*static HashSet<string> uiHashedOurs;'
     'OwnGame.uiHashedWalkRoot' = Get-CsLine $og '(?m)^\s*static string uiHashedWalkRoot = [^\r\n]*;'
-    'OwnGame.uiGoneRecordText' = Get-CsLine $og '(?m)^\s*static string uiGoneRecordText;'
+    'OwnGame.uiGoneRecordText' = Get-CsLine $og '(?m)^\s*static string uiGoneRecordText = null;'
     'OwnGame.uiGoneLeaves'     = Get-CsLine $og '(?m)^\s*static HashSet<string> uiGoneLeaves;'
     'OwnGame.uiGoneHashes'     = Get-CsLine $og '(?m)^\s*static HashSet<string> uiGoneHashes;'
     'OwnGame.ReadUiGoneRecord' = Get-CsMember $og 'static string ReadUiGoneRecord()'

@@ -21,7 +21,7 @@ namespace Thornswood
         /// scratch folder, so the search for Vortex's folder can be run
         /// against libraries it made. The launcher leaves it null.
         /// </summary>
-        public static string RootForTest;
+        public static string RootForTest = null;
 
         /// <summary>Where Steam is installed, or "" .</summary>
         public static string Path_()

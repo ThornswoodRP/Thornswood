@@ -20,6 +20,7 @@
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in game\tests\, the repository is two folders up
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const SRC = process.env.GM || path.join(REPO_DIR, 'game', 'gamemode.js');
 const CR = String.fromCharCode(13);
 const src = fs.readFileSync(SRC, 'utf8').split(CR).join('');
@@ -43,7 +44,8 @@ function yes(what, cond) {
       rollOf[0] + '\nreturn rollOf;')(isFinite, parseInt, String);
 
     yes('and answers with a SPEC rather than a result', f('20') === '20');
-    yes('several dice keep their shape', f('6x3') === '3x6');
+    yes('several dice keep their shape', f('6x3') === '6x3');
+    yes('count-d-sides notation becomes sides-by-count', f('1d20') === '20' && f('3d6') === '6x3');
     yes('a leading d is dropped, because people type it on reflex', f('d20') === '20');
     yes('nothing at all is twenty', f('') === '20');
     yes('nonsense is refused here so a typo is answered at once', f('fish') === null);
@@ -127,6 +129,73 @@ function yes(what, cond) {
 
     // A fixed die, so the arithmetic can be checked rather than guessed at.
     const half = function () { return 0.5; };
+
+    // #4895: run the whole chat page, then pass its actual socket frame to
+    // the server branch above. Testing the parsers separately missed that
+    // the page reversed sides and count between those two working halves.
+    const sockets = [], notes = [];
+    function Socket() { this.readyState = 0; sockets.push(this); }
+    Socket.prototype.send = function (text) {
+      const frame = JSON.parse(text);
+      if (frame.t === 'chat') this.chat = frame;
+    };
+    const win = {
+      THORNSWOOD: { host: 'voice.test', port: 7778, profileId: 11, name: 'Bjorn', token: 'test', base: 'https://voice.test/voice' },
+      thornswoodChat: { add: function (parts) { notes.push(parts.map(p => p.text).join('')); } },
+      skyrimPlatform: { sendMessage: function () {} }
+    };
+    const context = vm.createContext({
+      window: win, WebSocket: Socket, console: { log: function () {} },
+      setTimeout: function () {}, clearTimeout: function () {},
+      setInterval: function () {}, clearInterval: function () {}
+    });
+    vm.runInContext(page, context, { filename: 'thornswood-chat.js' });
+    const socket = sockets[0];
+    socket.readyState = 1;
+    socket.onopen();
+    socket.onmessage({ data: JSON.stringify({ t: 'welcome', peer: 1 }) });
+
+    for (const [typed, expected] of [
+      ['/roll 6x3', 'Bjorn rolls 3x6: 4 + 4 + 4 = 12'],
+      ['/r d6*3', 'Bjorn rolls 3x6: 4 + 4 + 4 = 12'],
+      ['/roll 1000x5', 'Bjorn rolls 5x1000: 501 + 501 + 501 + 501 + 501 = 2505'],
+      ['/roll 1x100', 'Bjorn rolls 100x1: 100'],
+      ['/roll 1d20', 'Bjorn rolls 20: 11'],
+      ['/r 3D6', 'Bjorn rolls 3x6: 4 + 4 + 4 = 12'],
+      ['/roll 5d1000', 'Bjorn rolls 5x1000: 501 + 501 + 501 + 501 + 501 = 2505'],
+      ['/roll 100d1', 'Bjorn rolls 100x1: 100'],
+      ['/roll', 'Bjorn rolls 20: 11']
+    ]) {
+      socket.chat = null;
+      const sent = win.thornswoodNet.typed(typed);
+      const frame = socket.chat;
+      const out = frame ? roll(frame.text.slice('/roll '.length), { random: half }) : [];
+      yes('typed ' + typed + ' reaches the server as the intended dice (' +
+          (frame ? frame.text : 'no frame') + ')',
+        sent && out.some(s => s.pid === 11 && s.line === expected) &&
+        out.some(s => s.pid === 12 && s.line === expected));
+    }
+    for (const typed of ['/roll 1001x3', '/roll 6x101', '/roll 0x3', '/roll 6x0', '/roll 6.5x3',
+      '/roll 1d1001', '/roll 101d6', '/roll 0d20', '/roll 1d0', '/roll 1.5d6', '/roll 1d20x3']) {
+      socket.chat = null;
+      const before = notes.length;
+      yes('typed ' + typed + ' is refused before a frame is sent',
+        win.thornswoodNet.typed(typed) === false && socket.chat === null && notes.length === before + 1);
+    }
+    for (const [spec, expected] of [
+      ['1d20', 'Bjorn rolls 20: 11'],
+      ['3D6', 'Bjorn rolls 3x6: 4 + 4 + 4 = 12'],
+      ['5d1000', 'Bjorn rolls 5x1000: 501 + 501 + 501 + 501 + 501 = 2505'],
+      ['100d1', 'Bjorn rolls 100x1: 100']
+    ]) {
+      const out = roll(spec, { random: half });
+      yes('the server independently accepts ' + spec, out.some(s => s.pid === 11 && s.line === expected));
+    }
+    for (const spec of ['1d1001', '101d6', '0d20', '1d0', '1.5d6', '1d20x3']) {
+      const out = roll(spec, { random: half });
+      yes('the server independently refuses ' + spec,
+        out.length === 1 && out[0].pid === 11 && /^The number is the sides/.test(out[0].line));
+    }
 
     {
       const out = roll('20', { random: half });

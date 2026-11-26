@@ -25,7 +25,7 @@ native acceptance run with the plugin and no list, 13 Oct: all 5,072 kept
 identities loaded and controlled before and after a gamemode reload, none of
 the 9,596 cut ones, peak 1,477 MiB.
 
-The 106-plugin catalogue in [NPC-POPULATION.md](NPC-POPULATION.md), which
+The 107-plugin catalogue in [NPC-POPULATION.md](NPC-POPULATION.md), which
 `scripts/dev/Build-NpcPopulation.py` writes, inspects
 14,668 placements: 4,883 retained and 9,785 excluded. Its counts by hold and
 location are there; this page does not repeat them. Named pets and enemies
@@ -40,10 +40,10 @@ and their traders. Humans, profiles and connected identities are protected.
 ## Where the lists come from
 
 [Population counts and locations](NPC-POPULATION.md),
-[exact NPC spawn coordinates](NPC-SPAWNS.csv),
-[hunting yields and access gates](HUNTING-SPOTS.csv),
-[existing fishing locations](FISHING-SPOTS.csv) and
-[hanging game locations](HANGING-GAME-SPOTS.csv) come from these inputs.
+[exact NPC spawn coordinates](../game/data/NPC-SPAWNS.csv),
+[hunting yields and access gates](../game/data/HUNTING-SPOTS.csv),
+[existing fishing locations](../game/data/FISHING-SPOTS.csv) and
+[hanging game locations](../game/data/HANGING-GAME-SPOTS.csv) come from these inputs.
 The existing fishing placements are a source inventory, before the new fishery
 allocation, poles, traps and scarce quest gates in the Fisher specification.
 

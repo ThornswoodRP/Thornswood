@@ -414,10 +414,11 @@ function staffRecords(now) {
   }
   return { bans: out, notes: freshNotes(jsonFile(NOTES, {}), now), pk: freshPk(jsonFile(PK, {}), now), names };
 }
-/* Minutes as a ban length: 0 is for good, anything else is capped. */
+/* Only explicit numeric whole minutes. 0 means for good; null is refused
+   by each caller before saving or logging a ban (#5512). */
 function banMinutes(v) {
-  const n = Math.floor(Number(v) || 0);
-  return n > 0 ? Math.min(n, BAN_MOST_MIN) : 0;
+  if (typeof v !== 'number' || !Number.isFinite(v) || !Number.isInteger(v) || v < 0) return null;
+  return Math.min(v, BAN_MOST_MIN);
 }
 
 Object.assign(module.exports, { BANS, BANS_BROKEN_WHY, MODLOG, NOTES, PK });

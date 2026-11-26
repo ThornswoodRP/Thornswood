@@ -49,7 +49,7 @@
   -Installer reads another copy, so the same test runs on the one from before
   this change:
 
-      git show origin/main:scripts/deploy/Install-Runner.ps1 > $env:TEMP\runner-before.ps1
+      git show 8fd10828:scripts/deploy/Install-Runner.ps1 > $env:TEMP\runner-before.ps1
       pwsh -NoProfile -File .\tests\test-runner-priority.ps1 -Installer $env:TEMP\runner-before.ps1
 #>
 [CmdletBinding()]

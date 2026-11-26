@@ -1,6 +1,8 @@
 <#
-  Set-LoadOrder.ps1
+.SYNOPSIS
+  Writes records\load-order.json, the load order the servers run and every content build reads (#5191), moved to the collection revision records\collection-plugins.json names.
 
+.DESCRIPTION
   Writes records\load-order.json, the load order the servers run and every
   content build reads (#5191), moved to the collection revision
   records\collection-plugins.json names:

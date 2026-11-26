@@ -48,8 +48,8 @@ function Get-ShipRecordedCollectionRevision([string]$RepoDir, [string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "There is no $Path, so nothing says which collection revision this release is built against."
     }
-    try { $doc = ([IO.File]::ReadAllText($Path) -replace ('^' + [char]0xFEFF), '') | ConvertFrom-Json }
-    catch { throw ("$Path does not read as JSON, so nothing says which collection revision this release is built against: " + ($_.Exception.Message -replace '\s+', ' ')) }
+    . (Join-Path $PSScriptRoot 'RecordShape.ps1')
+    $doc = Read-ThornswoodRecord -Path $Path -Kind collection-plugins
     $slug = if ($doc.PSObject.Properties['collection']) { [string]$doc.collection } else { '' }
     $raw = if ($doc.PSObject.Properties['revision']) { $doc.revision } else { $null }
     $n = 0

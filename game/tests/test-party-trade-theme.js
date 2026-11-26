@@ -70,7 +70,12 @@ function unesc(s) {
 function makeEl(tag) {
   const e = {
     tagName: String(tag).toLowerCase(), attrs: {}, kids: [], children: [], html: '', style: {},
-    id: '', className: '', textContent: '', value: '', onclick: null, oninput: null,
+    id: '', className: '', textContent: '', value: '', onclick: null, oninput: null, listeners: {},
+    addEventListener(type, fn) { (this.listeners[type] || (this.listeners[type] = [])).push(fn); },
+    contains(target) { return target === this || this.kids.concat(this.children).some(c => c.contains(target)); },
+    setAttribute(k, v) { this.attrs[k] = String(v); },
+    removeAttribute(k) { delete this.attrs[k]; },
+    hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k); },
     appendChild(c) { this.children.push(c); return c; },
     getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attrs, n) ? this.attrs[n] : null; },
     focus() { },
@@ -94,6 +99,8 @@ function makeEl(tag) {
   return e;
 }
 function matcher(sel) {
+  const cls = /^\.([\w-]+)$/.exec(sel);
+  if (cls) return function (el) { return el.className.split(/\s+/).indexOf(cls[1]) !== -1; };
   const m = /^([a-z0-9]*)(?:#([\w-]+))?(?:\[([\w-]+)\])?$/i.exec(sel);
   if (!m) { throw new Error('the stand-in page cannot read the selector ' + sel); }
   return function (el) {
@@ -347,14 +354,14 @@ const P = rules(party.css);
   yes('the party window loads and says it is ready', !!party.win.thornswoodParty &&
       party.told.indexOf('thornswood-front party:ready') >= 0);
   party.win.thornswoodParty.setData({
-    me: 'p1',
+    me: 1000,
     offer: { kind: 'party', name: 'Ingrid' },
     party: [{ name: 'Aldric', me: true, on: true, leader: true }, { name: 'Sera', on: true }, { name: 'Bjorn', on: false }],
     together: 1, bonus: 10,
     friends: [
       { name: 'Sera', on: true, party: true },
       { name: 'Bjorn', on: true },
-      { name: 'Hilde', on: false, muted: true }
+      { p: 1003, name: 'Hilde', on: false, muted: true }
     ]
   });
   party.win.thornswoodParty.open();
@@ -389,7 +396,10 @@ const P = rules(party.css);
   yes('Leave sends /party leave', press('leave') === '/party leave');
   yes('Ask to party names the friend', press('ask', 'Bjorn') === '/party Bjorn');
   yes('Mute names the friend', press('mute', 'Sera') === '/mute Sera');
-  yes('Remove names the friend', press('drop', 'Hilde') === '/friend remove Hilde');
+  const beforeRemove = party.sent.length;
+  press('drop', '1003');
+  yes('Remove waits for a second press naming the exact friend', party.sent.length === beforeRemove);
+  yes('Remove uses the exact friend profile after confirmation', press('drop', '1003') === '/friend remove 1003');
   yes('a friend who is already in the party has no Ask button', !body.querySelectorAll('button[data-do]').some(function (x) {
     return x.getAttribute('data-do') === 'ask' && x.getAttribute('data-who') === 'Sera';
   }));
@@ -420,6 +430,9 @@ const P = rules(party.css);
   const panelAsk = allHtml(pr);
   yes('#1591: a book invite on the P panel reads as one and names the book, escaped',
       /Ingrid<\/b> invites you into the business The &lt;Bee&gt;/.test(panelAsk) && !/offering to trade/.test(panelAsk));
+  yes('#1591: the floating card is inactive while the book invite is on P',
+      party.doc.body.children.filter(function (c) { return c.id === 'ts-ask'; })[0].html === '');
+  party.win.thornswoodParty.close();
   const askCard = party.doc.body.children.filter(function (c) { return c.id === 'ts-ask'; })[0];
   yes('#1591: and the ask card says the same, not a trade',
       !!askCard && /Ingrid<\/b> invites you into the business The &lt;Bee&gt;\./.test(askCard.html) &&
@@ -433,8 +446,10 @@ const P = rules(party.css);
     me: 'p1', offer: { kind: 'book', name: 'Ingrid' }, party: [], together: 0, bonus: 10, friends: []
   });
   yes('#1591: an invite with no book named still reads as a group book',
-      /invites you into a group book\./.test(askCard ? askCard.html : '') &&
-      /invites you into a group book/.test(allHtml(pr)));
+      /invites you into a group book\./.test(askCard ? askCard.html : ''));
+  party.win.thornswoodParty.open();
+  yes('#1591: the same unnamed group book invite is available inline when P opens',
+      /invites you into a group book/.test(allHtml(pr)) && askCard.html === '');
   party.win.thornswoodParty.close();
 }
 
@@ -446,7 +461,7 @@ const T = rules(trade.css);
   yes('the trade window loads and says it is ready', !!trade.win.thornswoodTrade &&
       trade.told.indexOf('thornswood-front trade:ready') >= 0);
   const offer = {
-    open: true, them: 'Ingrid',
+    open: true, offerVersion: 'a'.repeat(48), them: 'Ingrid',
     pack: [{ n: 'Iron Sword', c: 3 }, { n: 'Leek', c: 1 }],
     mine: [{ n: 'Iron Dagger', c: 1 }], myGold: 40, iAgreed: false,
     theirs: [{ n: 'Salt Pile', c: 5 }], theirGold: 25, theyAgreed: false
@@ -502,7 +517,7 @@ const T = rules(trade.css);
   const ok = tr.querySelector('#ts-trade-ok');
   yes('Agree is the gold primary until you agree', ok.className === 'go' && ok.textContent === 'Agree');
   ok.onclick.call(ok);
-  yes('Agree sends /trade ok', lastSent() === '/trade ok');
+  yes('Agree sends its observed offer version', lastSent() === '/trade agree ' + offer.offerVersion);
   const cancel = tr.querySelector('#ts-trade-cancel');
   cancel.onclick.call(cancel);
   yes('Walk away sends /trade cancel', lastSent() === '/trade cancel');
@@ -543,7 +558,7 @@ const T = rules(trade.css);
   const pr = pieces.root;
   function sent() { return pieces.sent[pieces.sent.length - 1]; }
   pieces.win.thornswoodTrade.setData({
-    open: true, them: 'Ingrid',
+    open: true, offerVersion: 'a'.repeat(48), them: 'Ingrid',
     pack: [{ p: 1, n: 'Key to Breezehome', c: 1, k: 'Keys' }, { p: 2, n: 'Key to Honeyside', c: 1, k: 'Keys' },
            { p: 3, n: 'Steel Dagger (enchanted)', c: 2, k: 'Weapons' }, { p: 4, n: 'Steel Dagger (enchanted)', c: 3, k: 'Weapons' }],
     mine: [{ p: 2, n: 'Key to Honeyside', c: 1 }], myGold: 0, iAgreed: false,

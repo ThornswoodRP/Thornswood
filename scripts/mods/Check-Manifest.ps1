@@ -1,6 +1,8 @@
 <#
-  Check-Manifest.ps1
+.SYNOPSIS
+  Says what load order the game server is actually handing out, and how it compares to the one you play with.
 
+.DESCRIPTION
   Says what load order the game server is actually handing out, and how it
   compares to the one you play with.
 

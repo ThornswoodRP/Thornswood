@@ -1,6 +1,8 @@
 <#
-  Set-NexusKey.ps1
+.SYNOPSIS
+  Puts Patrick's Nexus Mods API key on One, asked at a prompt and never shown, or says whether the key this machine has works (#2914).
 
+.DESCRIPTION
   Puts Patrick's Nexus Mods API key on One, asked at a prompt and never shown,
   or says whether the key this machine has works (#2914).
 

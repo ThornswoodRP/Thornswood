@@ -248,7 +248,7 @@ function serverLogWriter() {
   fs.writeFileSync(path.join(v, 'voice.log.20250101000000000'), '[' + stampOf(NOW - 120 * DAY) + '.000] [voice] old\n[' + stampOf(NOW - 60 * DAY) + '.000] [voice] sixty\n');
   const rv = cp.spawnSync(process.execPath, [WRITER, '--log', path.join(v, 'voice.log'), '--days', '90', '--stamp', 'stand-in-voice.js'], { cwd: v, encoding: 'utf8' });
   const vlog = (() => { try { return fs.readFileSync(path.join(v, 'voice.log'), 'utf8'); } catch (e) { return ''; } })();
-  const STAMPED = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] /;
+  const STAMPED = /^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\] /;
   const vlines = vlog.split('\n').filter((l) => l);
   yes('voice under the writer: every line in voice.log carries a time', rv.status === 0 && vlines.length >= 3 && vlines.every((l) => STAMPED.test(l)), vlog);
   yes('  voice\'s own lines among them, two in one write each stamped', /\] \[voice\] listening$/m.test(vlog) && /\] \[voice\] two$/m.test(vlog) && /\] \[voice\] lines in one write$/m.test(vlog));

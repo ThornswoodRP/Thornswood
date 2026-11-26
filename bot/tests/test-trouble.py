@@ -55,9 +55,9 @@ def yes(what, cond):
 
 
 def ms(year, month, day, hour, minute):
-    """Local unix ms, the way the site's Date.now() stamps a row, so it round
-    trips through _clock's fromtimestamp whatever this box's timezone is."""
-    return int(datetime.datetime(year, month, day, hour, minute).timestamp() * 1000)
+    """A fixed instant, independent of the machine running the harness."""
+    return int(datetime.datetime(year, month, day, hour, minute,
+               tzinfo=datetime.timezone.utc).timestamp() * 1000)
 
 
 # The incident from the issue, to the minute. Started the evening of the 23rd;
@@ -74,9 +74,9 @@ late = bot._trouble_line({
 })
 
 yes('T1 the late alert names the session own start, not now',
-    'started 20:07 on 23 September' in late)
+    'started 20:07 UTC on 23 September 2026' in late)
 yes('T2 and calls out when the logs actually arrived',
-    'did not arrive until 14:09 on 24 September' in late)
+    'did not arrive until 14:09 UTC on 24 September 2026' in late)
 yes('T3 and says in plain words it is a late upload, not a new failure',
     'late upload rather than a new failure' in late)
 yes('T4 it still names who, the build and the launcher version',
@@ -93,7 +93,7 @@ prompt = bot._trouble_line({
     'at': ms(2026, 9, 25, 10, 45), 'why': 'the game crashed',
 })
 yes('T6 a prompt upload still names the session start',
-    'started 10:00 on 25 September' in prompt)
+    'started 10:00 UTC on 25 September 2026' in prompt)
 yes('T7 and does not call the arrival late', 'did not arrive until' not in prompt)
 
 # An older row, or one whose start was never seen: no start, no arrival, and it
@@ -107,10 +107,13 @@ yes('T9 and a row with no arrival gap is not called late',
     'did not arrive until' not in bare)
 
 # _clock itself: the format the whole thing rests on, and its refusal to throw.
-yes('T10 _clock reads a stamp as HH:MM on D Month',
-    bot._clock(ms(2026, 9, 3, 8, 5)) == '08:05 on 3 September')
+yes('T10 _clock names its UTC zone and year',
+    bot._clock(ms(2026, 9, 3, 8, 5)) == '08:05 UTC on 3 September 2026')
 yes('T11 _clock gives nothing for a missing, zero or nonsense stamp',
     bot._clock(None) == '' and bot._clock('nope') == '' and bot._clock(0) == '')
+yes('T12 both repeated autumn hours remain distinct UTC instants',
+    bot._clock(ms(2026, 11, 1, 7, 30)) == '07:30 UTC on 1 November 2026'
+    and bot._clock(ms(2026, 11, 1, 8, 30)) == '08:30 UTC on 1 November 2026')
 
 
 # ----------------------------------------------------- where it is said --

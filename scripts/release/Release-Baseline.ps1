@@ -466,6 +466,7 @@ function Save-ReleaseAsset([string]$Owner, [string]$Repo, [string]$Tag, [string]
 # named by. Only /feed[-dev]/assets/<sha256> urls: that is where every asset
 # the feed names has lived since #897.
 function Get-FeedAssetFile([string]$Url, [string]$Sha, [string]$Dest, [string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net', [TimeSpan]$Timeout = [TimeSpan]::FromMinutes(10)) {
+    if (-not $SiteUrl) { $SiteUrl = 'https://thornswood.net' }
     $m = [regex]::Match([string]$Url, '/(feed|feed-dev)/assets/([0-9a-fA-F]{64})(?:[?#].*)?$')
     if (-not $m.Success) { throw "$Url is not an asset on the site, so it cannot be read back." }
     $prefix = $m.Groups[1].Value
@@ -542,6 +543,7 @@ function Get-RecordFileUrl([string]$RecordUrl, [string]$Sha) {
 # negative. From -SiteDir by seeking the file, otherwise with an https Range
 # request. Hands back @{ Bytes; Start }.
 function Get-FeedAssetRange([string]$Url, [int64]$From, [int64]$Count, [string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net') {
+    if (-not $SiteUrl) { $SiteUrl = 'https://thornswood.net' }
     $m = [regex]::Match([string]$Url, '/(feed|feed-dev)/assets/([0-9a-fA-F]{64})(?:[?#].*)?$')
     if (-not $m.Success) { throw "$Url is not an asset on the site." }
     $prefix = $m.Groups[1].Value; $name = $m.Groups[2].Value.ToLowerInvariant()
@@ -576,6 +578,7 @@ function Get-FeedAssetRange([string]$Url, [int64]$From, [int64]$Count, [string]$
 # The lines of delete.txt in one pack on the site, reading only the zip's
 # directory and that one entry, not the whole pack. @() when it has none.
 function Get-FeedPackDeleteLines($Pack, [string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net') {
+    if (-not $SiteUrl) { $SiteUrl = 'https://thornswood.net' }
     $url = [string]$Pack.url
     $tail = Get-FeedAssetRange $url -1 66000 $SiteDir $SiteUrl
     $b = [byte[]]$tail.Bytes
@@ -615,6 +618,7 @@ function Get-FeedPackDeleteLines($Pack, [string]$SiteDir, [string]$SiteUrl = 'ht
 # record with its files on the site starts its ':gone:' list from, so a launcher
 # that syncs to it takes out what the packs it never replayed would have.
 function Get-FeedPackDeletes($doc, [string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net', [scriptblock]$Say) {
+    if (-not $SiteUrl) { $SiteUrl = 'https://thornswood.net' }
     Add-Type -AssemblyName System.IO.Compression -ErrorAction SilentlyContinue
     $all = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
     $packs = @()
@@ -633,6 +637,7 @@ function Get-FeedPackDeletes($doc, [string]$SiteDir, [string]$SiteUrl = 'https:/
 # release sends the plugin list again (harmless) and never says the load order
 # moved when nobody knows that it did.
 function Get-BaselineFromPacks($doc, [string]$WorkDir, [string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net', [scriptblock]$Say) {
+    if (-not $SiteUrl) { $SiteUrl = 'https://thornswood.net' }
     Add-Type -AssemblyName System.IO.Compression -ErrorAction SilentlyContinue
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
     $map = @{}
@@ -681,6 +686,7 @@ function Get-BaselineFromPacks($doc, [string]$WorkDir, [string]$SiteDir, [string
 # scratch files under $WorkDir; Save-State writes the store copy once the
 # release is out.
 function Resolve-ReleaseBaseline([string]$VersionFile, [string]$StateFile, [string]$WorkDir, [string]$SiteDir, [string]$SiteUrl = 'https://thornswood.net', [scriptblock]$Say) {
+    if (-not $SiteUrl) { $SiteUrl = 'https://thornswood.net' }
     $doc = ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($VersionFile)) $VersionFile
     $ptr = Get-FeedBaselinePointer $doc
     $have = Get-BaselineFileSha $StateFile

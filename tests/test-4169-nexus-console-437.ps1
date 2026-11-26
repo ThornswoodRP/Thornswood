@@ -9,10 +9,9 @@
   English Windows console, so the name came back as other letters and the
   check failed there unless the console had been set to UTF-8 (#4169).
 
-  HOW. The Nexus test runs as a child whose console encoding is code page 437,
-  as on an English Windows machine, and the check that compares node's output
-  with that name has to pass. Only the child's console is set; nothing here
-  changes this one's.
+  HOW. The Nexus test runs the accented patch-output case in a child whose
+  console encoding is code page 437, as on an English Windows machine. The
+  full Nexus stand-in test runs separately. Only the child's console is set.
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -26,13 +25,15 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" -ForegroundColor Red }
 }
 
-$check = 'nexus-collection.js adds a patch to an entry with none and to one that has one, and says each'
-$child = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); 'CODEPAGE ' + [Console]::OutputEncoding.CodePage; & '" + $Nexus.Replace("'", "''") + "'"
+$check = 'nexus-collection.js gives two entries their file lists, adds a patch to an entry with none and to one that has one, and says each'
+$child = "[Console]::OutputEncoding = [Text.Encoding]::GetEncoding(437); 'CODEPAGE ' + [Console]::OutputEncoding.CodePage; & '" + $Nexus.Replace("'", "''") + "' -ConsoleEncodingOnly; exit " + '$LASTEXITCODE'
 $ErrorActionPreference = 'Continue'
 $out = & $Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $child 2>&1 | Out-String
+$childExit = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'
 
 Yes 'the child''s console decodes in code page 437' ($out -match '(?m)^CODEPAGE 437\s*$')
+Yes 'the accent case exits successfully' ($childExit -eq 0)
 Yes ('under it, the check on the accented mod name passes: ' + $check) ($out.Contains('PASS  ' + $check) -and -not $out.Contains('FAIL  ' + $check))
 if ($script:fail) { $out.TrimEnd() -split "`r?`n" | Where-Object { $_ -match '^(FAIL|CODEPAGE)|passed, \d+ failed' } | ForEach-Object { Write-Host ('      ' + $_) } }
 

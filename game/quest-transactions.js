@@ -39,7 +39,7 @@ function createQuestTransactions(deps) {
   function identity(actor) {
     return active ? actorIdentity(mp,actor) : null;
   }
-  function commit(actor,expectedRecord,nextRecord,changes,admission) {
+  function commit(actor,expectedRecord,nextRecord,changes,admission,abandoned) {
     if(!available())return {ok:false,why:'unavailable'};
     try {
       var token=identity(actor);
@@ -47,6 +47,17 @@ function createQuestTransactions(deps) {
       // Match the addon's JSON boundary, including omitted optional fields.
       nextRecord=JSON.parse(JSON.stringify(nextRecord));
       if(!Array.isArray(changes))throw new Error('Invalid quest goods.');
+      var collecting=changes.some(function(change){return change && change.upTo!==undefined;});
+      if(collecting || abandoned!==undefined) {
+        if(!collecting || !abandoned || typeof abandoned!=='object' || Array.isArray(abandoned) ||
+            Object.keys(abandoned).sort().join(',')!=='quest,until' ||
+            typeof abandoned.quest!=='string' || !/^[a-z][a-z0-9-]{0,127}$/.test(abandoned.quest) ||
+            abandoned.until!==null && (!Number.isSafeInteger(abandoned.until) || abandoned.until<=0) ||
+            !expectedRecord || !expectedRecord.open || !Object.prototype.hasOwnProperty.call(expectedRecord.open,abandoned.quest) ||
+            !nextRecord.open || Object.prototype.hasOwnProperty.call(nextRecord.open,abandoned.quest) ||
+            !changes.length || changes.some(function(change){return !change || change.count>=0 || change.upTo!==true;}))
+          throw new Error('Invalid quest abandonment.');
+      }
       if(changes.length===0) {
         var metadataOwner=JSON.parse(token);
         if(!available() || identity(actor)!==token)return {ok:false,why:'identity'};
@@ -90,14 +101,31 @@ function createQuestTransactions(deps) {
           sequence=oldReceipt.sequence+1;
         }
         if(!Number.isSafeInteger(sequence))throw new Error('Quest inventory receipt sequence is exhausted.');
-        var before=inventoryTools.inventory(mp.get(actor,'inventory')),next=before;
+        var before=inventoryTools.inventory(mp.get(actor,'inventory')),next=before,short=false;
         changes.forEach(function(change){
           if(!Number.isSafeInteger(change.count) || change.count===0)throw new Error('Invalid quest goods.');
+          if(change.upTo!==undefined && (change.upTo!==true || change.count>0))throw new Error('Invalid quest collection.');
           var baseId=mp.getIdFromDesc(change.item);
           if(!Number.isInteger(baseId) || baseId<=0 || baseId>0xffffffff)throw new Error('Quest goods are unavailable.');
-          next=change.count<0?inventoryTools.takeEntries(next,baseId,-change.count).inventory:
-            inventoryTools.addEntries(next,[{baseId:baseId,count:change.count}]);
+          if(change.count<0) {
+            var amount=-change.count;
+            // Only abandonment requests up-to collection. Plan it from this
+            // locked snapshot; the final CAS fences both goods and quest.
+            if(change.upTo===true) {
+              amount=Math.min(amount,next.entries.reduce(function(n,row){return row.baseId===baseId?n+row.count:n;},0));
+              if(amount < -change.count)short=true;
+            }
+            if(amount>0)next=inventoryTools.takeEntries(next,baseId,amount).inventory;
+          } else next=inventoryTools.addEntries(next,[{baseId:baseId,count:change.count}]);
         });
+        if(short) {
+          if(!abandoned || abandoned.until===null || !nextRecord.cool || typeof nextRecord.cool!=='object' || Array.isArray(nextRecord.cool))
+            throw new Error('The normal quest cooldown is unavailable.');
+          var previous=nextRecord.cool[abandoned.quest];
+          if(previous!==undefined && (!Number.isSafeInteger(previous) || previous<0))throw new Error('The quest cooldown cannot be verified.');
+          nextRecord.cool[abandoned.quest]=Math.max(previous || 0,abandoned.until);
+          if(Buffer.byteLength(JSON.stringify(nextRecord),'utf8')>16384)throw new Error('The quest record is too large.');
+        }
         var nextReceipt=JSON.stringify({actor:human.desc,profile:human.profileId,sequence:sequence});
         if(!stillActive() || !available() || identity(actor)!==token)return {ok:false,why:'identity'};
         if(admission!==undefined && (typeof admission!=='function' || admission()!==true))return {ok:false,why:'session'};

@@ -13,22 +13,44 @@ the launchers ask it who may play (`/api/allowed`, and `/dev/api/allowed` for
 the dev server), and it answers from the Discord roles in its config.
 `public\` holds the pages and the art it serves as they are.
 
+The Sessions page uses dated UTC times for starts, ends, chat, last played
+and staff receipts. Chat downloads carry the same explicit zone. The bot's
+failed-session alerts also name UTC and the year. New launcher log records
+use invariant UTC stamps ending in `Z`; the retention reader accepts those
+and older local stamps together. Log headings distinguish UTC from older
+server or PC local stamps without an offset. An old repeated local hour
+cannot be disambiguated after the fact; its original text remains intact.
+
+Discord errors are read by their JSON code. Unknown Member (10007) can prove
+that an account is absent, and Unknown Ban (10026) can prove it is not banned.
+Other 404s remain failed lookups. A complete member list can also prove
+absence; a page of 1000 members cannot. These checks keep linked character
+ownership intact when Discord cannot be read.
+
 These are what ask it for something other than a page, and each of them stops
 working while the site is down. `/api/play/join` is the launcher's question
 before every launch; when the site does not answer, a yes from the last 72
 hours still starts the game (`GraceHours` in `launcher\app\Door.cs`) and nothing
 else does.
 
+Admin API changes to a written page, an inbox row or an uploaded file record
+the verified actor's name and account ID alongside the page key, report ID
+or filename in the moderation log (#4939). Page and report contents stay in
+their original stores. The log records a committed file deletion even if a
+later metadata save fails. A successful retry that only removes the file's
+listing has its own action. A refused write or unchanged retry adds no
+success record.
+
 | Route | Method | Asked by |
 | --- | --- | --- |
 | `/api/play/join` | POST | the launcher, before every launch (`launcher\app\Discord.cs`) |
 | `/api/play/start`, `/api/play/end`, `/api/play/logs` | POST | the launcher, as a session starts, as it ends, and with the logs after (`launcher\app\Discord.cs`) |
 | `/api/play/roster` | POST | the launcher, for the names on the character cards (`launcher\app\Roster.cs`) |
-| `/api/play/characters` | POST | the launcher, at every Play and after a character is picked, deleted or played: the account's list of characters, their slots and the spare New character uses, kept in `linked.json` (#5938, `launcher\app\Chars.cs`) |
+| `/api/play/characters` | POST | the launcher, at every Play and after a character is picked, deleted or played: the account's list of characters on the game server the launcher names (`channel`, main or dev, each with a list of its own, #6904), their slots and the spare New character uses, kept in `linked.json` (#5938, `launcher\app\Chars.cs`) |
 | `/api/play/settings` | POST | the launcher, as it starts, before every launch, when the game closes and when its own settings change: the account's settings files, kept in `settings.json` (#5939, `launcher\app\YourSettings.cs`) |
 | `/api/play/pass` | POST | the launcher, when a character is picked at the game's menu and every minute while the game runs: a join pass the game server checks, or a plain no (#937, `launcher\app\Discord.cs`, which `launcher\app\JoinPass.cs` calls) |
 | `/auth/discord` | GET | the launcher's link button, through the browser; Discord sends the browser back to `/auth/discord/callback` (`launcher\app\Discord.cs`) |
-| `/api/allowed`, `/dev/api/allowed` | GET | each game server's door, every five minutes, with the bot's key; the dev server's `door.json` names the site with `/dev` on the end (`game\gamemode.js`) |
+| `/api/allowed`, `/dev/api/allowed` | GET | each game server's door, every five minutes, with the bot's key; the dev server's `door.json` names the site with `/dev` on the end; each lists only the characters on its own server's list in `linked.json` and their spares (#6906) (`game\gamemode.js`) |
 | `/api/roster` | POST | the game server, with the bot's key, when its book of characters changes (`game\gamemode.js`) |
 | `/api/economy`, `/dev/api/economy` | POST | each game server, with the bot's key, every five minutes: what each hold gathered, crafted and traded, by the day, for the hub's Hold economy page (#3164, the hold economy block in `game\gamemode.js`) |
 | `/api/ledger`, `/dev/api/ledger` | POST | each game server, with the bot's key, every 15 seconds while there are rows: each trade and each move of gold between people, by account and character, for the hub's Gold and trades page (#6270, the ledger block in `game\gamemode.js`) |
@@ -47,11 +69,12 @@ put in that folder answers 404 and is not on the Downloads page (#3798).
 The installer is not in that folder since #4824. It is Velopack's setup
 program, which `merge-release.yml` makes and signs, and `/file/` answers
 302 to its GitHub Release copy (`newestSetup` in `lib/feed.js`):
-`/file/Thornswood-Setup.exe` to the one on the newest Release `main-<tag>`,
-which the approval step publishes once a build is approved (#5181), and
-`/file/Thornswood-Dev-Setup.exe` to the one on the newest build Release
-(`build-YYYYMMDD.N`). Until there is one, the name answers 404 and the
-Downloads page says the installer is not published yet. The old installer's
+`/file/Thornswood-Setup.exe` to the newest main setup Release (matching
+`main-build-YYYYMMDD.N` or `main-build-1.3.n`, issue #5581), which the approval
+step publishes once a build is approved (#5181), and
+`/file/Thornswood-Dev-Setup.exe` to the newest dev build Release
+(`build-YYYYMMDD.N` or `build-1.3.n`). Until there is one, the name answers 404
+and the Downloads page says the installer is not published yet. The old installer's
 exe and payload zip, which `Publish-Installer` left in the folder, are never
 served or listed, whatever `files.json` still says. `/api/payload`, which the
 old setup program asked for its zip, is gone with it.
@@ -71,6 +94,12 @@ when a browser too old for that sends them on another site's form anyway, or
 a page on another name under thornswood.net does. A GET changes nothing
 another page can choose. `site\tests\test-1367-cross-site.js` sends every kind of
 write the hub makes from another site and from this one.
+
+Only `/hub` and `/api/hello` may use the last good Discord role answer to draw
+the page and its navigation when a refresh fails or is late (#4381). Private
+data routes, including GET and HEAD, check current standing and its existing
+one-minute cache instead of using the ten-minute page fallback. The request
+deadlines and configured manual-admin and password permissions stay the same.
 
 ## On your machine
 
@@ -128,6 +157,13 @@ Releases (#5547).
 | `THORNSWOOD_CHAT_DIR` | `C:\Thornswood-Voice\chat` | The live voice service's chat folder, read for the chat under a main session (`lib\serverlogs.js`). Set it to match when the live voice service writes elsewhere. |
 | `THORNSWOOD_DEV_CHAT_DIR` | `C:\Thornswood-Voice-Dev\chat` | The dev voice service's chat folder, read for the chat under a dev session (`lib\serverlogs.js`). |
 
+Session chat reads every local calendar day in its window, including middle
+days when a session spans several dates (#4947). One folder listing selects
+valid day files inside the local date window, including daylight-saving
+changes, without scanning an arbitrary date range. The same slice supplies
+an initial kept-chat copy; existing profile, time, server, output and retention
+limits still apply.
+
 To see the door answer, from a second window:
 
 ```
@@ -153,8 +189,9 @@ copy of the live `C:\Thornswood-Caddy\Caddyfile`), and `Setup-Domain.ps1` is
 what set `THORNSWOOD_DOCS_LOCAL=1` there. Its `config.json` on the VPS holds
 the member password, the Discord client secret and bot token, the bot's key
 and the cookie secret, and is never in the repo. `.\scripts\deploy\Deploy-Docs.ps1`
-sends `server.js`, `lib\` and everything in `public\` and restarts the task, and
-`-Site` also sends the public pages. A plain deploy never overwrites a
+sends only the changed `server.js`, `lib\` and `public\` files and stops the
+site only when one of them changed, and `-Site` also sends the public pages. A
+plain deploy never overwrites a
 document somebody has typed into on the site; `-Boards`, `-Docs` and
 `-SeedDocs` do, after a `.bak` of each. `-Board active` replaces that one board
 inside the live `board.json` and leaves every other board as typed. The
@@ -185,8 +222,9 @@ The pages, the downloads, the hub and every route in the table above are one
 node process. A route that throws is answered 500 and the rest carry on, and a
 throw in a timer is logged and carried on from, so a broken page does not take
 the door with it. What one process cannot keep apart: anything that holds its
-event loop holds the door for as long, and every `Deploy-Docs.ps1` restarts the
-door along with the pages. `tests\test-site-local.js` measures the first two
+event loop holds the door for as long, and a `Deploy-Docs.ps1` that changes the
+app restarts the door along with the pages (when nothing in the app changed,
+the site is left running). `tests\test-site-local.js` measures the first two
 against a copy: with a page made to throw, `/api/play/who` still answers its
 401, and with a page made to hold the loop for a second and a half, the same
 question waits until it lets go.
@@ -230,7 +268,7 @@ leaves the queue and is public at `/shot`, and `/up` closes behind it.
 | Route | Method | Who | Body | Answers |
 | --- | --- | --- | --- | --- |
 | `/api/gallery/who` | GET | anybody | none | `200 {signed,canSubmit,staff,admin,name}` for the public gallery page |
-| `/api/gallery/submit` | POST | a signed-in Discord account that may play (or the hub member cookie), or the launcher with the same signed ticket it sends `/api/play/join` | the file is the body, the way `/api/upload` takes it; `name`, `by`, `note` and, for the launcher, `ticket` are in the query | `200 {ok,name}`; `401 {why:'link'}` with neither door; `403`/`503` for a launcher ticket the door would also refuse; `415` for anything but png, jpg, jpeg, webp or gif; `413` over 25 MB |
+| `/api/gallery/submit` | POST | a signed-in Discord account that may play (or the hub member cookie), or the launcher with the same signed ticket it sends `/api/play/join` | the file is the body, the way `/api/upload` takes it; `name`, `by`, `note` and, for the launcher, `ticket` are in the query | `200 {ok,name}`; `401 {why:'link'}` with neither door; `403`/`503` for a launcher ticket the door would also refuse; `415` for anything but png, jpg, jpeg, webp, gif, mp4 or webm; `413` over 100 MB |
 | `/api/gallery/copy` | POST | whoever sent a waiting picture, once for each width, or staff at any time (#3218) | one smaller copy is the body, a WebP or a JPEG named by its Content-Type; `name` (the picture), `w` (800 or 1600) and, for the launcher, `ticket` in the query | `200 {ok,name,w}`, kept as `uploads/small/<name>.w<w>.webp` or `.jpg` and listed in the queue entry's `copies`; a staff copy of a picture already on the gallery goes into its `srcset` at once; `403` for anybody else, `409` for a width the sender already sent, `400` for another width or a picture no wider than it, `415` for another kind, `422` for a copy that is not exactly that width and the picture's shape |
 | `/api/gallery/pending` | GET | staff (`access.dev`), by the hub cookie or a launcher ticket | none | `200 {pending:[...]}`, each with `copies` (the widths sent); `403` otherwise |
 | `/api/gallery/approve` | POST | staff | `{name, by?, copies?}` | `200 {ok,approved,copies}`; upserts the name onto `gallery.json`, removes it from the queue, idempotent; only the copies named in `copies`, the ones the card showed, go into the item's `srcset`; `400` with no name |
@@ -250,13 +288,25 @@ rather than send something in. A ticket for an account that is not staff is
 one `403 {why:'banned'}`, and a Discord that could not be asked `503`. Neither
 cookie nor ticket is the `403 {error:'staff only'}` these doors always sent.
 
+Gallery accept, removal and report dismissal write the verified staff name,
+account ID and picture name to `data\for-bot\moderation.log` (#4938). Each
+record names the first step the request committed, so a cleanup retry does
+not read like another public removal. A refused first save or an unchanged
+retry leaves no new action. Report text stays in its existing store. The bot
+escapes the names in its staff sentence. The log keeps its existing retention
+and write-failure reporting.
+
+A report's retention record is saved before its open entry is cleared.
+Retrying a removal during an active hold keeps the picture and the original
+deadline. The retention sweep can remove the file once the hold ends.
+
 A submission lands in `uploads\` under the same stamped name `/api/upload` uses
 (`receiveUpload` in `lib\uploads.js` is the one helper both go through) and adds
 `{ name, by, note, at, from: 'web'|'launcher', discordId? }` to the queue. The
-cap is 25 MB rather than the 200 MB `/api/upload` takes for logs, and only
-images are taken: `/shot` serves with a plain `Content-Length` and no range,
-which a browser needs before it will play an mp4, so video waits until `/shot`
-honours a range. Staff means the `access.dev` roles (Owner, Dev, Gamemaster,
+cap is 100 MB rather than the 200 MB `/api/upload` takes for logs, and video as
+well as images is taken (mp4 and webm alongside png, jpg, jpeg, webp and gif):
+`/shot` answers byte ranges through `rangeReply`, so browsers can stream and
+play video. Staff means the `access.dev` roles (Owner, Dev, Gamemaster,
 Moderator, Loremaster), not Owner/Dev-only `w.admin`. The public `/gallery`
 page has the member submit form; the hub Gallery page, `/uploads`, shows the
 queue and the live list. That page is `LEVEL.uploads: 'staff'` (#742), so the

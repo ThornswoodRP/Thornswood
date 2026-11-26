@@ -1,6 +1,6 @@
 # Collection revisions
 
-The collection is on revision 11 of 7essxf on Nexus Mods, as
+The collection is on revision 12 of 7essxf on Nexus Mods, as
 `records/collection-plugins.json` records it, every plugin with its size and
 sha256. `tests/test-4533-collection-revision-docs.js` holds this page and
 every other page to that record, so a page that names an older revision as the
@@ -20,9 +20,11 @@ says how. From Nexus to a release it goes like this:
    `collection-modlist.wabbajack` (the revision as the Wabbajack modlist the
    launcher installs from, #6244), the record's
    `revision`, and `load-order.json`, the order the servers run and every
-   build reads, which `pwsh scripts/mods/Set-LoadOrder.ps1` moves to the new
-   revision once the others are its (`tests/test-5191-load-order.ps1` stays
-   red until it does).
+   build reads. The `collection-record` artifact carries the new server
+   `load-order.json`, computed from the verified layout and the prior server
+   order. It is distinct from the unpacked `loadorder.txt`, which is the
+   collection layout's order. `Set-LoadOrder.ps1 -Check` verifies the order
+   once the other records have moved to the same revision.
 3. The box builds again what is read from the plugins: the NPC catalogue
    (`game/data/npc-population.json`) and the Last plugin's recipe and record
    (`game/data/last-plugin.recipe`, `game/data/last-plugin.json`), through
@@ -34,9 +36,24 @@ says how. From Nexus to a release it goes like this:
    revision. Main follows from the feed only when Patrick says so for that
    build.
 
-For revision 11, steps 1 and 2 are done. Its collection plugins and their
-load order are unchanged from revision 10. The merge builds the content again
+For revision 12, steps 1 and 2 are done. Its collection plugins and their
+load order are unchanged from revision 11. The merge builds the content again
 on the box before its release.
+
+## Revision 12
+
+Published 26 November 2026 by [the collection record run](https://github.com/ThornswoodRP/Thornswood/actions/runs/45841963802).
+
+The nine mods whose plugins the collection gives a light flag (Deadly Spell
+Impacts, Better Container Controls, RaceMenu, More Craftable Equipment, SkyHUD,
+XP32 Maximum Skeleton, CBBE, LSFX and Pandora) now list the files they install,
+in place of their installer answers (#6888). Vortex patches only a copy it
+installs from the collection, and up to 1.15 it took a copy of the same file
+installed before as the collection's when the entry listed no files, so that
+copy kept its author's flag. An entry that lists its files is matched only by
+a copy with that list, so Vortex installs and patches its own. Somebody who
+has these mods from an earlier revision gets them installed once more. No
+archive, plugin, plugin index or order changed.
 
 ## Revision 11
 

@@ -1,10 +1,13 @@
 <#
   test-publish-sign-gate.ps1
 
-  Ship must refuse an unsigned tip (and a machine that cannot sign), not
-  only print "not signing". Local Build-Launcher may still soft-skip; the
-  gate is on publish to the feed (#825). Publish-Installer.ps1, which held
-  the old installer to the same gate, went with it (#4824).
+  The release gate must refuse an unsigned tip (and a machine that cannot
+  sign), not only print "not signing". Local Build-Launcher may still
+  soft-skip; the gate is on publish (#825, #4825, #5874). The launcher is
+  signed and held to the gate in merge-release.yml and Sign-OnRunner.ps1,
+  while Ship.ps1 checks the release signing configuration.
+  Publish-Installer.ps1, which held the old installer to the same gate,
+  went with it (#4824).
 
   Static wiring plus helper behaviour against temp unsigned files and a fake
   signing.json. No Azure, no network, no real Ship.
@@ -30,10 +33,14 @@ function Yes([string]$what, [bool]$cond) {
 $assert = Join-Path $repo 'scripts\release\Assert-PublishSigned.ps1'
 $ship = Join-Path $repo 'scripts\release\Ship.ps1'
 $build = Join-Path $repo 'scripts\release\Build-Launcher.ps1'
+$mergeRelease = Join-Path $repo '.github\workflows\merge-release.yml'
+$signOnRunner = Join-Path $repo 'scripts\release\Sign-OnRunner.ps1'
 
 Yes 'Assert-PublishSigned.ps1 is there' (Test-Path -LiteralPath $assert)
 Yes 'Ship.ps1 is there' (Test-Path -LiteralPath $ship)
 Yes 'Build-Launcher.ps1 is there' (Test-Path -LiteralPath $build)
+Yes 'merge-release.yml is there' (Test-Path -LiteralPath $mergeRelease)
+Yes 'Sign-OnRunner.ps1 is there' (Test-Path -LiteralPath $signOnRunner)
 if (-not (Test-Path -LiteralPath $assert)) {
     Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)
     exit 1
@@ -43,10 +50,13 @@ if (-not (Test-Path -LiteralPath $assert)) {
 
 $shipSrc = [IO.File]::ReadAllText($ship, $Utf8)
 $buildSrc = [IO.File]::ReadAllText($build, $Utf8)
+$mergeSrc = [IO.File]::ReadAllText($mergeRelease, $Utf8)
+$runnerSrc = [IO.File]::ReadAllText($signOnRunner, $Utf8)
 
 Yes 'Ship dotsources Assert-PublishSigned' ($shipSrc -match 'Assert-PublishSigned\.ps1')
 Yes 'Ship calls Get-SigningConfigRefusal' ($shipSrc -match 'Get-SigningConfigRefusal')
-Yes 'Ship calls Get-PublishSignRefusal for the launcher' ($shipSrc -match 'Get-PublishSignRefusal')
+Yes 'Sign-OnRunner calls Get-PublishSignRefusal' ($runnerSrc -match 'Get-PublishSignRefusal')
+Yes 'merge-release.yml calls Get-PublishSignRefusal for the launcher' ($mergeSrc -match 'Get-PublishSignRefusal')
 Yes 'Build-Launcher signs every program of the launcher, the native libraries too (#4823)' (
     $buildSrc.Contains('$programs = @(Get-ChildItem -LiteralPath $outDir -File | Where-Object { $_.Extension -in ''.exe'', ''.dll'' })') -and
     $buildSrc.Contains('& $signer -Path @($programs | ForEach-Object { $_.FullName })'))

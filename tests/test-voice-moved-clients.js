@@ -84,14 +84,11 @@ yes('and reads the silence marks off the rows that moved, as merged into its tab
   metre of me, where a local voice is at full level.
 */
 const TONES = { 2: 500, 3: 600, 4: 700, 5: 800 };
-// What hear() reads is a voice's loudest 40 ms in either ear (StandIns.cs,
-// #5456). Here, with everybody beside me, a voice in the mix read 0.39 to
-// 0.50, with twelve busy loops on four cores as well as without. One out of
-// it read 0.010 to 0.015 on a quiet machine and 0.014 to 0.046 on the busy
-// one: the other three voices' clicks, where their audio ran dry and came
-// back, spill into its pitch. The two lines sit between those.
+// hear() reports the loudest 40 ms in either ear. Keep the mixed output
+// checks for speaking peers. For silence, isolate the peer being checked:
+// another speaker's jitter-buffer clicks have energy at its pitch too.
 const HEARD = 0.2, SILENT = 0.1;
-const settle = () => new Promise((ok) => setTimeout(ok, 750));
+const profiles = Object.keys(TONES).map(Number);
 
 async function launcher() {
   const r = await VL.room([
@@ -107,40 +104,76 @@ async function launcher() {
     for (let i = 1; i < 5; i++) { await r.at(i).send({ do: 'ptt', on: true }); }
     await me.until(() => ['still', 'walker', 'leaver', 'arrival'].every((n) => me.says(new RegExp('^receiving from ' + n + '$'))), 30000, 'audio from all four');
     const row = (x) => ({ pos: [x, 0, 0], angleZ: 0, cell: 'c' });
+    async function mixStatus() {
+      const events = await me.send({ do: 'mix-status' });
+      return events.find((e) => e.ev === 'mix-status').value;
+    }
+    async function waitForMix(check, what) {
+      const deadline = Date.now() + 15000;
+      do {
+        const state = await mixStatus();
+        const sources = Object.fromEntries((state.sources || []).map((s) => [s.peer, s]));
+        if (check(sources)) return;
+      } while (Date.now() < deadline);
+      throw new Error('the launcher mix did not reach ' + what);
+    }
     async function heard() {
-      await settle();
-      const lv = await me.hear(Object.keys(TONES).map((k) => TONES[k]));
-      const out = {};
-      for (const k of Object.keys(TONES)) { out[k] = lv[String(TONES[k])]; }
-      return out;
+      const events = await me.send({ do: 'hear', fresh: true, tones: Object.values(TONES) });
+      const playback = events.find((e) => e.ev === 'heard');
+      return { levels: Object.fromEntries(profiles.map((p) => [p, playback.levels[TONES[p]]])),
+        sources: playback.capture.sources };
+    }
+    async function isolatedSilence(peer, reason) {
+      const others = profiles.filter((p) => p !== peer);
+      await me.send({ do: 'muted', list: others.join(' ') });
+      await waitForMix((s) => s[peer]?.audible && s[peer].reason === reason &&
+        s[peer].target === 0 && s[peer].gain < 0.005 &&
+        others.every((p) => s[p]?.audible === false && s[p].gain < 0.005), reason);
+      const { levels, sources } = await heard();
+      // The remote stream must still deliver audio during the silent window.
+      // A stopped peer would give a false pass for an ineffective removal.
+      const source = sources.find((s) => s.peer === peer);
+      await me.send({ do: 'muted', list: '' });
+      return { level: levels[peer], silent: source?.decoded.samples > 0 && levels[peer] < SILENT };
     }
     const say = (lv) => Object.keys(lv).map((k) => k + ' ' + lv[k].toFixed(3)).join(', ');
 
     // The whole view: everybody but the arrival, who is not in it yet.
     await r.say(0, { t: 'pos', at: 1, who: { 1: row(0), 2: row(20), 3: row(30), 4: row(40) } });
-    let lv = await heard();
-    yes('the launcher\'s voice: after the whole view, the three in it are heard and the one not in it is not (' + say(lv) + ')',
-        lv[2] > HEARD && lv[3] > HEARD && lv[4] > HEARD && lv[5] < SILENT);
+    await waitForMix((s) => [2, 3, 4].every((p) => s[p]?.target > 0) &&
+      s[5]?.reason === 'missing-remote-position', 'the whole view');
+    let { levels: lv } = await heard();
+    const absent = await isolatedSilence(5, 'missing-remote-position');
+    yes('the launcher\'s voice: after the whole view, the three in it are heard and the one not in it is not (' +
+        say(lv) + '; isolated arrival ' + absent.level.toFixed(3) + ')',
+        lv[2] > HEARD && lv[3] > HEARD && lv[4] > HEARD && absent.silent);
 
     await r.say(0, { t: 'moved', at: 1, who: { 3: Object.assign(row(35), { angleZ: 5 }), 5: row(25) }, gone: [4] });
-    lv = await heard();
+    await waitForMix((s) => [2, 3, 5].every((p) => s[p]?.target > 0) &&
+      s[4]?.reason === 'missing-remote-position', 'the moved view');
+    ({ levels: lv } = await heard());
     yes('the launcher\'s voice: somebody standing still is kept, and heard (' + lv[2].toFixed(3) + ')', lv[2] > HEARD);
     yes('the launcher\'s voice: somebody who moved is heard where they moved to (' + lv[3].toFixed(3) + ')', lv[3] > HEARD);
     yes('the launcher\'s voice: somebody new in range is added, and heard (' + lv[5].toFixed(3) + ')', lv[5] > HEARD);
-    yes('the launcher\'s voice: somebody in gone is dropped, and silent (' + lv[4].toFixed(3) + ')', lv[4] < SILENT);
+    const leaver = await isolatedSilence(4, 'missing-remote-position');
+    yes('the launcher\'s voice: somebody in gone is dropped, and silent (' + leaver.level.toFixed(3) +
+        ' isolated, ' + lv[4].toFixed(3) + ' mixed)', leaver.silent);
 
     // My own row was in no 'moved': distance is still measured from it, so
     // the one who stood still walking out of range goes quiet.
     await r.say(0, { t: 'moved', at: 2, who: { 2: row(2000) } });
-    lv = await heard();
-    yes('the launcher\'s voice: and its own row is still there to measure from (' + lv[2].toFixed(3) + ' once 2000 units off)',
-        lv[2] < SILENT && lv[3] > HEARD);
+    await waitForMix((s) => s[2]?.reason === 'out-of-range' && s[3]?.target > 0, 'the distant position');
+    ({ levels: lv } = await heard());
+    const distant = await isolatedSilence(2, 'out-of-range');
+    yes('the launcher\'s voice: and its own row is still there to measure from (' + distant.level.toFixed(3) + ' once 2000 units off)',
+        distant.silent && lv[3] > HEARD);
 
     // #5358: a row already held comes with only the fields that changed. A
     // position alone keeps the cell the place had: replaced, it would have
     // no cell, another cell from mine, and be silent.
     await r.say(0, { t: 'moved', at: 3, who: { 2: { pos: [20, 0, 0] } } });
-    lv = await heard();
+    await waitForMix((s) => s[2]?.target > 0, 'the restored position');
+    ({ levels: lv } = await heard());
     yes('the launcher\'s voice: a row with only a new position keeps its cell, and is heard back beside me (' + lv[2].toFixed(3) + ')',
         lv[2] > HEARD);
     for (let i = 0; i < 5; i++) {

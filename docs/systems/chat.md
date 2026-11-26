@@ -3,6 +3,10 @@
 What you type. Enter opens the box. A line that starts with `/` is a
 command. A line that does not is speech.
 
+While disconnected, chat keeps the newest 20 waiting lines. If another
+line removes the oldest one, a warning says it was removed and the new
+one is queued. It does not repeat the contents of either line.
+
 How a line is said, out of character, and the dice are typed, and the
 help names them. There are no buttons for them on the chat box.
 Decided by Patrick on 4 Oct (#1639): "Allow those commands and don't
@@ -40,8 +44,10 @@ enough, you are told.
 ## Dice
 
 `/roll` or `/r`, and the dice. The number is the sides: `/roll 20` is
-one twenty sided die, and `/roll 6x3` is three six sided ones. A
-leading `d` is fine. `/roll` alone is a twenty. Up to 1000 sides and
+one twenty sided die, and `/roll 6x3` is three six sided ones.
+Count-d-sides notation works too: `/roll 1d20` is one twenty sided die,
+and `/roll 3d6` is three six sided ones. A leading `d` is fine.
+`/roll` alone is a twenty. Up to 1000 sides and
 100 dice. The server rolls it, so nobody can make a number up, and
 the result goes to the same people `/ooc` reaches.
 
@@ -94,10 +100,10 @@ It is not this text.
 
 ## Where this is
 
-`/ooc` is local, 4000 units, same cell, in the server. `/roll` is
+`/ooc` is local, 4000 units, same cell, in the voice service. `/roll` is
 rolled in the server and goes to the same people. `/me`, `/do`,
-`/w`, and `/s` are local too, whether or not the plain-line switch is
-on. They are not sent on to the game server.
+`/w`, `/s`, and `/ooc` are local, whether or not the plain-line switch is
+on. They are kept by the voice service and not sent on to the game server.
 
 Plain speech in the box is local on both servers: the same cell,
 4000 units, the same reach as the line above the head.

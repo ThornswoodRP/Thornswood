@@ -163,7 +163,7 @@ for (const r of Object.keys(RECIPE)) {
     !!x && x.out === RECIPE[r] && x.owner === 'Tailor' && x.half === 'Haberdasher' &&
     x.rank === 'novice' && x.race === 'riekling' && !x.nobody);
 }
-const cut = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs', 'systems', 'cut-items.json'), 'utf8'));
+const cut = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'cut-items.json'), 'utf8'));
 yes('and neither is in the cut file',
   Object.keys(RECIPE).every(id => !cut.items.some(i => i.id === id)));
 yes('the loincloths and cloth wraps are cut again, and nobody makes them',

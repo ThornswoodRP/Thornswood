@@ -319,6 +319,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import struct
 import sys
 import zlib
@@ -341,6 +342,7 @@ POLICY = os.path.join(ROOT, 'game', 'data', 'last-plugin-policy.json')
 MANIFEST = os.path.join(ROOT, 'game', 'data', 'last-plugin.json')
 RECOST = os.path.join(ROOT, 'game', 'data', 'recost.json')
 RECIPES = os.path.join(ROOT, 'game', 'data', 'recipes.json')
+FOOD_GROUPS = os.path.join(ROOT, 'game', 'data', 'food-groups.json')
 OWN_DIR = os.path.join(ROOT, 'game', 'content')
 RECIPE = os.path.join(ROOT, 'game', 'data', 'last-plugin.recipe')
 
@@ -364,7 +366,7 @@ NEVER_TRUE = struct.pack('<B3sfHHIIIIi', 4 << 5, b'\x00\x00\x00', 0.0, 47, 0,
 HAS_PERK = 448
 CTDA_TRAILERS = (b'CIS1', b'CIS2')
 CTDA_OR = 0x01
-GROUP_ORDER = [b'COBJ', b'CELL', b'WRLD', b'QUST', b'LCTN']
+GROUP_ORDER = [b'ALCH', b'COBJ', b'CELL', b'WRLD', b'QUST', b'LCTN']
 
 # The subrecords of a cell that come before its location (XLCN), in the
 # order Skyrim.esm writes a cell; a location set on a cell that had none goes
@@ -762,6 +764,14 @@ COIN_PURSES = (('skyrim.esm', 0x0D790C),   # CoinPurseSmall
 # a field this does not know would keep its old plugin's numbering, which is
 # the one mistake that would be found months later.
 FIELDS = {
+    b'ALCH': {
+        'fid': {b'YNAM', b'ZNAM', b'EFID'},
+        'array': {b'KWDA'},
+        'structs': {b'ENIT': (20, (8, 16))},
+        'plain': {b'EDID', b'OBND', b'KSIZ', b'MODL', b'MODT', b'DATA', b'EFIT'},
+        'strings': {b'FULL'},
+        'drop': set(),
+    },
     b'CELL': {
         'fid': {b'LTMP', b'XLCN', b'XCMO', b'XCAS', b'XCIM', b'XEZN', b'XOWN', b'XCCM',
                 b'XILL', b'XCWT'},
@@ -884,12 +894,33 @@ class Renumber(object):
         return vmad_write(tree)
 
 
-def copy_record(src, entry, rn, strings, what):
+def model_swaps(src, data, rn, what):
+    """Renumber the texture set id after each length-prefixed node name."""
+    changed = bytearray(data)
+    try:
+        count = struct.unpack_from('<I', data)[0]
+        at = 4
+        for _ in range(count):
+            size = struct.unpack_from('<I', data, at)[0]
+            at += 4 + size
+            texture, _index = struct.unpack_from('<II', data, at)
+            struct.pack_into('<I', changed, at, rn.one(src, texture, what))
+            at += 8
+        if at != len(data):
+            raise ValueError
+    except (struct.error, ValueError):
+        raise SystemExit('STOP. %s has malformed MODS. Nothing was written.' % what)
+    return bytes(changed)
+
+
+def copy_record(src, entry, rn, strings, what, pairs=None):
     """The record's subrecords with every form id in this plugin's numbering
     and every localised string written out in plain."""
     table = FIELDS[entry.tag]
     out = []
-    for t, b in subrecords(src.data(entry)):
+    if pairs is None:
+        pairs = subrecords(src.data(entry))
+    for t, b in pairs:
         if t in table['drop']:
             continue
         if t in table['fid']:
@@ -934,6 +965,8 @@ def copy_record(src, entry, rn, strings, what):
             b = struct.pack('<I', rn.one(src, struct.unpack_from('<I', b, 0)[0], what)) + b[4:]
         elif t == b'VMAD':
             b = rn.vmad(src, b, entry.tag == b'QUST', what)
+        elif t == b'MODS' and entry.tag == b'ALCH':
+            b = model_swaps(src, b, rn, what)
         elif t in table['strings'] or t in table.get('dlstrings', ()):
             if src.localised:
                 kind = 'dlstrings' if t in table.get('dlstrings', ()) else 'strings'
@@ -959,6 +992,105 @@ def ref_key(desc):
 
 def desc_of(gid, canon):
     return '%x:%s' % (gid[1], canon[gid[0]])
+
+
+def seasoned_recipe_rows(groups):
+    """The two stable recipes per source dish, including their fine result.
+    Descriptors are data; neither a new master nor an ingredient alias is
+    permitted to make a source recipe fit Content's five-master namespace."""
+    season = groups.get('season', {})
+    sources, dishes = season.get('recipes', {}), season.get('dishes', {})
+    rows, seen, pairs = [], set(), {}
+    extras = {'34d22:Skyrim.esm', '34cdf:Skyrim.esm'}
+    for item, row in sorted(dishes.items()):
+        if 'recipe' not in row:
+            continue
+        dish, extra, recipe = row.get('of'), row.get('extra'), row.get('recipe')
+        fine = groups.get('quality', {}).get('fine', {}).get(item)
+        if (dish not in sources or extra not in extras or not fine or
+                dishes.get(fine) != {'of': dish, 'extra': extra} or
+                groups.get('items', {}).get(dish) not in ('cooked', 'soup') or
+                groups['items'].get(item) != groups['items'][dish] or
+                groups['items'].get(fine) != groups['items'][dish]):
+            raise ValueError('seasoned dish %s has no matching source, extra or fine result' % item)
+        for desc in (item, fine, recipe):
+            if not isinstance(desc, str) or not re.fullmatch(r'[0-9a-f]{1,6}:Thornswood-Content\.esp', desc) or desc in seen:
+                raise ValueError('seasoned object ID is invalid or repeated: %s' % desc)
+            seen.add(desc)
+        if extra in pairs.setdefault(dish, set()):
+            raise ValueError('seasoned dish repeats its extra: %s' % dish)
+        pairs[dish].add(extra)
+        rows.append({'item': item, 'recipe': recipe, 'of': dish, 'extra': extra, 'source': sources[dish]})
+    if set(pairs) != set(sources) or any(value != extras for value in pairs.values()):
+        raise ValueError('every cooking source must have exactly one garlic and one salt recipe')
+    return rows
+
+
+def seasoned_recipe_entries(groups, plugins, win, hidden):
+    """Bind source and disabled Content shell to real winning COBJ entries."""
+    rows = seasoned_recipe_rows(groups)
+    for row in rows:
+        source = win.get((b'COBJ', ref_key(row['source'])))
+        target = win.get((b'COBJ', ref_key(row['recipe'])))
+        if source is None or target is None or source.flags & DELETED or target.flags & DELETED:
+            raise ValueError('seasoned recipe has no live source and shell: %s' % row['recipe'])
+        src, own = plugins[source.pi], plugins[target.pi]
+        base = dict(subrecords(src.data(source)))
+        inputs = [body for tag, body in subrecords(src.data(source)) if tag == b'CNTO']
+        if (not inputs or struct.unpack('<I', base[b'COCT'])[0] != len(inputs) or
+                any(len(body) != 8 or struct.unpack_from('<i', body, 4)[0] < 1 for body in inputs)):
+            raise ValueError('seasoned source has invalid input records: %s' % row['source'])
+        shell_pairs = subrecords(own.data(target)); shell = dict(shell_pairs)
+        if (ref_key(row['source']) in hidden or src.gid(struct.unpack('<I', base[b'CNAM'])[0]) != ref_key(row['of']) or
+                src.gid(struct.unpack('<I', base[b'BNAM'])[0]) != ref_key('a5cb3:Skyrim.esm') or
+                struct.unpack('<H', base[b'NAM1'])[0] < 1):
+            raise ValueError('seasoned source is not the retained cooking-pot recipe: %s' % row['source'])
+        if (own.name.lower() != CONTENT.lower() or struct.unpack('<I', shell[b'BNAM'])[0] != 0 or
+                own.gid(struct.unpack('<I', shell[b'CNAM'])[0]) != ref_key(row['item']) or
+                (b'CTDA', NEVER_TRUE) not in shell_pairs or any(t == b'CNTO' for t, _ in shell_pairs) or
+                shell.get(b'EDID') != ('ThornswoodRecipeSeasoned' + row['item'].split(':')[0]).encode() + b'\0'):
+            raise ValueError('seasoned recipe shell is not disabled or has changed: %s' % row['recipe'])
+        row.update({'sourceEntry': source, 'shellEntry': target, 'editorId': shell[b'EDID']})
+    return rows
+
+
+def seasoned_recipe_pairs(row, plugins, rn, strings):
+    """Copy source semantics, then change only EDID, output and one extra."""
+    entry = row['sourceEntry']; src = plugins[entry.pi]
+    what = 'seasoned recipe %s from %s' % (row['recipe'], row['source'])
+    pairs = copy_record(src, entry, rn, strings, what)
+    if perk_tests(pairs)[0]:
+        pairs = without_perks(pairs, what)
+    extra = rn.gid(ref_key(row['extra']))
+    output = rn.gid(ref_key(row['item']))
+    added = False; out = []
+    for tag, body in pairs:
+        if tag == b'EDID': body = row['editorId']
+        elif tag == b'CNAM': body = struct.pack('<I', output)
+        elif tag == b'CNTO' and struct.unpack_from('<I', body)[0] == extra and not added:
+            count = struct.unpack_from('<i', body, 4)[0]
+            if count < 1 or count == 0x7fffffff: raise ValueError('seasoning input count is invalid')
+            body = body[:4] + struct.pack('<i', count + 1) + body[8:]
+            added = True
+        out.append((tag, body))
+    if not added:
+        at = next((i for i, (t, _) in enumerate(out) if t in (b'CTDA', b'CNAM')), len(out))
+        out.insert(at, (b'CNTO', struct.pack('<Ii', extra, 1)))
+    count = sum(1 for tag, _ in out if tag == b'CNTO')
+    return [(tag, struct.pack('<I', count) if tag == b'COCT' else body) for tag, body in out]
+
+
+def food_effects(src, entry, what):
+    """Split record data before the first effect from its EFID/EFIT pairs."""
+    pairs = list(subrecords(src.data(entry)))
+    first = next((i for i, (tag, _) in enumerate(pairs) if tag == b'EFID'), len(pairs))
+    effects = pairs[first:]
+    if (not effects or len(effects) % 2 or any(tag == b'EFIT' for tag, _ in pairs[:first]) or
+            any(tag != b'EFID' or len(value) != 4 for tag, value in effects[::2]) or
+            any(tag != b'EFIT' or len(value) != 12 for tag, value in effects[1::2])):
+        raise SystemExit('STOP. %s has an unexpected ALCH effect layout. Nothing was written.' % what)
+    return pairs[:first], [(src.gid(struct.unpack('<I', effect_id)[0]), (effect_id, effect_data))
+                           for (_, effect_id), (_, effect_data) in zip(effects[::2], effects[1::2])]
 
 
 def load(data_dir, catalogue):
@@ -1478,6 +1610,22 @@ def build(data_dir):
     # taken out, when its row says perkRecipesCopied (9; Patrick, 31 Oct
     # 2026, A on q-4826-ia-perk-recipes).
     blocked = {row['plugin'].lower() for row in policy.get('notCopiedFrom', [])}
+    food_policy = policy.get('foodEffects', {})
+    foods = []
+    for row in food_policy.get('foods', []):
+        entry = win.get((b'ALCH', ref_key(row['food'])))
+        if entry is None or entry.flags & DELETED or plugins[entry.pi].name.lower() in blocked:
+            raise SystemExit('STOP. %s has no permitted winning food record. Nothing was written.' % row['food'])
+        src = plugins[entry.pi]
+        what = '%s ALCH %s' % (src.name, row['food'])
+        pairs, effects = food_effects(src, entry, what)
+        keep, remove = ref_key(food_policy['keep']), ref_key(row['remove'])
+        if sorted(gid for gid, _ in effects) != sorted((keep, remove)):
+            raise SystemExit('STOP. %s does not have the expected effects. Nothing was written.' % what)
+        for gid, (effect_id, effect_data) in effects:
+            if gid == keep:
+                pairs.extend(((b'EFID', effect_id), (b'EFIT', effect_data)))
+        foods.append((entry, pairs, what))
     perks_off = perk_recipes_copied(policy)
     carried = {r.lower(): r for row in policy.get('notCopiedFrom', []) for r in row.get('carried', [])}
     used = set()
@@ -1697,6 +1845,15 @@ def build(data_dir):
     # that turn Skyrim's instruments into its weapons. That plugin loads after
     # Thornswood-Content.esp, so only a copy here can keep them off a bench.
     hidden = hidden_entries(policy, plugins, win, canon, blocked)
+    # Stable five-master Content shells acquire their real, full-load-order
+    # inputs only here. Their source row is the kept recipe, never an upgrade
+    # or cut duplicate. The same source plan is applied by Build-RecipeTable.
+    recipe_catalogue = json.load(open(RECIPES, encoding='utf-8'))['recipes']
+    cut_sources = {ref_key(key) for key, row in recipe_catalogue.items() if row.get('book') == 'cut'}
+    seasoned = seasoned_recipe_entries(json.load(open(FOOD_GROUPS, encoding='utf-8')), plugins, win, cut_sources)
+    for row in seasoned:
+        if plugins[row['sourceEntry'].pi].name.lower() in blocked:
+            raise SystemExit('STOP. a seasoned recipe copies a prohibited source. Nothing was written.')
 
     # 6. Nothing is copied out of a plugin the policy never copies from
     # (notCopiedFrom, above) but what it carries; anything else it would
@@ -1731,7 +1888,12 @@ def build(data_dir):
     rn = Renumber()
 
     def copies():
-        out = {'achr': [], 'refr': [], 'cell': {}, 'wrld': {}, 'qust': [], 'lctn': [], 'cobj': []}
+        out = {'achr': [], 'refr': [], 'cell': {}, 'wrld': {}, 'qust': [], 'lctn': [], 'cobj': [], 'alch': []}
+        for e, pairs, what in foods:
+            src = plugins[e.pi]
+            cooked = copy_record(src, e, rn, strings, what, pairs)
+            out['alch'].append((rn.one(src, e.fid, what), e.flags & ~COMPRESSED,
+                                pack_subrecords(cooked), e))
         for e in gates:
             src = plugins[e.pi]
             what = '%s REFR 0x%08X' % (src.name, e.fid)
@@ -1839,6 +2001,13 @@ def build(data_dir):
             if hide:
                 pairs = hide_recipe(pairs, what)
             out['cobj'].append((rn.one(src, e.fid, what), e.flags & ~COMPRESSED,
+                                pack_subrecords(pairs), e))
+        for row in seasoned:
+            e = row['sourceEntry']
+            pairs = seasoned_recipe_pairs(row, plugins, rn, strings)
+            # The target belongs to Content; provenance stays with the exact
+            # source entry so the recipe copies that author's bytes locally.
+            out['cobj'].append((rn.gid(ref_key(row['recipe'])), row['shellEntry'].flags & ~COMPRESSED,
                                 pack_subrecords(pairs), e))
         return out
 
@@ -1982,6 +2151,8 @@ def build(data_dir):
                                                             plugins[e.pi].name) for k, g, e, p in swapped),
         'carried': sorted(carried[k] for k in used),
     }
+    manifest['seasonedRecipes'] = [{key: row[key] for key in ('recipe', 'source', 'item', 'extra')} for row in seasoned]
+    manifest['counts']['seasonedRecipes'] = len(seasoned)
     return plugin, manifest, recipe
 
 
@@ -1991,7 +2162,7 @@ def make_recipe(plugin, made, plugins):
     index = {}
     for tag, rows in ((b'ACHR', made['achr']), (None, made['refr']), (b'CELL', made['cell'].values()),
                       (b'WRLD', made['wrld'].values()), (b'QUST', made['qust']), (b'LCTN', made['lctn']),
-                      (b'COBJ', made['cobj'])):
+                      (b'COBJ', made['cobj']), (b'ALCH', made['alch'])):
         for fid, flags, data, e in rows:
             key = (tag or e.tag, fid)
             if key in index:
@@ -2440,6 +2611,9 @@ def write_plugin(made, masters, plugins, rn):
     if made['cobj']:
         out[b'COBJ'] = g(b'COBJ', 0, b''.join(r(b'COBJ', f, i, d)
                                               for i, f, d, e in sorted(made['cobj'], key=lambda x: x[0])))
+    if made['alch']:
+        out[b'ALCH'] = g(b'ALCH', 0, b''.join(r(b'ALCH', f, i, d)
+                                              for i, f, d, e in sorted(made['alch'], key=lambda x: x[0])))
 
     head = [(b'HEDR', struct.pack('<fiI', 1.71, count, 0x800)),
             (b'CNAM', b'Thornswood\x00'),
@@ -2477,12 +2651,38 @@ def verify(data_dir, plugin_bytes, manifest):
     last.masters = [canon.get(m.lower(), m) for m in last.masters]
     if not last.hflags & LIGHT:
         return ['the plugin is not flagged light']
+    source_plugins = plugins
+    source_win = winners(source_plugins, {b'COBJ'})
     plugins = plugins + [last]
     win = winners(plugins, {b'ACHR', b'REFR', b'QUST', b'LCTN', b'CELL', b'FLOR', b'COBJ'} | set(FLOOR_TYPES))
     policy = json.load(open(POLICY, encoding='utf-8'))
     blocked = {row['plugin'].lower() for row in policy.get('notCopiedFrom', [])}
     perks_off = perk_recipes_copied(policy)
     fails = []
+    source_catalogue = json.load(open(RECIPES, encoding='utf-8'))['recipes']
+    cut_sources = {ref_key(key) for key, row in source_catalogue.items() if row.get('book') == 'cut'}
+    expected_seasoned = seasoned_recipe_entries(json.load(open(FOOD_GROUPS, encoding='utf-8')), source_plugins, source_win, cut_sources)
+    expected_ids = {row['recipe'] for row in expected_seasoned}
+    if {row['recipe'] for row in manifest.get('seasonedRecipes', [])} != expected_ids:
+        fails.append('seasoned recipe manifest does not cover the complete source plan')
+    rn = Renumber(); rn.masters = [name.lower() for name in last.masters]
+    for row in expected_seasoned:
+        actual = win.get((b'COBJ', ref_key(row['recipe'])))
+        if actual is None or actual.pi != last.index:
+            fails.append('seasoned recipe %s has no final Last override' % row['recipe'])
+            continue
+        expected = seasoned_recipe_pairs(row, source_plugins, rn, lambda src, kind: string_table(data_dir, src.name, kind))
+        if subrecords(last.data(actual)) != expected:
+            fails.append('seasoned recipe %s differs from its source ingredients, conditions or output' % row['recipe'])
+    food_policy = policy.get('foodEffects', {})
+    for row in food_policy.get('foods', []):
+        e = win.get((b'ALCH', ref_key(row['food'])))
+        if e is None or e.pi != last.index or e.flags & DELETED:
+            fails.append('food %s has no winning effects override' % row['food'])
+            continue
+        _, effects = food_effects(last, e, row['food'])
+        if [gid for gid, _ in effects] != [ref_key(food_policy['keep'])]:
+            fails.append('food %s does not keep only frost resistance' % row['food'])
     # Every re-costed recipe (#613) wins here, asking the counts the manifest says.
     for row in manifest.get('recost', []):
         e = win.get((b'COBJ', ref_key(row['recipe'])))

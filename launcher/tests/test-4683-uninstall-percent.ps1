@@ -145,7 +145,7 @@ try {
             $cmdFile = Join-Path $scratch ('run-' + [Guid]::NewGuid().ToString('N') + '.cmd')
             if ($text.Contains('""')) { $script:emptyPath = $true }
             [IO.File]::WriteAllText($cmdFile, $text, (New-Object System.Text.UTF8Encoding($false)))
-            $p = Start-Process -FilePath $cmdExe -ArgumentList '/c', ('"' + $cmdFile + '"') -PassThru -WindowStyle Hidden
+            $p = Start-Process -FilePath $cmdExe -ArgumentList '/c', ('"' + $cmdFile + '"') -WorkingDirectory $scratch -PassThru -WindowStyle Hidden
             $p.WaitForExit()
         }
         function Put([string]$dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null; [IO.File]::WriteAllText((Join-Path $dir 'file.txt'), 'x') }

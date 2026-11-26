@@ -101,6 +101,47 @@ Yes 'Defender skips the runner''s own folder and nothing else' ($text -match 'Ad
 # ---- ssh ---------------------------------------------------------------------------
 Yes 'it checks the VPS host key' ($text -match 'StrictHostKeyChecking=yes')
 
+# ---- an hour of the listener's own lines (#6903) ----------------------------------
+# -Status shows the last 25 lines of each log, which say nothing about an
+# hour days ago. -LogFrom reads the lines of that window from whichever log
+# was open then. The script it would send is written out by -DryRunTo and
+# its log part run here against made-up logs.
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-6903-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+$diag = Join-Path $tmp '_diag'
+$null = New-Item -ItemType Directory -Path $diag -Force
+try {
+    $dry = Join-Path $tmp 'dry.ps1'
+    $null = & pwsh -NoProfile -File $path -Status -LogFrom 2026-11-22T22:15 -LogMinutes 75 -DryRunTo $dry -NoPause 2>&1
+    $sent = $(if (Test-Path -LiteralPath $dry) { [IO.File]::ReadAllText($dry) } else { '' })
+    $m = [regex]::Match($sent, "(?s)\`$d = '[^']*'\r?\n(.*?\} else \{ 'diag      no ' \+ \`$d \})")
+    Yes '-Status -LogFrom sends the window as the keys the log lines start with' ($sent.Contains("`$from = '2026-11-22 22:15:00'; `$to = '2026-11-22 23:30:00'"))
+    $logs = [ordered]@{
+        'Runner_20261111-112438-utc.log' = @('[2026-11-20 15:29:40Z ERR  BrokerServer] closed before')
+        'Runner_20261120-153558-utc.log' = @('[2026-11-22 22:10:00Z INFO X] before the hour', '[2026-11-22 22:28:00Z ERR  BrokerServer] dropped', '   at its stack', '[2026-11-22 23:29:59Z INFO X] the last in it', '[2026-11-22 23:30:00Z INFO X] after it', '   at a stack after it')
+        'Runner_20261122-230000-utc.log' = @('[2026-11-22 23:00:01Z INFO Y] a listener started inside it')
+        'Runner_20261123-000000-utc.log' = @('[2026-11-23 00:00:01Z INFO Z] started after it')
+    }
+    foreach ($k in $logs.Keys) { [IO.File]::WriteAllText((Join-Path $diag $k), (($logs[$k] -join "`r`n") + "`r`n")) }
+    $out = @()
+    # The listener holds its newest log open for writing while it runs, and
+    # on 26 Nov the box's read of it came back empty because of that
+    # (#6903), so one log is held open the same way while it is read.
+    $held = [IO.File]::Open((Join-Path $diag 'Runner_20261122-230000-utc.log'), 'Open', 'ReadWrite', 'ReadWrite')
+    try { if ($m.Success) { $out = @(& ([scriptblock]::Create(("`$d = '" + $diag + "'`n" + $m.Groups[1].Value)))) } }
+    finally { $held.Dispose() }
+    $said = $out -join "`n"
+    Yes '  it reads the log open at the start and one started inside the hour, not one before or after' (
+        $said -match 'Runner_20261120-153558-utc\.log, 3 lines from 2026-11-22 22:15:00Z to 2026-11-22 23:30:00Z' -and $said -match 'Runner_20261122-230000-utc\.log, 1 lines' -and
+        $said -notmatch 'Runner_20261111' -and $said -notmatch 'Runner_20261123')
+    Yes '  it reads a log the listener holds open, as the tail does, and says when one cannot be read' (
+        $sent -notmatch 'IO\.File\]::ReadLines' -and $sent.Contains('COULD NOT BE READ') -and $said -match 'a listener started inside it')
+    Yes '  with a stack trace kept beside its line, and nothing from outside the hour' (
+        $said -match 'dropped\n  \|    at its stack\n' -and $said -match 'the last in it' -and $said -notmatch 'before the hour|after it|a stack after it')
+    $bad = (& pwsh -NoProfile -File $path -Status -LogFrom 22-11-2026 -DryRunTo $dry -NoPause 2>&1) -join ' '
+    Yes '  and a time not written yyyy-MM-ddTHH:mm is refused before anything is asked' ($bad -match 'LogFrom takes a UTC time')
+}
+finally { Remove-Item -LiteralPath $tmp -Recurse -Force -EA SilentlyContinue }
+
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)
 if ($script:fail) { exit 1 }

@@ -77,6 +77,12 @@ function world() {
   const sets = [];
   const refs = {};
   const mp = {
+    getNpcAIState: function (id) {
+      const f = forms[id];
+      if (!f) throw new Error('no actor ' + id);
+      return { profileId: f.pid || -1, isHuman: f.pid > 0, isDead: !!f.isDead, lifeGeneration: 0 };
+    },
+    getActorRuntimeIdentity: function (id) { return String(id); },
     getIdFromDesc: function (desc) { return refs[desc] || 0; },
     get: function (id, key) {
       const f = forms[id];
@@ -122,6 +128,7 @@ function rig(extraProp) {
     Date: { now: function () { return clock; } }
   };
   box.globalThis = box;
+  box.__thornswoodStaffState = { frozen: {} };
   box.__thornswoodProperty = Object.assign({ takeGold: L.takeGold, deposit: L.deposit, boxFare: L.boxFare }, extraProp || {});
   vm.runInNewContext(block, box);
   return { w: w, L: L, C: box.__thornswoodCarriages, box: box };
@@ -514,7 +521,7 @@ if (C0) {
   yes('the chat hands /ride to the carriages block', !!branch && /__thornswoodCarriages/.test(branch) && /\.command\(parts, actorId, profileId, toProfile\)/.test(branch));
   const exp = slice(gm, '  g.__thornswoodProperty = {', '\n  };');
   yes('the property block hands out deposit and takeGold', !!exp && /deposit: deposit/.test(exp) && /takeGold: takeGold/.test(exp));
-  const save = slice(gm, '  function save() {\n    try {\n      var dir = require(\'path\').dirname(registerPath());', '\n  }\n');
+  const save = slice(gm, '  function save(durable) {', '\n  }\n');
   yes('the ledger is in what the register writes, so a fare survives a restart', !!save && /funds: funds/.test(save));
 }
 

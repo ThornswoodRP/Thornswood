@@ -3,8 +3,9 @@
 
   Starts a workflow on main and reads the answer its runner left, for a
   script whose session cannot make the change itself: Set-Ref.ps1 (a ref
-  write, which a cloud session's proxy refuses) and Set-BuildRunners.ps1 (a
-  runner label, which needs the box's GitHub App). Each dot-sources this, and
+  write, which a cloud session's proxy refuses), Set-BuildRunners.ps1 (a
+  runner label, which needs the box's GitHub App) and Set-RepoAbout.ps1
+  (the repository About box). Each dot-sources this, and
   each workflow's half writes its answer as an annotation with a title of its
   own, which GitHub keeps on the job's check run, so the answer is read
   without reading the log (#3107).

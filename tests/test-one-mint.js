@@ -1,3 +1,4 @@
+const observedOfferVersion = require('./fixtures/trade-version');
 // test-one-mint.js
 //
 // Authorized coin sources are explicit and bounded. A character gets forty
@@ -335,7 +336,7 @@ const WRITERS = {
   'property/giveDeed': [1, 'one deed, DEED'],
   'property/giveNamed': [1, 'one named key or mold, KEY or MOLD'],
   'property/takeBlankMold': [1, 'only takes a mold away'],
-  'property/takeGold': [1, 'takes a notice, job or letter fee or a fare out and never puts any in (checked below)'],
+  'property/takeGold': [1, 'takes a carriage or ferry fare out and never puts any in (checked below); the board and drop box take through packFirst (#4901)'],
   'property/payOut': [1, 'a letter\'s held 15 back out of the ledger it was counted on, to its courier or its sender; payHeld is its one caller and takes the same off that ledger (#1374, checked below)'],
   'spoils/purse': [1, 'THE MINT: forty gold, once per character'],
   'trade/moveById': [2, 'moves a pile from one pack to the other, one write each (section 4)'],
@@ -346,7 +347,6 @@ const WRITERS = {
   'spoilage/writeInventory': [1, 'writes back a pack or chest it has just read: food renamed for its days left or its salting or smoking, food that went off turned into as many Spoiled Food (19100:Thornswood-Content.esp, never gold) named for it, and the Salt Pile or Firewood a cook used. A preserved stack is split off the stack it came from, so no count grows (#3163, test-3163-spoilage.js)'],
   'farming/compost': [2, 'one Spoiled Food taken off the pack it has just read to work into a plot, and that same pack put back as it was when the plot will not take the write; it never adds (#3526, test-3526-compost.js)'],
   'hair dye/setPack': [1, 'writes back the pack it has just read: a hair dye\'s inputs taken and one entry named for the dye added to the list\'s item (a Bowl, never gold), or one dye taken away, or the pack it read put back when the hair would not take (#2675, test-2675-hair-dye-wiring.js)'],
-  'property/boxLeave': [1, 'takes a stack off the pack into the drop box record, and refuses gold, which goes in through takeGold (#2298); it never adds'],
   'trade ships/packTake': [1, 'the dock\'s load (#2700) and a cart stop\'s (#3158, the same function through __thornswoodCargoHands): a stack off the pack onto a trade ship\'s or cart\'s manifest, coin refused before the pack is read; it only takes away (test-2700-trade-ship-dock.js, test-3158-trade-carts.js)'],
   'trade ships/packGive': [1, 'the dock\'s hand out (#2700) and a cart\'s collect, take back and raid (#3158, the same function through __thornswoodCargoHands): only a piece the manifest begin() hands back, or the piece a refused load just took, each first debited off a pack, so never coin (trade-cargo refuses base 0xF aboard) and never more than was loaded (test-2700-trade-ship-dock.js, test-3158-trade-carts.js)'],
   'market stalls/writePack': [1, 'the market stalls (#3160): packTake lays a stack out of the keeper\'s pack and refuses coin; packPay takes a price out of the buyer\'s pack; packGive puts in only what the stall book hands back, a piece laid out (the book refuses coin on a stall), or the very pieces packPay just took, to the keeper or back to the buyer when the sale cannot finish. No count grows (test-3160-market-stalls.js)'],
@@ -398,10 +398,34 @@ for (const at of Object.keys(WRITERS)) {
 }
 
 {
-  const calls=code.match(/\b\w+\.compareAndSetInventory\(/g) || [];
-  yes('the merchant native inventory writer is the single audited profile-bound CAS',
-    calls.length===1 && calls[0]==='mp.compareAndSetInventory(' &&
-    /mp\.compareAndSetInventory\(id, expected, receipt, next, sequence, profile\)/.test(code));
+  /*
+    The merchant and mold CAS writers and the property-bound quest and pack
+    writers are each counted here. packFirst (#4901) uses the same text in the
+    property and furniture blocks,
+    which writes only the entries a cut made out of the pack it read. Its
+    cuts only take: goldCut takes a count of gold out of one stack,
+    furniture's cutOne takes one item, and the drop box's lays a stack out
+    and refuses gold.
+  */
+  const calls = code.match(/\b\w+\.compareAndSetInventory\(/g) || [];
+  const markedCalls = code.match(/\b\w+\.compareAndSetInventoryAndProperty\(/g) || [];
+  const packDebit = /mp\.compareAndSetInventoryAndProperty\(actorId, \{ entries: before \}, receipt, \{ entries: out\.entries \},\s*sequence, who\.profileId, \{ name: markerField, expected: previousMarker, replacement: marker,/g;
+  yes('merchant and mold CAS writers remain profile-bound and both pack debit writers save a private operation marker',
+    calls.length === 2 && calls.every(call => call === 'mp.compareAndSetInventory(') &&
+    /mp\.compareAndSetInventory\(id, expected, receipt, next, sequence, profile\)/.test(code) &&
+    /mp\.compareAndSetInventory\(s.actor, s.inventory, s.receipt, next, s.sequence, s.profile\)/.test(code) &&
+    markedCalls.length === 3 && (code.match(packDebit) || []).length === 2 &&
+    /mp\.compareAndSetInventoryAndProperty\(actor,before,receipt,next,sequence,human\.profileId,/.test(code));
+  yes('the mold writer adds only one named mold after selecting a blank, and refunds its original snapshot',
+    /debit = blankMoldAfter\(source.inventory\)/.test(code) &&
+    /named.entries.push\(\{baseId:idOf\(MOLD\),count:1,name:moldLabel\(building\)\}\)/.test(code) &&
+    /replace\(taken.snapshot, source.inventory, alive\)/.test(code));
+  const goldCut = lift('  function goldCut(amount, refusal) {', '\n  }\n') || '';
+  const cutOne = lift('  function cutOne(entries, itemDesc) {', '\n  }\n') || '';
+  yes('packFirst\'s cuts only take: goldCut lowers one stack of gold, cutOne one furniture item, and the drop box\'s stack refuses gold',
+    /e\.count -= amount;/.test(goldCut) && !/\+=|\+ amount/.test(goldCut) &&
+    /e\.count = Number\(e\.count\) - 1;/.test(cutOne) && !/\+=|\+ 1/.test(cutOne) &&
+    /Number\(it\.baseId\) === GOLD_ID[^\n]*\n\s*return 'Your pack changed\. Nothing was put in the box\.'/.test(code));
   yes('merchant credit comes from durable finite stock or its debited purse, checked by the settlement and trading regressions',
     /nextPurse = npcBuys \? state\.purse - gold : state\.purse \+ gold/.test(code) &&
     /credit = gold > 0 \? \[\{baseId:GOLD_BASE,count:gold\}\] : \[\]/.test(code) &&
@@ -423,11 +447,11 @@ for (const at of Object.keys(WRITERS)) {
     if (body !== null && namesGold.test(body)) { naming.push(at); }
   }
   naming.sort();
-  // The drop box (#2298) names gold only to send it the way it came: boxLeave
-  // refuses it, and boxTake hands a gold row back through payOut.
+  // The drop box (#2298) names gold only to send it the way it came: its
+  // stack cut refuses it (#4901), and boxTake hands a gold row back through payOut.
   yes('of the writers, only purse, takeGold, payOut, a company sale and the drop box name gold' +
       (naming.length ? ' (' + naming.join(', ') + ')' : ''),
-      naming.join(',') === 'property/boxLeave,property/boxTake,property/payOut,property/takeGold,spoils/purse,trade/saleById');
+      naming.join(',') === 'property/boxTake,property/payOut,property/takeGold,spoils/purse,trade/saleById');
 }
 
 {
@@ -506,9 +530,18 @@ for (const at of Object.keys(WRITERS)) {
   */
   // And gold put in the drop box (#2298): n, a whole number above nothing, or refused first.
   // A post's cost (#2554) is its fee, NOTICE_FEE or JOB_FEE, and a job's reward, a whole number above nothing.
-  yes('its five callers pass a post\'s cost, NOTICE_FEE, or JOB_FEE and the reward, a letter\'s cost, LETTER_FEE and ' +
-      'LETTER_PAY, a haul\'s cost, the company\'s haul fee and the pay, a ride\'s fare, and gold put in the drop box',
-      callers.slice().sort().join(',') === 'cost,cost,cost,n,price' &&
+  // Since #4901 those four take through packFirst's goldCut, and takeGold keeps only the fare.
+  const cuts = [];
+  const reCut = /\bgoldCut\(\s*([^,()]+),/g;
+  let mc;
+  while ((mc = reCut.exec(code)) !== null) {
+    if (code.slice(Math.max(0, mc.index - 9), mc.index) === 'function ') { continue; }
+    cuts.push(mc[1].trim());
+  }
+  yes('takeGold\'s one caller passes a ride\'s fare', callers.join(',') === 'price');
+  yes('goldCut\'s four callers pass a post\'s cost, NOTICE_FEE, or JOB_FEE and the reward, a letter\'s cost, LETTER_FEE and ' +
+      'LETTER_PAY, a haul\'s cost, the company\'s haul fee and the pay, and gold put in the drop box',
+      cuts.slice().sort().join(',') === 'cost,cost,cost,n' &&
       /var n = Math\.floor\(Number\(amount\)\);\s*\n\s*if \(!\(n > 0\)/.test(code) &&
       /\bvar fee = isJob \? JOB_FEE : NOTICE_FEE;\s*\n\s*var cost = fee \+ reward;/.test(code) &&
       /reward = \/\^\\d\+\$\/\.test\(first\) \? Number\(first\) : 0;\s*\n\s*if \(!\(reward > 0\)/.test(code) &&
@@ -564,15 +597,15 @@ for (const at of Object.keys(WRITERS)) {
     And the company (#1393). handHaul pays a haul's held gold, the hauler's
     pay less the tenth or the poster's pay back, and haulTick what a haul
     held for somebody who was away, each taking the same off the ledger
-    through withdraw, which never takes more than that haul holds. postHaul
-    gives back the cost it has just taken when the ledger would not take it
-    (test-1393-company.js).
+    through withdraw, which never takes more than that haul holds. Posting a
+    haul takes through packFirst (#4901) and counts the coin only once the
+    pack is saved, so it never has anything to give back (test-1393-company.js).
   */
   // And the drop box (#2298): boxTake hands back gold a row holds, gold a
   // pack or a fare put in, and takes the row down by the same.
   yes('payOut\'s callers are payHeld, the takings #1392 kept for a holder, handed over once (#1603), the haul (#1393) and the drop box (#2298)',
       calls.slice().sort().join(',') ===
-      'property/boxTake,property/handHaul,property/haulTick,property/payHeld,property/payTakings,property/postHaul');
+      'property/boxTake,property/handHaul,property/haulTick,property/payHeld,property/payTakings');
 
   /*
     THE LEDGER GOES DOWN ONLY BY A PAYOUT (#1393). Coin comes off a ledger
@@ -766,9 +799,12 @@ function goldDescriptors(text) {
   const sceneGold = goldDescriptors(sceneQuest || '');
   yes('scene finish gold is the named GOLD_DESC row, and those lines stay in the scan',
       !!sceneQuest && sceneGold.gold.length === 0 &&
+      (sceneQuest.match(/\bitem:\s*GOLD_DESC\b/g) || []).length === 3 &&
       (sceneQuest.match(/\{item: GOLD_DESC, count: row\.gold\}/g) || []).length === 2 &&
+      (sceneQuest.match(/\{item:GOLD_DESC,count:open\.terms\.gold\}/g) || []).length === 1 &&
+      /!paid\.ok \|\| paid\.gold!==open\.terms\.gold/.test(sceneQuest) &&
       !/addItem\(actor, GOLD_DESC/.test(sceneQuest) &&
-      /if \(!keep\(actor, b, changes\)\)/.test(sceneQuest) &&
+      /if \(!keep\(actor, b, changes,eligible\)\)/.test(sceneQuest) &&
       /var GOLD_DESC = deps\.goldDesc;/.test(sceneQuest));
   yes('the testers\' two tables were found and set aside', !!outside);
   const inside = goldDescriptors(src);
@@ -792,9 +828,9 @@ function goldDescriptors(text) {
       And the drop box's names (#2298): itemName reads the two tables for the
       name the box's panel and records show, by the record a row already
       holds. It turns a record into a name, never a name into a thing, and
-      writes nothing.
+      writes nothing. The same decoded base lookup names Trade's pieces.
     */
-    const names = bodyOf('property/itemName') || '';
+    const names = (bodyOf('property/itemName') || '') + (bodyOf('property/baseItemName') || '');
     /*
       And the hold economy's names (#3164): recordNames reads the two tables
       to name a counted record on staff's page, the same one way round as the
@@ -914,9 +950,9 @@ function tradeWorld() {
     }
   });
   new Function(
-    'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
+    'require', 'globalThis', 'mp', 'console', 'setInterval', 'clearInterval', 'guard', 'say', 'notify',
     require('./fixtures/ordinary-quest-items') + tradeBlock)(
-    g, mp, { log: function () { } }, function () { return 1; }, function () { },
+    require, g, mp, { log: function () { } }, function () { return 1; }, function () { },
     function (n, f) { return f; }, function () { }, function () { });
   return {
     trade: g.__thornswoodTrade,
@@ -939,8 +975,8 @@ if (tradeBlock !== null) {
     w.trade.gold(A, 40);
     w.trade.gold(B, 5);
     w.trade.add(B, 'Leek', 3);
-    w.trade.confirm(A);
-    w.trade.confirm(B);
+    w.trade.confirm(A, observedOfferVersion(w.trade, A));
+    w.trade.confirm(B, observedOfferVersion(w.trade, B));
     yes('coin going both ways in one trade lands where it was sent',
         w.gold(A) === 65 && w.gold(B) === 40);
     yes('and there is exactly as much gold after the trade as before it',
@@ -953,9 +989,9 @@ if (tradeBlock !== null) {
     w.trade.begin(A, B);
     w.trade.gold(A, 40);
     w.trade.add(B, 'Leek', 1);
-    w.trade.confirm(A);
+    w.trade.confirm(A, observedOfferVersion(w.trade, A));
     w.store[A].inventory = { entries: [{ baseId: GOLD, count: 10 }] };   // spent it meanwhile
-    w.trade.confirm(B);
+    w.trade.confirm(B, observedOfferVersion(w.trade, B));
     yes('coin that is gone by the time both agree moves nothing at all',
         w.gold(A) === 10 && w.gold(B) === 0);
   });
@@ -997,8 +1033,8 @@ if (tradeBlock !== null) {
     const opened = w.trade.begin(A, A) === '';
     if (opened) {
       w.trade.gold(A, 40);
-      w.trade.confirm(A);
-      w.trade.confirm(A);
+      w.trade.confirm(A, observedOfferVersion(w.trade, A));
+      w.trade.confirm(A, observedOfferVersion(w.trade, A));
     }
     yes('a trade with yourself can never have both sides agreed, so nothing moves',
         w.gold(A) === 100 && (!opened || !!w.trade.tradeOf(A)));

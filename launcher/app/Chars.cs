@@ -32,9 +32,11 @@ namespace Thornswood
     // character on the server with nothing that knew its number. Patrick,
     // 12 Nov: "chacrthers, saves, and settings should all be cloud saved by
     // the server and linked to your discord and not all be saved locally".
-    // Now the site keeps it on the account's row (site\lib\characters.js) and
-    // answers POST /api/play/characters with it; this class asks at every
-    // Play and after every pick, forget and finished session, holds the last
+    // Now the site keeps it on the account's row (site\lib\characters.js), one
+    // list for each game server (#6904), and answers POST
+    // /api/play/characters with the list of the server this build plays on;
+    // this class asks at every Play and after every pick, forget and
+    // finished session, holds the last
     // answer in memory for the menu, and writes no list of its own. The site
     // also mints the spare, against every account's ids rather than one
     // install's, buries the dead, brings back a PK undone and tidies the
@@ -121,6 +123,10 @@ namespace Thornswood
                 throw new Exception("Connect Discord first: your characters are kept with your Discord account.");
             var json = new StringBuilder();
             json.Append("{\"ticket\":\"").Append(Discord.Escape(Discord.Ticket)).Append('"');
+            // The server this build plays on (#6904): main and dev each keep a
+            // list of their own, so a character is only ever on its own world's
+            // menu, and the bin on one never touches the other.
+            json.Append(",\"channel\":\"").Append(Discord.Escape(string.IsNullOrEmpty(Discord.Channel) ? "main" : Discord.Channel)).Append('"');
             if (op.Length > 0) json.Append(",\"op\":\"").Append(op).Append('"');
             if (profileId > 0) json.Append(",\"profileId\":").Append(profileId);
             if (seconds > 0) json.Append(",\"seconds\":").Append(seconds);
@@ -185,12 +191,6 @@ namespace Thornswood
         {
             try { return n == null ? 0 : n.GetValue<long>(); }
             catch { return 0; }
-        }
-
-        static Row FindId(List<Row> rows, int profileId)
-        {
-            foreach (Row r in rows) if (r.Id == profileId) return r;
-            return null;
         }
 
         /// <summary>The rows staff have killed for good.</summary>

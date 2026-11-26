@@ -110,8 +110,8 @@ Yes 'a Send-NexusFile line gives its parameters, the pack apart' (
     $c.Own['PackRoot'] -eq 'game/content' -and $c.Own['Pack'] -eq 'Thornswood-Content.esp' -and $c.Own['PackName'] -eq 'Thornswood-Content-1.3.zip')
 $c = Params 'New-NexusRevision -Mod 192001,192762 -FileId 830001,830002 -DropPatch 192001:Thornswood-Content.esp'
 Yes 'a list is split on its commas' (@($c.Params['Mod']).Count -eq 2 -and @($c.Params['FileId'])[1] -eq '830002' -and @($c.Params['DropPatch'])[0] -eq '192001:Thornswood-Content.esp' -and -not $c.Params.Contains('Archive'))
-$c = Params 'New-NexusRevision -Remove 24104 -Rule docs/COLLECTION-REVISION-6-RULE.json -WhatIf'
-Yes 'a revision can take a mod out and give a plugin a rule (#3649)' (@($c.Params['Remove'])[0] -eq '24104' -and $c.Params['Rule'] -eq 'docs/COLLECTION-REVISION-6-RULE.json')
+$c = Params 'New-NexusRevision -Remove 24104 -Rule records/collection-revision-6-rule.json -WhatIf'
+Yes 'a revision can take a mod out and give a plugin a rule (#3649)' (@($c.Params['Remove'])[0] -eq '24104' -and $c.Params['Rule'] -eq 'records/collection-revision-6-rule.json')
 $c = Params 'New-NexusRevision -Discard 6'
 Yes 'and a waiting draft can be thrown away' ($c.Params['Discard'] -eq '6')
 $c = Params 'Set-NexusDescription -Mod 192001,192762 -AddLine "THIS MOD IS NOT MADE, GUARANTEED OR SUPPORTED BY ZENIMAX OR ITS AFFILIATES." -WhatIf'
@@ -137,8 +137,8 @@ foreach ($bad in @(
         @('-Discard with -Publish', 'New-NexusRevision -Publish 7 -Discard 7'),
         @('-Mod and -FileId with -Discard', 'New-NexusRevision -Discard 7 -Mod 192001 -FileId 830001'),
         @('-Add outside records', 'New-NexusRevision -Add game/x.json'),
-        @('-Rule outside docs', 'New-NexusRevision -Rule records/x.json'),
-        @('-Rule that climbs out', 'New-NexusRevision -Rule docs/../x.json'),
+        @('-Rule outside records', 'New-NexusRevision -Rule docs/x.json'),
+        @('-Rule that climbs out', 'New-NexusRevision -Rule records/../x.json'),
         @('a dollar sign', 'Set-NexusDescription -Mod 192001 -AddLine "$env:THORNSWOOD_NEXUS_API_KEY"'),
         @('a parameter given twice', 'Set-NexusDescription -Mod 192001 -Mod 192762 -AddLine x'),
         @('a value that starts with a hyphen', 'Set-NexusDescription -Mod 192001 -AddLine -WhatIf'))) {

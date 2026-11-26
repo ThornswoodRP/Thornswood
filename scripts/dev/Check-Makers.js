@@ -36,7 +36,8 @@
 // or that the world no longer hands out, is a failure too, so the file cannot
 // grow stale. Named uniques and quest items go in its exempt list with why.
 //
-// Read only apart from docs/systems/who-makes-it.md with --write.
+// Read only apart from docs/systems/who-makes-it.md with --write. The content
+// chain writes that generated page through Write-SystemLists.js (#6531).
 // game/tests/test-3132-makers.js runs it on every pull request.
 'use strict';
 const fs = require('fs');
@@ -274,7 +275,7 @@ function run(root, write) {
   const file = path.join(root, PAGE);
   if (write) fs.writeFileSync(file, want, 'utf8');
   const have = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\r').join('') : '';
-  if (have !== want) result.problems.push(PAGE.split(path.sep).join('/') + ' is out of date. Run node scripts/dev/Check-Makers.js --write and commit it.');
+  if (have !== want) result.problems.push(PAGE.split(path.sep).join('/') + ' is out of date. Run node scripts/dev/Write-SystemLists.js after laying the current content build.');
   return result;
 }
 

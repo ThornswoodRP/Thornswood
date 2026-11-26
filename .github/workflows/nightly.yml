@@ -149,6 +149,12 @@ jobs:
           $env:THORNSWOOD_FORK_REQUIRED = '1'
           node tests\test-2483-kept-npcs.js
           $code = $LASTEXITCODE
+          node game\tests\test-3080-flora-blocked.js
+          if ($LASTEXITCODE -ne 0 -and $code -eq 0) { $code = $LASTEXITCODE }
+          node scripts\tests\test-2262-equip-attempt-setting.js
+          if ($LASTEXITCODE -ne 0 -and $code -eq 0) { $code = $LASTEXITCODE }
+          node scripts\tests\test-3078-containers-empty.js
+          if ($LASTEXITCODE -ne 0 -and $code -eq 0) { $code = $LASTEXITCODE }
           git -c core.longpaths=true submodule deinit -q -f engine/skymp
           if ($code -eq 0 -and -not $fetched) { $code = 1 }
           exit $code
@@ -345,9 +351,10 @@ jobs:
   harnesses:
     # The test harnesses, in shares (#2357). One job for each entry under
     # shard, each on a runner of its own with 45 minutes of its own; another
-    # share is one more number in the list, and Nightly-Harnesses.ps1 is told
-    # how many there are. fail-fast off: one share failing must not cancel
-    # the other, whose list of what failed is half the night's answer.
+    # share is not only one more number in shard, but the job name's "of 2"
+    # and -Of 2 have to change with the list (#4298). fail-fast off: one
+    # share failing must not cancel the other, whose list of what failed is
+    # half the night's answer.
     name: Test harnesses (${{ matrix.shard }} of 2)
     # Each share is a build check's worth of harnesses, on a runner of its own.
     runs-on: windows-latest
@@ -498,61 +505,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
       - name: Run the bot harnesses
         shell: pwsh
         run: |
-          # The two Python ones import bot.py for real, so they need the
-          # library the bot runs on. They were written to be run by hand and,
-          # like every harness above before this file existed, had never run
-          # anywhere: nothing was checking the bot's startup on a pull request.
-          #
-          # An install that fails must fail the step (#1344). A soft pass here
-          # made a green nightly that never ran the bot harnesses. A harness
-          # that fails is red, and so is a missing venv or a pip that could
-          # not install what the bot runs on.
-          #
-          # From requirements.txt, the file Install-Bot.ps1 installs on the
-          # VPS, so the versions tested here are the versions the bot runs.
-          #
-          # Into a venv of this run's own, never the machine's Python.
+          # The same hash-pinned dependencies and runner as pull requests.
+          # Install into this run's venv, never the machine's Python.
           $venv = Join-Path $env:RUNNER_TEMP 'bot-venv'
           python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $py = Join-Path $venv 'Scripts\python.exe'
-          if (-not (Test-Path $py)) {
-            Write-Host '::error::could not make a venv for the bot harnesses, so they did not run'
-            exit 1
-          }
+          if (-not (Test-Path $py)) { throw 'could not make the bot harness venv' }
           & $py -m pip install --quiet --disable-pip-version-check --require-hashes --only-binary :all: -r bot\requirements.txt
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host '::error::could not install discord.py from the hash-pinned bot\requirements.txt (a hash that does not match stops it, #2190), so the bot harnesses did not run'
-            exit 1
-          }
-          #
-          # Each on a clock, as in the step above: 300 seconds, then it and
-          # everything it started are killed and it is named, and the rest
-          # still run. Their output comes straight through as it is written.
-          #
-          # In UTF-8, as the bot itself runs (BotService.cs, Install-Bot.ps1)
-          # and as tests\bot-python.js runs it: the output goes to a pipe
-          # here, and Windows Python writes a pipe in the ANSI code page, so a
-          # harness that printed a channel name with an emoji in it died on
-          # the print (test-post-rules, test-wipe-channels, 23 Oct).
-          $env:PYTHONIOENCODING = 'utf-8'
-          $env:DISCORD_TOKEN = 'not-a-real-token'
-          $PER_HARNESS = 300
-          $bad = 0
-          foreach ($t in (Get-ChildItem bot/tests -Filter 'test-*.py' -File | Sort-Object Name)) {
-            Write-Host ("--- {0}" -f $t.Name)
-            $p = Start-Process -FilePath $py -ArgumentList ('"' + $t.FullName + '"') -NoNewWindow -PassThru
-            $null = $p.Handle
-            if (-not $p.WaitForExit($PER_HARNESS * 1000)) {
-              & taskkill.exe /T /F /PID $p.Id 2>&1 | Out-Null
-              $bad++; Write-Host ("::error file={0}::harness timed out after {1}s and was killed" -f $t.FullName, $PER_HARNESS)
-            }
-            elseif ($p.ExitCode -ne 0) { $bad++; Write-Host ("::error file={0}::harness failed (exit {1})" -f $t.FullName, $p.ExitCode) }
-          }
-          if ($bad) { exit 1 }
-          Write-Host 'every bot harness passed'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./scripts/dev/Run-BotHarnesses.ps1 -Python $py
 
   board:
     # Told last, once every job above has ended, passed or failed (#2357).

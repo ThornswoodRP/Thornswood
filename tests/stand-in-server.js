@@ -53,7 +53,8 @@
               it answered false, a spell tome teaches its spell and is spent
               (ReadBookEvent::OnFireSuccess).
     spells    PapyrusActor AddSpell, RemoveSpell, GetSpellCount and
-              GetNthSpell over the change form's learnedSpells.
+              GetNthSpell, excluding inherited entries. getActorLearnedSpells
+              returns the full change form list used by atomic knowledge CAS.
     death     MpActor: onDying, then onDeath, then onRespawn after the delay.
     animate   ActionListener: an animation the client sends for its own
               character is kept as lastAnimEvent (OnUpdateAnimation); a
@@ -101,19 +102,24 @@ const ENGINE_METHODS = [
   'destroyActor', 'setRaceMenuOpen', 'getActorsByProfileId', 'getUnreadableChangeForms', 'setEnabled',
   'createBot', 'getUserByActor', 'getUserIp', 'kick', 'getLocalizedString', 'getServerSettings', 'clear',
   'makeProperty', 'makeEventSource', 'get', 'set', 'compareAndSetInventory',
-  'compareAndSetInventoryAndProperty', 'compareAndSetActorProperty', 'getInventoryReceipt',
+  'compareAndSetInventoryAndProperty', 'compareAndSetActorProperty', 'compareAndSetActorPropertyAndSpells', 'getInventoryReceipt',
   'getSavedInventoryReceipt', 'place', 'lookupEspmRecordById', 'getEspmLoadOrder',
   'getNeighborsByPosition', 'getAllForms', 'loadNpcBatch', 'prepareNpcLoad', 'setNpcServerControlled',
   'setNpcDifficultyTier', 'updateNpcMovement', 'stopNpcMovement', 'getNavmeshRecords', 'getNpcAIState',
-  'getActorRuntimeIdentity', 'getFactionReactions', 'serverNpcAttack', 'getLoadedFormCount',
+  'getActorRuntimeIdentity', 'getActorLearnedSpells', 'getFactionReactions', 'serverNpcAttack', 'getLoadedFormCount',
   'setNpcPlacementExclusions', 'getLoadedNpcIds', 'getDescFromId', 'getIdFromDesc',
   'callPapyrusFunction', 'registerPapyrusFunction', 'sendCustomPacket', 'setPacketHistoryRecording',
   'getPacketHistory', 'clearPacketHistory', 'requestPacketHistoryPlayback', 'findFormsByPropertyValue',
   'getPrometheusMetrics'
 ];
-/* The built-in keys (PropertyBindingFactory.cpp). Everything else is custom. */
+/* The built-in keys (PropertyBindingFactory.cpp). Everything else is custom.
+   #6628 paired native API: ThornswoodRP/skymp#175, 17ca822f8747b75c384f26266aa3ebb3f9f92d9a:
+   cpp/addon/property_bindings/IsGodModeBinding.cpp (strict boolean),
+   cpp/server_guest_lib/MpActor.cpp (runtime-bound getter/dead-enable refusal),
+   cpp/addon/ScampServer.cpp GetNpcAIState (NPC safety flags).
+   This models that compiled addon, not availability in an older engine pin. */
 const BUILT_IN = ['actorNeighbors', 'angle', 'appearance', 'baseDesc', 'craftOutput', 'craftStock', 'craftWork',
-  'dyingHealth', 'eatItemScale', 'equipment', 'inventory', 'isDead', 'isDisabled', 'isOnline', 'isOpen',
+  'dyingHealth', 'eatItemScale', 'equipment', 'inventory', 'isDead', 'isGodMode', 'isDisabled', 'isOnline', 'isOpen',
   'locationalData', 'neighbors', 'onlinePlayers', 'percentages', 'pos', 'profileId', 'spawnPoint',
   'spellCastDurationMult', 'type', 'worldOrCellDesc', 'idx', 'consoleCommandsAllowed', 'spawnDelay',
   'templateChain', 'lastAnimEvent', 'respawnPercentages'];
@@ -150,6 +156,7 @@ function slots(order) {
     start     the clock at the start, ms since 1970 (default 26 Oct 2026, noon)
     settings  more server-settings.json
     files     { 'private/property.json': object or text } written before boot
+    pluginFlags  declared TES4 flags by file name; undeclared provenance is unknown
     gm        the gamemode file (default game/gamemode.js, or GM in the environment)
 */
 function world(opts) {
@@ -236,7 +243,7 @@ function world(opts) {
   /*
     A record as mp.lookupEspmRecordById hands it over (ScampServer.cpp):
     { record: { id, editorId, type, flags, fields: [{ type, data }] },
-    fileIndex, toGlobalRecordId }, or {} for an id no plugin has. record.id is
+    fileIndex, isLocalized, toGlobalRecordId }, or {} for an id no plugin has. record.id is
     the id as written in its own file: the top byte is the file's place in
     its own masters, and toGlobalRecordId maps such a local id to the load
     order. The plugins themselves are not here, so every file's masters are
@@ -293,6 +300,11 @@ function world(opts) {
     return {
       record: { id: localIn(at, id), editorId: r.editorId || '', type: r.type, flags: r.flags || 0, fields: fields },
       fileIndex: at,
+      // ScampServer::LookupEspmRecordById reads the winning file's TES4
+      // localization bit (0x80), never the individual record's flags.
+      // Undeclared fixture provenance stays unknown, as on an older engine.
+      isLocalized: opts.pluginFlags && Object.prototype.hasOwnProperty.call(opts.pluginFlags, SLOTS[at].file)
+        ? !!(opts.pluginFlags[SLOTS[at].file] & 0x80) : undefined,
       toGlobalRecordId: function (local) {
         local = local >>> 0;
         const b = local >>> 24;
@@ -449,7 +461,9 @@ function world(opts) {
   /* Who holds each container or bench open (not saved: the engine keeps it in memory). */
   let occupant = new Map();
   let made = new Set();          // custom properties made with makeProperty, this process
+  let propertyDefinitions = new Map(); // the engine's registered owner/neighbor scripts
   let madeVisible = new Set();   // those of them the owner or the neighbours see
+  let madeNeighbors = new Set();
   let online = [];               // actor ids, by user id order
   let users = new Map();         // actor -> user id
   let nextUser = 0;
@@ -561,8 +575,16 @@ function world(opts) {
     const row = store.get(id);
     return row ? copy(row[k]) : undefined;
   }
+  function godModeFormId(id, key) {
+    // ScampServer::Get/Set use NapiHelper::ExtractUInt32 before the binding.
+    // Do not let the general stand-in's coercion conceal a bad new API call.
+    if (key === 'isGodMode' && (!Number.isInteger(id) || id < 0 || id > 0xffffffff)) {
+      throw new Error('formId must be a uint32 integer');
+    }
+  }
   const impl = {
     get: function (id, k) {
+      godModeFormId(id, k);
       id = id >>> 0;
       if (k === 'onlinePlayers') { return online.slice(); }
       const row = store.get(id);
@@ -574,6 +596,9 @@ function world(opts) {
       switch (k) {
         case 'locationalData': return { cellOrWorldDesc: row.worldOrCellDesc, pos: copy(row.pos), rot: copy(row.angle) };
         case 'isOnline': return online.indexOf(id) >= 0;
+        // IsGodModeBinding / MpActor::IsGodMode: runtime authority, not a
+        // persisted custom flag. Reloading an actor cannot inherit the grant.
+        case 'isGodMode': return row.godModeRuntime === runtimeIdentity(id) && row.isGodMode === true;
         case 'isOpen': return !!row.isOpen;
         case 'craftWork': return craftWorkFor && craftWorkFor.actor === id ? { ms: craftWorkFor.ms } : undefined;
         case 'craftOutput': return craftOutputFor && craftOutputFor.actor === id ? copy(craftOutputFor.out) : undefined;
@@ -584,6 +609,7 @@ function world(opts) {
       }
     },
     set: function (id, k, v) {
+      godModeFormId(id, k);
       id = id >>> 0;
       const row = store.get(id);
       if (!row) { throw new Error('Form with id ' + id.toString(16) + ' doesn\'t exist'); }
@@ -594,6 +620,13 @@ function world(opts) {
         return;
       }
       switch (k) {
+        case 'isGodMode':
+          // SetGodMode and NapiHelper::ExtractBoolean refuse malformed input
+          // and enabling protection on the dead, rather than coercing either.
+          if (typeof v !== 'boolean') { throw new Error('isGodMode must be boolean'); }
+          if (v && row.isDead) { throw new Error('Cannot protect a dead actor'); }
+          row.isGodMode = v; row.godModeRuntime = v ? runtimeIdentity(id) : 0;
+          return;
         case 'locationalData': row.worldOrCellDesc = v.cellOrWorldDesc; row.pos = copy(v.pos); row.angle = copy(v.rot); return;
         case 'craftWork':
           if (!craftWorkFor || craftWorkFor.actor !== id) { fault('craftWork set on ' + id.toString(16) + ' outside its own onCraftWork'); return; }
@@ -615,6 +648,15 @@ function world(opts) {
         }
         case 'isOpen': case 'isOnline': case 'onlinePlayers': case 'type': case 'neighbors': case 'actorNeighbors':
           throw new Error('Property \'' + k + '\' is read-only');
+        case 'percentages': {
+          // PercentagesBinding::Set -> MpActor::NetSetPercentages: a write that
+          // takes health to nothing asks onDying first (fork #101), and one it
+          // lets through is SetPercentages' Kill, with nobody named.
+          const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {}, copy(v));
+          if (!(p.health > 0) && !row.isDead) { toNothing(id, p, 0); return; }
+          row.percentages = p;
+          return;
+        }
         default: row[k] = copy(v);
       }
     },
@@ -625,7 +667,9 @@ function world(opts) {
         throw new Error('makeProperty ' + name + ': options are not what the engine takes');
       }
       made.add(name);
+      propertyDefinitions.set(name, copy(options));
       if (options.isVisibleByOwner || options.isVisibleByNeighbors) { madeVisible.add(name); }
+      if (options.isVisibleByNeighbors) { madeNeighbors.add(name); }
     },
     makeEventSource: function () { },
     getDescFromId: function (id) { return w.descOf(id); },
@@ -687,6 +731,8 @@ function world(opts) {
     getFactionReactions: function (list) { if (!Array.isArray(list)) { throw new Error('factionIds must be an array'); } return []; },
     getLoadedFormCount: function () { return store.size; },
     getActorRuntimeIdentity: function (id) { actorRow(id); return String(runtimeIdentity(id >>> 0)); },
+    // Full change-form list, including explicitly stored inherited entries.
+    getActorLearnedSpells: function (id) { return (actorRow(inventoryActorId(id)).learnedSpells || []).slice(); },
     getNpcAIState: function (id) {
       const row = actorRow(id);
       const ai = (records.get(baseOf(row)) || {}).ai || [0, 4];
@@ -694,6 +740,8 @@ function world(opts) {
         profileId: typeof row.profileId === 'number' ? row.profileId : -1, pos: row.pos.slice(), rot: row.angle.slice(),
         cellOrWorld: w.idOf(row.worldOrCellDesc), isDead: !!row.isDead, isDisabled: !!row.isDisabled,
         isHuman: row.profileId >= 0, isConnected: online.indexOf(id >>> 0) >= 0, isServerControlled: !!row.serverControlled,
+        // ScampServer::GetNpcAIState exposes these authored NPC safety flags.
+        isEssential: row.isEssential === true, isProtected: row.isProtected === true, isUnique: row.isUnique === true,
         lifeGeneration: Number(row._skympNpcLifeGeneration) || 0, runtimeLifeIdentity: String(runtimeIdentity(id >>> 0)),
         difficultyTier: row.difficultyTier || 0, aggression: ai[0], confidence: ai[1],
         meleeReach: 0, meleeAllowance: 16, canSwim: false, canFly: false, immobile: false, combatTarget: 0, factions: []
@@ -752,6 +800,42 @@ function world(opts) {
       if (!sameInventory(now, property.expected === undefined ? null : property.expected)) { return false; }
       row[property.name] = copy(property.replacement);
       saw(id, 'set', property.name, copy(property.replacement));
+      return true;
+    },
+    // #6738: one actor snapshot commits progression and active learned spells.
+    compareAndSetActorPropertyAndSpells: function (id, profile, property) {
+      id = inventoryActorId(id);
+      const runtimeAtEntry = runtimeIdentity(id);
+      if (!Number.isInteger(profile) || profile <= 0 || profile > 2147483647) throw new Error('Actor profile must be positive int32');
+      if (!property || typeof property !== 'object') throw new Error('property must be an object');
+      const name = property.name, runtime = property.expectedRuntimeIdentity, life = property.expectedLifeGeneration;
+      const expected = copy(property.expected === undefined ? null : property.expected), replacement = copy(property.replacement);
+      function spells(value) {
+        if (!Array.isArray(value) || value.length > 4096) throw new Error('Invalid spell array');
+        const list = value.slice();
+        for (const spell of list) {
+          const record = Number.isInteger(spell) && spell > 0 && spell < 0xff000000 ? records.get(spell) : null;
+          if (!record || record.type !== 'SPEL' || list.indexOf(spell) !== list.lastIndexOf(spell)) throw new Error('Invalid spell form');
+        }
+        return list.sort((a, b) => a - b);
+      }
+      const before = spells(property.expectedSpells), next = spells(property.replacementSpells);
+      if (typeof name !== 'string' || !name || name.length > 128 || name[0] === '_' || BUILT_IN.includes(name) ||
+          !made.has(name) || madeNeighbors.has(name)) throw new Error('Progression needs a registered non-neighbor custom property');
+      if (typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime) || !Number.isSafeInteger(life) || life < 0)
+        throw new Error('Invalid actor identity');
+      if (Buffer.byteLength(JSON.stringify(expected)) > 1048576 || Buffer.byteLength(JSON.stringify(replacement)) > 1048576)
+        throw new Error('Character property is too large');
+      const row = actorRow(id);
+      if (runtimeIdentity(id) !== runtimeAtEntry || row.profileId !== profile || runtime !== String(runtimeIdentity(id)) ||
+          life !== (Number(row._skympNpcLifeGeneration) || 0) ||
+          !sameInventory(row[name] === undefined ? null : row[name], expected) ||
+          JSON.stringify((row.learnedSpells || []).slice().sort((a, b) => a - b)) !== JSON.stringify(before)) return false;
+      row[name] = replacement;
+      row.learnedSpells = next;
+      row._skympAuthoritativeSpells = true;
+      saw(id, 'set', name, copy(replacement));
+      saw(id, 'spells', 'replace', next.slice());
       return true;
     },
     getInventoryReceipt: function (id) {
@@ -858,18 +942,22 @@ function world(opts) {
     if (kind === 'method' && cls === 'Actor' && row && row.type === 'NPC_' &&
         (fn === 'AddSpell' || fn === 'RemoveSpell' || fn === 'GetSpellCount' || fn === 'GetNthSpell')) {
       const list = row.learnedSpells = row.learnedSpells || [];
-      if (fn === 'GetSpellCount') { return list.length; }
+      // PapyrusActor.cpp filters entries inherited from NPC_/RACE even when
+      // explicitly stored. This is intentionally not the full CAS snapshot.
+      const inherited = row.inheritedSpells || [];
+      const enumerable = list.filter(spell => !inherited.includes(spell));
+      if (fn === 'GetSpellCount') { return enumerable.length; }
       if (fn === 'GetNthSpell') {
         const n = Number(args[0]);
-        return n >= 0 && n < list.length ? { type: 'espm', desc: w.descOf(list[n]) } : undefined;
+        return n >= 0 && n < enumerable.length ? { type: 'espm', desc: w.descOf(enumerable[n]) } : undefined;
       }
       let spell = 0;
       try { spell = args[0] && args[0].desc !== undefined ? w.idOf(args[0].desc) : 0; } catch (e) { spell = 0; }
       const rec = spell ? records.get(spell) : null;
       if (!rec || rec.type !== 'SPEL') { return false; }
       const at = list.indexOf(spell);
-      if (fn === 'AddSpell') { if (at !== -1) { return false; } list.push(spell); saw(id, 'spell', w.descOf(spell), true); return true; }
-      if (at === -1) { return false; }
+      if (fn === 'AddSpell') { if (at !== -1 || inherited.includes(spell)) { return false; } list.push(spell); saw(id, 'spell', w.descOf(spell), true); return true; }
+      if (at === -1 || inherited.includes(spell)) { return false; }
       list.splice(at, 1); saw(id, 'spell', w.descOf(spell), false); return true;
     }
     // Actor.GetRace: a person's race from their appearance, anyone else's from their base record's (w.record's race).
@@ -978,6 +1066,8 @@ function world(opts) {
       ' var d = globalThis.__standInDice; return typeof d === "number" ? d : Math.__standInRandom(); };', box);
     proc = { box: box, timers: timers, err: null };
     made = new Set();
+    madeNeighbors = new Set();
+    propertyDefinitions = new Map();
     madeVisible = new Set();
     savedReceipts = new Map();      // a new WorldState remembers no saved receipt
     runtimeIds = new Map();         // and every actor it loads is a new runtime object
@@ -1056,8 +1146,13 @@ function world(opts) {
   w.box = function () { return proc.box; };
   w.timers = function () { return Array.from(proc.timers, t => ({ every: t.every || 0, at: t.at })); };
   w.mp = function () { return proc.box.mp; };
+  w.propertyDefinition = function (name) { return copy(propertyDefinitions.get(name)); };
   /* The gamemode deployed again while the server runs: same process, same mp. */
-  w.reload = function () { proc.err = null; load(); return w.loaded(); };
+  w.reload = function () {
+    // gamemodeLoad.ts clears the native registrations before reloading.
+    made = new Set(); madeVisible = new Set(); madeNeighbors = new Set(); propertyDefinitions = new Map();
+    proc.err = null; load(); return w.loaded();
+  };
   /* The server stopped and started: a new process, the change forms through JSON. */
   w.restart = function () {
     store = new Map(JSON.parse(JSON.stringify(Array.from(store.entries()))));
@@ -1154,11 +1249,19 @@ function world(opts) {
     if (row && row.profileId && !offKeys.has(actorId >>> 0)) { waiting.push({ profileId: row.profileId, text: '/afk active', proven: true }); }
   }
   w.idle = function (actorId, off) { if (off === false) { offKeys.delete(actorId >>> 0); } else { offKeys.add(actorId >>> 0); } };
-  w.say = function (actorId, text) {
+  w.say = function (actorId, text) { w.sayAll(actorId, [text]); };
+  // Several lines queued together, so the gamemode's one poll collects them
+  // and answers them at the same moment, as it does a person who sends two
+  // before the next poll. A check that compares two answers that read the
+  // clock (the needs bars) needs them read at one time (#6953).
+  w.sayAll = function (actorId, texts) {
     const row = store.get(actorId >>> 0);
-    waiting.push({ profileId: row.profileId, text: text, proven: true });
+    for (const text of texts) { waiting.push({ profileId: row.profileId, text: text, proven: true }); }
     w.run(2000);
   };
+  // Integration harnesses may hand over the actual authenticated relay result,
+  // retaining its profile, provenance and command id through the real queue.
+  w.relayCommand = function (command) { waiting.push(copy(command)); w.run(2000); };
   w.heard = function (actorId) {
     const pid = store.get(actorId >>> 0).profileId;
     return w.said.filter(function (s) { return s.profileId === pid; }).map(function (s) { return s.text; });
@@ -1369,14 +1472,10 @@ function world(opts) {
   */
   function maxHealthOf(row) { return Number(row.maxHealth) > 0 ? Number(row.maxHealth) : 100; }
   w.health = function (actorId) { const r = store.get(actorId >>> 0); return r && r.percentages ? r.percentages.health : undefined; };
-  w.hurtBy = function (actorId, points, killerId) {
-    actorId = actorId >>> 0;
+  /* Health written to nothing, by a blow or by the gamemode's own write (NetSetPercentages, then SetPercentages' Kill). */
+  function toNothing(actorId, p, killerId) {
     const row = store.get(actorId);
-    if (!row || row.isDead) { return; }
-    const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {});
-    p.health = Math.max(0, p.health - points / maxHealthOf(row));
     row.percentages = p;
-    if (p.health > 0) { return; }
     if (fire('onDying', [actorId, killerId || 0]) === false) {
       row.percentages = Object.assign({}, p, { health: Number(row.dyingHealth) > 0 ? Number(row.dyingHealth) : 0.1 });
       return;
@@ -1386,6 +1485,16 @@ function world(opts) {
     fire('onDeath', [actorId, killerId || 0]);
     const lies = Number(row.spawnDelay);
     engineTimers.push({ at: clock + (lies >= 0 ? lies : 25) * 1000, fn: function () { w.respawn(actorId); } });
+  }
+  w.toNothing = toNothing;
+  w.hurtBy = function (actorId, points, killerId) {
+    actorId = actorId >>> 0;
+    const row = store.get(actorId);
+    if (!row || row.isDead) { return; }
+    const p = Object.assign({ health: 1, magicka: 1, stamina: 1 }, row.percentages || {});
+    p.health = Math.max(0, p.health - points / maxHealthOf(row));
+    if (p.health > 0) { row.percentages = p; return; }
+    toNothing(actorId, p, killerId);
   };
   /*
     A blow (ActionListener::OnWeaponHit): the server decides a block, sends

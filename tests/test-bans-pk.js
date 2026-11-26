@@ -113,16 +113,19 @@ fs.mkdirSync(path.join(dir, 'feed', 'version'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'feed', 'version', '00000001.json'), JSON.stringify({ launcherVersion: '1.1.200', minLauncher: '1.1.200' }));
 const DATA = path.join(dir, 'data');
 fs.writeFileSync(path.join(DATA, 'linked.json'), JSON.stringify({
-  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001] },
-  [STAFF2_D]: { id: STAFF2_D, name: 'Brynja', profiles: [1002] },
-  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002, 2003] },
-  [CARA_D]: { id: CARA_D, name: 'Cara', profiles: [4001, 4002] },
-  [NOBODY_D]: { id: NOBODY_D, name: 'Nobody', profiles: [3003] }
+  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001], chars: [{ id: 1001, slot: 1 }] },
+  [STAFF2_D]: { id: STAFF2_D, name: 'Brynja', profiles: [1002], chars: [{ id: 1002, slot: 1 }] },
+  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002, 2003], chars: [{ id: 2002, slot: 1 }, { id: 2003, slot: 2 }] },
+  [CARA_D]: { id: CARA_D, name: 'Cara', profiles: [4001, 4002], chars: [{ id: 4001, slot: 1 }, { id: 4002, slot: 2 }] },
+  [NOBODY_D]: { id: NOBODY_D, name: 'Nobody', profiles: [3003], chars: [{ id: 3003, slot: 1 }] }
 }));
-fs.writeFileSync(path.join(DATA, 'roster.json'), JSON.stringify({ who: {
+// who is every server's rows merged, which staff pages name a profile by;
+// books.main is the live server's own, which its launchers' menus read (#6904).
+const ROWS = {
   2002: { name: 'Bjorn Iron-Hand' }, 2003: { name: 'Hrefna the Bold', race: 'Nord' },
   4001: { name: 'Cara' }, 4002: { name: 'Dara' }
-} }));
+};
+fs.writeFileSync(path.join(DATA, 'roster.json'), JSON.stringify({ who: ROWS, books: { main: ROWS } }));
 const readData = (f, d) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), 'utf8')); } catch (e) { return d; } };
 
 const gameDir = path.join(dir, 'game');
@@ -148,7 +151,7 @@ function request(port, method, where, headers, body) {
     (res) => {
       let buf = '';
       res.on('data', (d) => { buf += d; });
-      res.on('end', () => { let j = null; try { j = JSON.parse(buf); } catch (e) { } ok({ status: res.statusCode, j }); });
+      res.on('end', () => { let j = null; try { j = JSON.parse(buf); } catch (e) { } ok({ status: res.statusCode, j, headers: res.headers }); });
     });
     r.on('error', () => ok({ status: 0, j: null }));
     r.end(data);
@@ -215,15 +218,17 @@ function loadStaff(opts) {
   };
   // The door's admins, when a part wants a staff member who is not one.
   if (opts && opts.isAdmin) g.__thornswoodIsAdmin = opts.isAdmin;
+  if (opts && opts.staffState) g.__thornswoodStaffState = opts.staffState;
   const run = new Function('mp', 'require', 'globalThis', 'console', 'URL', 'Buffer', 'log', 'guard',
-    'voicePort', 'setInterval', 'clearInterval', 'setTimeout', 'addItem', 'idOf', 'placeActors',
+    'voicePort', 'setInterval', 'clearInterval', 'setTimeout', 'addItem', 'idOf', 'placeActors', 'Date',
     STAFF_SRC + '\nreturn globalThis.__thornswoodStaff;');
   w.api = run(mp, require, g, { log() { } }, URL, Buffer,
     function () { w.logs.push(Array.prototype.join.call(arguments, ' ')); },
     function (n, fn) { return fn; }, function () { return 1; },
     function () { return 0; }, function () { },
     function (fn, ms) { w.timeouts.push({ fn, ms }); return 0; },
-    function () { return false; }, function () { return 0; }, function () { return { made: 0 }; });
+    function () { return false; }, function () { return 0; }, function () { return { made: 0 }; },
+    (opts && opts.clock) || Date);
   w.to = (pid) => w.said.filter((s) => s.pid === pid).map((s) => s.text);
   return w;
 }
@@ -322,15 +327,16 @@ async function adminRoleOnly() {
   }, null, 2));
   const D2 = path.join(d2, 'data');
   fs.writeFileSync(path.join(D2, 'linked.json'), JSON.stringify({
-    [ids.owner]: { id: ids.owner, name: 'Owner', profiles: [8001] },
-    [ids.mod]: { id: ids.mod, name: 'Gamemaster', profiles: [8002] },
-    [ids.tova]: { id: ids.tova, name: 'Tova', profiles: [8101, 8102, 8103] },
-    [ids.mira]: { id: ids.mira, name: 'Mira', profiles: [8201, 8202, 8203] }
+    [ids.owner]: { id: ids.owner, name: 'Owner', profiles: [8001], chars: [{ id: 8001, slot: 1 }] },
+    [ids.mod]: { id: ids.mod, name: 'Gamemaster', profiles: [8002], chars: [{ id: 8002, slot: 1 }] },
+    [ids.tova]: { id: ids.tova, name: 'Tova', profiles: [8101, 8102, 8103], chars: [{ id: 8101, slot: 1 }, { id: 8102, slot: 2 }, { id: 8103, slot: 3 }] },
+    [ids.mira]: { id: ids.mira, name: 'Mira', profiles: [8201, 8202, 8203], chars: [{ id: 8201, slot: 1 }, { id: 8202, slot: 2 }, { id: 8203, slot: 3 }] }
   }));
-  fs.writeFileSync(path.join(D2, 'roster.json'), JSON.stringify({ who: {
+  const ROWS2 = {
     8101: { name: 'Tova One' }, 8102: { name: 'Tova Two' }, 8103: { name: 'Tova Dead' },
     8201: { name: 'Mira One' }, 8202: { name: 'Mira Two' }, 8203: { name: 'Mira Dead' }
-  } }));
+  };
+  fs.writeFileSync(path.join(D2, 'roster.json'), JSON.stringify({ who: ROWS2, books: { main: ROWS2 } }));
   fs.writeFileSync(path.join(D2, 'pk.json'), JSON.stringify({
     8103: { at: 1, by: 'Gamemaster', why: 'thought it was agreed', name: 'Tova Dead', account: ids.tova, from: 'the hub' },
     8203: { at: 1, by: 'Gamemaster', why: 'wrong character', name: 'Mira Dead', account: ids.mira, from: 'the hub' }
@@ -675,6 +681,269 @@ async function adminRoleOnly() {
     log = modlog();
     yes('moderation.log says unbanaccount', log[log.length - 1].did === 'unbanaccount');
 
+    // 4637: the first command message and sweep must agree with the most
+    // restrictive effective ban, across actual site rows and local receipts.
+    for (const test of [
+      { door: 'account', minutes: 60, local: 'character', length: '30m', winner: 'door' },
+      { door: 'account', minutes: 30, local: 'character', length: 'forever', winner: 'door' },
+      { door: 'character', minutes: 60, local: 'character', length: '30m', winner: 'door' },
+      { door: 'character', minutes: 30, local: 'character', length: '60m', winner: 'local' },
+      { door: 'character', minutes: 0, local: 'character', length: '30m', winner: 'door' },
+      { door: 'character', minutes: 30, local: 'character', length: 'forever', winner: 'local' },
+      { door: 'account', minutes: 60, local: 'account', length: '30m', winner: 'door' },
+      { door: 'character', minutes: 0, local: 'account', length: '30m', winner: 'local' },
+      { door: 'character', minutes: 0, local: 'character', length: 'forever', winner: 'door' },
+      { door: 'account', minutes: 0, local: 'account', length: 'forever', winner: 'door' }
+    ]) {
+      await hub('unban', { id: BJORN_D });
+      await hub('unban', { id: BJORN_D, profileId: 2002 });
+      const doorRule = await hub('ban', Object.assign({ id: BJORN_D, minutes: test.minutes,
+        why: '4637 existing ' + test.door }, test.door === 'character' ? { profileId: 2002 } : {}));
+      const snapshot = (await allowed()).j;
+      const onDoor = snapshot.bans.find((ban) => ban.scope === test.door && ban.profiles.includes(2002));
+      yes('4637 actual site provides the initial ' + test.door + ' ban', doorRule.status === 200 && !!onDoor);
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+        at: new Date().toISOString(), profiles: [], pk: [], bans: snapshot.bans
+      }));
+      w = loadStaff();
+      const reason = '4637 new ' + test.local;
+      staffLine(w, (test.local === 'account' ? '/banaccount' : '/ban') + ' Bjorn ' + test.length + ' ' + reason);
+      const confirmed = await until(() => w.to(1001).some((line) => line.startsWith('Banned ')));
+      const local = w.api.state.banned[2002][test.local];
+      const expected = test.winner === 'door' ? onDoor : local;
+      const untilText = expected.until ? 'until ' + new Date(expected.until).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'for good';
+      function matches(line) {
+        return line.includes(untilText) && line.includes(expected.why)
+          && (expected.scope === 'account'
+            ? line.startsWith('You are banned from Thornswood') && !line.includes('other characters')
+            : line.startsWith('Staff have banned this character') && line.includes('other characters'));
+      }
+      const label = test.door + ':' + test.minutes + ' over ' + test.local + ':' + test.length;
+      yes('4637 initial command message uses the effective ban: ' + label,
+          confirmed && w.to(2002).length === 1 && matches(w.to(2002)[0]));
+      const effective = w.api.bansNow(Date.now())[2002];
+      yes('4637 reduction keeps effective scope, duration and reason: ' + label,
+          effective.scope === expected.scope && effective.until === expected.until && effective.why === expected.why);
+      w.api.state.ending[2002] = 0;
+      w.said.length = 0;
+      w.api.banSweep();
+      yes('4637 the subsequent sweep reports that same effective ban: ' + label,
+          w.to(2002).length === 1 && matches(w.to(2002)[0]));
+    }
+    await hub('unban', { id: BJORN_D });
+    await hub('unban', { id: BJORN_D, profileId: 2002 });
+
+    // Two in-game commands can both be acknowledged before the door reads
+    // the new list. The effective ban still needs both local scopes then.
+    for (const accountFirst of [true, false]) {
+      await hub('unban', { id: BJORN_D });
+      await hub('unban', { id: BJORN_D, profileId: 2002 });
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+        at: new Date().toISOString(), profiles: [], pk: [], bans: []
+      }));
+      w = loadStaff();
+      const commands = ['/banaccount Bjorn 30m 4637 local account', '/ban Bjorn 60m 4637 local character'];
+      if (!accountFirst) { commands.reverse(); }
+      for (const line of commands) {
+        const count = w.to(1001).length;
+        staffLine(w, line);
+        await until(() => w.to(1001).slice(count).some((reply) => reply.startsWith('Banned ')));
+      }
+      const effective = w.api.bansNow(Date.now())[2002];
+      yes('4637 two local receipts retain the account ban in either command order',
+          effective && effective.scope === 'account' && effective.why === '4637 local account');
+      const stored = (await allowed()).j.bans;
+      const account = stored.find((ban) => ban.scope === 'account' && ban.profiles.includes(2002));
+      const character = stored.find((ban) => ban.scope === 'character' && ban.profiles.includes(2002));
+      yes('4637 actual site has both scopes while the door file still has neither',
+          !!(account && character && JSON.parse(fs.readFileSync(path.join(PRIV, 'allowed.json'), 'utf8')).bans.length === 0));
+      const expiryWorld = loadStaff({ staffState: JSON.parse(JSON.stringify(w.api.state)) });
+      const afterExpiry = account && expiryWorld.api.bansNow(account.until + 1)[2002];
+      yes('4637 an expired account receipt restores the still-active local character ban',
+          afterExpiry && afterExpiry.scope === 'character' && afterExpiry.why === '4637 local character');
+      const count = w.to(1001).length;
+      staffLine(w, '/unbanaccount Bjorn');
+      await until(() => w.to(1001).slice(count).some((reply) => /account is lifted/.test(reply)));
+      const afterLift = w.api.bansNow(Date.now())[2002];
+      yes('4637 a game lift only removes its own receipt',
+          afterLift && afterLift.scope === 'character' && afterLift.why === '4637 local character');
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+        at: new Date(Date.now() - 60000).toISOString(), profiles: [], pk: [], bans: stored
+      }));
+      const beforeCharacterLift = w.to(1001).length;
+      staffLine(w, '/unban Bjorn');
+      await until(() => w.to(1001).slice(beforeCharacterLift).some((reply) => /character Bjorn is lifted/.test(reply)));
+      yes('4637 either local lift can be acknowledged without reviving the other stale scope',
+          !w.api.bansNow(Date.now() + 11000)[2002]);
+      const beforeReban = w.to(1001).length;
+      staffLine(w, '/ban Bjorn 60m 4637 rebanned character');
+      const rebanned = await until(() => w.to(1001).slice(beforeReban).some((reply) => reply.startsWith('Banned ')));
+      const afterReban = w.api.bansNow(Date.now())[2002];
+      yes('4637 rebanning a character keeps the older lifted account ban masked',
+          rebanned && afterReban && afterReban.scope === 'character' && afterReban.why === '4637 rebanned character');
+    }
+    await hub('unban', { id: BJORN_D, profileId: 2002 });
+
+    const oldState = { banned: { 2002: { why: '4637 flat character', until: 0, scope: 'character' } },
+      lifted: { 2002: { at: Date.now(), scope: 'account' } } };
+    const afterReload = loadStaff({ staffState: oldState }).api.bansNow(Date.now())[2002];
+    yes('4637 a hot reload keeps the previous flat character receipt and account lift',
+        afterReload && afterReload.scope === 'character' && afterReload.why === '4637 flat character');
+
+    // 4484: actual game ban -> actual signed hub lift -> authoritative list.
+    // No restart, and no in-game unban that could hide the stale local copy.
+    for (const whole of [false, true]) {
+      let clock = Date.now();
+      class StaffClock extends Date { static now() { return clock; } }
+      const person = whole ? 'Cara' : 'Bjorn';
+      const target = whole ? 4001 : 2002;
+      const covers = whole ? [4001, 4002] : [2002];
+      const account = whole ? CARA_D : BJORN_D;
+      const scope = whole ? 'account' : 'character';
+      w = loadStaff({ clock: StaffClock });
+      staffLine(w, (whole ? '/banaccount ' : '/ban ') + person + ' forever 4484 test');
+      yes('4484 game command confirms a forever ' + scope + ' ban',
+          await until(() => w.to(1001).some((t) => t.startsWith('Banned ') && t.includes('for good')))
+          && covers.every((pid) => w.api.state.banned[pid][scope].until === 0));
+      const created = clock;
+      const before = (await allowed()).j;
+      const lifted = await hub('unban', Object.assign({ id: account }, whole ? {} : { profileId: target }));
+      yes('4484 actual signed hub lifts the ' + scope + ' ban', lifted.status === 200 && lifted.j.was === true);
+      const response = await allowed();
+      const after = response.j;
+      yes('4484 the live authoritative ban response forbids caching',
+          response.status === 200 && /no-store/.test(response.headers['cache-control'] || ''));
+      yes('4484 actual site list no longer bans those profiles',
+          covers.every((pid) => !after.bans.some((ban) => ban.profiles.includes(pid))));
+      function snapshot(doc) {
+        clock += 11000; // the existing ten-second staff read cadence
+        fs.writeFileSync(path.join(PRIV, 'allowed.json'), typeof doc === 'string' ? doc : JSON.stringify(doc));
+        return w.api.bansNow(clock);
+      }
+      const stamp = (ms) => new Date(ms).toISOString();
+      for (const doc of [
+        Object.assign({}, after, { bansRequestedAt: stamp(created - 1), at: stamp(created - 1) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(created), at: stamp(created) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(created - 1), at: stamp(created + 1) }),
+        Object.assign({}, after, { at: stamp(created + 1) }),
+        Object.assign({}, after, { bansRequestedAt: 'not a date', at: stamp(created + 1) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(created + 2), at: stamp(created + 1) }),
+        { bansRequestedAt: stamp(created + 1), at: stamp(created + 2) },
+        '{'
+      ]) {
+        const held = snapshot(doc);
+        yes('4484 old, equal, late old, legacy or broken list preserves local ' + scope + ' ban',
+            covers.every((pid) => held[pid] && w.api.state.banned[pid]));
+      }
+      const fresh = Object.assign({}, after, { bansRequestedAt: stamp(created + 1), at: stamp(clock + 1) });
+      const active = snapshot(fresh);
+      yes('4484 a genuinely newer snapshot retires every lifted local ' + scope + ' ban',
+          covers.every((pid) => !active[pid] && !w.api.state.banned[pid]));
+      w.said.length = 0;
+      const scheduled = w.timeouts.length;
+      w.api.banSweep();
+      w.timeouts.slice(scheduled).forEach((timer) => timer.fn());
+      yes('4484 no fresh ban-related end or kick follows the site lift',
+          covers.every((pid) => !w.to(pid).some((line) => /banned/.test(line))
+            && ((after.pk || []).includes(pid) || !w.kicked.includes(70 + pid))));
+      if (whole) yes("4484 the account lift preserves Dara's independent canonical PK",
+          w.to(4002).some((line) => /died for good/.test(line)) && w.kicked.includes(70 + 4002));
+      const reinstated = Object.assign({}, before, { bansRequestedAt: stamp(clock + 1), at: stamp(clock + 2) });
+      const still = snapshot(reinstated);
+      yes('4484 a current site ' + scope + ' ban still enforces after local retirement',
+          covers.every((pid) => still[pid] && still[pid].scope === scope));
+      const confirmedRequest = Date.parse(reinstated.bansRequestedAt);
+      const damaged = [
+        Object.assign({}, after, { bansRequestedAt: stamp(confirmedRequest - 1), at: stamp(clock + 1) }),
+        Object.assign({}, after, { bansRequestedAt: 'unreadable', at: stamp(clock + 2) }),
+        Object.assign({}, after, { bansRequestedAt: stamp(clock + 60000), at: stamp(clock + 60001) }),
+        Object.assign({}, after, { bans: [null], bansRequestedAt: stamp(clock + 1), at: stamp(clock + 2) }),
+        '{'
+      ];
+      for (const doc of damaged) {
+        const retained = snapshot(doc);
+        yes('4484 lost or regressing saved authority keeps the last good ' + scope + ' ban',
+            covers.every((pid) => retained[pid] && retained[pid].scope === scope));
+      }
+      w = loadStaff({ clock: StaffClock, staffState: w.api.state });
+      const duringReload = snapshot('{');
+      yes('4484 hot reload retains the last confirmed ' + scope + ' bans if the door file is broken',
+          covers.every((pid) => duringReload[pid] && duringReload[pid].scope === scope));
+      const freshLift = snapshot(Object.assign({}, after, { bansRequestedAt: stamp(clock + 1), at: stamp(clock + 2) }));
+      yes('4484 the next good snapshot can still lift the last known ' + scope + ' ban',
+          covers.every((pid) => !freshLift[pid]));
+    }
+
+    // Paired 4484/4637: one authoritative request may begin between two
+    // acknowledged scopes. Hand back only the older scope, not the whole pid.
+    for (const olderScope of ['account', 'character']) {
+      await hub('unban', { id: BJORN_D });
+      await hub('unban', { id: BJORN_D, profileId: 2002 });
+      let clock = Date.now();
+      class PairedClock extends Date { static now() { return clock; } }
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+        profiles: [], bans: [], pk: [], at: new Date(clock).toISOString()
+      }));
+      w = loadStaff({ clock: PairedClock });
+      const newerScope = olderScope === 'account' ? 'character' : 'account';
+      const word = (scope) => scope === 'account' ? '/banaccount' : '/ban';
+      staffLine(w, word(olderScope) + ' Bjorn 30m paired older scope');
+      yes('paired scope: first actual game ban is acknowledged',
+          await until(() => w.to(1001).some((line) => line.startsWith('Banned '))));
+      const beforeSecond = (await allowed()).j;
+      const first = beforeSecond.bans.find((ban) => ban.scope === olderScope && ban.profiles.includes(2002));
+      const requestStarted = clock + 1000;
+      clock += 2000;
+      const messages = w.to(1001).length;
+      staffLine(w, word(newerScope) + ' Bjorn 60m paired newer scope');
+      yes('paired scope: second actual game ban is acknowledged after request start',
+          await until(() => w.to(1001).slice(messages).some((line) => line.startsWith('Banned '))));
+      clock += 11000;
+      fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify(Object.assign({}, beforeSecond, {
+        bansRequestedAt: new Date(requestStarted).toISOString(), at: new Date(clock).toISOString(), pk: []
+      })));
+      w.api.bansNow(clock);
+      const held = w.api.state.banned[2002];
+      yes('paired scope: snapshot retires only the older scope and keeps the newer acknowledgement',
+          held && !held[olderScope] && held[newerScope] && held[newerScope].why === 'paired newer scope');
+      clock = first.until + 1;
+      const later = w.api.bansNow(clock)[2002];
+      yes('paired scope: the newer local ban remains effective after the older site ban expires',
+          later && later.scope === newerScope && later.why === 'paired newer scope');
+      w.said.length = 0;
+      w.api.state.ending[2002] = 0;
+      w.api.banSweep();
+      yes('paired scope: subsequent sweep still reports that remaining ban',
+          w.to(2002).length === 1 && w.to(2002)[0].includes('paired newer scope')
+          && (newerScope === 'account' ? w.to(2002)[0].startsWith('You are banned')
+                                      : w.to(2002)[0].startsWith('Staff have banned this character')));
+    }
+    await hub('unban', { id: BJORN_D });
+    await hub('unban', { id: BJORN_D, profileId: 2002 });
+
+    // Hot reload keeps older local overlays that predate the timestamp field.
+    {
+      let clock = Date.now();
+      class ReloadClock extends Date { static now() { return clock; } }
+      const loaded = clock;
+      const oldState = { frozen: {}, silenced: {}, banned: {
+        2002: { why: 'legacy game ban', until: 0, scope: 'character' }
+      } };
+      w = loadStaff({ clock: ReloadClock, staffState: oldState });
+      function refresh(requested, written) {
+        clock += 11000;
+        fs.writeFileSync(path.join(PRIV, 'allowed.json'), JSON.stringify({
+          bans: [], pk: [], at: new Date(written).toISOString(),
+          bansRequestedAt: new Date(requested).toISOString()
+        }));
+        return w.api.bansNow(clock);
+      }
+      yes('4484 an old hot-reload overlay waits for a request newer than module load',
+          !!refresh(loaded - 1, loaded + 1)[2002] && !!oldState.banned[2002]);
+      yes('4484 that legacy overlay retires once a fresh request confirms its lift',
+          !refresh(loaded + 1, loaded + 2)[2002] && !oldState.banned[2002]);
+    }
+
     w = loadStaff();
     staffLine(w, '/pk Sigrid fell to the dragon at Helgen');
     yes('/pk answers the moderator and says nobody else was told',
@@ -838,7 +1107,7 @@ async function adminRoleOnly() {
     // what it is told; test-play-characters.js runs the site's half whole.
     const chars = require('../site/lib/characters');
     const L = { '101': { id: '101', profiles: [11, 12], spare: 99, chars: [{ id: 11, slot: 1 }, { id: 12, slot: 2 }] } };
-    const said = chars.settle(L, '101', { slots: 2, pk: (id) => id === 12, revived: () => false });
+    const said = chars.settle(L, '101', 'main', { slots: 2, pk: (id) => id === 12, revived: () => false });
     yes('the site moves a dead character out of its slot to the dead slot, and Chars knows that slot',
         L['101'].chars.find((c) => c.id === 12).slot === chars.DEAD && chars.DEAD === -1 &&
         /const int DeadSlot = -1;/.test(charsCs) && said.length === 1);
@@ -846,8 +1115,8 @@ async function adminRoleOnly() {
     yes('before the id played last is chosen: Prepare asks the site for the list after the roster',
         prep.indexOf('Roster.Refresh(cfg)') > 0 && prep.indexOf('Ask("", 0, 0, out fetched)') > prep.indexOf('Roster.Refresh(cfg)') &&
         prep.indexOf('Ask("", 0, 0, out fetched)') < prep.indexOf('LastPlayedId(rows)'));
-    yes('a dead character is never picked', chars.choose(L, '101', 12, 1) !== null);
-    yes('and can be forgotten with the bin', chars.forget(L, '101', 12) === null && L['101'].retired.indexOf(12) >= 0);
+    yes('a dead character is never picked', chars.choose(L, '101', 'main', 12, 1) !== null);
+    yes('and can be forgotten with the bin', chars.forget(L, '101', 'main', 12) === null && L['101'].retired.indexOf(12) >= 0);
     const write = lift(charsCs, 'static string CharactersJson(List<Row> rows, int last, int spare, int slots)') || '';
     yes('the menu list carries the dead with "pk":true in slot 0, and a banned character with "banned":true',
         /all\.AddRange\(DeadRows\(rows\)\)/.test(write) && /,\\"pk\\":true/.test(write) &&
@@ -859,10 +1128,10 @@ async function adminRoleOnly() {
         /return revived\.Contains\(profileId\) && !dead\.Contains\(profileId\);/.test(rosterCs));
     const R = { '101': { id: '101', profiles: [11, 12, 13], spare: 99,
                      chars: [{ id: 11, slot: 1 }, { id: 12, slot: -1 }, { id: 13, slot: -1 }] } };
-    const none = chars.settle(R, '101', { slots: 2, pk: () => false, revived: () => false });
+    const none = chars.settle(R, '101', 'main', { slots: 2, pk: () => false, revived: () => false });
     yes('the site moves nobody back when nobody was revived',
         none.length === 0 && R['101'].chars.find((c) => c.id === 12).slot === -1);
-    const back = chars.settle(R, '101', { slots: 2, pk: () => false, revived: (id) => id === 12 });
+    const back = chars.settle(R, '101', 'main', { slots: 2, pk: () => false, revived: (id) => id === 12 });
     yes('and puts the one an admin revived into the lowest free slot, and leaves the other dead',
         R['101'].chars.find((c) => c.id === 12).slot === 2 && R['101'].chars.find((c) => c.id === 13).slot === -1 &&
         back.some((l) => l === 'An admin undid the PK of a character, so it can be played again: character 12 to slot 2.'));

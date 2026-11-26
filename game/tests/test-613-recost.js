@@ -209,7 +209,7 @@ e = got[0][0]
 L.copy_record(plugins[e.pi], e, rn, None, 'test')
 rn.masters = ['skyrim.esm', 'mod.esp']
 pairs = L.recount(L.copy_record(plugins[e.pi], e, rn, None, 'test'), row)
-made = {'achr': [], 'refr': [], 'cell': {}, 'wrld': {}, 'qust': [], 'lctn': [],
+made = {'achr': [], 'refr': [], 'cell': {}, 'wrld': {}, 'qust': [], 'lctn': [], 'alch': [],
         'cobj': [(rn.one(plugins[e.pi], e.fid, 'test'), 0, L.pack_subrecords(pairs), e)]}
 built = L.write_plugin(made, ['Skyrim.esm', 'Mod.esp'], plugins, rn)
 back = L.read_plugin(built, 'Thornswood-Last.esp', 2)
@@ -224,6 +224,7 @@ out['rest'] = [t.decode() for t, b in subs]
 out['same'] = [b.hex() for t, b in subs if t != b'CNTO'] == [b.hex() for t, b in L.subrecords(plugins[1].data(e)) if t != b'CNTO']
 out['masters'] = back.masters
 out['light'] = bool(back.hflags & L.LIGHT)
+out['groupOrder'] = [tag.decode() for tag in L.GROUP_ORDER]
 row2 = dict(row, inputs=[dict(row['inputs'][0], count=9), row['inputs'][1]])
 try:
     L.recost_entries({'recipes': [row2]}, plugins, win); out['refused'] = ''
@@ -266,9 +267,11 @@ yes('L6 an input the table takes to 0 (gold coins, q-3115 B) is left out, and CO
     !!r && JSON.stringify(r.dropped) === JSON.stringify({ cnto: [[0x01000900, 7]], coct: [1] }));
 yes('L7 a recipe the table would leave with no input stops the build',
     !!r && /takes every input out/.test(r.empty));
-yes('W1 the builder reads game/data/recost.json, puts COBJ first among its groups, and checks the re-costed counts win',
+yes('W1 the builder reads game/data/recost.json, keeps recipes before world groups, and checks the re-costed counts win',
     /RECOST = os\.path\.join\(ROOT, 'game', 'data', 'recost\.json'\)/.test(tool) &&
-    /GROUP_ORDER = \[b'COBJ', b'CELL'/.test(tool) && /does not ask the re-costed counts/.test(tool) &&
+    r.groupOrder.filter(tag => tag === 'COBJ').length === 1 &&
+    r.groupOrder.indexOf('COBJ') < r.groupOrder.indexOf('CELL') &&
+    r.groupOrder.indexOf('COBJ') < r.groupOrder.indexOf('WRLD') && /does not ask the re-costed counts/.test(tool) &&
     /re-costed by recost\.json, won by/.test(tool));
 
 done();

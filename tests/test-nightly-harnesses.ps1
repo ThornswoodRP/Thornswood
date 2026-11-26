@@ -14,7 +14,8 @@
     2. a harness that passes, one that fails, one past its clock (named in
        its header) and one that leaves a process running are each printed
        as they end, and the summary names the two that failed, the one that
-       timed out as timed out, the slowest, and exits 1;
+       timed out as such, the slowest, and exits 1. A lasting change at the
+       checkout's root fails the share and keeps the evidence;
     3. a harness whose clock would not fit in what is left of the budget is
        not started, is named "not run, out of time", turns the share red,
        and the summary is still printed;
@@ -199,6 +200,19 @@ try {
     Yes '  hands the names to Nightly-Harnesses.ps1 -Only through the environment' ($h -match 'HARNESSES: \$\{\{ inputs\.harnesses \}\}' -and $h -match 'Nightly-Harnesses\.ps1 -Only \$env:HARNESSES')
     $runs = @([regex]::Matches($h, '(?ms)^\s+run: \|\s*\r?\n(.*?)(?=^\s+- |\z)') | ForEach-Object { $_.Groups[1].Value })
     Yes '  and never pastes them into a script it runs' ($runs.Count -ge 1 -and -not @($runs | Where-Object { $_ -match '\$\{\{\s*inputs\.' }).Count)
+
+    $rootAudit = Join-Path $work 'root-audit'
+    $rootReport = Join-Path $work 'root-audit.xml'
+    Put (Join-Path $rootAudit 'tests/test-root-audit.js') ("const fs = require('fs');`n" +
+        "fs.writeFileSync('stray-root.txt', 'x');`nconsole.log('PASS  fixture ran');`n")
+    $result = Run $rootAudit @('-Report', $rootReport)
+    Yes 'a root change fails the share even when its harnesses pass' (
+        $result.Code -eq 1 -and $result.Said -match 'PASS  fixture ran' -and
+        $result.Said -match '::error::the harness share changed the repository root: stray-root.txt \(added\)' -and
+        $result.Said -notmatch 'harness\(es\) failed:')
+    Yes 'the root audit preserves the evidence and names it in the report' (
+        (Test-Path -LiteralPath (Join-Path $rootAudit 'stray-root.txt')) -and
+        ([IO.File]::ReadAllText($rootReport) -match 'harness share root audit'))
 
     # ---- 7. side by side (-Throttle, #3114) -------------------------------
     # Each stand-in leaves a mark in marks\ while it runs and counts the

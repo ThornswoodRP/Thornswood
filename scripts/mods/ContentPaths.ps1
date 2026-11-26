@@ -1,6 +1,8 @@
 <#
-  ContentPaths.ps1
+.SYNOPSIS
+  What a content build on the box reads and what it writes, worked out from scripts\mods\content-tables.json and the builders themselves (#5191).
 
+.DESCRIPTION
   What a content build on the box reads and what it writes, worked out from
   scripts\mods\content-tables.json and the builders themselves (#5191). One
   copy, for Run-OnBox.ps1 (what it sends and what it brings back) and
@@ -60,7 +62,9 @@ function Get-ThornswoodContentPaths {
         if (-not @($watch | Where-Object { $p -eq $_ -or $p.StartsWith($_ + '/') }).Count) { $watch += $p }
     }
     $load = New-Object 'Collections.Generic.Queue[string]'
-    $tools = @(@($chain['steps'] | ForEach-Object { [string]$_['tool'] }) + @($chain['steps'] | ForEach-Object { @($_['uses']) } | Where-Object { $_ -like '*.js' -or $_ -like '*.ps1' }))
+    # This reader also runs inside the packed checkout. Its own transitive
+    # helpers must travel even when the requested tool is the plugin builder.
+    $tools = @('scripts/mods/ContentPaths.ps1') + @(@($chain['steps'] | ForEach-Object { [string]$_['tool'] }) + @($chain['steps'] | ForEach-Object { @($_['uses']) } | Where-Object { $_ -like '*.js' -or $_ -like '*.ps1' }))
     if ($Tool) { $tools += $Tool }
     foreach ($t in $tools) { $load.Enqueue([string]$t) }
     $seen = @{}
@@ -193,7 +197,8 @@ function Get-ThornswoodContentOrder {
     param([Parameter(Mandatory = $true)][string]$Repo)
     $read = { param($rel) [IO.File]::ReadAllText((Join-Path $Repo $rel)) | ConvertFrom-Json }
     $record = & $read 'records/collection.json'
-    $plugins = & $read 'records/collection-plugins.json'
+    . (Join-Path $PSScriptRoot '..\release\RecordShape.ps1')
+    $plugins = Read-ThornswoodRecord -Path (Join-Path $Repo 'records/collection-plugins.json') -Kind collection-plugins
     if ([string]$record.collection -ne [string]$plugins.collection -or [string]$record.revision -ne [string]$plugins.revision) {
         throw ('records\collection.json is collection ' + $record.collection + ' revision ' + $record.revision + ', and records\collection-plugins.json ' + $plugins.collection + ' revision ' + $plugins.revision + ': they move together, so there is no telling which load order is meant.')
     }

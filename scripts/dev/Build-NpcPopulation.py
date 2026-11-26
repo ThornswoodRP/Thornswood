@@ -94,50 +94,91 @@ def location_chain(context, location):
         location = row.get('parent')
 
 
+HABITAT_POLICY = HERE.parent.parent / 'records' / 'npc-habitats.json'
+
+
+def read_habitat_annotations(path, context):
+    """Resolve authored exceptions once, refusing unknown records or cap overrides."""
+    def unique_fields(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('Duplicate NPC habitat annotation field: ' + key)
+            result[key] = value
+        return result
+
+    with open(path, encoding='utf-8') as source:
+        document = json.load(source, object_pairs_hook=unique_fields)
+    if not isinstance(document, dict) or set(document) != {'version', 'places'} or \
+            type(document['version']) is not int or document['version'] != 1 or not isinstance(document['places'], list):
+        raise ValueError('Invalid NPC habitat annotation document')
+
+    def canonical(value):
+        match = re.fullmatch(r'([0-9a-f]{1,6}):([^:/\\\x00-\x1f\x7f]+\.(?:esm|esp|esl))', value, re.I) if isinstance(value, str) else None
+        if not match or int(match[1], 16) == 0:
+            raise ValueError('Invalid NPC habitat form descriptor: ' + str(value))
+        return format(int(match[1], 16), 'x') + ':' + match[2].lower()
+
+    records = {kind: {canonical(form): form for form in context.t[kind.encode()]}
+               for kind in ('CELL', 'LCTN')}
+    result, seen = {}, set()
+    habitats = {'city', 'farm', 'bandit-camp', 'giant-camp', 'cave', 'dungeon', 'sewer', 'interior', 'wilderness'}
+    for row in document['places']:
+        required = {'form', 'recordType', 'habitat', 'reason'}
+        if not isinstance(row, dict) or not required <= set(row) or set(row) - required - {'location'} or \
+                not isinstance(row['recordType'], str) or row['recordType'] not in records or \
+                not isinstance(row['habitat'], str) or row['habitat'] not in habitats or \
+                not isinstance(row['reason'], str) or not row['reason'].strip():
+            raise ValueError('Invalid NPC habitat annotation: ' + str(row))
+        identity = canonical(row['form'])
+        if identity in seen:
+            raise ValueError('Duplicate NPC habitat annotation: ' + row['form'])
+        seen.add(identity)
+        form = records[row['recordType']].get(identity)
+        if not form:
+            raise ValueError('NPC habitat annotation does not name an existing ' + row['recordType'] + ': ' + row['form'])
+        if row['recordType'] == 'CELL':
+            cell = context.cells[form]
+            if not cell.get('interior'):
+                raise ValueError('NPC habitat cell annotation requires an interior: ' + form)
+            allowed = {form} | {place for place, _ in location_chain(context, cell.get('location'))}
+        else:
+            allowed = {place for place, _ in location_chain(context, form)}
+        group = canonical(row.get('location', form))
+        matches = {canonical(place): place for place in allowed}
+        if group not in matches:
+            raise ValueError('NPC habitat group is not this record or its location chain: ' + row['form'])
+        result[form] = dict(row, form=form, location=matches[group])
+    return result
+
+
 def habitat_at(context, actor):
     cell = context.cells.get(actor.get('cell'), {})
-    cell_name = (cell.get('edid', '') + ' ' + cell.get('name', '')).lower()
-    # An underground interior can point straight to the city's parent location.
-    # Its authored identity must win over that surface ancestor.
-    if cell.get('interior'):
-        inferred = 'sewer' if 'sewer' in cell_name or 'ratway' in cell_name else (
-            ('cave' if 'cave' in cell_name else 'dungeon')
-            if re.search(r'catacomb|cave|barrow|crypt|ruin|dungeon|mine|lair|den\b', cell_name) else None)
-        if inferred:
-            # Room names identify underground habitat, but a typed location
-            # groups all its rooms under one shared cap and difficulty tier.
-            for identity, row in location_chain(context, actor.get('location') or cell.get('location')):
-                keys = {context.kw.get(k) for k in row.get('keywords', [])}
-                if keys & {'LocTypeSewer', 'LocTypeCave', 'LocTypeDungeon', 'LocTypeNordicRuin',
-                           'LocTypeDwarvenRuin', 'LocTypeAnimalDen', 'LocTypeDragonLair'}:
-                    return inferred, identity
-            return inferred, actor.get('cell')
+    annotations = getattr(context, 'habitat_annotations', {})
+    explicit = annotations.get(actor.get('cell'))
+    if explicit:
+        return explicit['habitat'], explicit['location']
     location = actor.get('location') or cell.get('location')
     if cell.get('persistent') and actor.get('pos'):
         p = actor['pos']
         ground = context.ground.get((actor.get('world'), int(p[0] // 4096), int(p[1] // 4096)))
         location = actor.get('location') or context.cells.get(ground, {}).get('location') or location
     for identity, row in location_chain(context, location):
+        explicit = annotations.get(identity)
+        if explicit:
+            return explicit['habitat'], explicit['location']
         keys = {context.kw.get(k) for k in row.get('keywords', [])}
-        name = (row.get('edid', '') + ' ' + row.get('name', '')).lower()
-        if cell.get('interior') and ('sewer' in name or 'ratway' in name):
-            return 'sewer', identity
         for habitat, keyword in HABITATS:
             if keyword in keys:
                 return habitat, identity
         if cell.get('interior') and {'LocTypeNordicRuin', 'LocTypeDwarvenRuin',
-                                     'LocTypeAnimalDen', 'LocTypeDragonLair'} & keys:
+                                     'LocTypeAnimalDen', 'LocTypeDragonLair', 'LocTypeMine'} & keys:
             return 'dungeon', identity
     # Some plugins omit location links, but separate city worlds are unambiguous.
     world = context.t[b'WRLD'].get(actor.get('world'), {}).get('edid')
     if world in CITY_WORLDS and not cell.get('interior'):
         return 'city', actor.get('world')
-    name = (cell.get('edid', '') + ' ' + cell.get('name', '')).lower()
     if cell.get('interior'):
-        if 'sewer' in name or 'ratway' in name:
-            return 'sewer', actor.get('cell')
-        if re.search(r'cave|barrow|crypt|ruin|dungeon|mine|lair|den\b', name):
-            return 'cave' if 'cave' in name else 'dungeon', actor.get('cell')
         return 'interior', location or actor.get('cell')
     return 'wilderness', location or actor.get('cell')
 
@@ -340,7 +381,7 @@ def place_rules(policy):
         return json.load(fh).get('placeHolds') or {}
 
 
-def build(paths, strings_dir=None, policy=C.POLICY):
+def build(paths, strings_dir=None, policy=C.POLICY, habitat_policy=HABITAT_POLICY):
     order = [os.path.basename(p) for p in paths]
     if len({p.lower() for p in order}) != len(order):
         raise ValueError('Duplicate plugins in the load order')
@@ -379,6 +420,7 @@ def build(paths, strings_dir=None, policy=C.POLICY):
     if stop:
         raise SystemExit('STOP. ' + stop + '. Nothing was written.')
     context = C.Cast(tables)
+    context.habitat_annotations = read_habitat_annotations(habitat_policy, context)
     rows = []
     for ref, actor in sorted(tables[b'ACHR'].items()):
         policy = classify(context, ref, actor)
@@ -484,6 +526,8 @@ def main():
     parser.add_argument('--strings-dir', help='Installed archive directory for localized record names')
     parser.add_argument('--policy', default=C.POLICY,
                         help='The Last plugin policy, whose placeHolds give places their hold (#5191)')
+    parser.add_argument('--habitat-policy', default=HABITAT_POLICY,
+                        help='Versioned authored CELL/LCTN habitat annotations')
     args = parser.parse_args()
     if not args.settings and not args.data:
         args.data = os.environ.get('THORNSWOOD_DATA') or r'C:\Thornswood\Game\Data'
@@ -493,7 +537,7 @@ def main():
     else:
         with open(args.out, encoding='utf-8') as source:
             paths = [own_plugins.plugin_path(args.data, row['name']) for row in json.load(source)['loadOrder']]
-    payload = activate_guild(build(paths, args.strings_dir, args.policy))
+    payload = activate_guild(build(paths, args.strings_dir, args.policy, args.habitat_policy))
     with open(args.out, 'w', encoding='utf-8', newline='\n') as output:
         json.dump(payload, output, ensure_ascii=False, separators=(',', ':'))
         output.write('\n')
@@ -526,7 +570,7 @@ def write_runtime(payload):
     gamemode_tables.write('NPC_POPULATION_DATA', compact)
 
 
-# docs/HUNTING-SPOTS.csv is every retained animal with what its body gives.
+# game/data/HUNTING-SPOTS.csv is every retained animal with what its body gives.
 # One writer, so a population rebuild and a hunt table rebuild both leave the
 # same columns (#1874): it reads only npc-population.json and hunts.json, and
 # Build-ResourceLocations.py --hunting-only runs it without any plugin.
@@ -555,7 +599,7 @@ def write_hunting_spots(npcs):
     root = HERE.parent.parent
     hunts = json.loads((root / 'game/data/hunts.json').read_text(encoding='utf-8'))['hunts']
     rows = hunting_rows(npcs, hunts)
-    target = root / 'docs' / 'HUNTING-SPOTS.csv'
+    target = root / 'game' / 'data' / 'HUNTING-SPOTS.csv'
     # LF on every machine, as git stores it (#3029): since #3120 this builder
     # is a step of scripts/mods/content-tables.json.
     with target.open('w', encoding='utf-8', newline='') as output:
@@ -571,7 +615,7 @@ def write_catalogues(payload):
     columns = ['ref', 'name', 'base', 'hold', 'locationName', 'location', 'habitat', 'role',
                'species', 'tier', 'cap', 'returnMinutes', 'leash', 'cell', 'world', 'x', 'y', 'z']
     kept = [r for r in payload['npcs'] if r['keep']]
-    with (root / 'NPC-SPAWNS.csv').open('w', encoding='utf-8', newline='') as output:
+    with (HERE.parent.parent / 'game/data/NPC-SPAWNS.csv').open('w', encoding='utf-8', newline='') as output:
         writer = csv.DictWriter(output, fieldnames=columns, lineterminator='\n')
         writer.writeheader()
         for r in kept:
@@ -586,7 +630,7 @@ def write_catalogues(payload):
         f"{summary['catalogued']:,} placements inspected; {summary['retained']:,} retained; {summary['excluded']:,} excluded.", '',
         'Named pets and named enemies are excluded even when their source record lacks the Unique flag.',
         'Merchant traders and exterior transport services remain available.', '',
-        '[All retained spawn coordinates](NPC-SPAWNS.csv) and [animal habitat coordinates](HUNTING-SPOTS.csv)',
+        '[All retained spawn coordinates](../game/data/NPC-SPAWNS.csv) and [animal habitat coordinates](../game/data/HUNTING-SPOTS.csv)',
         'list source identities, species, location, tier, cap, return interval and home radius.',
         'Each row is one authored identity, not a per-person spawn. A dead identity returns once after its',
         'listed interval; the deadline persists through restart. A corpse yields one shared dressing per life.', '',
@@ -627,7 +671,7 @@ def write_merchants(payload):
         lines.append('| ' + ' | '.join([row['hold'], row['role'], row['locationName'], ref, row['bookHold']]) + ' |')
     lines += ['', 'Total: 60', '',
         'Each authored identity returns after 360 minutes and keeps its existing 512-unit home radius.',
-        'Exact coordinates and the shared population rules are in [NPC spawns](../NPC-SPAWNS.csv).']
+        'Exact coordinates and the shared population rules are in [NPC spawns](../../game/data/NPC-SPAWNS.csv).']
     with (root / 'docs/systems/merchant-traders.md').open('w', encoding='utf-8', newline='\n') as output:
         output.write('\n'.join(lines) + '\n')
 

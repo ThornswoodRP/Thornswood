@@ -1,7 +1,9 @@
 <#
-  Check-CleanInstall.ps1
+.SYNOPSIS
+  After installing the Nexus collection into a clean Vortex profile: does the plugin list that install wrote give the game the load order the server checks, with the server's files?
 
-      .\scripts\mods\Check-CleanInstall.ps1
+.DESCRIPTION
+  .\scripts\mods\Check-CleanInstall.ps1
       .\scripts\mods\Check-CleanInstall.ps1 -Server dev
       .\scripts\mods\Check-CleanInstall.ps1 -List <plugins.txt> -Data <Data folder>
       .\scripts\mods\Check-CleanInstall.ps1 -Manifest <manifest.json>

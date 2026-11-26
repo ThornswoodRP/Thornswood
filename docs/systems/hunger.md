@@ -5,11 +5,21 @@ except when you eat or when a night in a real bed puts a little back.
 
 ## The clock
 
-It empties in 2 hours and 24 minutes of real time. That is 41.67 points
+It empties in 3 hours of real time. That is 33.33 points
 an hour. Work and combat do not speed it. Cold does.
 
 While the cold band in [Temperature](temperature.md) is weary, the clock
 runs at 1.25. At bad, 1.5. At spent, 2. Heat does not speed it.
+
+While in the world, from full to empty, with no food and the same temperature
+band throughout:
+
+| Temperature band | Drain multiplier | Time |
+| --- | --- | --- |
+| Fine or any heat band | 1 | 3 hours |
+| Weary cold | 1.25 | 2 hours and 24 minutes |
+| Bad cold | 1.5 | 2 hours |
+| Spent cold | 2 | 1 hour and 30 minutes |
 
 ## The bands
 

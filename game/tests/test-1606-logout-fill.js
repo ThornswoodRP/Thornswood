@@ -62,8 +62,17 @@ const MIN = 60000;
 {
   const code = needsBlock.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
   const calls = code.match(/\barrived\(/g) || [];
-  yes('W1 arrived() has a caller: settle, at an arrival, and nothing else calls it',
-      calls.length === 2 && /var slept = arriving \? arrived\(actorId, n, away\) : '';/.test(code));
+  const staged = rig();
+  staged.seed(123);
+  const before = staged.N.read(123);
+  before.resting = 'bed'; before.rest = 10;
+  const at = staged.clock.now + staged.N.NEEDS.sleptFor;
+  const env = { restingGain: () => 0, warmthTarget: () => 50, outdoorCooling: () => 1 };
+  const arrival = staged.N.project(before, at, true, env);
+  const online = staged.N.project(before, at, false, env);
+  yes('W1 the bed fill is staged only on arrival and delivers nothing before saving',
+      !!arrival.slept && !online.slept && arrival.needs.rest === 100 && before.rest === 10 &&
+      staged.off.length === 0 && staged.redrawn.length === 0);
   yes('W1 and it is not handed out for anybody else to call',
       !/arrived: arrived/.test(code));
   yes('W2 the tick takes whoever has left out of here, so they arrive again',

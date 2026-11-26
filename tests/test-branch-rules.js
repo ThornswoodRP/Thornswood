@@ -56,7 +56,7 @@ function yes(what, cond) {
   if (cond) { pass++; console.log('PASS  ' + what); }
   else { fail++; console.log('FAIL  ' + what); }
 }
-function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
+function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r/g, ''); }
 
 // Prose wraps anywhere and CODEOWNERS is all comment lines, so every document
 // is compared as one line: comment marks off, Markdown emphasis and code
@@ -263,11 +263,12 @@ docs.forEach(function (d) {
 });
 
 // #5182 (Patrick's A, 31 Oct 2026): auto-merge is on, and a pull request
-// merges once main's ruleset's required check is green. The guide says so,
-// gives the command, and no longer says auto-merge is off.
+// merges once main's ruleset's required check is green. Since 2 Nov
+// auto-merge.yml puts every open pull request on auto-merge, so nobody turns
+// it on by hand (#5877, #6217). The guide says so and no longer says auto-merge is off.
 const guideText = docs[0].text;
 yes('The guide says auto-merge is on (#5182)', /auto-merge is on/i.test(guideText));
-yes('The guide gives gh pr merge --auto --squash', guideText.indexOf('gh pr merge --auto --squash') !== -1);
+yes('The guide says auto-merge.yml puts a pull request on auto-merge', /auto-merge\.yml/.test(guideText) && /puts.*pull request on|pull request goes on auto-merge/i.test(guideText));
 yes('The guide does not say auto-merge is off', !/auto-merge is off/i.test(guideText));
 yes('The guide says main\'s ruleset requires Build check result', /ruleset[^.]*requires[^.]*Build check result/.test(guideText));
 

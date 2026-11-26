@@ -21,7 +21,7 @@
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc', '/o',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
@@ -93,7 +93,7 @@ const WORDS = ['/ooc', '/o',
                // A letter (#1595): Write a letter on the board panel sends
                // /letter, and the look prompt's Hand over the letter sends
                // /deliver. Never typed, and not in PLAYER_WORDS either.
-               '/letter', '/deliver',
+               '/letter-post-v1', '/letter', '/deliver',
                // The company's terms card on the Office page of K, for staff
                // (#512, #2695): propose, confirm and drop. Sent by the page,
                // never typed, and so NOT in PLAYER_WORDS.
@@ -205,7 +205,7 @@ const WORDS = ['/ooc', '/o',
                // are the J panel's lines, never typed (#1630). /hidename too,
                // which the P panel's Name buttons send and which was missing
                // here, so it ran before the character was in the world (#1628).
-               '/friend', '/party', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
+               '/friend', '/party', '/party-action-v1', '/mute', '/hidename', '/trade', '/journal', '/book', '/merchant',
                // Contracts between people (#4561): K's Contracts section
                // sends them. Never typed, so not in PLAYER_WORDS.
                '/contract',

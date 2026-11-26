@@ -12,9 +12,11 @@
   code under test itself does something only Windows has.
 
   It sets these variables, and the functions below them, and nothing else
-  (apart from $OnWindows, which it gets from tests\Windows.ps1, and its own
-  workings, whose names all start with launcher, so none can replace a
-  variable of the harness that dot-sources it):
+  (apart from $OnWindows, which it gets from tests\Windows.ps1, its seven
+  working variables $launcherRepo, $launcherProjPath, $launcherProjXml,
+  $launcherAppDir, $launcherCopied, $launcherPackages and $launcherResources,
+  whose names all start with launcher so none can replace a variable of the
+  harness that dot-sources it, and the helper Get-LauncherProjectValue):
 
     $LauncherDotnet       the dotnet that builds the launcher: the one on
                           PATH, else $env:DOTNET_ROOT's, else ~/.dotnet's.
@@ -102,7 +104,8 @@
 
   Add-Type and CodeDom were never the build's compiler (#2821): they compile
   with whatever runtime PowerShell runs on, not with the project's settings
-  and packages. Every harness compiles launcher code through here so a
+  and packages. Before issue #2821 eighteen harnesses compiled launcher code
+  that way. Every harness compiles launcher code through here so a
   harness and the build cannot drift. WHY ONE PLACE (#498): a harness that
   kept a compiler of its own passed code the build refused, or refused code
   the build took.
@@ -170,6 +173,30 @@ $LauncherDotnet = & {
         if (Test-Path -LiteralPath $candidate) { return $candidate }
     }
     Join-Path ([IO.Path]::GetTempPath()) (Join-Path 'no-dotnet-sdk' 'dotnet')
+}
+
+# Output is captured until the compiler exits. Mark its identity first so a
+# stopped build is identifiable. Keep diagnostics out of the dll return stream;
+# report only selected project options and resource names, never their contents.
+function Write-LauncherBuildMarker {
+    param([string]$Stage, [string]$Kind, [string]$Key, [xml]$Project, $ExitCode = $null)
+    $options = [ordered]@{}
+    foreach ($name in 'TargetFramework', 'LangVersion', 'OutputType', 'GenerateAssemblyInfo', 'StartupObject', 'RuntimeIdentifier') {
+        $nodes = @($Project.SelectNodes('//PropertyGroup/*') | Where-Object { $_.LocalName -ieq $name })
+        $options[$name] = if ($nodes.Count) { $nodes[$nodes.Count - 1].InnerText } else { 'SDK default' }
+    }
+    $event = [ordered]@{
+        stage = $Stage; kind = $Kind; key = $Key; dotnet = $LauncherDotnet
+        options = $options
+        resources = @($Project.SelectNodes('//ItemGroup/EmbeddedResource') | ForEach-Object {
+            $logicalName = $_.GetAttribute('LogicalName')
+            $element = $_.SelectSingleNode('LogicalName')
+            if ($element) { $logicalName = $element.InnerText }
+            if ($logicalName) { $logicalName } else { 'MSBuild default' }
+        })
+    }
+    if ($null -ne $ExitCode) { $event.exitCode = $ExitCode }
+    Write-Host ('LAUNCHER_BUILD ' + ($event | ConvertTo-Json -Depth 4 -Compress))
 }
 
 function Build-LauncherCode {
@@ -260,7 +287,10 @@ function Build-LauncherCode {
     $base = Join-Path $launcherRepo (Join-Path 'out' 'harness')
     $done = Join-Path $base $hash.Substring(0, 24)
     $dll = Join-Path $done ($name + '.dll')
-    if (Test-Path -LiteralPath $dll) { return $dll }
+    if (Test-Path -LiteralPath $dll) {
+        Write-LauncherBuildMarker -Stage 'cache-hit' -Kind 'code' -Key $hash.Substring(0, 24) -Project ([xml]$projText)
+        return $dll
+    }
 
     $work = Join-Path $base ('building-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
     $null = New-Item -ItemType Directory -Force -Path $work
@@ -277,8 +307,11 @@ function Build-LauncherCode {
         # nor removed ("being used by another process", the first Windows run
         # of these harnesses, 2 Nov 2026), and it was left running after the
         # harness ended.
+        Write-LauncherBuildMarker -Stage 'compile-start' -Kind 'code' -Key $hash.Substring(0, 24) -Project ([xml]$projText)
         $said = & $LauncherDotnet build (Join-Path $work 'launcher-code.csproj') -c Release -o $bin -nologo -v:q '-clp:NoSummary;ErrorsOnly' --disable-build-servers 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $bin ($name + '.dll')))) {
+        $compilerExitCode = $LASTEXITCODE
+        Write-LauncherBuildMarker -Stage 'compile-exit' -Kind 'code' -Key $hash.Substring(0, 24) -Project ([xml]$projText) -ExitCode $compilerExitCode
+        if ($compilerExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $bin ($name + '.dll')))) {
             throw ('Build-LauncherCode: the .NET SDK refused it:' + [Environment]::NewLine + $said.Trim())
         }
         # Into place in one rename. Another harness may have built the same
@@ -310,9 +343,13 @@ function Get-LauncherProjectHash {
 function Build-LauncherProject {
     if (-not (Test-Path -LiteralPath $LauncherDotnet)) { throw ('Build-LauncherProject: the .NET SDK the launcher builds with is not on this machine (' + $LauncherDotnet + '). docs/guide/set-up-a-machine.md "Setting up a machine" has the install line.') }
     $base = Join-Path $launcherRepo (Join-Path 'out' 'harness')
-    $done = Join-Path $base ('project-' + (Get-LauncherProjectHash))
+    $hash = Get-LauncherProjectHash
+    $done = Join-Path $base ('project-' + $hash)
     $dll = Join-Path $done 'Thornswood.dll'
-    if (Test-Path -LiteralPath $dll) { return $dll }
+    if (Test-Path -LiteralPath $dll) {
+        Write-LauncherBuildMarker -Stage 'cache-hit' -Kind 'project' -Key $hash -Project $launcherProjXml
+        return $dll
+    }
 
     # A folder of its own for the build, obj included: the project's
     # Directory.Build.props puts obj under out\obj\launcher, which two
@@ -322,8 +359,11 @@ function Build-LauncherProject {
     try {
         $bin = Join-Path $work 'bin'
         $sep = [IO.Path]::DirectorySeparatorChar
+        Write-LauncherBuildMarker -Stage 'compile-start' -Kind 'project' -Key $hash -Project $launcherProjXml
         $said = & $LauncherDotnet build $launcherProjPath -c Release -o $bin ('-p:BaseIntermediateOutputPath=' + (Join-Path $work 'obj') + $sep) ('-p:BaseOutputPath=' + (Join-Path $work 'out') + $sep) '-p:CreateHardLinksForCopyLocalIfPossible=true' -nologo -v:q '-clp:NoSummary;ErrorsOnly' --disable-build-servers 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $bin 'Thornswood.dll'))) {
+        $compilerExitCode = $LASTEXITCODE
+        Write-LauncherBuildMarker -Stage 'compile-exit' -Kind 'project' -Key $hash -Project $launcherProjXml -ExitCode $compilerExitCode
+        if ($compilerExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $bin 'Thornswood.dll'))) {
             throw ('Build-LauncherProject: the .NET SDK refused launcher\app\Thornswood.csproj:' + [Environment]::NewLine + $said.Trim())
         }
         # Into place in one rename, as Build-LauncherCode does.

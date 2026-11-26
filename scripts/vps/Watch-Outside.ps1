@@ -680,6 +680,7 @@ function Paths($dir) {
     Outages = (Join-Path $dir 'outages.txt'); Due = (Join-Path $dir 'due.txt')
     Alerts = (Join-Path $dir 'alerts.jsonl'); Sent = (Join-Path $dir 'alerts-sent.txt')
     Log = (Join-Path $dir 'watch.log'); Last = (Join-Path $dir 'last-check.txt')
+    Asking = (Join-Path $dir 'asking.txt')
   }
 }
 $hookRx = '^https://((ptb|canary)\.)?discord(app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$'
@@ -921,7 +922,10 @@ function Invoke-Watch($S, $P, [switch]$Remember) {
   $seen = [ordered]@{}
   foreach ($c in (Get-Checks $S)) {
     if ($Remember -and -not (Is-Due $c $due $now)) { continue }
+    # Which check is being asked, kept until it answers (Read-Asking).
+    if ($Remember) { Set-Content -LiteralPath $P.Asking -Value ($c.Name + '|' + (Get-Now).ToString('o')) -Encoding ASCII }
     $res = Invoke-Check $S $c
+    if ($Remember) { Remove-Item -LiteralPath $P.Asking -Force -EA SilentlyContinue }
     $res.Private = [bool]$c.Private
     $seen[$c.Name] = $res
     if ($Remember) {
@@ -945,6 +949,22 @@ function Invoke-Watch($S, $P, [switch]$Remember) {
   return $seen
 }
 
+# A run that never reached its end (23 Nov 2026: run 45217985841's watch
+# step was still going an hour in, GitHub ended the job at its time limit,
+# and the job's log was not kept) leaves asking.txt behind in the state the
+# workflow keeps whatever happens: the check it was asking and since when.
+# The next run says it once, in the run log and watch.log, so a check that
+# hangs is named by the run after it instead of by nothing. Check names and
+# times are public, as every Note is.
+function Read-Asking($P) {
+  if (-not (Test-Path -LiteralPath $P.Asking)) { return }
+  $b = ('' + (Get-Content -LiteralPath $P.Asking -TotalCount 1 -EA SilentlyContinue)).Trim() -split '\|', 2
+  Remove-Item -LiteralPath $P.Asking -Force -EA SilentlyContinue
+  if (-not $b[0]) { return }
+  if (-not (Test-Path -LiteralPath $P.Log)) { $null = New-Item -ItemType Directory -Path (Split-Path -Parent $P.Log) -Force }
+  Note $P ('the run before this one stopped while asking ' + $b[0] + $(if ($b.Count -gt 1 -and $b[1]) { ', which it started at ' + $b[1] } else { '' }) + ', and that check never answered')
+}
+
 # Waits until $t. The harness puts its own clock here.
 function Wait-Until([datetime]$t) {
   $left = ($t - (Get-Now)).TotalMilliseconds
@@ -955,10 +975,11 @@ function Wait-Until([datetime]$t) {
 # after the one before started, however long a pass took, for $for minutes,
 # and no pass started that could not end inside them. GitHub's schedule
 # trigger does not keep an interval (#4170), so the clock is kept here and
-# the workflow starts the next run when this one ends. 55 minutes, because
+# the workflow has the next run waiting for this one to end. 55 minutes, because
 # the runners' App token minted at the start of a run lasts an hour.
 # Returns how many passes it made.
 function Invoke-WatchFor($S, $P, [int]$for) {
+  Read-Asking $P
   $every = [math]::Max(1, [int]$S.Minutes)
   $start = Get-Now
   $made = 0

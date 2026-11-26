@@ -785,8 +785,8 @@ def doc_print(key):
 # that is not a draft: an issue or pull request number, and the names of the
 # people and the AI who work on it. A channel name (#lore) is not a number.
 NOT_PUBLIC = (
-    (r'#\d', 'an issue or pull request number'),
-    (r'\b(?:Patrick|Djinn|WiccanDjinn|Jhinswife|Claude)\b',
+    (r'(?i)#\d|\b(?:issue|pr)\s+\d+', 'an issue or pull request number'),
+    (r'(?i)\b(?:Patrick|Djinn|Gav\x69n|Jhinswife|WiccanDjinn|Claude|Grok|Codex|ChatGPT|Smeagle|Anvil|Herald|Waystone|Wyrd|Cursor)\b',
      'a name of somebody on the team, which says how it was decided, not what changed'),
 )
 

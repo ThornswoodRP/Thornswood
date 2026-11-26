@@ -58,6 +58,12 @@ Only the leader can do these three, with the buttons on P:
 On P, the leader sees Kick and Lead beside each other person, and
 Disband for the party. Everyone, the leader too, sees Leave.
 
+Kick and Disband ask for a second press within five seconds. The button
+names the action and the person or party. Changed party information,
+another action, or closing the panel cancels that confirmation. A held key
+does not confirm. If the party changes before the request arrives, review
+the current party and confirm again. Nothing is retried for you.
+
 ## Finding them
 
 A party member's name is green above their head. They have a marker

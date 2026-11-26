@@ -100,6 +100,11 @@ the body, up to 600, and Job or Notice. Both the title and the body are
 needed. The server checks both lengths as well as the page, and refuses
 an empty or too long one with a plain line before any gold is taken.
 
+Posting keeps the title and body as written, including colons,
+backslashes, line breaks, repeated spaces and indentation. A refused
+post leaves that draft in the form. If you reach another hold's board
+before the post arrives, nothing is posted and no gold is taken.
+
 A notice is 20 gold. It is read only. There is nothing to take.
 
 A job is 30 gold and its reward, a whole number of gold above nothing,
@@ -127,6 +132,10 @@ A letter is a job with a named person at the other end. You post it
 from the board's panel: Write a letter, with who it is for and the
 words. The words are the letter, up to 300 characters, the same cap
 as `/ooc`.
+
+Quote marks in the recipient name remain part of that name when the letter
+is posted and handed over. The server keeps its existing name and first-name
+matching rules; it does not remove quotes or guess a different recipient.
 
 It costs 35 gold up front. 20 is the board fee and stays with the hold.
 15 is the courier's pay, and it is held
@@ -185,6 +194,12 @@ taker the whole reward out of the ledger and takes the job down; a taker
 who is away is paid when they are next in the world. A letter's 15 is
 paid when it is delivered to the named person, from gold the sender
 already put up.
+
+Take down asks for a second fresh press within five seconds, naming the
+post and board. A held key does not confirm. A changed board or post,
+another action, editing a field, or closing the panel cancels it. If the
+post changes before the request arrives, review the current board and
+confirm again. Nothing is retried automatically.
 
 Take down is the poster's. The fee stays with the hold, and a job's
 reward comes back to the poster. A job somebody has taken stays up until

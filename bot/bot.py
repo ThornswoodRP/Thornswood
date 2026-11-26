@@ -45,7 +45,17 @@ Everything it needs is in env:
   DISCORD_TOKEN    the bot token
   THORNSWOOD_SITE  https://thornswood.net
   THORNSWOOD_KEY   shared secret the site checks on /api/ticket
+  THORNSWOOD_BOT_DATA  bot records folder, read from the process environment
+                      before --env-file is loaded. Unset or empty uses data
+                      beside bot.py if it exists, else the bot folder itself
+  THORNSWOOD_OPEN  overrides the site for the play application panel: 1, true,
+                   yes or open for open; 0, false, no, alpha or closed for
+                   alpha. Unset, blank or unrecognized reads /api/public at
+                   startup; only a true open value selects open mode. If the
+                   read fails, the panel stays in alpha mode
   JOIN_CHANNEL     name of the channel join cards go in, default general
+  JOIN_NUMBER_FLOOR  highest arrival number assumed already issued, default
+                     28. A new number starts at 29 or higher by default
   TICKET_CHANNEL   public channel the panel lives in, comma separated, first wins
   TICKET_LOG       staff only channel closed tickets are recorded in, and where
                    a ticket goes when its thread will not open. Checked by its
@@ -69,6 +79,19 @@ Everything it needs is in env:
   WATCH_DIR        the watchdog's folder, default the one Watch-Services.ps1
                    makes on the VPS
   WATCH_READ_EVERY seconds between reads of its outbox, default 60
+  TROUBLE_CHANNEL_ID  staff channel ID for session failures, site reports and
+                      moderation notices. Unset, invalid or nonpositive uses
+                      staff-channel.txt beside the bot code. Without a usable
+                      ID, nothing is posted and no channel name is tried
+  TROUBLE_EVERY    seconds between checks for failed sessions, default 120
+  REPORTS_EVERY    seconds between checks of the site report inbox, default 120
+  MODERATION_LOG   Main moderation log, default for-bot/moderation.log under
+                   C:/Thornswood-Server
+  MODERATION_LOG_DEV  Dev moderation log, default for-bot/moderation.log under
+                      C:/Thornswood-Server-Dev
+  MODERATION_LOG_SITE  hub moderation log, default moderation.log beside the
+                       file named by TROUBLE_FILE
+  MODERATION_EVERY seconds between moderation log reads, default 30
   HOLD_CHANNEL     channel the hold panel lives in, default choose-your-hold
   MEMBER_ROLE      role ID (preferred) or name that may pick a hold, default Member
   TEST_TASK_ROLES  comma separated role IDs (preferred) or names, who may
@@ -94,6 +117,11 @@ Everything it needs is in env:
                    TEST_FINDINGS_CHANNEL
   TESTER_ROLES     comma separated role IDs (preferred) or names that may use
                    that panel besides staff, default Playtester
+  GITHUB_API       GitHub API base URL, default https://api.github.com when
+                   unset. Trailing slashes are removed
+  FORCE_COMMAND_SYNC  set to 1 to register slash commands even when the saved
+                      command list and servers match. Default 0 leaves the
+                      normal change and new-server checks in place
   KNOWN_ISSUES_REPO   default ThornswoodRP/Thornswood
   KNOWN_ISSUES_LABELS default Dev Findings,Main Findings
   KNOWN_ISSUES_EVERY  seconds between GitHub reads, default 300, never under 60

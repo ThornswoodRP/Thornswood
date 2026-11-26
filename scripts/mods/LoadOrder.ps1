@@ -1,6 +1,8 @@
 <#
-  LoadOrder.ps1
+.SYNOPSIS
+  The load order as the game counts it, and how to put a plugin list into the server's order.
 
+.DESCRIPTION
   The load order as the game counts it, and how to put a plugin list into the
   server's order. Dot-sourced by Check-CleanInstall.ps1, Check-CollectionRules.ps1,
   Check-Manifest.ps1 and Find-MissingMasters.ps1 in scripts\mods, and by Check-ShipReady.ps1,
@@ -547,7 +549,7 @@ function Get-VortexProfileDir([string]$Name = 'Thornswood') {
 function Assert-VortexProfile([string]$Name = 'Thornswood') {
     $dir = Get-VortexProfileDir $Name
     if (-not $dir) {
-        throw ("Vortex profile '$Name' was not found. In Vortex, create or switch to a profile named $Name, deploy the collection, then try again. Looked under %APPDATA%\Vortex\skyrimse\profiles and state.v2.")
+        throw ("Vortex profile '$Name' was not found. In Vortex, turn on Profile Management under Settings, Interface, create or switch to a profile named $Name, deploy the collection, then try again. Looked under %APPDATA%\Vortex\skyrimse\profiles and state.v2.")
     }
     # A profile folder with no plugins.txt is one Vortex never deployed the
     # collection into: there is no load order in it to read or check (#4387).

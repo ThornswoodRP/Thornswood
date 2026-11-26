@@ -22,7 +22,7 @@
   here. Once the hair dye block is, the tailor gate has to be there, and the
   refusal line the page quotes has to be the one the block builds from the
   staff list's who, so a change to who may steep fails here until the page
-  follows. Before then, those halves say SKIP.
+  follows. Each check fails if its inputs are missing.
 
   Read only.
 */
@@ -93,7 +93,7 @@ if (listText) {
   yes('the planted dye name check catches a dye named on the page',
       dyes.length > 0 && namedIn(flat + ' Try the ' + dyes[dyes.length - 1].name + '.').length === 1);
 } else {
-  console.log('SKIP  no staff dye list (game/data/hair-dyes.json) yet');
+  yes('staff dye list (game/data/hair-dyes.json) is present', false);
 }
 
 // ------------------------------------------------ the panels' own words
@@ -107,11 +107,11 @@ if (/hairDye/.test(skills) && /dye/.test(party)) {
   yes('P names the dye when there is more than one', /'Dye: '/.test(party));
   yes('the offer prompt\'s buttons are Accept and Refuse', />Accept<\/button>/.test(party) && />Refuse<\/button>/.test(party));
 } else {
-  console.log('SKIP  the hair dye panels are not in this checkout yet');
+  yes('hair dye panels are present in checkout', false);
 }
 
 // ------------------------------------------- who may steep, and the refusal
-const gm = require('./gamemode-tables.js').joined(read('game/gamemode.js')) || '';
+const gm = read('game/gamemode.js') || '';
 if (listText && /==== thornswood hair dye ====/.test(gm)) {
   const who = JSON.parse(listText).who || {};
   const halves = who.halves || {};
@@ -139,9 +139,12 @@ if (listText && /==== thornswood hair dye ====/.test(gm)) {
       '. Nothing was taken from your pack.';
   yes('the line the page quotes is the one the block builds from the list', built === REFUSAL);
   yes('the professions table names both halves that way',
-      names.every(function (h) { return gm.indexOf('"half":"' + h.charAt(0).toUpperCase() + h.slice(1) + '"') >= 0; }));
+      names.every(function (h) {
+        return gm.indexOf(h + ": '" + h.charAt(0).toUpperCase() + h.slice(1) + "'") >= 0 ||
+               gm.indexOf('"half":"' + h.charAt(0).toUpperCase() + h.slice(1) + '"') >= 0;
+      }));
 } else {
-  console.log('SKIP  the hair dye block (tailor gate) is not in this checkout yet');
+  yes('hair dye block (tailor gate) is present in checkout', false);
 }
 
 console.log('');

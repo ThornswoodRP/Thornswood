@@ -1,6 +1,8 @@
 <#
-  NexusModPlan.ps1
+.SYNOPSIS
+  What Vortex would install from one mod archive, worked out the way Install-NexusRevision.ps1 lays a whole revision out (NexusLayout.cs), for a mod the collection does not carry yet (#5189).
 
+.DESCRIPTION
   What Vortex would install from one mod archive, worked out the way
   Install-NexusRevision.ps1 lays a whole revision out (NexusLayout.cs), for a
   mod the collection does not carry yet (#5189):

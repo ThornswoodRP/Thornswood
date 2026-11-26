@@ -1,6 +1,6 @@
 // Write-CutItems.js
 //
-// Builds docs/systems/cut-items.md and docs/systems/cut-items.json from the
+// Builds docs/systems/cut-items.md and game/data/cut-items.json from the
 // recipe table. It does not edit recipes.json. The markdown is the plan for
 // what leaves the open craft book. The json is the same list, one row per
 // reference, so a row can be put back for an event without hunting the plugin.
@@ -24,12 +24,12 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
 const recipes = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'recipes.json'), 'utf8'));
-const CUT_JSON = path.join(ROOT, 'docs', 'systems', 'cut-items.json');
+const CUT_JSON = path.join(ROOT, 'game', 'data', 'cut-items.json');
 const cutFile = fs.existsSync(CUT_JSON) ? JSON.parse(fs.readFileSync(CUT_JSON, 'utf8')) : null;
 // Every row the rules left out of the cut file, so a row a plugin adds later
 // is told from one already decided (#4087). Its own file, because
 // merchant-role-tables.json pins cut-items.json's bytes and reads nothing here.
-const KEPT_JSON = path.join(ROOT, 'docs', 'systems', 'cut-kept.json');
+const KEPT_JSON = path.join(ROOT, 'game', 'data', 'cut-kept.json');
 const keptFile = fs.existsSync(KEPT_JSON) ? JSON.parse(fs.readFileSync(KEPT_JSON, 'utf8')) : null;
 
 // Cut means the recipe build has applied a cut file to it: an owned row marked
@@ -48,7 +48,7 @@ function tableIsCut() {
 }
 const ALREADY_CUT = tableIsCut();
 if (ALREADY_CUT && !cutFile) {
-  console.log('STOP. game/data/recipes.json is already cut and there is no docs/systems/cut-items.json to start from.');
+  console.log('STOP. game/data/recipes.json is already cut and there is no game/data/cut-items.json to start from.');
   console.log('The rules cannot sort a table that is already cut, so nothing was written.');
   process.exitCode = 1;
   return;
@@ -545,7 +545,7 @@ if (ALREADY_CUT) {
     return !inFile[id] && !keptIds.has(id);
   }).sort();
   if (fresh.length && !keptFile) {
-    console.log('STOP. There is no docs/systems/cut-kept.json, so the ' + fresh.length + ' row(s) of the recipe table outside the cut file');
+    console.log('STOP. There is no game/data/cut-kept.json, so the ' + fresh.length + ' row(s) of the recipe table outside the cut file');
     console.log('cannot be told apart: kept by the rules, or added by a plugin since. Nothing was written.');
     process.exitCode = 1;
     return;
@@ -660,7 +660,7 @@ let md = '';
 md += '# Cut items\n\n';
 md += 'What leaves the open craft book. Nothing in `game/data/recipes.json` is deleted by this page. ';
 md += 'Every reference listed here can be put back for an event, or if the cut was wrong, without hunting the plugin for the form id.\n\n';
-md += 'The same rows are in [cut-items.json](cut-items.json), one object per reference.\n\n';
+md += 'The same rows are in [cut-items.json](../../game/data/cut-items.json), one object per reference.\n\n';
 md += 'An item in this file is not found in the world and not made at a public bench. ';
 md += 'The test server is wiped, so what is already sitting in chests does not have to be stripped by hand. ';
 md += 'After that, a thing that is no longer made simply stops appearing.\n\n';
@@ -672,9 +672,9 @@ md += '| thalmor | Not found. Someone on the Thalmor remnant roll may craft it. 
 md += 'Counts in this file: cut ' + (byDisp.cut || 0) + ', embassy ' + (byDisp.embassy || 0) + ', thalmor ' + (byDisp.thalmor || 0) + '. ';
 md += 'Rows this pass left in the open book, or on a lock that is not a cut: ' + keptCount + '.\n\n';
 md += 'The rules below sorted the recipe table once, before anything was cut. The recipe build ';
-md += '(`scripts/dev/Build-RecipeTable.ps1`) reads [cut-items.json](cut-items.json), so the table it writes is already cut, ';
+md += '(`scripts/dev/Build-RecipeTable.ps1`) reads [cut-items.json](../../game/data/cut-items.json), so the table it writes is already cut, ';
 md += 'and `scripts/dev/Write-CutItems.js` run on that table writes this page from the list it has instead of sorting the table again.\n\n';
-md += 'A row a plugin adds later, which is in neither this list nor [cut-kept.json](cut-kept.json), is sorted once, by the rules about what cannot be had here and by no others: ';
+md += 'A row a plugin adds later, which is in neither this list nor [cut-kept.json](../../game/data/cut-kept.json), is sorted once, by the rules about what cannot be had here and by no others: ';
 md += 'a temper, a recipe that asks for something this file cuts, a dragon, Daedric or Aetherium piece, Thalmor and Empire gear, a Riekling piece outside the kept set, and a staff whose spell is not in the college book. ';
 md += 'A plugin is added for what it adds, so its other rows stay in the open book, and the recipe build gives them owners.\n\n';
 md += '## Rules that built the lists\n\n';
@@ -745,14 +745,14 @@ const keptJson = {
 // checkout (#3029), so a run that changes nothing writes the same bytes.
 const dir = path.join(ROOT, 'docs', 'systems');
 fs.writeFileSync(path.join(dir, 'cut-items.md'), md, 'utf8');
-fs.writeFileSync(path.join(dir, 'cut-items.json'), JSON.stringify(json, null, 2) + '\n', 'utf8');
+fs.writeFileSync(CUT_JSON, JSON.stringify(json, null, 2) + '\n', 'utf8');
 // Written once there is something in it, so a table from before #4087 with no
 // row outside the cut file writes back only the two files it always had.
 if (keptFile || keptJson.ids.length) {
   fs.writeFileSync(KEPT_JSON, JSON.stringify(keptJson, null, 2) + '\n', 'utf8');
 }
 if (ALREADY_CUT) {
-  console.log('the recipe table is already cut, so the list is the one docs/systems/cut-items.json has');
+  console.log('the recipe table is already cut, so the list is the one game/data/cut-items.json has');
 }
 console.log('cut', byDisp.cut || 0, 'embassy', byDisp.embassy || 0, 'thalmor', byDisp.thalmor || 0, 'kept', keptCount);
-console.log('wrote docs/systems/cut-items.md and cut-items.json' + (keptFile || keptJson.ids.length ? ', and cut-kept.json' : ''));
+console.log('wrote docs/systems/cut-items.md and game/data/cut-items.json' + (keptFile || keptJson.ids.length ? ', and cut-kept.json' : ''));

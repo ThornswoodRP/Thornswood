@@ -1,4 +1,4 @@
-﻿Thornswood installer licence texts
+Thornswood installer licence texts
 ==================================
 
 These files go out with every install beside SOURCE CODE.txt. The launcher's
@@ -19,15 +19,20 @@ sits in the launcher.
     MpClientPlugin.dll and the server engine.
 
   Concentus-LICENSE.txt
-    Byte for byte LICENSE in the Concentus 2.2.2 package from nuget.org, the
+    Byte for byte LICENSE in the Concentus 2.2.3 package from nuget.org, the
     Opus BSD licence, quoted in THIRD-PARTY.md under "Concentus licence".
     Covers the Opus codec compiled into the launcher for voice (#4823).
 
   SharpSRTP-LICENSE.txt
     Byte for byte LICENSE in https://github.com/jimm98y/SharpSRTP at commit
-    ede1d045, the commit SharpSRTP 0.5.8's nuspec names (MIT), quoted in
+    4a7015bc, the commit SharpSRTP 0.6.0's nuspec names (MIT), quoted in
     THIRD-PARTY.md under "SharpSRTP licence". Covers the DTLS-SRTP code
     compiled into the launcher for voice (#4823).
+
+  SharpDTLS-LICENSE.txt
+    LICENSE in https://github.com/jimm98y/SharpDTLS at commit
+    2d9ce3c5, the commit named by SharpDTLS 0.0.2 (MIT). SharpSRTP
+    brings in this DTLS library.
 
   BouncyCastle-LICENSE.txt
     Byte for byte LICENSE.md in the BouncyCastle.Cryptography 2.7.0 package
@@ -37,7 +42,7 @@ sits in the launcher.
 
   dotnet-LICENSE.txt
     Byte for byte LICENSE.TXT in the Microsoft.NETCore.App.Runtime.NativeAOT.win-x64
-    10.0.14 package (MIT, the .NET Foundation). Covers the .NET runtime and
+    10.0.15 package (MIT, the .NET Foundation). Covers the .NET runtime and
     libraries compiled into Thornswood.exe, and
     System.Security.Cryptography.ProtectedData 11.0.0, whose package names
     the same licence.
@@ -48,14 +53,14 @@ sits in the launcher.
 
   Avalonia-LICENSE.txt
     Byte for byte licence.md in https://github.com/AvaloniaUI/Avalonia at
-    commit cf8e5646, the commit the Avalonia 12.1.6 packages name (MIT).
-    Covers Avalonia and the rest of its 12.1.6 packages the launcher restores
+    commit 5d9e6d1b, the commit the Avalonia 12.2.0 packages name (MIT).
+    Covers Avalonia and the rest of its 12.2.0 packages the launcher restores
     (Desktop, Win32, Skia, HarfBuzz, the Fluent theme and the others),
     compiled into the launcher.
 
   MicroCom-LICENSE.txt
     Byte for byte LICENSE in https://github.com/kekekeks/MicroCom at commit
-    76785efc, the commit MicroCom.Runtime 0.11.6's nuspec names (MIT).
+    cd2fa3c8, the commit MicroCom.Runtime 0.11.7's nuspec names (MIT).
     Avalonia's COM interop, compiled into the launcher.
 
   Tmds.DBus-LICENSE.txt

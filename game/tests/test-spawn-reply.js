@@ -48,9 +48,8 @@ const NOT_NPC = { 0x12eb7: 'WEAP' };
 const placed = [], moved = [], destroyed = [], created = [], said = [], logs = [];
 let nextRef = 0xff000100;
 let placeThrows = '', setThrows = '';
-// The join pass hold off on purpose: these lines come from a chat connection
-// with no join token and a session with no pass, and the hold is what
-// test-join-pass-trust.js covers. Absent would be on (#1319).
+// Ordinary admission is off here; staff/tester commands still require both
+// a proven chat connection and a current launcher pass, even with it off.
 const HOLD_OFF = { thornswoodRequirePass: false };
 let settings = Object.assign({}, HOLD_OFF);
 const properties = new Set();
@@ -162,8 +161,9 @@ const pollTimer = timers.filter(function (t) { return /\bpoll\(\)/.test(String(t
 yes('the command timer that polls the voice service is armed', !!pollTimer);
 
 let seq = 0;
-function send(text, pid) {
-  queue.push({ id: 'test:' + (++seq), profileId: pid || PID, name: 'Patrick', text: text });
+function send(text, pid, proven) {
+  queue.push({ id: 'test:' + (++seq), profileId: pid || PID, name: 'Patrick', text: text,
+               proven: proven !== false });
   said.length = 0; placed.length = 0; moved.length = 0; destroyed.length = 0; created.length = 0;
   const before = logs.length;
   if (pollTimer) { pollTimer.fn(); }
@@ -188,6 +188,20 @@ if (loaded && pollTimer) {
 
   // ------------------------------------------------------- a tester ---
   settings = Object.assign({ thornswoodPlaytesters: [PID] }, HOLD_OFF);
+
+  // #1273: the fixture must meet the same proof checks as a real command.
+  // First keep both refusals covered, so a weaker production gate fails here.
+  for (const text of ['/spawn troll', '/give iron sword']) {
+    r = send(text, PID, false);
+    yes(text + ' from an unproven connection is refused without changing the world',
+      r.placed.length === 0 && actors[ME].inventory.entries.length === 0 &&
+      r.said.length === 1 && /chat to have proved who you are/.test(r.said[0]));
+    r = send(text);
+    yes(text + ' without a current launcher pass is refused without changing the world',
+      r.placed.length === 0 && actors[ME].inventory.entries.length === 0 &&
+      r.said.length === 1 && /launcher.s pass/.test(r.said[0]));
+  }
+  box.__thornswoodPassSeen.passes[PID] = { at: Date.now(), x: Date.now() + 600000, v: 'test' };
 
   r = send('/spawn troll');
   const trollId = r.placed.length ? r.placed[0].base : 0;

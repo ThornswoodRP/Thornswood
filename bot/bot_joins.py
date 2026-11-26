@@ -15,7 +15,7 @@ import discord
 import card
 
 from bot_base import DATA_DIR
-from bot_core import WELCOME, _int_env, by_name, client, log
+from bot_core import WELCOME, _int_env, _state_read, _state_write, by_name, client, log
 
 
 # Which arrival each person was, on disk in the bot's data folder.
@@ -41,6 +41,7 @@ from bot_core import WELCOME, _int_env, by_name, client, log
 # folder, so neither the full run nor -CodeOnly can overwrite or remove it,
 # and .gitignore keeps it out of the repo, like open-tickets.json.
 JOINS = os.path.join(DATA_DIR, 'joins.json')
+WELCOME_POSTS = os.path.join(DATA_DIR, 'welcome-posts.json')
 JOIN_FLOOR = _int_env('JOIN_NUMBER_FLOOR', 28)
 
 # HOW LONG A NUMBER IS KEPT (#2353). It was kept for ever, after its person
@@ -189,6 +190,62 @@ def age_restore_copies(folder, now):
             failed.append((n, str(e)))
     return deleted, failed
 
+def remember_welcome(guild, member, number, msg):
+    posts = _state_read(WELCOME_POSTS)
+    if posts is None:
+        raise ValueError('welcome post index could not be read')
+    posts[str(msg.id)] = {'guild': str(guild.id), 'member': str(member.id),
+                          'number': number, 'channel': msg.channel.id}
+    _state_write(WELCOME_POSTS, posts)
+
+
+async def forget_welcomes(rec):
+    """Remove only saved copies, against a readable join record for their server."""
+    posts = _state_read(WELCOME_POSTS)
+    if posts is None:
+        log('welcome posts: index could not be read; nothing removed')
+        return
+    gone = []
+    for message, post in posts.items():
+        if not isinstance(post, dict) or not message.isdecimal():
+            continue
+        g = rec.get(str(post.get('guild')))
+        ids = g.get('members') if isinstance(g, dict) else None
+        if not isinstance(ids, dict):
+            continue
+        member = post.get('member')
+        if not isinstance(member, str) or not member.isdecimal():
+            continue
+        # A later arrival can have a new number before this sweep runs.
+        number = post.get('number')
+        if type(number) is not int or number <= 0:
+            continue
+        if member in ids and (type(ids[member]) is not int or ids[member] == number):
+            continue
+        channel = post.get('channel')
+        if type(channel) is not int or channel <= 0:
+            continue
+        ch = client.get_channel(channel)
+        if ch is None:
+            continue
+        try:
+            await ch.get_partial_message(int(message)).delete()
+        except discord.NotFound:
+            pass  # Already absent. The reference can go too.
+        except discord.HTTPException as e:
+            log('welcome posts: could not remove a linked post (HTTP %d)' % e.status)
+            continue
+        gone.append(message)
+    if gone:
+        # Sends can finish during the Discord calls. Keep their new references.
+        current = _state_read(WELCOME_POSTS)
+        if current is None:
+            raise ValueError('welcome post index could not be read')
+        for message in gone:
+            current.pop(message, None)
+        _state_write(WELCOME_POSTS, current)
+
+
 async def watch_join_numbers():
     """
     Marks who has left and drops the numbers past JOIN_KEEP_DAYS, as the bot
@@ -218,6 +275,7 @@ async def watch_join_numbers():
             if dropped:
                 log('join numbers: %d dropped, their people gone more than %d days'
                     % (dropped, JOIN_KEEP_DAYS))
+            await forget_welcomes(rec)
         except Exception:
             log('join numbers: could not age %s, so it is as it was until the '
                 'next pass:\n%s' % (JOINS, traceback.format_exc()))
@@ -303,12 +361,21 @@ async def on_member_join(member):
     # that never reached the bot apart from one that reached it and failed.
     log('join: %s arrived in "%s"' % (member, member.guild.name))
 
+    if getattr(member, 'bot', False):
+        log('join: %s is a bot, so no welcome card and no join number' % member)
+        return
+
     ch = by_name(member.guild, [WELCOME])
     if ch is None:
         log('no text channel called #%s to greet in' % WELCOME)
         return
 
     number = arrival_number(member.guild, member)
+    try:
+        _, members = _joins_of(_joins_read(), member.guild)
+        linked = _joins_number(members, member.id) == number
+    except (OSError, ValueError):
+        linked = False  # A fallback greeting has no saved number to follow.
     name = member.display_name or member.name
 
     png = None
@@ -323,8 +390,10 @@ async def on_member_join(member):
     line = '%s came up the road.' % member.mention
     try:
         if png is not None:
-            await ch.send(line, file=discord.File(png, 'welcome.png'))
+            msg = await ch.send(line, file=discord.File(png, 'welcome.png'))
         else:
-            await ch.send(line)
+            msg = await ch.send(line)
+        if linked:
+            remember_welcome(member.guild, member, number, msg)
     except Exception:
-        log('greeting failed:\n' + traceback.format_exc())
+        log('greeting send or record failed:\n' + traceback.format_exc())

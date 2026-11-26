@@ -83,6 +83,7 @@
     build();
     if (!data || data.open === false) { close(); return; }
     root.className = 'on';
+    var was = shown;
     shown = true;
     root.querySelector('#' + ID + '-title').textContent =
       (data.trader || 'Trader') + (data.place ? ' at ' + data.place : '');
@@ -90,8 +91,13 @@
       (data.reservedPurse?' ('+data.reservedPurse+' promised for work)':'');
     var body = '';
     if (data.note) body += '<p class="note" role="status">' + esc(data.note) + '</p>';
-    var quests = data.quests || [];
-    if (quests.length) body += '<h3>Work from the guild</h3>';
+    // Offer only work the server says can be taken. Accepted work keeps its
+    // return/leave controls even when its original requirements no longer hold.
+    var quests = (data.quests || []).filter(function (quest) { return quest.state === 'open' || quest.canTake === true; });
+    body += '<h3>Work from the guild</h3>';
+    if (!quests.some(function (quest) { return quest.canTake === true; })) {
+      body += '<p class="note" role="status">I have nothing for you at the moment.</p>';
+    }
     for (var q = 0; q < quests.length; q++) {
       var quest = quests[q];
       var location = typeof quest.locations === 'string' ? quest.locations : Object.keys(quest.locations || {}).map(function(gem){
@@ -194,6 +200,7 @@
         if (take) take.disabled = take.getAttribute('data-ready') !== 'yes' || !el.value;
       };
     }
+    if (!was && window.thornswoodDialog) window.thornswoodDialog.open(root.querySelector('.panel'), root.querySelector('h2'));
     tell('opened');
   }
   function tradeLine(row, verb, index, maximum) {

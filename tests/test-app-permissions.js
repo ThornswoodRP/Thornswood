@@ -43,11 +43,18 @@ const clone = o => JSON.parse(JSON.stringify(o));
 // 1. the record's rules
 console.log('1. the record');
 yes('the real records/github-apps.json holds its own rules', checkRecord(real).length === 0);
-yes('  it names the six Bots\' two Apps, the box admin App, the watcher, the pin robot and the board App',
-  ['thornswood-bramble', 'thornswood-workers', 'thornswood-box-admin', 'thornswood-watch', 'thornswood-pin-robot', 'thornswood-board'].every(s => real.apps.some(a => a.slug === s)));
+yes('  it names the Bots\' Apps, the box admin App, the watcher, the pin robot and the board App',
+  ['thornswood-bramble', 'thornswood-workers', 'thornswood-magpie-actions-read', 'thornswood-box-admin', 'thornswood-watch',
+    'thornswood-pin-robot', 'thornswood-board'].every(s => real.apps.some(a => a.slug === s)));
 yes('  only Bramble\'s App may change a workflow', real.apps.filter(a => a.permissions.workflows).map(a => a.slug).join() === 'thornswood-bramble');
-yes('  no App holds administration but the box admin App and the watcher (read)',
-  real.apps.filter(a => a.permissions.administration).map(a => a.slug + ' ' + a.permissions.administration).sort().join() === 'thornswood-box-admin write,thornswood-watch read');
+yes('  only the box admin App has administration write, and Magpie and the watcher have read',
+  real.apps.filter(a => a.permissions.administration).map(a => a.slug + ' ' + a.permissions.administration).sort().join() ===
+  'thornswood-box-admin write,thornswood-magpie-actions-read read,thornswood-watch read');
+const privateReader = real.apps.find(a => a.slug === 'thornswood-magpie-actions-read');
+yes('  Magpie uses a private App with the two read scopes on its two repositories',
+  !!privateReader && privateReader.private_registration === true &&
+  JSON.stringify(privateReader.permissions) === '{"administration":"read","metadata":"read"}' &&
+  privateReader.installed_on.join() === 'ThornswoodRP/Thornswood,ThornswoodRP/skymp' && !privateReader.events.length);
 yes('  no App may write a secret, and only the box admin App an environment', real.apps.every(a => a.permissions.secrets !== 'write') && real.apps.filter(a => a.permissions.environments === 'write').map(a => a.slug).join() === 'thornswood-box-admin');
 yes('  only Bramble\'s App is sent events: check_suite and pull_request, to wake it', real.apps.filter(a => a.events.length).map(a => a.slug + ' ' + a.events.join('+')).join() === 'thornswood-bramble check_suite+pull_request');
 yes('  no Bot App is installed on Thornswood-Hermes', real.apps.every(a => (a.installed_on || []).indexOf('ThornswoodRP/Thornswood-Hermes') < 0));
@@ -58,6 +65,8 @@ yes('a level GitHub does not have is refused', bad(/issues is "all", not read or
 yes('a why for a permission not given is refused', bad(/a why for packages/, d => { d.apps[0].why.packages = 'x'; }));
 yes('no metadata read is refused', bad(/metadata: read/, d => { delete d.apps[0].permissions.metadata; delete d.apps[0].why.metadata; }));
 yes('no events list is refused', bad(/no events list/, d => { delete d.apps[0].events; }));
+yes('a mistyped private registration marker is refused',
+  bad(/private_registration must be true/, d => { d.apps[0].private_registration = 'true'; }));
 yes('an event with no why is refused', bad(/the check_suite event has no why/, d => { delete d.apps[0].events_why.check_suite; }));
 yes('a why for an event not sent is refused', bad(/an events_why for push/, d => { d.apps[0].events_why.push = 'x'; }));
 yes('an App that is also one of Patrick\'s agents is refused', bad(/is also one of Patrick's own agents/, d => { d.patrick_agents.push({ name: 'x', slug: 'thornswood-workers', why: 'x' }); }));
@@ -99,12 +108,12 @@ function standIn(apps) {
   });
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({ server, seen, url: 'http://127.0.0.1:' + server.address().port })));
 }
-function run(url, record) {
+function run(url, record, options = []) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-app-perms-'));
   const file = path.join(dir, 'github-apps.json');
   fs.writeFileSync(file, JSON.stringify(record));
   return new Promise(resolve => {
-    const p = spawn(process.execPath, [SCRIPT], { env: Object.assign({}, process.env, { THORNSWOOD_GITHUB_API: url, THORNSWOOD_APPS_RECORD: file, GH_TOKEN: TOKEN }) });
+    const p = spawn(process.execPath, [SCRIPT, ...options], { env: Object.assign({}, process.env, { THORNSWOOD_GITHUB_API: url, THORNSWOOD_APPS_RECORD: file, GH_TOKEN: TOKEN }) });
     let out = '';
     p.stdout.on('data', c => { out += c; });
     p.stderr.on('data', c => { out += c; });
@@ -120,12 +129,25 @@ function asGitHub(record) {
 // The stand-in GitHub listening now, so a throw part way still closes it.
 let s = null;
 (async () => {
-  s = await standIn(asGitHub(real));
+  const publicApps = real.apps.filter(a => !a.private_registration);
+  const privateApps = real.apps.filter(a => a.private_registration);
+  s = await standIn(asGitHub({ apps: publicApps }));
   let r = await run(s.url, real);
-  yes('every App matching passes, exit 0', r.code === 0 && /every app holds exactly what/.test(r.out) && !/FAIL/.test(r.out));
-  yes('  one line per App', real.apps.every(a => r.out.indexOf('PASS  ' + a.slug + ' ') >= 0));
-  yes('  the token reaches GitHub as a bearer token', s.seen.length === real.apps.length && s.seen.every(x => x.auth === 'Bearer ' + TOKEN));
+  yes('every public App matching passes, exit 0',
+    r.code === 0 && /every checked App matches/.test(r.out) && !/FAIL/.test(r.out));
+  yes('  one pass line per queried App', publicApps.every(a => r.out.indexOf('PASS  ' + a.slug + ' ') >= 0));
+  yes('  the private App is named for an owner check and gets no API call',
+    privateApps.length === 1 && privateApps.every(a => r.out.includes('OWNER CHECK  ' + a.slug) &&
+    s.seen.every(x => x.url !== '/apps/' + a.slug)));
+  yes('  the token reaches GitHub as a bearer token', s.seen.length === publicApps.length && s.seen.every(x => x.auth === 'Bearer ' + TOKEN));
   yes('  and is never printed', r.out.indexOf(TOKEN) < 0);
+  s.server.close();
+
+  s = await standIn(asGitHub(real));
+  r = await run(s.url, real, ['-Private']);
+  yes('an owner check reads just the private registration and matches its declared permissions',
+    r.code === 0 && privateApps.length === 1 && privateApps.every(a => r.out.includes('PASS  ' + a.slug + ' ')) &&
+    s.seen.length === 1 && s.seen[0].url === '/apps/thornswood-magpie-actions-read');
   s.server.close();
 
   const gh = asGitHub(real);
@@ -136,8 +158,10 @@ let s = null;
   r = await run(s.url, real);
   yes('an App holding more fails, exit 1, and names it', r.code === 1 && /FAIL  thornswood-workers holds workflows write, which the record does not give it/.test(r.out));
   yes('an App GitHub will not show fails with its answer', /FAIL  thornswood-watch: GitHub answered 404: Not Found/.test(r.out));
-  yes('  a private App says so, and how it is made readable', /FAIL  thornswood-board: GitHub answered 403: Resource not accessible by integration \(a private App: .*made public on its Advanced settings page/.test(r.out));
-  yes('  the others still pass', /PASS  thornswood-bramble /.test(r.out) && /3 of 6 apps differ/.test(r.out));
+  yes('  a public registration refusal explains the workflow token limit',
+    /FAIL  thornswood-board: GitHub answered 403: Resource not accessible by integration \(the workflow token can read only public Apps\)/.test(r.out));
+  yes('  the other public Apps still pass',
+    /PASS  thornswood-bramble /.test(r.out) && r.out.includes('3 of ' + publicApps.length + ' checked Apps differ'));
   s.server.close();
 
   const broken = clone(real); delete broken.apps[1].why.contents;

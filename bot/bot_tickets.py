@@ -793,18 +793,41 @@ class TicketModal(discord.ui.Modal):
                     log('the ticket could not be posted in #%s either:\n'
                         % book.name + traceback.format_exc())
 
-        # And whatever happened in Discord, the person gets told something
-        # true. The old wording promised a message that nothing ever sent.
-        if not posted and not fell_back and self.kind != 'faction':
-            try:
-                await who.send(
-                    'Your ticket reached staff, but Discord would not let the '
-                    'bot open a thread for it. Nothing is lost: it is in the '
-                    'staff inbox. Somebody will get back to you.')
-            except Exception as e:
-                log('could not even DM %s about the failed ticket: %s' % (who, e))
+        # Discord holds no copy of this one when neither the thread nor the
+        # staff only log channel took it. Then the site's inbox is the only
+        # place it is kept, and the person is told it is there only once the
+        # site has said it kept it (#4230): until then the message promised
+        # "nothing is lost: it is in the staff inbox" before the site copy was
+        # even sent, and a refused send or a bot with no key was a line in the
+        # bot's log and nothing else. A Faction Leader ticket never goes to
+        # the site without its thread, and was told above.
+        only_site = not posted and not fell_back and self.kind != 'faction'
+        kept = None
+        if only_site:
+            kept = await push_async(
+                self.kind, '%s: %s' % (self.label_text, who.display_name),
+                detail, str(who), who.id, rules)
+            if kept is True:
+                try:
+                    await who.send(
+                        'Your ticket reached staff, but Discord would not let '
+                        'the bot open a thread for it. It is in the staff '
+                        'inbox on the site, and somebody will get back to you '
+                        'by message.')
+                except Exception as e:
+                    log('could not even DM %s about the failed ticket: %s' % (who, e))
+            elif kept is False:
+                _last_ticket.pop(_ticket_key(guild, who), None)
+                log('ticket from %s was kept nowhere: no thread, no staff only '
+                    'channel, and the site did not take it.' % who)
+            else:
+                # A lost reply can follow a save. Keep the ordinary cooldown
+                # so the person can check with staff before sending another.
+                log('could not confirm delivery of a site-only ticket from %s' % who)
 
-        # The site copy is bookkeeping, and nobody waits on it. It used to be
+        # Where Discord holds a copy (the thread, or the staff only log
+        # channel), the site copy is bookkeeping, and nobody waits on it. With
+        # no Discord copy it was sent and answered above (#4230). It used to be
         # awaited here, before the reply, and push gives the site twelve
         # seconds to answer, so with the site down a stranger pressing Submit
         # watched the bot think for twelve seconds before hearing their ticket
@@ -815,7 +838,7 @@ class TicketModal(discord.ui.Modal):
         # push_async logs its own failure, so nothing is lost by not awaiting.
         # A Faction Leader ticket that never opened a thread is not sent:
         # the site inbox is readable by general staff.
-        if posted or self.kind != 'faction':
+        if (posted or self.kind != 'faction') and not only_site:
             task = asyncio.create_task(push_async(
                 self.kind, '%s: %s' % (self.label_text, who.display_name),
                 detail, str(who), who.id, rules))
@@ -834,10 +857,22 @@ class TicketModal(discord.ui.Modal):
                 'to staff instead, somewhere only staff can read it. Somebody '
                 'will answer you by message.',
                 ephemeral=True)
-        else:
+        elif kept is True:
             await interaction.followup.send(
                 'Sent to staff. Discord would not let a thread open for it, so '
-                'the answer will come by message rather than in here.',
+                'it is in the staff inbox on the site, and the answer will come '
+                'by message rather than in here.',
+                ephemeral=True)
+        elif kept is False:
+            await interaction.followup.send(
+                'This ticket did not reach staff. Please try again or message a '
+                'member of staff directly.',
+                ephemeral=True)
+        else:
+            await interaction.followup.send(
+                'I could not confirm whether the site received your ticket. It '
+                'may have been saved. Please message a member of staff to check '
+                'before submitting it again.',
                 ephemeral=True)
 
 
@@ -911,12 +946,39 @@ def _ticket_key(guild, who):
 
 
 def _open_tickets():
-    try:
-        with open(OPEN_TICKETS) as f:
-            d = json.load(f)
-        return d if isinstance(d, dict) else {}
-    except Exception:
+    """
+    The open ticket list, or {} when there is no file yet.
+
+    RAISES WHEN THE FILE IS THERE AND WILL NOT READ (#4339). This used to
+    answer {} for that too, so a file cut off half way through a write was
+    taken for an empty list, the next ticket wrote a fresh one over it, every
+    open ticket was forgotten and nothing was logged. Now the caller hears it
+    and writes nothing: remember_ticket and forget_ticket log it and leave the
+    file as it is for somebody to look at, and ticket_refusal logs it and lets
+    the person through, as it does for anything it cannot check.
+    """
+    if not os.path.exists(OPEN_TICKETS):
         return {}
+    with open(OPEN_TICKETS, encoding='utf-8-sig') as f:
+        d = json.load(f)
+    if not isinstance(d, dict):
+        raise ValueError(OPEN_TICKETS + ' is not a JSON object')
+    return d
+
+
+def _open_tickets_write(d):
+    """
+    Written to a file beside it and swapped in (#4339), the way joins.json is,
+    so a write that fails half way leaves the old list whole rather than half
+    of a new one. Opening the live file for writing empties it first, which is
+    how a cut-off write used to leave half a file behind.
+    """
+    tmp = OPEN_TICKETS + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(d, f)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, OPEN_TICKETS)
 
 
 def _open_thread(guild, tid):
@@ -954,11 +1016,11 @@ def remember_ticket(guild, who, thread):
                 continue
             keep[k] = v
         keep[_ticket_key(guild, who)] = thread.id
-        with open(OPEN_TICKETS, 'w') as f:
-            json.dump(keep, f)
+        _open_tickets_write(keep)
     except Exception:
-        log('could not write down which ticket %s has open, so they can open '
-            'a second one:\n' % who + traceback.format_exc())
+        log('could not write down which ticket %s has open in %s, so they '
+            'can open a second one; the file is left as it was:\n'
+            % (who, OPEN_TICKETS) + traceback.format_exc())
 
 
 def forget_ticket(guild, who, thread):
@@ -974,11 +1036,10 @@ def forget_ticket(guild, who, thread):
         if have.get(key) != getattr(thread, 'id', None):
             return
         have.pop(key, None)
-        with open(OPEN_TICKETS, 'w') as f:
-            json.dump(have, f)
+        _open_tickets_write(have)
     except Exception:
-        log('could not forget the half-written ticket for %s:\n'
-            % who + traceback.format_exc())
+        log('could not forget the half-written ticket for %s in %s; the file '
+            'is left as it was:\n' % (who, OPEN_TICKETS) + traceback.format_exc())
 
 
 def ticket_refusal(interaction):
@@ -1137,13 +1198,39 @@ async def close_here(interaction, why=None):
 
     # Sent first, then archived. The other way round the message never lands,
     # because an archived thread will not take one.
+    archived = False
     try:
         await ch.edit(archived=True, locked=True)
+        archived = True
     except Exception:
         try:
             await ch.edit(archived=True)
+            archived = True
         except Exception:
             log('could not archive the ticket thread:\n' + traceback.format_exc())
+
+    if not archived:
+        fail_msg = 'Discord could not archive the ticket thread, so it remains open.'
+        try:
+            if hasattr(interaction, 'followup') and hasattr(interaction.followup, 'send'):
+                await interaction.followup.send(fail_msg, ephemeral=True)
+            elif hasattr(interaction, 'followup') and hasattr(interaction.followup, 'send_message'):
+                await interaction.followup.send_message(fail_msg, ephemeral=True)
+        except Exception:
+            log('could not tell user about archive failure:\n' + traceback.format_exc())
+
+        try:
+            await ch.send('Archive failed: Discord could not archive this thread, so the ticket remains open.')
+        except Exception:
+            log('could not post archive failure in ticket:\n' + traceback.format_exc())
+
+        try:
+            if book is not None:
+                note_fail = 'Archive failed: **%s** is still open, Discord could not archive it.\n%s' % (
+                    as_typed(ch.name, 100), ch.jump_url)
+                await book.send(note_fail, allowed_mentions=mentions, suppress_embeds=True)
+        except Exception:
+            log('could not post archive failure in staff log:\n' + traceback.format_exc())
 
 
 class TicketTools(discord.ui.View):

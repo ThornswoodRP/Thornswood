@@ -2,7 +2,7 @@
 
 What leaves the open craft book. Nothing in `game/data/recipes.json` is deleted by this page. Every reference listed here can be put back for an event, or if the cut was wrong, without hunting the plugin for the form id.
 
-The same rows are in [cut-items.json](cut-items.json), one object per reference.
+The same rows are in [cut-items.json](../../game/data/cut-items.json), one object per reference.
 
 An item in this file is not found in the world and not made at a public bench. The test server is wiped, so what is already sitting in chests does not have to be stripped by hand. After that, a thing that is no longer made simply stops appearing.
 
@@ -16,9 +16,9 @@ An item in this file is not found in the world and not made at a public bench. T
 
 Counts in this file: cut 3417, embassy 19, thalmor 10. Rows this pass left in the open book, or on a lock that is not a cut: 595.
 
-The rules below sorted the recipe table once, before anything was cut. The recipe build (`scripts/dev/Build-RecipeTable.ps1`) reads [cut-items.json](cut-items.json), so the table it writes is already cut, and `scripts/dev/Write-CutItems.js` run on that table writes this page from the list it has instead of sorting the table again.
+The rules below sorted the recipe table once, before anything was cut. The recipe build (`scripts/dev/Build-RecipeTable.ps1`) reads [cut-items.json](../../game/data/cut-items.json), so the table it writes is already cut, and `scripts/dev/Write-CutItems.js` run on that table writes this page from the list it has instead of sorting the table again.
 
-A row a plugin adds later, which is in neither this list nor [cut-kept.json](cut-kept.json), is sorted once, by the rules about what cannot be had here and by no others: a temper, a recipe that asks for something this file cuts, a dragon, Daedric or Aetherium piece, Thalmor and Empire gear, a Riekling piece outside the kept set, and a staff whose spell is not in the college book. A plugin is added for what it adds, so its other rows stay in the open book, and the recipe build gives them owners.
+A row a plugin adds later, which is in neither this list nor [cut-kept.json](../../game/data/cut-kept.json), is sorted once, by the rules about what cannot be had here and by no others: a temper, a recipe that asks for something this file cuts, a dragon, Daedric or Aetherium piece, Thalmor and Empire gear, a Riekling piece outside the kept set, and a staff whose spell is not in the college book. A plugin is added for what it adds, so its other rows stay in the open book, and the recipe build gives them owners.
 
 ## Rules that built the lists
 

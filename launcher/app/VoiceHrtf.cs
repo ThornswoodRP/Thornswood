@@ -456,7 +456,6 @@ namespace Thornswood
     sealed class HrtfDatabase
     {
         public const int RawAzimuths = 24;
-        const int AzimuthSpacing = 15;
         const int InterpolationFactor = 8;
         public const int Azimuths = RawAzimuths * InterpolationFactor;
         const int Responses = 240;
@@ -754,7 +753,6 @@ namespace Thornswood
         readonly HrtfConvolver l1, r1, l2, r2;
         readonly HrtfDelay delayL, delayR;
         readonly float[] tl1 = new float[Quantum], tr1 = new float[Quantum], tl2 = new float[Quantum], tr2 = new float[Quantum];
-        readonly float[] delayed = new float[Quantum];
 
         bool selection2;
         int azimuthIndex1 = Uninitialized, azimuthIndex2 = Uninitialized;

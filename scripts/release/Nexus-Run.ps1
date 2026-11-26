@@ -1,6 +1,8 @@
 <#
-  Nexus-Run.ps1
+.SYNOPSIS
+  Runs one of the Nexus scripts with Patrick's Nexus API key from a session that does not hold the key, a cloud thread included (#2841).
 
+.DESCRIPTION
   Runs one of the Nexus scripts with Patrick's Nexus API key from a session
   that does not hold the key, a cloud thread included (#2841):
 
@@ -35,8 +37,8 @@
       from Nexus, which is the archive that was uploaded as that file. Its
       -Add names a JSON file of main under records\, and each mod's archive
       is downloaded by its fileId the same way.
-      Its -Rule names a JSON file of main under docs\ (plugin rules, such
-      as docs\COLLECTION-REVISION-6-RULE.json), read as main holds it.
+      Its -Rule names a JSON file of main under records\ (plugin rules, such
+      as records\collection-revision-6-rule.json), read as main holds it.
     - Install-NexusRevision always runs with -Record, into a folder of the
       run's own, which comes back with the output.
   Anything else that reads a file of the machine it runs on (-From, -Layout,

@@ -8,8 +8,8 @@ is not going to get done.
 ## Reading it
 
 - **Order** is the do-order. Sort the view by Order and work down.
-- **Status** says where it stands: Todo, In Progress, or Done (merged and
-  waiting only on a test).
+- **Status** says where it stands: Todo, In Progress, Merged (its fix is
+  merged with its test task and waits on a main release), or Done (closed).
 - **area:** labels say which part of the project it is.
 - **needs: patrick** marks what waits on Patrick.
 - **anyone can start** marks work that needs nobody in particular.

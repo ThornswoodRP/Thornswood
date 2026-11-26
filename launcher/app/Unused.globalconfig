@@ -1,0 +1,14 @@
+is_global = true
+
+# A member nothing uses fails the launcher's build (#4632).
+# IDE0051: a private member nothing calls or reads.
+# IDE0052: a private member that is written and never read.
+# CS0169: a field never used. CS0414: a field assigned and never read.
+# CS0649: a field never assigned, so it always holds its default.
+# EnforceCodeStyleInBuild in Thornswood.csproj makes the build run the IDE
+# rules; without it they only show in an editor.
+dotnet_diagnostic.IDE0051.severity = error
+dotnet_diagnostic.IDE0052.severity = error
+dotnet_diagnostic.CS0169.severity = error
+dotnet_diagnostic.CS0414.severity = error
+dotnet_diagnostic.CS0649.severity = error

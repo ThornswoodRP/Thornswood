@@ -229,7 +229,7 @@ namespace Thornswood
         /// The files a collection install put into the person's own Skyrim, and
         /// how many bytes they come to.
         ///
-        /// Setup-Thornswood.ps1 writes the list at install time. Nothing is
+        /// Setup and launcher updates record the files they put there. Nothing is
         /// guessed from what happens to be in the game folder, because most of
         /// what is in there belongs to Bethesda or to Vortex, and the one thing
         /// this must never do is delete either.
@@ -258,10 +258,10 @@ namespace Thornswood
             catch { vortex = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase); }
 
             string game;
-            try { game = Path.GetFullPath(into).TrimEnd('\\') + "\\"; }
+            try { game = Path.GetFullPath(into).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar; }
             catch { return outp.ToArray(); }
 
-            foreach (string raw in File.ReadAllLines(list))
+            foreach (string raw in SetupOwnership.PathsIn(list, into))
             {
                 string rel = (raw ?? "").Trim();
                 if (rel.Length == 0) continue;
@@ -337,7 +337,7 @@ namespace Thornswood
             // too. Never recursive, never forced: a directory with anything left
             // in it stays, which is what keeps this away from Vortex's files.
             string game;
-            try { game = Path.GetFullPath(InstalledInto(cfg)).TrimEnd('\\') + "\\"; }
+            try { game = Path.GetFullPath(InstalledInto(cfg)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar; }
             catch { return gone; }
             var ordered = new System.Collections.Generic.List<string>(dirs);
             ordered.Sort(delegate(string a, string b) { return b.Length.CompareTo(a.Length); });

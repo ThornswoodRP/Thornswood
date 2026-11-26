@@ -483,9 +483,11 @@ person(BRYN, 'Bryn', 209, 'smith', 'edgewright');
   yes('E1: the row is on K, the skills key, and not a new key', /(?:const|let) APPRENTICE_KEY = SKILLS_KEY;/.test(front) &&
       !/iniNumber\(ini, 'Apprentice/.test(front));
   const dp = between(front, '  function drawPrompt(row) {', '\n  }\n');
+  const htmlEscape = between(front, '  function escapeHtml(s) {', '\n  }\n');
+  yes('E2: the prompt uses its actual shared HTML helper', !!htmlEscape);
   let drawn = [];
   const draw = dp && new Function('T', 'FRIEND_NAME', 'TRADE_NAME', 'MUTE_NAME', 'PARTY_NAME', 'SLEEP_NAME', 'APPRENTICE_NAME', 'CONTRACT_NAME', 'LOOK_CSS',
-    'var lookingSig = "";\n' + dp + '\n  }\nreturn drawPrompt;')(
+    'var lookingSig = "";\n' + htmlEscape + '\n  }\n' + dp + '\n  }\nreturn drawPrompt;')(
     { js: function (s) { drawn.push(s); return true; } }, 'Y', 'H', 'L', 'P', 'U', 'K', 'K', '');
   yes('E2: drawPrompt is in the front plugin and runs', typeof draw === 'function');
   if (draw) {

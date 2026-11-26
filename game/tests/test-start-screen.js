@@ -5,10 +5,9 @@
 // as issues #619, #621, #622, #623 and #624, closed once as already written
 // up, and reopened because no build anybody was given behaved this way.
 //
-//   #624  The sealed scroll opens only when it is clicked. Typing in another
-//         window while the game sits on the start screen opens nothing and
-//         moves nobody on. A click opens the scroll, a click presses
-//         Continue, and no key does either.
+//   #624  Typing in another window opens nothing and moves nobody on.
+//         #4620 adds guarded keyboard controls now that the native foreground
+//         check exists; the original mouse routes stay available.
 //   #619  The sealed scroll glows, so it reads as something to click.
 //   #621  Continue gives the whole three minutes to choose. Time spent
 //         reading the scroll is not taken off the time to pick a character.
@@ -95,24 +94,25 @@ yes('it fades the moment the scroll is opened',
     page.indexOf("'#ts-select .intro.opening .halo{animation:tsFade .3s ease forwards}'") >= 0);
 yes('and it never swallows the click it is advertising', /pointer-events:none/.test(halo));
 
-// ======================== #624  the scroll opens only when it is clicked ==
+// =========================== #624  other windows cannot open the scroll ==
 
-// Half one: while the scroll is up every key is swallowed and nothing else
-// is bound to a key. Only .closed's click opens it and only .go's click
-// continues.
+// Half one: scroll keys are consumed and actions use the same fresh native
+// proof as the slots. test-4620-keyboard-start runs the real page end to end.
 const introKey = between(page, '  function introKey(ev) {', '\n  }\n') || '';
 yes('while the scroll is up every key is swallowed',
     /if \(!introPhase\) return false;/.test(introKey) &&
     /ev\.preventDefault\(\);/.test(introKey) &&
     /return true;/.test(introKey));
-yes('and nothing in it opens, continues or skips anything',
-    !/introOpen|introEnd|\.checked/.test(introKey));
-yes('the seal breaks on a click and on nothing else',
+yes('scroll actions require native keyboard proof and the fresh-answer gate',
+    /if \(!keysSaidAt \|\| !keysCount\(\)\)/.test(introKey) &&
+    /if \(heldKeys\.length \|\| !keysFresh\(\)\) \{ holdKey\(key\); return true; \}/.test(introKey) &&
+    introKey.indexOf('if (!keysSaidAt') < introKey.indexOf('keyAct(key)'));
+yes('the seal retains its existing click route',
     page.indexOf(".querySelector('.closed').onclick = introOpen;") >= 0);
-yes('Continue is a click and on nothing else',
+yes('Continue retains its existing click route',
     page.indexOf(".querySelector('.go').onclick = function () {") >= 0);
 yes('a swallowed key is written down, so a repeat of 25 September is provable',
-    /strayKey\('the sealed scroll only opens for a click'\)/.test(introKey));
+    /strayKey\('the keys are going to another window, not the game'\)/.test(introKey));
 
 // Half two, which the first pass left open and which #624 also asks for: the
 // slots behind the scroll play the lit character on Enter, so the same stray
@@ -164,7 +164,7 @@ if (KEYS) {
     const st = { now: 10000, told: [], played: 0, timers: [], drawn: 0, forgot: 0, moved: false };
     const clock = { now: function () { return st.now; } };
     const make = new Function('root', 'introKey', 'slots', 'draw', 'play', 'forget', 'tell', 'Date', 'setTimeout', 'clearTimeout', 'st', 'frontHere',
-      'var moved = false, asking = 0, at = 0;\n' + KEYS + '\n' +
+      'var moved = false, asking = 0, at = 0, introPhase = 0;\n' + KEYS + '\n' +
       'return { onKey: onKey, keys: keysSay, at: function () { return at; }, asking: function () { return asking; } };');
     const api = make({ className: '' }, function () { return false; },
       function () { return [{ id: 1, c: 1 }, { id: 2, c: 1 }]; },

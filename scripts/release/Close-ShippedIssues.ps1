@@ -1,13 +1,15 @@
 <#
 .SYNOPSIS
-  Closes the issues in Done whose fix a main Ship carries, each with the test
+  Closes the issues in Merged whose fix a main Ship carries, each with the test
   task its pull request wrote, and says which it closed and which stay open;
   with -Dev, writes the Dev test tasks a dev Ship carries, closing nothing.
 
 .DESCRIPTION
   WHY (#3279). A fix people would notice merges with "Test task for #N" in its
-  pull request, and .github\workflows\done-on-merge.yml moves #N to Done and
-  writes the test task on it, ready for when a main Ship puts the fix on the
+  pull request, scripts\ops\Sync-Board.js moves #N to Merged (#6878: an
+  open issue put in Done is closed by GitHub a second later, since GitHub
+  keeps an issue's own status and a board Status of the same name together),
+  .github\workflows\done-on-merge.yml writes the test task on it, ready for when a main Ship puts the fix on the
   main server testers play (#2796). Nothing did that close. It was a hand step
   for whoever ran the Ship, one issue at a time, and on 22 Oct 2026 two threads
   closed noticeable fixes at the merge instead, with no main Ship since 18 Oct,
@@ -16,8 +18,8 @@
   owner (#3192). The main Ship owns it now: Ship.ps1 runs this after it tags
   the release, with the commit the release was built from.
 
-  WHAT IT CLOSES. Every open issue of this repository whose card is in Done on
-  the board, read through scripts\ops\Read-Board.ps1 (the board is read only
+  WHAT IT CLOSES. Every open issue of this repository whose card is in Merged
+  on the board, or still in Done from before Merged was made (26 Nov 2026), read through scripts\ops\Read-Board.ps1 (the board is read only
   through GraphQL, which a cloud session is refused, so that script reads it
   on a VPS runner and works from One and the cloud alike). For each, the
   issue's last done-on-merge comment, written by github-actions[bot], names
@@ -257,10 +259,10 @@ catch { Stop-Here "could not read ${BoardFile}: $($_.Exception.Message)" }
 finally { if ($scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue } }
 
 $done = @(@($board.items) | Where-Object {
-        $_.kind -eq 'Issue' -and $_.state -eq 'OPEN' -and $_.status -eq 'Done' -and -not $_.archived -and
+        $_.kind -eq 'Issue' -and $_.state -eq 'OPEN' -and $_.status -in @('Merged', 'Done') -and -not $_.archived -and
         [string]$_.repo -eq $GitHubRepo -and $null -ne $_.number
     } | Sort-Object { [int]$_.number })
-Say ("  {0} open issue(s) in Done, read at {1}" -f $done.Count, $board.read_at) 'DarkGray'
+Say ("  {0} open issue(s) in Merged or Done, read at {1}" -f $done.Count, $board.read_at) 'DarkGray'
 
 # An issue moved to Done by hand (#3411) is not in Done on the board: since
 # #5185 a card's Status follows only what GitHub knows, and a "Fixed by" line

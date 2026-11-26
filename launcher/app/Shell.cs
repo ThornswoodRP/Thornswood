@@ -98,7 +98,7 @@ namespace Thornswood
                          txtUpdateTitle, txtUpdateNote,
                          txtPageTitle, txtHeroLine, txtVerifyTitle, txtVerifyNote,
                          txtDisplayNote,
-                         txtReadyTitle, txtReadyNote;
+                         txtReadyTitle;
         static Ellipse dotServer, dotVerify, dotReady;
         static StackPanel statusList, themeRow, themeEditor, pathRows, displayModeRow,
                           firstRunCard, quickKeysCard, quickKeys;
@@ -125,13 +125,12 @@ namespace Thornswood
         // Each chosen picture's own description, by its path (#4575): the
         // picture's alt text on the site, typed in its row on the Gallery page.
         static readonly Dictionary<string, string> galleryAlts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        static TextBlock txtGalleryChosen, txtGalleryPageSaid, txtGalleryDropLead,
+        static TextBlock txtGalleryChosen, txtGalleryPageSaid,
                          txtGalleryApprovedEmpty;
         static Control galleryPageReportRow;
         static Border galleryDrop;
         static StackPanel galleryChosenList;
         static WrapPanel galleryApprovedList;
-        static List<Gallery.Pending> galleryPending;
         static TextBox boxResolution, boxFrameLimit;
         static CheckBox chkAutoUpdate, chkVSync, chkKeepOpen, chkLockRes;
         static CheckBox chkCrashSnapshots; static TextBlock txtCrashFolder; static Button btnCrashFolder;
@@ -159,7 +158,6 @@ namespace Thornswood
         static TextBlock txtDowngradeNote, txtDowngradeTitle;
         static Button btnDowngrade;
         static ProgressBar prgDowngrade;
-        static Grid titleBar;
         static Button buttonDiscord;
         static TextBlock labelDiscord;
         static Ellipse discordAvatar;
@@ -776,12 +774,12 @@ namespace Thornswood
             chkMusic = win.ChkMusic; sldMusic = win.SldMusic; txtMusic = win.TxtMusic;
             dotServer = win.DotServer; dotVerify = win.DotVerify;
             dotReady = win.DotReady;
-            txtReadyTitle = win.TxtReadyTitle; txtReadyNote = win.TxtReadyNote;
+            txtReadyTitle = win.TxtReadyTitle;
             statusList = win.StatusList;
             themeRow = win.ThemeRow; themeEditor = win.ThemeEditor;
             pathRows = win.PathRows;
             chkAutoUpdate = win.ChkAutoUpdate;
-            updateBar = win.UpdateBar; titleBar = win.TitleBar;
+            updateBar = win.UpdateBar;
             downgradeBar = win.DowngradeBar; txtDowngradeNote = win.TxtDowngradeNote; btnDowngrade = win.BtnDowngrade;
             prgDowngrade = win.PrgDowngrade;
             txtDowngradeTitle = win.TxtDowngradeTitle;
@@ -825,7 +823,6 @@ namespace Thornswood
             boxGalleryNote = win.BoxGalleryNote;
             boxGalleryWhy = win.BoxGalleryWhy;
             txtGalleryChosen = win.TxtGalleryChosen;
-            txtGalleryDropLead = win.TxtGalleryDropLead;
             txtGalleryPageSaid = win.TxtGalleryPageSaid;
             txtGalleryApprovedEmpty = win.TxtGalleryApprovedEmpty;
             galleryPageReportRow = win.GalleryPageReportRow;
@@ -1155,7 +1152,11 @@ namespace Thornswood
             else if (i == PageNews) BuildNews();
             else if (i == PageDiag) BuildDiag();
             else if (i == PageGallery) BuildGalleryPage();
-            else if (i == PageSettings) BuildMicrophoneSettings();
+            else if (i == PageSettings)
+            {
+                BuildMicrophoneSettings();
+                BuildOutputSettings();
+            }
 
             // The Play spotlight turns only on the Play page, so a page
             // change starts or stops it, the way the title video follows
@@ -1344,7 +1345,7 @@ namespace Thornswood
             try
             {
                 double vol = Math.Max(0, Math.Min(100, cfg.MusicVolume)) / 100.0;
-                MenuMusic.Start(file, vol, cfg.BuildName, Icons.IconFile(), Stamp);
+                MenuMusic.Start(file, vol, cfg.BuildName, Icons.IconFile(), Stamp, cfg.AudioOutputId);
                 MusicDecide();
                 win.StateChanged += delegate { MusicDecide(); };
             }
@@ -1522,7 +1523,6 @@ namespace Thornswood
                         if (galleryCard != null) galleryCard.IsVisible = false;
                     }
 
-                    galleryPending = pending;
                     PaintGalleryPage();
                     FillGalleryGrid(shots, pending, pendingBad);
                 }));

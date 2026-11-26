@@ -51,10 +51,10 @@ with no account.
 <!-- engine-pin:credits -->
 The server's engine recorded for the next release, `scam_native.node`, is
 built from one commit,
-[`d2995cc9`](https://github.com/ThornswoodRP/skymp/tree/d2995cc9ba8d6a959614acc2542ab6197e44e0f3).
+[`3ae0435c`](https://github.com/ThornswoodRP/skymp/tree/3ae0435cd1e0ea971c46f70b964ab236feb97de0).
 That commit starts from
 [SkyMP](https://github.com/skyrim-multiplayer/skymp) at `2849e676`, and
-[every change Thornswood made](https://github.com/ThornswoodRP/skymp/compare/2849e676...d2995cc9)
+[every change Thornswood made](https://github.com/ThornswoodRP/skymp/compare/2849e676...3ae0435c)
 is the difference between the two.
 <!-- /engine-pin:credits -->
 
@@ -128,15 +128,17 @@ shows every line of it.
 
 ## What else Thornswood hands you that somebody else wrote
 
-**The launcher** carries three libraries for proximity voice: Concentus
-2.2.2, by Logan Stromberg, the Opus codec written in C# from the Opus
+**The launcher** carries four libraries for proximity voice: Concentus
+2.2.3, by Logan Stromberg, the Opus codec written in C# from the Opus
 reference library by Xiph.Org and its contributors, under the Opus BSD
-licence; SharpSRTP 0.5.8, by Lukas Volf, which encrypts each call, under the
-MIT licence; and BouncyCastle 2.7.0, by the Legion of the Bouncy Castle, the
+licence; SharpSRTP 0.6.0, by Lukas Volf, which encrypts each call, under the
+MIT licence; SharpDTLS 0.0.2, also by Lukas Volf, a DTLS dependency of
+SharpSRTP under the MIT licence; and BouncyCastle 2.7.0, by the Legion of the Bouncy Castle, the
 cryptography SharpSRTP is built on, under the MIT licence. Their licences are
 at the bottom of this page, and their sources are on GitHub:
-[Concentus](https://github.com/lostromb/concentus) at commit `6c2328dc`,
-[SharpSRTP](https://github.com/jimm98y/SharpSRTP) at commit `ede1d045` and
+[Concentus](https://github.com/lostromb/concentus) at commit `9edc8dcd`,
+[SharpSRTP](https://github.com/jimm98y/SharpSRTP) at commit `4a7015bc`,
+[SharpDTLS](https://github.com/jimm98y/SharpDTLS) at commit `2d9ce3c5` and
 [BouncyCastle](https://github.com/bcgit/bc-csharp) at commit `4007498b`.
 It also carries NLayer 3.0.1, by Mark
 Heath, Andrew Ward and contributors, the MP3 decoder it plays its menu theme
@@ -158,7 +160,7 @@ of this page.
 
 **The launcher is built on** .NET 10 by Microsoft and the .NET Foundation,
 compiled into it so you need nothing installed, under the MIT licence;
-Avalonia 12.1.6, by the AvaloniaUI project, its window and controls, under
+Avalonia 12.2.0, by the AvaloniaUI project, its window and controls, under
 the MIT licence; SkiaSharp 3.119.4 and HarfBuzzSharp 8.3.1.3, by Microsoft,
 under the MIT licence, with Google's Skia, which draws everything, and
 HarfBuzz, which shapes the text, under their own licences, and ANGLE, which
@@ -166,13 +168,13 @@ Avalonia draws through on Windows, under the BSD licence; MicroCom, by
 Nikita Tsukanov, under the MIT licence; and Velopack 1.2.161, by Velopack Ltd,
 Caelan Sayler and Kevin Bost, which installs and updates it, under the MIT
 licence. Their licences are at the bottom of this page, and their sources are
-on GitHub: [.NET](https://github.com/dotnet/dotnet) at commit `0427b9ab`,
-[Avalonia](https://github.com/AvaloniaUI/Avalonia) at commit `cf8e5646` and
+on GitHub: [.NET](https://github.com/dotnet/dotnet) at commit `8e0f8ed2`,
+[Avalonia](https://github.com/AvaloniaUI/Avalonia) at commit `5d9e6d1b` and
 [its ANGLE](https://github.com/AvaloniaUI/angle) at commit `1c898059`,
 [SkiaSharp and HarfBuzzSharp](https://github.com/mono/SkiaSharp) at commits
 `f568ac94` and `2888c737`, [Skia](https://github.com/google/skia),
 [HarfBuzz](https://github.com/harfbuzz/harfbuzz),
-[MicroCom](https://github.com/kekekeks/MicroCom) at commit `76785efc` and
+[MicroCom](https://github.com/kekekeks/MicroCom) at commit `cd2fa3c8` and
 [Velopack](https://github.com/velopack/velopack) at commit `92d6a1c9`.
 
 **The Thornswood Client Runtime** is Thornswood's own mod on
@@ -303,6 +305,34 @@ redistributed to you under the same terms of the general Opus license dictated a
 MIT License
 
 Copyright (c) 2025 Lukas Volf
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## SharpDTLS licence
+
+The MIT licence in the SharpDTLS source at commit `2d9ce3c5`.
+
+```text
+MIT License
+
+Copyright (c) 2026 Lukas Volf
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

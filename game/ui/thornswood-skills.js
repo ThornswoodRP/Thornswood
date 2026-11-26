@@ -63,7 +63,7 @@
   cursor rule restyles nothing.
 
   THE CONTRACT with thornswood-front.js, unchanged from the first cut:
-    window.thornswoodSkills = { open, close, toggle, isOpen, setData, takeOn, setKey }
+    window.thornswoodSkills = { open, close, toggle, isOpen, isCreating, setData, takeOn, setKey }
     setKey(name)    SkillsKey's name, K unless it is bound elsewhere (#1919)
     page -> plugin  'skills:ready' | 'skills:opened' | 'skills:closed' |
                     'skills:refresh' | 'skills:pick <words>' |
@@ -640,6 +640,7 @@
   var closing = false;     // creation is over and the panel is on its way shut
   var tableGen = 0;        // bumped when a table arrives from the server, so a redraw is forced
   var drawnKey = '';       // JSON of what head, nav and body were last drawn from
+  var drawnRow = -1;       // tracked separately so an arrow only updates the rendered highlight
   var footKey = '';        // the same for the foot
   var keyName = 'K';       // SkillsKey as bound, until the front says otherwise (#1919)
   var progRows = [];       // the value half of each progress line on the page, in order
@@ -683,7 +684,7 @@
     // nav: the first row's text sits 22px under the head line, level with the body's lead,
     // and 32px in from the panel's edge, level with the head and the body
     '#ts-skills .nav{grid-column:1;min-width:0;border-right:1px solid rgba(198,170,109,.22);padding:8px 0;overflow:auto}',
-    '#ts-skills .navrow{padding:14px 20px 13px 29px;border-left:3px solid transparent;cursor:pointer}',
+    '#ts-skills .navrow{display:block;width:100%;font:inherit;text-align:inherit;color:inherit;background:none;border:0;border-radius:0;padding:14px 20px 13px 29px;border-left:3px solid transparent;cursor:pointer}',
     '#ts-skills .navrow.on{border-left-color:#e9d19b;background:rgba(120,94,44,.24)}',
     '#ts-skills .navrow .k{font-size:16px;color:#d9cfb4;letter-spacing:.02em}',
     '#ts-skills .navrow.on .k{color:#f6e9c8}',
@@ -863,6 +864,7 @@
 
   var style = document.createElement('style');
   style.id = 'ts-skills-css';
+  css += '\n#ts-skills button.navrow:focus-visible{outline:2px solid #d9ab52;outline-offset:-2px;}';
   style.textContent = css;
   document.head.appendChild(style);
 
@@ -1694,8 +1696,8 @@
   function viewKey() {
     var v = null;
     if (mine) { v = {}; for (var k in mine) if (!NOT_DRAWN[k]) v[k] = mine[k]; }
-    return JSON.stringify([tableGen, sections, section, rowAt, picked, later, marked, markedStaff, v, progressShape(),
-                           candidate, endArmed, dyeTarget, guideAt]);
+    return JSON.stringify([tableGen, sections, section, picked, later, marked, markedStaff, v, progressShape(),
+                           candidate, endArmed, dyeTarget, guideAt, section === 'tree' && pickInFlight('tree')]);
   }
 
   function draw() {
@@ -1762,8 +1764,9 @@
     if (rowAt >= n) rowAt = n ? n - 1 : 0;
     if (rowAt < 0) rowAt = 0;
     var key = viewKey();
-    if (key !== drawnKey) {
+    if (key !== drawnKey || rowAt !== drawnRow) {
       drawnKey = key;
+      drawnRow = rowAt;
       drawHead();
       drawNav();
       drawBody();
@@ -1943,16 +1946,22 @@
   function drawNav() {
     elNav.textContent = '';
     sections.forEach(function (sec) {
-      var row = el('div', 'navrow' + (sec === section ? ' on' : ''));
+      var row = el('button', 'navrow' + (sec === section ? ' on' : ''));
       row.appendChild(el('div', 'k', titleOf(sec)));
       var v = navValue(sec);
       row.appendChild(el('div', 'v ' + v.c, v.t));
-      row.onclick = function () { goTo(sec); draw(); };
+      row.type = 'button';
+      row.onclick = function () {
+        var focused = document.activeElement === row;
+        goTo(sec); draw();
+        if (focused) elNav.querySelectorAll('.navrow')[sections.indexOf(sec)].focus();
+      };
       elNav.appendChild(row);
     });
   }
 
   function drawBody() {
+    resetOfficeArm();
     elBody.textContent = '';
     progRows = [];   // whatever was on the page is gone with it
     progKey = '';
@@ -2205,11 +2214,12 @@
       ' 50 is comfortable.'));
     var fire = (Number(v.fireAway) >= 0)
       ? 'a fire ' + Number(v.fireAway) + ' away, worth ' + (Number(v.fireWorth) || 0)
-      : 'no fire in reach';
+      : (v.burning ? 'no nearby fire in reach' : 'no fire in reach');
     card.appendChild(el('div', 'inn',
       'You are ' + (PLACE_WORDS[v.place] || 'somewhere the server does not know yet') +
       (v.roof ? ', under a roof' : ', with no roof') + (v.night ? ', at night' : '') + ', with ' + fire + '. ' +
       'Weather and height are worth ' + (Number(v.exposure) || 0) + '. ' +
+      (v.burning ? 'You are on fire. It counts as a fire at your feet. ' : '') +
       // A blizzard or a heavy storm (#3176), the server's own number.
       (Number(v.storm) > 0 ? 'The storm slows you by ' + Number(v.storm) + ' per cent while you are out in it. ' : '') +
       'What you are wearing covers ' + (Number(v.cover) || 0) + ' per cent of you.'));
@@ -2520,6 +2530,7 @@
         box.value = String(f.value);
         box.placeholder = f.kind === 'percent' ? 'percent' : 'gold';
       }
+      box.setAttribute('aria-label', String(f.label || f.key));
       inputs.push({ f: f, box: box });
       officeRow(card, String(f.label || f.key), f.kind === 'percent' ? String(f.value) + '%' : String(f.value), [box]);
     });
@@ -2548,13 +2559,27 @@
     return card;
   }
 
-  /* A button on the Office page. With twice, the first press only says what the second does. */
+  var OFFICE_ARM_MS = 5000;
+  var officeArmed = null;
+  function resetOfficeArm() {
+    if (officeArmed) { officeArmed.button.textContent = officeArmed.text; }
+    officeArmed = null;
+  }
+
+  /* Only one Office action may await its second press, for five seconds. */
   function officeButton(text, line, twice) {
     var b = el('span', 'stop', text);
-    var armed = false;
     b.onclick = function (ev) {
       if (ev && ev.stopPropagation) ev.stopPropagation();
-      if (twice && !armed) { armed = true; b.textContent = twice; return; }
+      var again = officeArmed && officeArmed.button === b && Date.now() < officeArmed.until;
+      resetOfficeArm();
+      if (twice && !again) {
+        var armed = { button: b, text: text, until: Date.now() + OFFICE_ARM_MS };
+        officeArmed = armed;
+        b.textContent = twice;
+        setTimeout(function () { if (officeArmed === armed) resetOfficeArm(); }, OFFICE_ARM_MS);
+        return;
+      }
       var said = typeof line === 'function' ? line() : line;
       if (said) officeSay(said);
     };
@@ -2745,11 +2770,13 @@
 
     // A recipe: what the craft gate says, and what their game was handed.
     var rc = el('div', 'card');
-    rc.appendChild(el('div', 'name', 'A recipe they cannot make'));
-    rc.appendChild(el('div', 'desc', 'Type part of the name of what it makes. The server says whether ' + who +
+    rc.appendChild(el('div', 'name', 'Owned recipes and kept smelts'));
+    rc.appendChild(el('div', 'desc', 'This check searches only profession-owned recipes and the kept smelting recipes. ' +
+      'Unowned recipes are outside this check. Type part of the name of what it makes. For a match, the server says whether ' + who +
       ' may make it, and why not, and whether their game lists it.'));
     var ask = document.createElement('input');
-    ask.placeholder = 'what it makes';
+    ask.setAttribute('aria-label', 'Owned recipe or kept smelt output name');
+    ask.placeholder = 'owned recipe output';
     var check = officeButton('Check', function () {
       var w = String(ask.value || '').trim();
       if (!w) { status = 'Type part of the name of what the recipe makes.'; statusKind = 'no'; drawFoot(); return ''; }
@@ -2760,7 +2787,7 @@
     var ch = them.check;
     if (ch) {
       var rows = Array.isArray(ch.rows) ? ch.rows : [];
-      if (!rows.length) rc.appendChild(el('div', 'inn', 'No recipe anybody owns makes anything called ' + String(ch.want) + '.'));
+      if (!rows.length) rc.appendChild(el('div', 'inn', 'This check found no owned recipe or kept smelt making ' + String(ch.want) + '. Unowned recipes are outside this check.'));
       var stale = false;
       rows.forEach(function (x) {
         var what = x.half ? String(x.half) + (x.rank ? ', ' + cap(x.rank) : '') : '';
@@ -2791,10 +2818,13 @@
     gb.appendChild(el('div', 'desc', 'Nothing records what somebody lost, so you go on what they and the logs say. Name ' +
       'the item, how many, and why: the reason goes in the staff log with your name, and ' + who + ' is told.'));
     var item = document.createElement('input');
+    item.setAttribute('aria-label', 'Item to give back');
     item.placeholder = 'item';
     var count = document.createElement('input');
+    count.setAttribute('aria-label', 'Count to give back');
     count.placeholder = 'how many';
     var why = document.createElement('input');
+    why.setAttribute('aria-label', 'Reason for giving items back');
     why.placeholder = 'why: what they lost, and how';
     var give = officeButton('Give back', function () {
       var n = Number(String(count.value || '').trim());
@@ -2861,6 +2891,7 @@
     if (!d.by) return card;
     officeRow(card, '', '', [officeButton('Evict', '/evict', 'Press again to end ' + d.by + '\'s claim')]);
     var input = document.createElement('input');
+    input.setAttribute('aria-label', 'Weekly rent in gold');
     input.placeholder = 'gold';
     var set = officeButton('Set rent', function () {
       var n = Number(String(input.value || '').trim());
@@ -2885,6 +2916,7 @@
   /* An amount and Rent paid, for gold of rent somebody handed the steward (#3895). */
   function rentPaidButtons(o) {
     var input = document.createElement('input');
+    input.setAttribute('aria-label', 'Rent paid in gold');
     input.placeholder = String(Number(o.owed) || 0);
     var paid = officeButton('Rent paid', function () {
       var raw = String(input.value || '').trim();
@@ -3550,7 +3582,7 @@
           refuses only at the cap, and this page decides none of it.
         */
         var allPlaced = given > 0 && given >= have;
-        var plus = el('div', 'plus' + ((pts > 0 && !full) ? '' : ' off'), '+');
+        var plus = el('div', 'plus' + ((pts > 0 && !full && !pickInFlight('tree')) ? '' : ' off'), '+');
         plus.title = (full && allPlaced) ? s.name + ' came with what you chose.'
                    : 'Put a point in ' + s.name +
                      (given ? '. ' + given + ' of these came with what you chose and do not move.' : '');
@@ -3899,6 +3931,7 @@
       write.appendChild(el('div', 'name', 'A contract with ' + who.name));
       write.appendChild(el('div', 'desc', 'Write the terms in your own words. You sign it as you give it to them, and they sign or refuse it on their own K.'));
       var box = document.createElement('textarea');
+      box.setAttribute('aria-label', 'Contract terms');
       box.maxLength = chars;
       box.rows = 6;
       box.style.width = '100%';
@@ -3997,15 +4030,22 @@
     answer never leaves the button dead.
   */
   function homeInFlight() {
+    return pickInFlight('home');
+  }
+  function pickInFlight(sec) {
     for (var i = 0; i < pending.length; i++) {
-      if (pending[i].section === 'home' && Date.now() - pending[i].at < PENDING_MS) return true;
+      if (pending[i].section === sec && Date.now() - pending[i].at < PENDING_MS) return true;
     }
     return false;
+  }
+  function redrawAfterPick(sec) {
+    setTimeout(function () { if (!pickInFlight(sec)) draw(); }, PENDING_MS + 50);
   }
   function canConfirm() {
     if (creating()) return section === 'review' && !!softHome() && !homeInFlight();
     if (section === 'spells') return canLearn();
     if (section === 'staff') return canUnlockStaff();
+    if (pickInFlight(section)) return false;
     var p = picked[section];
     if (!p || !p.row) return false;
     if (section === 'class') return !haveClass();
@@ -4060,6 +4100,7 @@
     if (section === 'staff') { unlockStaff(); return; }
     var p = picked[section];
     send(section, section === 'class' ? 'class ' + p.row : 'profession ' + p.row + ' ' + p.subs.join(','));
+    redrawAfterPick(section);
     status = 'Sent. The server is checking.'; statusKind = '';
     draw();
   }
@@ -4087,9 +4128,11 @@
   }
 
   function spend(skill) {
+    if (pickInFlight('tree')) return;
     if (!mine || !(Number(mine.points) > 0)) return;
     send('tree', 'spend ' + skill);
-    status = 'Sent.'; statusKind = '';
+    redrawAfterPick('tree');
+    status = 'Sent. The server is checking.'; statusKind = '';
     draw();
   }
 
@@ -4255,7 +4298,11 @@
         markedStaff[p.spell] = false;
         cleared = true;
       }
-      else if (p.section === 'tree') { status = 'Spent.'; statusKind = 'ok'; }
+      else if (p.section === 'tree' &&
+          Number((after.tree || {})[p.words.slice('spend '.length)] || 0) >
+          Number(((before && before.tree) || {})[p.words.slice('spend '.length)] || 0)) {
+        status = 'Spent.'; statusKind = 'ok';
+      }
       else if (p.section === 'perk' && perkRunning('fontofmagic')) { status = 'Font of Magic: for 15 seconds, a spell costs nothing.'; statusKind = 'ok'; }
       else if (p.section === 'weave' && after.weave && after.weave !== (before && before.weave)) {
         status = after.weave === 'armour' ? 'The garments you make now carry hidden armour.' : 'The garments you make now keep the weather off.';
@@ -4309,6 +4356,27 @@
   }
 
   // ---------------------------------------------------------------- keys --
+  function moveRow(direction) {
+    var n = countRows();
+    if (!n) return;
+    rowAt = (rowAt + n + direction) % n;
+    // Profession opens the selected card's half/school choices. Keep that
+    // canonical renderer; the other lists change only their live highlight.
+    var selector = section === 'tree' ? '.skill'
+      : (section === 'spells' || section === 'staff') ? '.spell' : '.card';
+    if (section === 'profession') {
+      var top = elBody.scrollTop;
+      draw();
+      elBody.scrollTop = top;
+    }
+    var nodes = elBody.querySelectorAll(selector);
+    for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('at', i === rowAt);
+    // An arrow paints only the selection. The next draw still checks whether
+    // the rest of the view changed, including if a pending spend expired.
+    drawnRow = rowAt;
+    if (nodes[rowAt]) nodes[rowAt].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
   /*
     Arrow keys and Enter, because the mouse is not always where somebody left
     it and the panel is a list. Escape closes. Everything else is left alone:
@@ -4319,12 +4387,14 @@
     if (root.className === 'gone') return;
     // Native footer buttons own Enter and Space; the row shortcuts below
     // must not turn keyboard navigation into a choice or confirmation.
-    if ((e.target === elBack || e.target === elNext) && (e.key === 'Enter' || e.key === ' ')) return;
+    if (e.target && e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) {
+      if (e.repeat) e.preventDefault();
+      return;
+    }
     // A number being typed into the Office page's rent (#1638) is the box's,
     // Enter and the arrows included. Escape still closes. And the terms of a
     // contract (#4561), K among them: a contract may say "keep".
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') return;
-    var n = countRows();
     if (e.key === 'Escape') { closeByHand(); e.preventDefault(); return; }
     /*
       K closes it too, as the K on the Close button says (#1919). The
@@ -4347,6 +4417,7 @@
       closeByHand(); e.preventDefault(); return;
     }
     if (e.key === 'Enter') {
+      if (e.repeat) { e.preventDefault(); return; }
       if (section === 'tree') {
         var flat = [];
         rows().forEach(function (a) { (a.subs || []).forEach(function (s) { flat.push(s.key); }); });
@@ -4376,8 +4447,8 @@
       }
       e.preventDefault(); return;
     }
-    if (e.key === 'ArrowDown') { rowAt = n ? (rowAt + 1) % n : 0; draw(); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { rowAt = n ? (rowAt + n - 1) % n : 0; draw(); e.preventDefault(); }
+    if (e.key === 'ArrowDown') { moveRow(1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { moveRow(-1); e.preventDefault(); }
     else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       var i = sections.indexOf(section);
       goTo(sections[(i + (e.key === 'ArrowRight' ? 1 : sections.length - 1)) % sections.length]);
@@ -4414,6 +4485,7 @@
       root.className = '';
       fit();
       draw();
+      if (window.thornswoodDialog) window.thornswoodDialog.open(elPanel, elTitle);
       tell('opened');
       tell('refresh');   // the server says again what this character is
     },
@@ -4421,6 +4493,7 @@
       if (creating()) return;
       if (root.className === 'gone') return;
       root.className = 'gone';
+      resetOfficeArm();
       quitArmed = 0;   // a panel put down with Close Skyrim armed comes back unarmed
       candidate = null;   // the person the look prompt opened it on is that moment's, not the next
       dyeTarget = null;   // and the same for Hair dye's (#2675)
@@ -4433,6 +4506,10 @@
       if (root.className === 'gone') { api.open(); } else { closeByHand(); }
     },
     isOpen: function () { return root.className !== 'gone'; },
+    // Whether the server says this character is still being made: true in
+    // the hall until a Starting Location is confirmed, false once placed,
+    // null before the server has said anything (the real game run, #5197).
+    isCreating: function () { return mine ? !!mine.creating : null; },
     /*
       SkillsKey's name, handed over by the front when this page says it is
       ready. A key the front has no name for (#57, say) is not one this page

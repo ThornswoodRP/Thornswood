@@ -81,6 +81,7 @@ const fees = slice(prop, '  var NOTICE_FEE = ', 'var LETTER_REACH = 700;');
 const holds = slice(prop, '  var LEDGER_HOLDS = [', '];');
 // The company's cut of a haul is its terms now (#512, #2695), read by the company terms block.
 const COMPANY = require('./fixtures/company-block').companyApi(gm);
+const PACK_FIRST = require('./fixtures/pack-first');
 const reads = slice(prop, '  var boardReads = ', ';');
 const seeding = (function () {
   const a = prop.indexOf('  var BOARD_REACH = 400;');
@@ -137,6 +138,8 @@ function world() {
       }
     }
   };
+  // A post takes out of the pack through packFirst, with receipts (#4901).
+  PACK_FIRST.receipts(w.mp);
   return w;
 }
 
@@ -171,6 +174,8 @@ function boot(w) {
      'evict', 'boxCmd', 'rentCmd', 'sleepHere'].map(function (n) { return 'function ' + n + '() { return true; }'; }).join('\n')
   ];
   NAMES.forEach(function (n) { body.push(lifted[n]); });
+  // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
+  body.push(PACK_FIRST.pieces(prop));
   body.push('return { boards: boards, notices: function () { return notices; }, command: command, ' +
             'lettersCarried: lettersCarried, funds: function () { return funds; } };');
   const make = new Function('reg', 'mp', 'plog', 'loadPart', 'PASSAGES', 'g', 'isSteward', body.join('\n'));
@@ -368,25 +373,39 @@ attempt('Write a letter', function () {
   yes('B1 the board panel and the front plugin parse', parses);
   yes('B2 the panel has Write a letter: who it is for, held to 60, and the words, held to 300',
       page.indexOf("out += '<h3>Write a letter</h3>';") !== -1 &&
-      /id="' \+ ID \+ '-to" maxlength="60"/.test(page) && /id="' \+ ID \+ '-letter" maxlength="300"/.test(page) &&
+      /id="' \+ ID \+ '-to"[^>]*maxlength="60"/.test(page) && /id="' \+ ID \+ '-letter"[^>]*maxlength="300"/.test(page) &&
       /data-do="letter">Post the letter<\/button>/.test(page));
   const branch = slice(page, "    if (verb === 'letter') {", '\n    }\n');
-  yes('B3 it sends /letter with the name in double quotes, quotes taken out of the name', !!branch &&
-      /field\(ID \+ '-to'\)\.replace\(\/"\/g, ''\)/.test(branch) && branch.indexOf("net('/letter \"' + to + '\" ' + words);") !== -1);
-  // The chat socket cuts a command at COMMAND_CHARS, and a line said at 400 (voice/voice-server.js, #2554).
+  yes('B3 the panel sends a distinct private letter request without stripping quotes', !!branch &&
+      !/\.replace\(\/"\/g/.test(branch) && /sendSubmission\('letter', \[to, words\]\)/.test(branch));
   const voice = read('voice/voice-server.js');
-  const longest = ('/letter "' + 'x'.repeat(60) + '" ' + 'y'.repeat(300)).length;
   const cap = Number((/const COMMAND_CHARS = (\d+);/.exec(voice) || [])[1]);
-  yes('B4 the longest line the form can send fits what the chat socket carries for a command (' + cap + ')',
-      /pageText\(msg\.text\)\.slice\(0, COMMAND_CHARS\)/.test(voice) && longest <= 400 && cap >= 400);
-  // Run the branch: what it sends for a name with quotes and spaces in it.
+  const longest='/letter-post-v1 '+encodeURIComponent('雪'.repeat(60))+' '+encodeURIComponent('雪'.repeat(300));
+  const carry=require('./fixtures/chat-relay-cut')(voice);
+  yes('B4 the longest encoded form fits the unchanged relay command bound ('+cap+')',longest.length<=cap&&carry(longest)===longest);
+  yes('B4 ordinary legacy letter commands keep the original bound',carry('/letter '+'x'.repeat(cap)).length===cap);
+  const privateLongest='/board-submit-v1 '+JSON.stringify(['letter','a'.repeat(32),'windhelm',[1000,'delivery-fixture','1'],'雪'.repeat(60),'雪'.repeat(300)]);
+  yes('B4 the current private JSON letter also fits the unchanged relay bound',privateLongest.length<=cap&&carry(privateLongest)===privateLongest);
   if (branch) {
-    const sent = [];
-    const fields = { 'ts-board-to': '  "Lydia   Stormblade" ', 'ts-board-letter': WORDS_OF_IT };
-    new Function('verb', 'ID', 'field', 'net', branch)('letter', 'ts-board',
-      function (id) { return String(fields[id] || '').trim(); }, function (l) { sent.push(l); });
-    yes('B5 a name with quotes and doubled spaces goes over as one clean name',
-        sent.length === 1 && sent[0] === '/letter "Lydia Stormblade" ' + WORDS_OF_IT);
+    const mounted=require('./fixtures/panel-page')();
+    mounted.win.crypto={getRandomValues:a=>require('node:crypto').randomFillSync(a)};
+    mounted.run('bridge',read('game/ui/thornswood-bridge.js'));
+    mounted.run('board',page);
+    mounted.win.thornswoodBoard.setData({me:1000,boardSubmissions:{owner:{profileId:1000,actorDesc:'delivery-fixture',runtime:'1'},results:[]},board:{hold:'windhelm',where:'Windhelm',here:true,
+      x:1,y:2,z:3,wall:[],jobs:[],dests:[],arrivals:[],submit:[]}});
+    mounted.win.thornswoodBoard.open();
+    const recipient='  "Lydia   Stormblade" ';
+    mounted.doc.getElementById('ts-board-to').value=recipient;
+    mounted.doc.getElementById('ts-board-letter').value=WORDS_OF_IT;
+    const button=mounted.doc.querySelector('[data-do="letter"]');
+    yes('B5 the actual open board owns its mounted letter control',
+      !!button&&mounted.doc.getElementById('ts-board').contains(button)&&typeof button.onclick==='function');
+    if(button){
+      const event=mounted.fire(button,'click','');
+      if(!event.defaultPrevented&&button.onclick)button.onclick.call(button,event);
+    }
+    const sent=mounted.sent.length===1&&mounted.sent[0].startsWith('/board-submit-v1 ')?JSON.parse(mounted.sent[0].slice('/board-submit-v1 '.length)):null;
+    yes('B5 quotes and actual spaces remain in the private recipient and body',!!sent&&sent[0]==='letter'&&/^[0-9a-f]{32}$/.test(sent[1])&&sent[2]==='windhelm'&&JSON.stringify(sent[3])===JSON.stringify([1000,'delivery-fixture','1'])&&sent[4]===recipient&&sent[5]===WORDS_OF_IT);
   }
 });
 

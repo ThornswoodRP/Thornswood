@@ -232,7 +232,8 @@ check('no anti-debug call', not re.search(r'IsDebuggerPresent|CheckRemoteDebugge
 
 # A copy that fails stops, naming both folders (#2201).
 check('a file that will not copy stops the install, naming both',
-      re.search(r'throw Die\("Could not copy " \+ from \+ " to " \+ dest', steps) is not None)
+      re.search(r'throw CopyFailed\(from, dest, e\)', steps) is not None
+      and re.search(r'Die\("Could not copy " \+ from \+ " to " \+ dest', steps) is not None)
 check('a hard-linked name in a made folder comes off before the copy (#1233)',
       steps.find('RemoveSharedNames(payload, files, gameDir)') != -1
       and steps.find('RemoveSharedNames(payload, files, gameDir)') < steps.find('CopyPayload(payload, files, gameDir)'))
@@ -346,7 +347,7 @@ else:
     try:
         proj = tmp / 'runner'
         proj.mkdir()
-        files = ';'.join(str(APP / n) for n in ['InstallSteps.cs', 'InstallAgreements.cs', 'InstallPlace.cs', 'InstallShortcut.cs', 'Config.cs', 'LooseString.cs', 'Failure.cs'])
+        files = ';'.join(str(APP / n) for n in ['InstallSteps.cs', 'InstallAgreements.cs', 'InstallPlace.cs', 'InstallShortcut.cs', 'Config.cs', 'LooseString.cs', 'Failure.cs', 'PathFence.cs'])
         write(proj / 'runner.csproj', f'''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -395,7 +396,7 @@ else:
             write(pkg / 'SOURCE CODE.txt', 'where the source is')
             write(pkg / 'GPL-3.0.txt', 'gpl')
             write(pkg / 'licences' / 'lib-a.txt', 'a')
-            write(pkg / 'config.json', json.dumps({'Server': 'thornswood.net', 'Password': '', 'Channel': 'dev'}))
+            write(pkg / 'config.json', json.dumps({'ServerAddress': 'thornswood.net', 'Password': '', 'Channel': 'dev'}))
             root = base / 'Thornswood'
             write(root / 'config.json', '\ufeff' + json.dumps({'Password': 'kept', 'Theme': 'Forge'}))
             write(root / 'licences' / 'old-lib.txt', 'gone after')
@@ -431,7 +432,7 @@ else:
               run('config', tmp / 'nokey' / 'config.json')['makeOwnGame'] is True)
         check('config.json: a blank field never wipes a filled one', cfg.get('Password') == 'kept')
         check('config.json: what was on the disk stays and the package\'s new fields come in',
-              cfg.get('Theme') == 'Forge' and cfg.get('Server') == 'thornswood.net' and cfg.get('Channel') == 'dev')
+              cfg.get('Theme') == 'Forge' and cfg.get('ServerAddress') == 'thornswood.net' and cfg.get('Channel') == 'dev')
         check('config.json: UTF-8 with no byte order mark', not cfg_raw.startswith(b'\xef\xbb\xbf'))
         check('the profile folders are made', all((root / 'Profile' / d).is_dir() for d in ['MyGames', 'LocalAppData', 'Default', 'MyGames/Saves']))
         check('applied.txt is laid down and counted', (root / 'Profile' / 'applied.txt').exists() and '  2 updates marked as already in this build' in r['lines'])
@@ -446,8 +447,15 @@ else:
               '  [next] Script Extender  the collection installs this' in r['lines']
               and '  [next] Address library  the collection installs this' in r['lines'] and r['later'] == 3)
         check('the multiplayer client and the load order are checked', '  [ok]   Multiplayer' in r['lines'] and '  [ok]   Load order' in r['lines'])
-        check('it ends with the script\'s words', 'Installed. 3 things still to come from the collection, which is the next step.' in r['lines']
-              and 'Make a character named after yourself, save once, then connect.' in r['lines'])
+        check('it ends with the launcher\'s steps in the launcher\'s order, Downgrade first for a wrong build (#4496)',
+              r['lines'][-9:-1] == ['Installed.', '', 'Next, in the launcher:',
+                                    '  1. Press Downgrade on the front page. Skyrim is not build 1.6.1170, and Steam downloads that build under your account.',
+                                    '  2. Install the collection in Vortex from the card the launcher shows, and switch to the profile it makes. The script extender and the address library come with it.',
+                                    '  3. Press Connect Discord at the bottom of the left sidebar.',
+                                    '  4. Press Play.', '']
+              and r['lines'][-1] == 'Opening Thornswood now.')
+        check('the closing lines no longer call the collection the next step, or ask for a save',
+              not any('which is the next step' in l or 'save once' in l for l in r['lines']))
         check('the bar ends full', r['last'] == 1)
         check('each step is headed as the script headed it',
               all(h in r['lines'] for h in ['Finding Skyrim', 'The base game', 'Installing the mods', 'Settings', 'Checking']))

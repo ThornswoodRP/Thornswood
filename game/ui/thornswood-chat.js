@@ -544,14 +544,14 @@
   // /roll, because a shop full of haggling needs one and the front's own dice
   // pouch has been taken off the screen.
   //
-  // The number is the number of sides. Not "d20", just 20, because nobody
-  // wants to type a letter to roll a die and the d only ever meant something
-  // to people who already play tabletop.
+  // A bare number is the number of sides. Count-d-sides is also accepted
+  // for people who use tabletop notation (#6476).
   //
   //   /roll          one 20
   //   /roll 20       one 20
   //   /roll 1000     one 1000
   //   /roll 6x3      three 6s, added up
+  //   /roll 3d6      three 6s, added up
   //
   // Sides: any whole number from 1 to 1000. Dice: up to 100 of them. Decimals
   // are refused rather than rounded, because a roll nobody can predict the
@@ -580,8 +580,9 @@
 
   function rollOf(spec) {
     spec = String(spec || '').trim().toLowerCase().replace(/\s+/g, '');
-    // A leading d is not the syntax, but somebody who has rolled dice before
-    // will type it on reflex, so it is dropped rather than refused.
+    var notation = /^(\d+)d(\d+)$/.exec(spec);
+    if (notation) spec = notation[2] + 'x' + notation[1];
+    // Preserve the existing leading-d shorthand alongside count-d-sides.
     spec = spec.replace(/(^|[x*])d/g, '$1');
     if (!spec) spec = String(DEFAULT_SIDES);
 
@@ -602,7 +603,7 @@
       reflex. The server parses it again and does not trust this: this is here
       so a typo is answered in the same breath instead of a round trip later.
     */
-    return count === 1 ? String(sides) : (count + 'x' + sides);
+    return count === 1 ? String(sides) : (sides + 'x' + count);
   }
 
   /* A queued line is its text, or { text, press } for one a key sent (#2251). */
@@ -648,7 +649,7 @@
     if (dice) {
       var spec = rollOf(dice[2]);
       if (!spec) {
-        note('The number is the sides: /roll 20, /roll 1000, or /roll 6x3 for three of them. ' +
+        note('The number is the sides: /roll 20, /roll 1000, or /roll 6x3 (also /roll 3d6) for three of them. ' +
              'Whole numbers, 1 to ' + MAX_SIDES + ', up to ' + MAX_DICE + ' dice.', C_WARN);
         return false;
       }
@@ -666,8 +667,11 @@
     // Held rather than dropped, and capped so a long outage does not grow
     // without limit.
     queue.push(item);
-    while (queue.length > 20) queue.shift();
-    if (notice) note('Not connected yet, that is queued.', C_WARN);
+    if (queue.length > 20) {
+      queue.shift();
+      // Even a quiet internal send can displace something somebody typed.
+      note('Chat queue is full. The oldest waiting line was removed. This one is queued.', C_WARN);
+    } else if (notice) note('Not connected yet, that is queued.', C_WARN);
     return false;
   }
 

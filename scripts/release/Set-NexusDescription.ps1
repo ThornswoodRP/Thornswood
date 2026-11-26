@@ -1,6 +1,8 @@
 <#
-  Set-NexusDescription.ps1
+.SYNOPSIS
+  Adds a line to the description of one or more of our mods on Nexus Mods, or puts back a description from a file, and reads the page back to prove what Nexus kept (#2914).
 
+.DESCRIPTION
   Adds a line to the description of one or more of our mods on Nexus Mods, or
   puts back a description from a file, and reads the page back to prove what
   Nexus kept (#2914).

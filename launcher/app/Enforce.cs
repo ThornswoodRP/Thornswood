@@ -40,6 +40,11 @@ namespace Thornswood
             // Only a file that is already there is edited; a missing one is
             // left for whatever makes it, rather than made here with one line.
             public bool Existing;
+            // The Nexus id, in records/collection.json, of the mod whose ini
+            // this is; 0 for a file of SkyrimPlatform's (the client build
+            // ships it) or of Skyrim's own. A mod the collection drops takes
+            // its rules with it (#4691).
+            public int Mod;
             public Rule(string f, string k, string v, string why) { File = f; Key = k; Value = v; Why = why; }
             public Rule(string f, string section, string k, string v, string why) { File = f; Section = section; Key = k; Value = v; Why = why; }
         }
@@ -141,27 +146,12 @@ namespace Thornswood
         {
             var l = new List<Rule>();
 
-            // Skyrim Souls keeps the world running while a menu is open, which
-            // is the point of it here: everybody else's world keeps running
-            // whatever your menu is doing.
-            //
-            // The favourites list was pinned back to paused to stop it crashing
-            // through Inventory Interface Information Injector. It did not. All
-            // seven crash logs from 18 and 19 Sep were taken with this set to
-            // false and the fault is identical in every one, so it bought
-            // nothing and cost a pause nobody asked for, which is what Patrick
-            // reported when the Q menu froze the world around him.
-            //
-            // The library is the real fix and OwnGame.Skip now keeps it out of
-            // the folder, so this goes back to unpaused. It has to be written
-            // rather than dropped: Skyrim Souls writes its own ini back on the
-            // way out, so removing the rule would leave our false in the file
-            // for good.
-            //
-            // The Tab menu stays paused. That one locks up with no cursor and
-            // no way out, and nothing here has changed about it.
-            l.Add(new Rule(P("SkyrimSoulsRE.ini"), "bFavoritesMenu", "true", "the favourites menu pausing the world for nothing"));
-            l.Add(new Rule(P("SkyrimSoulsRE.ini"), "bTweenMenu",     "false", "the Tab menu locking up"));
+            // Each rule for a mod's own ini names that mod by its Nexus id in
+            // records/collection.json (Mod), so a mod the collection drops
+            // cannot leave its rule behind writing a file nothing reads.
+            // Skyrim Souls RE's two rules did exactly that from revision 2
+            // until #4691; launcher\tests\test-4691-rules-follow-collection.ps1
+            // holds every rule here to the record.
 
             // Open Animation Replacer draws two things over the main menu and
             // nothing else in this build does: a banner across the top saying
@@ -171,8 +161,8 @@ namespace Thornswood
             // with its own values on the way out, which is exactly the case
             // this class exists for, and on a machine that has never run it
             // the file is not there yet, so the [UI] section is written in.
-            l.Add(new Rule(P("OpenAnimationReplacer.ini"), "UI", "bShowWelcomeBanner", "false", "the animation replacer banner over the main menu"));
-            l.Add(new Rule(P("OpenAnimationReplacer.ini"), "UI", "bEnableAnimationQueueProgressBar", "false", "the animation loading bar over the main menu"));
+            l.Add(new Rule(P("OpenAnimationReplacer.ini"), "UI", "bShowWelcomeBanner", "false", "the animation replacer banner over the main menu") { Mod = 92109 });
+            l.Add(new Rule(P("OpenAnimationReplacer.ini"), "UI", "bEnableAnimationQueueProgressBar", "false", "the animation loading bar over the main menu") { Mod = 92109 });
 
             // SkyrimPlatform's own log at its normal level, and no text window
             // beside the game. Patrick, 28 September (#963). Both installs here

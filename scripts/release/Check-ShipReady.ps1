@@ -425,7 +425,7 @@ try {
 $vpDir = $null; $vpWhy = ''
 try { $vpDir = Assert-VortexProfile 'Thornswood' } catch { $vpWhy = $_.Exception.Message }
 Ready 'Vortex has a profile named Thornswood, deployed' ([bool]$vpDir) $(if ($vpDir) { $vpDir } else { '' }) `
-  $(if ($vpWhy) { $vpWhy } else { 'In Vortex: Profiles, add one named Thornswood, switch to it, install the Thornswood collection and let it deploy' })
+  $(if ($vpWhy) { $vpWhy } else { 'In Vortex: turn on Profile Management under Settings, Interface, go to Profiles, add one named Thornswood, switch to it, install the Thornswood collection and let it deploy' })
 # A ship root's launcher is never started (#2603), so the folder is made the
 # way a Ship makes it first, by Update-ShipRoot.ps1. The animation and body
 # files are not built there: no release carries them (#3715).

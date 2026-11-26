@@ -39,8 +39,8 @@ fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
   botKey: KEY, admins: [STAFF_D], secret: SECRET, gameCheckPort: 1, onlineFile: path.join(dir, 'online.json')
 }, null, 2));
 fs.writeFileSync(path.join(DATA, 'linked.json'), JSON.stringify({
-  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001] },
-  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002] }
+  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001], chars: [{ id: 1001, slot: 1 }] },
+  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002], chars: [{ id: 2002, slot: 1 }] }
 }));
 const BANS = path.join(DATA, 'bans.json');
 

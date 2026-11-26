@@ -18,12 +18,16 @@ import urllib.request
 #   joins.json              which arrival each person was, and the
 #                           joins.json-before-restore-<stamp> copies a
 #                           restore sets aside, which it deletes at 30 days
+#   welcome-posts.json      message links for welcome posts, keyed by message ID
 #   open-tickets.json       which thread is each person's open ticket
 #   commands-synced.json    the slash commands it last registered
 #   trouble-posts.json      which message is which row of the site's trouble
+#   report-posts.json       message IDs for copies of site inbox rows
+#   moderation-posts.json   message IDs for copies of moderation log lines
 #   deletion-requests.json  put there by Delete-Person.ps1; read and removed
 #                           at the next start
 #   news-said.json          which release notes it has posted
+#   rules-carried.json      who reacted to a rules message it sent again
 #   restarts-said.json      which restart notices it has posted
 #   staff-notices.json      which staff notice became which message
 #   problems-filed.json     the Report a problem issues it has filed

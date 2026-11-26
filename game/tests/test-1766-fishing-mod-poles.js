@@ -29,7 +29,7 @@ function yes(what, cond) {
 const MOD = ["1f24f:FishingInSkyrim.esp", "2180d:FishingInSkyrim.esp", "1f252:FishingInSkyrim.esp"];
 const OURS = ["1549c:Thornswood-Content.esp", "1549d:Thornswood-Content.esp", "1549e:Thornswood-Content.esp"];
 const recipes = JSON.parse(read("game/data/recipes.json"));
-const cutDoc = JSON.parse(read("docs/systems/cut-items.json"));
+const cutDoc = JSON.parse(read("game/data/cut-items.json"));
 const cutById = {};
 cutDoc.items.forEach(function (i) { cutById[i.id] = i; });
 const gm = require('../../tests/gamemode-tables.js').joined(read("game/gamemode.js"));
@@ -94,27 +94,27 @@ try {
   before.items = before.items.filter(function (i) { return MOD.indexOf(i.id) < 0; });
   before.counts.cut -= 3;
   before.counts.kept += 3;
-  fs.writeFileSync(path.join(tmp, "docs", "systems", "cut-items.json"), JSON.stringify(before, null, 2) + "\n");
+  fs.writeFileSync(path.join(tmp, "game", "data", "cut-items.json"), JSON.stringify(before, null, 2) + "\n");
   fs.writeFileSync(path.join(tmp, "docs", "systems", "cut-items.md"), "old\n");
   // and the rows it left in the open book, the three poles among them (#4087).
-  const keptBefore = JSON.parse(read("docs/systems/cut-kept.json"));
+  const keptBefore = JSON.parse(read("game/data/cut-kept.json"));
   keptBefore.ids = keptBefore.ids.concat(MOD).sort();
-  fs.writeFileSync(path.join(tmp, "docs", "systems", "cut-kept.json"), JSON.stringify(keptBefore, null, 2) + "\n");
+  fs.writeFileSync(path.join(tmp, "game", "data", "cut-kept.json"), JSON.stringify(keptBefore, null, 2) + "\n");
   const run = function () {
     return cp.spawnSync(process.execPath, [path.join(tmp, "scripts", "dev", "Write-CutItems.js")], { encoding: "utf8", timeout: 120000 });
   };
   const r1 = run();
-  const after = JSON.parse(fs.readFileSync(path.join(tmp, "docs", "systems", "cut-items.json"), "utf8"));
+  const after = JSON.parse(fs.readFileSync(path.join(tmp, "game", "data", "cut-items.json"), "utf8"));
   yes("on a cut table, CUT_SINCE adds the three poles the file did not have (exit " + r1.status + ")",
     r1.status === 0 && (r1.stdout.match(/cut since the first pass, added/g) || []).length === 3 &&
     MOD.every(function (id) { return after.items.some(function (i) { return i.id === id && i.disposition === "cut"; }); }));
   yes("  the cut count goes up by three and the kept count down by three",
     after.counts.cut === before.counts.cut + 3 && after.counts.kept === before.counts.kept - 3);
   yes("  and the result is the cut file in the repository", JSON.stringify(after) === JSON.stringify(cutDoc));
-  const once = fs.readFileSync(path.join(tmp, "docs", "systems", "cut-items.json"), "utf8");
+  const once = fs.readFileSync(path.join(tmp, "game", "data", "cut-items.json"), "utf8");
   const r2 = run();
   yes("a second run adds nothing", r2.status === 0 && !/added/.test(r2.stdout) &&
-    fs.readFileSync(path.join(tmp, "docs", "systems", "cut-items.json"), "utf8") === once);
+    fs.readFileSync(path.join(tmp, "game", "data", "cut-items.json"), "utf8") === once);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

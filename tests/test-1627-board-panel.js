@@ -107,6 +107,7 @@ const fees = slice(prop, '  var NOTICE_FEE = ', 'var LETTER_REACH = 700;');
 const holds = slice(prop, '  var LEDGER_HOLDS = [', '];');
 // The company's cut of a haul is its terms now (#512, #2695), read by the company terms block.
 const COMPANY = require('./fixtures/company-block').companyApi(gm);
+const PACK_FIRST = require('./fixtures/pack-first');
 const reads = slice(prop, '  var boardReads = ', ';');
 const seeding = (function () {
   const a = prop.indexOf('  var BOARD_REACH = 400;');
@@ -141,7 +142,7 @@ function world() {
     gold: function (p) {
       return people[p.actor].pack.reduce(function (s, e) { return s + (e.baseId === GOLD ? e.count : 0); }, 0);
     },
-    mp: {
+    mp: PACK_FIRST.receipts({
       get: function (id, key) {
         const p = people[id];
         if (!p) { return undefined; }
@@ -149,12 +150,13 @@ function world() {
         if (key === 'appearance') { return { name: p.name }; }
         if (key === 'worldOrCellDesc') { return p.cell; }
         if (key === 'pos') { return p.pos.slice(); }
+        if (key === 'profileId') { return p.pid; }
         return undefined;
       },
       set: function (id, key, v) {
         if (key === 'inventory') { people[id].pack = JSON.parse(JSON.stringify(v.entries)); }
       }
-    }
+    })
   };
 }
 
@@ -186,6 +188,8 @@ function boot(reg, w) {
      'evict', 'boxCmd', 'rentCmd', 'sleepHere'].map(function (n) { return 'function ' + n + '() { return true; }'; }).join('\n')
   ];
   NAMES.forEach(function (n) { body.push(lifted[n]); });
+  // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
+  body.push(PACK_FIRST.pieces(prop));
   body.push('return { boards: boards, funds: function () { return funds; }, ' +
             'notices: function () { return notices; }, command: command, boardPanel: boardPanel, ' +
             'boardsView: boardsView, wallOf: wallOf, jobsOf: jobsOf };');
@@ -401,12 +405,32 @@ attempt('the panels', function () {
   yes('U3 and the line that counts the older ones', /var older = Number\(b\.older\) \|\| 0;/.test(page) &&
       /older ones are/.test(page));
   yes('U4 the panel still posts, takes and takes down with its buttons',
-      page.indexOf("line = '/notice ' + slashTitle(title)") !== -1 &&
-      page.indexOf("line = '/job ' + Number(reward) + ' ' + slashTitle(title)") !== -1 && page.indexOf('net(line);') !== -1 &&
-      page.indexOf("net('/take ") !== -1 && page.indexOf("net('/unpin ") !== -1);
+      page.indexOf("var line = '/board-post-v1 ' + JSON.stringify([draft.kind, rewardValue, title, text, b.hold]);") !== -1 &&
+      page.indexOf('rewardValue = Number(reward);') !== -1 && page.indexOf('net(line);') !== -1 &&
+      page.indexOf("net('/take ") !== -1 &&
+      page.indexOf("if (verb === 'unpin' && n) { confirmTakedown(this, n); return; }") !== -1 &&
+      page.indexOf("line: '/board-unpin-v1 ' + JSON.stringify([b.hold, row.n, row.at])") !== -1);
+  const boardView = { journals: [{ id: 'j', title: 'Journal', pages: [{ id: 'p', title: 'Page', text: 'Saved' }] }],
+    boards: { list: [{ hold: 'whiterun', where: 'Whiterun' }] } };
+  const editor = require('./fixtures/journal-editor')({ journalId: 'j', pageId: 'p', view: () => boardView });
+  const town = () => editor.doc.querySelector('[data-board="whiterun"]');
+  town().click();
   yes('U5 J lists the towns under Boards and picking one sends /board and the town',
-      /'<h3>Boards<\/h3>'/.test(journal) && /data-board="/.test(journal) &&
-      journal.indexOf("net('/board ' + this.getAttribute('data-board'));") !== -1);
+      /'<h3>Boards<\/h3>'/.test(journal) && town() &&
+      editor.sent.length === 1 && editor.sent[0] === '/board whiterun');
+  editor.doc.querySelector('[data-book="j"]').click();
+  editor.doc.querySelector('[data-page="p"]').click();
+  editor.type('Unsent', 'Keep these private words');
+  town().click();
+  yes('U5 a dirty page defers the board read until the discard choice',
+      editor.sent.length === 1 && !editor.doc.getElementById('ts-journal-leave-choice').hidden);
+  editor.doc.getElementById('ts-journal-keep').click();
+  yes('U5 keeping the page sends no board read and retains its private text',
+      editor.sent.length === 1 && editor.field('text').value === 'Keep these private words');
+  town().click();
+  editor.doc.getElementById('ts-journal-discard').click();
+  yes('U5 explicit discard sends the intended board read exactly once',
+      editor.sent.length === 2 && editor.sent[1] === '/board whiterun');
   const drawBoards = slice(journal, '  function drawBoards(main) {', '\n  }\n');
   yes('U6 J\'s board is read only: drawing it sends nothing and has no button',
       !!drawBoards && drawBoards.indexOf('net(') === -1 && drawBoards.indexOf('<button') === -1 &&

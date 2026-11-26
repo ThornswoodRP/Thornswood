@@ -1632,7 +1632,7 @@ $OPEN_ROW_WHY = [ordered]@{
     'RecipeIngotDwarvenScrapPlateMetalLarge' = 'a smelter makes ingots, which are stock rather than a finished good. Both halves of the Smith need them, and a Miner who could not smelt his own ore would have nothing to sell. Smith work at novice, so both smith halves can do it. Not open to anybody.'
 }
 
-# THE CUT FILE (#1391). docs\systems\cut-items.json names every recipe that
+# THE CUT FILE (#1391). game\data\cut-items.json names every recipe that
 # leaves the open craft book, one row per reference so a row can be put back
 # for an event, and says which of three things each one is:
 #   cut       not found and not made. An owned row keeps its owner and rank in
@@ -1652,7 +1652,7 @@ $OPEN_ROW_WHY = [ordered]@{
 # anything was cut. On a table that is already cut it starts from this file
 # and writes it back as it is (issue #1714), because its rules would read the
 # cut table wrongly.
-$CUT_FILE = Join-Path $PSScriptRoot '..\..\docs\systems\cut-items.json'
+$CUT_FILE = Join-Path $PSScriptRoot '..\..\game\data\cut-items.json'
 $CUT_ROLLS = [ordered]@{ 'embassy' = 'embassy'; 'thalmor' = 'remnant' }
 # What the gamemode says, after "Nobody makes that here. ", for a cut row.
 $CUT_SENTENCE = 'Cut from the open book. Not found and not made. The reference stays in the cut file.'
@@ -1944,7 +1944,7 @@ $BENCH_UNOWNED_PREFIX = 'BYOHBuildingInteriorPart'
 # ONE SMELT ROW PER INGOT AND ONE ROW FOR LEATHER (#1391, #1400). Smelting an
 # ingot is smith work and tanning a hide is the Platewright's
 # (docs/systems/cut-items.md, "Smelting and tanning are not anybody's work").
-# The duplicates are cut in docs/systems/cut-items.json, which CUT_FILE reads,
+# The duplicates are cut in game/data/cut-items.json, which CUT_FILE reads,
 # and these are the rows that stay. They are named here because the smelter
 # is open furniture in BENCH_OWNER and the tanning rack is no profession's
 # bench, so no derived rule gives either to a half. All of them are novice
@@ -3148,6 +3148,47 @@ foreach ($pl in $order) {
 Ok ("{0} recipes after overrides, out of {1} COBJ records read" -f $recipes.Count, ($recipes.Count + $seenTwice.Count))
 Ok ("{0} item and keyword records to resolve against, {1} of them keywords" -f $items.Count, $kwName.Count)
 if ($recipes.Count -eq 0) { Bad 'no COBJ records found at all, which means the load order or the Data folder is not what this thinks it is' }
+
+# #4610: Content's five-master recipe shells are deliberately uncraftable.
+# Last fills them from the exact original COBJ after this table is made.
+# Always derive from that original, even with Last already in the input order,
+# so a later pass cannot add the seasoning twice.
+$foodGroupsPath = Join-Path $PSScriptRoot '..\..\game\data\food-groups.json'
+$seasoning = ([IO.File]::ReadAllText($foodGroupsPath) | ConvertFrom-Json -AsHashtable).season
+function Use-SeasonedRecipes($recipes, $seasoning) {
+    $applied = 0
+    foreach ($item in $seasoning.dishes.Keys) {
+        $row = $seasoning.dishes[$item]
+        if (-not $row.recipe) { continue }
+        $source = [string]$seasoning.recipes[$row.of]
+        $target = [string]$row.recipe
+        if (-not $recipes.Contains($source) -or -not $recipes.Contains($target)) {
+            throw ("seasoned recipe {0} has no source/shell {1}" -f $target, $source)
+        }
+        $base = $recipes[$source]; $own = $recipes[$target]
+        if ($base.OutDesc -ne $row.of -or $base.BenchDesc -ne 'a5cb3:Skyrim.esm' -or $base.Count -lt 1 -or $own.OutDesc -ne $item) {
+            throw ("seasoned recipe {0} no longer matches its original cooking-pot output" -f $target)
+        }
+        $inputs = New-Object 'System.Collections.Generic.List[object]'
+        $added = $false
+        foreach ($input in $base.InputList) {
+            $count = [int]$input.Count
+            if ($count -lt 1) { throw 'seasoned source has an invalid input count' }
+            if ($input.Desc -eq $row.extra -and -not $added) {
+                if ($count -eq [int]::MaxValue) { throw 'seasoning input count exceeds the native limit' }
+                $count++; $added = $true
+            }
+            $inputs.Add([pscustomobject]@{ Desc = $input.Desc; Count = $count })
+        }
+        if (-not $added) { $inputs.Add([pscustomobject]@{ Desc = [string]$row.extra; Count = 1 }) }
+        $own.InputList = $inputs.ToArray(); $own.Inputs = $inputs.Count; $own.Coct = $inputs.Count
+        $own.Count = $base.Count; $own.BenchDesc = $base.BenchDesc
+        $own.Conditions = $base.Conditions; $own.CondMasters = $base.CondMasters; $own.CondIn = $base.CondIn
+        $applied++
+    }
+    return $applied
+}
+Ok ("{0} seasoned recipes take their exact source inputs and conditions before Last is built" -f (Use-SeasonedRecipes $recipes $seasoning))
 
 # ------------------------------------------------- the re-costed counts --
 #
@@ -4751,6 +4792,14 @@ if ($noValue.Count -gt 0) {
     Ok 'every owned recipe makes something the records put a price on'
 }
 
+# A garlic or salt variant unlocks at the same rank as the dish it seasons.
+# Count the original craft once when building the Cook's rank ladder so
+# adding the two variants does not move existing recipes between ranks.
+$seasonedBases = @{}
+foreach ($dish in $seasoning.dishes.Values) {
+    if ($dish.recipe) { $seasonedBases[$dish.recipe] = $seasoning.recipes[$dish.of] }
+}
+
 # The shares, half by half. Sorted by price, cheapest first, and the cut is
 # pushed past any run of rows that share the boundary price, so two recipes
 # that make things worth the same never land on different rungs.
@@ -4778,7 +4827,9 @@ foreach ($p in $PROFESSIONS.Keys) {
         $key = $p + '/' + $h
         $mine = New-Object 'System.Collections.Generic.List[object]'
         foreach ($desc in $owned.Keys) {
-            if (($owned[$desc].Owner + '/' + $owned[$desc].Half) -eq $key) { $mine.Add($desc) }
+            if (-not $seasonedBases.ContainsKey($desc) -and ($owned[$desc].Owner + '/' + $owned[$desc].Half) -eq $key) {
+                $mine.Add($desc)
+            }
         }
         if ($mine.Count -eq 0) { continue }
         $sorted = @($mine | Sort-Object @{ Expression = { [int64]$owned[$_].Value } }, @{ Expression = { [string]$_ } })
@@ -5014,6 +5065,30 @@ foreach ($p in $PROFESSIONS.Keys) {
                     $key, $n, $lo, $hi, $counts['novice'], $counts['advanced'], $counts['expert'], $counts['master'], `
                     $rankedByInputs[$key], $rankedByValue[$key], $heldByPrice[$key])
     }
+}
+foreach ($desc in $seasonedBases.Keys) {
+    $row = $owned[$desc]
+    $baseId = $seasonedBases[$desc]
+    $baseRow = $owned[$baseId]
+    if (-not $row -or -not $baseRow -or -not $baseRow.Rank -or $row.Owner -ne 'Cook' -or
+        $baseRow.Owner -ne $row.Owner -or $baseRow.Half -ne $row.Half) {
+        Bad ("seasoned recipe {0} does not have a matching ranked Cook recipe ({1})" -f $desc, $baseId)
+        continue
+    }
+    $row.Rank = $baseRow.Rank
+    $row.RankByValue = $baseRow.RankByValue
+    $row.RankFrom = 'the unseasoned recipe'
+    $row.RankWhy = ('it seasons ' + $baseRow.OutName + ', which is ' + $baseRow.Rank + ' work')
+    $row.Family = $baseRow.Family
+    $row.FamilyFrom = 'the unseasoned recipe'
+    $row.InputsUnplaced = @($row.InputList | Where-Object { -not $supply.ContainsKey($_.Desc) }).Count
+    $priced = @($row.InputList | Where-Object { $supply.ContainsKey($_.Desc) } |
+        ForEach-Object { $supply[$_.Desc] } | Sort-Object At -Descending:$INPUT_RANK_IS_THE_DEAREST)
+    if ($RANK_FROM_INPUT_COST -and $priced.Count) {
+        $row.InputRank = $RANKS[$priced[0].At]
+        $row.InputRankWho = $priced[0].Who
+    }
+    $rankRows[$row.Owner + '/' + $row.Half][$row.Rank]++
 }
 if ($promoted.Count -gt 0) {
     Loud ("{0} row(s) were moved to novice so that the half has something a new character can make:" -f $promoted.Count)

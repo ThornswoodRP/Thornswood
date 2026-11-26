@@ -405,11 +405,8 @@
       var at = clock && Number(clock.at) > 0 ? Number(clock.at) : now;
       var days = Math.max(0, Math.floor((now - at) / DAY_MS));
       var from = clock && Number(clock.at) > 0 ? Math.max(0, Number(clock.days) || 0) : days;
-      var turned = Math.max(0, days - from);
-      var cold = false;
-      try { cold = !!api.cold(containerId); } catch (e) { cold = false; }
-      var spoiling = cold ? 0 : turned - winterDays(at, from, days);
-      var res = aged(entries, spoiling);
+      var time = storageTime(containerId, at, from, now);
+      var res = aged(entries, time.turned);
       if (!same(res.entries, entries) && !api.setInventory(containerId, res.entries)) {
         return null;
       }
@@ -420,9 +417,19 @@
       }
       if (res.gone.length) {
         api.log('spoilage:', Number(containerId).toString(16), 'spoiled', JSON.stringify(res.gone), 'after',
-                spoiling, 'day(s)');
+                time.turned, 'day(s)');
       }
-      return { turned: spoiling, cold: cold, gone: res.gone };
+      return { turned: time.turned, cold: time.cold, gone: res.gone };
+    }
+
+    // Shared calculation only: the caller commits the clock with its goods.
+    // Guild shelves use the same place/season rules as a physical chest.
+    function storageTime(placeId, at, from, now) {
+      var days = Math.max(0, Math.floor((now - at) / DAY_MS));
+      var cold = false;
+      try { cold = !!api.cold(placeId); } catch (e) { cold = false; }
+      return { clock: { at: at, days: days }, cold: cold,
+        turned: cold ? 0 : Math.max(0, days - from) - winterDays(at, from, days) };
     }
 
     /*
@@ -589,7 +596,7 @@
     return {
       DAY_MS: DAY_MS, PASS_MS: PASS_MS, GAP_MS: GAP_MS, SMOKE_PER_WOOD: SMOKE_PER_WOOD,
       lifeOf: lifeOf, leftOf: leftOf, keptOf: keptOf, bareName: bareName, ownName: ownName,
-      aged: aged, pass: pass, opened: opened, pressed: pressed, outputName: outputName,
+      aged: aged, storageTime: storageTime, pass: pass, opened: opened, pressed: pressed, outputName: outputName,
       inputRefusal: inputRefusal, view: view, preserve: preserve, panel: panel, mayPreserve: mayPreserve
     };
   }

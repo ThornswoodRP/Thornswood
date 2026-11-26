@@ -78,7 +78,7 @@
 //          meets the second (both stand still, side by side), asks it
 //          ("/trade <its actor id>"), the second says yes ("/yes"), each puts
 //          up 1 to 5 of the 40 gold every person is handed ("/trade gold
-//          <n>") and both agree ("/trade ok"). Two seconds between steps.
+//          <n>") and both agree to their received offer version. Two seconds between steps.
 //          What the server says back is counted by what it says (PAY_SAID).
 //   quest  takes guild work the way the trader panel's buttons ask for it
 //          (game/ui/thornswood-merchant.js): every 30 s or so it stands still
@@ -155,12 +155,13 @@ const QUEST_REACH = 400;       // merchant-trading-bundle.ts REACH: the panel an
 const QUEST_EVERY_MS = 30000;  // from one Step back to the next panel
 const QUEST_STEP_MS = 5000;    // between the presses at an open panel
 const MERCHANT_VIEW = 'thornswoodMerchantView';
+const TRADE_VIEW = 'thornswoodTrade';
 // What the merchant block says to a quest press (merchant-trading-bundle.ts,
 // the quest verb's text and reasons), by the count it adds to. A line said
 // for anything else is a trade answer.
 const QUEST_SAID = {
   'You take the work.': 'questTaken',
-  'You give back what you drew and leave the work.': 'questLeft',
+  'You give back what remains of the draw and leave the work.': 'questLeft',
   'You leave the work without payment.': 'questLeft',
   'The work is turned in.': 'questTurnedIn',
   'Choose the work in the trader panel.': 'questRefused:panel',
@@ -242,6 +243,7 @@ class LoadBot extends Bot {
     this.payWith = null;       // the bot it trades gold with (pairUp)
     this.payGives = false;     // the first of the pair, which leads each trade
     this.payPhase = 'idle';    // idle, met, asked, open, agree
+    this.tradeOfferVersion = ''; // latest owner view, never guessed from a counter
     this.payAt = null;         // [x, y, z] it stands at while trading
     this.nextPay = 0;
     this.anim = 0;
@@ -373,6 +375,7 @@ class LoadBot extends Bot {
       const here = this.here();
       this.payAt = here.slice();
       p.payAt = [here[0] + 80, here[1], here[2]];
+      this.tradeOfferVersion = ''; p.tradeOfferVersion = '';
       this.payPhase = 'met';
       this.did('payMeets');
       return;
@@ -385,8 +388,14 @@ class LoadBot extends Bot {
       this.payPhase = 'agree';
       return;
     }
-    mine('/trade ok');
-    theirs('/trade ok');
+    const version = this.tradeOfferVersion;
+    if (!/^[0-9a-f]{48}$/.test(version) || version !== p.tradeOfferVersion) {
+      mine('/trade cancel');
+      end('payNoCurrentOffer');
+      return;
+    }
+    mine('/trade agree ' + version);
+    theirs('/trade agree ' + p.tradeOfferVersion);
     end('payAgrees');
   }
 
@@ -524,10 +533,15 @@ class LoadBot extends Bot {
       if (!m) { continue; }
       if (m.t !== MSG.UpdateMovement) { this.noteRepeat(m, Date.now()); }
       if (m.t === MSG.CreateActor && m.isMe && !this.character) { this.character = m; }
-      if (m.t === MSG.UpdateProperty && m.propName === MERCHANT_VIEW && this.character && m.idx === this.character.idx && this.play.indexOf('quest') >= 0) {
+      if (m.t === MSG.UpdateProperty && this.character && m.idx === this.character.idx &&
+          ((m.propName === MERCHANT_VIEW && this.play.indexOf('quest') >= 0) ||
+           (m.propName === TRADE_VIEW && this.play.indexOf('trade') >= 0))) {
         let v = null;
         try { v = JSON.parse(m.dataDump); } catch (err) { v = null; }
-        if (v && typeof v === 'object') {
+        if (m.propName === TRADE_VIEW) {
+          this.tradeOfferVersion = v && v.open === true && typeof v.offerVersion === 'string' && /^[0-9a-f]{48}$/.test(v.offerVersion)
+            ? v.offerVersion : '';
+        } else if (v && typeof v === 'object') {
           this.questView = v;
           this.did('questViews');
           if (Array.isArray(v.quests)) {

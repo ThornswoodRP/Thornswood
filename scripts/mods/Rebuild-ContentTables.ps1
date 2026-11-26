@@ -1,6 +1,8 @@
 <#
-  Rebuild-ContentTables.ps1
+.SYNOPSIS
+  Rebuilds every table that is read out of the plugins of the load order, in the order they read each other, after a change to one of Thornswood's own plugins in game\content, and says what changed.
 
+.DESCRIPTION
   Rebuilds every table that is read out of the plugins of the load order, in
   the order they read each other, after a change to one of Thornswood's own
   plugins in game\content, and says what changed. Issue #2923.
@@ -168,7 +170,22 @@ if ($PluginsTxt) {
 }
 if (-not $List) {
     $populationPath = Join-Path $repo 'game\data\npc-population.json'
-    $catalogued = $(if (Test-Path -LiteralPath $populationPath -PathType Leaf) { @(([IO.File]::ReadAllText($populationPath) | ConvertFrom-Json).loadOrder | ForEach-Object { [string]$_.name }) } else { @() })
+    $catalogued = @(if (Test-Path -LiteralPath $populationPath -PathType Leaf) {
+        # Read the top-level array without creating PowerShell objects for every NPC.
+        # Parse the document so invalid catalogue JSON still stops the build.
+        $options = [Text.Json.JsonDocumentOptions]::new()
+        $options.MaxDepth = 1024
+        $options.AllowTrailingCommas = $true
+        $options.CommentHandling = [Text.Json.JsonCommentHandling]::Skip
+        $catalogue = [Text.Json.JsonDocument]::Parse([IO.File]::ReadAllText($populationPath), $options)
+        try {
+            foreach ($plugin in $catalogue.RootElement.GetProperty('loadOrder').EnumerateArray()) {
+                $plugin.GetProperty('name').GetString()
+            }
+        } finally {
+            $catalogue.Dispose()
+        }
+    })
     $parting = Get-Parting $catalogued $recorded
     if ($parting) { throw ("game\data\npc-population.json is not built in the load order the commit records: $parting. Build-LastPlugin.py cuts the actors it lists, so build it in that order first (Build-NpcPopulation.py --settings, as Build-ContentOnBox.ps1 does). Nothing was run.") }
 }
@@ -222,7 +239,7 @@ Say ('steps 1 to {0}{1} read it without {2}: {3}' -f $lastAt, $(if ($lastAt -lt 
 # A file a step reads back (readsBack in content-tables.json) is written by a
 # later step. When that step changes it, the reader built from the old one, so
 # the chain runs again from the reader, once (#4087): Build-RecipeTable.ps1
-# reads docs\systems\cut-items.json, and Write-CutItems.js sorts a row a new
+# reads game\data\cut-items.json, and Write-CutItems.js sorts a row a new
 # plugin added into it, which the recipe build has to apply; it reads
 # game\data\recost.json too, which Build-Recost.py writes from it (#5191).
 # Each file read back may change once: a second change of the same file is a

@@ -1,6 +1,8 @@
 <#
-  New-CollectionPluginRecord.ps1
+.SYNOPSIS
+  Writes records\collection-plugins.json, the collection's plugins with the size and sha256 of each, which the full deploys hold the plugins they send to (#2019, CollectionPlugins.ps1).
 
+.DESCRIPTION
   Writes records\collection-plugins.json, the collection's plugins with the
   size and sha256 of each, which the full deploys hold the plugins they send
   to (#2019, CollectionPlugins.ps1). Reads plugin files from a folder and

@@ -1,10 +1,16 @@
-# What is enabled that should not be, and what is missing that should be there.
-# Compares the live load order against the reference this install shipped with.
-# Exit 0 when both enable the same plugins. Exit 1 when either enables one the
-# other does not, or when either list cannot be found or read (#4760).
-# -Live and -Reference name the two lists. Left off, they are the game's own
-# plugins.txt under LOCALAPPDATA and the first Thornswood\Profile\Default\
-# plugins.txt on a fixed drive, as before.
+<#
+.SYNOPSIS
+  What is enabled that should not be, and what is missing that should be there.
+
+.DESCRIPTION
+  What is enabled that should not be, and what is missing that should be there.
+  Compares the live load order against the reference this install shipped with.
+  Exit 0 when both enable the same plugins. Exit 1 when either enables one the
+  other does not, or when either list cannot be found or read (#4760).
+  -Live and -Reference name the two lists. Left off, they are the game's own
+  plugins.txt under LOCALAPPDATA and the first Thornswood\Profile\Default\
+  plugins.txt on a fixed drive, as before.
+#>
 param(
   [string]$Live = '',
   [string]$Reference = ''

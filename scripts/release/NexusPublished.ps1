@@ -1,6 +1,8 @@
 <#
-  NexusPublished.ps1
+.SYNOPSIS
+  The newest published revision of a Nexus collection, as Nexus says it now (#4068).
 
+.DESCRIPTION
   The newest published revision of a Nexus collection, as Nexus says it now
   (#4068).
 

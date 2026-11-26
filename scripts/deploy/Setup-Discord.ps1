@@ -295,20 +295,30 @@ try {
   $env:DISCORD_GIVE = $null
   $env:THORNSWOOD_OPEN = $null
 }
-# An audit reads and builds nothing, and a give only gives, so there is no
-# webhook to hand on.
-if ($Audit -or $gives.Count) { exit $code }
-
-# It used to say the webhook was ready whatever happened, including on the run
-# that stopped on a missing intent and built nothing at all. A script that
-# congratulates you for work it did not do is worse than one that says nothing.
 if ($code -ne 0) {
   Write-Host ''
-  Write-Host '  Nothing was built. Fix what it said above and run it again.' -ForegroundColor Yellow
+  Write-Host ("  Discord setup ended with exit {0}. No webhook was handed over. See the details above." -f $code) -ForegroundColor Yellow
   exit $code
 }
 
+# Audits and rank grants do not build a webhook to hand over.
+if ($Audit -or $gives.Count) { exit 0 }
+
 $hook = Join-Path $Here '..\..\bot\news-webhook.txt'
+
+# -Check changes nothing and never hands a webhook on. If a leftover file is
+# there, it only notes that it is there, without reading it (#4226).
+if ($Check) {
+  if (Test-Path -LiteralPath $hook) {
+    Write-Host ''
+    Write-Host '  bot\news-webhook.txt is there'
+  }
+  exit $code
+}
+
+# -Only touches no webhook (#2519, #4226).
+if ($Only.Count) { exit $code }
+
 Write-Host ''
 # An empty bot\news-webhook.txt reads back as $null, and .Trim() on that threw
 # before anything was said. Wrapped in a string it is '', which is refused here:
