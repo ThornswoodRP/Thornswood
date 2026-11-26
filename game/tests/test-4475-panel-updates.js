@@ -121,6 +121,11 @@ const trader = { open: true, sessionId: 'm1', trader: 'Smith', place: 'Whiterun'
   p.win.thornswoodDialog.patch = function (host) { if (host === body) writes++; return patch.apply(this, arguments); };
   for (let i = 0; i < 10; i++) p.api.setWhere([{ p: 1001, x: i, y: 0, z: 0, cell: 1 }]);
   yes('P: positions moving redraw the strip and leave the panel as it was', writes === 0 && body.childNodes[0] === first && p.doc.querySelector('[data-do="kick"]') === kick);
+  p.api.setData({ me: 1000, party: [], friends: [], near: [], muted: [],
+    offer: { kind: 'book', from: 1001, name: 'Brenna', about: 'The "Red" Book\' x="1' } });
+  const ask = p.doc.querySelector('.ask');
+  yes('P: a request\'s key stays one attribute when its book\'s name has quotes', !!ask &&
+    ask.getAttribute('data-row-key') === 'offer:book:1001:The "Red" Book\' x="1' && ask.getAttribute('x') === null);
 }
 
 // ------------------------------------------------------ the K panel --

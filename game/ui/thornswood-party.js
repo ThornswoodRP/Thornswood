@@ -419,9 +419,12 @@
     return keyName ? 'Escape or ' + keyName + ' closes this.' : 'Escape closes this.';
   }
 
+  // The double quote too, since a request's key goes in an attribute, which
+  // is double quoted (#4475), and a group book's name can hold one.
   function esc(s) {
     return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   // In place, so the focused control outlasts the update (#4475).
