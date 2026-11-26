@@ -18,8 +18,9 @@
 //     ends the run as failed, unless it is a wait with skip, which passes
 //     over the steps that deal with what it waited for (creation, for a
 //     character the server has not got);
-//   - every step in tests/real-client/*.json is one the plugin knows, and the
-//     runner names the same three files the plugin does;
+//   - every step in tests/real-client/*.json is one the plugin knows, every
+//     K panel tab and button a page step looks for is one the panel has, and
+//     the runner names the same three files the plugin does;
 //   - the runner's Windows helper compiles under PowerShell 7, where pwsh is;
 //   - an install on main is put on dev for the run as the launcher's Server
 //     card does, Play waits for dev's launcher, and the channel goes back
@@ -44,6 +45,7 @@ function read(p) {
 }
 const PLUGIN = read(process.env.PLUGIN || path.join('game', 'plugins', 'thornswood-test.js'));
 const RUNNER = read(path.join('scripts', 'dev', 'Run-RealClient.ps1'));
+const SKILLS = read(path.join('game', 'ui', 'thornswood-skills.js')) || '';
 const OUR_ADDRESS = JSON.parse(read(path.join('scripts', 'vps', 'vps.json'))).address;
 
 let pass = 0, fail = 0;
@@ -344,6 +346,22 @@ function game(opts) {
     yes(n + ' reads, and every step is one the plugin knows', !!bad && bad.length === 0);
     if (bad && bad.length) { console.log('      unknown: ' + bad.map(function (s) { return s.do; }).join(', ')); }
     yes(n + ' ends with an end step', !!doc && doc.steps.length > 0 && doc.steps[doc.steps.length - 1].do === 'end');
+    // A page step finds the K panel's tabs by the titles it shows and its
+    // buttons by data-act, so a renamed tab fails here and not two minutes
+    // into a run on One (26 Nov: #6454 renamed Home to Starting Location).
+    const pages = doc && Array.isArray(doc.steps) ? doc.steps.filter(function (s) { return s.do === 'page' && /ts-skills/.test(s.js || ''); }) : [];
+    const lost = [];
+    pages.forEach(function (s) {
+      let t;
+      const rowRx = /row\('([^']+)'\)/g;
+      while ((t = rowRx.exec(s.js))) { if (SKILLS.indexOf("title: '" + t[1] + "'") < 0) lost.push('tab ' + t[1]); }
+      const actRx = /data-act=\\?"([a-z]+)\\?"/g;
+      while ((t = actRx.exec(s.js))) { if (SKILLS.indexOf('data-act="' + t[1] + '"') < 0) lost.push('button ' + t[1]); }
+    });
+    if (pages.length) {
+      yes(n + ': every K panel tab and button its page steps look for is in game/ui/thornswood-skills.js', lost.length === 0);
+      if (lost.length) { console.log('      not there: ' + lost.join(', ')); }
+    }
   });
   [['thornswood-test-run.json', RUN], ['thornswood-test-results.jsonl', OUT], ['thornswood-test-ack.txt', ACK]].forEach(function (p) {
     yes('the plugin and the runner name the same ' + p[0],
