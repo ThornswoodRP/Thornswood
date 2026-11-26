@@ -106,7 +106,7 @@ finally { Remove-Item -LiteralPath $tmp -Recurse -Force -EA SilentlyContinue }
 
 # ---- 3. the layout -------------------------------------------------------------
 $inr = [IO.File]::ReadAllText((Join-Path $Repo 'scripts/release/Install-NexusRevision.ps1'))
-Yes '3. Install-NexusRevision.ps1 loads SliderSets.ps1' ($inr -match "\. \(Join-Path \`$PSScriptRoot 'SliderSets\.ps1'\)")
+Yes '3. Install-NexusRevision.ps1 loads SliderSets.ps1' ($inr -match "\. \(Join-Path \`$Here 'SliderSets\.ps1'\)")
 $loop = $inr.IndexOf('foreach ($w in $plan.Warnings)')
 $rec1 = $inr.IndexOf('if ($Record) {', [Math]::Max(0, $loop))
 $read1 = $inr.IndexOf('$script:SliderSetsRead[$s.Full] = ', [Math]::Max(0, $loop))
