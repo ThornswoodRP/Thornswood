@@ -230,7 +230,7 @@ async function roster(table, store, discordId) {
       if (f === 'roster.json') return clone(store);
       return fallback;
     },
-    LINKED: 'linked.json', ROSTER: 'roster.json',
+    LINKED: 'linked.json', ROSTER: 'roster.json', chars: require('../site/lib/characters'),
     // Nobody killed for good or banned by character here (#1010);
     // test-bans-pk.js runs those.
     characterBar: function () { return null; },
@@ -449,10 +449,12 @@ const PID = 1893288986;
     yes('and still calls the first account\'s character somebody else\'s',
         notMine && notMine.code === 200 && notMine.obj.ok === false && notMine.obj.why === 'somebody else');
 
-    const store = { who: {} };
+    // The live server's own book, which the main menu reads (#6904).
+    const store = { who: {}, books: { main: {} } };
     store.who[String(NEW_SPARE)] = { name: 'Bryn', race: 'Nord', trade: 'smith', town: 'Karthwasten' };
     store.who['42'] = { name: 'Arven', race: 'Breton', trade: 'hunter', town: 'Dragon Bridge' };
     store.who[String(PID)] = { name: 'Ilsa', race: 'Imperial', trade: 'cook', town: 'Karthwasten' };
+    store.books.main = clone(store.who);
     const r = await roster(table, store, B);
     yes('/roster gives the menu card for the second account\'s character its name',
         r && r.code === 200 && r.obj.rows[String(NEW_SPARE)] && r.obj.rows[String(NEW_SPARE)].name === 'Bryn');
@@ -494,7 +496,7 @@ const PID = 1893288986;
     const two = {};
     two[A] = { id: A, profiles: [PID, OLD_SPARE], spare: OLD_SPARE, chars: [{ id: PID, slot: 1 }] };
     two[B] = { id: B, profiles: [] };
-    C.settle(two, B, { slots: 2, pk: () => false, revived: () => false });
+    C.settle(two, B, 'main', { slots: 2, pk: () => false, revived: () => false });
     yes('which is why the site mints the second account a spare of its own, never the first account\'s',
         two[B].spare > 0 && two[B].spare !== OLD_SPARE && two[B].spare !== PID);
   }

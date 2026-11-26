@@ -307,7 +307,7 @@ yes('the site takes the roster at /api/roster and /dev/api/roster, and answers /
 if (PUSH && ASK && FRESH) {
   const store = { file: null };
   const LINKED = { '615236910243119104': { profiles: [902356861, 126519151, 114847261] } };
-  const ROUTE = new Function('p', 'route', 'req', 'res', 'o_body', 'cfg', 'store', 'LINKED', 'NOW',
+  const ROUTE = new Function('p', 'route', 'req', 'res', 'o_body', 'cfg', 'store', 'LINKED', 'NOW', 'chars',
     'const ROSTER = "roster"; const ROSTER_HELD_FRESH_MS = ' + FRESH + ';\n' +
     'const Date = { now: function () { return NOW; } };\n' +
     'function body() { return Promise.resolve(o_body); }\n' +
@@ -327,7 +327,8 @@ if (PUSH && ASK && FRESH) {
   const T0 = 1790000000000;
   async function call(pth, obj, now) {
     const res = {};
-    await ROUTE(pth, pth.toLowerCase(), { method: 'POST' }, res, JSON.stringify(obj), { botKey: 'k' }, store, LINKED, now || T0);
+    await ROUTE(pth, pth.toLowerCase(), { method: 'POST' }, res, JSON.stringify(obj), { botKey: 'k' }, store, LINKED, now || T0,
+                require('../site/lib/characters'));
     return res;
   }
   (async function () {
@@ -349,6 +350,15 @@ if (PUSH && ASK && FRESH) {
     yes('a report two hours old is not passed on', r.code === 200 && r.obj.gone.length === 0 && r.obj.goneAt === 0);
     r = await call('/api/play/roster', { ticket: 'bad', channel: 'dev' });
     yes('no ticket, no answer', r.code === 401);
+    // An id made a character on both servers before each had a list of its
+    // own (#6904) is two characters, and each menu names its own.
+    r = await call('/api/roster', { key: 'k', who: { 902356861: { name: 'Hrefna of main' } }, server: 'main' });
+    yes('the live server\'s push is taken too', r.code === 200);
+    r = await call('/api/play/roster', { ticket: 'good', channel: 'dev' });
+    yes('the dev menu names the dev character, not the live one under the same id',
+        r.obj.rows['902356861'] && r.obj.rows['902356861'].name === 'Adventurer5435434');
+    r = await call('/api/play/roster', { ticket: 'good', channel: 'main' });
+    yes('and the main menu names the live one', r.obj.rows['902356861'] && r.obj.rows['902356861'].name === 'Hrefna of main');
     partD();
   })().catch(function (e) { yes('the site routes ran: ' + e, false); partD(); });
 } else { partD(); }

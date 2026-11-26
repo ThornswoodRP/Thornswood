@@ -10,6 +10,10 @@
 // the way test-play-join.js runs /api/play/join. Then reads the launcher:
 // Chars.cs asks the route and writes no list of its own.
 //
+// And each game server's list apart from the other's (#6904): main's and
+// dev's characters are two worlds, and nothing on one list is read for the
+// other.
+//
 // Read only. Nothing here touches linked.json.
 const fs = require('fs');
 const path = require('path');
@@ -28,51 +32,51 @@ const none = { slots: 2, pk: () => false, revived: () => false };
 
 {
   const linked = { '101': { id: '101', profiles: [] } };
-  const said = chars.settle(linked, '101', none);
+  const said = chars.settle(linked, '101', 'main', none);
   const a = linked['101'];
   yes('a new account gets a spare minted by the site', a.spare >= 1000 && Array.isArray(a.chars) && a.chars.length === 0);
   yes('and the spare is on the door\'s list for that account', a.profiles.indexOf(a.spare) >= 0);
   yes('and nothing is said about it', said.length === 0);
 
   const spare = a.spare;
-  yes('picking the spare at the menu is allowed', chars.choose(linked, '101', spare, 5000) === null);
-  chars.settle(linked, '101', none);
+  yes('picking the spare at the menu is allowed', chars.choose(linked, '101', 'main', spare, 5000) === null);
+  chars.settle(linked, '101', 'main', none);
   yes('it becomes the character in slot 1, played now',
       a.chars.length === 1 && a.chars[0].id === spare && a.chars[0].slot === 1 && a.chars[0].played === 5000);
   yes('and a new spare is minted behind it', a.spare > 0 && a.spare !== spare);
   yes('and both are on the door\'s list', a.profiles.indexOf(spare) >= 0 && a.profiles.indexOf(a.spare) >= 0);
 
-  yes('an hour of play is counted', chars.played(linked, '101', spare, 3600, 9000) === null &&
+  yes('an hour of play is counted', chars.played(linked, '101', 'main', spare, 3600, 9000) === null &&
       a.chars[0].seconds === 3600 && a.chars[0].played === 9000);
-  yes('half a minute is not', chars.played(linked, '101', spare, 30, 9500) !== null && a.chars[0].seconds === 3600);
-  yes('more than a day is not', chars.played(linked, '101', spare, 90000, 9500) !== null && a.chars[0].seconds === 3600);
+  yes('half a minute is not', chars.played(linked, '101', 'main', spare, 30, 9500) !== null && a.chars[0].seconds === 3600);
+  yes('more than a day is not', chars.played(linked, '101', 'main', spare, 90000, 9500) !== null && a.chars[0].seconds === 3600);
 
   const second = a.spare;
-  chars.choose(linked, '101', second, 10000);
-  chars.settle(linked, '101', none);
+  chars.choose(linked, '101', 'main', second, 10000);
+  chars.settle(linked, '101', 'main', none);
   yes('a second new character takes slot 2', a.chars.find((c) => c.id === second).slot === 2);
 
-  yes('forgetting the first works', chars.forget(linked, '101', spare) === null);
-  chars.settle(linked, '101', none);
+  yes('forgetting the first works', chars.forget(linked, '101', 'main', spare) === null);
+  chars.settle(linked, '101', 'main', none);
   yes('it leaves the list and is retired', !a.chars.find((c) => c.id === spare) && a.retired.indexOf(spare) >= 0);
   yes('slot 2 stays where it was', a.chars.find((c) => c.id === second).slot === 2);
-  yes('a forgotten character cannot be picked back', chars.choose(linked, '101', spare, 11000) !== null);
-  yes('the spare cannot be forgotten', chars.forget(linked, '101', a.spare) !== null);
+  yes('a forgotten character cannot be picked back', chars.choose(linked, '101', 'main', spare, 11000) !== null);
+  yes('the spare cannot be forgotten', chars.forget(linked, '101', 'main', a.spare) !== null);
 
   const third = a.spare;
-  chars.choose(linked, '101', third, 12000);
-  chars.settle(linked, '101', none);
+  chars.choose(linked, '101', 'main', third, 12000);
+  chars.settle(linked, '101', 'main', none);
   yes('the next new character takes the free slot 1, the lowest', a.chars.find((c) => c.id === third).slot === 1);
 }
 
 {
   // Somebody else's id, and one the door already holds for this account.
   const linked = { '101': { id: '101', profiles: [777] }, '102': { id: '102', profiles: [888] } };
-  chars.settle(linked, '101', none);
-  yes('another account\'s id is not taken', chars.choose(linked, '101', 888, 1) !== null &&
+  chars.settle(linked, '101', 'main', none);
+  yes('another account\'s id is not taken', chars.choose(linked, '101', 'main', 888, 1) !== null &&
       !linked['101'].chars.find((c) => c.id === 888));
   yes('an id the door already holds for this account becomes a character',
-      chars.choose(linked, '101', 777, 1) === null && linked['101'].chars.find((c) => c.id === 777).slot === 1);
+      chars.choose(linked, '101', 'main', 777, 1) === null && linked['101'].chars.find((c) => c.id === 777).slot === 1);
 }
 
 {
@@ -87,15 +91,15 @@ const none = { slots: 2, pk: () => false, revived: () => false };
   // Dead for good, brought back, and the allowance.
   const linked = { '101': { id: '101', profiles: [1, 2, 3], spare: 50,
                         chars: [{ id: 1, slot: 1 }, { id: 2, slot: 2 }, { id: 3, slot: 3 }] } };
-  const said = chars.settle(linked, '101', { slots: 2, pk: (id) => id === 1, revived: () => false });
+  const said = chars.settle(linked, '101', 'main', { slots: 2, pk: (id) => id === 1, revived: () => false });
   const a = linked['101'];
   yes('a character staff killed leaves its slot', a.chars.find((c) => c.id === 1).slot === chars.DEAD);
   yes('and the one above the allowance comes down into it', a.chars.find((c) => c.id === 3).slot === 1);
   yes('and both are said', said.length === 2);
-  yes('the dead cannot be picked', chars.choose(linked, '101', 1, 1) !== null);
-  chars.settle(linked, '101', { slots: 3, pk: () => false, revived: (id) => id === 1 });
+  yes('the dead cannot be picked', chars.choose(linked, '101', 'main', 1, 1) !== null);
+  chars.settle(linked, '101', 'main', { slots: 3, pk: () => false, revived: (id) => id === 1 });
   yes('a PK an admin undid puts it back in a free slot', a.chars.find((c) => c.id === 1).slot === 3);
-  const ans = chars.answer(linked, '101', 3);
+  const ans = chars.answer(linked, '101', 'main', 3);
   yes('the answer lists characters in slot order', ans.chars.map((c) => c.id).join(',') === '3,2,1' && ans.spare === 50);
 }
 
@@ -106,6 +110,45 @@ const none = { slots: 2, pk: () => false, revived: () => false };
   yes('the door keeps the characters, the spare and the last eight others',
       kept.join(',') === '1,2,12,13,14,15,16,17,18,19');
   yes('with no characters it is the last eight, as before', chars.keepProfiles([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], {}).join(',') === '3,4,5,6,7,8,9,10');
+}
+
+{
+  // One list for each game server (#6904). Patrick, 26 Nov: main characters
+  // showed on dev "with a message that they are no longer on the server",
+  // and the bin on one took them off the other.
+  const linked = { '101': { id: '101', profiles: [] } };
+  chars.settle(linked, '101', 'main', none);
+  chars.settle(linked, '101', 'dev', none);
+  const a = linked['101'];
+  yes('each server has a spare of its own', a.spare > 0 && a.dev.spare > 0 && a.spare !== a.dev.spare);
+  const onMain = a.spare;
+  chars.choose(linked, '101', 'main', onMain, 1000);
+  chars.settle(linked, '101', 'main', none);
+  yes('a character made on main is on main\'s list', chars.answer(linked, '101', 'main', 2).chars.map((c) => c.id).join() === String(onMain));
+  yes('and not on dev\'s', chars.answer(linked, '101', 'dev', 2).chars.length === 0);
+  yes('dev cannot pick it, even though the door holds it for this account',
+      a.profiles.indexOf(onMain) >= 0 && chars.choose(linked, '101', 'dev', onMain, 2000) === 'that character is on the other server' &&
+      a.dev.chars.length === 0);
+  const onDev = a.dev.spare;
+  chars.choose(linked, '101', 'dev', onDev, 3000);
+  chars.settle(linked, '101', 'dev', none);
+  yes('a character made on dev is on dev\'s list only',
+      a.dev.chars.map((c) => c.id).join() === String(onDev) && !a.chars.some((c) => c.id === onDev));
+  yes('main cannot pick it either', chars.choose(linked, '101', 'main', onDev, 4000) === 'that character is on the other server');
+  yes('the bin on dev does not know main\'s character', chars.forget(linked, '101', 'dev', onMain) !== null &&
+      a.chars.some((c) => c.id === onMain) && a.dev.retired.indexOf(onMain) < 0);
+  yes('the bin on dev takes the dev character off dev\'s list alone', chars.forget(linked, '101', 'dev', onDev) === null &&
+      a.dev.chars.length === 0 && a.dev.retired.indexOf(onDev) >= 0 && a.retired.indexOf(onDev) < 0 &&
+      a.chars.some((c) => c.id === onMain));
+  yes('play time goes to the server it was played on', chars.played(linked, '101', 'dev', onMain, 600, 5000) !== null &&
+      chars.played(linked, '101', 'main', onMain, 600, 5000) === null && a.chars[0].seconds === 600);
+  yes('the door holds the characters and spares of both servers',
+      [onMain, a.spare, a.dev.spare].every((n) => a.profiles.indexOf(n) >= 0));
+  let n = 0;
+  const taken = { '102': { id: '102', chars: [{ id: 1000, slot: 1 }], spare: 1001, dev: { chars: [{ id: 1002, slot: 1 }], retired: [1003], spare: 1004 } } };
+  yes('an id is never minted that either server of any account uses', chars.mintId(taken, () => n++) === 1005);
+  yes('anything that is not dev is main', chars.serverKey('dev') === 'dev' && chars.serverKey('main') === 'main' &&
+      chars.serverKey('') === 'main' && chars.serverKey(undefined) === 'main' && chars.serverKey('DEV') === 'main');
 }
 
 // ---- the route ----------------------------------------------------------------
@@ -181,6 +224,16 @@ async function ask(files, ticket, req, standing) {
         Object.keys(files['linked.json']).every((k) => /^[0-9]+$/.test(k)));
     yes('accountKey takes digits only', chars.accountKey('201') === '201' && chars.accountKey('__proto__') === '' &&
         chars.accountKey('') === '' && chars.accountKey(null) === '' && chars.accountKey('12a') === '');
+    const devFirst = await ask(files, '201', { channel: 'dev' });
+    yes('the dev launcher gets dev\'s list, without main\'s character', devFirst.code === 200 &&
+        devFirst.obj.server === 'dev' && devFirst.obj.chars.length === 0 && devFirst.obj.spare > 0 &&
+        devFirst.obj.spare !== elsewhere.obj.spare);
+    const devPick = await ask(files, '201', { channel: 'dev', op: 'chose', profileId: first.obj.spare });
+    yes('and cannot pick main\'s character on dev', devPick.obj.ok === false && devPick.obj.chars.length === 0);
+    const devForget = await ask(files, '201', { channel: 'dev', op: 'forget', profileId: first.obj.spare });
+    const mainAfter = await ask(files, '201', { channel: 'main' });
+    yes('the bin on dev leaves main\'s character on main\'s list', devForget.obj.ok === false &&
+        mainAfter.obj.server === 'main' && mainAfter.obj.chars.length === 1 && mainAfter.obj.chars[0].id === first.obj.spare);
     const banned = await ask(files, '201', {}, { banned: true });
     yes('a banned account is refused', banned.code === 403);
     const late = await ask(files, '201', {}, { lookupFailed: 'rate limited' });
@@ -192,6 +245,8 @@ async function ask(files, ticket, req, standing) {
   yes('Chars.cs asks /api/play/characters', cs.indexOf('/api/play/characters') >= 0);
   yes('Chars.cs keeps no profiles.txt or retired.txt', !/profiles\.txt|retired\.txt/.test(cs.replace(/\/\/.*$/gm, '').replace(/\/\/\/.*$/gm, '')));
   yes('Chars.cs mints no ids of its own', !/RandomNumberGenerator|NextProfileId/.test(cs));
+  yes('Chars.cs names the server it plays on with every ask (#6904)',
+      /json\.Append\(",\\"channel\\":\\""\)\.Append\(Discord\.Escape\(string\.IsNullOrEmpty\(Discord\.Channel\) \? "main" : Discord\.Channel\)\)/.test(cs));
 
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');

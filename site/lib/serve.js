@@ -2591,6 +2591,16 @@ async function handle(req, res) {
       if (known.every((s) => clear.indexOf(s) >= 0)) delete marks[pid];
     }
     if (Object.keys(marks).length) store.deleted = marks; else delete store.deleted;
+    /*
+      Each server's book is kept apart as well (#6904), whole as it was
+      sent, since every push carries the server's whole book. A profile id
+      that is a character on both servers (made before the lists were apart)
+      is two characters with two names, and the menu of each server reads
+      its own: /api/play/roster answers from books[channel]. who stays the
+      merged view staff pages name a profile by.
+    */
+    if (!store.books || typeof store.books !== 'object' || Array.isArray(store.books)) store.books = {};
+    const book = {};
     let n = 0;
     for (const pid of Object.keys(who)) {
       if (!/^\d+$/.test(pid) || refused.has(pid)) continue;
@@ -2602,8 +2612,10 @@ async function handle(req, res) {
         town: String(row.town || '').slice(0, 32), where: String(row.where || '').slice(0, 80),
         at: Number(row.at) || Date.now()
       };
+      book[pid] = store.who[pid];
       n++;
     }
+    store.books[srv] = book;
     store.at = Date.now();
     // Said, not answered ok (#4379), the economy's way below.
     if (!putJson(ROSTER, store)) return sendJson(res, 500, { error: 'could not save' });
@@ -2657,17 +2669,21 @@ async function handle(req, res) {
     if (!t) return sendJson(res, 401, { ok: false, why: 'link' });
     const linked = jsonFile(LINKED, {});
     const mine = ((linked[t.d] || {}).profiles || []).map(Number).filter((x) => x > 0);
+    /* The names come from the asking launcher's server's own book (#6904),
+       never the other server's, which is another world: an id made a
+       character on both before the lists were apart has a name in each. */
+    const srv = chars.serverKey(o.channel);
     const store = jsonFile(ROSTER, { who: {} });
+    const book = (store.books && store.books[srv] && typeof store.books[srv] === 'object') ? store.books[srv] : {};
     const rows = {};
     for (const pid of mine) {
-      const row = store.who && store.who[String(pid)];
+      const row = book[String(pid)];
       if (row) rows[String(pid)] = row;
     }
     /* This account's characters that the asking launcher's server looked up
        and does not hold (#955), from its last report if that is recent. The
        launcher marks them on the menu; it trusts the answer only for a
        character last played before goneAt. */
-    const srv = String(o.channel || '') === 'dev' ? 'dev' : 'main';
     const rep = store.servers && store.servers[srv];
     let gone = [], goneAt = 0;
     if (rep && Array.isArray(rep.checked) && Array.isArray(rep.held) &&
@@ -3121,6 +3137,10 @@ async function handle(req, res) {
       op 'played' profileId was played for seconds
       op 'forget' profileId was put in the bin at the menu
 
+    channel names the game server the launcher plays on, dev or main, and
+    each has a list of its own (#6904): a character is in one world, so
+    the other server's menu never shows it and its bin never touches it.
+
     Discord is asked first, as at /api/play/join, and nothing is awaited
     between reading linked.json and writing it. Discord not answering is 503,
     not a no, and the launcher stops Play on it rather than draw a menu
@@ -3141,16 +3161,17 @@ async function handle(req, res) {
 
     const now = Date.now();
     const op = String(o.op || '');
+    const srv = chars.serverKey(o.channel);
     const linked = jsonFile(LINKED, {});
     let refused = null;
-    if (op === 'chose') refused = chars.choose(linked, d, o.profileId, now);
-    else if (op === 'played') refused = chars.played(linked, d, o.profileId, o.seconds, now);
-    else if (op === 'forget') refused = chars.forget(linked, d, o.profileId);
+    if (op === 'chose') refused = chars.choose(linked, d, srv, o.profileId, now);
+    else if (op === 'played') refused = chars.played(linked, d, srv, o.profileId, o.seconds, now);
+    else if (op === 'forget') refused = chars.forget(linked, d, srv, o.profileId);
     else if (op !== '') return sendJson(res, 400, { ok: false, why: 'op', message: 'The site does not know that request.' });
 
     const pkRows = jsonFile(PK, {}) || {};
     const slots = slotsFor(st);
-    const said = chars.settle(linked, d, {
+    const said = chars.settle(linked, d, srv, {
       slots,
       pk: (pid) => { const bar = characterBar(pid, now); return !!(bar && bar.pk); },
       revived: (pid) => !!pkRows[String(pid)] && !pkActive(pkRows[String(pid)])
@@ -3160,7 +3181,7 @@ async function handle(req, res) {
       return sendJson(res, 503, { ok: false, why: 'not recorded', message:
         'The site could not record your characters just now. Try again later, and tell staff if it keeps happening.' });
     }
-    const out = chars.answer(linked, d, slots);
+    const out = chars.answer(linked, d, srv, slots);
     out.said = said;
     if (refused) { out.ok = false; out.why = 'refused'; out.message = refused; }
     return sendJson(res, 200, out);
