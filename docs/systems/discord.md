@@ -166,7 +166,7 @@ Holders of Moderator also talk in the Gamemasters space.
 | Blades Officer | #A08560 | no | nothing of its own | the build | An Officer of Blades: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Volkihar Clan Officer | #A08560 | no | nothing of its own | the build | An Officer of Volkihar Clan: posts its announcements and sits in its leadership. Its Leader gives and takes it, to a member. |
 | Business Owner | #A08C6A | no | nothing of its own | the build | Owns a business book in the game. Support gives it. |
-| Member | #8D9682 | no | nothing of its own | the build | Reacted to the rules in #rules, which says 18 or over and the rules accepted. Applies, opens tickets and asks in #travelers-questions. |
+| Member | #8D9682 | yes | nothing of its own | the build | Reacted to the rules in #rules, which says 18 or over and the rules accepted. Applies, opens tickets and asks in #travelers-questions. |
 | Banned | #4A4A4A | no | nothing of its own | the build | Takes the site and the game away (site/server.js, access.banned). |
 | News Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
 | Updates Pings | #8D9682 | no | left to what makes it | the bot (bot_pings.py) |  |
