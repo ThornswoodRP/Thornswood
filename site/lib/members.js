@@ -203,7 +203,7 @@ function holdsNamedRole(roles, name) {
 
 /*
   THE FACTION LEADER ROLES HELD (#3317). Every faction's Leader role is its
-  name and " Leader" (bot/Build-Discord.py FACTION_LEADERS), and a faction
+  name and " Leader" (bot/Apply-Discord.py FACTION_LEADERS), and a faction
   that comes in through the application as Other gets one the same way, so
   the site reads them by that shape rather than keeping a second list of the
   factions. Whoever holds one owns that faction's book in the game (Patrick,
@@ -218,12 +218,12 @@ function leaderRoles(roles) {
   THE HOLD OFFICES, FROM THE ROLES (#2551). Patrick, 15 Oct: a Jarl's hold
   comes from their "Jarl of <Hold>" Discord role, and each hold has a Court,
   a Steward and Guards, which are Discord roles too ("<Hold> Court",
-  "Steward of <Hold>", "Guard of <Hold>", made by bot\Build-Discord.py and
+  "Steward of <Hold>", "Guard of <Hold>", made by bot\Apply-Discord.py and
   never hoisted). The role is the one truth: the game keeps no list of who
   holds what, it reads this, through /api/allowed.
 
   The key is the hold as the game names it (its ledger holds); the town is
-  how the role names it. Raven Rock is here although Build-Discord.py makes
+  how the role names it. Raven Rock is here although Apply-Discord.py makes
   no roles for it, so roles made for it by hand are read the same way.
 
   OFFICE_ROLE says, for one office and one hold, the role's exact name. Only

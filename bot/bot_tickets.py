@@ -265,7 +265,7 @@ HOLD_PICK_Q = 'Which hold?'
 # refusing it (page card q-3317-seat-rule-check, A): staff cannot apply for
 # a seat, and a seat holder cannot apply for staff. Every staff role counts,
 # Trial Gamemaster, Content Creator and Support included, so the names are
-# Build-Discord.py's STAFF, and test-3317-seats.py holds the two to the same
+# Apply-Discord.py's STAFF, and test-3317-seats.py holds the two to the same
 # list. STAFF_ROLES ids count too.
 LEADERSHIP_KINDS = ('jarl', 'faction')
 SEAT_RULE_STAFF = ('Owner', 'Co-Owner',
@@ -278,7 +278,7 @@ SEAT_RULE_STAFF = ('Owner', 'Co-Owner',
 # The applications that make somebody staff. Apply: Lead joins this when it
 # is on the panel.
 STAFF_JOB_KINDS = ('gamemaster', 'loremaster', 'moderator', 'dev', 'creator', 'support')
-# A faction's leader role uses its short name, as Build-Discord.py makes it.
+# A faction's leader role uses its short name, as Apply-Discord.py makes it.
 FACTION_SHORT = {'Thalmor Remnant': 'Thalmor', 'The Companions': 'Companions'}
 # Djinn, 12 Oct 2026. On the public panel, word for word.
 STAFF_LEADERSHIP_RULE = 'No GM or staff member (Loremaster, Discord Moderator, or any other staff role) may hold an in-game RP role with faction leadership, such as a Jarl or a faction lead.'
@@ -652,7 +652,7 @@ class TicketModal(discord.ui.Modal):
                     # Private, not invitable: only people the bot adds can
                     # read it. Roles with Manage Threads on this channel
                     # (the council, Gamemaster, Trial Gamemaster, Moderator
-                    # and Support, by their sets in Build-Discord.py) can
+                    # and Support, by their sets in Apply-Discord.py) can
                     # still open a private thread. That
                     # is Discord's permission, not something this bot sets.
                     opened = await ch.create_thread(
@@ -897,7 +897,7 @@ def is_staff(who):
     Nothing else makes somebody staff here, a channel permission included.
     This used to let in anybody the channel trusted with threads as well, and
     Lead Gamemaster and Trial Gamemaster carry Manage Threads on every channel
-    (their sets in Build-Discord.py), so a Trial Gamemaster, which is not a
+    (their sets in Apply-Discord.py), so a Trial Gamemaster, which is not a
     staff role, could close any ticket and skip the ticket limits (#1342). A
     Lead Gamemaster is staff by STAFF_ROLES since #3317, not by the
     permission.

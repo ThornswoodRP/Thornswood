@@ -17,7 +17,7 @@ with the Attach Files overwrite on #welcome-travelers, planned far more:
 Plus a hand-made gated channel and two server or channel settings that the
 approval did not cover.
 
-What this checks, with Build-Discord.py imported for real under another name
+What this checks, with Apply-Discord.py imported for real under another name
 and every guild, role and channel a stand-in that records what would have
 been asked of Discord:
   1. role_order: roles already in the plan's order are not moved, whatever
@@ -74,7 +74,7 @@ def yes(what, cond):
 
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_2519', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_2519', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -341,6 +341,8 @@ def run(g, check=False, posts=False, only='', prune=False):
     B.POSTS = posts
     B.PRUNE = prune
     B.ROLES_ONLY = False
+    # The whole build (#6961: a plain run applies only the plan's changes).
+    B.WHOLE = True
     B.ONLY = [n.strip() for n in only.split(',') if n.strip()]
     B.GUILD = ''
     B.client = Client(g)

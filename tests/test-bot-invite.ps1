@@ -6,7 +6,7 @@
   Issue #455 took Administrator off the running bot and left RUN_BITS, with
   a line at the end of every build saying to untick it and to tick it again
   before the next. Patrick ended that on 22 Oct 2026 (#3317): "the bot will
-  keep admin". So `Build-Discord.py --invite <application id>` prints the
+  keep admin". So `Apply-Discord.py --invite <application id>` prints the
   invite with Administrator, and RUN_BITS stays as the record of what the
   running bot itself uses, which the audit checks when Administrator is gone.
   It prints without a token, without discord.py and without connecting.
@@ -24,7 +24,7 @@
     6. the dry path never imports discord.py and needs no token: a stand-in
        discord package that fails on import is put first on the path;
     7. with no id it says how to get one and prints no link;
-    8. Setup-Discord.ps1 parses and says the bot keeps Administrator.
+    8. Apply-Discord.ps1 parses and says the bot keeps Administrator.
 
   The end of a real build is checked in bot\tests\test-bot-overwrites.py, which
   drives the builder against a stand-in server and needs discord.py.
@@ -38,8 +38,8 @@ $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent $Here
-$Builder = Join-Path $Repo 'bot\Build-Discord.py'
-$Setup = Join-Path $Repo 'scripts\deploy\Setup-Discord.ps1'
+$Builder = Join-Path $Repo 'bot\Apply-Discord.py'
+$Setup = Join-Path $Repo 'scripts\deploy\Apply-Discord.ps1'
 
 $script:pass = 0
 $script:fail = 0
@@ -116,7 +116,7 @@ function Run-Py([string[]]$argv) {
 try {
     # ---- 1. the builder parses, without running it -------------------------
     $r = Run-Py @('-c', "import ast,sys; ast.parse(open(sys.argv[1], encoding='utf-8').read()); print('the builder parses')", $Builder)
-    Yes 'Build-Discord.py parses' ($r.Code -eq 0 -and $r.Out -match 'the builder parses')
+    Yes 'Apply-Discord.py parses' ($r.Code -eq 0 -and $r.Out -match 'the builder parses')
 
     # ---- 2. the dry path prints the invite with Administrator ---------------
     $id = '123456789012345678'
@@ -181,10 +181,10 @@ try {
     $r = Run-Py @($Builder, '--invite', 'not-an-id')
     Yes 'with something that is not an id it prints no link either' ($r.Code -ne 0 -and $r.Out -notmatch 'oauth2/authorize')
 
-    # ---- 8. Setup-Discord.ps1 says the same ---------------------------------
+    # ---- 8. Apply-Discord.ps1 says the same ---------------------------------
     $tokens = $null; $errors = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile($Setup, [ref]$tokens, [ref]$errors)
-    Yes 'Setup-Discord.ps1 parses' (@($errors).Count -eq 0)
+    Yes 'Apply-Discord.ps1 parses' (@($errors).Count -eq 0)
     $s = Get-Content -LiteralPath $Setup -Raw
     Yes '  and says the bot keeps Administrator' ($s -match 'The bot keeps Administrator' -and $s -notmatch '(?i)untick')
     Yes '  and says how to print the invite' ($s -match '--invite')

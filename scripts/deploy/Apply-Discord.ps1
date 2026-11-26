@@ -1,44 +1,55 @@
 <#
-  Setup-Discord.ps1
+  Apply-Discord.ps1
 
-  Builds the Thornswood Discord: roles, categories, channels, permissions and
-  the words in the read only channels, in one run.
+  Applies the plan's changes to the Thornswood Discord: what the repository
+  changed in the plan (roles, categories, channels, permissions, topics and
+  the words of the read only posts) since the last run, and nothing else
+  (#6961). The Discord is already set up; this is how a change to the plan
+  reaches it.
 
-  Run it again any time. Anything already there is left alone and anything
-  missing is made. It does NOT rewrite the read only posts unless you ask, so
-  a run to add one channel no longer deletes and re-sends every rule, welcome
-  and faq message in the server.
+  The box keeps a record of the plan it last applied
+  (C:\Thornswood-Bot\data\discord-applied.json). A run compares the plan with that
+  record and asks Discord only for what differs: one role's overwrite on one
+  channel, one topic, one post. Whatever the plan did not change is left as
+  the live server has it, hand edits included, and the run lists where the
+  live server differs from the plan there, so a hand edit worth keeping can be
+  written into the plan. When the plan has not changed, Discord is asked
+  nothing. The record moves on only when the whole run went through. Until
+  26 Nov 2026 every run made the live server the whole plan, and undid hand
+  edits each time (Patrick: "why it resets up the whole fucking server every
+  time we make a slight change").
 
-    .\Setup-Discord.ps1            roles, channels, permissions, settings
-    .\Setup-Discord.ps1 -Posts     also rewrites the read only posts from
-                                    content.py. Use this when the wording moved.
-    .\Setup-Discord.ps1 -Check     changes nothing at all, just says what it
-                                    would do
-    .\Setup-Discord.ps1 -Audit     changes nothing at all, reads the live
-                                    server and says where it differs from
-                                    the plan: the bot's permissions, each
-                                    role's, who holds each staff rank and
-                                    every double rank, and every channel's
-                                    overwrites (#3317)
-    .\Setup-Discord.ps1 -Prune     also deletes channels this no longer wants
-    .\Setup-Discord.ps1 -OnBox     runs the build on the VPS with the token the
-                                    running bot already holds, and asks for
-                                    nothing. Goes with -Check, -Audit, -Posts,
-                                    -Prune and -Only
-    .\Setup-Discord.ps1 -Give 'Co-Owner=WiccanDjinn','Lead Dev=Patrick Thornwood'
+    .\Apply-Discord.ps1 -OnBox     applies the plan's changes, on the VPS with
+                                    the token the bot holds there, and asks
+                                    for nothing
+    .\Apply-Discord.ps1 -OnBox -Check
+                                   changes nothing, says what it would
+    .\Apply-Discord.ps1 -OnBox -Audit
+                                   changes nothing, reads the live server and
+                                    says where it differs from the plan: the
+                                    bot's permissions, each role's, who holds
+                                    each staff rank and every double rank,
+                                    every channel's overwrites (#3317), and
+                                    who changed channels, permissions and
+                                    roles in the last week (#6961)
+    .\Apply-Discord.ps1 -OnBox -Record
+                                   writes this plan as the record and asks
+                                    Discord nothing. Once, when there is no
+                                    record and -Audit says the live server is
+                                    this plan; it never writes over a record
+    .\Apply-Discord.ps1 -OnBox -Prune
+                                   also deletes the channels the plan dropped
+                                    since the record, when nothing is open in
+                                    them
+    .\Apply-Discord.ps1 -OnBox -Give 'Co-Owner=WiccanDjinn','Lead Dev=Patrick Thornwood'
                                    gives each staff rank to the one member
                                     named exactly, and does nothing else. Never
                                     a second rank of one category, never to a
                                     seat holder; with -Check only says it (#3317)
-    .\Setup-Discord.ps1 -Only Gamemasters,welcome-travelers
-                                   touches only those categories and channels
-                                    of the plan: no role made or moved, no
-                                    other channel, no webhook, no server
-                                    setting. For a change approved for one
-                                    part of the Discord (#2519)
-    .\Setup-Discord.ps1 -Only lore,factions -Posts
-                                   also rewrites the read only posts of
-                                    those channels, and no other post (#3656)
+
+  -Whole is the build as it was: it makes the live server the whole plan,
+  hand edits undone, for a server made from nothing. -Posts, -Only and the
+  news webhook go with it. The gate never runs it.
 
   First time only, before running it:
 
@@ -55,7 +66,7 @@
   To see the invite link without building anything, from the repository
   folder, with the id from the developer portal's General Information page:
 
-    python bot\Build-Discord.py --invite <application id>
+    python bot\Apply-Discord.py --invite <application id>
     5. Server Settings, Roles: drag the bot's own role to the TOP. It cannot
        make roles above itself.
     6. Server Settings, Enable Community, so forums, the announcement channel
@@ -67,7 +78,7 @@
   -OnBox asks for nothing (#2519, #2341). The token is the bot's own, in
   C:\Thornswood-Bot\bot.env.json on the VPS, so a machine with the VPS key
   and no token, or a run with nobody at a prompt, can still build, and the
-  token never leaves the box. Build-Discord.py, content.py,
+  token never leaves the box. Apply-Discord.py, content.py,
   staff-channel.txt and factions.json go up inside the run's script as the
   commit holds them,
   with the two site pages content.py reads its words from (join.md and
@@ -91,11 +102,15 @@ param(
   # Scoped to the categories this script made, so anything you added yourself
   # is never touched.
   [switch]$Prune,
-  # Rewrites the read only posts from content.py. Off by default: it deletes
-  # the bot's old messages in each of those channels and sends them again, and
-  # doing that on every run turns a one channel change into the whole server
-  # flashing.
+  # With -Whole: rewrites the read only posts from content.py. A run without
+  # -Whole writes the posts whose words the plan changed, and no other.
   [switch]$Posts,
+  # The whole plan, made on the live server whatever it has, hand edits
+  # undone (#6961). For a server made from nothing.
+  [switch]$Whole,
+  # Writes this plan as the record of what was applied, and asks Discord
+  # nothing (#6961). Never over a record already there.
+  [switch]$Record,
   # Touches nothing. Says what it would make, remove and rewrite, then stops.
   [switch]$Check,
   # Touches nothing. Reads the live server and says where it differs from the
@@ -104,10 +119,10 @@ param(
   # Builds on the VPS with the token the bot holds there. Asks for nothing.
   [switch]$OnBox,
   # Only these categories and channels of the plan, and nothing else in the
-  # Discord (#2519). Build-Discord.py's ONLY says what that leaves out, and
+  # Discord (#2519). Apply-Discord.py's ONLY says what that leaves out, and
   # refuses a name its plan does not have before Discord is asked anything.
   [string[]]$Only = @(),
-  # Staff ranks to give, each 'rank=member' (#3317). Build-Discord.py's GIVE
+  # Staff ranks to give, each 'rank=member' (#3317). Apply-Discord.py's GIVE
   # says which ranks and how a member is matched. Nothing else in the run
   # happens.
   [string[]]$Give = @()
@@ -116,7 +131,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
-$app = Join-Path $Here '..\..\bot\Build-Discord.py'
+$app = Join-Path $Here '..\..\bot\Apply-Discord.py'
 if (-not (Test-Path -LiteralPath $app)) { throw "not found: $app" }
 # One 'rank=member' each. A quote, a semicolon or anything else that could
 # leave the line it is written into stops here, before anything is sent.
@@ -124,6 +139,13 @@ $gives = @($Give | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
 foreach ($g in $gives) {
   if ($g -notmatch '^[A-Za-z -]+=[\p{L}\p{N} _.-]+$') { throw ("-Give takes 'staff rank=member', not: " + $g) }
 }
+# A run writes the posts the plan changed by itself (#6961); -Posts and -Only
+# are the whole build's.
+if (($Posts -or $Only.Count) -and -not $Whole) { throw '-Posts and -Only go with -Whole. A run without it writes the posts whose words the plan changed, and nothing else. Nothing was sent.' }
+if ($Record -and ($Whole -or $Audit -or $gives.Count -or $Prune)) { throw '-Record writes the record and does nothing else. Nothing was sent.' }
+# The record of what was applied is the box's, so a run that applies the
+# plan's changes, or starts the record, goes there.
+if (-not $OnBox -and -not ($Audit -or $gives.Count -or $Whole)) { throw 'The record of what was last applied is on the box, so this runs with -OnBox. Nothing was sent.' }
 
 # The one switch (#428): the site's "open", read off its public page so the
 # posts say the same as the site. Anything that goes wrong is the alpha
@@ -148,13 +170,13 @@ if ($OnBox) {
   # reads join.md and rules.md through ..\site\data\site from its own folder,
   # and a run that sent only the bot's files stopped on the box with
   # FileNotFoundError for join.md (22 Oct 2026). tests\test-2519-setup-discord-onbox.ps1
-  # imports content.py from a folder holding only these. Build-Discord.py
+  # imports content.py from a folder holding only these. Apply-Discord.py
   # reads factions.json from its own folder when it loads (#3317), and the
   # first -OnBox run after that stopped with FileNotFoundError for it; the
-  # same test imports Build-Discord.py there too, where a python with
+  # same test imports Apply-Discord.py there too, where a python with
   # discord.py is. content.py reads #factions out of lore\factions.md (#3317).
-  # Build-Discord.py logs in through trust.py, the bot's roots (#3604).
-  $send = @('bot/Build-Discord.py', 'bot/content.py', 'bot/trust.py', 'bot/staff-channel.txt',
+  # Apply-Discord.py logs in through trust.py, the bot's roots (#3604).
+  $send = @('bot/Apply-Discord.py', 'bot/content.py', 'bot/trust.py', 'bot/staff-channel.txt',
     'bot/factions.json', 'site/data/site/join.md', 'site/data/site/rules.md',
     'lore/factions.md')
   # The commit, never the working tree, so what ran is a commit anyone can name.
@@ -169,6 +191,12 @@ if ($OnBox) {
   }
   $flags = "`$env:THORNSWOOD_OPEN = '" + $(if ($open) { '1' } else { '0' }) + "'`r`n"
   if ($Guild) { $flags += "`$env:DISCORD_GUILD = '" + ($Guild -replace '[^0-9]', '') + "'`r`n" }
+  # The record of the plan last applied (#6961), beside the bot, and the
+  # commit this run's plan is from.
+  $flags += "`$env:DISCORD_RECORD = 'C:\Thornswood-Bot\data\discord-applied.json'`r`n"
+  $flags += "`$env:DISCORD_COMMIT = '" + $commit + "'`r`n"
+  if ($Whole) { $flags += "`$env:DISCORD_WHOLE = '1'`r`n" }
+  if ($Record) { $flags += "`$env:DISCORD_RECORD_NOW = '1'`r`n" }
   if ($Prune) { $flags += "`$env:DISCORD_PRUNE = '1'`r`n" }
   if ($Posts) { $flags += "`$env:DISCORD_POSTS = '1'`r`n" }
   if ($Check) { $flags += "`$env:DISCORD_CHECK = '1'`r`n" }
@@ -210,7 +238,7 @@ $files  }
   `$env:PYTHONPATH = Join-Path `$botRoot 'py-libs'
   `$env:PYTHONIOENCODING = 'utf-8'
 $flags  `$ErrorActionPreference = 'Continue'
-  & python (Join-Path `$dir 'bot/Build-Discord.py') 2>&1 | ForEach-Object { "`$_" }
+  & python (Join-Path `$dir 'bot/Apply-Discord.py') 2>&1 | ForEach-Object { "`$_" }
   `$code = `$LASTEXITCODE
 } finally {
   `$env:DISCORD_TOKEN = `$null
@@ -222,7 +250,7 @@ exit `$code
   $User = Get-ThornswoodVpsUser
   $Vps = Get-ThornswoodVpsAddress
   $ssh = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
-  Write-Host ("Building on the VPS from commit {0}, with the token the bot holds there..." -f $commit)
+  Write-Host ("On the VPS from commit {0}, with the token the bot holds there..." -f $commit)
   $out = Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script $far
   $code = $LASTEXITCODE
   foreach ($l in @($out)) { Write-Host "$l" }
@@ -254,10 +282,10 @@ if (-not $py) { throw 'No Python 3.10 or newer found. Install Python 3.12 (py -3
 
 if (-not $SkipInstall) {
   Write-Host 'Making sure discord.py is here...'
-  # Build-Discord.py logs in through bot\trust.py, which reads its roots out
+  # Apply-Discord.py logs in through bot\trust.py, which reads its roots out
   # of the certifi the bot pins, so that one comes too (#3604).
   $certifi = [regex]::Match((Get-Content -LiteralPath (Join-Path $Here '..\..\bot\requirements.in') -Raw), '(?m)^certifi==(\S+)').Groups[1].Value
-  if (-not $certifi) { throw 'bot\requirements.in names no certifi version, so the roots Build-Discord.py trusts cannot be installed.' }
+  if (-not $certifi) { throw 'bot\requirements.in names no certifi version, so the roots Apply-Discord.py trusts cannot be installed.' }
   & $py @pyArgs -m pip install -q -U discord.py ('certifi==' + $certifi)
   if ($LASTEXITCODE -ne 0) { throw 'pip could not install discord.py and certifi' }
   Write-Host '  ready'
@@ -273,6 +301,7 @@ if (-not $tok) { throw 'No token given.' }
 # Only for this process. Nothing is written down and nothing outlives the run.
 $env:DISCORD_TOKEN = $tok
 if ($Guild) { $env:DISCORD_GUILD = $Guild }
+if ($Whole) { $env:DISCORD_WHOLE = '1' }
 if ($Prune) { $env:DISCORD_PRUNE = '1' }
 if ($Posts) { $env:DISCORD_POSTS = '1' }
 if ($Check) { $env:DISCORD_CHECK = '1' }
@@ -288,6 +317,7 @@ try {
 } finally {
   $env:DISCORD_TOKEN = $null
   $env:DISCORD_PRUNE = $null
+  $env:DISCORD_WHOLE = $null
   $env:DISCORD_POSTS = $null
   $env:DISCORD_CHECK = $null
   $env:DISCORD_AUDIT = $null
@@ -301,8 +331,9 @@ if ($code -ne 0) {
   exit $code
 }
 
-# Audits and rank grants do not build a webhook to hand over.
-if ($Audit -or $gives.Count) { exit 0 }
+# Only the whole build makes the news webhook; an audit, a rank grant and a
+# run of the plan's changes have none to hand over.
+if ($Audit -or $gives.Count -or -not $Whole) { exit $code }
 
 $hook = Join-Path $Here '..\..\bot\news-webhook.txt'
 

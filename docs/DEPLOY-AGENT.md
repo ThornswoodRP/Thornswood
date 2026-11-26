@@ -540,7 +540,7 @@ to "back", "down" or "off" (called off before the stop), that is posted
 once too. A "coming" whose time is over 15 minutes gone, and an end whose
 "coming" never went out, are written down without a post. #updates is found
 as the Information category's `updates` channel, the place
-`bot/Build-Discord.py` gives it, or by `UPDATES_CHANNEL_ID`; the bot's log
+`bot/Apply-Discord.py` gives it, or by `UPDATES_CHANNEL_ID`; the bot's log
 names the id it found. A gamemode reload is not a restart and says nothing.
 
 The scripts that stop a game server by hand leave the same notice

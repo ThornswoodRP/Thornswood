@@ -8,7 +8,7 @@ bot's in the channel, and the "started a thread" line keep_changelog's
 create_thread leaves is the bot's too, so every -Posts run after the first
 took the only way into the Changelog thread out of the channel.
 
-What this checks, with Build-Discord.py imported for real under another name
+What this checks, with Apply-Discord.py imported for real under another name
 and each channel and thread a stand-in that records what was asked of it:
   1. post() edits the bot's words where they stand and leaves everybody
      else's messages; it keeps the "started a thread" line while the words
@@ -54,7 +54,7 @@ import asyncio
 import importlib.util
 import types
 
-spec = importlib.util.spec_from_file_location('build_discord_3336', os.path.join(HERE, 'Build-Discord.py'))
+spec = importlib.util.spec_from_file_location('build_discord_3336', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 discord = B.discord
@@ -195,7 +195,7 @@ yes('the post ends on a link to the thread', text.rstrip().endswith('in the Chan
 yes('and says the newest change', B.nice_date(B.C.CHANGES[key][-1][0]) in text and B.C.CHANGES[key][-1][1] in text)
 
 # ---- 3. -Posts makes the thread first
-src = open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
+src = open(os.path.join(HERE, 'Apply-Discord.py'), encoding='utf-8').read()
 at = src.index('thread = await keep_changelog(ch, key)')
 yes('-Posts makes the thread before it writes the post, and the post links it',
     at < src.index('await post(ch, doc_with_footer(key, thread), found)', at))

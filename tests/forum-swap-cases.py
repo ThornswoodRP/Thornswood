@@ -6,7 +6,7 @@ forum-swap-cases.py
 The cases tests/test-4492-forum-swap.js runs, which say why. Each prints a
 PASS or FAIL line, and it exits 1 when any fails.
 
-bot/Build-Discord.py's ensure_channel, open_threads, refused and the check
+bot/Apply-Discord.py's ensure_channel, open_threads, refused and the check
 the build's deletes share are lifted out of the file by their source and run
 against a stand-in guild, with a stand-in for the few discord names they
 use. So this needs neither discord.py nor a token, and runs wherever there
@@ -19,7 +19,7 @@ import os
 import types
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BUILD = os.path.join(REPO, 'bot', 'Build-Discord.py')
+BUILD = os.path.join(REPO, 'bot', 'Apply-Discord.py')
 with open(BUILD, encoding='utf-8') as f:
     SRC = f.read()
 TREE = ast.parse(SRC)
@@ -57,7 +57,7 @@ def called_in(node, callee):
 
 
 def functions_calling(attr):
-    """Every top level function of Build-Discord.py that calls .attr()."""
+    """Every top level function of Apply-Discord.py that calls .attr()."""
     return sorted(n.name for n in TREE.body
                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
                   and called_in(n, attr))
@@ -204,10 +204,10 @@ space['keep_overwrites'] = _no_overwrites
 for name in ('refused', 'open_threads', 'why_kept', 'rebuild_as_forum', 'ensure_channel'):
     exec(lift(name), space)
 
-yes('Build-Discord.py has ensure_channel and open_threads, where the swap and '
+yes('Apply-Discord.py has ensure_channel and open_threads, where the swap and '
     'the prune list\'s thread check are',
     'ensure_channel' in space and 'open_threads' in space)
-yes('Build-Discord.py has why_kept, the one check the build\'s deletes go through',
+yes('Apply-Discord.py has why_kept, the one check the build\'s deletes go through',
     'why_kept' in space)
 
 CAT = Category('Out of Character')

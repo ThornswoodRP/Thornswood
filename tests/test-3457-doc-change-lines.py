@@ -6,7 +6,7 @@ test-3457-doc-change-lines.py
 Issue #3457: #3445 rewrote the join and rules pages, which #start-here,
 #welcome, #faq and #game-rules are read out of, and added no change line for
 them in bot/content.py. Its build was green, because the one check that a doc
-has its line (Build-Discord.py, check_docs) ran only in the bot's harnesses,
+has its line (Apply-Discord.py, check_docs) ran only in the bot's harnesses,
 and those need discord.py and run only at night. So main went red there and
 the next Discord build would have refused to run.
 
@@ -20,7 +20,7 @@ nightly still runs check_docs over the build's own list of written channels
     and the fingerprint its words have;
   - with a doc's words changed, unrecorded names it;
   - a doc with no changelog at all is named, and a draft never is;
-  - check_docs asks content.py, and Build-Discord.py keeps no fingerprint of
+  - check_docs asks content.py, and Apply-Discord.py keeps no fingerprint of
     its own to drift from it.
 Read only. Never connects to anything.
 """
@@ -78,11 +78,11 @@ finally:
 yes('the fingerprint is twelve hex digits',
     len(fp) == 12 and all(c in '0123456789abcdef' for c in fp))
 
-src = (ROOT / 'bot' / 'Build-Discord.py').read_text(encoding='utf-8')
+src = (ROOT / 'bot' / 'Apply-Discord.py').read_text(encoding='utf-8')
 start = src.index('def check_docs():')
 body = src[start:src.index('\ndef ', start + 1)]
 yes('check_docs asks content.py which docs have no line', 'C.unrecorded(' in body)
-yes('Build-Discord.py keeps no fingerprint of its own',
+yes('Apply-Discord.py keeps no fingerprint of its own',
     'def doc_print' not in src and 'def doc_texts' not in src and 'sha256' not in src)
 
 print('\n%d passed, %d failed' % (len(PASS), len(FAIL)))

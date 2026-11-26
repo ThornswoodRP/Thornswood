@@ -130,12 +130,15 @@ Yes 'Rehearse-Restore takes -Which and a profile id in digits, never another bac
     (Words 'Rehearse-Restore -ProfileId 1 -Root x') -eq 'REFUSED' -and (Test-ThornswoodGateRequest -Line 'Rehearse-Restore -ProfileId 1' -Verbs $verbs).Out -eq '-Out')
 Yes 'Set-InboundRules takes -Check and -Own, never another box, user, record or known_hosts' ((Words 'Set-InboundRules -Own -Check') -eq '-NoPause|-Own|-Check' -and
     (Words 'Set-InboundRules -Vps x') -eq 'REFUSED' -and (Words 'Set-InboundRules -Record x') -eq 'REFUSED' -and (Words 'Set-InboundRules -KnownHosts x') -eq 'REFUSED')
-# -Posts rewrites the read only posts from content.py (Patrick, 26 Nov 2026,
-# page card q-6874-discord-posts-gate, A: the posts follow the repository
-# without a hand step, #6874).
-Yes 'Setup-Discord runs on the box and builds, audits, checks or rewrites the posts: -Prune, -Give and another guild wait for Patrick' ((Words 'Setup-Discord -Audit') -eq '-OnBox|-Audit' -and
-    (Words 'Setup-Discord -Posts') -eq '-OnBox|-Posts' -and
-    (Words 'Setup-Discord -Prune') -eq 'REFUSED' -and (Words 'Setup-Discord -Give x') -eq 'REFUSED' -and (Words 'Setup-Discord -Guild 1') -eq 'REFUSED')
+# A plain run applies the plan's changes since the record, posts included
+# (#6961; the posts follow the repository without a hand step, Patrick,
+# 26 Nov 2026, page card q-6874-discord-posts-gate, A). -Record starts the
+# record. -Whole, which makes the live server the whole plan, is never a
+# gate line.
+Yes 'Apply-Discord runs on the box and applies the plan''s changes, audits, checks or starts the record: -Whole, -Prune, -Give and another guild wait for Patrick' ((Words 'Apply-Discord -Audit') -eq '-OnBox|-Audit' -and
+    (Words 'Apply-Discord') -eq '-OnBox' -and (Words 'Apply-Discord -Record') -eq '-OnBox|-Record' -and
+    (Words 'Apply-Discord -Whole') -eq 'REFUSED' -and (Words 'Apply-Discord -Posts') -eq 'REFUSED' -and
+    (Words 'Apply-Discord -Prune') -eq 'REFUSED' -and (Words 'Apply-Discord -Give x') -eq 'REFUSED' -and (Words 'Apply-Discord -Guild 1') -eq 'REFUSED')
 # The last box scripts a person ran from One with its ssh key (#2862, 1 Nov):
 # the nightly backup's install (#5168 waited on it), a deletion request, and
 # four reads. None takes a host, user, folder, task or passphrase file.

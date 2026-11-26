@@ -26,7 +26,7 @@ same as the nine (q-3317-raven-rock, A). This proves:
      the council posts in like every other; @everyone sees none
   H8 each hold's category is gated to that hold
 
-Build-Discord.py is imported for real, under another name, so its __main__
+Apply-Discord.py is imported for real, under another name, so its __main__
 block never runs. Read only. Never connects to anything.
 """
 import os
@@ -58,7 +58,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_holds', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_holds', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 

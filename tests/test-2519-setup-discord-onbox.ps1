@@ -1,10 +1,10 @@
 <#
   test-2519-setup-discord-onbox.ps1
 
-  Setup-Discord.ps1 -OnBox builds the Discord on the VPS with the token the
+  Apply-Discord.ps1 -OnBox builds the Discord on the VPS with the token the
   running bot already holds, and asks for nothing.
 
-  WHY THIS EXISTS. Issues #2519 and #2341. Setup-Discord.ps1 asked for the bot
+  WHY THIS EXISTS. Issues #2519 and #2341. Apply-Discord.ps1 asked for the bot
   token at a hidden prompt (Read-Host -AsSecureString), even for -Check, so
   the Gamemasters layout and the #welcome-travelers Attach Files overwrite,
   both merged, waited on a person who holds the token to sit at a prompt; the
@@ -15,7 +15,7 @@
   What it checks, with Vps.ps1 and Send-Script.ps1 replaced by stand-ins that
   write down the script instead of sending it, in a throwaway git repository:
     1. -OnBox -Check asks for no token, sends one script and passes;
-    2. the script carries Build-Discord.py, content.py, trust.py (the roots
+    2. the script carries Apply-Discord.py, content.py, trust.py (the roots
        it logs in with, #3604), staff-channel.txt, factions.json, the two site pages content.py reads (join.md, rules.md)
        and lore/factions.md, which it reads for #factions (#3317), byte for byte
        as the commit holds them, each under its path in the repository, sets
@@ -29,7 +29,7 @@
        laid out as in the repository, and the real Python imports content.py
        from that folder (a run on 22 Oct 2026 sent only the bot's files and
        content.py stopped on the box with FileNotFoundError for join.md),
-       and, where a python with discord.py is, imports Build-Discord.py
+       and, where a python with discord.py is, imports Apply-Discord.py
        there too (the first -OnBox run after #3317 stopped on the box with
        FileNotFoundError for factions.json, which it reads as it loads);
        the token is in its environment, and the folder is gone afterwards,
@@ -76,8 +76,8 @@ try {
     $dep = Join-Path $tree 'scripts\deploy'; $vps = Join-Path $tree 'scripts\vps'; $bot = Join-Path $tree 'bot'
     $pages = Join-Path $tree 'site\data\site'; $lore = Join-Path $tree 'lore'
     New-Item -ItemType Directory -Force -Path $dep, $vps, $bot, $pages, $lore | Out-Null
-    Copy-Item -LiteralPath (Join-Path $Repo 'scripts\deploy\Setup-Discord.ps1') -Destination $dep
-    foreach ($f in 'Build-Discord.py', 'content.py', 'trust.py', 'staff-channel.txt', 'factions.json') { Copy-Item -LiteralPath (Join-Path $Repo ('bot\' + $f)) -Destination $bot }
+    Copy-Item -LiteralPath (Join-Path $Repo 'scripts\deploy\Apply-Discord.ps1') -Destination $dep
+    foreach ($f in 'Apply-Discord.py', 'content.py', 'trust.py', 'staff-channel.txt', 'factions.json') { Copy-Item -LiteralPath (Join-Path $Repo ('bot\' + $f)) -Destination $bot }
     foreach ($f in 'join.md', 'rules.md') { Copy-Item -LiteralPath (Join-Path $Repo ('site\data\site\' + $f)) -Destination $pages }
     Copy-Item -LiteralPath (Join-Path $Repo 'lore\factions.md') -Destination $lore
     $sent = Join-Path $work 'sent.ps1'
@@ -104,7 +104,7 @@ function Invoke-RestMethod { [pscustomobject]@{ open = `$false } }
 `$s = @{}; foreach (`$p in (`$Pass -split ',')) { if (`$p) { `$s[`$p] = `$true } }
 if (`$Only) { `$s['Only'] = @(`$Only -split ';') }
 if (`$Give) { `$s['Give'] = @(`$Give -split '\|') }
-& '$((Join-Path $dep 'Setup-Discord.ps1').Replace("'", "''"))' -OnBox @s
+& '$((Join-Path $dep 'Apply-Discord.ps1').Replace("'", "''"))' -OnBox @s
 exit `$LASTEXITCODE
 "@)
     function Run-Setup([string[]]$pass, [string[]]$only = @(), [string[]]$give = @()) {
@@ -128,7 +128,7 @@ exit `$LASTEXITCODE
     $errs = $null
     [void][System.Management.Automation.Language.Parser]::ParseInput($s, [ref]$null, [ref]$errs)
     Yes 'the script it sends parses' (@($errs).Count -eq 0)
-    foreach ($f in 'bot/Build-Discord.py', 'bot/content.py', 'bot/trust.py', 'bot/staff-channel.txt', 'bot/factions.json', 'site/data/site/join.md', 'site/data/site/rules.md', 'lore/factions.md') {
+    foreach ($f in 'bot/Apply-Discord.py', 'bot/content.py', 'bot/trust.py', 'bot/staff-channel.txt', 'bot/factions.json', 'site/data/site/join.md', 'site/data/site/rules.md', 'lore/factions.md') {
         $m = [regex]::Match($s, "(?m)^\s*'" + [regex]::Escape($f) + "' = '([A-Za-z0-9+/=]+)'")
         $same = $m.Success -and ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $tree $f))) -eq $m.Groups[1].Value)
         Yes "  it carries $f byte for byte, under that path" $same
@@ -166,7 +166,7 @@ exit `$LASTEXITCODE
     $py = Get-Command python3, python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     Yes 'Python is on this machine' ($null -ne $py)
     if (-not $py) { Done }
-    # Build-Discord.py imports discord.py before anything else, so only a
+    # Apply-Discord.py imports discord.py before anything else, so only a
     # python that has it loads the rest of the module, where it reads its
     # files. The VPS runner and a developer's machine have one; anywhere
     # else that one check is skipped, and says so (as test-bot-heartbeat.ps1).
@@ -215,20 +215,20 @@ function python {
     }
     [IO.File]::WriteAllText((Join-Path $box 'bot.env.json'), '{"DISCORD_TOKEN":"stand-in-token","PING_URL":"x"}')
     $f = Run-Far
-    Yes ("run on the box, the build runs and passes (exit {0})" -f $f.Code) ($f.Code -eq 0 -and $f.Out -match 'RAN Build-Discord\.py')
-    Yes '  with the eight files laid out as in the repository' ($f.Out -match 'FILES bot/Build-Discord\.py,bot/content\.py,bot/factions\.json,bot/staff-channel\.txt,bot/trust\.py,lore/factions\.md,site/data/site/join\.md,site/data/site/rules\.md')
+    Yes ("run on the box, the build runs and passes (exit {0})" -f $f.Code) ($f.Code -eq 0 -and $f.Out -match 'RAN Apply-Discord\.py')
+    Yes '  with the eight files laid out as in the repository' ($f.Out -match 'FILES bot/Apply-Discord\.py,bot/content\.py,bot/factions\.json,bot/staff-channel\.txt,bot/trust\.py,lore/factions\.md,site/data/site/join\.md,site/data/site/rules\.md')
     Yes '  and content.py imports there, reading the site pages through its own folder' ($f.Out -match 'CONTENT IMPORTS' -and $f.Out -notmatch 'FileNotFoundError')
     if ($bpy) {
-        Yes '  and Build-Discord.py loads there, reading factions.json from its own folder' ($f.Out -match 'BUILD IMPORTS' -and $f.Out -notmatch 'FileNotFoundError')
+        Yes '  and Apply-Discord.py loads there, reading factions.json from its own folder' ($f.Out -match 'BUILD IMPORTS' -and $f.Out -notmatch 'FileNotFoundError')
     } else {
-        Write-Host 'SKIP  Build-Discord.py loading on the box: no python 3.10 or newer with discord.py on this machine'
+        Write-Host 'SKIP  Apply-Discord.py loading on the box: no python 3.10 or newer with discord.py on this machine'
     }
     Yes '  with the bot''s token in its environment, and -Check' ($f.Out -match 'TOKEN stand-in-token' -and $f.Out -match 'CHECK 1')
     Yes '  and its folder is gone afterwards' (@(Get-ChildItem -LiteralPath $win -Directory -Filter 'thornswood-discord-*').Count -eq 0)
 
     [IO.File]::WriteAllText($farPath, $standIn.Replace('EXIT_CODE', '1') + $far)
     $f = Run-Far
-    Yes ("a build that fails on the box gives its exit back (exit {0})" -f $f.Code) ($f.Code -eq 1 -and $f.Out -match 'RAN Build-Discord\.py')
+    Yes ("a build that fails on the box gives its exit back (exit {0})" -f $f.Code) ($f.Code -eq 1 -and $f.Out -match 'RAN Apply-Discord\.py')
     Yes '  and its folder is gone afterwards too' (@(Get-ChildItem -LiteralPath $win -Directory -Filter 'thornswood-discord-*').Count -eq 0 -and $f.Out -notmatch 'LEFT BEHIND')
     [IO.File]::WriteAllText($farPath, $standIn.Replace('EXIT_CODE', '0') + $far)
 

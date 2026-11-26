@@ -7,7 +7,7 @@ if (-not $python) { throw 'Python is required for the offline Discord fixture.' 
 & $python.Source (Join-Path $PSScriptRoot 'test-4222-discord-exit.py')
 $pythonCode = $LASTEXITCODE
 
-$source = [IO.File]::ReadAllText((Join-Path $repo 'scripts/deploy/Setup-Discord.ps1'))
+$source = [IO.File]::ReadAllText((Join-Path $repo 'scripts/deploy/Apply-Discord.ps1'))
 $start = [regex]::Match($source, '(?m)^  \$env:THORNSWOOD_OPEN = \$null\r?\n\}\r?\n')
 if (-not $start.Success) { throw 'Cannot find the local setup verdict after cleanup.' }
 $tail = $source.Substring($start.Index + $start.Length)

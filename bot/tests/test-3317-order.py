@@ -23,7 +23,7 @@ channel under every category is in an order that makes sense". This proves:
      Support under Support; Support Voice becomes Support Staff
   O7 every hold has its Court voice and every faction its voice
 
-Build-Discord.py is imported for real, under another name, so its __main__
+Apply-Discord.py is imported for real, under another name, so its __main__
 block never runs. Never connects to anything.
 """
 import os
@@ -59,7 +59,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 

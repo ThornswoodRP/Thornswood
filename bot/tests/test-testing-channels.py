@@ -1844,14 +1844,14 @@ yes('a line longer than one message is cut where it has to be, nothing lost',
 
 import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location(
-    'build_discord', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(B)
 _plan = [s for _c, specs in B.PLAN for s in specs if s['name'] == 'dev-test-tasks']
 # In the Dev space since #3317 (Patrick, 22 Oct: "the tasks and finings under
 # staff will go under the new dev category"), moved there by its was line so
 # the id the bot finds it by stays the same.
-yes('Build-Discord.py names #dev-test-tasks in Dev, moved from Staff, never makes it '
+yes('Apply-Discord.py names #dev-test-tasks in Dev, moved from Staff, never makes it '
     '(the bot\'s setup does), never deletes it, and writes the bot\'s own topic on it',
     [c for c, specs in B.PLAN if any(s['name'] == 'dev-test-tasks' for s in specs)]
     == ['Dev'] and ('Staff', 'dev-test-tasks') in (_plan[0].get('was') or ())

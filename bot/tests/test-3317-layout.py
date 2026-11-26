@@ -11,13 +11,13 @@ question about it". He picked a page made from the plan and checked (page card
 q-3317-layout-doc, A). This proves:
 
   D1 the page in the repository is exactly what
-     `python3.12 bot/Build-Discord.py --layout` writes from the plan today, so
+     `python3.12 bot/Apply-Discord.py --layout` writes from the plan today, so
      a change to the plan without the page, or to the page by hand, fails here
   D2 every role and every channel of the plan is on the page
   D3 every written channel says whether it is a draft or keeps a changelog,
      and every live doc has its change line (check_docs is empty)
 
-Build-Discord.py is imported for real, under another name, so its __main__
+Apply-Discord.py is imported for real, under another name, so its __main__
 block never runs. Read only. Never connects to anything.
 """
 import os
@@ -48,7 +48,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_layout', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_layout', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -68,7 +68,7 @@ if not same:
     print('      first difference at line %d:' % (at + 1))
     print('        page: %r' % (a[at] if at < len(a) else '(end)'))
     print('        plan: %r' % (b[at] if at < len(b) else '(end)'))
-    print('      run: python3.12 bot/Build-Discord.py --layout')
+    print('      run: python3.12 bot/Apply-Discord.py --layout')
 yes('D1 it is exactly what --layout writes from the plan today', same)
 
 missing = [n for n, _, _, _ in B.ROLES if '| %s |' % n not in want]

@@ -419,7 +419,7 @@ yes('and off again puts the application back first, with both questions',
     and 'playtest' in bot.AGE_KINDS and 'playtest' in bot.RULES_KINDS
     and bot.PANEL == bot.PANEL_ALPHA)
 
-# The read only posts, the same switch, handed in by Setup-Discord.ps1.
+# The read only posts, the same switch, handed in by Apply-Discord.ps1.
 import importlib  # noqa: E402
 os.environ['THORNSWOOD_OPEN'] = '1'
 try:

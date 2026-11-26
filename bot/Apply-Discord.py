@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-  Build-Discord.py
+  Apply-Discord.py
 
   Builds the whole Thornswood Discord in one run: roles, categories, channels,
   permissions, and the words in the read only channels.
@@ -11,7 +11,7 @@
   content.py. So changing the rules is an edit and a re run, not forty clicks.
 
       pip install -U discord.py
-      python Build-Discord.py
+      python Apply-Discord.py
 
   It never deletes anything unless DISCORD_PRUNE=1 is set, and even then only
   inside the categories it made and only names it knows it no longer wants.
@@ -21,9 +21,9 @@
   line, so it does not sit in your shell history:
 
       $env:DISCORD_TOKEN = 'paste-it-here'
-      python Build-Discord.py
+      python Apply-Discord.py
 
-  Or run Setup-Discord.ps1, which asks for it without showing it.
+  Or run Apply-Discord.ps1, which asks for it without showing it.
 
   Before any of that:
 
@@ -52,12 +52,13 @@
   without Administrator or one of those. To see the invite link without
   building anything, and without a token:
 
-      python Build-Discord.py --invite <application id>
+      python Apply-Discord.py --invite <application id>
 
   The application id is on the developer portal's General Information page.
 """
 
 import asyncio
+import json
 import os
 import re
 import sys
@@ -132,7 +133,7 @@ if __name__ == '__main__' and '--invite' in sys.argv:
     _rest = sys.argv[sys.argv.index('--invite') + 1:]
     _app = (_rest[0] if _rest else os.environ.get('DISCORD_CLIENT_ID', '')).strip()
     if not _app.isdigit():
-        sys.exit('Say which application: python Build-Discord.py --invite '
+        sys.exit('Say which application: python Apply-Discord.py --invite '
                  '<application id>. It is on the developer portal\'s General '
                  'Information page.')
     say_invite(_app)
@@ -166,7 +167,7 @@ PRUNE = os.environ.get('DISCORD_PRUNE', '') == '1'
 # there is a switch that means it, rather than a promise that the rest
 # would probably be a no-op.
 #
-#     python Build-Discord.py --roles-only
+#     python Apply-Discord.py --roles-only
 ROLES_ONLY = ('--roles-only' in sys.argv) or os.environ.get('DISCORD_ROLES_ONLY', '') == '1'
 # Rewriting the read only posts means deleting the bot's old messages and
 # sending them again, in seven channels. Doing that on every run makes a one
@@ -186,7 +187,7 @@ CHECK = os.environ.get('DISCORD_CHECK', '') == '1'
 # may touch, comma separated:
 #
 #     $env:DISCORD_ONLY = 'Gamemasters,welcome-travelers'
-#     python Build-Discord.py
+#     python Apply-Discord.py
 #
 # A category named here is made if missing, with every channel PLAN puts in
 # it; a channel named here is made or kept in its own category, which is not
@@ -213,8 +214,8 @@ ONLY = [n.strip() for n in os.environ.get('DISCORD_ONLY', '').split(',') if n.st
 # people can really do is to read it. This is that read, as a tool anybody can
 # run again, rather than a one-off look:
 #
-#     python Build-Discord.py --audit
-#     .\Setup-Discord.ps1 -OnBox -Audit
+#     python Apply-Discord.py --audit
+#     .\Apply-Discord.ps1 -OnBox -Audit
 #
 # It says: the bot's own permissions against the running set, each role's
 # permissions against ROLES, who holds each staff rank and every double rank
@@ -229,7 +230,7 @@ AUDIT = ('--audit' in sys.argv) or os.environ.get('DISCORD_AUDIT', '') == '1'
 # name, the same way every time:
 #
 #     $env:DISCORD_GIVE = 'Co-Owner=WiccanDjinn;Lead Dev=Patrick Thornwood'
-#     .\Setup-Discord.ps1 -OnBox -Give 'Co-Owner=WiccanDjinn','Lead Dev=Patrick Thornwood'
+#     .\Apply-Discord.ps1 -OnBox -Give 'Co-Owner=WiccanDjinn','Lead Dev=Patrick Thornwood'
 #
 # Only a staff rank (STAFF), only to one member matched exactly by id, user
 # name, display name or server nickname, never a second rank of a category
@@ -3099,26 +3100,30 @@ def plan_modes():
     return modes
 
 
-def onboarding_shut(guild, ob):
+def onboarding_shut(guild, ob, only=None):
     """The default channels of Onboarding that the plan shuts @everyone out
-       of, as (id, name). A channel the plan does not name is left alone."""
+       of, as (id, name). A channel the plan does not name is left alone, and
+       with only, so is every channel it does not name (#6961: a run takes
+       off only the channels the plan gates in that run)."""
     modes = plan_modes()
     out = []
     for cid in sorted(getattr(ob, 'default_channel_ids', None) or ()):
         ch = guild.get_channel(cid)
         name = getattr(ch, 'name', None)
+        if only is not None and name not in only:
+            continue
         if name in modes and not everyone_reads(modes[name]):
             out.append((cid, name))
     return out
 
 
-async def keep_onboarding_channels(guild):
+async def keep_onboarding_channels(guild, only=None):
     try:
         ob = await guild.onboarding()
     except discord.HTTPException as e:
         failed.append("could not read Discord's Onboarding (%s)" % refused(e))
         return
-    shut = onboarding_shut(guild, ob)
+    shut = onboarding_shut(guild, ob, only)
     if not shut:
         return
     what = ("#%s off Discord's Onboarding default channels, which the plan shuts "
@@ -3145,7 +3150,7 @@ async def keep_onboarding_channels(guild):
         failed.append('could not take ' + what + ' (%s)' % refused(e))
 
 
-def welcome_shut(guild, ws):
+def welcome_shut(guild, ws, only=None):
     """The channels of Discord's Welcome Screen that the plan shuts @everyone
        out of, as (id, name). The live build of 12 Nov, 5:20 PM (main
        54e22c0) took #start-here and #disboard off Onboarding's default
@@ -3159,6 +3164,8 @@ def welcome_shut(guild, ws):
         ch = getattr(wc, 'channel', None)
         cid = getattr(ch, 'id', None)
         name = getattr(guild.get_channel(cid), 'name', None) if cid else None
+        if only is not None and name not in only:
+            continue
         if name in modes and not everyone_reads(modes[name]):
             out.append((cid, name))
     return out
@@ -3181,7 +3188,7 @@ GUIDE_LISTS = ('new_member_actions', 'resource_channels')
 GUIDE_WHERE = 'Server Settings, Onboarding, Server Guide'
 
 
-async def tell_server_guide(guild):
+async def tell_server_guide(guild, only=None):
     """Says, as a failure, which channels the plan gates are in Discord's
        Server Guide, and any channel the server no longer has, so a person
        takes them off there before the build can gate them.
@@ -3210,6 +3217,8 @@ async def tell_server_guide(guild):
                 continue
             ch = guild.get_channel(cid)
             name = getattr(ch, 'name', None)
+            if only is not None and name not in only:
+                continue
             if ch is None:
                 drop[cid] = 'a deleted channel'
             elif name in modes and not everyone_reads(modes[name]):
@@ -3263,7 +3272,7 @@ def prompt_shut(guild, ob):
     return out
 
 
-async def keep_welcome_screen(guild):
+async def keep_welcome_screen(guild, only=None):
     """Takes the channels the plan gates off the Welcome Screen, before any
        channel is gated, and leaves its words, its other channels and whether
        it is on as they are. A server with no Welcome Screen is left alone."""
@@ -3274,7 +3283,7 @@ async def keep_welcome_screen(guild):
             return
         failed.append("could not read Discord's Welcome Screen (%s)" % refused(e))
         return
-    shut = welcome_shut(guild, ws)
+    shut = welcome_shut(guild, ws, only)
     if not shut:
         return
     what = ("#%s off Discord's Welcome Screen, which the plan shuts @everyone out of"
@@ -3304,7 +3313,7 @@ async def keep_welcome_screen(guild):
 # the script and we can quickly ask an agent a question about it").
 # docs/systems/discord.md is made from ROLES and PLAN by
 #
-#     python3.12 bot/Build-Discord.py --layout
+#     python3.12 bot/Apply-Discord.py --layout
 #
 # and bot/tests/test-3317-layout.py fails when the file and the plan differ, so the
 # page is the plan in words and never a second copy that drifts. -Audit says
@@ -3419,10 +3428,10 @@ def layout():
     w = L.append
     w('# The Discord layout')
     w('')
-    w('Made from `bot/Build-Discord.py` (ROLES and PLAN) by')
-    w('`python3.12 bot/Build-Discord.py --layout`. Do not edit it by hand:')
+    w('Made from `bot/Apply-Discord.py` (ROLES and PLAN) by')
+    w('`python3.12 bot/Apply-Discord.py --layout`. Do not edit it by hand:')
     w('change the plan and run that, and `bot/tests/test-3317-layout.py` fails when')
-    w('the two differ. `Setup-Discord.ps1 -OnBox -Audit` says where the live')
+    w('the two differ. `Apply-Discord.ps1 -OnBox -Audit` says where the live')
     w('server differs from this page. Issue #3317 is where it was set out.')
     w('')
     w('## The staff council')
@@ -3817,6 +3826,20 @@ async def audit(guild):
         off('%d categories and channels are out of the plan\'s order; a build '
             'puts them back' % len(moved))
 
+    # Who changed what, from Discord's own audit log (#6961), so a hand edit
+    # can be written into the plan and what a run undid can be put back.
+    # Only said; none of it is a difference.
+    print("\n  Discord's audit log, the last %d days: channels, permissions and "
+          "roles, oldest first" % AUDIT_LOG_DAYS, flush=True)
+    try:
+        logged = await audit_log_lines(guild)
+        for w in logged:
+            line(w)
+        if not logged:
+            line('nothing')
+    except discord.HTTPException as e:
+        line("Discord's audit log could not be read (%s)" % refused(e))
+
     # What bot.env.json is written with (#3317): Install-Bot takes these as
     # they are, and nothing else on the server says a role's id.
     print('\n  Role ids, for bot.env.json', flush=True)
@@ -3977,6 +4000,742 @@ async def rename_category(guild, catname):
     return None
 
 
+# ------------------------------------------------------------ the record --
+# CHANGES ONLY, AND HAND EDITS KEPT (#6961, Patrick, 26 Nov 2026: "Setup is
+# already done so I don't know why it's called setup and why it resets up
+# the whole fucking server every time we make a slight change", and "sometimes
+# it reverts changes we made manualy"). Until then every run made the live
+# server the whole plan, because nothing said what the last run had applied.
+# The run of 26 Nov 2026 that opened the read channels put 48 channels and
+# categories back in the plan's order, took Member's own member-list group
+# away and replaced #general-chat's permissions, all set by hand since
+# 16 Nov.
+#
+# Now a run reads the record of the plan it last applied (RECORD, a file the
+# box keeps in the bot's data folder), works out what the plan says now (plan_state),
+# and asks Discord only for what differs between the two: one role's
+# overwrite on one channel, one topic, one post, one new channel put under
+# the channel the plan has above it. Whatever the plan did not change is left
+# as the live server has it, hand edits included, and the run lists where the
+# live server differs from the plan there, so a hand edit worth keeping can
+# be written into the plan. The record moves on only when the whole run went
+# through, so whatever Discord refused is asked for again next time.
+#
+# -Record (RECORD_NOW) writes this plan as the record and asks Discord
+# nothing, for the one time a record starts: when the live server already is
+# this plan (-Audit says 0 differences). -Whole (WHOLE) is the build as it
+# was, which makes the live server the whole plan, for a server made from
+# nothing.
+RECORD = os.environ.get('DISCORD_RECORD', '').strip()
+RECORD_NOW = os.environ.get('DISCORD_RECORD_NOW', '') == '1'
+WHOLE = os.environ.get('DISCORD_WHOLE', '') == '1'
+# The commit the run is from, written into the record so it says which plan
+# it holds. Setup on the box hands it in.
+COMMIT = os.environ.get('DISCORD_COMMIT', '').strip()
+OLD = None          # the record, read before the bot logs in
+
+EVERYONE = '@everyone'
+THE_BOT = '@bot'
+
+
+class _Name(object):
+    """A role, @everyone or the bot by its name alone: what plan_state hands
+       overwrites() in place of the live ones, so the plan's overwrites are
+       worked out without Discord."""
+    def __init__(self, name):
+        self.name = name
+
+    def __hash__(self):
+        return hash(('_Name', self.name))
+
+    def __eq__(self, other):
+        return isinstance(other, _Name) and other.name == self.name
+
+
+class _AnyRole(dict):
+    """Every role the plan names, found by name, whether ROLES makes it or
+       not (a channel's extra_roles may name one it does not)."""
+    def get(self, name, default=None):
+        return self.setdefault(name, _Name(name))
+
+
+def place_key(catname, spec):
+    """A planned channel's name in the record: its category and its name as
+       Discord holds it, so a move to another category is a new place."""
+    want = spec['name'] if spec['kind'] == 'voice' else spec['name'].lower().replace(' ', '-')
+    return '%s/%s' % (catname or '', want)
+
+
+def _place_name(key):
+    return key.split('/', 1)[1]
+
+
+def _ow_json(ow):
+    """{target name: [allow, deny]} of an overwrites() map made of _Name."""
+    out = {}
+    for t, o in ow.items():
+        a, d = o.pair()
+        out[t.name] = [a.value, d.value]
+    return out
+
+
+def _staff_channel_id():
+    try:
+        with open(STAFF_CHANNEL_FILE, encoding='utf-8') as f:
+            return f.read().strip()
+    except OSError:
+        return ''
+
+
+def plan_state():
+    """Everything the plan sets, by name, as plain JSON: what the record
+       holds and what a run compares it with. Asks Discord nothing."""
+    g = types.SimpleNamespace(default_role=_Name(EVERYONE), me=_Name(THE_BOT), roles=[])
+    roles = _AnyRole()
+    places = {}
+    order = {}
+    for catname, specs in PLAN:
+        if catname:
+            places[catname] = {'kind': 'category',
+                               'overwrites': _ow_json(category_overwrites(g, catname, roles))}
+        order[catname or ''] = [_place_name(place_key(catname, s)) for s in specs]
+        for spec in specs:
+            places[place_key(catname, spec)] = {
+                'kind': spec['kind'],
+                'make': bool(spec.get('make', True)),
+                'topic': spec.get('topic') or '',
+                'overwrites': _ow_json(spec_overwrites(g, spec, roles)),
+            }
+    posts = {}
+    for key in doc_keys():
+        if key in C.DRAFTS or key not in C.DOCS:
+            continue
+        posts[key] = {'words': doc_with_footer(key), 'changes': change_lines(key)}
+    return {
+        'roles': dict((n, {'permissions': p.value, 'hoist': bool(h), 'colour': c})
+                      for n, c, h, p in ROLES),
+        'role_order': [n for n, _, _, _ in ROLES],
+        'everyone': PLAIN.value,
+        'categories': [c for c, _ in PLAN if c],
+        'order': order,
+        'places': places,
+        'posts': posts,
+        'server': {
+            'onboarding': 'off',
+            'join_message': 'off, boosts said',
+            'afk': 'AFK after five minutes',
+            'notices': _staff_channel_id(),
+        },
+    }
+
+
+STATE_PARTS = ('roles', 'role_order', 'everyone', 'categories', 'order',
+               'places', 'posts', 'server')
+
+
+def read_record(path):
+    """The record at path, or None when there is none. A record that cannot
+       be read is a ValueError: guessing what was applied is how a run
+       comes to undo hand edits."""
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding='utf-8') as f:
+        rec = json.load(f)
+    missing = [p for p in STATE_PARTS if p not in rec]
+    if missing:
+        raise ValueError('the record at %s has no %s' % (path, ', '.join(missing)))
+    return rec
+
+
+def write_record(path, state):
+    """The record, written whole or not at all."""
+    import datetime
+    rec = dict(state)
+    rec['commit'] = COMMIT
+    rec['applied'] = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    folder = os.path.dirname(path)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
+    tmp = path + '.new'
+    with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(rec, f, indent=1, sort_keys=True)
+    os.replace(tmp, path)
+
+
+def plan_changes(old, new):
+    """Every part of the plan that differs between the record and now, in
+       words, top of the server first. [] when the plan has not changed."""
+    out = []
+    for name, _, _, _ in ROLES:
+        o, w = old['roles'].get(name), new['roles'][name]
+        if o is None:
+            out.append('role %s is new' % name)
+        elif o != w:
+            out.append('role %s: %s' % (name, ', '.join(
+                k for k in ('permissions', 'hoist', 'colour') if o.get(k) != w.get(k))))
+    for name in sorted(set(old['roles']) - set(new['roles'])):
+        out.append('role %s left the plan' % name)
+    if old['role_order'] != new['role_order']:
+        out.append('the order of the roles')
+    if old['everyone'] != new['everyone']:
+        out.append("@everyone's server wide permissions")
+    if old['categories'] != new['categories']:
+        out.append('the order of the categories')
+    for cat in new['order']:
+        if old['order'].get(cat) != new['order'][cat] and cat in old['order']:
+            out.append('the order of the channels in %s' % (cat or 'no category'))
+    for key in sorted(new['places']):
+        o, w = old['places'].get(key), new['places'][key]
+        what = ('category ' + key) if w['kind'] == 'category' else '#' + key
+        if o is None:
+            out.append('%s is new' % what)
+            continue
+        for name in sorted(set(o['overwrites']) | set(w['overwrites'])):
+            if o['overwrites'].get(name) != w['overwrites'].get(name):
+                out.append('%s, %s: %s' % (what, name, pair_words(w['overwrites'].get(name))))
+        for k in ('topic', 'kind', 'make'):
+            if o.get(k) != w.get(k):
+                out.append('%s: its %s' % (what, k))
+    for key in sorted(set(old['places']) - set(new['places'])):
+        out.append('%s left the plan' % key)
+    for key in sorted(new['posts']):
+        if old['posts'].get(key) != new['posts'][key]:
+            out.append('the post %s' % key)
+    for k in sorted(new['server']):
+        if old['server'].get(k) != new['server'][k]:
+            out.append('the server setting %s' % k)
+    return out
+
+
+def pair_words(pair):
+    """An overwrite of the record, [allow, deny], in words."""
+    if pair is None:
+        return 'no overwrite'
+    a = perm_names(discord.Permissions(pair[0]))
+    d = perm_names(discord.Permissions(pair[1]))
+    bits = []
+    if a:
+        bits.append('allows ' + ', '.join(a))
+    if d:
+        bits.append('denies ' + ', '.join(d))
+    return '; '.join(bits) or 'an empty overwrite'
+
+
+def _target(guild, name, roles=None):
+    """The live role, @everyone or bot an overwrite of the record is for."""
+    if name == EVERYONE:
+        return guild.default_role
+    if name == THE_BOT:
+        return guild.me
+    r = (roles or {}).get(name) if roles else None
+    return r if r is not None else discord.utils.get(guild.roles, name=name)
+
+
+async def change_overwrites(place, old, new, what, roles=None):
+    """The overwrites the plan changed on one category or channel, target by
+       target, and nothing else on it: an overwrite the plan did not change
+       stays as the live server has it, set by hand or not."""
+    guild = place.guild
+    live = dict(getattr(place, 'overwrites', {}) or {})
+    full = dict(live)
+    said = []
+    for name in sorted(set(old) | set(new)):
+        if old.get(name) == new.get(name):
+            continue
+        t = _target(guild, name, roles)
+        if t is None:
+            say('note', '%s: the plan changed the overwrite of %s, which is not '
+                'on the server' % (what, name))
+            continue
+        if name in new:
+            full[t] = discord.PermissionOverwrite.from_pair(
+                discord.Permissions(new[name][0]), discord.Permissions(new[name][1]))
+        else:
+            full.pop(t, None)
+        said.append('%s %s' % (name, pair_words(new.get(name))))
+    if not said:
+        return
+    if not overwrite_diff(guild, live, full):
+        say('same', '%s already has it: %s' % (what, '; '.join(said)))
+        return
+    if CHECK:
+        for s in said:
+            say('would change', '%s, %s' % (what, s))
+        return
+    try:
+        await place.edit(overwrites=full, reason='Thornswood plan change, these overwrites only')
+        for s in said:
+            say('access', '%s, %s' % (what, s))
+    except discord.HTTPException as e:
+        failed.append('%s kept its old overwrites (%s)' % (what, refused(e)))
+
+
+def _merged(have, old_names, new_names, name_of):
+    """have, as the sidebar or the role list shows it, with only what the
+       plan changed moved: a name new to the plan goes straight under the
+       one the plan has above it, and the rest stay where they are. When the
+       plan changed the order of names it already had, those take the plan's
+       order among the places they hold."""
+    common_old = [n for n in old_names if n in new_names]
+    common_new = [n for n in new_names if n in old_names]
+    if common_old != common_new:
+        return _in_order(have, new_names, name_of)
+    added = [n for n in new_names if n not in old_names]
+    order = [c for c in have if name_of(c) not in added]
+    for n in added:
+        c = next((c for c in have if name_of(c) == n), None)
+        if c is None:
+            continue
+        i = new_names.index(n)
+        above = [p for p in new_names[:i] if any(name_of(x) == p for x in order)]
+        if above:
+            at = next(j for j, x in enumerate(order) if name_of(x) == above[-1]) + 1
+        else:
+            at = 0
+        order.insert(at, c)
+    return order
+
+
+def order_changes(guild, old, new):
+    """[(category or channel, position)] for the places whose position the
+       plan's change moves, as order_wanted gives them; empty when the plan
+       moved nothing."""
+    def shown(places):
+        return sorted(places, key=lambda c: (c.position, c.id))
+
+    moves = []
+    cats = shown(guild.categories)
+    want = _merged(cats, old['categories'], new['categories'], lambda c: c.name)
+    if want != cats:
+        moves += [(c, i) for i, c in enumerate(want)]
+    for catname, _specs in PLAN:
+        before = old['order'].get(catname or '')
+        after = new['order'][catname or '']
+        if before is None or before == after or not catname:
+            continue
+        cat = discord.utils.get(guild.categories, name=catname)
+        if cat is None:
+            continue
+        mine = [ch for ch in guild.channels
+                if not isinstance(ch, discord.CategoryChannel)
+                and getattr(ch, 'category', None) == cat]
+        for voice in (False, True):
+            have = shown(ch for ch in mine if _is_voice(ch) == voice)
+            want = _merged(have, before, after, lambda ch: ch.name)
+            if want != have:
+                moves += [(ch, i) for i, ch in enumerate(want)]
+    return moves
+
+
+async def change_roles(guild, old, new):
+    """The roles the plan changed: a role new to it made (or found under its
+       old name) and put under the plan role above it, and a changed role
+       given only what changed. {name: role} of the plan's live roles."""
+    have = dict((r.name, r) for r in guild.roles)
+    out = {}
+    made = set()
+    for name, colour, hoist, perms in ROLES:
+        o, w = old['roles'].get(name), new['roles'][name]
+        r = have.get(name)
+        if o is None and r is None:
+            r = await rename_role(have, name)
+        if r is not None:
+            out[name] = r
+        if o is None:
+            if r is not None:
+                await keep_role(r, hoist, perms)
+                continue
+            if name in NOT_MADE:
+                say('note', 'there is no ' + name + ' role, and Discord, Patreon '
+                    'or the bot makes that one, not this')
+                continue
+            if CHECK:
+                say('would make', 'role ' + name)
+                continue
+            try:
+                out[name] = await guild.create_role(
+                    name=name, colour=discord.Colour(colour), hoist=hoist,
+                    mentionable=True, permissions=perms, reason='Thornswood plan change')
+                made.add(name)
+                say('role', name)
+            except discord.HTTPException as e:
+                failed.append('role %s was not made (%s)' % (name, refused(e)))
+            continue
+        if o == w:
+            continue
+        if r is None:
+            say('left', 'role %s is not on the server; it was at the last run, so '
+                'it was taken off by hand, and stays off' % name)
+            continue
+        await keep_role(r,
+                        hoist if o.get('hoist') != w['hoist'] else bool(getattr(r, 'hoist', hoist)),
+                        perms if o.get('permissions') != w['permissions'] else r.permissions)
+    if old['everyone'] != new['everyone']:
+        await keep_everyone(guild)
+    if old['role_order'] != new['role_order'] or made:
+        me = getattr(guild, 'me', None)
+        top = getattr(me, 'top_role', None)
+        live = [r for r in sorted(set(guild.roles) | set(out.values()), key=rank, reverse=True)
+                if r is not guild.default_role and r.name != '@everyone'
+                and (top is None or (r is not top and rank(r) < rank(top)))]
+        # A role made this run is at the bottom; _merged puts it under the
+        # plan role above it, and moves nothing the plan did not.
+        want = _merged([r for r in live if r.name not in made] + [out[n] for n in made if n in out],
+                       [n for n in old['role_order'] if n not in made],
+                       new['role_order'], lambda r: r.name)
+        if [r.id for r in want] != [r.id for r in live]:
+            room = (top.position - 1) if top is not None else len(want)
+            at = role_positions(want, room)
+            what = 'the roles the plan moved or made into its order'
+            if at is None:
+                failed.append('the roles were not put in order: %d roles do not fit '
+                              'in the %d positions under the bot' % (len(want), room))
+            elif CHECK:
+                say('would move', what)
+            else:
+                try:
+                    await guild.edit_role_positions(positions=at, reason='Thornswood plan change')
+                    say('moved', what)
+                except discord.HTTPException as e:
+                    failed.append('%s were not moved (%s)' % (what, refused(e)))
+    if CLANKER in made:
+        await give_bots_clanker(guild, out.get(CLANKER))
+    return out
+
+
+async def change_places(guild, old, new, roles, found):
+    """The categories and channels the plan changed. A place new to the plan
+       is made, or found under its old name and moved, with everything its
+       mode gives; a place the plan changed gets only what changed; a place
+       it did not change is not asked anything."""
+    oldp, newp = old['places'], new['places']
+    for catname, specs in PLAN:
+        cat = None
+        if catname:
+            o, w = oldp.get(catname), newp[catname]
+            cat = discord.utils.get(guild.categories, name=catname)
+            if o is None:
+                if cat is None:
+                    cat = await rename_category(guild, catname)
+                if cat is None and CHECK:
+                    say('would make', 'category ' + catname)
+                    continue
+                if cat is None:
+                    try:
+                        cat = await guild.create_category(
+                            catname, overwrites=category_overwrites(guild, catname, roles),
+                            reason='Thornswood plan change')
+                        made.append(catname)
+                        say('category', catname)
+                    except discord.HTTPException as e:
+                        failed.append('category %s was not made (%s)' % (catname, refused(e)))
+                        continue
+                else:
+                    await keep_overwrites(cat, category_overwrites(guild, catname, roles),
+                                          'category ' + catname)
+            elif cat is None:
+                say('left', 'category %s is not on the server; it was at the last run, '
+                    'so it was taken off by hand, and stays off with its channels' % catname)
+                continue
+            else:
+                await change_overwrites(cat, o['overwrites'], w['overwrites'],
+                                        'category ' + catname, roles)
+        for spec in specs:
+            key = place_key(catname, spec)
+            o, w = oldp.get(key), newp[key]
+            want = _place_name(key)
+            if o is None:
+                await ensure_channel(guild, cat, spec, roles, found)
+                continue
+            ch = None
+            for c in guild.channels:
+                if c.name == want and getattr(c, 'category', None) == cat:
+                    ch = c
+                    break
+            if ch is None:
+                if spec.get('make', True) and o.get('make', True):
+                    say('left', '#%s is not in %s; it was at the last run, so it was '
+                        'taken off by hand, and stays off' % (want, catname or 'no category'))
+                continue
+            if spec.get('key'):
+                found[spec['key']] = ch
+            if o == w:
+                continue
+            if o.get('topic') != w['topic']:
+                topic = topic_text(guild, spec) or ''
+                if (getattr(ch, 'topic', None) or '') != topic:
+                    if CHECK:
+                        say('would change', '#%s gets the plan\'s topic' % want)
+                    else:
+                        try:
+                            await ch.edit(topic=topic, reason='Thornswood plan change')
+                            say('topic', '#' + want)
+                        except discord.HTTPException as e:
+                            failed.append('#%s kept its old topic (%s)' % (want, refused(e)))
+            await change_overwrites(ch, o['overwrites'], w['overwrites'], '#' + want, roles)
+            if o.get('kind') != w['kind']:
+                if (w['kind'] == 'announce' and isinstance(ch, discord.TextChannel)
+                        and ch.type is not discord.ChannelType.news):
+                    if CHECK:
+                        say('would change', '#%s becomes an announcement channel' % want)
+                    else:
+                        try:
+                            await ch.edit(type=discord.ChannelType.news)
+                            say('changed', '#%s is an announcement channel' % want)
+                        except discord.HTTPException as e:
+                            failed.append('#%s could not become an announcement channel (%s)'
+                                          % (want, refused(e)))
+                else:
+                    say('note', '#%s is a %s in the plan now. Discord cannot turn one '
+                        'kind of channel into another, so it is left as it is'
+                        % (want, w['kind']))
+
+
+async def gone_from_plan(guild, old, new):
+    """The categories and channels the plan dropped since the record, which
+       -Prune deletes when nothing is open in them; nothing else is ever
+       deleted, so a channel made by hand is never touched."""
+    gone = sorted(set(old['places']) - set(new['places']))
+    if not gone:
+        return
+    busy = await open_threads(guild) if PRUNE else None
+    for key in gone:
+        kind = old['places'][key].get('kind')
+        if kind == 'category':
+            continue
+        catname, name = key.split('/', 1)
+        cat = discord.utils.get(guild.categories, name=catname) if catname else None
+        ch = next((c for c in guild.channels
+                   if not isinstance(c, discord.CategoryChannel) and c.name == name
+                   and getattr(cat, 'id', None) == getattr(getattr(c, 'category', None), 'id', None)), None)
+        if ch is None:
+            continue
+        if not PRUNE:
+            say('note', '#%s in %s left the plan. -Prune deletes it' % (name, catname or 'no category'))
+            continue
+        why = await why_kept(ch, busy)
+        if why:
+            say('left', '#%s: %s' % (name, why))
+        elif CHECK:
+            say('would remove', '#' + name)
+        else:
+            try:
+                await ch.delete(reason='Thornswood plan change, no longer in the plan')
+                say('removed', '#' + name)
+            except discord.HTTPException as e:
+                failed.append('could not remove #%s (%s)' % (name, refused(e)))
+
+
+def gated_now(old, new):
+    """The text channels whose @everyone overwrite the plan changes this
+       run, or that are new to it: the only ones the run takes off
+       Discord's Onboarding and Welcome Screen lists, which Discord holds
+       open to everybody."""
+    out = set()
+    for key, w in new['places'].items():
+        if w['kind'] in ('category', 'voice'):
+            continue
+        o = old['places'].get(key)
+        if o is None or o['overwrites'].get(EVERYONE) != w['overwrites'].get(EVERYONE):
+            out.add(_place_name(key))
+    return out
+
+
+def hand_edits(guild, old, new, roles):
+    """Where the live server differs from the plan in a part the plan did not
+       change, in words: the hand edits this run kept. Asks Discord nothing."""
+    out = []
+    for name, _, hoist, perms in ROLES:
+        r = roles.get(name)
+        o = old['roles'].get(name)
+        if r is None or o is None or o != new['roles'][name] or getattr(r, 'managed', False):
+            continue
+        if bool(getattr(r, 'hoist', hoist)) != bool(hoist):
+            out.append('role %s %s in its own member-list group; the plan has it %s'
+                       % (name, 'shows' if r.hoist else 'does not show',
+                          'there' if hoist else 'not'))
+        if name not in NOT_MADE and r.permissions.value != perms.value:
+            extra, missing = perm_diff(r.permissions, perms)
+            out.append('role %s: %s' % (name, '; '.join(
+                ([('holds ' + ', '.join(extra))] if extra else []) +
+                ([('is without ' + ', '.join(missing))] if missing else []))))
+    for catname, specs in PLAN:
+        cat = discord.utils.get(guild.categories, name=catname) if catname else None
+        if catname and cat is None:
+            continue
+        if cat is not None and old['places'].get(catname) == new['places'][catname]:
+            want = category_overwrites(guild, catname, roles)
+            for d in overwrite_diff(guild, cat.overwrites, with_members(cat.overwrites, want)):
+                out.append('category %s, %s' % (catname, d))
+        for spec in specs:
+            key = place_key(catname, spec)
+            if old['places'].get(key) != new['places'][key]:
+                continue
+            want = _place_name(key)
+            ch = next((c for c in guild.channels if c.name == want
+                       and getattr(c, 'category', None) == cat), None)
+            if ch is None:
+                continue
+            plan = with_members(ch.overwrites, spec_overwrites(guild, spec, roles))
+            for d in overwrite_diff(guild, ch.overwrites, plan):
+                out.append('#%s, %s' % (want, d))
+            topic = topic_text(guild, spec) or ''
+            if spec['kind'] != 'voice' and topic and (getattr(ch, 'topic', None) or '') != topic:
+                out.append('#%s has its own topic' % want)
+    moved = order_wanted(guild)
+    if moved:
+        out.append('%d categories and channels sit in an order of their own' % len(moved))
+    return out
+
+
+async def apply_changes(guild):
+    """A run: the plan's changes since the record, and nothing else."""
+    old = OLD
+    new = plan_state()
+    print('\n  Applying the plan\'s changes to %s\n' % guild.name)
+    print('  The record is of %s, %s'
+          % (('commit ' + old['commit'][:12]) if old.get('commit') else 'an earlier plan',
+             old.get('applied') or 'at a time it does not say'))
+    changes = plan_changes(old, new)
+    if not changes:
+        print('  The plan has not changed since then, so Discord is asked nothing.\n')
+    else:
+        print('  What the plan changed since then:')
+        for c in changes:
+            print('    ' + c)
+        print('')
+        found = {}
+        roles = await change_roles(guild, old, new)
+        gating = gated_now(old, new)
+        if gating:
+            await keep_onboarding_channels(guild, only=gating)
+            await keep_welcome_screen(guild, only=gating)
+            await tell_server_guide(guild, only=gating)
+        if old['server'].get('onboarding') != new['server']['onboarding']:
+            await keep_onboarding_off(guild)
+        await change_places(guild, old, new, roles, found)
+        moves = order_changes(guild, old, new)
+        if moves:
+            what = '%d categories and channels, only those the plan moved or made' % len(moves)
+            if CHECK:
+                say('would move', what)
+            else:
+                try:
+                    await set_positions(guild, moves)
+                    say('moved', what)
+                except discord.HTTPException as e:
+                    failed.append('the order was not set (%s)' % refused(e))
+        await gone_from_plan(guild, old, new)
+        posts = [k for k in new['posts'] if old['posts'].get(k) != new['posts'][k]]
+        if posts:
+            look_up(guild, found)
+            for key in posts:
+                ch = found.get(key) or plan_channel(guild, key)
+                if ch is None:
+                    say('left', 'the post %s has no channel on the server to go in' % key)
+                elif CHECK:
+                    say('would write', '#%s and its changelog' % ch.name)
+                else:
+                    thread = await keep_changelog(ch, key)
+                    await post(ch, doc_with_footer(key, thread), found)
+        s_old, s_new = old['server'], new['server']
+        if (s_old.get('join_message') != s_new['join_message']
+                or s_old.get('afk') != s_new['afk']):
+            look_up(guild, found)
+            await apply_welcome_and_afk(guild, found)
+        if s_old.get('notices') != s_new['notices']:
+            await apply_notice_channels(guild)
+    kept_by_hand = hand_edits(guild, old, new, dict((r.name, r) for r in guild.roles))
+    if kept_by_hand:
+        print('\n  Left as they were set by hand (the plan did not change these, and has')
+        print('  them otherwise; write one into the plan to keep it there):')
+        for k in kept_by_hand:
+            print('    ' + k)
+    if failed:
+        print('\n  did not manage:')
+        for f in failed:
+            print('    ' + f)
+        print('\n  The record was not moved on, so the next run asks for these again.')
+    elif CHECK:
+        print('\n  -Check: nothing was changed, and the record was not moved on.')
+    elif changes:
+        write_record(RECORD, new)
+        print('\n  The record now holds this plan.')
+    print('')
+
+
+# ------------------------------------------------------- the audit log --
+# What changed by hand, and what a run changed, as Discord's own audit log
+# says it (#6961): who, when, what it was and what it became. The audit says
+# it so a hand edit can be read back into the plan, and so what a run undid
+# can be put back.
+AUDIT_LOG_DAYS = 7
+_LOGGED = ('channel_create', 'channel_update', 'channel_delete',
+           'overwrite_create', 'overwrite_update', 'overwrite_delete',
+           'role_create', 'role_update', 'role_delete')
+
+
+def _value_words(v):
+    if isinstance(v, discord.Permissions):
+        return ', '.join(perm_names(v)) or 'nothing'
+    if isinstance(v, discord.Colour):
+        return str(v)
+    name = getattr(v, 'name', None)
+    if name is not None and not isinstance(v, (str, int, bool)):
+        return str(name)
+    s = str(v)
+    return s if len(s) <= 80 else s[:77] + '...'
+
+
+def change_words(before, after):
+    """One audit log entry's changes, attribute by attribute."""
+    out = []
+    b = dict(iter(before)) if before is not None else {}
+    a = dict(iter(after)) if after is not None else {}
+    for k in sorted(set(a) | set(b)):
+        bv, av = b.get(k), a.get(k)
+        if isinstance(bv, discord.Permissions) or isinstance(av, discord.Permissions):
+            bs = set(perm_names(bv)) if bv is not None else set()
+            as_ = set(perm_names(av)) if av is not None else set()
+            parts = []
+            if as_ - bs:
+                parts.append('+' + ', +'.join(sorted(as_ - bs)))
+            if bs - as_:
+                parts.append('-' + ', -'.join(sorted(bs - as_)))
+            if parts:
+                out.append('%s %s' % (k, ' '.join(parts)))
+            continue
+        if bv == av:
+            continue
+        out.append('%s %s -> %s' % (k, _value_words(bv), _value_words(av)))
+    return '; '.join(out)
+
+
+async def audit_log_lines(guild, days=AUDIT_LOG_DAYS):
+    import datetime
+    after = discord.utils.utcnow() - datetime.timedelta(days=days)
+    actions = set(getattr(discord.AuditLogAction, n) for n in _LOGGED)
+    out = []
+    async for e in guild.audit_logs(limit=None, after=after, oldest_first=True):
+        if e.action not in actions:
+            continue
+        who = getattr(e.user, 'name', None) or str(getattr(e, 'user_id', '?'))
+        if getattr(e.user, 'bot', False):
+            who += ' (bot)'
+        target = getattr(e.target, 'name', None) or str(getattr(e.target, 'id', '?'))
+        if e.action.name.startswith('channel') or e.action.name.startswith('overwrite'):
+            target = '#' + target
+        extra = getattr(e, 'extra', None)
+        if e.action.name.startswith('overwrite') and extra is not None:
+            target += ', ' + (getattr(extra, 'name', None) or 'member %s' % getattr(extra, 'id', '?'))
+        words = change_words(e.changes.before, e.changes.after)
+        out.append('%s  %s  %s  %s%s%s' % (
+            e.created_at.strftime('%Y-%m-%d %H:%M UTC'), who, e.action.name.replace('_', ' '),
+            target, (': ' + words) if words else '',
+            ('  (' + e.reason + ')') if getattr(e, 'reason', None) else ''))
+    return out
+
+
 @client.event
 async def on_ready():
     global completed
@@ -4003,7 +4762,13 @@ async def on_ready():
             completed = True
             return
 
-        print('\n  Building %s\n' % guild.name)
+        if not (WHOLE or ROLES_ONLY or ONLY):
+            # The plan's changes since the record, and nothing else (#6961).
+            await apply_changes(guild)
+            completed = True
+            return
+
+        print('\n  Building the whole plan into %s\n' % guild.name)
 
         roles = await ensure_roles(guild)
 
@@ -4259,13 +5024,43 @@ if __name__ == '__main__':
         plan_for(ONLY)
     except ValueError as e:
         sys.exit('DISCORD_ONLY: ' + str(e) + '. Nothing was asked of Discord.')
+    if RECORD_NOW:
+        # The record starts here, and Discord is asked nothing (#6961).
+        if not RECORD:
+            sys.exit('-Record needs DISCORD_RECORD, the path of the record. Nothing was written.')
+        if os.path.exists(RECORD):
+            sys.exit('There is a record at %s already. A run applies the plan\'s changes '
+                     'since it; writing this plan over it would skip them. Nothing was '
+                     'written.' % RECORD)
+        if CHECK:
+            print('  -Check: would write this plan as the record at %s' % RECORD)
+            sys.exit(0)
+        write_record(RECORD, plan_state())
+        print('  The record at %s now holds this plan%s. Discord was asked nothing.'
+              % (RECORD, (', commit ' + COMMIT) if COMMIT else ''))
+        sys.exit(0)
+    if not (AUDIT or GIVE or WHOLE or ROLES_ONLY or ONLY):
+        if not RECORD:
+            sys.exit('No record. A run applies only what the plan changed since the '
+                     'record of the last run, so it needs DISCORD_RECORD, the path of '
+                     'that record (Apply-Discord.ps1 -OnBox hands in the box\'s). '
+                     'Nothing was asked of Discord.')
+        try:
+            OLD = read_record(RECORD)
+        except (OSError, ValueError) as e:
+            sys.exit('The record could not be read (%s). Nothing was asked of Discord.' % e)
+        if OLD is None:
+            sys.exit('There is no record at %s of what was last applied, so there is no '
+                     'telling what the plan changed. When -Audit says the live server is '
+                     'this plan, -Record writes it as the record. Nothing was asked of '
+                     'Discord.' % RECORD)
     _bad = ['%s=%s' % g for g in GIVE if g[0] not in STAFF or not g[1]]
     if _bad:
         sys.exit('DISCORD_GIVE takes "staff rank=member" pairs, and these are not: ' +
                  ', '.join(_bad) + '. The staff ranks are ' + ', '.join(STAFF) +
                  '. Nothing was asked of Discord.')
     if not TOKEN:
-        sys.exit('No token. Set DISCORD_TOKEN first, or run Setup-Discord.ps1.')
+        sys.exit('No token. Set DISCORD_TOKEN first, or run Apply-Discord.ps1.')
     # Discord dispatches on_ready separately. A clean client shutdown is not
     # proof that the requested operation finished or that all its steps worked.
     completed = False

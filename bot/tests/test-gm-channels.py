@@ -14,7 +14,7 @@ stays inside the lore.
 
 Holds:
 
-  G1 Build-Discord.py has a Gamemasters category with #gm-announcements,
+  G1 Apply-Discord.py has a Gamemasters category with #gm-announcements,
      #gm-rules, #gm-event-plans, #gm-scene-summaries, #gm-chat,
      #gm-suggestions, #gm-discipline and GM Voice, in that order, and the old
      #gm only as make=False; Djinn's channels are all in KEEP
@@ -33,7 +33,7 @@ Holds:
      them; Lead Gamemaster, Owner and Co-Owner post; the rest get nothing
   G10 Loremasters read the three channels named for them and talk in none
 
-Build-Discord.py is imported for real, under another name, so its __main__
+Apply-Discord.py is imported for real, under another name, so its __main__
 block never runs. Read only. Never connects to anything.
 """
 import os
@@ -65,7 +65,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_gm', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_gm', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -95,7 +95,7 @@ def granted(ow, role):
 # ------------------------------------------------------------------ G1 --
 plan = dict(B.PLAN)
 gm = plan.get('Gamemasters')
-yes('G1 Build-Discord.py has a Gamemasters category', gm is not None)
+yes('G1 Apply-Discord.py has a Gamemasters category', gm is not None)
 gm = gm or []
 made = [s for s in gm if s.get('make', True)]
 want = [('text', 'gm-announcements'), ('text', 'gm-rules'), ('text', 'gm-event-plans'),

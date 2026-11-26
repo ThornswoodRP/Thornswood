@@ -10,7 +10,7 @@ the server, also when Applying to be a jarl the application should give an
 option to choose which Hold and only include the open seats)". He picked the
 bot refusing it (page card q-3317-seat-rule-check, A). This proves:
 
-  S1 the bot's staff roles, seats and faction short names are Build-Discord.py's,
+  S1 the bot's staff roles, seats and faction short names are Apply-Discord.py's,
      so a role the build makes is the role the bot reads
   S2 the Jarl form is a required pick of the open holds and four questions,
      five items, and a held seat is not offered
@@ -22,7 +22,7 @@ bot refusing it (page card q-3317-seat-rule-check, A). This proves:
   S6 a STAFF_ROLES id counts as staff for the rule whatever the role is named
   S7 a seat filled after the form opened is flagged at the top of the ticket
 
-The real bot module and Build-Discord.py are imported. Read only. Never
+The real bot module and Apply-Discord.py are imported. Read only. Never
 connects to anything.
 """
 import os
@@ -62,7 +62,7 @@ import harness_bot  # noqa: E402
 
 bot = harness_bot.whole()
 spec = importlib.util.spec_from_file_location(
-    'build_discord_seats', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_seats', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -211,7 +211,7 @@ def labels(sel):
 
 
 # ------------------------------------------------------------------ S1 --
-yes('S1 the bot counts every staff role Build-Discord.py makes, and no other',
+yes('S1 the bot counts every staff role Apply-Discord.py makes, and no other',
     sorted(bot.SEAT_RULE_STAFF) == sorted(B.STAFF))
 yes('S1 the seats are the build\'s: each Jarl, then each faction leader',
     bot.seat_roles() == list(B.SEATS))

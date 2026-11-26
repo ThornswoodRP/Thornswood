@@ -10,7 +10,7 @@ server when it runs. This runs it against a fake server and proves:
   - nothing it hands out opens the game or carries any power
   - the rules and age questions are off unless asked for
   - --check sends nothing, and a plan Discord would refuse sends nothing
-  - the server as gated today (Build-Discord.py THE GATE) is refused, with
+  - the server as gated today (Apply-Discord.py THE GATE) is refused, with
     the reason in words, and a server with the nine channels open passes
   - questions already there keep their ids
   - the token is never printed, and no line says player or has an em dash
@@ -70,7 +70,7 @@ def roles(extra=None, member_perms=VIEW | SEND, drop=()):
 
 
 def ch(cid, name, mode, ctype=0):
-    """A channel with @everyone's overwrite as Build-Discord.py's modes set it."""
+    """A channel with @everyone's overwrite as Apply-Discord.py's modes set it."""
     ow = []
     if mode == 'read':
         ow = [dict(id=GID, type=0, allow='0', deny=str(SEND))]
@@ -80,7 +80,7 @@ def ch(cid, name, mode, ctype=0):
 
 
 def gated():
-    """The server as Build-Discord.py's PLAN and the hand set gate describe it."""
+    """The server as Apply-Discord.py's PLAN and the hand set gate describe it."""
     c = [ch(1, 'welcome', 'read'), ch(2, 'rules', 'read'), ch(3, 'start-here', 'read'),
          ch(4, 'say-hello', 'public'), ch(5, 'apply-to-playtest', 'read'),
          ch(6, 'news', 'membersread', 5), ch(7, 'general', 'open'),

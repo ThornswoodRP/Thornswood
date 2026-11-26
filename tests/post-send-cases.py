@@ -6,7 +6,7 @@ post-send-cases.py
 The cases tests/test-4493-post-send.js runs, which say why. Each prints a
 PASS or FAIL line, and it exits 1 when any fails.
 
-bot/Build-Discord.py's post, write_posts, doc_post_of_mine, keep_under and
+bot/Apply-Discord.py's post, write_posts, doc_post_of_mine, keep_under and
 the helpers they use are lifted out of the file by their source and run against a stand-in channel
 that can refuse a send, with a stand-in for the few discord names they use.
 So this needs neither discord.py nor a token, and runs wherever there is a
@@ -21,7 +21,7 @@ import sys
 import types
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BUILD = os.path.join(REPO, 'bot', 'Build-Discord.py')
+BUILD = os.path.join(REPO, 'bot', 'Apply-Discord.py')
 with open(BUILD, encoding='utf-8') as f:
     SRC = f.read()
 TREE = ast.parse(SRC)
@@ -218,7 +218,7 @@ for name in ('refused', 'doc_post_of_mine', '_oldest_first', 'kept_out_of_place'
              'keep_under', 'post', 'write_posts'):
     exec(lift(name), space)
 
-yes('Build-Discord.py has post and write_posts, the step that writes a read only channel\'s words',
+yes('Apply-Discord.py has post and write_posts, the step that writes a read only channel\'s words',
     'post' in space and 'write_posts' in space)
 
 # Two paragraphs over 1,900 characters: post() sends them as two messages.

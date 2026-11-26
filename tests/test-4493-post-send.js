@@ -4,7 +4,7 @@
 
       node tests/test-4493-post-send.js
 
-  Issue #4493. A -Posts build of the Discord (bot/Build-Discord.py, post)
+  Issue #4493. A -Posts build of the Discord (bot/Apply-Discord.py, post)
   took the bot's old words out of a read only channel first and then sent
   the new ones with nothing to catch a refused send. One refused send left
   the channel empty or half written, escaped write_posts and on_ready, and
@@ -12,7 +12,7 @@
   settings, were skipped, and nothing named the channel left empty.
 
   This runs tests/post-send-cases.py, which lifts post and write_posts out
-  of Build-Discord.py and runs them against a stand-in channel that refuses
+  of Apply-Discord.py and runs them against a stand-in channel that refuses
   a send or an edit. Since 26 Nov 2026 a post is edited where it stands and
   one already right is asked nothing (#6891), and it holds:
 

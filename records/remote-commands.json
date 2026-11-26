@@ -2867,11 +2867,11 @@
                       "reason":  "reads files, settings, logs or status only"
                   },
                   {
-                      "script":  "scripts/deploy/Setup-Discord.ps1",
+                      "script":  "scripts/deploy/Apply-Discord.ps1",
                       "scope":  "\u003ctop\u003e",
                       "via":  "Invoke-ThornswoodRemote",
                       "anchor":  "$out = Invoke-ThornswoodRemote -Target \"$User@$Vps\" -SshArgs $ssh -Script $far",
-                      "does":  "-OnBox: writes Build-Discord.py, content.py and staff-channel.txt to a new folder in C:\\Windows\\Temp, runs Build-Discord.py there with the token from C:\\Thornswood-Bot\\bot.env.json and the bot\u0027s own Python libraries, then removes the folder (#2519)",
+                      "does":  "-OnBox: writes Apply-Discord.py, content.py and staff-channel.txt to a new folder in C:\\Windows\\Temp, runs Apply-Discord.py there with the token from C:\\Thornswood-Bot\\bot.env.json and the bot\u0027s own Python libraries, then removes the folder (#2519); keeps the record of the plan it applied in C:\\Thornswood-Bot\\data\\discord-applied.json (#6961)",
                       "class":  "admin",
                       "reason":  "reads the bot token from the bot\u0027s settings, which only an administrator may read, and works outside the gate verbs"
                   },

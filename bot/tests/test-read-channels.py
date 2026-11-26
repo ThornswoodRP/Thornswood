@@ -18,11 +18,11 @@ So this checks three things.
   2. That they cannot drift. Every paragraph of join.md is in #start-here,
      and a copy of content.py pointed at an edited join.md follows the edit,
      or refuses to load when the paragraph it quotes has gone.
-  3. That they fit. Build-Discord.py's own post() is run on every read only
+  3. That they fit. Apply-Discord.py's own post() is run on every read only
      post with a stand in channel that keeps what it is sent, and every
      message has to be under Discord's 2000 characters with nothing lost.
 
-Build-Discord.py is loaded as a module, which defines things and connects to
+Apply-Discord.py is loaded as a module, which defines things and connects to
 nothing: client.run is only reached when it is run as a script, and no token
 is involved. Nothing here posts anywhere.
 
@@ -214,10 +214,10 @@ except ImportError:
     have_discord = False
 
 if not have_discord:
-    print('SKIP  discord.py is not installed, so Build-Discord.py\'s post() was not run')
+    print('SKIP  discord.py is not installed, so Apply-Discord.py\'s post() was not run')
 else:
     spec = importlib.util.spec_from_file_location(
-        'build_discord_under_test', os.path.join(HERE, 'Build-Discord.py'))
+        'build_discord_under_test', os.path.join(HERE, 'Apply-Discord.py'))
     B = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(B)
 

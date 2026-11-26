@@ -3,7 +3,7 @@ test-onboarding-defaults.py
 
 A build takes the channels the plan gates off Onboarding's default channels.
 
-Measured on the live server on 12 Nov 2026 (Setup-Discord build of 1:40 PM,
+Measured on the live server on 12 Nov 2026 (Apply-Discord build of 1:40 PM,
 main df3738c): with Onboarding off, Discord still refused to shut @everyone
 out of #start-here and #disboard, "400 Onboarding channels must be readable
 by everyone", because Onboarding keeps its default channels while it is off.
@@ -35,7 +35,7 @@ So this checks:
      #welcome-travelers, #general-chat and #travelers-questions (Patrick,
      16 Nov), a Member those and the ticket and application channels
 
-Build-Discord.py is imported for real under another name. Every guild and
+Apply-Discord.py is imported for real under another name. Every guild and
 channel is a stand-in. Connects to nothing.
 """
 import os
@@ -68,7 +68,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_onboarding', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_onboarding', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -240,7 +240,7 @@ yes('6 a build says, as a failure, that #get-help, #apply-to-playtest and a dele
     'in the Server Guide, and where a person takes them off',
     len(B.failed) == 1 and '#get-help' in B.failed[0] and '#apply-to-playtest' in B.failed[0]
     and 'deleted' in B.failed[0] and B.GUIDE_WHERE in B.failed[0])
-src_b = open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
+src_b = open(os.path.join(HERE, 'Apply-Discord.py'), encoding='utf-8').read()
 yes('6 and never sends the guide: Discord answers a bot "403 Bots cannot use this '
     'endpoint" (the build of 12 Nov, 6:21 PM)',
     "Route('PUT', '/guilds/{guild_id}/new-member-welcome'" not in src_b)
@@ -274,7 +274,7 @@ yes('5 an Onboarding answer that points to a gated channel is named',
     B.prompt_shut(w, ob) == ['Why are you here: To chat: #get-help'])
 
 # ------------------------------------------------------------------ 4 --
-src = open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
+src = open(os.path.join(HERE, 'Apply-Discord.py'), encoding='utf-8').read()
 build = src[src.index('found = {}\n        posts = []'):]
 yes('4 a whole build does it, the Welcome Screen and the Server Guide, before it gates '
     'any channel', all(build.index(c) < build.index('for catname, specs in plan_for(ONLY):')

@@ -15,7 +15,7 @@ from bot_reports import report_say
 
 # #2551. Patrick, 15 Oct: each hold has a Court, a Steward and Guards, and
 # they are Discord roles ("<Hold> Court", "Steward of <Hold>", "Guard of
-# <Hold>", made by Build-Discord.py and never hoisted). That hold's Jarl gives
+# <Hold>", made by Apply-Discord.py and never hoisted). That hold's Jarl gives
 # and takes them, two ways, for their own hold only: here, with Add and Remove
 # buttons, and in the game on the Office page of K, where the site sets the
 # same roles with this bot's token. The role is the one truth either way, so
@@ -44,7 +44,7 @@ OFFICE_PANEL = ('**Hold offices**\n\n'
 
 
 def office_role(office, town):
-    """The role's exact name, as Build-Discord.py makes it and the site reads it."""
+    """The role's exact name, as Apply-Discord.py makes it and the site reads it."""
     if office == 'court':
         return town + ' Court'
     if office == 'steward':
@@ -312,7 +312,7 @@ class OfficeTake(discord.ui.View):
         self.add_item(OfficeTakeSelect(office, town, holders))
 
 
-# The in-world roles the game reads, as Build-Discord.py makes them: name,
+# The in-world roles the game reads, as Apply-Discord.py makes them: name,
 # colour, shown as a group of its own. The office roles are never hoisted
 # (Patrick, 15 Oct); the Jarl roles are.
 JARL_COLOUR = 0xE0C56A
@@ -331,11 +331,11 @@ async def ensure_office_roles(guild):
     """
     Make any Jarl or office role the game reads that is missing, the way the
     hold panel makes its two ping roles, so the offices exist as soon as the
-    bot that gives them is running, without a run of Build-Discord.py (which
+    bot that gives them is running, without a run of Apply-Discord.py (which
     asks for the bot's token at a prompt). Raven Rock's included (#2551,
     Patrick, 16 Oct). Nothing that is there is changed. A new Jarl role goes
     under the lowest Jarl role there is, and a new office role under the
-    lowest Citizen role, where Build-Discord.py keeps them; a build later puts
+    lowest Citizen role, where Apply-Discord.py keeps them; a build later puts
     every role in its exact place. Says in bot.log what it made.
     """
     if not guild.me.guild_permissions.manage_roles:
@@ -386,7 +386,7 @@ async def ensure_office_panel(guild):
                if _role(guild, office_role(o, t)) is None]
     if missing:
         log('these office roles are missing, so those offices cannot be given '
-            'until Build-Discord.py makes them: %s' % ', '.join(missing))
+            'until Apply-Discord.py makes them: %s' % ', '.join(missing))
     try:
         async for m in ch.history(limit=30):
             if (m.author.id == client.user.id and m.components and

@@ -50,7 +50,7 @@ function fakeGitHub(comments, closed) {
   yes('  and the paragraph under a "## Done when" heading', B.doneWhen('## What\nx\n\n## Done when\n\nTrace-Gate.ps1 -Uninstall has been run\non the box.\n\n## Related\nnone') === 'Trace-Gate.ps1 -Uninstall has been run\non the box.');
   yes('  and a "Needs" line', B.doneWhen('Needs: Install-Bot -CodeOnly and Deploy-Docs -Site.') === 'Install-Bot -CodeOnly and Deploy-Docs -Site.');
   yes('a gate verb in the Done when is a step on the box', B.namesBoxStep('Done when: Install-Voice has run on dev and on live.', verbs) === 'Install-Voice');
-  yes('  with .ps1 after it too', B.namesBoxStep('Done when: Setup-Discord.ps1 -Check prints nothing to make.', verbs) === 'Setup-Discord');
+  yes('  with .ps1 after it too', B.namesBoxStep('Done when: Apply-Discord.ps1 -Check prints nothing to make.', verbs) === 'Apply-Discord');
   yes('  and so are "on the box", "box step" and Box-Run', B.namesBoxStep('Done when: Trace-Gate.ps1 -Uninstall has been run on the box.', verbs) === 'on the box' &&
       B.namesBoxStep('Done when: the box step ran.', verbs) === 'box step' && B.namesBoxStep('Done when: Box-Run of it ends 0.', verbs) === 'Box-Run');
   yes('a verb named only above the Done when is not', B.namesBoxStep('Found while running Install-Voice.\n\nDone when: the page says it.', verbs) === '');

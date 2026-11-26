@@ -27,7 +27,7 @@ function yes(what, cond) {
 
 const bot = require('./bot-files').source().split(CR).join('');
 const install = read('scripts/deploy/Install-Bot.ps1');
-const build = read('bot/Build-Discord.py');
+const build = read('bot/Apply-Discord.py');
 const names = JSON.parse(read('bot/factions.json'));
 // The site is server.js over its modules in site\lib since #5357.
 const site = require('./site-files').source();
@@ -118,7 +118,7 @@ yes('F5 Install-Bot sends factions.json on the artifact list and in the copy loo
 // "<faction> Leader" role per named faction, from factions.json, short names,
 // and its member role, the short name; Trading Company is renamed to the
 // company's member role so its holders keep it (lore/factions.md, 22 Oct).
-yes('F6 Build-Discord makes a member and a Leader role for each faction in factions.json, Trading Company renamed',
+yes('F6 Apply-Discord makes a member and a Leader role for each faction in factions.json, Trading Company renamed',
     build.indexOf("ROLES.append(('Trading Company'") === -1 &&
     /FACTION_MEMBERS = tuple\(FACTION_SHORT\.get\(f, f\) for f in FACTIONS\)/.test(build) &&
     /'Free Skyrim Trading Company': \('Trading Company',\)/.test(build) &&
@@ -146,7 +146,7 @@ yes('F8 Faction Leader routing is IDs only; empty list refuses; no staff-log fal
     bot.indexOf("name='faction-seat'") === -1 &&
     install.indexOf('UPPER_STAFF_ROLES') !== -1 &&
     /the council: Owner, Co-Owner and each of the six leads/.test(install) &&
-    /Setup-Discord\.ps1 -OnBox -Audit prints as the -UpperStaffRoles line/.test(install) &&
+    /Apply-Discord\.ps1 -OnBox -Audit prints as the -UpperStaffRoles line/.test(install) &&
     build.indexOf("('-UpperStaffRoles', COUNCIL_ROLES)") !== -1);
 
 yes('F15 Install-Bot keeps existing UPPER_STAFF_ROLES unless -UpperStaffRoles is passed, IDs only',

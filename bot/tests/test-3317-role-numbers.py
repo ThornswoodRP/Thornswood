@@ -32,7 +32,7 @@ This proves:
   N7 rank sorts a shared position the way Discord does, older above, and
      order_slips sees a slip between two roles that share a position
 
-Build-Discord.py is imported for real, under another name, so its __main__
+Apply-Discord.py is imported for real, under another name, so its __main__
 block never runs. Never connects to anything.
 """
 import os
@@ -67,7 +67,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_3317_numbers', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_3317_numbers', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 

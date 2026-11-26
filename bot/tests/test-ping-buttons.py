@@ -30,7 +30,7 @@ So this checks:
      with no permissions; a build gives it to every bot and to nobody else,
      and -Check gives nothing
 
-bot.py and Build-Discord.py are imported for real. Every guild, member and
+bot.py and Apply-Discord.py are imported for real. Every guild, member and
 message is a stand-in. Never connects to anything.
 """
 import os
@@ -233,7 +233,7 @@ yes('S one with old words is rewritten in place', old.edits == 1
     and old.content == P.PING_PANEL and not w2.sent)
 
 spec = importlib.util.spec_from_file_location('build_discord_pings',
-                                              os.path.join(HERE, 'Build-Discord.py'))
+                                              os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 mine = types.SimpleNamespace(author=types.SimpleNamespace(id=ME), content=P.PING_PANEL,
@@ -309,7 +309,7 @@ yes('C a build gives it to every bot that has not got it',
     all(clanker in b.roles for b in bots) and [b.given for b in bots]
     == [['Clanker'], ['Clanker'], ['Clanker'], []])
 yes('C and to nobody else', not any(clanker in p.roles for p in people))
-src = open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
+src = open(os.path.join(HERE, 'Apply-Discord.py'), encoding='utf-8').read()
 yes('C ensure_roles does it once the roles are in order',
     'await give_bots_clanker(guild, out.get(CLANKER))' in src)
 

@@ -11,7 +11,7 @@ decided a change is not what changed, and an issue number means nothing to
 somebody reading the Discord or the site.
 
 bot/content.py's NOT_PUBLIC says what a public line never says, and
-Build-Discord.py's check_docs refuses to build while a change line or the
+Apply-Discord.py's check_docs refuses to build while a change line or the
 live words of a doc say it. That refusal runs only when the Discord is
 built, so this runs the same check on every pull request, with nothing but
 the standard library. It proves:

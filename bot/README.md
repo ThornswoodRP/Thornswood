@@ -1,15 +1,48 @@
 # The Thornswood Discord
 
-What `Setup-Discord.ps1` builds, why it is shaped that way, and the handful of
-things a bot is not allowed to do for you.
+How the Thornswood Discord is planned, how `Apply-Discord.ps1` applies a
+change to the plan, why it is shaped that way, and the handful of things a bot
+is not allowed to do for you.
+
+## A change to the plan reaches Discord, and nothing else does
+
+The Discord is set up. `Apply-Discord.ps1` applies what the repository
+changed in the plan since its last run, and touches nothing else (#6961).
+The box keeps a record of the plan it last applied
+(`C:\Thornswood-Bot\data\discord-applied.json`). A run compares the plan
+with that record and asks Discord only for what differs: one role's
+overwrite on one channel, a topic, a post whose words changed, a new channel
+put straight under the one the plan has above it. Whatever the plan did not
+change stays as the live server has it, hand edits included, and the run
+lists where the live server differs from the plan there, so a hand edit
+worth keeping can be written into the plan. When the plan has not changed,
+Discord is asked nothing. The record moves on only when the whole run went
+through, so what Discord refused is asked for again next time.
+
+```
+pwsh scripts/vps/Box-Run.ps1 -Line 'Apply-Discord'
+```
+
+`-Check` says what it would change, and `-Audit` reads the live server
+against the plan, with who changed channels, permissions and roles in
+Discord's audit log over the last week. `-Record` writes the plan as the
+record and asks Discord nothing: once, when there is no record and `-Audit`
+says the live server is the plan. It never writes over a record.
+
+Until 26 Nov 2026 every run made the live server the whole plan, because
+nothing said what the last one had applied, so a run for one change undid
+every hand edit: that morning's run put 48 channels and categories back in
+order, took Member's own member-list group away and replaced the
+`#general-chat` permissions set by hand. That build is still there as
+`-Whole`, for a server made from nothing, and the gate never runs it.
 
 ## The shape of it
 
 `docs/systems/discord.md` is the whole layout: every category, channel and
 role in order, who sees, talks and posts in each, and what each was before.
-It is made from the builder's plan (`python3.12 bot/Build-Discord.py
+It is made from the builder's plan (`python3.12 bot/Apply-Discord.py
 --layout`) and `test-3317-layout.py` fails when the two differ, so read it
-there rather than here. `Setup-Discord.ps1 -OnBox -Audit` says where the live
+there rather than here. `Apply-Discord.ps1 -OnBox -Audit` says where the live
 server differs from it. What follows is only what the bot itself depends on.
 
 The sidebar reads in the order somebody meets it (#3317, Patrick, 22 Oct,
@@ -384,7 +417,7 @@ bot finds the forum by that id from then on, never by its name: a rename
 keeps it, and no second one is made. A forum of that name already in the
 category is taken as it is, with the Dev tag and the bot's rights added. If
 the recorded forum is deleted, the bot says so in its log once and posts no
-dev test tasks until the next apply makes it again. `Build-Discord.py` names
+dev test tasks until the next apply makes it again. `Apply-Discord.py` names
 it in the Dev space with `make=False` and in its never-delete list, so
 `-Prune` leaves it. `test-testing-channels.py` holds all of this.
 
@@ -612,7 +645,7 @@ Then the person picks a hold.
 
 1. **Turn on Community.** Server Settings, Enable Community. Without it there
    are no forum channels, no announcement channel and no rules screen. Run
-   `Setup-Discord.ps1` again afterwards and the text channels standing in for
+   `Apply-Discord.ps1 -Whole` again afterwards and the text channels standing in for
    forums are replaced with real ones. That takes `-Prune`, and only an empty
    one is replaced: the forum is made first and the text channel deleted
    after, so a forum Discord refuses leaves the channel. One with a message
@@ -628,11 +661,9 @@ Then the person picks a hold.
 
 ## Changing the words later
 
-`content.py` holds every read only post. Edit it, run `Setup-Discord.ps1 -Posts`
-again, and the posts are rewritten in place. A plain run leaves the posts alone
-unless `-Posts` is given, so a routine run does not touch existing messages. To
-rewrite only some of them, pass `-Only <channels> -Posts` (such as `-Only
-lore,factions -Posts`, issue #3656). Each post is edited where it stands,
+`content.py` holds every read only post. Edit it and its change line, and
+the next `Apply-Discord` run writes that post and its Changelog thread, and
+no other post (#6961). Each post is edited where it stands,
 and a post whose words have not changed is left alone, so a run shows new
 messages nowhere and moves nothing (26 Nov 2026: until then every run
 deleted all 15 posts and sent them again, and each went under what the bot
@@ -650,11 +681,10 @@ From a session with no box key, a cloud thread included, the deploy gate runs
 it on the box (#6874):
 
 ```
-pwsh scripts/vps/Box-Run.ps1 -Line 'Setup-Discord -Posts'
+pwsh scripts/vps/Box-Run.ps1 -Line 'Apply-Discord'
 ```
 
-`Setup-Discord.ps1` asks for the bot token at a hidden prompt. With `-OnBox`
-it asks for nothing: the build runs on the VPS with the token the running bot
+It runs with `-OnBox`, where the record is, and asks for nothing: it runs on the VPS with the token the running bot
 already holds in `C:\Thornswood-Bot\bot.env.json`, so anybody with the VPS key
 can run it and the token never leaves the box (#2519, #2341). The running bot
 has the smaller permission set, so a change that needs Administrator is named
@@ -663,7 +693,7 @@ under "did not manage" until the bot's role has it again.
 ## Reading what the live server really allows
 
 The plan only says what a channel the build makes gets, and much of the live
-server was gated by hand. `Setup-Discord.ps1 -OnBox -Audit` reads the live
+server was gated by hand. `Apply-Discord.ps1 -OnBox -Audit` reads the live
 server and changes nothing (#3317). It says the bot's own permissions against
 the running set, each role's permissions against the plan, who holds each
 staff rank, anybody holding two ranks of one staff category, every planned
@@ -731,7 +761,7 @@ repository that was downloaded earlier:
 The pull comes first because a deploy sends what the commit holds. A stale
 folder sends the bot as it was before the change and says nothing about it,
 and the same folder builds the Discord as it was before the change if
-`Setup-Discord.ps1` is run from it. That is how a live smoke went out of a
+`Apply-Discord.ps1` is run from it. That is how a live smoke went out of a
 folder in Downloads that had not been pulled for days.
 
 `-CodeOnly` stages the code beside the running bot and checks it there, then
@@ -889,7 +919,7 @@ monitor never holds up anything the bot does on Discord.
 ## Community setup, field by field
 
 These three are on the Enable Community screen, which only a person can go
-through. Take what it offers for the last two: the next `Setup-Discord.ps1`
+through. Take what it offers for the last two: the next `Apply-Discord.ps1`
 run moves them.
 
 | Field | On the Enable Community screen | After the build |
@@ -902,7 +932,7 @@ Both of the last two carry Discord's notices about your own server, moderation
 and safety among them and some of it about specific people, so they do not
 belong in a channel everybody reads, and they are notices, so they go where
 staff notices go: `#staff-updates`, never `#staff-general`, which is for talk.
-`Build-Discord.py` finds `#staff-updates` by the id in `bot\staff-channel.txt`,
+`Apply-Discord.py` finds `#staff-updates` by the id in `bot\staff-channel.txt`,
 the same one the bot speaks in, and says under "did not manage" when it could
 not move them. `-Check` says `would change` when either one points anywhere
 else.
@@ -951,8 +981,8 @@ What it sets, in `Build-Onboarding.py`'s own channel names:
 no longer has: they are `#general-chat` and `#test-tasks` now. It looks every
 channel up by name on the server, so `-Check` names both and sends nothing
 until the script is caught up. That is its own change and its own issue on the
-board. And a whole `Setup-Discord.ps1` build switches Onboarding off again
-(`ONBOARDING_WHY` in `Build-Discord.py`), because the plan gates the server
+board. And a `-Whole` `Apply-Discord.ps1` build switches Onboarding off again
+(`ONBOARDING_WHY` in `Apply-Discord.py`), because the plan gates the server
 with the rules reaction in `#rules` instead and Discord refuses that gate
 on two channels while Onboarding is on.
 - **Which hold does your character call home?** Only with `-GrantMember`. Pick

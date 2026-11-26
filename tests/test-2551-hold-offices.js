@@ -9,7 +9,7 @@
     - If two accounts hold the same Jarl role, neither acts as Jarl until staff
       fix it, and staff are told which accounts clash.
     - Each hold has "<Hold> Court", "Steward of <Hold>" and "Guard of <Hold>"
-      (bot/Build-Discord.py; bot/tests/test-2551-hold-offices.py holds the roles and
+      (bot/Apply-Discord.py; bot/tests/test-2551-hold-offices.py holds the roles and
       the bot's panel).
     - That hold's Jarl gives and takes those three. In the game the Office
       page asks the site, and the bot's account sets the role, so the role
@@ -41,7 +41,7 @@ const CR = String.fromCharCode(13);
 const read = function (p) { return fs.readFileSync(p, 'utf8').split(CR).join(''); };
 const site = siteFiles.source();
 const gm = require('./gamemode-tables.js').joined(read(path.join(REPO_DIR, 'game', 'gamemode.js')));
-const builder = read(path.join(REPO_DIR, 'bot', 'Build-Discord.py'));
+const builder = read(path.join(REPO_DIR, 'bot', 'Apply-Discord.py'));
 const botSrc = require('./bot-files').source().split(CR).join('');
 
 let pass = 0, fail = 0;
@@ -154,7 +154,7 @@ function siteWith(opts) {
   // ------------------------------------------------------- S1. the names
   {
     const S = siteWith({});
-    yes('S1 each office of each hold has the role name Build-Discord.py makes',
+    yes('S1 each office of each hold has the role name Apply-Discord.py makes',
         S.OFFICE_ROLE('jarl', 'whiterun') === 'Jarl of Whiterun' && S.OFFICE_ROLE('court', 'whiterun') === 'Whiterun Court' &&
         S.OFFICE_ROLE('steward', 'riften') === 'Steward of Riften' && S.OFFICE_ROLE('guard', 'ravenrock') === 'Guard of Raven Rock' &&
         S.OFFICE_ROLE('guard', 'narnia') === '' && S.OFFICE_ROLE('thane', 'whiterun') === '');

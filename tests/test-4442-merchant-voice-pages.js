@@ -102,7 +102,7 @@ const party = read('game/ui/thornswood-party.js');
 const partyRows = party.slice(party.indexOf("html += '<div><h3>Your party</h3>';"), party.indexOf("html += '<div><h3>Friends</h3>';"));
 const friendRows = party.slice(party.indexOf("html += '<div><h3>Friends</h3>';"), party.indexOf("html += '<div><h3>Near you</h3>';"));
 
-const discord = read('bot/Build-Discord.py');
+const discord = read('bot/Apply-Discord.py');
 const botHolds = (/^HOLDS = \[([\s\S]*?)\]/m.exec(discord) || [])[1] || '';
 
 yes('0 the code reads: ' + COMMISSIONS + ' commissions, ' + KEPT + ' of ' + HISTORY + ' traders kept at ' + PURSE + ', ' +

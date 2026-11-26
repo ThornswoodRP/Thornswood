@@ -10,7 +10,7 @@ two categories and five channels (q-3317-ticket-split, A): Tickets holds
 #get-help and #report-someone, Applications holds #apply-to-playtest,
 #apply-for-a-seat and #apply-for-staff. This proves:
 
-  T1 every kind of ticket has exactly one desk, and Build-Discord.py's plan
+  T1 every kind of ticket has exactly one desk, and Apply-Discord.py's plan
      makes each desk, in Tickets or Applications, as a ticket channel
   T2 each desk's panel offers only its own kinds, under a custom_id of its
      own; the one panel of before still offers every kind
@@ -26,7 +26,7 @@ two categories and five channels (q-3317-ticket-split, A): Tickets holds
   T7 the old channels are retired, KEEP no longer names #tickets, and
      -Prune leaves a channel while a thread is still open in it
 
-bot.py and Build-Discord.py are imported for real. Never connects to
+bot.py and Apply-Discord.py are imported for real. Never connects to
 anything.
 """
 import os
@@ -68,7 +68,7 @@ import harness_bot  # noqa: E402
 
 bot = harness_bot.whole()
 spec = importlib.util.spec_from_file_location(
-    'build_discord', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 

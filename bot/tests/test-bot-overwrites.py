@@ -5,13 +5,13 @@ The bot keeps its channels without Administrator.
 
 From the To Do List, entry 223: "The bot is invited with Administrator and
 keeps it." Administrator overrides every channel overwrite, and nothing in
-Build-Discord.py ever named the bot, so the only reason it could see the staff
+Apply-Discord.py ever named the bot, so the only reason it could see the staff
 channels, the channels behind Member and the holds, and post in the read only
 ones was Administrator. Untick it and the @everyone deny shuts the bot out
 along with everybody else: the trouble alerts and the watchdog's messages
 in #staff-updates go quiet, and so does the hold panel.
 
-Build-Discord.py is imported for real, under another name so its __main__
+Apply-Discord.py is imported for real, under another name so its __main__
 block never runs. Its client is swapped for a stand-in, and every guild, role
 and channel here is a stand-in that records what would have been asked of
 Discord. The live server is modelled as it is today: every role, category and
@@ -63,7 +63,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -358,7 +358,7 @@ def live_server():
     for name, _c, _h, _p in B.ROLES:
         g.roles.append(Role(name, 100 + pos, pos))
         pos -= 1
-    # The running set Build-Discord.py prints the invite for, which holds
+    # The running set Apply-Discord.py prints the invite for, which holds
     # the three and the thread ones as well.
     bot_role = Role('Thornswood Bot', 7, 60, B.RUN_PERMISSIONS)
     g.roles.append(bot_role)
@@ -422,6 +422,8 @@ def run(g, check):
     B.PRUNE = False
     B.POSTS = False
     B.ROLES_ONLY = False
+    # The whole build (#6961: a plain run applies only the plan's changes).
+    B.WHOLE = True
     B.GUILD = ''
     B.client = Client(g)
     del B.made[:]

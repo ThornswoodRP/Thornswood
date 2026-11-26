@@ -274,7 +274,7 @@ async def ensure_panel(guild):
     if not here and old is None:
         names = ', '.join('#' + c.name for c in guild.text_channels) or 'none'
         log('there is no ticket channel in "%s": none of #%s, and no #%s, so there '
-            'is no panel and no tickets. Text channels there: %s. Build-Discord.py '
+            'is no panel and no tickets. Text channels there: %s. Apply-Discord.py '
             'makes them.' % (guild.name, ', #'.join(d for d, _k in TICKET_DESKS),
                              TICKETS_SAID, names))
         return
@@ -289,7 +289,7 @@ async def ensure_panel(guild):
     gone = [d for d, ch in desks if ch is None]
     if gone:
         log('there is no #%s in "%s", so those tickets have nowhere to open. '
-            'Build-Discord.py makes them.' % (', #'.join(gone), guild.name))
+            'Apply-Discord.py makes them.' % (', #'.join(gone), guild.name))
     for d, ch in here:
         await desk_ready(guild, ch, d, book)
     if old is not None:
