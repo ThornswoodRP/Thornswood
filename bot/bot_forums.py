@@ -341,7 +341,7 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
     A known issue is a finding people still meet: an open issue labelled
     Dev Findings or Main Findings whose fix has not landed (Patrick, 22 Oct,
     and #3140). Its fix has landed when the issue gets a "Test task:"
-    comment or is in Done: done-on-merge.yml's comment on it (merged_fix),
+    comment or is in Merged: done-on-merge.yml's comment on it (merged_fix),
     A card is never moved to Done by hand (#5185): it follows that same
     merged test task. A closed or unlabelled issue is not a finding at all. Then its post goes: the fix is a test task, not
     a known issue. A merged pull request alone does not take it down: until
