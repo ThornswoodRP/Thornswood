@@ -226,6 +226,33 @@ namespace ThornswoodRealClient {
     [DllImport("user32.dll")] static extern bool ClientToScreen(IntPtr h, ref POINT p);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n);
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, uint flags, System.Text.StringBuilder s, ref uint n);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+    // Which window is in front, for a key step that could not get the game
+    // window there: its process, its id and its title (26 Nov: Windows
+    // refused the focus at step 20 and the run could not say what had it).
+    public static string ForegroundWho() {
+      IntPtr h = GetForegroundWindow();
+      if (h == IntPtr.Zero) return "no window";
+      uint pid; GetWindowThreadProcessId(h, out pid);
+      System.Text.StringBuilder t = new System.Text.StringBuilder(256);
+      GetWindowText(h, t, t.Capacity);
+      // The process by its file, asked with the least access there is
+      // (PROCESS_QUERY_LIMITED_INFORMATION), which an elevated one allows too.
+      string name = "an unknown process";
+      IntPtr p = OpenProcess(0x1000, false, pid);
+      if (p != IntPtr.Zero) {
+        System.Text.StringBuilder f = new System.Text.StringBuilder(1024);
+        uint n = (uint)f.Capacity;
+        if (QueryFullProcessImageName(p, 0, f, ref n)) { string full = f.ToString(); name = full.Substring(full.LastIndexOf('\\') + 1); }
+        CloseHandle(p);
+      }
+      return name + " " + pid + " \"" + t.ToString() + "\"";
+    }
     [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [StructLayout(LayoutKind.Sequential)] struct KEYBDINPUT { public ushort wVk, wScan; public uint dwFlags, time; public IntPtr dwExtraInfo; }
     [StructLayout(LayoutKind.Sequential)] struct MOUSEINPUT { public int dx, dy; public uint mouseData, dwFlags, time; public IntPtr dwExtraInfo; }
@@ -297,13 +324,13 @@ function Invoke-GameKey([IntPtr]$handle, $code) {
     if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         if (-not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
-            return @{ ok = $false; note = 'Windows refused to give the game window the keyboard' }
+            return @{ ok = $false; note = 'Windows refused to give the game window the keyboard; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho() }
         }
     }
     # Check before SendInput: acknowledging a key after noticing another
     # foreground window counted undelivered keys as passed steps.
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
-        return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent' }
+        return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho() }
     }
     $why = ''
     try {
@@ -316,7 +343,7 @@ function Invoke-GameKey([IntPtr]$handle, $code) {
             # native buffered menus saw it (b0b869cb, main.cpp MyInputListener).
             Start-Sleep -Milliseconds 120
             if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
-                $why = 'the game window lost the keyboard during input'
+                $why = 'the game window lost the keyboard during input; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho()
             }
         }
     } catch { $why = 'the key press failed: ' + $_.Exception.Message }

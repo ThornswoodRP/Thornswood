@@ -3,14 +3,15 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const makePage=require('../../tests/fixtures/panel-page'),root=path.join(__dirname,'../..');let pass=0,fail=0;
 function test(name,fn){try{fn();pass++;console.log('PASS '+name);}catch(e){fail++;console.log('FAIL '+name+': '+e.message);}}
-function rig(){const p=makePage();for(const f of ['bridge','board'])p.run(f,fs.readFileSync(f==='board'&&process.env.BOARD_UI||path.join(root,'game/ui/thornswood-'+f+'.js'),'utf8'));
- p.state={me:1000,board:{hold:'windhelm',where:'Windhelm',here:true,x:1,y:2,z:3,wall:[],jobs:[],dests:[{hold:'whiterun',where:'Whiterun'}],arrivals:[],submit:[]}};
+function rig(){const p=makePage();p.win.crypto={getRandomValues:a=>require('node:crypto').randomFillSync(a)};for(const f of ['bridge','board'])p.run(f,fs.readFileSync(f==='board'&&process.env.BOARD_UI||path.join(root,'game/ui/thornswood-'+f+'.js'),'utf8'));
+ p.state={me:1000,boardSubmissions:{owner:{profileId:1000,actorDesc:'letter-fixture',runtime:'1'},results:[]},board:{hold:'windhelm',where:'Windhelm',here:true,x:1,y:2,z:3,wall:[],jobs:[],dests:[{hold:'whiterun',where:'Whiterun'}],arrivals:[],submit:[]}};
  p.api=p.win.thornswoodBoard;p.field=id=>p.doc.getElementById('ts-board-'+id);p.prepare=()=>{for(const f of p.doc.querySelectorAll('input,select'))if(!f.setCustomValidity){f.validationMessage='';f.validity={customError:false};f.reports=0;f.setCustomValidity=t=>{f.validationMessage=String(t);f.validity.customError=!!t;};f.reportValidity=()=>{f.reports++;return !f.validity.customError;};}};
  p.feed=()=>{p.api.setData(JSON.parse(JSON.stringify(p.state)));p.prepare();};p.feed();p.api.open();p.prepare();
  p.button=verb=>p.doc.querySelector('[data-do="'+(verb||'letter')+'"]');p.press=b=>{assert(b,'current control exists');b.focus();const e=p.fire(b,'click','');if(!e.defaultPrevented&&b.onclick)b.onclick.call(b,e);p.prepare();};
  p.values=()=>['to','letter','pay','dest','haul'].map(id=>p.field(id)?.value);
  for(const[id,value]of [['to','Brenna'],['letter','A private draft'],['pay','25'],['dest','whiterun'],['haul','Timber']])p.field(id).value=value;
  return p;}
+function packets(lines){return lines.map(line=>{assert(line.startsWith('/board-submit-v1 '));const p=JSON.parse(line.slice('/board-submit-v1 '.length));assert.match(p[1],/^[0-9a-f]{32}$/);assert.deepEqual(p[3],[1000,'letter-fixture','1']);return[p[0],p[2],...p.slice(4)];});}
 for(const id of ['to','letter'])for(const blank of ['', '   ']){
  const p=rig(),f=p.field(id);f.value=blank;const values=p.values(),state=JSON.stringify(p.state);p.press(p.button());
  test(id+JSON.stringify(blank)+' refuses without sending or changing any input',()=>{assert.equal(p.sent.length,0);assert.deepEqual(p.values(),values);assert.equal(JSON.stringify(p.state),state);});
@@ -22,7 +23,7 @@ for(const id of ['to','letter'])for(const blank of ['', '   ']){
  p.field('to').value='  Brenna "Ox" & Co  ';p.fire(p.field('to'),'input');p.press(p.button());
  test('correction advances to missing body while preserving raw recipient',()=>{assert(p.doc.activeElement===p.field('letter'));assert.equal(p.field('to').value,'  Brenna "Ox" & Co  ');assert.equal(p.sent.length,0);});
  p.field('letter').value='  Meet <near> & west\nThen return.  ';p.fire(p.field('letter'),'input');p.press(p.button());
- test('completed letter preserves exact raw private URI wire',()=>assert.deepEqual(p.sent,['/letter-post-v1 '+encodeURIComponent(p.field('to').value)+' '+encodeURIComponent(p.field('letter').value)]));
+ test('completed letter preserves exact raw private JSON fields and captured hold',()=>assert.deepEqual(packets(p.sent),[['letter','windhelm',p.field('to').value,p.field('letter').value]]));
 }
 for(const kind of ['prior','newer','cleared']){
  const p=rig(),f=p.field('letter');f.value='';f.setAttribute('aria-describedby','old-hint');if(kind==='prior'){f.setCustomValidity('Prior error');f.setAttribute('aria-invalid','grammar');}p.press(p.button());
@@ -56,6 +57,6 @@ for(const id of ['to','letter']){
  p.api.close();test(id+' invalid-text diagnostic is retired on close',()=>{const note=p.field('letter-reason');assert(!note||!note.textContent);});
 }
 for(const delivery of ['sent','queued','throws']){
- const p=rig(),values=p.values(),calls=[];p.win.thornswoodNet.say=line=>{calls.push(line);if(delivery==='throws')throw Error('after queue');return delivery==='sent';};p.press(p.button());test(delivery+' preserves both drafts and never retries',()=>{assert.deepEqual(calls,['/letter-post-v1 Brenna A%20private%20draft']);assert.deepEqual(p.values(),values);});
+ const p=rig(),values=p.values(),calls=[];p.win.thornswoodNet.say=line=>{calls.push(line);if(delivery==='throws')throw Error('after queue');return delivery==='sent';};p.press(p.button());test(delivery+' preserves both drafts and never retries',()=>{assert.deepEqual(packets(calls),[['letter','windhelm','Brenna','A private draft']]);assert.deepEqual(p.values(),values);});
 }
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;

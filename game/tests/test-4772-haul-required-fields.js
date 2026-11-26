@@ -4,8 +4,8 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const makePage=require('../../tests/fixtures/panel-page'),root=path.join(__dirname,'../..');
 let pass=0,fail=0;function test(name,fn){try{fn();pass++;console.log('PASS '+name);}catch(e){fail++;console.log('FAIL '+name+': '+e.message);}}
 function rig(){
- const p=makePage();for(const f of ['bridge','board'])p.run(f,fs.readFileSync(f==='board'&&process.env.BOARD_UI||path.join(root,'game/ui/thornswood-'+f+'.js'),'utf8'));
- p.state={me:1000,board:{hold:'windhelm',where:'Windhelm',here:true,x:1,y:2,z:3,wall:[],jobs:[],dests:[{hold:'whiterun',where:'Whiterun'}],arrivals:[],submit:[]}};
+ const p=makePage();p.win.crypto={getRandomValues:a=>require('node:crypto').randomFillSync(a)};for(const f of ['bridge','board'])p.run(f,fs.readFileSync(f==='board'&&process.env.BOARD_UI||path.join(root,'game/ui/thornswood-'+f+'.js'),'utf8'));
+ p.state={me:1000,boardSubmissions:{owner:{profileId:1000,actorDesc:'haul-fixture',runtime:'1'},results:[]},board:{hold:'windhelm',where:'Windhelm',here:true,x:1,y:2,z:3,wall:[],jobs:[],dests:[{hold:'whiterun',where:'Whiterun'}],arrivals:[],submit:[]}};
  p.api=p.win.thornswoodBoard;p.field=id=>p.doc.getElementById('ts-board-'+id);
  p.prepare=()=>{for(const field of p.doc.querySelectorAll('input,select'))if(!field.setCustomValidity){
   field.validationMessage='';field.validity={customError:false};field.reports=0;
@@ -18,6 +18,7 @@ function rig(){
  p.field('pay').value=' 25 ';p.field('dest').value='whiterun';p.field('haul').value=' timber ';p.field('to').value='Brenna';p.field('letter').value='A private draft';
  return p;
 }
+function packets(lines){return lines.map(line=>{assert(line.startsWith('/board-submit-v1 '));const p=JSON.parse(line.slice('/board-submit-v1 '.length));assert.match(p[1],/^[0-9a-f]{32}$/);assert.deepEqual(p[3],[1000,'haul-fixture','1']);return[p[0],p[2],...p.slice(4)];});}
 for(const id of ['pay','dest','haul'])for(const blank of ['', '   ']){
  const p=rig(),field=p.field(id);field.value=blank;const before=p.values(),state=JSON.stringify(p.state);p.press(p.button());
  test(id+' blank '+JSON.stringify(blank)+' sends nothing and preserves all values',()=>{assert.equal(p.sent.length,0);assert.deepEqual(p.values(),before);assert.equal(JSON.stringify(p.state),state);});
@@ -34,7 +35,7 @@ for(const id of ['pay','dest','haul'])for(const blank of ['', '   ']){
   p.field(id).value=value;p.fire(p.field(id),id==='dest'?'change':'input');
   test('editing '+id+' retires only its missing-field reason',()=>{assert.equal(p.field(id).validity.customError,false);assert.equal(p.field(id).getAttribute('aria-invalid'),null);const note=p.field('haul-reason');assert(!note||note.style.display==='none'||!note.textContent);});
  }
- p.press(p.button());test('completed required fields keep the exact existing wire',()=>assert.deepEqual(p.sent,['/haul 20 whiterun Timber']));
+ p.press(p.button());test('completed required fields keep their exact payload and captured hold',()=>assert.deepEqual(packets(p.sent),[['haul','windhelm','20','whiterun','Timber']]));
 }
 for(const kind of ['prior','newer','cleared']){
  const p=rig(),f=p.field('haul');f.value='';f.setAttribute('aria-describedby','existing-hint');
@@ -60,11 +61,11 @@ for(const mode of ['redraw','close','compose']){
 }
 for(const delivery of ['sent','queued','throws']){
  const p=rig(),calls=[],values=p.values();p.win.thornswoodNet.say=line=>{calls.push(line);if(delivery==='throws')throw Error('after queue');return delivery==='sent';};p.press(p.button());
- test(delivery+' preserves entered values with no retry or acknowledgement claim',()=>{assert.deepEqual(calls,['/haul 25 whiterun timber']);assert.deepEqual(p.values(),values);});
+ test(delivery+' preserves entered values with no retry or acknowledgement claim',()=>{assert.deepEqual(packets(calls),[['haul','windhelm','25','whiterun','timber']]);assert.deepEqual(p.values(),values);});
 }
 {
- const p=rig();p.field('pay').value='0';p.press(p.button());test('zero still follows the existing wire and authoritative refusal path',()=>assert.deepEqual(p.sent,['/haul 0 whiterun timber']));
- const q=rig();q.field('pay').value='1a2';q.press(q.button());test('existing pay grammar is unchanged by empty-field feedback',()=>assert.deepEqual(q.sent,['/haul 12 whiterun timber']));
+ const p=rig();p.field('pay').value='0';p.press(p.button());test('zero still follows the authoritative refusal path',()=>assert.deepEqual(packets(p.sent),[['haul','windhelm','0','whiterun','timber']]));
+ const q=rig();q.field('pay').value='1a2';q.press(q.button());test('existing pay grammar is unchanged by empty-field feedback',()=>assert.deepEqual(packets(q.sent),[['haul','windhelm','12','whiterun','timber']]));
  const r=rig();r.state.board.dests=[];r.feed();test('unavailable haul form has no invented destination or send button',()=>assert.equal(r.button(),null));
 }
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;

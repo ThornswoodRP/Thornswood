@@ -1,8 +1,20 @@
 """Actual source compilers, synthetic records only; no game or native build."""
+print('{"event":"compiler_stage","entrypoint":"test-4610-compiler-stages","phase":"child_start"}', flush=True)
+import sys
+import json
+
+
+def phase(name, executable=None):
+    row = {'event': 'compiler_stage', 'entrypoint': 'test-4610-compiler-stages', 'phase': name}
+    if executable is not None:
+        row['executable'] = executable
+    print(json.dumps(row), flush=True)
+
+
+phase('interpreter', sys.executable)
 import importlib.util
 import pathlib
 import struct
-import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -16,8 +28,12 @@ def module(name, filename):
     spec.loader.exec_module(value)
     return value
 
+phase('content_import_start')
 C = module('content_4610', 'scripts/mods/Add-ContentRecords.py')
+phase('content_import_end')
+phase('last_import_start')
 L = module('last_4610', 'scripts/mods/Build-LastPlugin.py')
+phase('last_import_end')
 SALT, GARLIC = '34cdf:Skyrim.esm', '34d22:Skyrim.esm'
 BASE, SOURCE = 'e8448:Skyrim.esm', '8ad:Gourmet.esp'
 ITEMS = ['1c0c6:Thornswood-Content.esp', '1c0c9:Thornswood-Content.esp']
@@ -101,4 +117,4 @@ class Stages(unittest.TestCase):
         plugins[0].records[entry.fid]=L.pack_subrecords([(t,struct.pack('<I',0x123) if t==b'CNAM' else b) for t,b in L.subrecords(plugins[0].data(entry))])
         with self.assertRaises((ValueError,SystemExit)):L.seasoned_recipe_entries(groups(),plugins,win,set())
 
-if __name__=='__main__':unittest.main()
+if __name__=='__main__':unittest.main(verbosity=2)

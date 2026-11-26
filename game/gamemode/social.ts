@@ -1286,6 +1286,10 @@
           return prop.boardPanel(actorId, mine);
         } catch (eBoard) { return null; }
       })(),
+      boardSubmissions: (function () {
+        var prop = g.__thornswoodProperty;
+        return prop && prop.boardSubmissions ? prop.boardSubmissions(actorId, mine) : null;
+      })(),
       // J's Boards tab: the ten towns, the board picked there, read only,
       // and your jobs under it (#1627).
       boards: (function () {

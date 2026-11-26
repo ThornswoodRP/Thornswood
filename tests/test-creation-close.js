@@ -575,8 +575,10 @@ yes('the social keys still wait out the RaceSex Menu',
 {
   const method = page.slice(page.indexOf('    close: function () {'), page.indexOf('    toggle: function () {'));
   const w = { root: { className: '' }, active: true, told: [],
-    quitArmed: 0, candidate: null, dyeTarget: null, contractWith: null, endArmed: null, guideAt: '' };
+    quitArmed: 0, candidate: null, dyeTarget: null, contractWith: null, endArmed: null, guideAt: '', officeResets: 0 };
   w.creating = () => w.active;
+  // close() also puts down an Office action waiting on its second press (#6802).
+  w.resetOfficeArm = () => { w.officeResets++; };
   w.tell = (message) => w.told.push(message);
   vm.runInNewContext('var api = {' + method + '}; api.close();', w);
   yes('K9 programmatic close cannot release an unfinished character', w.root.className === '' && w.told.length === 0);

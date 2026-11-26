@@ -27616,6 +27616,43 @@ module.exports = {
     return { rows: rows, older: up - rows.length };
   }
 
+  // Private posting evidence, never the public wall or letter body. Each of
+  // the ten ledgers contributes at most its last 32 slots, including down
+  // posts. Missing older evidence is uncertainty, not a failed posting.
+  function boardSubmissions(actorId, profileId) {
+    try {
+      var actualProfile = mp.get(actorId, 'profileId');
+      var desc = mp.getDescFromId(actorId);
+      var runtime = mp.getActorRuntimeIdentity(actorId);
+      if (!Number.isSafeInteger(profileId) || profileId < 1 || actualProfile !== profileId ||
+          typeof desc !== 'string' || !desc || typeof runtime !== 'string' || !/^[1-9][0-9]{0,19}$/.test(runtime)) return null;
+      var found = [];
+      for (var h = 0; h < LEDGER_HOLDS.length; h++) {
+        var hold = LEDGER_HOLDS[h], list = notices[hold];
+        if (!Array.isArray(list)) continue;
+        for (var i = list.length - 1, first = Math.max(0, list.length - 32); i >= first; i--) {
+          var n = list[i], meta = n && n.boardSubmission;
+          var kind = n && n.letter && !n.haul ? 'letter' : n && n.haul && !n.letter ? 'haul' : '';
+          if (!meta || meta.version !== 1 || typeof meta.id !== 'string' || !/^[0-9a-f]{32}$/.test(meta.id) ||
+              meta.kind !== kind || !kind ||
+              meta.actorDesc !== desc || n.by !== profileId || typeof n.at !== 'number' || !Number.isFinite(n.at)) continue;
+          found.push({ id: meta.id, kind: kind, hold: hold, status: 'posted', at: n.at, index: i });
+        }
+      }
+      found.sort(function (a, b) { return b.at - a.at || b.index - a.index || a.hold.localeCompare(b.hold); });
+      var counts = { letter: 0, haul: 0 };
+      var results = found.filter(function (r) { return counts[r.kind]++ < 16; }).map(function (r) {
+        return { id: r.id, kind: r.kind, hold: r.hold, status: r.status };
+      });
+      if (mp.get(actorId, 'profileId') !== actualProfile || mp.getDescFromId(actorId) !== desc ||
+          mp.getActorRuntimeIdentity(actorId) !== runtime) return null;
+      return { owner: { profileId: profileId, actorDesc: desc, runtime: runtime }, results: results };
+    } catch (e) {
+      plog('could not read private board posting evidence:', e);
+      return null;
+    }
+  }
+
   /** What the board panel draws. Null until they are near one. */
   function boardPanel(actorId, profileId) {
     var near = nearestBoard(actorId, 1500);
@@ -29185,18 +29222,81 @@ module.exports = {
     }
     // Same unsafe characters as character names; quotes and valid spaces stay.
     // Do not run a rename normalizer or change the existing name-match policy.
-    if (!to.trim() || to.length > 60 || /[\p{C}\p{Zl}\p{Zp}<>]/u.test(to) ||
-        !words.trim() || words.length > LETTER_CHARS) {
+    if (!validLetterText(to, words)) {
       toProfile(profileId, 'That letter request is invalid or too long. Nothing was posted or taken.'); return true;
     }
     return postLetter(parts, actorId, profileId, toProfile, {to:to,words:words});
   }
 
+  function validLetterText(to, words) {
+    if (typeof to !== 'string' || typeof words !== 'string' || !to.trim() || to.length > 60 ||
+        /[\p{C}\p{Zl}\p{Zp}<>]/u.test(to) || !words.trim() || words.length > LETTER_CHARS) return false;
+    // JSON can carry an escaped lone surrogate that the older URI decoder
+    // rejected. Keep both private entry points on that same text boundary.
+    try { encodeURIComponent(to); encodeURIComponent(words); return true; }
+    catch (e) { return false; }
+  }
+
+  var BOARD_OWNER_CHANGED = 'Your character changed before this post was handled. Nothing was posted or taken; keep your draft.';
+  function boardOwnerMatches(actorId, profileId, expected) {
+    if (!Array.isArray(expected) || expected.length !== 3 || !Number.isSafeInteger(expected[0]) ||
+        expected[0] < 1 || expected[0] !== profileId || typeof expected[1] !== 'string' || !expected[1] ||
+        typeof expected[2] !== 'string' || !/^[1-9][0-9]{0,19}$/.test(expected[2])) return false;
+    try {
+      return mp.get(actorId, 'profileId') === profileId && mp.getDescFromId(actorId) === expected[1] &&
+        mp.getActorRuntimeIdentity(actorId) === expected[2] && mp.get(actorId, 'profileId') === profileId &&
+        mp.getDescFromId(actorId) === expected[1] && mp.getActorRuntimeIdentity(actorId) === expected[2];
+    } catch (e) { return false; }
+  }
+  function boardSubmissionCut(actorId, profileId, submission, cut) {
+    // Runs inside the existing native admission, immediately before any
+    // debit intent. Its captured runtime/life proof still guards the CAS.
+    return function (entries) {
+      return boardOwnerMatches(actorId, profileId, submission.expectedOwner) ? cut(entries) : BOARD_OWNER_CHANGED;
+    };
+  }
+
+  // One private UI boundary. The request ID correlates a saved posting only;
+  // it is not authorization or an exactly-once/retry key. Legacy routes stay.
+  function submitBoard(payload, actorId, profileId, toProfile) {
+    var kind = payload && payload[0];
+    if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul') ||
+        payload.length !== (kind === 'letter' ? 6 : 7) ||
+        typeof payload[1] !== 'string' || !/^[0-9a-f]{32}$/.test(payload[1]) ||
+        typeof payload[2] !== 'string' || LEDGER_HOLDS.indexOf(payload[2]) < 0 ||
+        payload.slice(4).some(function (field) { return typeof field !== 'string'; }) ||
+        (kind === 'letter' && !validLetterText(payload[4], payload[5]))) {
+      toProfile(profileId, 'That board submission is invalid. Nothing was posted or taken.'); return true;
+    }
+    if (!boardOwnerMatches(actorId, profileId, payload[3])) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
+    var desc;
+    try {
+      desc = mp.getDescFromId(actorId);
+      if (mp.get(actorId, 'profileId') !== profileId || typeof desc !== 'string' || !desc) throw new Error('posting owner changed');
+    } catch (e) {
+      plog('could not identify the owner of a board submission:', e);
+      toProfile(profileId, 'That posting owner could not be checked. Nothing was posted or taken.'); return true;
+    }
+    var meta = { version: 1, id: payload[1], kind: kind, actorDesc: desc };
+    var expectedOwner = payload[3].slice();
+    if (kind === 'letter') return postLetter([], actorId, profileId, toProfile,
+      { to: payload[4], words: payload[5], hold: payload[2], submission: meta, expectedOwner: expectedOwner });
+    // Match the old /haul word boundary, including its whitespace joining.
+    var parts = ['/haul', payload[4], payload[5]].concat(payload[6].trim().split(/\s+/));
+    return postHaul(parts, actorId, profileId, toProfile, { hold: payload[2], submission: meta, expectedOwner: expectedOwner });
+  }
+
   function postLetter(parts, actorId, profileId, toProfile, written) {
+    var submission = written && written.submission ? written : null;
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     var hold = boardHere(actorId);
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     if (!hold) {
       toProfile(profileId, 'Stand at a hold\'s notice board to write a letter there.');
       return true;
+    }
+    if (written && written.hold !== undefined && written.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.'); return true;
     }
     var rest = (parts && parts.length > 1) ? parts.slice(1).join(' ').trim() : '';
     var to = '', words = '';
@@ -29230,8 +29330,11 @@ module.exports = {
     } catch (e) { }
     var made = { by: profileId, name: who, text: words, at: Date.now(),
                  job: true, letter: true, to: to, pay: LETTER_PAY, taken: 0 };
+    if (written && written.submission) made.boardSubmission = written.submission;
     // On the board only once the pack's take is saved (#4901): landLetter.
-    var r = packs.begin(actorId, goldCut(cost, 'A letter costs ' + cost + ' gold and you do not have it.'),
+    var postingCut = goldCut(cost, 'A letter costs ' + cost + ' gold and you do not have it.');
+    if (submission) postingCut = boardSubmissionCut(actorId, profileId, submission, postingCut);
+    var r = packs.begin(actorId, postingCut,
                         'letter', { hold: hold, made: made, cost: cost });
     toProfile(profileId, r.why || r.line ||
       ('Your letter for ' + to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
@@ -29487,11 +29590,16 @@ module.exports = {
     return postHaul(parts, actorId, profileId, toProfile);
   }
 
-  function postHaul(parts, actorId, profileId, toProfile) {
+  function postHaul(parts, actorId, profileId, toProfile, submission) {
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     var hold = boardHere(actorId);
+    if (submission && !boardOwnerMatches(actorId, profileId, submission.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
     if (!hold) {
       toProfile(profileId, 'Stand at the board of the hold you are sending from to post a haul.');
       return true;
+    }
+    if (submission && submission.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.'); return true;
     }
     var word = String(parts[1] || '').trim();
     var pay = /^\d+$/.test(word) ? Number(word) : 0;
@@ -29535,8 +29643,11 @@ module.exports = {
     // The haul carries the cut it was posted under, so a change of terms never re-prices it.
     var made = co.stampHaul({ by: profileId, name: who, text: text, at: Date.now(),
                               job: true, haul: true, dest: dest, pay: pay, taken: 0 });
+    if (submission) made.boardSubmission = submission.submission;
     // On the board only once the pack's take is saved (#4901): landHaul.
-    var r = packs.begin(actorId, goldCut(cost, short), 'haul',
+    var postingCut = goldCut(cost, short);
+    if (submission) postingCut = boardSubmissionCut(actorId, profileId, submission, postingCut);
+    var r = packs.begin(actorId, postingCut, 'haul',
                         { hold: hold, made: made, cost: cost, fee: fee, pay: pay, dest: dest });
     toProfile(profileId, r.why || r.line ||
       ('Your haul to ' + dest + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
@@ -30909,6 +31020,7 @@ module.exports = {
           n.by = 0;
           n.name = 'somebody';
           delete n.title; delete n.text; delete n.to;
+          delete n.boardSubmission;
           touched = true;
         }
         if (mine(n.taken)) {
@@ -31023,6 +31135,7 @@ module.exports = {
     // A notice in an office's name, with no fee (#513). See the world stage block.
     officePost: officePost,
     boards: function () { return boards; }, boardHere: boardHere, boardPanel: boardPanel, postExact: postExact,
+    submitBoard: submitBoard, boardSubmissions: boardSubmissions,
     standBoard: standBoard, standBoards: standBoards, boardActivated: boardActivated,
     boxOffset: boxOffset, boardAngle: boardAngle,
     standBench: standBench, standBenches: standBenches,
@@ -46015,7 +46128,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   function commandParts(text) {
     var raw = String(text || '').trim();
     var head = /^\S+/.exec(raw);
-    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1' || head[0] === '/board-unpin-v1')) return [head[0]];
+    if (head && (head[0] === '/journal-write-v1' || head[0] === '/board-post-v1' || head[0] === '/board-unpin-v1' || head[0] === '/board-submit-v1')) return [head[0]];
     return raw.split(/\s+/);
   }
 
@@ -46271,6 +46384,17 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       var journalWhy = journals.writePageExact(actorId, journalPayload[0], journalPayload[1], journalPayload[2], journalPayload[3]);
       if (journalWhy) toProfile(profileId, journalWhy);
       journals.pushJournalSave(actorId);
+      return;
+    }
+
+    if (word === '/board-submit-v1') {
+      if (!needCharacter()) return;
+      var submitPayload = savedTextPayload(cmd.text, word, 8200, 6) || savedTextPayload(cmd.text, word, 8200, 7);
+      var submitProperty = g.__thornswoodProperty;
+      if (!submitPayload || !submitProperty || !submitProperty.submitBoard) {
+        toProfile(profileId, 'That board submission is invalid or unavailable. Keep your draft.'); return;
+      }
+      submitProperty.submitBoard(submitPayload, actorId, profileId, toProfile);
       return;
     }
 
@@ -60975,6 +61099,10 @@ module.exports = {
           if (!prop || !prop.boardPanel) { return null; }
           return prop.boardPanel(actorId, mine);
         } catch (eBoard) { return null; }
+      })(),
+      boardSubmissions: (function () {
+        var prop = g.__thornswoodProperty;
+        return prop && prop.boardSubmissions ? prop.boardSubmissions(actorId, mine) : null;
       })(),
       // J's Boards tab: the ten towns, the board picked there, read only,
       // and your jobs under it (#1627).
