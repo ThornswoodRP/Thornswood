@@ -15,10 +15,21 @@
 // (game/data/cut-items.json), so a cut row kept the forge its mod put it
 // at, and the forge still listed it.
 //
-// This holds the loop: it moves a cut row with the rest. The tables it builds
-// (game/data/recipes.json and what is read out of it) come from the merged
-// loop in a pull request of their own, which adds the check on the rows
-// themselves (#5037). Read only.
+// This holds the loop: it moves a cut row with the rest. It also holds the
+// rows themselves, in the box's content build laid over the checkout
+// (game/data/recipes.json and game/data/last-plugin.json, #5191), so a
+// build that puts one back at the forge fails in the merge release's content
+// checks before any release carries it:
+// - the Woodwright's bows (family Bows), arrows and bolts (family Arrows and
+//   bolts), instruments (its why says the output is an instrument) and
+//   fishing poles (name starts Fishing Pole) are each found, so a reader that
+//   finds nothing cannot pass;
+// - not one of them, in any of the table's three lists, is at the forge
+//   (CraftingSmithingForge), named by kind, name, record and editor ID;
+// - each one at the woodworking bench that its mod put at the forge carries
+//   movedFrom, and Thornswood-Last.esp's benchMoves moves that record from
+//   the forge to the woodworking bench, which is what the crafting menu
+//   reads. Read only.
 
 const fs = require('fs');
 const path = require('path');
@@ -37,6 +48,61 @@ const loopEnd = loopAt < 0 ? -1 : ps.indexOf('\nif ($movedCount.Count -eq 0)', l
 const loop = (loopAt >= 0 && loopEnd > loopAt) ? ps.slice(loopAt, loopEnd) : '';
 yes('Build-RecipeTable.ps1 has its move loop', loop.indexOf('MovedFromName') >= 0);
 yes('the move loop does not pass over a cut row', !!loop && !/Book\s+-eq\s+'cut'/.test(loop));
+
+// ---- the rows, in the content build -----------------------------------------
+
+const FORGE = 'CraftingSmithingForge';
+const BENCH = 'ThornswoodCraftingWoodworking';
+const table = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'recipes.json'), 'utf8'));
+const last = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'last-plugin.json'), 'utf8'));
+
+function kind(row) {
+  if (row.family === 'Bows') return 'bow';
+  if (row.family === 'Arrows and bolts') return 'arrow or bolt';
+  if (/^the output is an instrument\b/.test(row.why || '')) return 'instrument';
+  if (/^Fishing Pole\b/.test(row.name || '')) return 'fishing pole';
+  return null;
+}
+const KINDS = ['bow', 'arrow or bolt', 'instrument', 'fishing pole'];
+
+const found = {};
+for (const k of KINDS) found[k] = 0;
+const atForge = [];
+const noMovedFrom = [];
+const notMoved = [];
+const moves = new Map((last.benchMoves || []).map(m => [String(m.recipe).toLowerCase(), m]));
+// The woodworking bench's keyword, as the rows give it.
+let benchKey = null;
+
+for (const list of ['recipes', 'refused', 'unowned']) {
+  for (const [id, row] of Object.entries(table[list] || {})) {
+    const woodwright = row.owner === 'Woodworker' && row.half === 'Woodwright';
+    // A row the table gives nobody still shows at its bench, so the forge is
+    // read for every row of these kinds; a kind is counted for the Woodwright.
+    const k = kind(row);
+    if (!k) continue;
+    if (woodwright && list === 'recipes') found[k]++;
+    const what = k + ' ' + row.name + ' (' + id + ', ' + row.editorId + ', ' + list + ')';
+    if (row.benchName === FORGE) atForge.push(what);
+    if (row.benchName === BENCH) {
+      if (!benchKey) benchKey = String(row.bench).toLowerCase();
+      if (row.movedFromName === FORGE) {
+        if (!row.movedFrom) { noMovedFrom.push(what); continue; }
+        const m = moves.get(id.toLowerCase());
+        if (!m || String(m.from).toLowerCase() !== String(row.movedFrom).toLowerCase()
+          || String(m.to).toLowerCase() !== String(row.bench).toLowerCase()) notMoved.push(what);
+      }
+    }
+  }
+}
+for (const k of KINDS) yes('the table has the Woodwright\'s ' + k + ' rows (' + found[k] + ')', found[k] > 0);
+yes('the woodworking bench is a keyword of Thornswood-Content.esp', !!benchKey && /:thornswood-content\.esp$/.test(benchKey));
+yes('no bow, arrow, bolt, instrument or fishing pole is at the forge', atForge.length === 0);
+for (const w of atForge) console.log('      at the forge: ' + w);
+yes('each one moved off the forge says where from (movedFrom)', noMovedFrom.length === 0);
+for (const w of noMovedFrom) console.log('      no movedFrom: ' + w);
+yes('Thornswood-Last.esp moves each one from the forge to the woodworking bench', notMoved.length === 0);
+for (const w of notMoved) console.log('      not in benchMoves: ' + w);
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;
