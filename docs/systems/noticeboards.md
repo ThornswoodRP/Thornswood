@@ -4,6 +4,15 @@ One board a town. You stand at it to post, to read the one in front of
 you, and to take a job. Reading another town's board does not require
 standing there: J has every one, under Boards.
 
+## Contents
+
+- [Where a board is](#where-a-board-is)
+- [The drop box](#the-drop-box)
+- [A notice and a job](#a-notice-and-a-job)
+- [What the board shows](#what-the-board-shows)
+- [Taking, handing back, taking down](#taking-handing-back-taking-down)
+- [Where this is](#where-this-is)
+
 ## Where a board is
 
 The object is the message board. One stands at every board, wherever
