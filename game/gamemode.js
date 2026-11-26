@@ -23673,19 +23673,15 @@ module.exports = {
       claim like any other. The deed still opens the door it names, as a
       deed does (mayPass).
     */
-    if (mine && holdsDeed(actorId, building) && (!held || held.by !== mine) &&
+    if (mine && held && held.by !== mine && holdsDeed(actorId, building) &&
         mayHold(actorId, mine, building)) {
-      var was = held ? held.name : null;
+      var was = held.name;
       var now2 = Date.now();
       var who2 = 'somebody';
       try {
         var ap = mp.get(actorId, 'appearance');
         if (ap && ap.name) { who2 = String(ap.name); }
       } catch (e2) { }
-      // The ground goes with the house, because a home and its farm are one
-      // claim. Kept from the old record when there is one, so a transfer does
-      // not quietly drop the field behind the house.
-      var keepGround = held ? held.ground : groundHere(actorId);
       /*
         THE RENT STAYS ON THE BUILDING, AND WHAT WAS OWED STAYS OWED (#3893,
         Patrick, 27 Oct). This record used to be written with no rent on it,
@@ -23696,15 +23692,15 @@ module.exports = {
         holder owed, counted up to now first, stays theirs in arrears.
       */
       var keepRent = null;
-      if (held && held.rent) {
+      if (held.rent) {
         keepOwed(building, held, now2);
         keepRent = { amount: Number(held.rent.amount) || 0, everyDays: Number(held.rent.everyDays) || 7,
                      owed: 0, since: Number(held.rent.since) || now2 };
       }
+      // Keep the field and deed number with the building when it changes hands.
       claims[building] = { by: mine, name: who2, at: now2, touched: now2,
-                           locked: held ? !!held.locked : false,
-                           ground: keepGround };
-      if (held && held.deed) { claims[building].deed = held.deed; }
+                           locked: !!held.locked, ground: held.ground };
+      if (held.deed) { claims[building].deed = held.deed; }
       if (keepRent) { claims[building].rent = keepRent; }
       save();
       pushAll();
@@ -23717,17 +23713,16 @@ module.exports = {
       */
       var master2 = issueMaster(actorId, building, claims[building]);
       plog(who2, 'presented the deed at', nameOf(building), 'and now holds it',
-           was ? '(it was ' + was + '\'s)' : '(it was nobody\'s)',
+           '(it was ' + was + '\'s)',
            master2 ? 'with master key no. ' + master2 : '');
-      // The old holder is sent word of it (#2680). A lapsed claim is no
-      // claim, so its holder had already lost the place and is not.
-      if (held && held.by && held.by !== mine) {
+      // The old holder is sent word of it (#2680).
+      if (held.by) {
         var wordSaid = recordWord('deed', building, held.by, actorId, mine, now2);
         plog('word: the deed to', nameOf(building), 'presented by', who2, '(profile ' + mine + '), for',
              was, '(profile ' + held.by + '):', WORD_SAID[wordSaid] || wordSaid);
       }
       var told = 'You present the deed at ' + nameOf(building) +
-                 '. It is yours now' + (was ? ', and no longer ' + was + '\'s' : '') + '.' +
+                 '. It is yours now, and no longer ' + was + '\'s.' +
                  (master2 ? ' ' + masterHandedLine(building) : '');
       notify(actorId, told);
       say(actorId, told);
