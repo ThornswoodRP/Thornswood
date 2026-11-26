@@ -100,7 +100,7 @@ for (const r of rows) {
   yes('the ' + r.args[0] + ' row that can shut Play says its problem in a few words  [' + r.at.replace(/\s+/g, ' ') + ']',
       /\{\s*Problem\s*=/.test(r.after));
 }
-const all = lift(checksCs, 'public static List<Check> All(Config cfg)');
+const all = lift(checksCs, 'public static List<Check> All(Config cfg, int collectionRevision = -1)');
 yes('Checks.All still has nine rows', !!all && (all.match(/l\.Add\(/g) || []).length === 9);
 for (const w of ['"Wrong Skyrim build"', '"Skyrim not found"', '"Script Extender missing"', '"Multiplayer client missing"',
                  '"Another server\'s client found"', '"Steam not running"']) {
