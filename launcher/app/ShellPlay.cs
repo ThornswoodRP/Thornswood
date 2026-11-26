@@ -394,26 +394,35 @@ namespace Thornswood
                 // plugin in beside ours. Ours go back and theirs step aside
                 // until the game closes. See Keep. Last thing before the game
                 // starts, so nothing that can still say no leaves them parked.
-                string kept = Keep.Restore();
-                if (kept != null) Log(kept);
-                Keep.LeaveNote();
-
-                // And held, read only, until the game closes. Another server's
-                // launcher opened mid-session rewrote them under the game once
-                // (16 Sep, 19:08); it cannot now. See Hold. A hold that fails
-                // leaves them open to that for the whole session, so the log
-                // says so in plain words, not under a step name (#4690).
+                //
+                // These and Swap.Apply below copy, move and open the game's
+                // files, so they run off the window's thread: called straight
+                // from here the window stopped drawing until the disk was done
+                // (#4628). A throw still reaches the catch below through the
+                // await.
+                string kept = null;
                 int holding = 0;
-                try { holding = Hold.Take(PresenceLog); }
-                catch (Exception ex)
+                string holdWhy = null;
+                await OffThread(delegate
                 {
-                    Log("The game files are not held this session, so another launcher could change them while the game runs (" +
-                        Failure.Why("Shell.Play, Hold.Take", ex) + ").");
-                }
+                    kept = Keep.Restore();
+                    Keep.LeaveNote();
+
+                    // And held, read only, until the game closes. Another server's
+                    // launcher opened mid-session rewrote them under the game once
+                    // (16 Sep, 19:08); it cannot now. See Hold. A hold that fails
+                    // leaves them open to that for the whole session, so the log
+                    // says so in plain words, not under a step name (#4690).
+                    try { holding = Hold.Take(PresenceLog); }
+                    catch (Exception ex) { holdWhy = Failure.Why("Shell.Play, Hold.Take", ex); }
+                });
+                if (kept != null) Log(kept);
+                if (holdWhy != null)
+                    Log("The game files are not held this session, so another launcher could change them while the game runs (" + holdWhy + ").");
                 if (holding > 0) Log("Holding " + holding + " of " + cfg.BuildName + "'s game files while the game runs, so nothing else can change them under it.");
 
                 Log("Pointing Skyrim settings and saves at this build.");
-                Swap.Apply();
+                await OffThread(delegate { Swap.Apply(); });
                 playing = true;
                 MusicDecide();
                 headerVideoDecide();
