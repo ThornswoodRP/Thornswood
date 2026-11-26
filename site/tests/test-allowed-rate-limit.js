@@ -199,7 +199,7 @@ async function ask(linked, api, budget) {
   const run = new Function(
     'route', 'devDoor', 'req', 'res', 'cfg', 'url', 'sameSecret', 'sendJson',
     'jsonFile', 'LINKED', 'standingCached', 'keyInAddress', 'standingsForDoor', 'activeBans', 'pkProfiles',
-    'Date', 'setTimeout', 'clearTimeout', 'officesForDoor',
+    'Date', 'setTimeout', 'clearTimeout', 'officesForDoor', 'chars',
     'return (async function () {\n' + route + '\n})();');
   const t0 = clock.now;
   await onClock(run('/api/allowed', false,
@@ -214,16 +214,18 @@ async function ask(linked, api, budget) {
     function () { return []; },
     ClockDate, clockSetTimeout, clockClearTimeout,
     // No hold offices here (#2551); test-2551-hold-offices.js runs them.
-    async function () { return []; }));
+    async function () { return []; },
+    // Each door's characters from its own server's list (#6906).
+    require('../lib/characters')));
   if (sent) sent.ms = clock.now - t0;
   return sent;
 }
 
 function five() {
   return {
-    d1: { name: 'one', profiles: [101] }, d2: { name: 'two', profiles: [102] },
-    d3: { name: 'three', profiles: [103] }, d4: { name: 'four', profiles: [104] },
-    d5: { name: 'five', profiles: [105] }
+    d1: { name: 'one', profiles: [101], chars: [{ id: 101, slot: 1 }] }, d2: { name: 'two', profiles: [102], chars: [{ id: 102, slot: 1 }] },
+    d3: { name: 'three', profiles: [103], chars: [{ id: 103, slot: 1 }] }, d4: { name: 'four', profiles: [104], chars: [{ id: 104, slot: 1 }] },
+    d5: { name: 'five', profiles: [105], chars: [{ id: 105, slot: 1 }] }
   };
 }
 
@@ -289,7 +291,7 @@ function five() {
 
   // ============================================ a hundred accounts, 100ms each
   const hundred = {};
-  for (let i = 1; i <= 100; i++) hundred['h' + i] = { name: 'h' + i, profiles: [1000 + i] };
+  for (let i = 1; i <= 100; i++) hundred['h' + i] = { name: 'h' + i, profiles: [1000 + i], chars: [{ id: 1000 + i, slot: 1 }] };
   api = discord(function (p) { return { ms: 100, status: 200, body: { user: { id: p } } }; });
   got = await ask(hundred, api);
   b = got ? got.body : {};

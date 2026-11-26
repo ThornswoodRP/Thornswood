@@ -47,8 +47,8 @@ const SECRET = crypto.randomBytes(32).toString('hex');
 const PASSKEY = crypto.randomBytes(32).toString('hex');
 const STAFF_D = '222222222', BJORN_D = '333333333';
 const LINKED_OK = JSON.stringify({
-  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001] },
-  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002] }
+  [STAFF_D]: { id: STAFF_D, name: 'Aela', profiles: [1001], chars: [{ id: 1001, slot: 1 }] },
+  [BJORN_D]: { id: BJORN_D, name: 'Bjorn', profiles: [2002], chars: [{ id: 2002, slot: 1 }] }
 });
 
 function scratch() {

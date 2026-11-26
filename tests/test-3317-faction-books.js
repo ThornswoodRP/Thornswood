@@ -74,18 +74,19 @@ const same = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); }
   const run = async function (linked, standings, extra) {
     let sent = null;
     const f = new Function('route', 'devDoor', 'req', 'res', 'cfg', 'url', 'sameSecret', 'sendJson', 'jsonFile', 'LINKED',
-      'standingCached', 'keyInAddress', 'standingsForDoor', 'activeBans', 'pkProfiles', 'officesForDoor',
+      'standingCached', 'keyInAddress', 'standingsForDoor', 'activeBans', 'pkProfiles', 'officesForDoor', 'chars',
       'return (async function () {\n' + allowed + '\n})();');
     await f('/api/allowed', false, { method: 'GET', headers: { 'x-thornswood-key': 'k' } }, {}, { botKey: 'k' }, null,
       function (a, b) { return a === b; }, function (r, c, b) { sent = JSON.parse(JSON.stringify(b)); },
       function () { return linked; }, 'linked.json', null, new Set(),
       async function (ids) { return new Map(ids.map(function (id) { return [id, standings[id]]; })); },
       function () { const b = (extra && extra.bans) || []; if (extra && extra.broken) { b.broken = true; } return b; },
-      function () { return (extra && extra.pk) || []; }, async function () { return []; });
+      function () { return (extra && extra.pk) || []; }, async function () { return []; },
+      require('../site/lib/characters'));
     return sent;
   };
   if (allowed) {
-    const linked = { A: { profiles: [11, 12] }, B: { profiles: [21] }, C: { profiles: [31] }, D: { profiles: [41] } };
+    const linked = { A: { profiles: [11, 12], chars: [{ id: 11, slot: 1 }, { id: 12, slot: 2 }] }, B: { profiles: [21], chars: [{ id: 21, slot: 1 }] }, C: { profiles: [31], chars: [{ id: 31, slot: 1 }] }, D: { profiles: [41], chars: [{ id: 41, slot: 1 }] } };
     const st = {
       A: { play: true, roles: ['Playtester', 'Companions Leader'], leads: ['Companions Leader'], name: 'Kodlak' },
       B: { play: true, roles: ['Playtester', 'Thalmor Leader'], leads: ['Thalmor Leader'], name: 'Elenwen' },
