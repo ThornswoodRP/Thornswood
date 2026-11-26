@@ -98,6 +98,28 @@
 // installer answers and file hashes, where Vortex writes it.
 // On stdout: <entry name>\tpatch\t\t<path> CRC-32 <crc>.
 //
+// FILE HASHES ON A PATCHED ENTRY (#6888). Vortex applies a collection's patch
+// only to a mod it installs while it installs the collection (the collections
+// extension's did-install-mod handler, InstallDriver.ts, applyPatches). Before
+// that it asks whether a mod it already has is the collection's
+// (testModReference.ts): up to 1.15 the patch check passes a copy of the same
+// Nexus file installed with no patches at all, so a copy somebody had before
+// is taken as it is and never patched, and its plugin is the author's bytes,
+// not the server's. The file-list check is strict in every version: a mod
+// whose files are not the entry's "hashes" is not the collection's, so Vortex
+// installs the entry itself, by that list (mod_management/listInstaller.tsx),
+// and then patches it. An entry with "replicate": true gives the entry that
+// installs Nexus file fileId of mod modId the files it puts in its folder, each
+// with the md5 of the archive's own copy, as Vortex writes a "replicate" entry:
+//   { "replicate": true, "modId": "12939", "fileId": "536557",
+//     "hashes": [ { "path": "DeadlySpellImpacts.esp", "md5": "<32 hex>" }, ... ] }
+// The list installer takes the place of the entry's installer, so the
+// entry's FOMOD answers go (a Vortex "replicate" entry has none). It refuses
+// an entry that has hashes already or fileOverrides, a list that does not name
+// every file the entry patches, and a path twice. A patch is refused on an
+// entry with no hashes, so every patched entry carries them.
+// On stdout: <entry name>\treplicate\t<installer before>\t<n> file hash(es).
+//
 // INSTALLER ANSWERS (#5531). An entry with "answers": true gives a file the
 // revision keeps new FOMOD answers, which take the place of its choices:
 //   { "answers": true, "modId": "9141", "fileId": "23215",
@@ -356,6 +378,7 @@ function applySwaps(collection, swaps) {
   for (const sw of swaps) {
     if (onlyContext(sw)) continue;
     if (sw.add === true) { applyAdd(collection, sw, lines); continue; }
+    if (sw.replicate === true) { applyReplicate(collection, sw, lines); continue; }
     if (sw.patch === true) { applyPatch(collection, sw, lines); continue; }
     if (sw.rule === true) { applyRule(collection, sw, lines); continue; }
     if (sw.remove === true) { applyRemove(collection, sw, lines); continue; }
@@ -686,6 +709,75 @@ function applyAnswers(collection, an, lines) {
   lines.push([String(e.name), 'answers', was, steps(an.choices)].join('\t'));
 }
 
+// FILE HASHES ON A PATCHED ENTRY, above.
+function hashesProblem(e, hashes) {
+  if (!Array.isArray(hashes) || !hashes.length) return 'no file hashes';
+  const seen = new Set();
+  for (const h of hashes) {
+    if (!h || typeof h !== 'object' || Object.keys(h).join(',') !== 'path,md5') return 'a file hash that is not { path, md5 }';
+    const p = String(h.path);
+    if (!p || /^[\\/]/.test(p) || /(^|[\\/])\.\.?([\\/]|$)/.test(p) || /\//.test(p) || /^[A-Za-z]:/.test(p)) return 'the path ' + JSON.stringify(p) + ', which is not a path inside the mod as Vortex writes it';
+    if (!/^[0-9a-f]{32}$/.test(String(h.md5))) return 'the md5 ' + JSON.stringify(h.md5) + ' for ' + p + ', which is not 32 lower case hex characters';
+    const low = p.toLowerCase();
+    if (seen.has(low)) return p + ' twice';
+    seen.add(low);
+  }
+  const patches = e.patches && typeof e.patches === 'object' ? Object.keys(e.patches) : [];
+  for (const k of patches) if (!seen.has(k.toLowerCase())) return 'no ' + k + ', which the entry patches';
+  return '';
+}
+
+function replicated(e, hashes) {
+  const next = {};
+  for (const k of Object.keys(e)) {
+    if (k === 'choices' || k === 'hashes') continue;
+    next[k] = e[k];
+    if (k === 'source') next.hashes = hashes.map(h => ({ path: String(h.path), md5: String(h.md5) }));
+  }
+  return next;
+}
+
+function applyReplicate(collection, rp, lines) {
+  for (const k of ['modId', 'fileId']) if (rp[k] === undefined || rp[k] === null || rp[k] === '') stop('File hashes have no ' + k + '.');
+  const hits = collection.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.fileId) === String(rp.fileId) && String(m.source.modId) === String(rp.modId));
+  if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for Nexus file ' + rp.fileId + ' of mod ' + rp.modId + ', so there is no one entry to give file hashes.');
+  const e = hits[0];
+  if (Array.isArray(e.hashes) && e.hashes.length) stop(e.name + ' already carries file hashes.');
+  if (e.fileOverrides !== undefined && e.fileOverrides !== null && !(Array.isArray(e.fileOverrides) && !e.fileOverrides.length)) stop(e.name + ' carries fileOverrides, which a file list would not keep.');
+  const bad = hashesProblem(e, rp.hashes);
+  if (bad) stop('The file hashes for ' + e.name + ' have ' + bad + '.');
+  const was = e.choices ? 'FOMOD answers' : 'its own installer';
+  collection.mods[collection.mods.indexOf(e)] = replicated(e, rp.hashes);
+  lines.push([String(e.name), 'replicate', was, rp.hashes.length + ' file hash' + (rp.hashes.length === 1 ? '' : 'es')].join('\t'));
+}
+
+// The publisher reads the draft archive before it publishes: against the
+// published revision, only the named entries may differ, and each only by its
+// file hashes in place of its FOMOD answers; the archive's other files are the
+// same (checkRepairFiles).
+function checkReplicated(before, after, ids) {
+  if (!Array.isArray(ids) || !ids.length || new Set(ids.map(String)).size !== ids.length) stop('Say distinct mod numbers to check.');
+  const expected = JSON.parse(JSON.stringify(before));
+  if (!Array.isArray(expected.mods) || !Array.isArray(after.mods)) stop('A file hash check needs two collection mod lists.');
+  for (const id of ids) {
+    if (!/^[1-9][0-9]{0,8}$/.test(String(id))) stop('A file hash check has an invalid mod number.');
+    const matches = c => c.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.modId) === String(id));
+    const old = matches(expected), next = matches(after);
+    if (old.length !== 1 || next.length !== 1) stop('The file hash check has no one entry for mod ' + id + '.');
+    if (Array.isArray(old[0].hashes) && old[0].hashes.length) stop(old[0].name + ' carried file hashes already.');
+    const bad = hashesProblem(old[0], next[0].hashes);
+    if (bad) stop('The draft\'s file hashes for ' + old[0].name + ' have ' + bad + '.');
+    expected.mods[expected.mods.indexOf(old[0])] = replicated(old[0], next[0].hashes);
+  }
+  if (expected.info && after.info) {
+    for (const key of ['summary', 'description', 'installInstructions']) {
+      if (Object.prototype.hasOwnProperty.call(after.info, key)) expected.info[key] = after.info[key];
+      else delete expected.info[key];
+    }
+  }
+  if (JSON.stringify(expected) !== JSON.stringify(after)) stop('The draft changes more than the file hashes of the named entries.');
+}
+
 function applyPatch(collection, pt, lines) {
   for (const k of ['fileId', 'path', 'crc']) {
     if (pt[k] === undefined || pt[k] === null || pt[k] === '') stop('A patch has no ' + k + '.');
@@ -697,6 +789,10 @@ function applyPatch(collection, pt, lines) {
   const e = hits[0];
   const low = String(pt.path).toLowerCase();
   if (e.patches && Object.keys(e.patches).some(k => k.toLowerCase() === low)) stop(e.name + ' already patches ' + pt.path + '.');
+  // FILE HASHES ON A PATCHED ENTRY, above: without them Vortex can take a copy
+  // somebody already had as the collection's and never apply this patch.
+  if (!Array.isArray(e.hashes) || !e.hashes.length) stop(e.name + ' carries no file hashes, so Vortex would take a copy somebody already has as the collection\'s and never apply the patch (#6888). Give it its hashes in the same run ("replicate").');
+  if (!e.hashes.some(h => String(h.path).toLowerCase() === low)) stop(e.name + '\'s file hashes do not name ' + pt.path + ', so Vortex would not install the file the patch is for.');
   if (e.patches) { e.patches[String(pt.path)] = String(pt.crc); }
   else {
     const at = ['choices', 'hashes', 'source'].find(k => Object.prototype.hasOwnProperty.call(e, k));
@@ -839,6 +935,14 @@ function main(argv) {
     process.stdout.write('The draft refreshes only the requested identities.\n');
     return;
   }
+  if (argv[0] === '--check-replicate') {
+    if (argv.length !== 4) stop('usage: nexus-collection.js --check-replicate <published folder> <draft folder> <mod numbers>');
+    const path = require('path');
+    checkRepairFiles(argv[1], argv[2]);
+    checkReplicated(JSON.parse(fs.readFileSync(path.join(argv[1], 'collection.json'), 'utf8')), JSON.parse(fs.readFileSync(path.join(argv[2], 'collection.json'), 'utf8')), argv[3].split(','));
+    process.stdout.write('The draft gives only the named entries their file hashes.\n');
+    return;
+  }
   if (argv.length !== 4) stop('usage: node nexus-collection.js <collection.json> <swaps.json> <out collection.json> <out payload.json>');
   const [inPath, swapsPath, outPath, payloadPath] = argv;
   let collection, swaps;
@@ -863,4 +967,4 @@ if (require.main === module) {
     process.exitCode = 1;
   }
 }
-module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyRule, applyRemove, applyPage, checkRefreshedTags, checkRepairFiles, filterInfo, toV3CollectionPayload };
+module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyReplicate, applyRule, applyRemove, applyPage, checkRefreshedTags, checkReplicated, checkRepairFiles, filterInfo, toV3CollectionPayload };
