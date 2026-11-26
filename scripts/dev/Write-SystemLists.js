@@ -59,6 +59,7 @@ const races = JSON.parse(fs.readFileSync(RACES, 'utf8'));
 const sources = JSON.parse(fs.readFileSync(SOURCES, 'utf8'));
 
 fs.mkdirSync(OUT, { recursive: true });
+// The audit also reads Check-Makers.waiting.json, this step's unchanged gap policy.
 const makers = require('./Check-Makers.js').run(ROOT, true);
 if (makers.problems.length) { throw new Error(makers.problems.join('\n')); }
 
