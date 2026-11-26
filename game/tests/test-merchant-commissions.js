@@ -57,7 +57,7 @@ function world(startingPurse=250) {
   prices:{catalog:()=>[...itemNames.values()].map(name=>({name,buy:unit,sell:unit+1})),quote:()=>({buy:unit,sell:unit+1})},
   // The staff's reward prices (#6180): `unit` stands for the reward each good pays.
   rewards:{price:desc=>unit===null?null:{item:desc,name:itemNames.get(id(desc)),gold:unit,start:unit}},
-  commissionEligible:(actor,gate)=>{if(deps.onRankRead)deps.onRankRead();return rules.allows(gate,standing);}};
+  commissionEligible:(actor,gate)=>{if(deps.onRankRead)deps.onRankRead();return rules.check(gate,standing);}};
  let api=bundle.createMerchantTrading(deps);
  const command=(...parts)=>api.command({actorId:10,profileId:7,parts:['/merchant',...parts]});
  const open=row=>command(row.merchantId.toString(16)).view;
@@ -145,7 +145,7 @@ function seedPromise(w,row) {
 for(const row of rows) {
  const w=world();w.rank({v:1,cls:'other',prof:'other',ranks:{}});
  assert.equal(w.open(row).quests.find(q=>q.id===row.id).canTake,false);
- assert.match(w.command('quest','take',row.id,'@2').text,/requirements/);
+ assert.match(w.command('quest','take',row.id,'@2').text,/requires the .* (class|profession)\./);
  assert.equal(w.purses.read(row.merchantId).commissions,undefined);
 }
 console.log('PASS all ten compiled commissions: exact specialists, actual gates, pre-goods acceptance, original reserved payment, native settlement and stale-panel refusal');

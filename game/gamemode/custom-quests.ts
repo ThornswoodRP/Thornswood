@@ -111,7 +111,7 @@
       seal:'The chest inside the Silent Moons Camp ruins'};
     retrievalRows.forEach(function(source){retrievalByQuest[source.quest]=source;});
     var eligibility = deps.eligibility, gates = Object.create(null);
-    if (!eligibility || typeof eligibility.validate !== 'function' || typeof eligibility.allows !== 'function' ||
+    if (!eligibility || typeof eligibility.validate !== 'function' || typeof eligibility.check !== 'function' ||
         typeof deps.readCharacter !== 'function') throw new Error('The custom quests have no eligibility rules.');
     SCARCE.concat(SCENE).forEach(function(row){gates[row.id]=eligibility.validate(row.gate);});
     var kills = deps.killContracts;
@@ -305,11 +305,11 @@
       try {
         if (!held || !current(actor,held.owner)) return {ok:false,why:'unwritten'};
         var gate=gates[row.id], state=gate.open===true ? null : deps.readCharacter(actor);
-        var ok=eligibility.allows(gate,state);
+        var result=eligibility.check(gate,state);
         // During final admission the native CAS owns the original body fence.
         // An identity query here could invalidate the progression just read.
         if(!(atCommit ? usable() : current(actor,held.owner)))return {ok:false,why:'unwritten'};
-        return {ok:!!ok,why:ok?'':'eligibility'};
+        return result;
       } catch(error) {return {ok:false,why:'eligibility'};}
     }
     function creatureOk(match, name) {
@@ -344,9 +344,10 @@
       var b = held || questsOf(actor);
       if (!b) return { ok: false, why: 'unread' };
       if (own(b.open,id)) return { ok: false, why: 'open' };
-      if ((b.cool[id] || 0) > deps.now()) return { ok: false, why: 'cooldown' };
+      var left=(b.cool[id] || 0)-deps.now();
+      if (left>0) return {ok:false,why:'cooldown',waitMinutes:Math.ceil(left/60000)};
       var gate = qualify(actor, row, b);
-      if (!gate.ok) return { ok: false, why: gate.why };
+      if (!gate.ok) return gate;
       var eligible=function(){return traderFor(row,opts && opts.traderRef) && qualify(actor,row,b,true).ok;};
       if (row.kind==='kill') {
         if(!kills)return {ok:false,why:'unbound'};

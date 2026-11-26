@@ -339,8 +339,11 @@ class LoadBot extends Bot {
     if ((!quest && !trade) || text.indexOf('"t":"chat"') < 0) { return; }
     let said = '';
     try { said = String(JSON.parse(text).text || ''); } catch (e) { return; }
-    if (quest && Object.prototype.hasOwnProperty.call(QUEST_SAID, said)) {
-      const k = QUEST_SAID[said];
+    const questAnswer = Object.prototype.hasOwnProperty.call(QUEST_SAID, said) ? QUEST_SAID[said] :
+      /^This work requires .+\.$/.test(said) ? 'questRefused:eligibility' :
+      /^This work is still resting\. Come back in \d+ minutes?\.$/.test(said) ? 'questRefused:cooldown' : null;
+    if (quest && questAnswer) {
+      const k = questAnswer;
       this.did(k);
       if (k.indexOf('questRefused:') === 0) { this.did('questRefused'); }
       return;
@@ -451,7 +454,9 @@ class LoadBot extends Bot {
     if (q.canTake === true || q.state === 'open') { return; }
     const check = String(q.check || '');
     const why = Object.keys(QUEST_ROW_WHY).find((t) => check.endsWith(t));
-    if (why) { this.did('questWhy:' + QUEST_ROW_WHY[why]); }
+    const reason = why ? QUEST_ROW_WHY[why] : /This work requires .+\.$/.test(check) ? 'requirements' :
+      /This work is still resting\. Come back in \d+ minutes?\.$/.test(check) ? 'resting' : null;
+    if (reason) { this.did('questWhy:' + reason); }
   }
 
   // Leave work: the panel's second button on work that is open.

@@ -1,6 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const trading = require('../../game/merchant-trading.js');
+require('./test-4617-trader-refusals');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const mode = require('../../tests/gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../../game/gamemode.js'),'utf8'));
 const lookupSource = mode.slice(mode.indexOf('  function findIn('),mode.indexOf('  function findBeast('));
