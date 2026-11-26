@@ -27,10 +27,21 @@ class Watched(dict):
         if key in self.forbidden: raise AssertionError('unexpected member read: '+key)
         return super().get(key)
 
-def run(code, *, original=False, control='Quick Inventory', value='keyDown', item=False, category=False, trap=()):
+def value_type(value):
+    return 'boolean' if isinstance(value, bool) else 'number' if isinstance(value, (int, float)) else \
+        'string' if isinstance(value, str) else 'function' if callable(value) else 'object' if value is not None else 'undefined'
+
+def run(code, *, original=False, control='Quick Inventory', value='keyDown', item=False, category=False,
+        trap=(), skse_key=23, mapping=23, native=True, trap_mapping=False, trap_value=False):
     this = Watched({'inventoryLists': Watched({'itemList': {'disableInput': item},
         'categoryList': {'disableInput': category}}, forbidden=('categoryList',) if item else ())}, forbidden=trap)
-    details = Watched({'control': control, 'value': value}, forbidden=('value',) if control != 'Quick Inventory' else ())
+    details = Watched({'control': control, 'value': value, 'skseKeycode': skse_key}, forbidden=('value',) if trap_value else ())
+    def mapped(*args):
+        if trap_mapping: raise AssertionError('unexpected mapped-key lookup')
+        if args != ('Quick Inventory', 0, 0): raise AssertionError('not the keyboard gameplay mapping')
+        return mapping
+    globals = Watched({'skse': None if native is None else {'GetMappedKey': mapped} if native else {}},
+        forbidden=('skse',) if trap_mapping else ())
     registers = {1: this, 2: details}; stack = [original]
     actions = {at: (op, data, end) for at, op, data, end in M._avm1_actions(code)}
     pc = 0
@@ -43,12 +54,26 @@ def run(code, *, original=False, control='Quick Inventory', value='keyDown', ite
                     stop = code.index(0, data); stack.append(code[data:stop].decode()); data = stop+1
                 elif kind == 4: stack.append(registers[code[data]]); data += 1
                 elif kind == 5: stack.append(bool(code[data])); data += 1
+                elif kind == 7: stack.append(struct.unpack_from('<i', code, data)[0]); data += 4
                 else: raise AssertionError('unexpected Push type')
         elif op == 0x4e:
             name = stack.pop(); obj = stack.pop(); stack.append(obj.get(name))
+        elif op == 0x1c: stack.append(globals.get(stack.pop()))
+        elif op == 0x44:
+            value = stack.pop()
+            stack.append(value_type(value))
+        elif op in (0x48, 0x67):
+            right = stack.pop(); left = stack.pop(); stack.append(left < right if op == 0x48 else left > right)
+        elif op == 0x52:
+            name = stack.pop(); obj = stack.pop(); count = stack.pop(); args = [stack.pop() for _ in range(count)]
+            stack.append(obj[name](*args))
         elif op == 0x49:
             right = stack.pop(); stack.append(stack.pop() == right)
+        elif op == 0x66:
+            right = stack.pop(); left = stack.pop()
+            stack.append(value_type(left) == value_type(right) and left == right)
         elif op == 0x4c: stack.append(stack[-1])
+        elif op == 0x17: stack.pop()
         elif op == 0x12: stack.append(not stack.pop())
         elif op in (0x10, 0x11):
             right = bool(stack.pop()); left = bool(stack.pop()); stack.append(left and right if op == 0x10 else left or right)
@@ -61,8 +86,23 @@ def run(code, *, original=False, control='Quick Inventory', value='keyDown', ite
 
 yes('original false predicate cannot close on the mapped inventory control', run(BODY) is False)
 yes('real emitted predicate accepts a fresh mapped inventory press', run(PATCHED) is True)
-yes('ordinary native close makes no additional movie/list reads', run(PATCHED, original=True, trap=('inventoryLists',)) is True)
-yes('unrelated named control skips both later input and movie properties', run(PATCHED, control='Quick Magic', trap=('inventoryLists',)) is False)
+yes('ordinary native close makes no additional movie/list or mapping reads', run(PATCHED, original=True, trap=('inventoryLists',), trap_mapping=True) is True)
+yes('named inventory branch does not require a new lookup', run(PATCHED, trap_mapping=True) is True)
+yes('unrelated physical control skips both later input and movie properties', run(PATCHED, control='Quick Magic', skse_key=25, trap=('inventoryLists',), trap_value=True) is False)
+yes('default physical inventory key closes without a named control', run(PATCHED, control='', skse_key=23) is True)
+yes('remapped physical inventory key closes with a different menu-context name', run(PATCHED, control='Other', skse_key=44, mapping=44) is True)
+yes('a known different key does not close', run(PATCHED, control='', skse_key=44, mapping=23, trap=('inventoryLists',), trap_value=True) is False)
+for bad in (-1, 0, 256, 280, None, '23', True, float('nan'), float('inf')):
+    yes('invalid keyboard mapping refuses: '+str(bad), run(PATCHED, control='', skse_key=bad, mapping=bad, trap=('inventoryLists',), trap_value=True) is False)
+yes('missing native mapping function refuses', run(PATCHED, control='', native=False, trap=('inventoryLists',), trap_value=True) is False)
+yes('missing native SKSE object refuses', run(PATCHED, control='', native=None, trap=('inventoryLists',), trap_value=True) is False)
+for key, mapping in [(None, 23), ('23', 23), (True, 1), (256, 23), (280, 23)]:
+    yes('unmatched or nonnumeric physical key refuses: '+str(key), run(PATCHED, control='', skse_key=key, mapping=mapping,
+        trap=('inventoryLists',), trap_value=True) is False)
+for value in ('keyUp', 'keyHold'):
+    yes('physical branch refuses '+value, run(PATCHED, control='', value=value, trap=('inventoryLists',)) is False)
+yes('physical branch respects the item-card quantity guard', run(PATCHED, control='', item=True) is False)
+yes('physical branch respects disabled categories', run(PATCHED, control='', category=True) is False)
 for value in ('keyUp', 'keyHold', '', None):
     yes('only a fresh keyDown closes: '+str(value), run(PATCHED, value=value, trap=('inventoryLists',)) is False)
 yes('disabled item list refuses and never reads the category list', run(PATCHED, item=True) is False)
