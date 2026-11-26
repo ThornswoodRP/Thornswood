@@ -341,6 +341,51 @@ function takeOver(from, to, pid) {
   return moved;
 }
 
+/*
+  ONE TIME (#6904, Patrick's answer A on q-6904-dev-list, 26 Nov): until
+  today both servers read one list, so the characters the dev world holds are
+  on main's list or only among the ids an account checked in. This puts every
+  id of an account (its list and the ids it holds) that dev's book has onto
+  dev's list, and takes the ones main's book does not have off main's. An id
+  both books have is a character in each world and stays on both lists. One
+  binned before today stays binned and is not carried. The roster route runs
+  it once, when it first holds a whole book from each server, and marks
+  roster.json devCarried; the next change deletes this and that call.
+  devBook and mainBook are the books' profile ids as numbers. Returns what
+  moved, one line an account, for the site's log.
+*/
+function carryDevOnce(linked, devBook, mainBook) {
+  const said = [];
+  for (const d of Object.keys(linked)) {
+    if (!accountKey(d) || !linked[d] || typeof linked[d] !== 'object') continue;
+    const row = rowOf(linked, d);
+    const ids = [];
+    for (const c of row.chars) if (ids.indexOf(c.id) < 0) ids.push(c.id);
+    for (const n of row.profiles.map(num)) if (n && ids.indexOf(n) < 0) ids.push(n);
+    const carried = [], offMain = [];
+    for (const id of ids) {
+      if (!devBook.has(id) || row.retired.indexOf(id) >= 0) continue;
+      if (!row.dev.chars.some((c) => c.id === id)) {
+        const was = row.chars.find((c) => c.id === id);
+        row.dev.chars.push({ id, slot: (was && was.slot === DEAD) ? DEAD : nextSlot(row.dev.chars),
+                             played: was ? was.played : 0, seconds: was ? was.seconds : 0 });
+        carried.push(id);
+      }
+      if (!mainBook.has(id)) {
+        const at = row.chars.findIndex((c) => c.id === id);
+        if (at >= 0) { row.chars.splice(at, 1); offMain.push(id); }
+      }
+      if (row.spare === id) row.spare = 0;
+      if (row.dev.spare === id) row.dev.spare = 0;
+    }
+    if (carried.length || offMain.length) {
+      said.push('account ' + d + ': ' + (carried.length ? 'onto dev\'s list ' + carried.join(', ') : 'nothing onto dev\'s list') +
+                (offMain.length ? '; off main\'s list, dev only ' + offMain.join(', ') : ''));
+    }
+  }
+  return said;
+}
+
 /* What the launcher is told about one server: its characters in slot order, then the dead. */
 function answer(linked, d, srv, slots) {
   const list = listOf(rowOf(linked, d), srv);
@@ -350,4 +395,4 @@ function answer(linked, d, srv, slots) {
            chars: live.concat(dead).map((c) => ({ id: c.id, slot: c.slot, played: c.played, seconds: c.seconds })) };
 }
 
-module.exports = { accountKey, answer, choose, DEAD, doorIds, forget, keepProfiles, mintId, played, rowOf, serverKey, settle, takeOver, tidySlots };
+module.exports = { accountKey, answer, carryDevOnce, choose, DEAD, doorIds, forget, keepProfiles, mintId, played, rowOf, serverKey, settle, takeOver, tidySlots };

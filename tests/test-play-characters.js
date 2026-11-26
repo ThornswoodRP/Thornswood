@@ -158,6 +158,28 @@ const none = { slots: 2, pk: () => false, revived: () => false };
       chars.doorIds(newer, 'main').join() === '80,70' && chars.doorIds(newer, 'dev').join() === '71' &&
       chars.doorIds(leaver, 'main').length === 0 && chars.doorIds(leaver, 'dev').length === 0);
   yes('and an id on no list moves nothing', chars.takeOver(leaver, newer, 99) === false);
+  // The one-time carry of dev's characters onto dev's list (#6904,
+  // Patrick's A on q-6904-dev-list, 26 Nov).
+  const before = {
+    '201': { id: '201', profiles: [1, 2, 3, 4, 7], spare: 4, retired: [5],
+             chars: [{ id: 1, slot: 1, played: 9, seconds: 70 }, { id: 2, slot: 2 }, { id: 5, slot: 3 }] },
+    '202': { id: '202', profiles: [6], chars: [{ id: 6, slot: 1 }] }
+  };
+  // Dev holds 1 (made on both), 2 (dev only), 3 (an old dev one only checked
+  // in), 4 (the main spare, made on dev) and 5 (binned); main holds 1 and 6.
+  const said = chars.carryDevOnce(before, new Set([1, 2, 3, 4, 5]), new Set([1, 6]));
+  const r1 = before['201'];
+  yes('the carry puts every id of the account dev holds onto dev\'s list, in slots, with its time',
+      r1.dev.chars.map((c) => c.id + ':' + c.slot).join() === '1:1,2:2,3:3,4:4' && r1.dev.chars[0].seconds === 70);
+  yes('and takes the dev only ones off main\'s list, leaving the one both hold',
+      r1.chars.map((c) => c.id).join() === '1,5');
+  yes('a binned id is not carried', !r1.dev.chars.some((c) => c.id === 5));
+  yes('a spare dev made a character on is no longer main\'s spare', r1.spare === 0);
+  yes('an account dev holds nothing of is left alone', before['202'].dev.chars.length === 0 && before['202'].chars.length === 1);
+  yes('and the log says what moved for each account that changed', said.length === 1 && /201/.test(said[0]) && /off main/.test(said[0]));
+  const again = JSON.stringify(before);
+  chars.carryDevOnce(before, new Set([1, 2, 3, 4, 5]), new Set([1, 6]));
+  yes('run twice, it changes nothing the second time', JSON.stringify(before) === again);
   let n = 0;
   const taken = { '102': { id: '102', chars: [{ id: 1000, slot: 1 }], spare: 1001, dev: { chars: [{ id: 1002, slot: 1 }], retired: [1003], spare: 1004 } } };
   yes('an id is never minted that either server of any account uses', chars.mintId(taken, () => n++) === 1005);

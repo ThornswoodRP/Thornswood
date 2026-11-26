@@ -2620,6 +2620,26 @@ async function handle(req, res) {
     }
     store.books[srv] = book;
     store.at = Date.now();
+    /* ONE TIME (#6904, Patrick's A on q-6904-dev-list): the first time both
+       servers' whole books are here, dev's characters go onto dev's list
+       (characters.carryDevOnce says how). linked.json is read and written
+       with nothing awaited between, and devCarried is set only once it is
+       written, so a failed write tries again at the next push. The next
+       change deletes this block. */
+    if (!store.devCarried && store.books.dev && store.books.main) {
+      const linked = jsonFile(LINKED, null);
+      if (linked && typeof linked === 'object') {
+        const ids = (b) => new Set(Object.keys(b).map(Number).filter((x) => x > 0));
+        const said = chars.carryDevOnce(linked, ids(store.books.dev), ids(store.books.main));
+        if (putJson(LINKED, linked)) {
+          store.devCarried = Date.now();
+          console.log('[thornswood-docs] dev characters carried onto dev\'s list (#6904), ' + said.length +
+                      ' account(s)' + (said.length ? ': ' + said.join(' | ') : ''));
+        } else {
+          console.error('[thornswood-docs] dev characters not carried (#6904): linked.json was not written');
+        }
+      }
+    }
     // Said, not answered ok (#4379), the economy's way below.
     if (!putJson(ROSTER, store)) return sendJson(res, 500, { error: 'could not save' });
     return sendJson(res, 200, { ok: true, merged: n, total: Object.keys(store.who).length });

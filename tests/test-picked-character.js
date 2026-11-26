@@ -315,7 +315,8 @@ if (PUSH && ASK && FRESH) {
     'function jsonFile(f, d) { if (f === "linked") return LINKED; if (f === "pk") return d; return store.file ? JSON.parse(JSON.stringify(store.file)) : d; }\n' +
     // Nor any PK an admin undid (#1010): pk.json is empty here.
     'const PK = "pk"; function pkActive(r) { return !!r && !r.undone; }\n' +
-    'function putJson(f, v) { store.file = JSON.parse(JSON.stringify(v)); return true; }\n' +
+    // linked.json lands back in LINKED, which the one-time dev carry writes (#6904).
+    'function putJson(f, v) { if (f === "linked") { const w = JSON.parse(JSON.stringify(v)); for (const k of Object.keys(LINKED)) delete LINKED[k]; Object.assign(LINKED, w); return true; } store.file = JSON.parse(JSON.stringify(v)); return true; }\n' +
     // Nobody killed for good or banned by character here (#1010); test-bans-pk.js runs those.
     'function characterBar() { return null; }\n' +
     'function sendJson(res, code, obj) { res.code = code; res.obj = obj; return res; }\n' +
@@ -359,6 +360,16 @@ if (PUSH && ASK && FRESH) {
         r.obj.rows['902356861'] && r.obj.rows['902356861'].name === 'Adventurer5435434');
     r = await call('/api/play/roster', { ticket: 'good', channel: 'main' });
     yes('and the main menu names the live one', r.obj.rows['902356861'] && r.obj.rows['902356861'].name === 'Hrefna of main');
+    // With both whole books here, dev's characters went onto dev's list once
+    // (#6904, Patrick's A on q-6904-dev-list); carryDevOnce in
+    // test-play-characters.js says what moves.
+    const row = LINKED['615236910243119104'];
+    yes('the first push that leaves both books here carries dev\'s character onto dev\'s list',
+        !!store.file.devCarried && row.dev && row.dev.chars.map((c) => c.id).join() === '902356861');
+    const first = store.file.devCarried;
+    row.dev.chars = [];
+    await call('/dev/api/roster', { key: 'k', who: { 902356861: { name: 'Adventurer5435434' } }, server: 'dev' }, T0 + 1000);
+    yes('and it runs once: a later push carries nothing again', store.file.devCarried === first && row.dev.chars.length === 0);
     partD();
   })().catch(function (e) { yes('the site routes ran: ' + e, false); partD(); });
 } else { partD(); }
