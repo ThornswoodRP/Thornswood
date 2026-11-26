@@ -518,7 +518,11 @@ ROLES.append(('Business Owner', 0xA08C6A, False, NONE))
 
 # Joined, and answered the rules and age questions (#3317). Member applies,
 # opens tickets and asks in #travelers-questions; Playtester opens the rest.
-ROLES.append(('Member', 0x8D9682, False, NONE))
+# Member has its own group in the member list: it was set by hand, and the
+# whole build of 26 Nov 2026 took it away because the plan did not have it
+# (Patrick, 26 Nov: "I want it all put back and the plan updated we made
+# those changes on purpose", #6961).
+ROLES.append(('Member', 0x8D9682, True, NONE))
 
 # THE ONE A BAN DEPENDS ON, and it was never created.
 #

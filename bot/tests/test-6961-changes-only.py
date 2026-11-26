@@ -17,8 +17,8 @@ and channel a stand-in that records what would have been asked of Discord:
      itself has no changes;
   2. a live server that is the plan, and the record the plan: Discord is
      asked nothing and the record is left alone;
-  3. hand edits (a role's overwrite on #general-chat, Member shown in its
-     own group, two channels swapped) and no plan change: Discord is asked
+  3. hand edits (a role's overwrite on #general-chat, Member's member-list group flipped from
+     the plan, two channels swapped) and no plan change: Discord is asked
      nothing, and the run lists all three as kept by hand;
   4. one overwrite the plan changed (a role on #lore): exactly that channel
      is edited, with that role's overwrite and every other one as it was,
@@ -293,7 +293,8 @@ try:
     gc = named(g, 'general-chat', 'Out of Character')
     member = next(r for r in g.roles if r.name == 'Member')
     gc.ow[member] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
-    member.hoist = True
+    member.hoist = not member.hoist
+    hand_hoist = member.hoist
     a, b = [c for c in g.channels if getattr(c.category, 'name', None) == 'Out of Character'
             and c.kind != 'voice'][:2]
     a.position, b.position = b.position, a.position
@@ -301,8 +302,9 @@ try:
     yes('hand edits and no plan change: Discord is asked nothing', g.calls == [])
     yes('  the hand overwrite on #general-chat is listed as kept',
         '#general-chat, Member' in out)
-    yes('  Member shown in its own group is listed as kept',
-        'role Member shows in its own member-list group' in out)
+    yes('  Member\'s member-list group set by hand is listed as kept',
+        'role Member %s in its own member-list group' % ('shows' if hand_hoist else 'does not show')
+        in out)
     yes('  the hand order is listed as kept', 'an order of their own' in out)
 
     # ---- 4 ----------------------------------------------------------------
@@ -325,7 +327,7 @@ try:
     yes('  it says what it changed, in words', 'access    #lore, Lead Dev allows' in out
         or '#lore, Lead Dev allows' in out)
     yes('  the hand overwrite on #general-chat stays', member in gc.ow)
-    yes('  Member stays in its own group', member.hoist is True)
+    yes('  Member\'s member-list group stays as set by hand', member.hoist is hand_hoist)
     yes('  the record moves on to the plan', os.path.exists(RECORD)
         and all(read_json(RECORD)[k] == state[k] for k in B.STATE_PARTS))
 
