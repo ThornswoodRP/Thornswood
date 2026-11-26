@@ -130,8 +130,8 @@ function isBed(ref) {
 }
 function refName(ref) {
   let id = 0, name = '';
-  try { id = ref.getFormID(); } catch (e) { }
-  try { const b = ref.getBaseObject(); name = b ? String(b.getName() || '') : ''; } catch (e) { }
+  try { id = ref.getFormID(); } catch (e) { log('could not read a reference id:', e); }
+  try { const b = ref.getBaseObject(); name = b ? String(b.getName() || '') : ''; } catch (e) { log('could not read a reference name:', e); }
   return (id >>> 0).toString(16) + (name ? ' "' + name + '"' : '');
 }
 // Stand 90 units out from the nearest bed in the cell, on the side the
@@ -168,7 +168,7 @@ sp.on('update', function () {
   try { const pc = sp.Game.getPlayer(); cell = pc ? pc.getParentCell() : null; } catch (e) { cell = null; }
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
   crosshairBed = '';
-  try { const r = sp.Game.getCurrentCrosshairRef(); if (r && isBed(r)) { crosshairBed = refName(r); } } catch (e) { }
+  try { const r = sp.Game.getCurrentCrosshairRef(); if (r && isBed(r)) { crosshairBed = refName(r); } } catch (e) { log('could not read the crosshair:', e); }
   if (faceAsked && !faceDone) {
     try { faceDone = faceAsked === 'bed' ? faceBed() : { ok: false, note: 'cannot face a ' + faceAsked }; }
     catch (e) { faceDone = { ok: false, note: 'facing threw: ' + e }; }
@@ -181,13 +181,13 @@ sp.on('furnitureEnter', function (e) {
   try {
     if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
     write({ t: 'furniture', enter: true, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
-  } catch (err) { }
+  } catch (err) { log('could not note sitting down:', err); }
 });
 sp.on('furnitureExit', function (e) {
   try {
     if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
     write({ t: 'furniture', enter: false, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
-  } catch (err) { }
+  } catch (err) { log('could not note getting up:', err); }
 });
 
 // Every message the page sends, kept with when it came, so a step can look
