@@ -399,11 +399,6 @@
   function plain(row) { return !row.letter && !row.haul; }
 
   function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
-  }
-
-  function drawContents() {
     rememberSubmissions();
     resetTakedown();
     clearBoardFieldError();
@@ -415,7 +410,7 @@
     var b = data && data.board;
     if (!b || !b.here) {
       title.innerHTML = 'Notice board';
-      body.innerHTML = '<div class="none">Step up to the board.</div>';
+      put(body, '<div class="none">Step up to the board.</div>');
       formDrawn = false;
       if (make) { make.style.display = 'none'; }
       return;
@@ -577,7 +572,7 @@
         '</span><span class="tools"><button class="go" data-do="submit" data-id="' +
         esc(lists[s].id) + '">Leave the list</button></span></div>';
     }
-    body.innerHTML = out;
+    put(body, out);
     var payBox = document.getElementById(ID + '-pay');
     var destBox = document.getElementById(ID + '-dest');
     var haulBox = document.getElementById(ID + '-haul');
@@ -592,6 +587,12 @@
     if (toBox) toBox.value = submissionDrafts.letter.values.to;
     if (letterBox) letterBox.value = submissionDrafts.letter.values.letter;
     wire(body);
+  }
+
+  // In place, so what is being typed and its focus outlast the update (#4475).
+  function put(host, html) {
+    var b = data && data.board;
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, b && b.here ? b.hold : ''); } else { host.innerHTML = html; }
   }
 
   function wire(body) {

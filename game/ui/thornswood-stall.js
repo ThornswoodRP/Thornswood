@@ -142,9 +142,6 @@
 
   function draw() {
     if (!root) { return; }
-    var kept = {};
-    var inputs = root.querySelectorAll('input,select');
-    for (var q = 0; q < inputs.length; q++) { if (inputs[q].id) { kept[inputs[q].id] = inputs[q].value; } }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
     var d = data || {};
@@ -166,7 +163,7 @@
       for (var i = 0; i < lines.length; i++) {
         var l = lines[i];
         var p = ID + '-p' + l.n;
-        out += '<div class="row"><span class="nm">' + esc(l.count > 1 ? l.count + ' ' : '') + esc(l.what) +
+        out += '<div class="row" data-row-key="line:' + esc(l.n) + '"><span class="nm">' + esc(l.count > 1 ? l.count + ' ' : '') + esc(l.what) +
           ', ' + esc(l.words) + ' a piece</span><span class="tools">' + pricePicker(p, found) +
           '<button data-do="price" data-n="' + esc(l.n) + '">Set price</button>' +
           '<input class="n" id="' + ID + '-back-' + esc(l.n) + '" aria-label="Count to take back" placeholder="' + (l.count > 1 ? 'all' : '1') + '">' +
@@ -202,7 +199,7 @@
       if (!lines.length) { out += '<div class="none">Nothing laid out.</div>'; }
       for (var j = 0; j < lines.length; j++) {
         var w = lines[j];
-        out += '<div class="row"><span class="nm">' + esc(w.count > 1 ? w.count + ' ' : '') + esc(w.what) +
+        out += '<div class="row" data-row-key="line:' + esc(w.n) + '"><span class="nm">' + esc(w.count > 1 ? w.count + ' ' : '') + esc(w.what) +
           ', ' + esc(w.words) + ' a piece</span><span class="tools">' +
           (w.count > 1 ? '<input class="n" id="' + ID + '-buy-' + esc(w.n) + '" aria-label="Count to buy" placeholder="1">' : '') +
           '<button class="go" data-do="buy" data-n="' + esc(w.n) + '"' + (d.keeperHere ? '' : ' disabled') + '>Buy</button>' +
@@ -219,12 +216,8 @@
       }
     }
 
-    body.innerHTML = out;
-    for (var key in kept) {
-      if (!Object.prototype.hasOwnProperty.call(kept, key)) { continue; }
-      var el = document.getElementById(key);
-      if (el && kept[key]) { el.value = kept[key]; }
-    }
+    // In place, so what is being typed and its focus outlast the update (#4475).
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(body, out, (d.place || '') + (d.free ? ' free' : d.mine ? ' mine' : ' wares')); } else { body.innerHTML = out; }
     var buttons = body.querySelectorAll('button[data-do]');
     for (var b = 0; b < buttons.length; b++) { buttons[b].onclick = onDo; }
   }

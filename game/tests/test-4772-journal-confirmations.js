@@ -39,11 +39,12 @@ for(const[verb,group]of actions){
  yes(verb+' expires at five seconds and the next press only arms again',p.sent.length===before&&/again/i.test(b.textContent));
 }
 for(const[verb,group]of actions){
- const p=rig(group),b=p.button(verb);b.click();const before=p.sent.length,stale=b.onclick;
- p.feed();stale.call(b);
- yes(verb+' owner redraw retires the old button and its retained handler',p.sent.length===before);
- const fresh=p.button(verb);if(fresh)fresh.click();
- yes(verb+' current button after redraw needs a fresh first press',p.sent.length===before);
+ // The button is kept through an update (#4475); the update is what retires the arm.
+ const p=rig(group),b=p.button(verb);b.click();const before=p.sent.length;
+ p.feed();
+ yes(verb+' an owner update keeps the button and puts its words back',p.button(verb)===b&&!/again/i.test(b.textContent));
+ b.click();
+ yes(verb+' the press after an update is a fresh first press',p.sent.length===before&&/again/i.test(b.textContent));
 }
 for(const[verb,group]of actions){
  const p=rig(group),b=p.button(verb);b.click();const before=p.sent.length;
@@ -120,7 +121,9 @@ for(const[verb,group]of actions){
 }
 {
  const p=rig();p.doc.querySelector('[data-page="p"]').click();const text=p.doc.getElementById('ts-journal-text');
- text.value='Private draft';text.oninput.call(text);const b=p.button('dropbook'),stale=b.onclick;p.feed();stale.call(b);
- yes('a detached dirty-journal handler cannot open a fresh deletion choice',p.sent.length===0&&p.doc.getElementById('ts-journal-leave-choice').hidden);
+ text.value='Private draft';text.oninput.call(text);const b=p.button('dropbook');p.feed();
+ yes('an update keeps the draft being written',p.doc.getElementById('ts-journal-text')===text&&text.value==='Private draft');
+ b.click();
+ yes('dropping a journal with an unsaved page asks first and sends nothing',p.sent.length===0&&!p.doc.getElementById('ts-journal-leave-choice').hidden);
 }
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;

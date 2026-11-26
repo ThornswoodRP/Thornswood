@@ -111,12 +111,12 @@
     if (foot) { foot.onclick = function () { close(); }; }
   }
 
-  function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
+  // In place, so the focused control outlasts the update (#4475).
+  function put(host, html, subject) {
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, subject); } else { host.innerHTML = html; }
   }
 
-  function drawContents() {
+  function draw() {
     if (!root) { return; }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
@@ -128,13 +128,13 @@
     var stops = d.stops || [];
     if (!stops.length) { out += '<div class="none">This driver goes nowhere from here.</div>'; }
     for (var i = 0; i < stops.length; i++) {
-      out += '<div class="row"><span class="nm">' + esc(stops[i].name) + '</span>' +
+      out += '<div class="row" data-row-key="' + esc(stops[i].name) + '"><span class="nm">' + esc(stops[i].name) + '</span>' +
         '<span class="fare">' + esc(stops[i].fare) + ' gold</span>' +
         '<button class="go" data-focus-key="' + esc(stops[i].name) + '" data-n="' + i + '">Ride</button></div>';
     }
     out += '<div class="note">The fare goes into ' + esc(d.ledger || 'the hold') + '\'s drop box. ' +
       'If the gold is not in your pack, you do not move and nothing is taken.</div>';
-    body.innerHTML = out;
+    put(body, out, d.driver || '');
     var buttons = body.querySelectorAll('button[data-n]');
     for (var b = 0; b < buttons.length; b++) { buttons[b].onclick = onRide; }
   }

@@ -822,8 +822,11 @@
   /* Their turn: Join now, with the seconds the server holds the seat. */
   function turn(secs) {
     var until = Date.now() + Math.max(0, Number(secs) || 60) * 1000;
+    var first = !turnUntil;
     if (!turnUntil || until < turnUntil) turnUntil = until;   // the server's clock wins
     root.className = 'waiting turn';
+    // The one thing to do now has the keyboard, so Enter joins (#4475).
+    if (first && elTurn) elTurn.focus();
     elPlace.textContent = 'It is your turn';
     function tick() {
       var left = Math.ceil((turnUntil - Date.now()) / 1000);
@@ -1098,8 +1101,21 @@
     }
     if (keyAct(ev.key)) ev.preventDefault();
   }
+  /*
+    IN LINE, THE KEYS ARE THE BUTTONS' (#4475). The slots are hidden while
+    somebody waits, so Enter and Space go to the button that has focus, Join
+    now or Choose another character, the way a click does. Enter used to be
+    taken for playing the hidden lit slot, which does nothing once a pick is
+    in, so neither button could be pressed from the keyboard. They still
+    pass the window check above like every other key here.
+  */
+  function lineButton() {
+    var b = document.activeElement;
+    return waiting && b && b.tagName === 'BUTTON' && root.contains(b) ? b : null;
+  }
   /* Whether this page has anything bound to the key at all. */
   function keyActs(key) {
+    if (waiting) return (key === 'Enter' || key === ' ') && !!lineButton();
     if (asking) return key === 'Escape' || key === 'Enter';
     return key === 'ArrowDown' || key === 'ArrowUp' || key === 'Enter' ||
            key === 'Delete' || /^[1-9]$/.test(key);
@@ -1112,6 +1128,11 @@
       key = key.key;
     }
     if (introPhase) return introAct(key);
+    if (waiting) {
+      var press = (key === 'Enter' || key === ' ') && lineButton();
+      if (press) press.click();
+      return !!press;
+    }
     var list = slots();
     var n = list.length;
     if (asking) {
