@@ -18,8 +18,9 @@
     2. Another run's whole build landing in the moment before this run names
        its zip, its record or its folder leaves this run finished with that
        same artifact, every time: the other run is put there, not hoped for.
-       And a zip another run named, still held the way MoveFileExW holds
-       it while it names it, is read and unpacked all the same (#3067).
+       And a zip, record or folder pointer another run named, still held
+       the way MoveFileExW holds it while it names it, is read all the same
+       (#3067, #6916).
     3. A zip, a record or a folder already at the name that is not what this
        run built is refused and left as it was, never replaced or used.
     4. Eight runs in separate processes, half under PowerShell 7 and half
@@ -205,12 +206,25 @@ try {
     }
     $script:holdZip = $false
     $script:held = $null
+    $script:holdNamed = ''
+    $script:holdOut = ''
+    $script:heldOther = $null
+    $script:holdingOther = $false
     function Set-ThornswoodArtifactName([string]$From, [string]$To) {
         if ($script:holdZip -and -not $script:held -and $To -like '*.zip') {
             # 2b: the same zip named by the other run, which still holds it.
             $theirs = Join-Path (Split-Path -Parent $To) ('.building-' + [Guid]::NewGuid().ToString('N') + '.zip')
             [IO.File]::Copy($From, $theirs)
             if (-not (& $script:realName $theirs $To)) { throw "the other run's zip could not be named $To" }
+            $script:held = Hold-AsRenaming $To
+        }
+        if ($script:holdNamed -and -not $script:held -and -not $script:holdingOther -and
+            [IO.Path]::GetExtension($To) -eq ('.' + $script:holdNamed)) {
+            # A complete second build supplies its own record and unpacked
+            # folder. Keep its naming handle open before this run reads it.
+            $script:holdingOther = $true
+            try { $script:heldOther = Build $script:holdOut }
+            finally { $script:holdingOther = $false }
             $script:held = Hold-AsRenaming $To
         }
         Invoke-OtherRunInGap $To
@@ -284,6 +298,39 @@ try {
     $left = Leftovers $oHeld
     Yes "  nothing of either run's own is left behind (zip held)" ($left.Count -eq 0)
     if ($left.Count) { Write-Host ('  left: ' + ($left -join ', ')) }
+
+    # ---- 2c. records and folder pointers held during publication (#6916) --
+    foreach ($kind in 'json', 'folder') {
+        $script:holdOut = Join-Path $tmp ('out-held-' + $kind)
+        $script:holdNamed = $kind
+        $script:heldOther = $null
+        $mine = $null
+        $err = $null
+        $refused = $null
+        try {
+            try { $mine = Build $script:holdOut } catch { $err = $_ }
+            if ($script:held -and $OnWindows) {
+                $named = if ($kind -eq 'json') { $script:heldOther.RecordPath }
+                    else { Join-Path $script:holdOut ([IO.Path]::GetFileNameWithoutExtension($good.Name) + '.folder') }
+                try { [IO.File]::ReadAllText($named) | Out-Null; $refused = $false }
+                catch { $refused = $_.Exception.Message -like '*being used by another process*' }
+            }
+        } finally {
+            $script:holdNamed = ''
+            if ($script:held) { $script:held.Dispose(); $script:held = $null }
+        }
+        Yes "another complete run named the $kind and held its rename handle" ($null -ne $script:heldOther)
+        if ($OnWindows) { Yes "  ReadAllText beside the held $kind is refused" ($refused -eq $true) }
+        Yes "  this run reads the held $kind and still finishes" ($null -eq $err -and $null -ne $mine)
+        if ($err) { Write-Host ('  ' + $err.Exception.Message) }
+        Yes "  both runs keep the exact zip record and unpacked folder ($kind held)" (
+            $null -ne $mine -and $mine.Name -eq $good.Name -and $mine.Sha256 -eq $good.Sha256 -and
+            $mine.Folder -eq $script:heldOther.Folder -and (Sha $mine.Zip) -eq $good.Sha256 -and
+            (RecordSame $good.Record $mine.RecordPath) -and (FolderShort $mine.Folder $good.Record.files) -eq '')
+        $left = Leftovers $script:holdOut
+        Yes "  nothing of either run's own is left behind ($kind held)" ($left.Count -eq 0)
+        if ($left.Count) { Write-Host ('  left: ' + ($left -join ', ')) }
+    }
 
     Remove-Item Function:\Move-Item
     Remove-Item Function:\Set-ThornswoodArtifactName
