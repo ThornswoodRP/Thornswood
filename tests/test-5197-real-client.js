@@ -414,6 +414,20 @@ function game(opts) {
       const actRx = /data-act=\\?"([a-z]+)\\?"/g;
       while ((t = actRx.exec(s.js))) { if (SKILLS.indexOf('data-act="' + t[1] + '"') < 0) lost.push('button ' + t[1]); }
     });
+    // After the face the K panel's view still says not creating until the
+    // server's answer comes, so the run waits for creating before the step
+    // that tells a new character from a placed one, inside the race menu's
+    // skip (26 Nov, 1:44 PM: placed was read 21 ms after the menu closed).
+    if (doc && Array.isArray(doc.steps)) {
+      const st = doc.steps;
+      const open = st.findIndex(function (s) { return s.do === 'wait' && s.menu === 'RaceSex Menu' && s.open === true; });
+      const close = st.findIndex(function (s) { return s.do === 'wait' && s.menu === 'RaceSex Menu' && s.open === false; });
+      if (open >= 0 && close > open) {
+        const after = st[close + 1] || {};
+        yes(n + ': after the race menu closes the run waits for the server to say creating, inside the race menu\'s skip',
+            after.do === 'page' && /isCreating\(\)===true/.test(after.js || '') && open + Number(st[open].skip) === close + 1);
+      }
+    }
     if (pages.length) {
       yes(n + ': every K panel tab, button and call its page steps use is in game/ui/thornswood-skills.js', lost.length === 0);
       if (lost.length) { console.log('      not there: ' + lost.join(', ')); }
