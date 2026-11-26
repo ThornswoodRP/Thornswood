@@ -384,21 +384,16 @@ $launcherLog = Join-Path $Root 'Profile\launcher.log'
 $launcherLogStart = if (Test-Path -LiteralPath $launcherLog) { (Get-Item -LiteralPath $launcherLog).Length } else { 0 }
 $script:launcherLogReadAt = $launcherLogStart
 
-# The launcher's own word that Play went wrong. A Play that fails writes
-# "Failed to start: <why>" to launcher.log and leaves the launcher open with
-# no game, and the run waited the whole -Minutes for a game that was never
-# coming, with the launcher sitting there (26 Nov, 10:59 AM: "Could not
-# redirect ... Skyrim Special Edition"). Read from where the run began, whole
-# lines only, sharing the file as the launcher writes it. A reason of several
-# lines comes in one write, so its lines that carry no time stamp are its own.
-function Read-LauncherFailure {
-    if (-not (Test-Path -LiteralPath $launcherLog)) { return '' }
+# What the launcher writes to launcher.log from where the run began: whole
+# lines only, sharing the file as the launcher writes it, each line read once.
+function Read-LauncherLines {
+    if (-not (Test-Path -LiteralPath $launcherLog)) { return @() }
     $fs = [IO.File]::Open($launcherLog, 'Open', 'Read', 'ReadWrite, Delete')
     try {
         # The launcher starts the log afresh past its size limit.
         if ($fs.Length -lt $script:launcherLogReadAt) { $script:launcherLogReadAt = 0 }
         $have = $fs.Length - $script:launcherLogReadAt
-        if ($have -le 0) { return '' }
+        if ($have -le 0) { return @() }
         [void]$fs.Seek($script:launcherLogReadAt, 'Begin')
         $buf = New-Object byte[] $have
         $n = 0
@@ -407,22 +402,40 @@ function Read-LauncherFailure {
             if ($got -le 0) { break }
             $n += $got
         }
-        if ($n -le 0) { return '' }
+        if ($n -le 0) { return @() }
         $end = [Array]::LastIndexOf($buf, [byte]10, $n - 1)
-        if ($end -lt 0) { return '' }
+        if ($end -lt 0) { return @() }
         $script:launcherLogReadAt += $end + 1
-        $lines = [Text.Encoding]::UTF8.GetString($buf, 0, $end + 1) -split "`n" | ForEach-Object { $_.TrimEnd("`r") }
-        $stamp = '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ  '
-        $why = $null
-        foreach ($l in $lines) {
-            if ($null -eq $why) {
-                if ($l -match ($stamp + 'Failed to start: (.*)$')) { $why = $Matches[1] }
-            } elseif ($l -match $stamp) { break }
-            elseif ($l.Trim()) { $why += ' ' + $l.Trim() }
-        }
-        if ($null -eq $why) { return '' }
-        return $why.Trim()
+        return @([Text.Encoding]::UTF8.GetString($buf, 0, $end + 1) -split "`n" | ForEach-Object { $_.TrimEnd("`r") })
     } finally { $fs.Dispose() }
+}
+$launcherStamp = '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ  '
+
+# The launcher's own word that Play went wrong. A Play that fails writes
+# "Failed to start: <why>" to launcher.log and leaves the launcher open with
+# no game, and the run waited the whole -Minutes for a game that was never
+# coming, with the launcher sitting there (26 Nov, 10:59 AM: "Could not
+# redirect ... Skyrim Special Edition"). A reason of several lines comes in
+# one write, so its lines that carry no time stamp are its own.
+function Read-LauncherFailure {
+    $why = $null
+    foreach ($l in @(Read-LauncherLines)) {
+        if ($null -eq $why) {
+            if ($l -match ($launcherStamp + 'Failed to start: (.*)$')) { $why = $Matches[1] }
+        } elseif ($l -match $launcherStamp) { break }
+        elseif ($l.Trim()) { $why += ' ' + $l.Trim() }
+    }
+    if ($null -eq $why) { return '' }
+    return $why.Trim()
+}
+
+# Windows' two Skyrim folders, and whether either still points at this build.
+function Get-StillRedirected {
+    $docs = [Environment]::GetFolderPath('MyDocuments')
+    @((Join-Path $docs 'My Games\Skyrim Special Edition'), (Join-Path $env:LOCALAPPDATA 'Skyrim Special Edition')) | Where-Object {
+        $i = Get-Item -LiteralPath $_ -Force -ErrorAction SilentlyContinue
+        $i -and ($i.Attributes -band [IO.FileAttributes]::ReparsePoint)
+    }
 }
 
 $launcher = $null
@@ -587,10 +600,50 @@ try {
     $note = $_.Exception.Message
     Say "Stopped: $note"
 } finally {
-    $proc = Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue
-    if ($proc) { $proc | Stop-Process -Force; Say 'Closed the game.' }
+    # The launcher points Windows' Skyrim folders at this build for the game
+    # and puts them back when it sees the game close, or when its window is
+    # closed. Ending both by force skipped that, and after every run the two
+    # folders were left pointing into Profile with the person's own moved
+    # aside, until the next launcher start cleaned up "a redirect left behind
+    # by a crash" (26 Nov, 12:42 PM on One). So the steps go in order: the
+    # game closes, the launcher says it has put the folders back, and then its
+    # window is closed as a person closes it.
     $ours = @(Get-Process -Name Thornswood -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [string]::Equals($_.Path, $launcherExe, [StringComparison]::OrdinalIgnoreCase) })
-    if ($ours.Count) { $ours | Stop-Process -Force; Say 'Closed the launcher.' }
+    $proc = Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue
+    if ($proc) {
+        $proc | Stop-Process -Force
+        Say 'Closed the game.'
+        if ($ours.Count) {
+            # The launcher looks for the game every two seconds.
+            $until = (Get-Date).AddSeconds(60)
+            $back = $false
+            while (-not $back -and (Get-Date) -lt $until) {
+                foreach ($l in @(Read-LauncherLines)) { if ($l -match ($launcherStamp + 'Game closed after ')) { $back = $true } }
+                if (-not $back) { Start-Sleep -Milliseconds 500 }
+            }
+            if ($back) { Say 'The launcher saw the game close and put the Skyrim folders back.' }
+            else { Say 'The launcher did not say in 60 s that it saw the game close.' }
+        }
+    }
+    foreach ($lp in $ours) {
+        if ($lp.HasExited) { continue }
+        [void]$lp.CloseMainWindow()
+        if ($lp.WaitForExit(30000)) { Say "Closed the launcher, process $($lp.Id)." }
+        else {
+            # Its window did not close: a dialog or a wait in it. It is ended
+            # rather than left open on somebody's PC, and the folders it held
+            # are named below.
+            $lp | Stop-Process -Force
+            Say "The launcher, process $($lp.Id), did not close its window in 30 s, so it was ended."
+        }
+    }
+    $left = @(Get-StillRedirected)
+    if ($left.Count) {
+        $leftNote = 'Windows'' Skyrim folders still point at this build after the run: ' + ($left -join '; ') + '. The next launcher start puts them back.'
+        Say $leftNote
+        $note = ($note + ' ' + $leftNote).Trim()
+        if ($result -eq 'passed') { $result = 'failed' }
+    }
     if (Test-Path -LiteralPath $runFile) { Remove-Item -LiteralPath $runFile -Force; Say 'The plugin never took the run file; removed it so the next Play does not run it.' }
     if ($switched) {
         Set-RunChannel $leftOn
