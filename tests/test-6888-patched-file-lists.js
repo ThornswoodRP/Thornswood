@@ -62,18 +62,32 @@ assert.equal(counts(ref(bcc), { md5: md5('b'), fileId: 244865 }), false, 'after:
 assert.equal(counts(ref(bcc), { md5: md5('b'), fileId: 244865, fileList: bccList }), true, 'after: the copy installed from the entry does');
 console.log('PASS a copy installed by hand no longer counts as the collection\'s; the one Vortex installs from the entry does');
 
-assert.doesNotThrow(() => checkReplicated(before, after, ['12939', '25271']));
+assert.doesNotThrow(() => checkReplicated(before, after, ['536557', '244865']));
 const other = JSON.parse(JSON.stringify(after)); other.mods[2].version = '2';
-assert.throws(() => checkReplicated(before, other, ['12939', '25271']), /more than the file hashes/);
-assert.throws(() => checkReplicated(before, after, ['12939']), /more than the file hashes/, 'an entry changed that was not named');
+assert.throws(() => checkReplicated(before, other, ['536557', '244865']), /more than the file hashes/);
+assert.throws(() => checkReplicated(before, after, ['536557']), /more than the file hashes/, 'an entry changed that was not named');
 const lost = JSON.parse(JSON.stringify(after)); delete lost.mods[0].patches;
-assert.throws(() => checkReplicated(before, lost, ['12939', '25271']), /no DeadlySpellImpacts\.esp|more than the file hashes/);
+assert.throws(() => checkReplicated(before, lost, ['536557', '244865']), /no DeadlySpellImpacts\.esp|more than the file hashes/);
 const moved = JSON.parse(JSON.stringify(after)); moved.mods[1].source.fileId = 1;
-assert.throws(() => checkReplicated(before, moved, ['12939', '25271']), /more than the file hashes/);
-assert.throws(() => checkReplicated(before, after, ['12939', '12939']), /distinct/);
-assert.throws(() => checkReplicated(before, after, ['0']), /invalid mod number/);
-assert.throws(() => checkReplicated(after, after, ['25271']), /carried file hashes already/);
+assert.throws(() => checkReplicated(before, moved, ['536557', '244865']), /no one entry for Nexus file 244865/);
+assert.throws(() => checkReplicated(before, after, ['536557', '536557']), /distinct/);
+assert.throws(() => checkReplicated(before, after, ['0']), /invalid file id/);
+assert.throws(() => checkReplicated(after, after, ['244865']), /carried file hashes already/);
 console.log('PASS the publisher\'s draft check passes only the named file lists and stops on any other change');
+
+// A mod with two entries, as More Craftable Equipment has in revision 11:
+// the entry is named by its file id, which its mod number cannot do.
+const twoBefore = base();
+twoBefore.mods.push({ name: 'BCC Extra', version: '1', optional: false, domainName: 'skyrimspecialedition',
+  source: { type: 'nexus', modId: 25271, fileId: 111111, md5: md5('d'), fileSize: 8, logicalFilename: 'BCC extra', tag: 'bccExtra01' },
+  author: 'Y', details: { category: 'UI', type: '' }, phase: 0 });
+const twoAfter = JSON.parse(JSON.stringify(twoBefore));
+applySwaps(twoAfter, [{ replicate: true, modId: '25271', fileId: '244865', hashes: bccList }]);
+assert.deepEqual(twoAfter.mods[1].hashes, bccList);
+assert.equal(twoAfter.mods[3].hashes, undefined, 'the mod\'s other entry is untouched');
+assert.doesNotThrow(() => checkReplicated(twoBefore, twoAfter, ['244865']));
+assert.throws(() => checkReplicated(twoBefore, twoAfter, ['25271']), /no one entry/, 'a mod number names neither entry');
+console.log('PASS a mod with two entries gets the list on the one entry its file id names');
 
 const refuse = (sw, re, why) => assert.throws(() => applySwaps(base(), sw), re, why);
 refuse([{ replicate: true, modId: '999', fileId: '1', hashes: bccList }], /no one entry/, 'an absent entry');

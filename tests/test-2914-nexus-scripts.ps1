@@ -1102,9 +1102,9 @@ PlugRec 3
 # collection's and never patch it; -Replicate gives the entry its list.
 $n0 = Count
 $r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Layout', $lay, '-WhatIf')
-YesR '#6888 -SetLight on an entry with no list of its files is refused, naming -Replicate, before anything is downloaded' ($r.Code -eq 1 -and $r.Out -match 'carries no list of the files it installs' -and $r.Out -match '-Replicate 47618' -and @(Since $n0 | Where-Object { $_.path -eq '/cdn/file/191234' }).Count -eq 0) $r
+YesR '#6888 -SetLight on an entry with no list of its files is refused, naming -Replicate, before anything is downloaded' ($r.Code -eq 1 -and $r.Out -match 'carries no list of the files it installs' -and $r.Out -match '-Replicate 191234' -and @(Since $n0 | Where-Object { $_.path -eq '/cdn/file/191234' }).Count -eq 0) $r
 $n0 = Count
-$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Replicate', '47618', '-Layout', $lay, '-WhatIf')
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-SetLight', 'FishingInSkyrim.esp', '-Replicate', '191234', '-Layout', $lay, '-WhatIf')
 $got = @(Since $n0)
 $crcM = [regex]::Match($r.Out, 'patch: FishingInSkyrim\.esp CRC-32 ([0-9A-F]{8})')
 $builtL = Join-Path $T 'scratch\nexus-revision-7essxf\out\collection_4.7z'
@@ -1139,7 +1139,7 @@ $onlyFlag = $ab.Length -eq $wb.Length -and [BitConverter]::ToUInt32($ab, 8) -eq 
 for ($i = 0; $onlyFlag -and $i -lt $wb.Length; $i++) { if (($i -lt 8 -or $i -gt 11) -and $ab[$i] -ne $wb[$i]) { $onlyFlag = $false } }
 Yes 'the patch, applied as Install-NexusRevision.ps1 applies it, gives the plugin with the light flag and nothing else changed' $onlyFlag
 foreach ($case in @(
-        @(@('-SetLight', 'Fish-Light.esp', '-Replicate', '47618', '-Layout', $lay), 'is already light in A Fishing Mod', 'a plugin the archive already has light'),
+        @(@('-SetLight', 'Fish-Light.esp', '-Replicate', '191234', '-Layout', $lay), 'is already light in A Fishing Mod', 'a plugin the archive already has light'),
         @(@('-ClearLight', 'Nowhere.esp', '-Layout', $lay), 'puts no Nowhere\.esp in Data', 'a plugin the layout does not place'),
         @(@('-SetLight', 'FishingInSkyrim.esp'), 'need -Layout', 'no -Layout'),
         @(@('-SetLight', 'Fish.esl', '-Layout', $lay), 'is not a plugin file name', 'an .esl'),
@@ -1150,23 +1150,24 @@ foreach ($case in @(
 # #6888: -Replicate alone gives the entry its list and changes nothing else,
 # as the collection-record publisher checks a draft (--check-replicate).
 $n0 = Count
-$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-Replicate', '47618', '-WhatIf')
+$r = Run 'New-NexusRevision.ps1' @('-From', $lightBase, '-Replicate', '191234', '-WhatIf')
 $repAfter = Join-Path $T 'replicate-after'; $repBefore = Join-Path $T 'replicate-before'
 & $sz x -y ('-o' + $repAfter) $builtL | Out-Null
 & $sz x -y ('-o' + $repBefore) $lightBase | Out-Null
-$checked = (& $node.Source $js '--check-replicate' $repBefore $repAfter '47618' 2>&1) -join ' '
+$checked = (& $node.Source $js '--check-replicate' $repBefore $repAfter '191234' 2>&1) -join ' '
 YesR '#6888 -Replicate -WhatIf builds a revision that only lists the entry''s files, which --check-replicate passes, and writes nothing' ($r.Code -eq 0 -and $r.Out -match 'replicate: its own installer -> 2 file hashes' -and $LASTEXITCODE -eq 0 -and $checked -match 'only the named entries' -and @(Writes @(Since $n0)).Count -eq 0) $r
-$checked = (& $node.Source $js '--check-replicate' $repBefore $repAfter '192762' 2>&1) -join ' '
+$checked = (& $node.Source $js '--check-replicate' $repBefore $repAfter '809366' 2>&1) -join ' '
 Yes '  and --check-replicate naming another mod stops' ($LASTEXITCODE -eq 1 -and $checked -match 'more than the file hashes|carried file hashes|no one entry|have no file hashes')
 foreach ($case in @(
     @(@('-Replicate', '999'), 'no one entry', 'an absent mod'),
     @(@('-Replicate', '0'), 'distinct positive', 'zero'),
-    @(@('-Replicate', '47618,47618'), 'distinct positive', 'duplicate targets'),
-    @(@('-Replicate', '1111'), 'already carries the list', 'an entry that has its list'),
-    @(@('-Replicate', '47618', '-RefreshTag', '192762'), 'repairs identities alone', 'a tag repair'),
-    @(@('-Replicate', '47618', '-Remove', '47618'), 'named in -Replicate and in', 'a mod also taken out'),
-    @(@('-Replicate', '47618', '-Publish', '3'), 'takes no', 'publishing'),
-    @(@('-Replicate', '47618', '-Discard', '3'), 'takes no', 'discarding'))) {
+    @(@('-Replicate', '191234,191234'), 'distinct positive', 'duplicate targets'),
+    @(@('-Replicate', '47618'), 'no one entry', 'a mod number rather than a file id'),
+    @(@('-Replicate', '2222'), 'already carries the list', 'an entry that has its list'),
+    @(@('-Replicate', '191234', '-RefreshTag', '192762'), 'repairs identities alone', 'a tag repair'),
+    @(@('-Replicate', '191234', '-Remove', '47618'), 'named in -Replicate and its mod', 'a mod also taken out'),
+    @(@('-Replicate', '191234', '-Publish', '3'), 'takes no', 'publishing'),
+    @(@('-Replicate', '191234', '-Discard', '3'), 'takes no', 'discarding'))) {
     $n0 = Count
     $r = Run 'New-NexusRevision.ps1' (@('-From', $lightBase) + $case[0] + @('-WhatIf'))
     YesR ('#6888 -Replicate rejects ' + $case[2] + ' before writing') ($r.Code -eq 1 -and $r.Out -match $case[1] -and @(Writes @(Since $n0)).Count -eq 0) $r

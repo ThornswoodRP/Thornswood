@@ -18,8 +18,8 @@
       pwsh scripts/release/New-NexusRevision.ps1 -Rule <plugin rules>.json -WhatIf
       pwsh scripts/release/New-NexusRevision.ps1 -Remove 24104 -WhatIf
       pwsh scripts/release/New-NexusRevision.ps1 -Answers <installer answers>.json -WhatIf
-      pwsh scripts/release/New-NexusRevision.ps1 -SetLight RaceMenu.esp,XPMSE.esp -Replicate 19080,1988 -Layout <the -Record folder> -WhatIf
-      pwsh scripts/release/New-NexusRevision.ps1 -Replicate 12939,25271 -WhatIf
+      pwsh scripts/release/New-NexusRevision.ps1 -SetLight RaceMenu.esp,XPMSE.esp -Replicate 743640,469854 -Layout <the -Record folder> -WhatIf
+      pwsh scripts/release/New-NexusRevision.ps1 -Replicate 536557,244865 -WhatIf
       .\scripts\release\New-NexusRevision.ps1 -Publish 3 -WhatIf
       .\scripts\release\New-NexusRevision.ps1 -Publish 3
       pwsh scripts/release/New-NexusRevision.ps1 -Discard 6 -WhatIf
@@ -194,7 +194,9 @@
   "hashes", the files it puts in its folder each with the md5 of the archive's
   own copy, is never matched by a copy that was not installed from it: Vortex
   installs the entry itself, by that list, and patches it.
-  -Replicate names mods, by their numbers, whose entries get that list. Each
+  -Replicate names entries, by the Nexus file id each installs, that get that
+  list: a file id, because a mod may have more than one entry (More Craftable
+  Equipment has two). Each
   entry's archive is downloaded and held to its md5 and size, its installer is
   run with the entry's own answers (NexusModPlan.ps1, NexusLayout.cs, as
   Install-NexusRevision.ps1 runs it), and the list is the files that run puts
@@ -284,7 +286,7 @@
   with other changes. The collection-record publisher verifies the draft.
 
 .PARAMETER Replicate
-  Mods, by their numbers on the website, whose entries get the list of files
+  Entries, by the Nexus file id each installs, that get the list of files
   they install, as THE FILES A PATCHED MOD INSTALLS above says. The
   collection-record publisher verifies the draft.
 
@@ -553,8 +555,8 @@ if ($refreshRequested -and (-not $RefreshTag.Count -or @($RefreshTag | Where-Obj
 }
 $replicateRequested = $PSBoundParameters.ContainsKey('Replicate')
 $Replicate = @($Replicate | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() })
-if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Object { $_ -notmatch '^[1-9][0-9]{0,8}$' }).Count -or @($Replicate | Select-Object -Unique).Count -ne $Replicate.Count)) {
-  Die '-Replicate needs a nonempty list of distinct positive Nexus mod numbers.'
+if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Object { $_ -notmatch '^[1-9][0-9]{0,11}$' }).Count -or @($Replicate | Select-Object -Unique).Count -ne $Replicate.Count)) {
+  Die '-Replicate needs a nonempty list of distinct positive Nexus file ids.'
 }
 [void](Step { Read-NexusKey })
 Say ('  key from ' + $script:NexusKeyFrom) 'DarkGray'
@@ -705,9 +707,6 @@ foreach ($m in $Remove) {
   if ($m -notmatch '^\d+$') { Die ('-Remove ' + $m + ' is not a mod number.') }
   if (@($Remove | Where-Object { $_ -eq $m }).Count -gt 1 -or $Mod -contains $m) { Die ('Mod ' + $m + ' is named more than once in -Mod and -Remove.') }
 }
-foreach ($m in $Replicate) {
-  if ($Mod -contains $m -or $Remove -contains $m) { Die ('Mod ' + $m + ' is named in -Replicate and in -Mod or -Remove.') }
-}
 # A tag repair retains every published file and is never mixed with a move.
 
 if ($RefreshTag.Count) {
@@ -837,6 +836,14 @@ if ($Mod.Count) { Head 'The new files' }
 $swaps = New-Object System.Collections.Generic.List[object]
 $baseCol = Step { ConvertFrom-Json ([IO.File]::ReadAllText($baseJson)) }
 $dropped = @()
+# An entry -Replicate names is not also moved, taken out or answered: its
+# list is of the files it installs as it is (THE FILES A PATCHED MOD INSTALLS).
+foreach ($rf in $Replicate) {
+  foreach ($e in @($baseCol.mods | Where-Object { $_.source -and [string]$_.source.type -eq 'nexus' -and [string]$_.source.fileId -eq $rf })) {
+    $m = [string]$e.source.modId
+    if ($Mod -contains $m -or $Remove -contains $m -or @($answerSet | Where-Object { [string]$_.modId -eq $m }).Count) { Die ('File ' + $rf + ' is named in -Replicate and its mod ' + $m + ' in -Mod, -Remove or -Answers.') }
+  }
+}
 foreach ($m in $RefreshTag) { $swaps.Add([ordered]@{ refreshTag = $true; modId = $m }) }
 for ($i = 0; $i -lt $Mod.Count; $i++) {
   $m = $Mod[$i]; $fid = $FileId[$i]
@@ -981,11 +988,11 @@ foreach ($m in $Remove) {
 $replicated = @{}
 if ($Replicate.Count) {
   Head 'The files they install'
-  foreach ($m in $Replicate) {
-    if ($Mod -contains $m -or $Remove -contains $m -or @($answerSet | Where-Object { [string]$_.modId -eq $m }).Count) { Die ('Mod ' + $m + ' is named in -Replicate and in -Mod, -Remove or -Answers.') }
-    $hits = @($baseCol.mods | Where-Object { $_.source -and [string]$_.source.type -eq 'nexus' -and [string]$_.source.modId -eq $m })
-    if ($hits.Count -ne 1) { Die ('Revision ' + $BaseRevision + ' has ' + $hits.Count + ' entries for mod ' + $m + ', so there is no one entry to give the list of files it installs.') }
+  foreach ($rf in $Replicate) {
+    $hits = @($baseCol.mods | Where-Object { $_.source -and [string]$_.source.type -eq 'nexus' -and [string]$_.source.fileId -eq $rf })
+    if ($hits.Count -ne 1) { Die ('Revision ' + $BaseRevision + ' has ' + $hits.Count + ' entries for Nexus file ' + $rf + ', so there is no one entry to give the list of files it installs.') }
     $e = $hits[0]
+    $m = [string]$e.source.modId
     if ($e.PSObject.Properties['hashes'] -and @($e.hashes).Count) { Die ($e.name + ' already carries the list of files it installs.') }
     if ($e.PSObject.Properties['fileOverrides'] -and @($e.fileOverrides).Count) { Die ($e.name + ' carries fileOverrides, which a list of files would not keep.') }
     $type = if ($e.details -and $e.details.PSObject.Properties['type']) { [string]$e.details.type } else { '' }
@@ -998,7 +1005,7 @@ if ($Replicate.Count) {
       $bad = @(Get-NexusChoicesProblems $choices)
       if ($bad.Count) { Die ('The choices ' + $e.name + ' carries are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
     }
-    $work = Join-Path $scratch ('replicate-' + $m)
+    $work = Join-Path $scratch ('replicate-' + $rf)
     if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $work | Out-Null
     $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $got.Path -Work $work -Choices $choices }
@@ -1063,7 +1070,7 @@ if ($lights.Count) {
     if ($type) { Die ($e.name + ' is mod type "' + $type + '", which does not deploy into Data, so its patch path is not ' + $l.Name + '.') }
     # THE FILES A PATCHED MOD INSTALLS above: without its list, Vortex can
     # take a copy somebody already had as the collection's and never patch it.
-    if (-not ($e.PSObject.Properties['hashes'] -and @($e.hashes).Count) -and -not $replicated.ContainsKey([string]$e.source.fileId)) { Die ($e.name + ' carries no list of the files it installs, so Vortex would take a copy somebody already had as the collection''s and never apply the patch (#6888). Give it its list in the same run: -Replicate ' + $e.source.modId + '.') }
+    if (-not ($e.PSObject.Properties['hashes'] -and @($e.hashes).Count) -and -not $replicated.ContainsKey([string]$e.source.fileId)) { Die ($e.name + ' carries no list of the files it installs, so Vortex would take a copy somebody already had as the collection''s and never apply the patch (#6888). Give it its list in the same run: -Replicate ' + $e.source.fileId + '.') }
     if (([string]$e.name).IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { Die ('The entry name "' + $e.name + '" cannot be a folder under patches.') }
     if ($e.PSObject.Properties['patches'] -and $e.patches -and @($e.patches.PSObject.Properties | Where-Object { $_.Name -ieq $l.Name }).Count) { Die ($e.name + ' already patches ' + $l.Name + ' in revision ' + $BaseRevision + '.') }
     $fid = [string]$row.FileId
