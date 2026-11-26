@@ -154,7 +154,7 @@ yes('WriteBrowserBackend has no bare return left', wbb.length > 0 && !/\breturn\
 yes('no SkyrimPlatform.ini returns null', /if \(!File\.Exists\(PlatformIni\)\) return null;/.test(wbb));
 yes('the steady state (ini already right) returns the choice', /if \(next == text\) return want;/.test(wbb));
 yes('a written ini returns the choice',
-  /File\.WriteAllText\(PlatformIni, next, new UTF8Encoding\(true\)\);\s*return want;/.test(wbb));
+  /WholeFile\.WriteText\(PlatformIni, next, new UTF8Encoding\(true\)\);\s*return want;/.test(wbb));
 yes('a read or write that threw returns null, after the Swallow note',
   /Swallow\.Note\("Chars\.WriteBrowserBackend, write", ex\);\s*\}[\s\S]*return null;\s*\}$/.test(wbb));
 yes('the ini keeps its byte order mark (UTF8Encoding(true))', /new UTF8Encoding\(true\)/.test(wbb));

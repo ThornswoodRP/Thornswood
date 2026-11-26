@@ -422,8 +422,8 @@ namespace Thornswood
                 // The fields go in before the closing brace of the object.
                 if (extra.Length > 0 && json.EndsWith("}")) json = json.Substring(0, json.Length - 1) + extra.ToString() + "}";
                 Directory.CreateDirectory(ui);
-                File.WriteAllText(Path.Combine(ui, "thornswood-characters.js"),
-                                  "window.THORNSWOOD_SELECT=" + json + ";\n", new UTF8Encoding(false));
+                WholeFile.WriteText(Path.Combine(ui, "thornswood-characters.js"),
+                                    "window.THORNSWOOD_SELECT=" + json + ";\n");
             }
             catch
             {
@@ -490,7 +490,9 @@ namespace Thornswood
             lock (listGate)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(CharactersFile));
-                File.WriteAllText(CharactersFile, json, new UTF8Encoding(false));
+                // Whole or not at all (#4702): the plugin reads this when it
+                // goes back to the menu, and Relist rewrites it mid-session.
+                WholeFile.WriteText(CharactersFile, json);
             }
         }
 
@@ -874,7 +876,9 @@ namespace Thornswood
                 // The file arrives with a byte order mark and SkyrimPlatform
                 // reads it happily, so keep one rather than quietly changing
                 // the encoding of a file this launcher does not own.
-                File.WriteAllText(PlatformIni, next, new UTF8Encoding(true));
+                // Whole or not at all (#4702): the rest of the ini is
+                // Skyrim Platform's, and a launcher stopped mid-write lost it.
+                WholeFile.WriteText(PlatformIni, next, new UTF8Encoding(true));
                 return want;
             }
             catch (Exception ex) { Swallow.Note("Chars.WriteBrowserBackend, write", ex); }
