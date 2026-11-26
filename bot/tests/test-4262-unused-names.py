@@ -15,10 +15,15 @@ It also checks the bot's code still says each hold button id once.
 Read only. No discord.py needed.
 """
 import os
-import re
+import sys
+# bot\, the folder above: the bot's tests sit in bot\tests (#5341), and
+# _pyguard is found from there.
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, HERE)
+import _pyguard  # noqa: F401,E402  (first after the path: Python 3.11 or newer, #2276)
+import re  # noqa: E402
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-BOT = os.path.dirname(HERE)
+BOT = HERE
 
 passed = failed = 0
 
