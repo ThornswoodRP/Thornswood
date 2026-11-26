@@ -20,7 +20,7 @@ from bot_github import (DEV_FORM, KNOWN_FORM, KNOWN_MARK, TASK_FORM, TASK_MARK,
 from bot_task_text import (_all_marked, _marked, checked_since, dev_chunks, dev_render,
     dev_task_of, fix_refs, issue_tags, main_task_of, strip_footer,
     test_task_of)
-from bot_post_rules import (fix_in_main, post_problems, refuse,
+from bot_post_rules import (fix_in_main, post_problems, refuse_off_loop,
     task_server_line)
 
 
@@ -417,13 +417,15 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
         # With no "Known issue:" comment there are no words to post, so
         # nothing goes up whether the rules are checked or not: the bot never
         # writes a post's words itself (known_of).
-        if refuse(state, 'known', num, post_problems(
+        held, settled = await refuse_off_loop(state, 'known', num, post_problems(
                 'known', title, body, issue=issue, written=post is not None,
-                has_task=False, taken_titles=taken), say) or post is None:
+                has_task=False, taken_titles=taken), say)
+        if held or post is None:
             if have:
                 listed.add(num)     # the post already up stays as it was
             why[key] = 'its post breaks a rule'
-            unposted(key, mark + ('|kept' if have else ''))
+            if settled:             # a refusal GitHub did not take is said again
+                unposted(key, mark + ('|kept' if have else ''))
             continue
         listed.add(num)
         if read.pop(key, None) is not None:
@@ -504,16 +506,17 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
     rec = state.setdefault('tasks', {})
 
     async def broken(num, issue, comments, post):
-        # The rules check before a #test-tasks post goes up or is edited.
+        # The rules check before a #test-tasks post goes up or is edited:
+        # (held, settled), as refuse_off_loop gives them.
         task = main_task_of(issue, comments, dev_since)
         if task is None:
-            return False    # no post is made of it (task_post_of)
+            return False, True  # no post is made of it (task_post_of)
         timeline = await loop.run_in_executor(None, github_timeline, num, get)
         refs = await loop.run_in_executor(None, fix_refs, timeline, get)
         inmain = await loop.run_in_executor(None, fix_in_main, *refs, get)
         taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items()
                  if k != str(num)]
-        return refuse(state, 'main', num, post_problems(
+        return await refuse_off_loop(state, 'main', num, post_problems(
             'main', post[0], post[1],
             server=task_server_line(issue, comments, task[4]),
             fix_in_main=inmain, taken_titles=taken), say)
@@ -637,7 +640,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
         num = int(key)
         comments = await loop.run_in_executor(None, github_comments, num, get)
         post = task_post_of(issue, comments, dev_since)
-        if post is None or await broken(num, issue, comments, post):
+        if post is None or (await broken(num, issue, comments, post))[0]:
             return
         if _sig(*post) != have['sig']:
             # Revised instructions need a new active post. Keep every earlier
@@ -698,9 +701,12 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             continue
         title, body, tags = post
         sig = _sig(title, body, tags)
-        if (not have or have.get('sig') != sig) and await broken(num, issue, comments, post):
-            unposted(key, mark + ('|kept' if have else ''))
-            continue        # not posted, and a post already up keeps its text
+        if not have or have.get('sig') != sig:
+            held, settled = await broken(num, issue, comments, post)
+            if held:
+                if settled:         # a refusal GitHub did not take is said again
+                    unposted(key, mark + ('|kept' if have else ''))
+                continue            # not posted, and a post already up keeps its text
         if read.pop(key, None) is not None:
             state['_dirty'] = True
         if have:
@@ -770,7 +776,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
                 removed.append(int(key))
                 continue
             sig = _sig(*post)
-            if have.get('sig') != sig and await broken(int(key), issue, comments, post):
+            if have.get('sig') != sig and (await broken(int(key), issue, comments, post))[0]:
                 continue
             if have.get('sig') != sig:
                 try:
@@ -831,11 +837,15 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
         post = None
         if task is not None:
             taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items() if k != key]
-            if refuse(state, 'dev', num, post_problems(
+            held, settled = await refuse_off_loop(state, 'dev', num, post_problems(
                     'dev', task[0], task[1], server=task[2],
-                    taken_titles=taken), say):
-                read[key] = upd     # the post already up, if any, keeps its text
-                state['_dirty'] = True
+                    taken_titles=taken), say)
+            if held:
+                if settled:
+                    read[key] = upd     # the post already up, if any, keeps its text
+                    state['_dirty'] = True
+                else:
+                    refused.append(upd)  # a refusal GitHub did not take is said again
                 continue
             timeline = await loop.run_in_executor(None, github_timeline, num, get)
             refs = await loop.run_in_executor(None, fix_refs, timeline, get)
