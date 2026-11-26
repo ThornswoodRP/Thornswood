@@ -310,8 +310,8 @@ const N = needs.NEEDS;
       ['camp', 'rough'].every(function (k) { return N.away[k].rest === 50 && N.away[k].food === 0 && N.away[k].drink === 0; }));
   yes('N3 a seat or your feet: nothing',
       ['campfire', 'sit', 'up'].every(function (k) { return N.away[k].rest === 0 && N.away[k].food === 0 && N.away[k].drink === 0; }));
-  yes('N6 the clock stays as Patrick set it on 23 Sep: 2.5 times the old shape',
-      near(N.drain.food, 2.5 * 100 / 6) && near(N.drain.drink, 2.5 * 100 / 3) && near(N.drain.rest, 2.5 * 100 / 20));
+  yes('N6 #6481 slows food and drink by 20% and keeps the rest clock',
+      near(N.drain.food, 100 / 3) && near(N.drain.drink, 100 / 1.5) && near(N.drain.rest, 2.5 * 100 / 20));
   yes('N4 a night away is still 24 real minutes', N.sleptFor === 24 * MIN);
   yes('N5 the old three numbers are gone, so nothing reads two tables',
       !('sleptIn' in N) && !('sleptRest' in N) && !('sleptAlso' in N));
@@ -319,12 +319,12 @@ const N = needs.NEEDS;
 
 // ====================================== L. a logout, through the hooks
 const ME = 0xff000909;
-function logout(kind, awayMs) {
+function logout(kind, awayMs, awakeMs = 2 * HOUR) {
   delete needs.store[ME];
   refs[ME] = { worldOrCellDesc: INN, pos: [0, 0, 0] };
   if (online.indexOf(ME) === -1) { online.push(ME); }
   needs.settle(ME);                       // arrives fresh
-  clock.t += 2 * HOUR;
+  clock.t += awakeMs;
   needs.settle(ME);
   if (kind) { needs.resting(ME, kind); }
   const was = needs.read(ME);
@@ -366,9 +366,9 @@ function near(a, b) { return Math.abs(a - b) < 1e-9; }
       none.n.resting === 'common');
   // A floor: 9 hours away would empty all three; with a floor of 25 none
   // goes under it, and a meter already under it at logout stays put. After
-  // 2 hours awake, rest is above it and hunger and thirst are under it.
+  // 2.5 hours awake, rest is above it and hunger and thirst are under it.
   N.away.common = { drain: 1, floor: 25, rest: 0, food: 0, drink: 0 };
-  const floored = logout('common', 9 * HOUR);
+  const floored = logout('common', 9 * HOUR, 2.5 * HOUR);
   const expect = function (was) { return was > 25 ? 25 : was; };
   yes('H5 a floor of 25: rest stops at 25, hunger and thirst already under it stay where they were (' +
       ['food', 'drink', 'rest'].map(function (k) { return k + ' ' + floored.was[k].toFixed(1) + ' to ' + floored.n[k].toFixed(1); }).join(', ') + ')',
@@ -420,9 +420,9 @@ function nightIn(kind, awayMs) {
 function r1(v) { return Math.round(v * 10) / 10; }
 {
   const h = firstHour();
-  yes('F1 the first hour awake with nothing eaten is the clock alone: Hunger 58.3, Thirst 16.7, Rest 87.5 (' +
+  yes('F1 the first hour awake with nothing eaten is the clock alone: Hunger 66.7, Thirst 33.3, Rest 87.5 (' +
       [h.food, h.drink, h.rest].map(r1).join(', ') + ')',
-      r1(h.food) === 58.3 && r1(h.drink) === 16.7 && r1(h.rest) === 87.5);
+      r1(h.food) === 66.7 && r1(h.drink) === 33.3 && r1(h.rest) === 87.5);
 
   // The kinds, as the beds hand them out.
   fireAt(EVE, null);
@@ -438,18 +438,18 @@ function r1(v) { return Math.round(v * 10) / 10; }
 
   const NIGHT = 8 * HOUR;
   const walk = [
-    ['in your own bed', ownKind, 83.3, 41.7, 100],
-    ['in a bed you are allowed in, by its key', keyKind, 83.3, 41.7, 100],
-    ['in the arrival inn\'s bed, nobody holding it', innKind, 73.3, 31.7, 100],
-    ['in a temple bed nobody holds', templeKind, 73.3, 31.7, 100],
-    ['in the inn bed by its fire', innFireKind, 73.3, 31.7, 100],
-    // Hunger falls half the clock to the floor; thirst was already under 25
-    // and stays; rest falls to 37.5 and the night lifts it to 50.
-    ['in a bed on the road', roadKind, 25, 16.7, 50],
-    ['on a bedroll by a campfire', campKind, 25, 16.7, 50],
-    ['on a seat', 'sit', 25, 16.7, 37.5],
-    ['on a seat by a fire', 'campfire', 25, 16.7, 37.5],
-    ['on their feet', '', 25, 16.7, 37.5]
+    ['in your own bed', ownKind, 91.7, 58.3, 100],
+    ['in a bed you are allowed in, by its key', keyKind, 91.7, 58.3, 100],
+    ['in the arrival inn\'s bed, nobody holding it', innKind, 81.7, 48.3, 100],
+    ['in a temple bed nobody holds', templeKind, 81.7, 48.3, 100],
+    ['in the inn bed by its fire', innFireKind, 81.7, 48.3, 100],
+    // Hunger and thirst fall half the clock to the floor of 25;
+    // rest falls to 37.5 and the night lifts it to 50.
+    ['in a bed on the road', roadKind, 25, 25, 50],
+    ['on a bedroll by a campfire', campKind, 25, 25, 50],
+    ['on a seat', 'sit', 25, 25, 37.5],
+    ['on a seat by a fire', 'campfire', 25, 25, 37.5],
+    ['on their feet', '', 25, 25, 37.5]
   ];
   walk.forEach(function (w) {
     const t = nightIn(w[1], NIGHT);
