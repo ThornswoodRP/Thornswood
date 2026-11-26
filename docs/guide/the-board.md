@@ -83,6 +83,8 @@ How to use it:
   ("What this is" says how the Bots use them). Assign yourself when you start one. The stage is Order and
   Status: the `wave:` labels and `needs: the live server` were retired on
   22 Oct (#3192), because nothing read them and Order had replaced them.
+### Status, and how an issue finishes
+
 - Status: In Progress the moment work starts, Merged when its fix is merged
   with its test task and only needs a main release (Patrick, 19 Oct; Merged
   since his A on 26 Nov 2026, #6878), Done once the issue is closed. Nobody moves a card: the Status follows
@@ -91,11 +93,13 @@ How to use it:
   Progress while a pull request that names it (`Closes`, `Fixes`,
   `Resolves`, `Refs` or `Part of #N`, or its test task) is open, or while it
   carries a `claimed:` label; Merged once a merged pull request carries its
-  test task; Todo otherwise. Done is never put on an open issue: GitHub
-  keeps an issue's own status and a board Status of the same name together,
-  so an open issue put in Done is closed by GitHub a second later, as the
-  board App, which sent testers to look for fixes main did not have
-  (#6878). Merged is no issue status, so its issue stays open. So to move a card, change the fact: open the
+  test task; Todo otherwise. Done is never put on an open issue: while the
+  board's issue status sync is on, GitHub keeps an issue's own status and a
+  board Status of the same name together, so an open issue put in Done is
+  closed a second later, as the board App, which sent testers to look for
+  fixes main did not have (#6878). The sync was turned off on 26 Nov 2026
+  at 10:48 AM MT; Merged is no issue status, so its issue stays open
+  whether the sync is on or off. So to move a card, change the fact: open the
   pull request, put the claim on, or close the issue, and the card follows
   within a minute. The Status options are Todo, In Progress, Merged and
   Done. GitHub's API replaces every option when one is added: an option

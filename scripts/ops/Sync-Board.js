@@ -21,11 +21,13 @@
 //                task ("Test task for #N:"), so its fix is on main and the
 //                issue stays open until a main release closes it with that
 //                test task (docs/guide/the-board.md), unless another pull
-//                request naming it is open. Not Done: GitHub keeps an
-//                issue's own status and a board Status of the same name
-//                together, so an open issue put in Done is closed by GitHub
-//                a second later, as the board App (#6878, Patrick's A on
-//                26 Nov 2026). Merged is no issue status, so it stays open.
+//                request naming it is open. Not Done: while the board's
+//                issue status sync is on, GitHub keeps an issue's own status
+//                and a board Status of the same name together, so an open
+//                issue put in Done is closed a second later, as the board
+//                App (#6878, Patrick's A on 26 Nov 2026; the sync was turned
+//                off that day). Merged is no issue status, so it stays open
+//                either way.
 //   In Progress  an open pull request of this repository names it (Closes,
 //                Fixes, Resolves, Refs or Part of #N, or its test task), in
 //                its title or body, draft or not; or it carries a claimed:
