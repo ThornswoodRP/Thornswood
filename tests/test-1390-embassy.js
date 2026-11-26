@@ -365,8 +365,9 @@ if (block && RECIPES && ADMIN_ITEMS) {
     }
     yes('B4 a deed presented at the embassy door takes nothing', !deedAt(EMBASSY)[EMBASSY]);
     const held = { by: 9, name: 'Somebody', deed: 42 };
-    yes('B4 a deed at the embassy leaves even a preexisting claim alone', deedAt(EMBASSY, held)[EMBASSY] === held);
-    const transferred = deedAt(HOUSE, held)[HOUSE];
+    const embassyClaim = deedAt(EMBASSY, { ...held })[EMBASSY];
+    yes('B4 a deed at the embassy leaves even a preexisting claim alone', JSON.stringify(embassyClaim) === JSON.stringify(held));
+    const transferred = deedAt(HOUSE, { ...held })[HOUSE];
     yes('B4 an active deed at another door still transfers its claim', transferred?.by === 50 && transferred.deed === held.deed);
     yes('B4 an old deed cannot restore an ended claim', !deedAt(HOUSE)[HOUSE]);
 
