@@ -15,7 +15,7 @@ Steward"):
      setup_hook registers it; it is in each faction's #<faction>-seats, found
      again by its own buttons, and the old shared #seats panel is edited to
      say where the panels went, with no buttons
-  P2 every role the bot gives is one Build-Discord.py makes, by the same
+  P2 every role the bot gives is one Apply-Discord.py makes, by the same
      name, for every faction in factions.json
   L1 a press by somebody who leads no faction is refused, only to them
   L2 the Companions Leader's Add asks who, and the pick gives Companions,
@@ -64,7 +64,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_3317_fp', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_3317_fp', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 

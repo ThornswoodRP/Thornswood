@@ -6,7 +6,7 @@ What the live build of 22 Oct left (#3317, the Cloud Desk's run, comment
 
   G1 the staff pulled into every ticket are one list, by name, in bot.py's
      STAFF_ROLES default, Install-Bot's -StaffRoles default and
-     Build-Discord.py's TICKET_STAFF, and it holds the whole council. The
+     Apply-Discord.py's TICKET_STAFF, and it holds the whole council. The
      run found Install-Bot's default without the council, so every full
      Install-Bot dropped the council from tickets
   G2 -Give finds one member exactly, by id or by a whole name, never by a
@@ -23,7 +23,7 @@ What the live build of 22 Oct left (#3317, the Cloud Desk's run, comment
   G7 the audit says Onboarding is on, and prints every plan role's id and
      the two Install-Bot lines bot.env.json is written with
 
-Build-Discord.py is imported for real, under another name, so its __main__
+Apply-Discord.py is imported for real, under another name, so its __main__
 block never runs. Never connects to anything.
 """
 import os
@@ -75,7 +75,7 @@ except ImportError:
     sys.exit(1 if FAIL else 0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_give', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_give', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -85,7 +85,7 @@ async def _no_guide(guild):
     return {}
 B.read_server_guide = _no_guide
 
-yes('G1 and it is Build-Discord.py\'s TICKET_STAFF, the whole council first',
+yes('G1 and it is Apply-Discord.py\'s TICKET_STAFF, the whole council first',
     bot_default.split(',') == list(B.TICKET_STAFF)
     and list(B.TICKET_STAFF[:len(B.COUNCIL_ROLES)]) == list(B.COUNCIL_ROLES))
 
@@ -145,6 +145,13 @@ class Guild(object):
     async def edit_onboarding(self, **kw):
         CALLS.append(('edit_onboarding', kw.get('enabled')))
         self.onboarding_enabled = kw.get('enabled')
+
+    def audit_logs(self, **kw):
+        # Discord's audit log, empty here (#6961).
+        async def none():
+            return
+            yield
+        return none()
 
 
 def give(g, pairs, check=False):
@@ -228,7 +235,7 @@ for on, check, want, what in (
         asyncio.run(B.keep_onboarding_off(g))
     yes('G6 Onboarding: ' + what, CALLS == want and B.failed == [])
 
-src = read('bot/Build-Discord.py')
+src = read('bot/Apply-Discord.py')
 body = src[src.index('async def on_ready'):]
 yes('G6 the build switches it off before the first channel is gated',
     body.index('keep_onboarding_off(guild)') < body.index('for catname, specs in plan_for(ONLY)'))

@@ -17,7 +17,7 @@ on a fixture in the gate; this is the nightly half, with the bot's libraries.
   4. Every connection goes through bot.CONTEXT, made from that file alone:
      it holds exactly the written roots, urllib's installed opener uses it,
      and both clients bot.py makes log in with a connector on it, and so do
-     backfill.py's and redraw.py's (#3604); Build-Discord.py's and a
+     backfill.py's and redraw.py's (#3604); Apply-Discord.py's and a
      trust.client_class() client log in on a context of the same roots,
      made at login in a folder of its own. On the box,
      where a default context also loads LocalMachine Root and its emSign
@@ -85,7 +85,7 @@ async def logins():
 asyncio.run(logins())
 
 # The scripts beside the bot (#3604). backfill.py and redraw.py take the
-# bot's own class; Build-Discord.py and Wipe-Channels.py make the roots at
+# bot's own class; Apply-Discord.py and Wipe-Channels.py make the roots at
 # login from trust.py into a folder of their own.
 import importlib.util
 import trust
@@ -107,7 +107,7 @@ async def scripts():
         except Stop:
             pass
     discord.http.HTTPClient.static_login = own_login
-    spec = importlib.util.spec_from_file_location('build_discord', os.path.join(sys.argv[1], 'Build-Discord.py'))
+    spec = importlib.util.spec_from_file_location('build_discord', os.path.join(sys.argv[1], 'Apply-Discord.py'))
     build = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(build)
     for c in (build.client, trust.client_class()(intents=discord.Intents.none())):
@@ -200,7 +200,7 @@ try:
     yes('backfill.py and redraw.py log in with the bot\'s TrustedClient, on CONTEXT too (#3604)',
         said.get('login', [])[2:] == [True, True], json.dumps(said.get('login')))
     own = said.get('own') or []
-    yes('Build-Discord.py and a trust.client_class() client, Wipe-Channels.py\'s, log in on a context of the same roots, none eMudhra\'s',
+    yes('Apply-Discord.py and a trust.client_class() client, Wipe-Channels.py\'s, log in on a context of the same roots, none eMudhra\'s',
         len(own) == 2 and all(o is not None and len(o) == len(ours) and not [x for x in o if 'emudhra' in x.lower()] for o in own),
         json.dumps([len(o) if o else o for o in own]))
     text = open(planted, encoding='ascii').read()

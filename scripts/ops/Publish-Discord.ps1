@@ -3,7 +3,7 @@
 
   Posts the newest release into the Discord #news channel.
 
-  Uses the webhook Build-Discord.py made, which is why this needs no bot
+  Uses the webhook Apply-Discord.py made, which is why this needs no bot
   running and no token: a webhook is a one way address into one channel and
   nothing else.
 

@@ -11,7 +11,7 @@
   without the council, and said staff give Member after an application is
   accepted.
 
-  The builder's plan is docs\systems\discord.md: Build-Discord.py --layout
+  The builder's plan is docs\systems\discord.md: Apply-Discord.py --layout
   writes it from ROLES and PLAN, and bot\tests\test-3317-layout.py fails
   when the two differ. This reads that page and the bot's STAFF_ROLES
   default, and holds bot\README.md to them:

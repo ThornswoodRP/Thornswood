@@ -9,7 +9,7 @@ The audit said some admin commands had no staff role check. Measured on
 answer to is_staff, and /test-task (the four /live-smoke commands until
 11 October) to is_task_poster.
 The hole was inside is_staff, which also let in anybody the channel trusted
-with threads. On the server Build-Discord.py makes, that is Lead Gamemaster
+with threads. On the server Apply-Discord.py makes, that is Lead Gamemaster
 and Trial Gamemaster, whose GM permissions carry Manage Threads on every
 channel, and neither is a staff role. Both could close any ticket and skip
 the ticket limits. Since #3317 every lead is on the council and staff; a
@@ -128,11 +128,11 @@ OUTSIDERS = {
                  ['Loremaster']],
 }
 
-# Every role GM or ADMIN carries in Build-Discord.py has Manage Threads on
+# Every role GM or ADMIN carries in Apply-Discord.py has Manage Threads on
 # every channel. Read from the builder, so this cannot drift from it.
 import importlib.util  # noqa: E402
 _spec = importlib.util.spec_from_file_location(
-    'build_discord', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord', os.path.join(HERE, 'Apply-Discord.py'))
 _built = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_built)
 MANAGES_THREADS = set(n for n, _c, _h, p in _built.ROLES

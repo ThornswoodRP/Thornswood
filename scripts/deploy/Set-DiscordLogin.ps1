@@ -451,7 +451,7 @@ Write-Host '  The redirect in the Discord application must be exactly this:' -Fo
 Write-Host '    https://thornswood.net/auth/discord/callback' -ForegroundColor Green
 Write-Host ''
 Write-Host '  The bot has to be IN the server for roles to be readable.' -ForegroundColor DarkGray
-Write-Host '  Setup-Discord.ps1 puts it there.' -ForegroundColor DarkGray
+Write-Host '  Apply-Discord.ps1 puts it there.' -ForegroundColor DarkGray
 if ($failed.Count) {
   Write-Host ''
   Write-Host '  It is written on the VPS, but not in use: the FAILED lines above say which restart did not happen.' -ForegroundColor Red

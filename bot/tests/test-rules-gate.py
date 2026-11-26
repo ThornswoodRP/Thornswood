@@ -251,7 +251,7 @@ yes('W the reaction handlers on the running client are its own',
     getattr(bot.client, 'on_raw_reaction_add', None) is G.on_raw_reaction_add
     and getattr(bot.client, 'on_raw_reaction_remove', None) is G.on_raw_reaction_remove)
 spec = importlib.util.spec_from_file_location(
-    'build_discord_rules_gate', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_rules_gate', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 yes('W the build knows the message by the same first line',

@@ -300,7 +300,7 @@ scripts\vps\Write-BotToken.ps1 1
 # in game\gamemode.js, which #2784 is about.
 #
 # bot\ went to none in the fourth (19 Oct), so this section has no lines
-# left. Build-Discord.py names a role it could not move, a topic, old posts it
+# left. Apply-Discord.py names a role it could not move, a topic, old posts it
 # could not remove and a pin under "did not manage", and -Check no longer
 # moves roles. Build-Onboarding.py passes a refused read of the bot's own
 # member to its caller instead of reading it as no permissions. bot.py needs

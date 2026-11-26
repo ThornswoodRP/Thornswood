@@ -21,7 +21,7 @@
 
   THE APPLICATION GATE. Since 12 Nov 2026 somebody who joins sees #rules and
   #welcome-travelers and nothing else until they react to the rules, which
-  gives them Member (bot_rules_gate.py; Build-Discord.py, THE GATE). The
+  gives them Member (bot_rules_gate.py; Apply-Discord.py, THE GATE). The
   game itself opens on a separate role given when an application is accepted
   (site\\server.js access.play, Playtester). So by default this hands out no
   role at all: the hold question, which gives Member and a Citizen role, is

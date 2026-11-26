@@ -46,7 +46,7 @@ RESTART_EVERY = max(5, _int_env('RESTART_EVERY', 15))
 RESTART_STALE = 15 * 60
 RESTART_KEEP = 200
 RESTART_STATES = ('coming', 'back', 'down', 'off')
-# #updates is found by its place in the plan (bot\Build-Discord.py: the
+# #updates is found by its place in the plan (bot\Apply-Discord.py: the
 # Information category's "updates"), because no file names its id yet;
 # UPDATES_CHANNEL_ID names it outright. The id found is said in the log once.
 UPDATES_CHANNEL_ID = _int_env('UPDATES_CHANNEL_ID', 0)

@@ -14,9 +14,9 @@ the rest. "Don't make it a button."
 
 The bot keeps one message of its own in #rules, GATE_TEXT, and reacts to it
 with MARK so there is something to press. It is a message apart from the
-rules' own words, which Build-Discord.py -Posts edits and takes down when
+rules' own words, which Apply-Discord.py -Posts edits and takes down when
 they need fewer messages: a reaction on those could go with them.
-Build-Discord.py never edits, sends again or takes down a message of the
+Apply-Discord.py never edits, sends again or takes down a message of the
 bot's that starts with GATE_FIRST_LINE (doc_post_of_mine, keep_under).
 
 Member follows the reaction. Adding MARK gives Member and taking it off takes
@@ -67,12 +67,12 @@ MEMBER_ROLE = os.environ.get('MEMBER_ROLE', 'Member').strip()
 MEMBER_IDS, MEMBER_NAMES = _role_tokens([MEMBER_ROLE] if MEMBER_ROLE else [])
 TESTER_IDS, TESTER_NAMES = _role_tokens(['Playtester'])
 # Every staff role, Trial Gamemaster, Content Creator and Support included:
-# each opens more than Member (Build-Discord.py's STAFF, which
+# each opens more than Member (Apply-Discord.py's STAFF, which
 # test-rules-gate.py holds this to). STAFF_ROLES ids count too.
 EVERY_STAFF_IDS, EVERY_STAFF_NAMES = _role_tokens(list(SEAT_RULE_STAFF))
 
 MARK = '\N{WHITE HEAVY CHECK MARK}'
-# Build-Discord.py keeps any message of the bot's that starts with this line,
+# Apply-Discord.py keeps any message of the bot's that starts with this line,
 # so the words below can change without the build learning them again.
 GATE_FIRST_LINE = '**React here for the Member role**'
 GATE_TEXT = (GATE_FIRST_LINE + '\n\n'

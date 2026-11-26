@@ -7,7 +7,7 @@
 // refused to load, read no output, and failed checks that said nothing about
 // the bot (test-help-report.js, 4 of 45, measured 12 Oct).
 //
-// This makes the same choice Setup-Discord.ps1 and Set-DiscordOnboarding.ps1
+// This makes the same choice Apply-Discord.ps1 and Set-DiscordOnboarding.ps1
 // make (#2421): the py launcher's 3.12 first, then plain python, then python3.
 // Off Windows there is no py launcher, and 3.12 goes by python3.12, so that
 // is asked second (#3005): python3 on a Linux machine can be 3.13, where the

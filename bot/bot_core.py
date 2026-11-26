@@ -41,7 +41,7 @@ TICKETS_SAID = ' or #'.join(TICKETS)
 # THE TICKET DESKS (#3317, Patrick's page card q-3317-ticket-split, A): one
 # channel a kind of ticket, each with a panel offering only its kinds, and the
 # private threads open off it. A Tickets category holds help and reports, an
-# Applications category the three kinds of application; Build-Discord.py makes
+# Applications category the three kinds of application; Apply-Discord.py makes
 # them by these names. TICKETS above is the one channel of before the split,
 # #tickets-and-applications. It is used only on a server that has none of
 # these, so a server not yet built again keeps working, and where it is still
@@ -548,7 +548,7 @@ async def log_channel(guild, make=True):
     ticket that is not an application to join it.
 
     CHECKED, NOT TRUSTED BY NAME. TICKET_LOG's first name is tickets. Until
-    24 September Build-Discord.py's PLAN made a #tickets in Help with
+    24 September Apply-Discord.py's PLAN made a #tickets in Help with
     mode='open', which everybody in the server could read. The PLAN now makes
     #tickets staff only, in Applications beside the panel, and that is the
     channel this is meant to find. But the PLAN's modes only apply to a
@@ -598,7 +598,7 @@ async def log_channel(guild, make=True):
             if _role_hit(r, STAFF_IDS, STAFF_NAMES):
                 over[r] = discord.PermissionOverwrite(view_channel=True,
                                                       send_messages=True)
-        # In Staff, where Build-Discord.py has #ticket-log (#3317).
+        # In Staff, where Apply-Discord.py has #ticket-log (#3317).
         where = discord.utils.get(getattr(guild, 'categories', None) or [], name='Staff')
         ch = await guild.create_text_channel(
             free[0],

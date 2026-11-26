@@ -21,20 +21,20 @@ import re
 #
 # So #start-here is site\data\site\join.md, and the welcome and the
 # questions take what you need and what happens to your own Skyrim out of its
-# "What you need" section. Change the page and the next Setup-Discord.ps1
+# "What you need" section. Change the page and the next Apply-Discord.ps1
 # -Posts says the same thing. join.md rather than help.md because the site's
 # pages go out from the repo with each merge's Release, while help.md is
 # edited in the hub and a redeploy never overwrites it, so the repo copy of
 # help.md is not always the one people read.
 #
 # The only words here are the ones the page cannot have: which channel a
-# ticket goes in and where logs go, as the <#KEY> mentions Build-Discord.py
+# ticket goes in and where logs go, as the <#KEY> mentions Apply-Discord.py
 # fills in.
 _JOIN = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                      '..', 'site', 'data', 'site', 'join.md')
 _SITE = 'https://thornswood.net'
 
-# Build-Discord.py packs paragraphs into messages of up to 1900 characters
+# Apply-Discord.py packs paragraphs into messages of up to 1900 characters
 # and never splits one, and it deletes the old messages before it sends. A
 # paragraph past 2000 would be refused by Discord with the channel already
 # half emptied, so a long one is refused here instead, when content.py
@@ -43,7 +43,7 @@ _SITE = 'https://thornswood.net'
 LONGEST_PARAGRAPH = 1800
 
 # THE ONE SWITCH (#428). The site's config.json "open", off unless it says
-# true, and handed to this by Setup-Discord.ps1 as THORNSWOOD_OPEN, which reads
+# true, and handed to this by Apply-Discord.ps1 as THORNSWOOD_OPEN, which reads
 # it off https://thornswood.net/api/public so there is one copy of it. Off, the
 # posts say what is true today: an alpha, open by application. On, they say
 # anyone in the Discord can play, and there is no application to make.
@@ -232,7 +232,7 @@ in <#RESULTS>, with the finding they belong to.
 # decided on 28 Sep that fights start freely, and that the site page is the
 # only copy. So
 # #game-rules is that page's "# In the World" part, to the end of the page,
-# and an edit there reaches the channel with the next Setup-Discord.ps1
+# and an edit there reaches the channel with the next Apply-Discord.ps1
 # -Posts. Paragraphs past LONGEST_PARAGRAPH are refused by as_discord, as
 # they are for join.md.
 #
@@ -617,7 +617,7 @@ and problems in <#RESULTS>, after checking <#KNOWN>.
 
 # The sixteen factions of 4E 252 (#3317): lore/factions.md, which Patrick
 # approved on 22 Oct, read out of the file so #factions and the repository
-# cannot disagree. Setup-Discord -OnBox sends the file with this one.
+# cannot disagree. Apply-Discord -OnBox sends the file with this one.
 _FACTIONS_MD = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             '..', 'lore', 'factions.md')
 with open(_FACTIONS_MD, encoding='utf-8') as _f:
@@ -652,7 +652,7 @@ DRAFTS = ()
 # The build posts each line once in the channel's Changelog thread and ends
 # the post with the newest one, and it refuses to run while a doc's words
 # have no line: changing a doc is adding its line here. The fingerprint to
-# write is the one the refusal prints (Build-Discord.py, check_docs), and
+# write is the one the refusal prints (Apply-Discord.py, check_docs), and
 # the pull request's build prints it too (tests/test-3457-doc-change-lines.py).
 CHANGES = {
     'ECONOMY': [
@@ -737,7 +737,7 @@ CHANGES = {
 }
 
 
-# THE FINGERPRINTS (#3457). Here rather than in Build-Discord.py so a pull
+# THE FINGERPRINTS (#3457). Here rather than in Apply-Discord.py so a pull
 # request's build can check every doc has its change line without discord.py
 # (tests/test-3457-doc-change-lines.py). #3445 rewrote the join and rules
 # pages, which #start-here, #welcome, #faq and #game-rules are read out of, and

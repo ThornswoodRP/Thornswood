@@ -156,7 +156,7 @@ if (!Array.isArray(cfg.access.company)) {
 }
 // Who gets a third character slot at the game's main menu. Everybody gets
 // two; a Patreon tier or a Gamemaster gets three, and so do the admin roles.
-// Decided by Patrick on 20 September. The tier names are Build-Discord.py's.
+// Decided by Patrick on 20 September. The tier names are Apply-Discord.py's.
 if (!Array.isArray(cfg.access.slots3)) {
   cfg.access.slots3 = ['Thalmor Boot-Licker', 'Talos Worshiper', 'Milk Drinker', 'Gamemaster'];
 }

@@ -7,7 +7,7 @@ in none of them (Patrick, 16 Nov 2026). Reacting to the rules gives Member
 (bot_rules_gate.py, #5841), and Member reads the ticket and application
 channels and asks in #travelers-questions. Playtester opens the rest.
 
-Measured on the live server on 10 Nov 2026 (Setup-Discord -OnBox -Audit):
+Measured on the live server on 10 Nov 2026 (Apply-Discord -OnBox -Audit):
 @everyone held no View Channels server wide. Every read channel's overwrite
 only takes posting away, so it leaned on @everyone for View Channels, and
 somebody with no role saw nothing of the gate. Patrick's order of 12 Nov
@@ -34,7 +34,7 @@ So this checks:
      Playtester run no command and staff talk and run commands. #disboard is
      #say-hello renamed.
 
-Build-Discord.py is imported for real under another name, so its __main__
+Apply-Discord.py is imported for real under another name, so its __main__
 block never runs. Every guild, role and channel is a stand-in. A member's
 permissions are worked out in Discord's documented order, as
 test-bot-overwrites.py does. Read only; connects to nothing.
@@ -69,7 +69,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_gate', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_gate', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -193,7 +193,7 @@ yes('  and keeps what it held beyond PLAIN: voice activity, invites, polls',
 quiet(B.keep_everyone(guild))
 yes('a second run asks nothing', len(everyone.edits) == 1)
 
-src = open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
+src = open(os.path.join(HERE, 'Apply-Discord.py'), encoding='utf-8').read()
 audit = src[src.index('async def audit('):]
 audit = audit[:audit.index('\nasync def ') if '\nasync def ' in audit[10:] else len(audit)]
 yes('the audit names what @everyone is missing of PLAIN',

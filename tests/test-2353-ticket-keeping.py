@@ -287,7 +287,7 @@ yes('the close message says when it is deleted, and no longer that nothing is',
     'deleted %d days after it was last closed' in close and 'TICKET_KEEP_DAYS' in close
     and 'Nothing is deleted' not in close)
 
-build = (ROOT / 'bot' / 'Build-Discord.py').read_text(encoding='utf-8')
+build = (ROOT / 'bot' / 'Apply-Discord.py').read_text(encoding='utf-8')
 yes('the bot is still given Manage Threads, which deleting a thread needs',
     "('Manage Threads',           34)" in build)
 

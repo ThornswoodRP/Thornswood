@@ -11,7 +11,7 @@ reading the report in the channel is a safety problem, not a formatting one."
 The fallback used to post the whole ticket into the channel the panel lives
 in, which the whole server can read. The obvious fix, posting it into the log
 channel instead, was broken too: TICKET_LOG's first name is tickets, and until
-24 September Build-Discord.py's PLAN made a #tickets with mode='open'. The PLAN
+24 September Apply-Discord.py's PLAN made a #tickets with mode='open'. The PLAN
 now makes #tickets staff only, but it never changes a channel that is already
 there, so the log channel is checked by its permissions, not trusted by its
 name.
@@ -19,7 +19,7 @@ name.
 The real bot module is imported and the real coroutines are run: on_submit,
 log_channel and ensure_panel. Only what touches Discord is replaced, by stub
 guilds, channels, roles and people, and the thread creation always raises.
-The site push is replaced by a counter. One scenario loads Build-Discord.py
+The site push is replaced by a counter. One scenario loads Apply-Discord.py
 too, without running it, to build #tickets from the PLAN's own roles and
 overwrites. The one open ticket file is pointed at a scratch folder, so the
 real one in the bot's data folder is never read or written.
@@ -286,17 +286,17 @@ def run(what, fn):
 
 # ------------------------------------------------ THE ONE THIS IS FOR --
 def load_build_discord():
-    """Build-Discord.py as a module. Its client only runs under __main__."""
+    """Apply-Discord.py as a module. Its client only runs under __main__."""
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        'build_discord', os.path.join(HERE, 'Build-Discord.py'))
+        'build_discord', os.path.join(HERE, 'Apply-Discord.py'))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
 def plan_shape():
-    # The server as Build-Discord.py's PLAN builds it since #3317: a report
+    # The server as Apply-Discord.py's PLAN builds it since #3317: a report
     # opens off #report-someone in Tickets, which anybody can read (page card
     # q-3317-ticket-split, A; it was #tickets-and-applications until then),
     # and #ticket-log in Staff with mode='staff' (it was #tickets beside the
@@ -322,7 +322,7 @@ def plan_shape():
         roles[name] = g.role(name, admin=bool(perms.administrator))
     g.role('Thornswood bot', bot_role=True)
     # Each with the mode the PLAN gives it, and 'open' when the PLAN gives none,
-    # the same default Build-Discord.py uses.
+    # the same default Apply-Discord.py uses.
     panel = g.channel('report-someone',
                       overwrites=bd.overwrites(g, panel_at[1] or 'open', roles))
     book = g.channel('ticket-log', overwrites=bd.overwrites(g, tickets[1] or 'open', roles))

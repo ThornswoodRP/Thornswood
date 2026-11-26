@@ -1,11 +1,11 @@
 """
-The Thornswood bot. This one stays running, unlike Build-Discord.py which sets
+The Thornswood bot. This one stays running, unlike Apply-Discord.py which sets
 the server up once and exits.
 
 What it does:
 
   Joins    draws a card and puts it in JOIN_CHANNEL, #welcome-travelers on
-           the server Build-Discord.py makes
+           the server Apply-Discord.py makes
   Tickets  a panel in each ticket desk (TICKET_DESKS: #get-help,
            #report-someone, #apply-to-playtest, #apply-for-a-seat and
            #apply-for-staff), one private thread per
@@ -67,7 +67,7 @@ Everything it needs is in env:
   UPPER_STAFF_ROLES comma separated role IDs only, who is pinged and added
                    to Faction Leader tickets. Must include the council's
                    role IDs: Owner, Co-Owner and each lead, which
-                   Setup-Discord.ps1 -OnBox -Audit prints as the
+                   Apply-Discord.ps1 -OnBox -Audit prints as the
                    -UpperStaffRoles line.
                    Names are ignored and logged. Empty or unset means a
                    Faction Leader ticket is refused: nobody else is added,

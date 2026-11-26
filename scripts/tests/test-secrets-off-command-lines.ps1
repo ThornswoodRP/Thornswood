@@ -467,7 +467,7 @@ Yes 'Publish-Discord.ps1 has no -Webhook: it reads the webhook through Discord-H
     @($pubAst.ParamBlock.Parameters | Where-Object { (NameOf $_.Name) -eq 'Webhook' }).Count -eq 0 -and $pub -match 'Discord-Hook\.ps1''\) -Name \$hookName')
 $hookText = [IO.File]::ReadAllText((Join-Path $repo 'scripts\ops\Discord-Hook.ps1'))
 Yes 'Discord-Hook.ps1 takes a webhook from another script only as a SecureString (-Url)' ($hookText -match '\[System\.Security\.SecureString\]\$Url')
-foreach ($caller in @('scripts\ops\Set-DevNews.ps1', 'scripts\deploy\Setup-Discord.ps1')) {
+foreach ($caller in @('scripts\ops\Set-DevNews.ps1', 'scripts\deploy\Apply-Discord.ps1')) {
     $ct = [IO.File]::ReadAllText((Join-Path $repo $caller))
     Yes ((Split-Path -Leaf $caller) + ' hands Discord-Hook.ps1 the webhook as -Save -Url, a SecureString') ($ct -match 'Discord-Hook\.ps1''\) -Name \w+ -Save -Url ')
 }

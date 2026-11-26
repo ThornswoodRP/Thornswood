@@ -30,7 +30,7 @@ channel "called leadership since it's not a court"). This proves:
      Leader and FACTION_STAFF read, members and Officers see nothing
   F6 lore/factions.md has an entry for every faction, by its short name
 
-Build-Discord.py is imported for real, under another name, so its __main__
+Apply-Discord.py is imported for real, under another name, so its __main__
 block never runs. Read only. Never connects to anything.
 """
 import os
@@ -76,7 +76,7 @@ except ImportError:
     sys.exit(1 if FAIL else 0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord_factions', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord_factions', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 

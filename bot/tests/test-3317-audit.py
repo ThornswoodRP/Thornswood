@@ -1,7 +1,7 @@
 """
 test-3317-audit.py
 
-Build-Discord.py --audit reads the live server, says where it differs from
+Apply-Discord.py --audit reads the live server, says where it differs from
 the plan, and changes nothing (#3317).
 
 Patrick, 22 Oct 2026: every role's permissions right globally, per category,
@@ -10,7 +10,7 @@ category. The plan only says what a channel the builder MAKES gets, and the
 live server was gated by hand, so the audit is the read that says what is
 really there.
 
-Build-Discord.py is imported for real, under another name so its __main__
+Apply-Discord.py is imported for real, under another name so its __main__
 block never runs. The guild is a stand-in that matches the plan exactly, and
 then is put wrong one way at a time; every write a stand-in could be asked
 for is recorded, and none may happen.
@@ -50,7 +50,7 @@ except ImportError:
     sys.exit(0)
 
 spec = importlib.util.spec_from_file_location(
-    'build_discord', os.path.join(HERE, 'Build-Discord.py'))
+    'build_discord', os.path.join(HERE, 'Apply-Discord.py'))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
@@ -159,6 +159,13 @@ class Guild(object):
 
     async def edit_onboarding(self, **kw):
         WRITES.append(('edit_onboarding',))
+
+    def audit_logs(self, **kw):
+        # Discord's audit log, empty here (#6961).
+        async def none():
+            return
+            yield
+        return none()
 
 
 def build():

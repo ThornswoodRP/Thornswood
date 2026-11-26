@@ -5,7 +5,7 @@
 # plain in memory, or a test's own fixture, so it stays off the command line
 # (#1069). The files it would hit, one place each (the harness for #4188
 # holds this list to the tree, by file, since line numbers move with every edit):
-#   scripts/deploy/Setup-Discord.ps1
+#   scripts/deploy/Apply-Discord.ps1
 #   scripts/ops/Discord-Hook.ps1
 #   scripts/tests/test-prove-secret.ps1
 #   scripts/tests/test-secret-channel.ps1

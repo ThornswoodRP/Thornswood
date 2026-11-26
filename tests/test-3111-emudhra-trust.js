@@ -25,7 +25,7 @@
        context made from that file alone (trust.context), because on Windows
        a default context also loads the machine's stores, and the box's
        LocalMachine\Root holds emSign Root CA - G1 (read 21 Oct). Every
-       other script in bot/ that logs in to Discord (Build-Discord.py,
+       other script in bot/ that logs in to Discord (Apply-Discord.py,
        Wipe-Channels.py, backfill.py, redraw.py) makes its client from the
        same trust.client_class, and none makes a Discord client of its own
        (#3604: backfill.py and redraw.py did, so on the box they trusted that

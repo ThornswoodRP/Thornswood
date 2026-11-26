@@ -15,7 +15,7 @@ from bot_tickets import FACTION_SHORT, faction_leader_role, faction_names
 # #3317. Patrick, 22 Oct, page card q-3317-faction-member-give, A: a
 # faction's Leader gives and takes its member role from a bot panel. The
 # member role is the faction's short name ("Thalmor", "Companions"), made by
-# Build-Discord.py with its "<short name> Leader" role, and the Leader is
+# Apply-Discord.py with its "<short name> Leader" role, and the Leader is
 # whoever holds that role. Like a Jarl's offices: their own faction only, and
 # when two accounts hold one Leader role neither acts until staff take it
 # from all but one.
@@ -43,7 +43,7 @@ OLD_FACTION_PANEL_CHANNEL = ['seats']
 
 def faction_slug(faction):
     """A faction's channel name: its short name, lower case, hyphens, as
-       Build-Discord.py names its channels."""
+       Apply-Discord.py names its channels."""
     return FACTION_SHORT.get(faction, faction).lower().replace(' ', '-')
 
 
@@ -53,7 +53,7 @@ def faction_seats(faction):
 
 
 def faction_role(office, faction):
-    """A faction's role for an office, as Build-Discord.py makes it."""
+    """A faction's role for an office, as Apply-Discord.py makes it."""
     short = FACTION_SHORT.get(faction, faction)
     if office == 'officer':
         return short + ' Officer'
@@ -340,7 +340,7 @@ async def ensure_faction_panel(guild):
                if _role(guild, faction_role(o, f)) is None]
     if missing:
         log('these faction roles are missing, so they cannot be given until '
-            'Build-Discord.py makes them: %s' % ', '.join(missing))
+            'Apply-Discord.py makes them: %s' % ', '.join(missing))
     here = []
     nowhere = []
     for f in faction_names():
@@ -351,7 +351,7 @@ async def ensure_faction_panel(guild):
         here.append(ch)
         await _faction_panel_in(ch, f)
     if nowhere:
-        log('no #%s yet, so those factions\' panels wait for Build-Discord.py '
+        log('no #%s yet, so those factions\' panels wait for Apply-Discord.py '
             'to make them' % ', #'.join(nowhere))
     old = by_name(guild, OLD_FACTION_PANEL_CHANNEL)
     if old is not None and here:

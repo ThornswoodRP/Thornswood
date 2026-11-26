@@ -1,7 +1,7 @@
 # test-setup-check.py
 #
-# Issue #1211. Setup-Discord -Check must not say the AFK channel or the join
-# message was set when nothing changed. This runs Build-Discord's own
+# Issue #1211. Apply-Discord -Check must not say the AFK channel or the join
+# message was set when nothing changed. This runs Apply-Discord's own
 # apply_welcome_and_afk in check mode against a stand-in guild. Nothing here
 # logs in, and no token is set.
 #
@@ -31,7 +31,7 @@ def yes(what, cond):
 
 
 spec = importlib.util.spec_from_file_location(
-    "build_discord_check", os.path.join(HERE, "Build-Discord.py"))
+    "build_discord_check", os.path.join(HERE, "Apply-Discord.py"))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 

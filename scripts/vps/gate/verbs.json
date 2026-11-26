@@ -1290,8 +1290,8 @@
         "Own": "switch"
       }
     },
-    "Setup-Discord": {
-      "script": "scripts/deploy/Setup-Discord.ps1",
+    "Apply-Discord": {
+      "script": "scripts/deploy/Apply-Discord.ps1",
       "reads": [
         "scripts/ops/Discord-Hook.ps1",
         "scripts/vps/Remote.ps1",
@@ -1304,7 +1304,7 @@
       "params": {
         "Audit": "switch",
         "Check": "switch",
-        "Posts": "switch"
+        "Record": "switch"
       }
     },
     "Renew-BoxKey": {

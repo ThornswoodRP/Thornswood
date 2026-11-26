@@ -3,7 +3,7 @@
 // A ban does not depend on somebody spelling a role name correctly.
 //
 // From the To Do List: "site/server.js:75 expects a role named Banned...
-// Build-Discord.py builds the role list and Banned is not in it. Entry 30 is
+// Apply-Discord.py builds the role list and Banned is not in it. Entry 30 is
 // the enforcement; this is the fact that the thing being enforced does not
 // exist yet."
 //
@@ -24,7 +24,7 @@ const siteFiles = require('../../tests/site-files');
 const CR = String.fromCharCode(13);
 const SRC = path.join(REPO_DIR, 'site', 'server.js');
 const src = siteFiles.source(SRC).split(CR).join('');
-const builder = fs.readFileSync(path.join(REPO_DIR, 'bot', 'Build-Discord.py'), 'utf8')
+const builder = fs.readFileSync(path.join(REPO_DIR, 'bot', 'Apply-Discord.py'), 'utf8')
   .split(CR).join('');
 
 let pass = 0, fail = 0;

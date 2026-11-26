@@ -8,7 +8,7 @@ import types
 import unittest
 from unittest.mock import AsyncMock
 
-SOURCE = Path(__file__).resolve().parents[1] / 'bot' / 'Build-Discord.py'
+SOURCE = Path(__file__).resolve().parents[1] / 'bot' / 'Apply-Discord.py'
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8-sig'), filename=str(SOURCE))
 READY = next(n for n in TREE.body if isinstance(n, ast.AsyncFunctionDef)
              and n.name == 'on_ready')
@@ -47,7 +47,7 @@ class ExitContract(unittest.TestCase):
                          LoginFailure=type('LoginFailure', (Exception,), {}),
                          PrivilegedIntentsRequired=type('IntentsRequired', (Exception,), {})),
                      GUILD='', TOKEN=object(), AUDIT=audit, CHECK=check, GIVE=give, STAFF=['Staff'],
-                     ROLES_ONLY=roles_only, ONLY=only, PRUNE=False, PLAN=[], KEEP=[], RETIRED=[],
+                     ROLES_ONLY=roles_only, ONLY=only, WHOLE=True, RECORD_NOW=False, RECORD='', PRUNE=False, PLAN=[], KEEP=[], RETIRED=[],
                      RETIRED_CATEGORIES=[], made=[], kept=[], failed=[], check_docs=lambda: [],
                      plan_for=lambda _: [], audit=read_audit, ensure_roles=ensure_roles,
                      give=AsyncMock(),

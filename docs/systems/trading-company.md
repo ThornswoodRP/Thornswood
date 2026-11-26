@@ -166,7 +166,7 @@ lets a character handle a company sale is the company's member role,
 Free Skyrim Trading Company (it was called Trading Company until #3317),
 given and taken by the company's Leader on the faction panel in
 #free-skyrim-trading-company-seats, in the company's own category.
-`bot/Build-Discord.py` makes that role, and `access.company` in the
+`bot/Apply-Discord.py` makes that role, and `access.company` in the
 site's config names it. A sale out of Skyrim is the trade panel's Buy
 for the company, as above. The things the seller put up leave the
 seller's pack and the world. The worker pays the price less their

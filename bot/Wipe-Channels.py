@@ -105,7 +105,7 @@ def why_kept(name, keep=(), wipe_records=False):
     return ''
 
 
-# The thread every doc channel keeps its changelog in (Build-Discord.py,
+# The thread every doc channel keeps its changelog in (Apply-Discord.py,
 # #3317). Never deleted, in any channel: the first wipe took #news's (#3336).
 CHANGELOG = 'Changelog'
 

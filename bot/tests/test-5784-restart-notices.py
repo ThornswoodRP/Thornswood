@@ -169,9 +169,9 @@ yes('the loop is started with the others', 'asyncio.create_task(watch_restarts()
 yes('it reads the folder the agent writes', bot.restart_docs.__defaults__ == (None,) and bot.NEWS_DIR in (
     r'C:\Thornswood-Deploys\for-bot', os.environ.get('THORNSWOOD_NEWS_DIR')))
 yes('it looks often enough for dev\'s one-minute lead', bot.RESTART_EVERY <= 30)
-yes('#updates is the Information category\'s, as Build-Discord.py plans it',
-    "('Information', [" in open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
-    and "name='updates'" in open(os.path.join(HERE, 'Build-Discord.py'), encoding='utf-8').read()
+yes('#updates is the Information category\'s, as Apply-Discord.py plans it',
+    "('Information', [" in open(os.path.join(HERE, 'Apply-Discord.py'), encoding='utf-8').read()
+    and "name='updates'" in open(os.path.join(HERE, 'Apply-Discord.py'), encoding='utf-8').read()
     and bot.UPDATES_CATEGORY == 'information' and bot.UPDATES_NAME == 'updates')
 yes('the ping role is the one the button in #welcome hands out', ('updates', bot.UPDATES_PING_ROLE, 'Updates pings') in bot.PINGS)
 

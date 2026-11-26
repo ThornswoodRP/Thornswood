@@ -1,7 +1,7 @@
 ﻿<#
   test-setup-discord-empty-hook.ps1
 
-  Setup-Discord.ps1 ends by handing bot\news-webhook.txt to Discord-Hook.ps1
+  Apply-Discord.ps1 ends by handing bot\news-webhook.txt to Discord-Hook.ps1
   -Save. An empty file read back as $null and .Trim() threw on it. This runs
   only that tail, cut out of the real script, in a temp copy of the layout:
   scripts\deploy, the real scripts\ops\Discord-Hook.ps1 and the real
@@ -33,9 +33,9 @@ function Yes([string]$what, [bool]$cond) {
     else { $script:fail++; Write-Host "FAIL  $what" }
 }
 
-$src = [IO.File]::ReadAllText((Join-Path $RepoDir 'scripts\deploy\Setup-Discord.ps1'))
+$src = [IO.File]::ReadAllText((Join-Path $RepoDir 'scripts\deploy\Apply-Discord.ps1'))
 $at = $src.IndexOf('$hook = Join-Path $Here')
-Yes 'the webhook hand-over is where it was in Setup-Discord.ps1' ($at -gt 0)
+Yes 'the webhook hand-over is where it was in Apply-Discord.ps1' ($at -gt 0)
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-setup-discord-' + [Guid]::NewGuid().ToString('N'))
 try {
@@ -47,7 +47,7 @@ try {
     $stub = "param([Parameter(ValueFromRemainingArguments=`$true)]`$rest)`r`n[IO.File]::AppendAllText('" + $called.Replace("'", "''") + "', 'called`r`n')`r`nexit 1`r`n"
     [IO.File]::WriteAllText((Join-Path $vps 'Remote.ps1'), $stub)
     $tail = "param([switch]`$Check, [string[]]`$Only = @())`r`n`$ErrorActionPreference = 'Stop'`r`n`$Here = `$PSScriptRoot`r`n`$code = 0`r`n" + $src.Substring($at)
-    $tailPath = Join-Path $dep 'Setup-Discord-tail.ps1'
+    $tailPath = Join-Path $dep 'Apply-Discord-tail.ps1'
     [IO.File]::WriteAllText($tailPath, $tail, (New-Object Text.UTF8Encoding($true)))
     $hookFile = Join-Path $bot 'news-webhook.txt'
 

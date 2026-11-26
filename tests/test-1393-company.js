@@ -908,11 +908,11 @@ attempt('the wiring', function () {
       !/\('company',\s+'Apply: Trading Company'/.test(bot) &&
       !/'company':\s+'Trading Company'/.test(bot) && !/'company': \[/.test(bot) &&
       bot.indexOf('No GM or staff member (Loremaster, Discord Moderator, or any other staff role) may hold an in-game RP role with faction leadership, such as a Jarl or a faction lead.') !== -1);
-  const build = read('bot/Build-Discord.py');
+  const build = read('bot/Apply-Discord.py');
   // Since #3317 the role is the company's member role, the faction's own
-  // name in bot/factions.json, which Build-Discord.py makes for every faction.
+  // name in bot/factions.json, which Apply-Discord.py makes for every faction.
   const factions = JSON.parse(read('bot/factions.json'));
-  yes('W10 and Build-Discord.py makes that role, so there is one to give',
+  yes('W10 and Apply-Discord.py makes that role, so there is one to give',
       !!def && factions.indexOf(def[1]) !== -1 &&
       /FACTION_MEMBERS = tuple\(FACTION_SHORT\.get\(f, f\) for f in FACTIONS\)/.test(build) &&
       /for _name in FACTION_MEMBERS:\n    ROLES\.append\(\(_name, /.test(build) &&

@@ -110,11 +110,11 @@ yes('#game-rules has no em dash', chr(0x2014) not in GAME_RULES)
 yes('#game-rules calls nobody by the word the house rules keep out',
     re.search(r'\bplayers?\b', GAME_RULES, re.I) is None)
 
-builder = read(os.path.join(HERE, 'Build-Discord.py'))
+builder = read(os.path.join(HERE, 'Apply-Discord.py'))
 # Since #3317 a plan line says post=True and its key names the words in
 # content.py's DOCS, so every written channel keeps a changelog.
 content_src = read(os.path.join(HERE, 'content.py'))
-yes('Build-Discord.py still posts content.GAME_RULES into #game-rules',
+yes('Apply-Discord.py still posts content.GAME_RULES into #game-rules',
     re.search(r"name='game-rules',\s*key='GAMERULES'[^)]*?post=True", builder, re.S) is not None
     and re.search(r"'GAMERULES':\s*GAME_RULES,", content_src) is not None)
 yes('and its topic counts nine rules, as the page has',

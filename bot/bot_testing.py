@@ -64,7 +64,7 @@ from bot_holds import _say
 # written to channel-setup.json as dev_tasks_id, and from then on the bot
 # finds it by that id and never by its name, so a rename keeps it and no
 # second one is made. A forum of that name already in the category (made by
-# hand or by Build-Discord.py) is taken as it is and its id recorded.
+# hand or by Apply-Discord.py) is taken as it is and its id recorded.
 TASKS_NAME = os.environ.get('TEST_TASKS_CHANNEL', 'test-tasks').strip().lower()
 TASKS_ARCHIVE = TASKS_NAME + '-archive'
 FINDINGS_OLD = 'test-results'
@@ -226,7 +226,7 @@ async def _first_setup(guild, apply, path):
     old = _channel_named(guild, TASKS_NAME, ('text',))
     if tasks is None and old is None:
         return ['there is no #%s in "%s", so nothing was changed. Make it '
-                '(Build-Discord.py) and run this again.'
+                '(Apply-Discord.py) and run this again.'
                 % (TASKS_NAME, getattr(guild, 'name', '?'))], True
     if tasks is None:
         said.append('%stry to convert #%s to a forum' % (verb, TASKS_NAME))

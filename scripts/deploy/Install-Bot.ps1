@@ -2,7 +2,7 @@
   Install-Bot.ps1
 
   Puts the Thornswood bot on the VPS and keeps it running. This is the one that
-  stays up, unlike Setup-Discord.ps1 which builds the server once and exits.
+  stays up, unlike Apply-Discord.ps1 which builds the server once and exits.
 
       .\Install-Bot.ps1               all of it, asks for the token
       .\Install-Bot.ps1 -CodeOnly    just the code, then restart
@@ -89,7 +89,7 @@ param(
   # said so in its log for a day before anybody read it.
   [string]$JoinChannel   = 'welcome-travelers',
   # Pulled into every ticket thread: the council and the ranks that answer
-  # tickets, the same names as bot.py's STAFF_ROLES default and Build-Discord.py's
+  # tickets, the same names as bot.py's STAFF_ROLES default and Apply-Discord.py's
   # TICKET_STAFF (#3317). A run that wrote the old list left the council out of
   # every ticket; bot\tests\test-3317-give.py holds the three together.
   [string]$StaffRoles    = 'Owner,Co-Owner,Lead Dev,Lead Gamemaster,Lead Loremaster,Lead Moderator,Lead Content Creator,Lead Support,Gamemaster,Dev,Loremaster,Moderator',
@@ -99,7 +99,7 @@ param(
   [string]$CreatorRoles  = 'Content Creator',
   # Faction Leader tickets. IDs only. Install-Bot -UpperStaffRoles should
   # carry the council: Owner, Co-Owner and each of the six leads, whose IDs
-  # Setup-Discord.ps1 -OnBox -Audit prints as the -UpperStaffRoles line.
+  # Apply-Discord.ps1 -OnBox -Audit prints as the -UpperStaffRoles line.
   # Names are ignored. Empty means those tickets are refused, not opened
   # to general staff.
   [string]$UpperStaffRoles = '',
@@ -925,7 +925,7 @@ if ("$libs" -match 'ROOTS NOT MADE') { Die "trust.py could not make the bot's ro
 $token = ''
 if (-not $NoToken) {
   Head 'The bot token'
-  Say '  Same one Setup-Discord.ps1 wants. Leave blank to keep what is up there.' 'DarkGray'
+  Say '  Same one Apply-Discord.ps1 wants. Leave blank to keep what is up there.' 'DarkGray'
   $ss = Read-Host '  Paste it' -AsSecureString
   if ($ss -and $ss.Length -gt 0) {
     $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
@@ -1028,7 +1028,7 @@ catch { 'could not tighten bot.env.json: ' + `$_.Exception.Message }
 'creator only:  ' + `$env2['CREATOR_ROLES']
 'upper staff:   ' + `$env2['UPPER_STAFF_ROLES']
 if (-not [string]`$env2['UPPER_STAFF_ROLES']) {
-  'WARNING: UPPER_STAFF_ROLES is empty. Faction Leader applications will be refused until it is set to the council: Owner, Co-Owner and each of the six leads, whose IDs Setup-Discord.ps1 -OnBox -Audit prints as the -UpperStaffRoles line.'
+  'WARNING: UPPER_STAFF_ROLES is empty. Faction Leader applications will be refused until it is set to the council: Owner, Co-Owner and each of the six leads, whose IDs Apply-Discord.ps1 -OnBox -Audit prints as the -UpperStaffRoles line.'
 }
 
 # The same key into the site's config, so it accepts the bot and nobody else.

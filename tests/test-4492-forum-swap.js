@@ -5,7 +5,7 @@
       node tests/test-4492-forum-swap.js
 
   Issue #4492. Once Community is on, a -Prune build of the Discord
-  (bot/Build-Discord.py, ensure_channel) found #bugs, #character-introductions
+  (bot/Apply-Discord.py, ensure_channel) found #bugs, #character-introductions
   and #tales still the text channels they were made as before Community,
   deleted each one and then made a forum in its place. It never asked whether
   anything was in them, though the prune list for channels the plan no longer
@@ -13,7 +13,7 @@
   a forum Discord refused left the channel gone.
 
   This runs tests/forum-swap-cases.py, which lifts the build's code out of
-  Build-Discord.py and runs it against a stand-in guild, and holds:
+  Apply-Discord.py and runs it against a stand-in guild, and holds:
 
     1. an empty text channel where the plan wants a forum is rebuilt, the
        forum made before the text channel is deleted;

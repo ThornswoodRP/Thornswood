@@ -26,6 +26,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | Script | What it is for |
 | --- | --- |
 | [bot/Load-Box.ps1](bot/Load-Box.ps1) | #4623. The load test with the collection's world: its NPCs, the gamemode's NPC runtime, merchants and quests, and bots that fight, host the NPCs near them, ask the guild traders to trade and take and leave their work (load-bots.js, quest). |
+| [deploy/Apply-Discord.ps1](deploy/Apply-Discord.ps1) | Applies the plan's changes to the Thornswood Discord: what the repository changed in the plan (roles, categories, channels, permissions, topics and the words of the read only posts) since the last run, and nothing else (#6961). |
 | [deploy/Artifact.ps1](deploy/Artifact.ps1) | What a deploy sends, built from a commit rather than copied off a working tree, and what the box keeps to say which commit each part runs. |
 | [deploy/Bot-Code.ps1](deploy/Bot-Code.ps1) | The Discord bot's code as one list (#5357): what Install-Bot.ps1 sends and parse checks on the box, and what App-Part.ps1 puts in the bot's part of a Release for the deploy agent. |
 | [deploy/Check-GitHubSettings.ps1](deploy/Check-GitHubSettings.ps1) | Reads GitHub's Actions settings, environments, secrets and variables for this repository and names every way they differ from records\github-settings.json on main. |
@@ -77,7 +78,6 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [deploy/Set-DiscordOnboarding.ps1](deploy/Set-DiscordOnboarding.ps1) | Sets Discord's onboarding (Server Settings, Onboarding) with the bot, from bot\Build-Onboarding.py: the default channels, the questions and what each answer gives, every role and channel looked up by name on the server when it runs. |
 | [deploy/Set-RepoAbout.ps1](deploy/Set-RepoAbout.ps1) | Makes the repository's About box on GitHub (the line under its name, the website and the topics) match records\repo-about.json on main. |
 | [deploy/Set-Turnstile.ps1](deploy/Set-Turnstile.ps1) | Puts Cloudflare Turnstile's two keys for the report form into the site's config.json on the VPS and restarts the site, so /report draws the check and the site asks Cloudflare about every pass (#3216, Patrick's answer on 22 Oct 2026). |
-| [deploy/Setup-Discord.ps1](deploy/Setup-Discord.ps1) | Builds the Thornswood Discord: roles, categories, channels, permissions and the words in the read only channels, in one run. |
 | [deploy/Setup-Domain.ps1](deploy/Setup-Domain.ps1) | Puts thornswood.net in front of the docs site, with a real certificate. |
 | [deploy/SiteConfigSet.ps1](deploy/SiteConfigSet.ps1) | The one block that changes a single top-level setting in the site's config.json on the VPS and leaves every other setting as it was. |
 | [deploy/StopAndMove.ps1](deploy/StopAndMove.ps1) | Stopping what runs from a folder, and then moving its files, on the box: each process waited for until it has exited, and each move tried once. |

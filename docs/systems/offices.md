@@ -179,7 +179,7 @@ payouts on the trading company page leave it. See
 
 The Jarl, the Court, the Steward and the Guards are in the server,
 including eviction, rent, the box, the board and the jail. Each is a
-Discord role (`bot\Build-Discord.py` makes them, never hoisted, and never
+Discord role (`bot\Apply-Discord.py` makes them, never hoisted, and never
 deletes them), which the site reads with the other roles and hands the
 game server for each profile (`/api/allowed`); the game reads every
 office through one function, `officeOf` in the property block. They are

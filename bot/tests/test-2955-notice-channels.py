@@ -2,7 +2,7 @@
 #
 # Issue #2955. Discord's own Community Updates and Safety Notifications
 # channels go to #staff-updates, by the id in staff-channel.txt, and never to
-# #staff-general. This runs Build-Discord's own apply_notice_channels against
+# #staff-general. This runs Apply-Discord's own apply_notice_channels against
 # a stand-in guild. Nothing here logs in, and no token is set.
 import os
 import sys
@@ -27,7 +27,7 @@ def yes(what, cond):
 
 
 spec = importlib.util.spec_from_file_location(
-    "build_discord_notices", os.path.join(HERE, "Build-Discord.py"))
+    "build_discord_notices", os.path.join(HERE, "Apply-Discord.py"))
 B = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(B)
 
