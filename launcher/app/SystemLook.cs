@@ -24,7 +24,7 @@ namespace Thornswood
         /// <summary>A Windows contrast theme is on.</summary>
         public bool HighContrast;
 
-        /// <summary>Windows' text size, 1 for 100%, up to LargestText.</summary>
+        /// <summary>Windows' text size, 1 for 100%, up to 2.25, the far end of its Text size slider (Scale).</summary>
         public double TextScale = 1.0;
 
         /// <summary>
@@ -33,9 +33,6 @@ namespace Thornswood
         /// contrast theme puts them on screen.
         /// </summary>
         public Dictionary<string, string> Colours = new Dictionary<string, string>();
-
-        /// <summary>The far end of Windows' Text size slider, 225%.</summary>
-        public const double LargestText = 2.25;
 
         const uint SPI_GETHIGHCONTRAST = 0x0042;
         const uint HCF_HIGHCONTRASTON = 0x00000001;

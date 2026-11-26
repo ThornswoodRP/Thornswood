@@ -39,8 +39,8 @@ namespace Thornswood
         /// leaves a machine, which was right, and nothing was put in its place.
         /// The client bundle does not create it, and every function in this
         /// class returned early when it was missing. So from that evening on a
-        /// fresh install could not choose a character: SetProfileId returned
-        /// false, GetProfileId read nothing, and Chars.StartAs stopped with
+        /// fresh install could not choose a character: the profile id could
+        /// not be written, GetProfileId read nothing, and Chars.StartAs stopped with
         /// "they still say no profile", which is what a tester reported on
         /// 17 Sep after reinstalling.
         ///
@@ -219,13 +219,20 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Which character slot the client asks the server for.
+        /// Tell the client to wait at the main menu and let the person pick,
+        /// rather than connecting as one id the moment it loads.
         ///
-        /// It has to go INSIDE gameData. That is not a tidiness point, it is
-        /// the whole difference between walking into the world and staring at
-        /// a login box.
+        /// Since 20 September the launcher has no character picker of its
+        /// own. gameData.chooseAtMenu = true is what our fork of the client
+        /// reads to hold at the menu, and gameData.profileId still carries a
+        /// number, the id played last (or the spare on an install that has
+        /// played nobody), so the menu has something to offer first and an
+        /// older client that does not know the flag still walks in as
+        /// somebody rather than showing the login box.
         ///
-        /// authService.ts decides on one line:
+        /// The number has to go INSIDE gameData. That is not a tidiness
+        /// point, it is the whole difference between walking into the world
+        /// and staring at a login box. authService.ts decides on one line:
         ///
         ///     const settingsGameData = this.sp.settings["skymp5-client"]["gameData"];
         ///     const isOfflineMode = Number.isInteger(settingsGameData?.profileId);
@@ -237,55 +244,15 @@ namespace Thornswood
         /// written, fails to resolve it against the master, and sits there
         /// saying ID: UNDEFINED. The log line for it is
         /// "No offline mode detectted in settings, regular auth needed",
-        /// spelling and all.
+        /// spelling and all. A profileId at the top level of the document,
+        /// where gameData?.profileId is undefined, never engages offline mode.
         ///
-        /// This was writing profileId at the top level of the document, where
-        /// gameData?.profileId is undefined, so offline mode has never once
-        /// engaged. Nothing else was wrong: not the token, not the browser,
-        /// not the menu.
-        /// </summary>
-        public static bool SetProfileId(int profileId)
-        {
-            try
-            {
-                string file = SettingsFile;
-                Ensure(null);
-                if (!File.Exists(file)) return false;
-                string before = File.ReadAllText(file);
-
-                // Put one inside gameData if it is not there, then bring every
-                // copy in the file to the same number. Older files carry a top
-                // level profileId from before this was understood, and two
-                // copies that disagree is how GetProfileId starts answering
-                // with the wrong slot.
-                string after = EnsureInGameData(before, "profileId", profileId.ToString());
-                after = SetEveryNumber(after, "profileId", profileId);
-
-                if (string.Equals(before, after, StringComparison.Ordinal)) return false;
-                if (!LooksLikeJson(after)) return false;
-                string changed = after;
-                Hold.Around(file, delegate { File.WriteAllText(file, changed, new UTF8Encoding(false)); });
-                return true;
-            }
-            catch { return false; }
-        }
-
-        /// <summary>
-        /// Tell the client to wait at the main menu and let the person pick,
-        /// rather than connecting as one id the moment it loads.
-        ///
-        /// Since 20 September the launcher has no character picker of its
-        /// own. gameData.chooseAtMenu = true is what our fork of the client
-        /// reads to hold at the menu, and gameData.profileId still carries a
-        /// number, the id played last (or the spare on an install that has
-        /// played nobody), so the menu has something to offer first and an
-        /// older client that does not know the flag still walks in as
-        /// somebody rather than showing the login box (see SetProfileId for
-        /// why the number has to be inside gameData).
-        ///
-        /// Same edit style as SetProfileId: one key put inside gameData when
-        /// it is not there, every copy in the file brought to the same value,
-        /// the shape checked, and the write under Hold.Around. Then the file
+        /// So one key is put inside gameData when it is not there, and every
+        /// copy in the file is brought to the same value: older files carry a
+        /// top level profileId from before this was understood, and two copies
+        /// that disagree is how GetProfileId starts answering with the wrong
+        /// slot. Then the shape is checked, and the write is under
+        /// Hold.Around. Then the file
         /// is read back and this throws when it does not say what was
         /// written, because a write that quietly failed leaves the client
         /// connecting as whoever the last session left there. Play stops on
