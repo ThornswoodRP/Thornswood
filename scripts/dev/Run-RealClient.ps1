@@ -408,8 +408,40 @@ try {
     $toldWaiting = $false
     $toldChannel = ''
     $launcherGoneSince = $null
+    $sawPlay = ''
+    # What the loop saw, said each time it changes: the window it looks in and
+    # Play in it (26 Nov: launcher 1.3.125 was Ready with a clean scan, and
+    # for 15 minutes Play was never pressable, with nothing to say whether
+    # the window, the button or its enabled state was missing).
+    function Get-PlayState($h, $btn) {
+        if ($h -eq [IntPtr]::Zero) { return 'no main window' }
+        $title = ''
+        try { $title = $ae::FromHandle($h).Current.Name } catch { $title = '(unreadable)' }
+        $w = 'window ' + $h + ' "' + $title + '"'
+        if (-not $btn) { return $w + ', no BtnPlay in it' }
+        $w + ', BtnPlay "' + $btn.Current.Name + '" ' + $(if ($btn.Current.IsEnabled) { 'enabled' } else { 'disabled' }) +
+            $(if ($btn.Current.IsOffscreen) { ', off screen' } else { '' })
+    }
+    # The launcher's top-level windows, for when Play never came.
+    function Get-LauncherWindows($procId) {
+        $byProc = New-Object System.Windows.Automation.PropertyCondition ($ae::ProcessIdProperty, [int]$procId)
+        @($ae::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $byProc) | ForEach-Object {
+            '"' + $_.Current.Name + '" (' + $_.Current.ClassName + ', ' + $_.Current.NativeWindowHandle + ')'
+        }) -join '; '
+    }
     while (-not $pressed) {
         if ((Get-Date) -gt $deadline) {
+            # A fresh read of the process, not a refresh of the one followed:
+            # tests\test-real-client-restart-grace.ps1 runs this loop's start,
+            # up to its first refresh, against doubles.
+            $now = Get-Process -Id $launcher.Id -ErrorAction SilentlyContinue
+            if ($now) {
+                Say ('At the end, the launcher''s windows: ' + (Get-LauncherWindows $now.Id))
+                if ($now.MainWindowHandle -ne [IntPtr]::Zero) {
+                    $how = [ThornswoodRealClient.Win]::Shot($now.MainWindowHandle, (Join-Path $Out 'launcher-no-play.png'))
+                    Say "shot launcher-no-play ($how)"
+                }
+            }
             $ch = Get-InstalledChannel
             if ($ch -and $ch -ne 'dev') { throw "The launcher was still $ch's after $PlayMinutes minutes, so it never took dev's package: is Settings, Updates, automatic updates off?" }
             throw "Play was not there to press in $PlayMinutes minutes"
@@ -436,9 +468,14 @@ try {
             Start-Sleep -Milliseconds 500
             continue
         }
+        $btn = $null
         if ($h -ne [IntPtr]::Zero) {
             $win = $ae::FromHandle($h)
             $btn = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+        }
+        $state = Get-PlayState $h $btn
+        if ($state -ne $sawPlay) { Say ('Launcher ' + $launcher.Id + ': ' + $state); $sawPlay = $state }
+        if ($h -ne [IntPtr]::Zero) {
             if ($btn -and $btn.Current.IsEnabled) {
                 $btn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
                 $pressed = $true
