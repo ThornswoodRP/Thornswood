@@ -83,6 +83,12 @@ function makePage() {
         };
       }
     });
+    // disabled is the attribute, as in a browser, so markup that leaves it
+    // off enables a control a page had disabled and an update kept.
+    Object.defineProperty(n, 'disabled', {
+      get() { return this.hasAttribute('disabled'); },
+      set(v) { if (v) { this.attrs.disabled = ''; } else { delete this.attrs.disabled; } }
+    });
     Object.defineProperty(n, 'childNodes', { get() { return this.kids.concat(this.children); } });
     Object.defineProperty(n, 'textContent', {
       get() { return String(this._text || '') + this.childNodes.map(c => c.textContent).join(''); },
