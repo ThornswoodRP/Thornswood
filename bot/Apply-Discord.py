@@ -4036,10 +4036,10 @@ async def rename_category(guild, catname):
 # the whole fucking server every time we make a slight change", and "sometimes
 # it reverts changes we made manualy"). Until then every run made the live
 # server the whole plan, because nothing said what the last run had applied.
-# The run of 26 Nov 2026 that opened the read channels put 48 channels and
-# categories back in the plan's order, took Member's own member-list group
-# away and replaced #general-chat's permissions, all set by hand since
-# 16 Nov.
+# The run of 26 Nov 2026, the first since Patrick's 16 Nov decision to open
+# the read channels, carried that decision and also put 48 channels and
+# categories back in the plan's order and took Member's own member-list
+# group away, both set by hand.
 #
 # Now a run reads the record of the plan it last applied (RECORD, a file the
 # box keeps in the bot's data folder), works out what the plan says now (plan_state),
