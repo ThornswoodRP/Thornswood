@@ -695,6 +695,54 @@ foreach ($scan in @(1,23,36)) {
   }
 }
 
+// A Play the launcher could not start (26 Nov, 10:59 AM on One: "Could not
+// redirect ... Skyrim Special Edition") leaves the launcher open with no game.
+// The run must stop on the launcher's own "Failed to start" line, with its
+// reason, and not wait -Minutes for a game that is never coming.
+{
+  const cp = require('child_process');
+  const os = require('os');
+  const fn = /function Read-LauncherFailure \{[\s\S]*?\n\}\n/.exec(RUNNER);
+  yes('the runner reads the launcher log for a failed Play', !!fn);
+  const loop = RUNNER.indexOf('$sawGame = $false');
+  const check = RUNNER.indexOf('$failed = Read-LauncherFailure', loop);
+  const game = RUNNER.indexOf("Say \"The game is up", loop);
+  yes('the game wait stops on it before any game is up',
+      loop > 0 && check > loop && game > check &&
+      /if \(\$failed\) \{ throw "The launcher could not start the game: \$failed" \}/.test(RUNNER));
+  // And the launcher says why. "Could not redirect" alone, with Junction's
+  // reason dropped, is all One's log had to go on.
+  const swap = read(path.join('launcher', 'app', 'Swap.cs'));
+  yes('a redirect that fails says what Windows said and what was found there',
+      /static bool MakeLink\(string link, string target, out string why\)/.test(swap) &&
+      /if \(!MakeLink\(win, ours\[i\], out why\)\)\s*throw new Exception\("Could not redirect " \+ win \+ " \(" \+ why \+ "; found " \+ found \+ "\)"\)/.test(swap));
+  const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+  if (ver.status === 0 && fn) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-5197-log-'));
+    const log = path.join(dir, 'launcher.log');
+    const old = '2026-11-26T16:00:00Z  Failed to start: an older Play, before the run\n';
+    fs.writeFileSync(log, old);
+    const q = function (v) { return "'" + v.replace(/'/g, "''") + "'"; };
+    const script = '$ErrorActionPreference = "Stop"\n$launcherLog = ' + q(log) + '\n' +
+      '$script:launcherLogReadAt = ' + Buffer.byteLength(old) + '\n' + fn[0] +
+      "'NONE [' + (Read-LauncherFailure) + ']'\n" +
+      "[IO.File]::AppendAllText($launcherLog, \"2026-11-26T17:59:51Z  Play pressed by no input device`n2026-11-26T17:59:53Z  Failed to start: Windows would not let go of`n`n    C:\\x`n`nSomething else has it open.`n2026-11-26T17:59:54Z  Next line`n\")\n" +
+      "'GOT [' + (Read-LauncherFailure) + ']'\n" +
+      "'AGAIN [' + (Read-LauncherFailure) + ']'\n" +
+      "[IO.File]::AppendAllText($launcherLog, '2026-11-26T18:00:00Z  Failed to start: half a li')\n" +
+      "'PART [' + (Read-LauncherFailure) + ']'\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const out = (r.stdout || '') + (r.stderr || '');
+    yes('a failure from before the run is not taken for this one', /NONE \[\]/.test(out));
+    yes('the failure is read with every line of its reason, and stops at the next stamped line',
+        /GOT \[Windows would not let go of C:\\x Something else has it open\.\]/.test(out));
+    yes('a failure is read once', /AGAIN \[\]/.test(out));
+    yes('a line still being written is not read yet', /PART \[\]/.test(out));
+    if (!/GOT \[Windows/.test(out)) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;
