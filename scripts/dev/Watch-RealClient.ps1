@@ -2,6 +2,7 @@
   Watch-RealClient.ps1
 
       pwsh scripts\dev\Watch-RealClient.ps1 [-Root <install>] [-IdleMinutes 10]
+      pwsh scripts\dev\Watch-RealClient.ps1 -Now [-Root <install>]
       pwsh scripts\dev\Watch-RealClient.ps1 -Install
       pwsh scripts\dev\Watch-RealClient.ps1 -Uninstall
 
@@ -28,6 +29,10 @@
   that goes afterwards, so its steps are the ones that build's plugin knows.
   Every look is one line in temp\real-client\watch.log of the clone.
 
+  -Now is a look somebody asks for: it skips the wait for an idle PC (26 Nov,
+  Patrick: "do it now dont wait"), and they keep off the keyboard and mouse
+  while it runs. Every other condition holds as above.
+
   The task runs this script from worktrees\real-client-watcher, a worktree
   -Install makes and every look first moves to origin/main, so a look is
   always today's rule and never the copy in the shared clone, which other
@@ -40,6 +45,7 @@ param(
     [string]$Root = '',
     [int]$IdleMinutes = 10,
     [string]$Repo = 'ThornswoodRP/Thornswood',
+    [switch]$Now,
     [switch]$Install,
     [switch]$Uninstall
 )
@@ -65,6 +71,7 @@ function Get-WatchVerdict($deployment, [string[]]$started, [bool]$gameOpen, [boo
 }
 
 if ($MyInvocation.InvocationName -eq '.') { return }
+if ($Now) { $IdleMinutes = 0 }
 if (-not $IsWindows) { throw 'Watch-RealClient.ps1 starts the real game, so it runs on Windows only.' }
 
 # The clone every worktree hangs off, also when this copy runs from the

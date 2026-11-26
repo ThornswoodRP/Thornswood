@@ -821,6 +821,7 @@ foreach ($scan in @(1,23,36)) {
       /-Command "' \+ \$look/.test(WATCH));
   yes('its worktrees and temp hang off the clone, found through git\'s shared directory',
       /rev-parse --git-common-dir/.test(WATCH) && /\$repoRoot = Split-Path -Parent/.test(WATCH));
+  yes('-Now runs at once when asked, skipping only the idle wait', /\[switch\]\$Now/.test(WATCH) && /if \(\$Now\) \{ \$IdleMinutes = 0 \}/.test(WATCH));
   yes('-Uninstall takes the watcher\'s worktree off too', /if \(\$Uninstall\) \{[\s\S]*?worktree remove --force \$watcher/.test(WATCH));
   const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
   if (ver.status === 0) {

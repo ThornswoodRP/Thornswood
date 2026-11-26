@@ -96,7 +96,10 @@ run once, pass or fail. The task runs the script from
 `worktrees\real-client-watcher`, which `-Install` makes and each look moves
 to origin/main first, so it never runs a stale copy from the shared clone.
 Every look is a line in `temp\real-client\watch.log` of the clone;
-`-Uninstall` takes the task and that worktree off.
+`-Uninstall` takes the task and that worktree off. To run the newest
+Deployment at once, without the ten idle minutes, run
+`pwsh worktrees\real-client-watcher\scripts\dev\Watch-RealClient.ps1 -Now -Root C:\Thornswood`
+from the clone and keep off the keyboard and mouse while it runs.
 
 ## How a step is written
 
