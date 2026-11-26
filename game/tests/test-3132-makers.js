@@ -59,6 +59,8 @@ yes('every waiting entry names an issue',
 const SOURCES = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'game', 'data', 'item-sources.json'), 'utf8'));
 const FILES = SOURCES.readFrom.concat([
   'game/data/item-sources.json',
+  'game/data/races.json', 'game/gamemode-tables/SPELL_IDS.json',
+  'scripts/dev/Write-SystemLists.js', 'scripts/dev/Check-Makers.js',
   'scripts/dev/Check-Makers.waiting.json', 'docs/systems/who-makes-it.md'
 ]);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'test-3132-'));
@@ -90,6 +92,38 @@ function refused(what, root, words) {
 }
 
 try {
+  const steps = JSON.parse(fs.readFileSync(path.join(REPO_DIR, 'scripts/mods/content-tables.json'), 'utf8')).steps;
+  const sourceAt = steps.findIndex(s => s.tool === 'scripts/dev/Build-ItemSources.js');
+  const writerAt = steps.findIndex(s => s.tool === 'scripts/dev/Write-SystemLists.js');
+  yes('the content chain writes the maker page after both of its generated inputs',
+    sourceAt >= 0 && writerAt > sourceAt && steps[writerAt].writes.includes('docs/systems/who-makes-it.md') &&
+    ['game/data/item-sources.json', 'game/data/recipes.json'].every(p => steps[writerAt].reads.includes(p)));
+
+  function writeLists(root) {
+    return spawnSync(process.execPath, [path.join(root, 'scripts/dev/Write-SystemLists.js')], { encoding: 'utf8' });
+  }
+  let generated = copy();
+  fs.unlinkSync(path.join(generated, 'docs/systems/who-makes-it.md'));
+  let built = writeLists(generated);
+  yes('the actual documentation builder recreates an absent maker page',
+    built.status === 0 && check.run(generated, false).problems.length === 0);
+  generated = copy();
+  edit(generated, 'docs/systems/who-makes-it.md', s => s + '\nplanted stale page');
+  built = writeLists(generated);
+  yes('the actual documentation builder replaces a stale maker page',
+    built.status === 0 && check.run(generated, false).problems.length === 0);
+  generated = copy();
+  waiting(generated, w => {
+    w.items.push({ desc: '7b:Skyrim.esm', name: 'Nothing', issue: '#1', why: 'planted' });
+    w.items.push({ desc: '7c:Skyrim.esm', name: 'Another missing item', issue: '#2', why: 'planted' });
+    return w;
+  });
+  built = writeLists(generated);
+  const diagnostics = built.stdout + built.stderr;
+  yes('the documentation builder fails with every original maker-policy diagnostic',
+    built.status !== 0 && diagnostics.includes('Nothing (7b:Skyrim.esm)') &&
+    diagnostics.includes('Another missing item (7c:Skyrim.esm)') && diagnostics.includes('the world no longer hands it out'));
+
   let root = copy();
   yes('an untouched copy passes', check.run(root, false).problems.length === 0);
 
