@@ -27,6 +27,7 @@ import urllib.request
 #   deletion-requests.json  put there by Delete-Person.ps1; read and removed
 #                           at the next start
 #   news-said.json          which release notes it has posted
+#   rules-carried.json      who reacted to a rules message it sent again
 #   restarts-said.json      which restart notices it has posted
 #   staff-notices.json      which staff notice became which message
 #   problems-filed.json     the Report a problem issues it has filed

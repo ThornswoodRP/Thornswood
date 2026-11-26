@@ -2395,8 +2395,8 @@ async def kept_drift(channel, me_id):
     said = {'thread line': 'its Changelog thread\'s "started a thread" line is '
                            'in the channel; -Posts takes it away, the post links the thread',
             'buttons': 'its buttons sit above its words; -Posts puts them under',
-            'gate': 'the Member reaction message sits above its words; sending it '
-                    'again would take every reaction off it'}
+            'gate': 'the Member reaction message sits above its words; the bot\'s '
+                    'next start moves it under them, with who reacted'}
     return [said[what] for _, what in found]
 
 
@@ -2407,9 +2407,11 @@ async def keep_under(channel, last, linked):
        under them, the same words and buttons, and the old one taken down.
        The bot answers a button by its id wherever the message is
        (bot_core.py add_view), so the buttons work the moment they are in.
-       The Member reaction message is never sent again: the reactions on it
-       are the record of who accepted the rules (bot_rules_gate.py), and a
-       new message would have none, so it is said and left."""
+       The Member reaction message is never sent from here: the reactions on
+       it are the record of who accepted the rules, and the bot's start
+       moves it under the words, carrying who reacted to it
+       (bot_rules_gate.py, Patrick's B on q-6891-rules-reaction-move), so
+       it is said and left."""
     me_id = getattr(getattr(client, 'user', None), 'id', None)
     if me_id is None:
         return
@@ -2431,8 +2433,8 @@ async def keep_under(channel, last, linked):
                 say('moved', '#%s: its buttons, under the words' % channel.name)
             else:
                 say('left alone', '#%s: the Member reaction message sits above the '
-                    'words; sending it again would take every reaction off it'
-                    % channel.name)
+                    'words; the bot\'s next start moves it under them, with who '
+                    'reacted' % channel.name)
         except discord.NotFound:
             pass  # gone already
         except discord.HTTPException as e:

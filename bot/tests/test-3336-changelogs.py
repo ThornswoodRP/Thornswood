@@ -38,8 +38,8 @@ and each channel and thread a stand-in that records what was asked of it:
      sends only the extra and one that needs fewer takes the rest down; what
      the bot keeps there goes under the words: the "started a thread" line
      goes once the post links the thread, a panel of buttons above the words
-     is sent again under them, and the Member reaction message is left where
-     it is and said; the audit says each of those.
+     is sent again under them, and the Member reaction message is left for
+     the bot's start to move and said; the audit says each of those.
 
 Never connects to anything.
 """
@@ -344,7 +344,7 @@ yes('the Member reaction message is never sent again or taken down',
     gate in rules.msgs and not [x for x in rules.log if x[1:] == (gate.content,)])
 d = run(B.kept_drift(rules, BOT))
 yes('  and the audit says it sits above the words', d == [
-    'the Member reaction message sits above its words; sending it again would take every reaction off it'])
+    'the Member reaction message sits above its words; the bot\'s next start moves it under them, with who reacted'])
 ch = Channel('faq')
 ch.msgs = [Msg(ch, BOT, 'Changelog', T.thread_created), Msg(ch, BOT, '**Pings**', components=['buttons']),
            Msg(ch, BOT, B.doc_with_footer('FAQ', Thread(952, 'Changelog', ch.log)))]

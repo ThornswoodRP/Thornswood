@@ -34,13 +34,29 @@ they keep their other roles Obviosuly so it doesnt really change anything for
 them"). Member follows the reaction for everybody; only Member is touched, so
 a Playtester's or staff member's own roles still open what they open.
 
+THE MESSAGE SITS UNDER THE RULES (Patrick, 26 Nov 2026, page card
+q-6891-rules-reaction-move, B). The rules' words are above it, so somebody
+reads them before they react. Discord orders messages by when they were
+sent, so when the rules' words are newer than this message (a -Posts run
+that had to send one, or the 26 Nov run that sent them all again, #6891),
+the bot's start sends the message again under them and takes the old one
+down. A new message has no reactions, so first everybody who reacted to
+the old one is written in rules-carried.json in the bot's data folder, and
+the bot counts them as having reacted until they react on the new message
+or take their reaction off it: nobody loses Member over a move they did not
+ask for, and their yes is already on the site's record.
+
 Only Member is ever given or taken here.
 """
 import os
 import traceback
 
+import discord
+
+from bot_base import DATA_DIR
 from bot_core import (STAFF_IDS, STAFF_NAMES, _guild_roles, _role_tokens,
-                      _who_hits, by_name, client, log, push_async)
+                      _state_read, _state_write, _who_hits, by_name, client,
+                      log, push_async)
 from bot_tickets import SEAT_RULE_STAFF
 
 
@@ -70,6 +86,41 @@ GATE_TEXT = (GATE_FIRST_LINE + '\n\n'
 
 # The gate message's id in each server, found or posted when the bot starts.
 GATE_IDS = {}
+
+# Who reacted to a gate message the bot has since sent again under the rules,
+# by server: they count as having reacted (THE MESSAGE SITS UNDER THE RULES).
+CARRIED = os.path.join(DATA_DIR, 'rules-carried.json')
+
+
+def carried(guild_id):
+    """The ids carried over in a server, or None when the file is there but
+       cannot be read: then nobody's Member is changed on a guess."""
+    got = _state_read(CARRIED)
+    if got is None:
+        return None
+    return set(int(i) for i in got.get(str(guild_id), []) if str(i).isdigit())
+
+
+def _carry(guild_id, ids):
+    got = _state_read(CARRIED)
+    if got is None:
+        raise RuntimeError('%s could not be read' % CARRIED)
+    if ids:
+        got[str(guild_id)] = sorted(str(i) for i in ids)
+    else:
+        got.pop(str(guild_id), None)
+    _state_write(CARRIED, got)
+
+
+def _uncarry(guild_id, user_id):
+    """Their own reaction on the message, or taking it off, is their record
+       from now on."""
+    try:
+        now = carried(guild_id)
+        if now and user_id in now:
+            _carry(guild_id, now - {user_id})
+    except Exception:
+        log('rules-carried.json could not be changed:\n' + traceback.format_exc())
 
 
 def member_role(guild):
@@ -156,6 +207,7 @@ async def reacted(payload):
     who = getattr(payload, 'member', None) or (guild and guild.get_member(payload.user_id))
     if guild is None or who is None or getattr(who, 'bot', False):
         return
+    _uncarry(guild.id, who.id)
     if await set_member(guild, who, True, 'Reacted to the rules in #rules'):
         log('gave Member to %s, who reacted to the rules' % who.id)
         await record(who, 'reacted')
@@ -168,6 +220,7 @@ async def unreacted(payload):
     who = guild and guild.get_member(payload.user_id)
     if guild is None or who is None or getattr(who, 'bot', False):
         return
+    _uncarry(guild.id, who.id)
     # Staff and Playtesters too: only Member comes off (Patrick, 12 Nov).
     if await set_member(guild, who, False, 'Took their reaction to the rules off'):
         log('took Member from %s, who took their reaction to the rules off' % who.id)
@@ -196,6 +249,45 @@ async def _find(ch):
                 and (getattr(m, 'content', '') or '').startswith(GATE_FIRST_LINE)):
             return m
     return None
+
+
+def _is_rules_words(m):
+    """One of the rules' own words, which -Posts writes: the bot's plain
+       message that is not this one and has no buttons."""
+    return (m.author.id == client.user.id
+            and getattr(m, 'type', discord.MessageType.default) is discord.MessageType.default
+            and not (getattr(m, 'content', '') or '').startswith(GATE_FIRST_LINE)
+            and not getattr(m, 'components', None))
+
+
+async def _under_the_words(ch, msg):
+    """True when any of the rules' words was sent after the message, which
+       puts the message above them."""
+    async for m in ch.history(limit=100):
+        if m is msg or m.id == msg.id:
+            return False
+        if _is_rules_words(m):
+            return True
+    return False
+
+
+async def _move_under(ch, guild, msg):
+    """Sends the message again under the rules' words and takes the old one
+       down, carrying everybody who reacted to it first."""
+    was = carried(guild.id)
+    if was is None:
+        raise RuntimeError('%s could not be read' % CARRIED)
+    _carry(guild.id, was | await _reactors(msg))
+    new = await ch.send(GATE_TEXT)
+    await new.add_reaction(MARK)
+    try:
+        await msg.delete()
+    except discord.NotFound:
+        pass  # gone already
+    log('the Member reaction message is sent again under the rules in #%s, '
+        'and the %d who reacted to the old one are carried over'
+        % (ch.name, len(carried(guild.id) or ())))
+    return new
 
 
 async def _reactors(msg):
@@ -245,6 +337,8 @@ async def ensure_rules_gate(guild):
         if msg is None:
             msg = await ch.send(GATE_TEXT)
             log('the Member reaction message is posted in #%s' % ch.name)
+        elif await _under_the_words(ch, msg):
+            msg = await _move_under(ch, guild, msg)
         elif msg.content != GATE_TEXT:
             await msg.edit(content=GATE_TEXT)
             log('the Member reaction message is updated in #%s' % ch.name)
@@ -254,6 +348,10 @@ async def ensure_rules_gate(guild):
         if not mine:
             await msg.add_reaction(MARK)
         reactors = await _reactors(msg)
+        kept = carried(guild.id)
+        if kept is None:
+            raise RuntimeError('%s could not be read' % CARRIED)
+        reactors |= kept
     except Exception:
         log('the Member reaction message failed, so Member was left as it is:\n'
             + traceback.format_exc())

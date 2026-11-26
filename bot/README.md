@@ -641,8 +641,11 @@ sends any. What the bot keeps in a doc channel goes under the words: the
 "started a thread" line of its Changelog thread is taken away, since the
 post's last line links the thread, and the ping buttons in `#welcome` are
 sent again under the words. The Member reaction message in `#rules` is
-never sent again, because the reactions on it are the record of who
-accepted the rules; the run and the audit say where it sits.
+the bot's own: when the rules' words are newer than it, the bot's next
+start sends it again under them and carries everybody who reacted to the
+old one in `rules-carried.json`, so nobody loses Member (Patrick's B on
+q-6891-rules-reaction-move). The run and the audit say where it sits until
+then.
 From a session with no box key, a cloud thread included, the deploy gate runs
 it on the box (#6874):
 
