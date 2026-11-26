@@ -433,7 +433,7 @@ def insert_inventory_actions(body, offset, extra):
 
 
 def inventory_close_predicate():
-    """OR the existing Tab predicate with a fresh, unblocked mapped control."""
+    """Use the named control or its current keyboard mapping in this movie."""
     def push(value):
         return b'\x96' + struct.pack('<H', len(value)) + value
     def string(value):
@@ -443,22 +443,52 @@ def inventory_close_predicate():
         for name in names:
             value += string(name) + b'\x4e'  # GetMember
         return value
-    checks = [member(2, 'control') + string('Quick Inventory') + b'\x49']
+    def integer(value):
+        return push(b'\x07' + struct.pack('<i', value))
+    def global_skse():
+        return string('skse') + b'\x1c'  # GetVariable
+    def all_checks(checks):
+        value, branches = bytearray(checks[0]), []
+        for check in checks[1:]:
+            value += b'\x4c\x12\x9d\x02\x00\x00\x00'
+            branches.append(len(value) - 2)
+            value += check + b'\x10'
+        for data in branches:
+            struct.pack_into('<h', value, data, len(value) - (data + 2))
+        return bytes(value)
+    # The menu-context control name can differ from the gameplay binding.
+    # InputDelegate carries SKSE's physical code independently. Read the actual
+    # gameplay keyboard mapping for this press, never a hardcoded I or cache.
+    call = integer(0) + integer(0) + string('Quick Inventory') + integer(3) + \
+        global_skse() + string('GetMappedKey') + b'\x52'  # CallMethod
+    physical, failures = bytearray(call), []
+    for check in (b'\x4c\x44' + string('number') + b'\x66',  # Duplicate, TypeOf, StrictEquals
+                  b'\x4c' + integer(0) + b'\x67',           # Greater: mapping > 0
+                  b'\x4c' + integer(256) + b'\x48'):       # Less2: keyboard, not mouse/pad
+        physical += check + b'\x12\x9d\x02\x00\x00\x00'
+        failures.append(len(physical) - 2)
+    physical += member(2, 'skseKeycode') + b'\x66'  # Numeric strict equality
+    physical += b'\x99\x02\x00\x00\x00'
+    done = len(physical) - 2
+    failed = len(physical)
+    physical += b'\x17' + push(b'\x05\x00')  # Drop invalid mapping, return false
+    for data in failures:
+        struct.pack_into('<h', physical, data, failed - (data + 2))
+    struct.pack_into('<h', physical, done, len(physical) - (done + 2))
+    fallback = all_checks([
+        global_skse() + b'\x44' + string('object') + b'\x66',
+        global_skse() + string('GetMappedKey') + b'\x4e\x44' + string('function') + b'\x66',
+        bytes(physical)])
+    named = member(2, 'control') + string('Quick Inventory') + b'\x49'
+    # A real named control retains its existing behavior, with no new lookup.
+    either = named + b'\x4c\x9d\x02\x00' + struct.pack('<h', len(fallback) + 1) + fallback + b'\x11'
+    checks = [either]
     # Shared.GlobalFunc.IsKeyPressed also accepts keyHold. The new shortcut
     # must not close from a repeat of the key that just opened the menu.
     checks.append(member(2, 'value') + string('keyDown') + b'\x49')
     for name in ('itemList', 'categoryList'):
         checks.append(member(1, 'inventoryLists', name, 'disableInput') + b'\x12')
-    value, branches = bytearray(checks[0]), []
-    for check in checks[1:]:
-        # Keep the current boolean, but skip later properties when false.
-        value += b'\x4c\x12\x9d\x02\x00\x00\x00'  # Duplicate, Not, If
-        branches.append(len(value) - 2)
-        value += check + b'\x10'  # And
-    finish = len(value)
-    value += b'\x11'  # Or, retaining the existing Tab/Shift-Tab result
-    for data in branches:
-        struct.pack_into('<h', value, data, finish - (data + 2))
+    value = all_checks(checks) + b'\x11'  # Or with the existing Tab result
     # Native Tab/Shift-Tab must not read any new input or movie properties.
     return b'\x4c\x9d\x02\x00' + struct.pack('<h', len(value)) + value
 
