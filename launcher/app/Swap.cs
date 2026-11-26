@@ -186,6 +186,38 @@ namespace Thornswood
                 refused);
         }
 
+        /// <summary>
+        /// Windows' Skyrim folders that are there as real folders with
+        /// something in them while their .st-backup is there too (#4698). The
+        /// backup is what an earlier session that did not finish moved aside,
+        /// so both can hold saves, settings and plugin lists the other does
+        /// not, and neither is the launcher's to set aside. Reads only. Empty
+        /// under the collection, where Apply stands down.
+        /// </summary>
+        public static List<string> BothKept()
+        {
+            var l = new List<string>();
+            if (Paths.Collection) return l;
+            string[] ours;
+            foreach (string win in Pairs(out ours))
+            {
+                if (IsLink(win) || !Directory.Exists(win) || IsEmpty(win)) continue;
+                if (Directory.Exists(win + ".st-backup")) l.Add(win);
+            }
+            return l;
+        }
+
+        /// <summary>What Play and Scan say about BothKept: both folders by name, and what to do.</summary>
+        public static string BothKeptSays(List<string> wins)
+        {
+            var both = new System.Text.StringBuilder();
+            foreach (string win in wins) both.Append("\n    ").Append(win).Append("\n    ").Append(win).Append(".st-backup\n");
+            return "Two copies of your Skyrim settings and saves are on this PC:\n" + both +
+                   "\nThe .st-backup one is your own folder, set aside by a session that did not finish. " +
+                   "Either can hold saves the other does not, so the launcher will not choose between them or move either. " +
+                   "Keep the one you want under the name without .st-backup, move the other out of that folder, then press Play.";
+        }
+
         public static void Apply()
         {
             // Under the collection, Vortex owns this. A Vortex profile with
@@ -194,6 +226,13 @@ namespace Thornswood
             // end up somewhere neither of them looks. So the launcher stands
             // down and leaves the folders alone.
             if (Paths.Collection) return;
+
+            // Before anything is moved: a real folder and its backup both
+            // there is the person's to choose between (#4698). It used to
+            // rename the backup to a dated folder nothing read again, which
+            // hid their own saves beside the real ones.
+            List<string> twice = BothKept();
+            if (twice.Count > 0) throw new Exception(BothKeptSays(twice));
 
             Directory.CreateDirectory(Paths.MyGames);
             Directory.CreateDirectory(Paths.LocalAD);
@@ -206,15 +245,18 @@ namespace Thornswood
                 string win = wins[i], bak = win + ".st-backup";
                 string found;
                 if (IsLink(win)) { DropLink(win); found = "a link there, taken off"; }
+                else if (Directory.Exists(win) && Directory.Exists(bak) && IsEmpty(win))
+                {
+                    // A session that fell over half way: the person's own
+                    // folder is already the backup and this one is empty, so
+                    // it is cleared and the backup stays as it is, as Restore
+                    // does. BothKept stopped Apply above if it was not empty.
+                    Directory.Delete(win);
+                    found = "an empty folder there beside the backup, cleared";
+                }
                 else if (Directory.Exists(win))
                 {
                     found = "a folder there, moved aside";
-                    if (Directory.Exists(bak))
-                    {
-                        string aside = bak + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
-                        try { Directory.Move(bak, aside); found += " after the backup left from before went to " + Path.GetFileName(aside); }
-                        catch (Exception ex) { Swallow.Note("Swap.Apply, renaming leftover backup", ex); }
-                    }
                     MoveAside(win, bak);
                 }
                 else found = "nothing there";

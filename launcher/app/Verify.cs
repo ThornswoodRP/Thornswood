@@ -105,6 +105,7 @@ namespace Thornswood
         public const string MadeFromGame = "made-from-game";
         public const string Generated = "generated";
         public const string WindowsFolders = "windows-folders";
+        public const string BothFolders = "windows-folders-twice";
         public const string Icon = "shortcut-icon";
         public const string Client = "client";
         public const string Steam = "steam";
