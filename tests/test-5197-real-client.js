@@ -91,8 +91,10 @@ function game(opts) {
     printConsole: function () { },
     getPlatformVersion: function () { return 'test'; },
     browser: { executeJavaScript: function (src) { pageRuns.push(src); } },
-    Game: { getPlayer: function () { return { getParentCell: function () { return world.cell; } }; } }
+    Game: { getPlayer: function () { return { getParentCell: function () { return world.cell; } }; } },
+    Input: { tapKey: function (code) { if (world.tapThrows) { throw new Error('no SKSE'); } world.taps.push(code); } }
   };
+  world.taps = [];
   const FakeDate = { now: function () { return now; }, parse: Date.parse };
   const sandbox = {
     skyrimPlatform: sp,
@@ -330,6 +332,25 @@ function game(opts) {
   const done = g.lines().filter(function (l) { return l.t === 'done'; });
   yes('once it is taken the run ends failed, 0 of 2, without the steps after it',
       done.length === 1 && done[0].ok === false && done[0].passed === 0);
+}
+
+// A key "via": "game" is tapped inside the game on update, once, with no
+// ask to the runner: Windows gives the keyboard to nothing behind the lock
+// screen, which is how One sits with nobody at it (26 Nov).
+{
+  const g = game({ steps: [{ do: 'key', code: 19, via: 'game' }, { do: 'end' }] });
+  g.frame(); g.frame(); g.frame(); g.frame();
+  const step = g.lines().find(function (l) { return l.t === 'step'; });
+  yes('a key via the game is tapped once, on update', g.world.taps.length === 1 && g.world.taps[0] === 19);
+  yes('and passes saying how, with nothing asked of the runner',
+      !!step && step.ok === true && /Input\.tapKey/.test(step.note) && !g.lines().some(function (l) { return l.t === 'ask' && l.do === 'key'; }));
+}
+{
+  const g = game({ steps: [{ do: 'key', code: 19, via: 'game' }, { do: 'end' }] });
+  g.world.tapThrows = true;
+  g.frame(); g.frame(); g.frame();
+  const step = g.lines().find(function (l) { return l.t === 'step'; });
+  yes('a tap that throws fails its step with the reason', !!step && step.ok === false && /Input\.tapKey threw: Error: no SKSE/.test(step.note));
 }
 
 // -------------------------------------------- the lists and the runner ----
