@@ -15,8 +15,8 @@
 # comments; the merge queue does the merge, as github-merge-queue[bot], so
 # main's push workflows run after it as they do for everybody's.
 #
-# WHOSE TOKEN. The pin robot's (a GitHub App: contents and pull requests
-# write, this repository only), minted in the engine-pin environment, main
+# WHOSE TOKEN. The pin robot's (a GitHub App: contents, pull requests and
+# issues write, this repository only), minted in the engine-pin environment, main
 # only, as engine-pin.yml does since #5256. Auto-merge turned on with the
 # run's own token puts the pull request in the queue as github-actions[bot],
 # and GitHub starts no workflow from that token's events, so the queue's
@@ -25,6 +25,14 @@
 # got no run at all, while every entry Patrick's account queued got its
 # runs. An App's token starts them like a person's. Patrick's answer A on
 # q-automerge-app-token, 2 Nov 2026.
+#
+# ISSUES WRITE. When the queue merges, GitHub closes the issues the pull
+# request's Closes, Fixes or Resolves names as whoever put it in the queue.
+# With contents and pull requests alone the pin robot could not close an
+# issue, and GitHub said nothing: on 26 Nov 2026 none of the six issues it
+# queued a Closes for (#6880, #6915, #6916, #6925, #6936, #6953) closed at
+# its merge, each closed by hand minutes later, while the three Patrick's
+# account queued (#6878, #6891, #6896) closed two seconds after theirs.
 name: Auto-merge
 on:
   workflow_run:
@@ -64,6 +72,7 @@ jobs:
           private-key: ${{ secrets.PIN_APP_KEY }}
           permission-contents: write
           permission-pull-requests: write
+          permission-issues: write
       - name: Put each ready one on auto-merge
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}

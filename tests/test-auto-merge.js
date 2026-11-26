@@ -166,8 +166,8 @@ function fake(pages, refuse) {
     /\n        with:\n          ref: main\n          persist-credentials: false\n          sparse-checkout: \|\n            scripts\/ops\n/.test(wf) && !/pull_request_target|head_sha|head_branch|github\.event\.pull_request/.test(code_));
   yes('4 it runs in the engine-pin environment, and the run\'s own token only reads',
     /\n    environment: engine-pin\n    permissions:\n      contents: read\n    steps:\n/.test(wf));
-  yes('4 it mints the pin robot\'s token there, with contents and pull requests write, and reads no other secret',
-    /\n      - name: The pin robot's token\n        id: app\n        uses: actions\/create-github-app-token@[0-9a-f]{40} # v\S+\n        with:\n          client-id: \$\{\{ vars\.PIN_APP_CLIENT_ID \}\}\n          private-key: \$\{\{ secrets\.PIN_APP_KEY \}\}\n          permission-contents: write\n          permission-pull-requests: write\n/.test(wf) &&
+  yes('4 it mints the pin robot\'s token there, with contents, pull requests and issues write (a queue merge closes its Closes issues as the one who queued it), and reads no other secret',
+    /\n      - name: The pin robot's token\n        id: app\n        uses: actions\/create-github-app-token@[0-9a-f]{40} # v\S+\n        with:\n          client-id: \$\{\{ vars\.PIN_APP_CLIENT_ID \}\}\n          private-key: \$\{\{ secrets\.PIN_APP_KEY \}\}\n          permission-contents: write\n          permission-pull-requests: write\n          permission-issues: write\n/.test(wf) &&
     (code_.match(/secrets\.\w+/g) || []).every(x => x === 'secrets.PIN_APP_KEY'));
   yes('4 it runs the script with the App\'s token, never the run\'s own (whose queue entries start no checks)',
     /\n        env:\n          GH_TOKEN: \$\{\{ steps\.app\.outputs\.token \}\}\n          REPO: \$\{\{ github\.repository \}\}\n        run: node scripts\/ops\/Auto-Merge\.js\n/.test(wf) && !/github\.token/.test(code_));
