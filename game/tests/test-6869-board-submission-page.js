@@ -108,6 +108,10 @@ try{
    p.press('letter');p.flush();p.press('haul');p.flush();feed(p);
    yes('letter and haul requests can coexist and clear only their matching forms',p.values('letter').every(v=>v==='')&&p.field('pay').value===''&&p.field('haul').value==='');
   }
+  {
+   const p=ready('Two identical posts');p.press('letter');p.flush();p.press('letter');p.flush();feed(p);
+   yes('identical successful requests clear once without claiming an empty newer draft was kept',p.values('letter').every(v=>v==='')&&!/newer draft/.test(p.field('action-status').textContent));
+  }
   for(const delivery of ['queued','throws']){
    const p=ready('Uncertain '+delivery);let calls=0;
    p.win.thornswoodNet.say=line=>{calls++;p.sent.push(line);if(delivery==='throws')throw Error('after queue');return false;};

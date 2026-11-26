@@ -244,7 +244,7 @@
     if (hold !== submissionHold) { submissionContext++; submissionHold = hold; }
     var results = value && value.boardSubmissions && value.boardSubmissions.results;
     if (!owner || !Array.isArray(results) || results.length > 32) return;
-    var accepted = 0, kept = false;
+    var accepted = 0, kept = { letter: false, haul: false }, reset = { letter: false, haul: false };
     results.forEach(function (result) {
       if (!result || result.status !== 'posted' || (result.kind !== 'letter' && result.kind !== 'haul') ||
           typeof result.id !== 'string' || !/^[0-9a-f]{32}$/.test(result.id) || typeof result.hold !== 'string') return;
@@ -257,7 +257,12 @@
       var sent = submissions.splice(at, 1)[0], draft = submissionDrafts[sent.kind];
       accepted++;
       if (sent.context !== submissionContext || sent.hold !== submissionHold || sent.revision !== draft.revision ||
-          sent.snapshot !== JSON.stringify(draft.values)) { kept = true; return; }
+          sent.snapshot !== JSON.stringify(draft.values)) {
+        // A reset earlier in this result batch is not a newer form edit.
+        if (!reset[sent.kind]) kept[sent.kind] = true;
+        return;
+      }
+      reset[sent.kind] = true; kept[sent.kind] = false;
       var reason = ID + '-' + sent.kind + '-reason';
       if (boardFieldError && boardFieldError.token === reason) clearBoardFieldError();
       Object.keys(draft.values).forEach(function (id) { draft.values[id] = ''; });
@@ -269,7 +274,7 @@
       });
     });
     if (accepted) submissionSaid = (accepted === 1 ? 'The post was saved.' : 'The posts were saved.') +
-      (kept ? ' Your newer draft is kept.' : '');
+      (kept.letter || kept.haul ? ' Your newer draft is kept.' : '');
     showSubmissionStatus();
   }
 
