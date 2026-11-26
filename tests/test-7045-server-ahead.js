@@ -101,4 +101,4 @@ yes('5. no em dash, and not the word the rules keep out', !/—/.test(said) && !
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
