@@ -102,25 +102,36 @@ function Add-Task([string]$name, [string]$args2, [string]$dir) {
     Register-ScheduledTask -TaskName $name -Action $a -Principal $p -Settings (New-ScheduledTaskSettingsSet) | Out-Null
 }
 try {
+    $taskStage = 'create-folders'; $taskAlias = 'unavailable'
     New-Item -ItemType Directory -Force -Path $Root, $otherRoot | Out-Null
     # As Fix-Voice.ps1 made it: the full path, and the root as its folder.
+    $taskStage = 'register'; $taskAlias = 'stray'
     Add-Task $names.stray ('"' + $Root + '\voice-server.js"') $Root
     # The full path only, from somewhere else.
+    $taskAlias = 'byPath'
     Add-Task $names.byPath ('"' + $Root + '\voice-server.js"') $base
     # The install's own, as Install-Voice's cmd starts it: a bare name in the root.
+    $taskAlias = 'own'
     Add-Task $names.own 'voice-server.js' $Root
     # Dev's, beside live's, whose folder begins with live's.
+    $taskAlias = 'other'
     Add-Task $names.other ('"' + $otherRoot + '\voice-server.js"') $otherRoot
 
     # The installer expands its own $Root and $TaskName before it sends the
     # script; the box's own variables are escaped and stay. Case matters:
     # $rootDir is the box's.
+    $taskStage = 'prepare-removal'; $taskAlias = 'unavailable'
     $text = $fn[0].Extent.Text.Replace('$Root', $Root).Replace('$TaskName', $TaskName)
     $box = [scriptblock]::Create($text + "`nRemoveStrayTasks")
+    $taskStage = 'remove-strays'
     $said = @(& $box | ForEach-Object { "$_" })
     $said | ForEach-Object { Write-Host ('      ' + $_) }
     $left = @{}
-    foreach ($k in $names.Keys) { $left[$k] = [bool](Get-ScheduledTask -TaskName $names[$k] -ErrorAction SilentlyContinue) }
+    $taskStage = 'read-results'
+    foreach ($k in $names.Keys) {
+        $taskAlias = $k
+        $left[$k] = [bool](Get-ScheduledTask -TaskName $names[$k] -ErrorAction SilentlyContinue)
+    }
     Yes 'the stray task in the root is taken off' (-not $left.stray)
     Yes '  and so is one that names the root''s voice-server.js from another folder' (-not $left.byPath)
     Yes '  and it says which, by name' (($said -join "`n") -match [regex]::Escape($names.stray) -and ($said -join "`n") -match [regex]::Escape($names.byPath))
@@ -128,6 +139,22 @@ try {
     Yes 'another root''s task stays, though its folder begins with this one''s' ($left.other)
 }
 catch {
+    $taskError = $_
+    # A removal error may identify a particular task. Report only its fixture
+    # alias when the error proves that identity; otherwise leave it unknown.
+    if ($taskError.InvocationInfo -and $taskError.InvocationInfo.BoundParameters -and $taskError.InvocationInfo.BoundParameters.ContainsKey('TaskName')) {
+        $boundName = $taskError.InvocationInfo.BoundParameters['TaskName']
+        foreach ($entry in $names.GetEnumerator()) {
+            if ($entry.Value -eq $boundName) { $taskAlias = $entry.Key; break }
+        }
+    }
+    Write-Host ('VOICE_TASK_FAILURE ' + ([ordered]@{
+        stage = $taskStage; taskAlias = $taskAlias
+        message = $taskError.Exception.Message; hResult = $taskError.Exception.HResult
+        errorId = $taskError.FullyQualifiedErrorId
+        position = if ($taskError.InvocationInfo) { [string]$taskError.InvocationInfo.PositionMessage } else { '' }
+        stack = [string]$taskError.ScriptStackTrace
+    } | ConvertTo-Json -Compress))
     Yes ('the harness ran to the end without an error: ' + $_.Exception.Message) $false
 }
 finally {
