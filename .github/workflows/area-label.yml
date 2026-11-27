@@ -1,5 +1,6 @@
 # A new issue gets an area: label, or "area: triage" when its title does not
-# say which part of the project it is (#2798).
+# say which part of the project it is (#2798). A report from one of the forms
+# gets the area its own answer to "where is it?" names (#4261).
 #
 # WHY. The weekly review of 19 Oct 2026 found 21 open issues with no labels at
 # all and 39 more with no area:, and the board review of 21 Oct (#3192) found
@@ -8,13 +9,21 @@
 # whose it was. Patrick approved this on the board review page, 21 Oct.
 #
 # WHAT IT DOES. When an issue is opened with no area: label, it reads the
-# title against the table below. When exactly one area matches, that area's
-# label goes on. When none or more than one match, "area: triage" goes on, so
-# a person picks, and the label list shows what is waiting to be sorted. A
-# guess between two areas is never made. Started by hand, it does the same
+# form's answer to where the problem is, when the issue came from bug.yml,
+# crash.yml or suggestion.yml, against $fromForm below; an answer that names
+# one area puts that area's label on. Otherwise it reads the title against the
+# table below. When exactly one area matches, that area's label goes on. When
+# none or more than one match, "area: triage" goes on, so a person picks, and
+# the label list shows what is waiting to be sorted. A guess between two areas
+# is never made. A form report already carries "triage", the form's own mark
+# that nobody has read it yet, so it never gets "area: triage" as well: two
+# labels saying the same thing left the person sorting it to guess which to
+# clear (#4261). docs/guide/the-board.md, "Sorting a report", says how one is
+# sorted. Started by hand, it does the same
 # for every open issue with no area: label. "area: triage" is made the first
-# time it is needed. It checks out nothing and runs no action, and the title
-# reaches the script through the environment, never pasted into it.
+# time it is needed. It checks out nothing and runs no action, and the title,
+# body and labels reach the script through the environment, never pasted
+# into it.
 #
 # WHERE IT RUNS. On GitHub's Windows runner (#3685, #4983). Opening an issue
 # is something anyone can do on a public repository, so this job never
@@ -44,6 +53,8 @@ jobs:
           EVENT: ${{ github.event_name }}
           ISSUE: ${{ github.event.issue.number }}
           TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+          LABELS: ${{ join(github.event.issue.labels.*.name, '|') }}
         run: |
           $ErrorActionPreference = 'Stop'
           $h = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
@@ -89,11 +100,42 @@ jobs:
             'area: Website'       = (Words 'website' 'site' 'hub' 'staff hub' 'sign-in' 'sign out' 'gallery' 'downloads page' 'home page' 'front page' 'visitor' 'thornswood.net' 'api')
             'area: World'         = (Words 'npc' 'carriage' 'ferry' 'storm' 'weather' 'horse' 'guard' 'bounty' 'bounties')
           }
+          # The forms' questions about where the problem is, each answer with
+          # the one area it names, or '' where it names none ("In the game" is
+          # the client, the gamemode, the world or the things to do in it), so
+          # the title decides. tests/test-4261-form-area.ps1 holds these to the
+          # forms' own options and to the areas the guide lists.
+          $fromForm = [ordered]@{
+            'Where is it?'      = [ordered]@{ 'In the game' = ''; 'The launcher' = 'area: Launcher'; 'The installer' = 'area: Launcher'; 'The website' = 'area: Website'; 'The Discord bot' = 'area: Discord'; 'Voice' = 'area: Voice'; 'Somewhere else' = '' }
+            'What crashed?'     = [ordered]@{ 'The game (Skyrim)' = 'area: Client'; 'The launcher' = 'area: Launcher'; 'The installer' = 'area: Launcher' }
+            'What is it for?'   = [ordered]@{ 'The world and roleplay' = ''; 'The launcher or the installer' = 'area: Launcher'; 'The website' = 'area: Website'; 'The Discord bot' = 'area: Discord'; 'Voice' = 'area: Voice'; 'Something else' = '' }
+          }
+          # A form's report is "### <question>", a blank line, then the answer.
+          function FormArea([string]$body) {
+            $b = "$body" -replace "`r`n", "`n"
+            foreach ($q in $fromForm.Keys) {
+              $m = [regex]::Match($b, '(?m)^###\s+' + [regex]::Escape($q) + '\s*\n+([^\n]+)')
+              if (-not $m.Success) { continue }
+              $a = $m.Groups[1].Value.Trim()
+              if ($fromForm[$q].Contains($a) -and $fromForm[$q][$a]) { return $fromForm[$q][$a] }
+            }
+            return ''
+          }
           function Has($o, [string]$n) { return ($null -ne $o -and $o.PSObject.Properties[$n] -and $null -ne $o.$n) }
           function Pick([string]$title) {
             $hit = @($areas.Keys | Where-Object { $title -match ('(?i)' + $areas[$_]) })
             if ($hit.Count -eq 1) { return $hit[0] }
             return $triage
+          }
+          # The label an issue gets: its form's answer, then its title. A form
+          # report that neither names keeps only the form's "triage", and gets
+          # nothing here ('').
+          function LabelFor([string]$title, [string]$body, [string[]]$labels) {
+            $a = FormArea $body
+            if ($a) { return $a }
+            $p = Pick $title
+            if ($p -eq $triage -and @($labels) -contains 'triage') { return '' }
+            return $p
           }
           $todo = @()
           if ($env:EVENT -eq 'workflow_dispatch') {
@@ -103,16 +145,17 @@ jobs:
               # hands a JSON array on as one object, and @() alone kept the whole page
               # as a single item (#2798).
               $got = @(Invoke-RestMethod -Method Get -Uri ("$api/issues?state=open&per_page=100&page=" + $page) -Headers $h | ForEach-Object { $_ })
-              $todo += @($got | Where-Object { -not (Has $_ 'pull_request') -and @($_.labels | Where-Object { $_.name -like 'area:*' }).Count -eq 0 } | ForEach-Object { [pscustomobject]@{ n = [int]$_.number; t = [string]$_.title } })
+              $todo += @($got | Where-Object { -not (Has $_ 'pull_request') -and @($_.labels | Where-Object { $_.name -like 'area:*' }).Count -eq 0 } | ForEach-Object { [pscustomobject]@{ n = [int]$_.number; t = [string]$_.title; b = [string]$_.body; l = @($_.labels | ForEach-Object { [string]$_.name }) } })
               $page++
             } while ($got.Count -eq 100)
           } else {
-            $todo = @([pscustomobject]@{ n = [int]$env:ISSUE; t = [string]$env:TITLE })
+            $todo = @([pscustomobject]@{ n = [int]$env:ISSUE; t = [string]$env:TITLE; b = [string]$env:BODY; l = @("$env:LABELS" -split '\|' | Where-Object { $_ }) })
           }
           Write-Host ("{0} issue(s) with no area label" -f $todo.Count)
           $made = $false
           foreach ($i in $todo) {
-            $label = Pick $i.t
+            $label = LabelFor $i.t $i.b $i.l
+            if (-not $label) { Write-Host ("#{0}: a form report whose answer and title name no area, left with its triage label" -f $i.n); continue }
             if ($label -eq $triage -and -not $made) {
               try { Invoke-RestMethod -Method Get -Uri ("$api/labels/" + [Uri]::EscapeDataString($triage)) -Headers $h | Out-Null }
               catch {

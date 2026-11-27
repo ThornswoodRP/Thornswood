@@ -74,7 +74,8 @@ How to use it:
   marks an issue whose title did not say which part it is:
   `.github\workflows\area-label.yml` gives a new issue with no `area:` label
   the one its title names, or this one, and a person swaps it for the right
-  area. Every `area:` label is in "Area labels", below, and no other is
+  area. A report from one of the forms gets its area from its own answer
+  first, and never `area: triage` ("Sorting a report", below). Every `area:` label is in "Area labels", below, and no other is
   used. `weekly-review` marks what the weekly project review found,
   `Suggestion` an idea somebody asked for, and `bug` something broken;
   nothing reads these three, they are for people sorting the board.
@@ -166,6 +167,24 @@ How to use it:
   missed. A step file under `deploy\after` writes the comment by itself
   when its step ends 0, and the issue it names is held the same way. A main
   Ship's `Close-ShippedIssues.ps1` leaves such an issue open and names it.
+
+### Sorting a report
+
+A report from one of the three forms (something broken, a crash, an idea)
+carries `triage`, the form's mark that nobody on the team has read it yet.
+`.github\workflows\area-label.yml` gives it the area its answer to where
+the problem is names: the launcher or the installer is `area: Launcher`, the
+website `area: Website`, the Discord bot `area: Discord`, voice
+`area: Voice`, and a game crash `area: Client`. An answer that names no one
+area ("In the game", "The world and roleplay", "Somewhere else") leaves it
+to the title, as for any issue. When neither names one, the report gets no
+area label, and `triage` alone says it waits to be sorted; it never carries
+`area: triage` as well (#4261).
+
+To sort one, read it, put on the right `area:` label if it has none or the
+wrong one, and take `triage` off. `area: triage` is for issues the team
+opened by hand whose title named no area; swap it for the right area the
+same way.
 
 ### Area labels
 
