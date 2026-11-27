@@ -84,8 +84,9 @@
     bot       the python the ThornswoodBot service started is alive (#3189).
               And its heartbeat, C:\Thornswood-Bot\data\heartbeat.json, says it is on
               Discord: a bot hung or off Discord for ten minutes while its
-              process runs is down too (issue #449). That file is written once
-              Install-Bot.ps1 -NoToken has run. The bot is the Windows
+              process runs is down too (issue #449), and so is one with no
+              heartbeat it can read ten minutes after it started (#4287).
+              That file is written once Install-Bot.ps1 -NoToken has run. The bot is the Windows
               service ThornswoodBot (issue #465), so either way it is
               restarted by that name, under the same three an hour
     dev game  answers on 7788, the dev server's resources port
@@ -344,8 +345,11 @@ function BotAlive() {
 # that name like a bot whose process is gone, under the same three restarts
 # an hour. Nothing here reads a command line to stop anything.
 #
-# No file at all says nothing either way: that is a bot from before this
-# went in, and the process check above is all there is for it.
+# Every bot writes the file, once before it logs in and every minute after
+# (bot\bot_heartbeat.py, by a whole-file replace), so no file, or one that
+# cannot be read, is a bot that never got going or cannot write it. Either
+# way nothing says it is working: past the same ten minutes from its start it
+# is down (#4287). Until then it may still be starting.
 #
 # In data under the bot's folder since #1104, the one folder the bot's account
 # may write; the code beside it is read only to it.
@@ -365,10 +369,13 @@ function BotProcs() {
   return $list
 }
 
-# heartbeat.json as an object, or $null when it is not there or not readable.
+# heartbeat.json as an object, $null when it is not there, or an object with
+# only Unreadable set when it is there but cannot be read as a heartbeat.
 function ReadBeat($path) {
   if (-not (Test-Path -LiteralPath $path)) { return $null }
-  try { return (Get-Content -LiteralPath $path -Raw -Encoding UTF8 -EA Stop | ConvertFrom-Json) } catch { return $null }
+  try { $b = Get-Content -LiteralPath $path -Raw -Encoding UTF8 -EA Stop | ConvertFrom-Json -EA Stop } catch { return [pscustomobject]@{ Unreadable = $true } }
+  if ($null -eq $b -or $null -eq $b.PSObject.Properties['written']) { return [pscustomobject]@{ Unreadable = $true } }
+  return $b
 }
 
 function Mins($s) {
@@ -382,13 +389,22 @@ function Mins($s) {
 # unix seconds. Nothing in here looks at the world, so it can be tested.
 function BeatProblem($beat, $procs, $at) {
   $procs = @($procs)
-  if ($procs.Count -eq 0 -or $null -eq $beat) { return '' }
-  $mine = $false
+  if ($procs.Count -eq 0) { return '' }
   $young = [int64]::MaxValue
   foreach ($p in $procs) {
-    if ([int64]$p.Id -eq [int64]$beat.pid) { $mine = $true }
     if ([int64]$p.Started -gt 0 -and $at - [int64]$p.Started -lt $young) { $young = $at - [int64]$p.Started }
   }
+  # No heartbeat to go by (#4287): fine while it is starting, down once it is
+  # old. A process Windows gave no start time for is not judged on its age.
+  $none = ''
+  if ($null -eq $beat) { $none = 'there is no heartbeat file, so it is stuck before it got going or cannot write the file' }
+  elseif ($beat.PSObject.Properties['Unreadable']) { $none = 'its heartbeat file cannot be read, so nothing says it is working' }
+  if ($none) {
+    if ($young -le $beatStale -or $young -eq [int64]::MaxValue) { return '' }
+    return ('Its python process has been running for ' + (Mins $young) + ' and ' + $none)
+  }
+  $mine = $false
+  foreach ($p in $procs) { if ([int64]$p.Id -eq [int64]$beat.pid) { $mine = $true } }
   $heard = ''
   if ([int64]$beat.last_event -gt 0) { $heard = '. The last thing it heard from Discord was ' + (Mins ($at - [int64]$beat.last_event)) + ' ago' }
   if (-not $mine) {
