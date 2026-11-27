@@ -29,7 +29,7 @@ const { docVersion, INBOX, jsonFile, noteRules, putJson, readDoc,
 const { NEWS } = require('./news');
 const newsPictures = require('../public/news-pictures');
 const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
-  loginWait, publicApiWait, publicJson, reportFrom, reportRefusal,
+  loginWait, publicApiWait, publicJson, reportFrom, reportLine, reportRefusal,
   reportTaken, requestAddr, trimInbox, turnstileOn, turnstilePasses } = require('./limits');
 const { ageGateBody, ageStated, downloadServed, downloadsBody, downloadsFacts,
   listFiles } = require('./downloads');
@@ -782,7 +782,8 @@ async function handle(req, res) {
     // put there by a script filling in every box it found. Answered as if it
     // worked, so the script has nothing to learn from, and nothing is kept.
     if (o && String(o.homepage || '').trim()) return sendJson(res, 200, { ok: true });
-    const title = String(o.title || '').trim().slice(0, 200);
+    // One line each, with no breaks, direction marks or zero-width characters (#4953).
+    const title = reportLine(o.title, 200);
     if (!title) return sendJson(res, 400, { error: 'Nothing was sent: say what happened in the first box, then send it again.' });
     // Turnstile's pass (#3216), asked before the limit is read again below,
     // because it waits on Cloudflare and nothing may wait between that read
@@ -816,7 +817,7 @@ async function handle(req, res) {
     if (o.kind === 'report') {
       const no = personReportRefusal(w);
       if (no) return sendJson(res, no.code, { error: no.error });
-      const about = String(o.about || '').trim().slice(0, 60);
+      const about = reportLine(o.about, 60);
       if (!about) return sendJson(res, 400, { error: 'Nothing was sent: say who it is about in the Who box, then send it again.' });
       const acct = 'acct:' + w.id;
       const mine = reportRefusal(acct, Date.now(), 'your account');
@@ -829,7 +830,7 @@ async function handle(req, res) {
       kind: person ? 'report' : (o.kind === 'idea' ? 'idea' : 'bug'),
       title,
       detail: String(o.detail || '').slice(0, 8000),
-      by: person ? String(w.name || '').slice(0, 40) : String(o.by || '').slice(0, 40),
+      by: reportLine(person ? w.name : o.by, 40),
       at: Date.now(),
       state: 'new',
       from: person ? 'the public page, signed in' : 'the public page'
@@ -899,8 +900,9 @@ async function handle(req, res) {
     const key = 'game:' + (dev ? 'dev:' : '') + pid;
     const no = reportRefusal(key, Date.now(), 'that profile');
     if (no) return send(res, 429, JSON.stringify({ error: no.error }), null, { 'Retry-After': String(no.wait) });
-    const name = String(o.name || '').trim().slice(0, 60) || 'Somebody';
-    const about = String(o.about || '').trim().slice(0, 60);
+    // The same one line as the public form's (reportLine, #4953).
+    const name = reportLine(o.name, 60) || 'Somebody';
+    const about = reportLine(o.about, 60);
     if (kind === 'report' && !about) return sendJson(res, 400, { error: 'a report names somebody' });
     const said = String(o.said || '').trim().slice(0, kind === 'problem' ? 1000 : 300);
     if (kind === 'problem' && !said) return sendJson(res, 400, { error: 'a problem says what went wrong' });
