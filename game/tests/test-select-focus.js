@@ -77,6 +77,8 @@ yes('the focus arbiter is in the plugin', ARBITER !== null);
 yes('the main menu block is in the plugin', MENU !== null);
 yes('the two minute cap is in the plugin', CAP !== null);
 yes('the lines the update tick runs when the world arrives are in the plugin', WORLD !== null);
+yes('the menu block no longer watches whether something hid the page or took its mouse (#4616)',
+    MENU !== null && MENU.indexOf('isVisible') < 0 && MENU.indexOf('isFocused') < 0);
 
 // The rig delivers the page's messages the way the plugin's browserMessage
 // handler does, so those lines are checked to still be what the plugin does.
@@ -217,6 +219,8 @@ function rig(opts) {
   const prelude =
     'const chooseAtMenu = true;\n' +
     'let menuPhase = 0;\n' +
+    // Every move of the phase, and what it tells the client (#4616).
+    require('../../tests/fixtures/menu-phase.js') +
     'let menuAt = 0;\n' +
     'const loadedAt = Date.now();\n' +
     "const CHOICE_FILE = 'Data/Platform/thornswood-choice.txt';\n" +
@@ -370,8 +374,10 @@ function rig(opts) {
       page.picked = 0; page.acked = false; page.ackAt = 0; page.panels = {};
       tell(['thornswood-front', 'bridge is up']);
     },
-    /* The client's own keys, from browserService.ts. */
+    /* The client's own keys, from browserService.ts. While the front holds
+       the choice (#4616) none of them touches the page. */
     press: function (key) {
+      if (glob.__thornswoodChoiceHeld === true) { return; }
       const bad = game.stage !== 'world';
       if (key === 'Escape') {
         if (browser.focused) { sp.browser.setFocused(false); }
@@ -385,7 +391,12 @@ function rig(opts) {
     },
     /* The arbiter's own entry point, the one every plugin claims through. */
     claim: function (who, on) { T.claimFocus(who, on); },
-    hideByClient: function () { sp.browser.setVisible(false); }
+    /* browserService.ts's menu open: the main menu is a menu it hides the
+       page for, unless the front holds the choice (#4616). */
+    mainMenuOpens: function () {
+      if (glob.__thornswoodChoiceHeld !== true) { sp.browser.setVisible(false); }
+    },
+    heldSaid: function () { return glob.__thornswoodChoiceHeld; }
   };
   return h;
 }
@@ -394,16 +405,17 @@ if (ARBITER !== null && MENU !== null && CAP !== null && WORLD !== null) {
   {
     const h = rig({ nirnlab: true });
     h.run(1000);
-    h.hideByClient();
-    yes('NirnLab startup hide drops real mouse focus while the getter stays true',
-        !h.browser.actualFocused && h.browser.focused && !h.browser.visible);
-    h.run(500);
-    yes('the choice restores real mouse focus when it restores visibility',
+    yes('the front tells the client it holds the choice while it is up (#4616)', h.heldSaid() === true);
+    h.mainMenuOpens();
+    h.press('Escape');
+    h.press('F6');
+    yes('so the main menu, Escape and F6 leave the choice on screen with its real mouse focus',
         h.browser.visible && h.browser.actualFocused && h.api.claims.select);
     h.pick(PICK);
     h.run(10000);
     yes('after entry the choice releases native mouse focus',
         h.game.stage === 'world' && !h.browser.actualFocused && !h.api.claims.select);
+    yes('and the client is told the choice is no longer held', h.heldSaid() === false);
     yes('the NirnLab startup sequence throws nothing', h.threw.length === 0);
   }
   // ---------------------------------------------------- S1: THE BUG, Djinn's
