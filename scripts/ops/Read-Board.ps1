@@ -44,7 +44,7 @@ function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Die($m) { Write-Host "STOP. $m" -ForegroundColor Red; exit 1 }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Die 'there is no gh here to start the board-read workflow with.' }
-if (-not $OutFile) { $OutFile = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-board.json' }
+if (-not $OutFile) { $OutFile = Join-Path (& (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') 'board-review') 'board.json' }
 $OutFile = [IO.Path]::GetFullPath($OutFile)
 
 # One GET, its answer as an object; a refusal stops the script with why.

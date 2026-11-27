@@ -176,11 +176,12 @@ Yes 'help.md tells a copy ahead of the server nothing needs installing' ($help.C
 # ---- the real method, compiled ----------------------------------------------
 Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
 if (Test-Path -LiteralPath $LauncherDotnet) {
-    $slug = Method $checks 'public static string CollectionSlug(Config cfg)'
+    $slug = (Method $checks 'public static string CollectionSlug(Config cfg)') + "`n" + (Method $checks 'static string SlugIn(string url)') + "`n" + (Method $checks 'public static bool IsSlug(string s)')
     $fixture = @'
 using System;
 namespace Thornswood {
- public class Config { public string CollectionUrl; }
+ public class Config { public string CollectionUrl; public const string Collection = "https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf"; }
+ public static class Updater { public static string ServerCollectionSlug = ""; }
  public static class CollectionLinkFixture {
   __METHODS__
   static string At(string url, int revision) { return CollectionRevisionUrl(new Config { CollectionUrl = url }, revision); }
@@ -198,6 +199,17 @@ namespace Thornswood {
     { CollectionRevisionUrl(null, 2), "" },
    };
    for (int i = 0; i < want.GetLength(0); i++) if (want[i, 0] != want[i, 1]) return "case " + i + ": " + want[i, 0];
+   // A dev install on the Dev collection (#7193): the collection the
+   // launcher ships with becomes Dev's, and a collection of its own stays.
+   Updater.ServerCollectionSlug = "dv1abc";
+   string d = "https://www.nexusmods.com/games/skyrimspecialedition/collections/dv1abc";
+   string[,] dev = {
+    { At(c, 2), d + "/revisions/2" },
+    { At(c + "/revisions/14", 1), d + "/revisions/1" },
+    { At("https://www.nexusmods.com/games/skyrimspecialedition/collections/other1", 3), "https://www.nexusmods.com/games/skyrimspecialedition/collections/other1/revisions/3" },
+   };
+   for (int i = 0; i < dev.GetLength(0); i++) if (dev[i, 0] != dev[i, 1]) return "dev case " + i + ": " + dev[i, 0];
+   Updater.ServerCollectionSlug = "";
    return "";
   }
  }
@@ -205,7 +217,7 @@ namespace Thornswood {
 '@
     $asm = Add-LauncherType -Source ($fixture.Replace('__METHODS__', $slug + "`n" + $urlMethod))
     $said = [string]$asm.GetType('Thornswood.CollectionLinkFixture').GetMethod('Run').Invoke($null, @())
-    Yes ('the real CollectionRevisionUrl pins the revision, replaces one already there, and leaves no revision or no collection as it is' + $(if ($said) { ' (' + $said + ')' } else { '' })) ($said -eq '')
+    Yes ('the real CollectionRevisionUrl pins the revision, replaces one already there, leaves no revision or no collection as it is, and opens Dev''s collection on a dev install' + $(if ($said) { ' (' + $said + ')' } else { '' })) ($said -eq '')
 }
 
 Write-Host ''

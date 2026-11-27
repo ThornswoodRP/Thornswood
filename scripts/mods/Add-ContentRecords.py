@@ -481,7 +481,7 @@ CONTENTS = (
     (r'(MISC ThornswoodMiscTool(Handle|Shears|Alembic|RuneKnife)|'
      r'COBJ ThornswoodRecipe(Tool(Handle|Shovel|Hammer|Shears|Alembic|RuneKnife|Ladle)|WeaponPickaxe|WeaponAxe|Lockpick))$',
      'own', 'tools and handles'),
-    (r'COBJ ThornswoodRecipeInstrument(Flute|Lute|Drum)$', 'own', 'instruments'),
+    (r'COBJ ThornswoodRecipeInstrument(Flute|Lute|Drum|Horn)$', 'own', 'instruments'),
     (r'BOOK ThornswoodBookDeed$', 'own', 'deeds'),
     (r'(MISC ThornswoodMisc(Master)?Key(Mold)?|COBJ ThornswoodRecipeKey(Mold)?)$', 'own', 'keys and molds'),
     (r'(MISC ThornswoodMisc(Pole\w+|FishTrap)|FLOR ThornswoodFish\w+|COBJ ThornswoodRecipe(Pole\w+|FishTrap))$',
@@ -1399,6 +1399,18 @@ LOCKPICK = 0x0000000A     # Skyrim's Lockpick (MISC)
 RECIPE_LOCKPICK = 0x501B00B
 LOCKPICKS_MADE = 5
 
+# THE HORN (#7167). The emote wheel's Horn blows Skyrim's own war horn
+# (IdleBlowHornStormcloak), and nothing in the load order made one. Skyrim's
+# Nord War Horn is the instrument, as the flute, lute and drum are Skyrim's
+# own (THE INSTRUMENTS above), so the Woodwright makes it at the woodworking
+# bench with them: a horker tusk hollowed into the horn and a leather strap
+# to carry it. Measured on the box on 27 Nov 2026 (List-GameData -Lister
+# ToolRecords): the Nord War Horn is MISC 200b6 of Skyrim.esm, on
+# Clutter\WarHorns\NordWarHorn.nif, worth 70. Form id after the lockpick's.
+HORN = 0x000200B6         # Skyrim's Nord War Horn (MISC)
+HORKER_TUSK = 0x0003AD68  # Skyrim's Horker Tusk (MISC), a hunter's
+RECIPE_HORN = 0x501B00C
+
 # THE STATIONS.
 #
 # The charcoal kiln (charburner.md) is Skyrim's smelter marker furniture
@@ -2001,6 +2013,9 @@ def thornswood_records(clam, scrap):
              LUTE, WOODWORKING_KEYWORD),
         cobj(RECIPE_DRUM, 'ThornswoodRecipeInstrumentDrum', [(FIREWOOD, 2), (LEATHER, 1), (LEATHER_STRIPS, 1)],
              DRUM, WOODWORKING_KEYWORD),
+        # Skyrim's own war horn (#7167), THE HORN above.
+        cobj(RECIPE_HORN, 'ThornswoodRecipeInstrumentHorn', [(HORKER_TUSK, 1), (LEATHER_STRIPS, 1)],
+             HORN, WOODWORKING_KEYWORD),
         # Skyrim's own lockpick (#4646), THE LOCKPICK above.
         cobj(RECIPE_LOCKPICK, 'ThornswoodRecipeLockpick', [(IRON_INGOT, 1)], LOCKPICK, FORGE_KEYWORD,
              makes=LOCKPICKS_MADE),

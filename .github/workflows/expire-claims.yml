@@ -28,7 +28,8 @@
 name: Expire stale claims
 on:
   schedule:
-    # 10:15 UTC, 4:15 AM on the box's clock, after the nightly checks.
+    # 10:15 AM UTC, after the nightly checks: 3:15 AM Mountain in winter
+    # (MST) and 4:15 AM in summer (MDT), since the schedule is UTC (#4290).
     - cron: '15 10 * * *'
   workflow_dispatch:
 permissions:

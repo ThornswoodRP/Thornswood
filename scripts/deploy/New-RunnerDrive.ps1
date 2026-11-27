@@ -38,11 +38,13 @@
   WHAT IT DOES, in order:
     1. Checks this is PowerShell run as administrator on a Windows that makes
        Dev Drives.
-    2. Makes the disk file -File (a VHDX that grows as it fills, up to
-       -SizeGB), attaches it, gives it one partition at -Letter and formats
-       it as a Dev Drive labelled Thornswood Runners. The file sits in a
-       folder only SYSTEM and Administrators may open, so no runner account
-       reads the disk under its own folder's lock.
+    2. Makes the disk file, runners.vhdx (a VHDX that grows as it fills, up
+       to -SizeGB), attaches it, gives it one partition at -Letter and formats
+       it as a Dev Drive labelled Thornswood Runners. The file sits in the
+       drive's own folder, %ProgramData%\Thornswood-RunnerDrive, which only
+       SYSTEM and Administrators may open, so no runner account reads the disk
+       under its own folder's lock. A folder that already holds anything this
+       script does not make is refused, and nothing is locked or made.
     3. Trusts it (fsutil devdrv trust), which is what lets Defender use
        performance mode there, and says what Defender and fsutil report.
     4. Locks the drive's root: SYSTEM and Administrators may do anything,
@@ -57,7 +59,18 @@
 
   -Remove refuses while any runner service still runs from the drive
   (Install-Runner.ps1 -OffBox -Number n -Remove takes each off first). Then
-  it takes the task off, detaches the file and deletes it and its folder.
+  it takes the task off, detaches the file, deletes the files this script
+  makes there (runners.vhdx, start.ps1, start.log) and then the folder once
+  it is empty. Anything else in it is said and left, with the folder.
+
+  ONE FOLDER, issue #4660. The disk file's place was a -File parameter, and
+  its parent was taken as the drive's own folder: locked to SYSTEM and
+  Administrators by step 2, deleted whole by -Remove. A -File in a folder
+  that held anything else, a disk's root or a folder of other disk images,
+  would have had all of it locked, then all of it deleted. Install-Runner.ps1
+  and Move-RunnersToDrive.ps1 read the startup script from this folder by
+  name, so a disk file anywhere else broke them too. The folder is fixed
+  now, and this script deletes only what it makes in it.
 
   Changes nothing outside this machine. scripts\tests\test-runner-drive.ps1 checks
   the scripts it runs.
@@ -68,7 +81,6 @@ param(
   [string]$Letter = 'R',
   [ValidateRange(50, 2000)]
   [int]$SizeGB = 100,
-  [string]$File = (Join-Path $env:ProgramData 'Thornswood-RunnerDrive\runners.vhdx'),
   [switch]$Status,
   [switch]$Remove,
   [switch]$NoPause
@@ -78,7 +90,8 @@ $ErrorActionPreference = 'Stop'
 $Label = 'Thornswood Runners'
 $Task = 'Thornswood Runner Drive'
 $Letter = $Letter.ToUpper()
-$Folder = Split-Path -Parent $File
+$Folder = Join-Path $env:ProgramData 'Thornswood-RunnerDrive'
+$File = Join-Path $Folder 'runners.vhdx'
 $StartScript = Join-Path $Folder 'start.ps1'
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -108,6 +121,31 @@ try {
   }
 } catch { Note ('FAILED: ' + `$_.Exception.Message); exit 1 }
 "@
+}
+
+# What this script makes in the drive's folder, and nothing else: the disk
+# file, the startup script, what that writes, and diskpart's script while it
+# runs (#4660).
+$Ours = @('runners.vhdx', 'start.ps1', 'start.log', 'make.txt')
+
+# The names in $folder that this script does not make; none when it is not
+# there yet.
+function Get-OthersIn([string]$folder) {
+  if (-not (Test-Path -LiteralPath $folder)) { return @() }
+  @(Get-ChildItem -LiteralPath $folder -Force | Where-Object { $Ours -notcontains $_.Name } | ForEach-Object { $_.Name } | Sort-Object)
+}
+
+# -Remove's last step: each file this script makes in $folder deleted, then
+# the folder, once nothing else is in it. A line for each, and one naming
+# what was left when something was.
+function Remove-OurFiles([string]$folder) {
+  foreach ($n in $Ours) {
+    $p = Join-Path $folder $n
+    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force; 'deleted ' + $p }
+  }
+  $left = @(Get-OthersIn $folder)
+  if ($left.Count) { 'LEFT ' + $folder + ', which also holds what this script did not make: ' + ($left -join ', ') }
+  elseif (Test-Path -LiteralPath $folder) { Remove-Item -LiteralPath $folder -Force; 'deleted ' + $folder }
 }
 
 # Step 2's disk file, by diskpart: the only tool in Windows itself that makes
@@ -155,9 +193,8 @@ if ($Remove) {
   if (Get-ScheduledTask -TaskName $Task -EA SilentlyContinue) { Unregister-ScheduledTask -TaskName $Task -Confirm:$false; Say ('task ' + $Task + ' taken off') }
   if (Test-Path -LiteralPath $File) {
     if ((Get-DiskImage -ImagePath $File).Attached) { Dismount-DiskImage -ImagePath $File | Out-Null; Say 'detached' }
-    Remove-Item -LiteralPath $Folder -Recurse -Force
-    Say ('deleted ' + $Folder)
   } else { Say ('no disk file at ' + $File) }
+  foreach ($l in @(Remove-OurFiles $Folder)) { Say $l $(if ($l -like 'LEFT *') { 'Yellow' } else { 'Gray' }) }
   Done
 }
 
@@ -166,7 +203,10 @@ $build = [Environment]::OSVersion.Version.Build
 if ($build -lt 22621) { Die ('Windows build ' + $build + ' makes no Dev Drive; it needs Windows 11 22H2 (build 22621) or later.') }
 if (-not (Get-Command Format-Volume).Parameters.ContainsKey('DevDrive')) { Die 'Format-Volume on this Windows has no -DevDrive, so it makes no Dev Drive. Windows Update brings it.' }
 
-# 2. The disk file, in a folder only SYSTEM and Administrators may open.
+# 2. The disk file, in a folder only SYSTEM and Administrators may open, and
+# one of its own (#4660).
+$others = @(Get-OthersIn $Folder)
+if ($others.Count) { Die ($Folder + ' holds what this script does not make: ' + ($others -join ', ') + '. It locks that folder and -Remove deletes it, so it must be the drive''s alone. Nothing was changed.') }
 $null = New-Item -ItemType Directory -Path $Folder -Force
 $out = & icacls.exe $Folder /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /C /Q 2>&1
 if ($LASTEXITCODE -ne 0) { Die ('icacls could not lock ' + $Folder + ': ' + (($out | ForEach-Object { "$_" }) -join ' ')) }

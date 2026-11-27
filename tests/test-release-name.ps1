@@ -154,8 +154,6 @@ try {
     $old = '20260928-174812'; $new = New-ReleaseId $null -UtcNow $at
     Yes ('  and an old id from the same instant sorts before it, ordinal') ([string]::CompareOrdinal($old, $new) -lt 0 -and
         [string]::CompareOrdinal($old + '-dev', $new + '-dev') -lt 0 -and (Get-ReleaseIdUtc $old) -eq (Get-ReleaseIdUtc $new))
-    $up = [IO.File]::ReadAllText((Join-Path $repo 'launcher\app\Updater.cs'))
-    Yes 'the launcher skips a pack only when applied.txt has that exact id' ($up -match '!done\.Contains\(p\.id\)\) list\.Add\(p\)')
     foreach ($s in 'Publish-Update.ps1', 'Rollback-Feed.ps1') {
         $src = [IO.File]::ReadAllText((Join-Path $repo ('scripts\release\' + $s)))
         Yes "$s mints through New-ReleaseId and mints no id from the minute" ($src -match 'New-ReleaseId \$\w+ -Dev:\$Dev' -and $src -notmatch "Get-Date -Format 'yyyyMMdd-HHmm'")

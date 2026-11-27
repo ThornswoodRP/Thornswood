@@ -106,7 +106,7 @@ $tagObj = Invoke-GitHub GET ($script:Api + '/git/tags/' + $ref.object.sha)
 $shas = Read-TagShas ([string]$tagObj.message)
 if (-not $shas.Contains('record')) {
     # A tag from before #3686: the live feed, while it still names this release.
-    $work0 = Join-Path ([IO.Path]::GetTempPath()) ('release-files-' + [Guid]::NewGuid().ToString('N'))
+    $work0 = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('release-files-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $work0 -Force | Out-Null
     $vf = Join-Path $work0 'version.json'
     Get-SiteFile "$Site/$feedDir/version.json" $vf
@@ -125,7 +125,7 @@ if (-not $shas.Contains('record')) {
     if (-not $shas.Contains('record')) { Stop-Run "the $channel feed names no record for $Tag; nothing was uploaded" }
 }
 
-$work = Join-Path ([IO.Path]::GetTempPath()) ('release-files-' + [Guid]::NewGuid().ToString('N'))
+$work = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('release-files-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
     # Fetched once, checked, kept until the upload: name -> @{ Path; Sha; Bytes }.

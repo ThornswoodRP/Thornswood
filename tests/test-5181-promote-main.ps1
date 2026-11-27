@@ -17,10 +17,14 @@
       Release runs with, through MergeRelease.ps1's Find-MainPackage (which
       tests\test-5179-merge-release.ps1 drives), and the GitHub Package
       merge-release.yml kept it as, held to the build's signed record;
-    - the job that makes the Deployment waits in the Main environment, needs
-      the check, has deployments: write, and contents: write and packages:
-      read for main's package, nothing else, and names the Release and its
-      own run in the payload, to Main;
+    - a job waits in the Main environment for Patrick, needing the check and
+      holding no token; the collection job (#7193) needs it, runs in the desk
+      environment with the Nexus key, from the build's own commit, and copies
+      the Release's revision to main's collection (Promote-Collection.ps1);
+    - the job that makes the Deployment needs the collection job, has
+      deployments: write, and contents: write and packages: read for main's
+      package, nothing else, and names the Release and its own run in the
+      payload, to Main;
     - once approved, and before the Deployment, it puts main's package out
       on main-<build tag>, the Release VeloRecord.MainRelease names, each
       file held to the signed record of the build that made it, from a draft
@@ -42,8 +46,12 @@ function Yes([string]$what, [bool]$cond) {
 
 $wf = [IO.File]::ReadAllText((Join-Path $Repo '.github/workflows/promote-main.yml'))
 $i = $wf.IndexOf("`n  promote:")
+$j = $wf.IndexOf("`n  collection:")
+$k = $wf.IndexOf("`n  deploy:")
 $check = if ($i -gt 0) { $wf.Substring(0, $i) } else { '' }
-$promote = if ($i -gt 0) { $wf.Substring($i) } else { '' }
+$wait = if ($i -gt 0 -and $j -gt $i) { $wf.Substring($i, $j - $i) } else { '' }
+$coll = if ($j -gt 0 -and $k -gt $j) { $wf.Substring($j, $k - $j) } else { '' }
+$promote = if ($k -gt 0) { $wf.Substring($k) } else { '' }
 
 Yes 'promote-main.yml is started by hand only' ($wf -match '(?m)^on:\s*\n\s+workflow_dispatch:' -and $wf -notmatch '(?m)^\s+(push|pull_request|schedule|workflow_run):')
 Yes '  on main only, one at a time' ($wf.Contains("if: `${{ github.ref == 'refs/heads/main' }}") -and $wf -match '(?m)^\s+cancel-in-progress: false\s*$')
@@ -55,7 +63,12 @@ Yes '  and reads only' ($check -match '(?m)^\s+deployments: read\s*$' -and $chec
 Yes 'the check finds main''s launcher package before anybody is asked (#4825)' ($check.Contains('$pkg = Find-MainPackage -Tag $tag -Manifest $m -Repo $repo') -and
     $check.Contains('$kept = Save-MainPackage -Tag $pkg.From -Commit $pkg.Commit -Look') -and $check.Contains('Get-MainPackageProblem -Record $pkg.Record -Have $kept') -and
     $check.Contains('("main_package=" + $ref)') -and $check -notmatch 'actions/artifacts')
-Yes 'the promotion needs the check and waits in the Main environment' ($promote -match '(?m)^\s+needs: check\s*$' -and $promote -match '(?m)^\s+environment: Main\s*$')
+Yes 'the promotion needs the check and waits in the Main environment, with no token' ($wait -match '(?m)^\s+needs: check\s*$' -and $wait -match '(?m)^\s+environment: Main\s*$' -and $wait -match '(?m)^\s+permissions: \{\}\s*$' -and $wait -notmatch 'secrets\.')
+Yes 'once approved, the collection job puts the revision on main''s collection (#7193)' ($coll -match '(?m)^\s+needs: \[check, promote\]\s*$' -and $coll -match '(?m)^\s+environment: desk\s*$' -and
+    $coll -match '(?m)^\s+permissions:\s*\n\s+contents: read\s*\n\s+steps:' -and $coll.Contains('ref: ${{ needs.check.outputs.commit }}') -and
+    $coll.Contains('THORNSWOOD_NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}') -and $coll.Contains("scripts/release/Promote-Collection.ps1') -Manifest `$file"))
+Yes '  and the Deployment waits for it, outside the Main environment' ($promote -match '(?m)^\s+needs: \[check, collection\]\s*$' -and $promote -notmatch '(?m)^\s+environment:' -and $promote -notmatch 'secrets\.')
+Yes '  and only the collection job reads a secret' (([regex]::Matches($wf, 'secrets\.')).Count -eq 1)
 Yes '  with deployments: write, and contents: write and packages: read for main''s package, nothing else' ($promote -match '(?m)^\s+permissions:\s*\n\s+deployments: write\s*\n\s+contents: write\s*\n\s+packages: read\s*\n\s+steps:')
 Yes '  and makes a Deployment to Main of the Release, naming its own run' ($promote.Contains("environment = 'Main'") -and $promote.Contains('payload = [ordered]@{ release = $env:TAG; run = [long]$env:GITHUB_RUN_ID }') -and $promote.Contains('ref = $env:COMMIT'))
 $pubAt = $promote.IndexOf("- name: Put main's launcher package out")

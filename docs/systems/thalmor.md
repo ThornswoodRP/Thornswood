@@ -58,10 +58,9 @@ strip. The fight is the point. A robe left on the ground is still
 world gear, and world gear is not a mint and not a free armoury. See
 [Gold](gold.md).
 
-They are quiet when nobody is near. The machine of a nearby person
-is what moves them, and that host can change every 2 seconds. That
-is the limit of shared Skyrim, written on the known-issues page, and
-it applies to these patrols the same as to a wolf.
+They are part of the cast that stays, and the server runs them the
+way it runs the rest of that cast: see
+[People who are not people](npcs.md).
 
 ## What you cannot do
 
@@ -87,9 +86,11 @@ and hood and the Justiciar weapons, and the world does not hand them
 out. The robes are not race locked, as the race page says.
 
 A character wearing any of those pieces, or the game's own Thalmor
-robes, reads Thalmor to the server. Nothing acts on that yet: guards do
-not attack on sight, because most of them are still the game's own
-actors and the server does not run their AI. The server knows no item
+robes, reads Thalmor to the server. Nothing acts on that by itself.
+There are no NPC guards: a hold's guards are people in a guard role,
+and to them a Thalmor marker is a reason to start a fight, not a rule
+that starts one (see
+[People who are not people](npcs.md#who-does-not-stay)). The server knows no item
 that is a Dominion flag, so a flag is not read yet.
 
 The patrols are staff settings in `game/data/thalmor-patrols.json`
@@ -114,9 +115,8 @@ start and never used. A dead
 member comes back at its point after the return time; nothing stacks a
 second group. A member keeps to its stretch of road, inside its leash;
 there is no route between holds. A body cannot be opened, so it gives no
-coin. The known-issues page still says the cast that stays is traders
-and the carriage workers. This page adds the patrols to that cast. See
-[People who are not people](npcs.md).
+coin. The patrols are part of the cast that stays, beside the traders
+and the transport workers on [People who are not people](npcs.md).
 
 The war is what people make of it (Patrick, 17 October, #513). The server holds
 the tools and never plays it out by itself. It keeps one stage for the

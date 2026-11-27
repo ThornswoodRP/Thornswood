@@ -82,6 +82,10 @@ eval(grab('function send('));
 eval(grab('function wantsHtml('));
 eval(grab('function errorAnswer('));
 eval(grab('function rangeReply('));
+// rangeReply and the routes send a file through streamFile, and ask isFile
+// whether there is one to send (#4402).
+const { pipeline } = require('stream');
+eval(grab('function isFile(') + '\n' + grab('function streamFile('));
 // The setup programs' names, as the site has them (lib/feed.js), and a stand-in for the
 // Release lookup (test-release-copies.js drives the real one).
 const kindsAt = src.indexOf('const SETUP_KINDS = {');

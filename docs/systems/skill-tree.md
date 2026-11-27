@@ -99,6 +99,11 @@ Every rank after that gives 1 free point. It goes in any sub-skill that
 is not full. Rank comes from work, not from gold and not from being here
 a long time. See [Professions](professions.md) for how a rank is earned.
 
+Above the tree on K, one line for each class, half and school that can
+still climb names the next rank and how much work is left, with a bar
+filled to the work done so far. A rank earned and waiting, such as a
+sister half held until a Master takes you on, shows a full bar.
+
 ## Where this is
 
 The fifteen sub-skills, the cap of 5, the per-point numbers, the placed
@@ -157,7 +162,7 @@ not left on you (issue #1642).
 | Purified Blood | Yes. The tree's disease resistance comes to 100 and its poison resistance to 75. What your race resists comes on top, as far as the game allows | |
 | Archmage's Vessel | Yes | |
 | Leyline Attunement | Yes. The server sees a cast as magicka falling. The usual rate is your race's own, raised by your Clarity | |
-| Overcharge | Yes, both halves, each counted on its own. Every fifth spell of yours that takes health takes double, counted on the server. Every fifth spell of yours that holds (one you cast and let go, with an effect that lasts a time and none that takes health, like Oakflesh, Candlelight or Fear) holds twice as long. Its effects run on the machine of whoever they land on, so the engine fork counts the cast on your own machine and the server, counting the same casts, tells everybody else's machine to hold it twice as long too | |
+| Overcharge | Yes, both halves, each counted on its own. Every fifth spell of yours that takes health takes double, counted on the server by the cast and not by the hit: a stream like Flames counts once however long it is held, a spell with an area counts once however many it catches, and every hit of the fifth is double. Every fifth spell of yours that holds (one you cast and let go, with an effect that lasts a time and none that takes health, like Oakflesh, Candlelight or Fear) holds twice as long. Its effects run on the machine of whoever they land on, so the engine fork counts the cast on your own machine and the server, counting the same casts, tells everybody else's machine to hold it twice as long too | |
 | Spellbreaker | Yes. A spell you hold up, like Flames, counts once a second | |
 | Font of Magic | Yes, from the Use button on the K panel. For 15 seconds each school's cost is taken off in full, the way the game's own Fortify enchantments take it off, so the game takes no magicka at all | |
 | Tireless | Yes, on your own machine: a sprint, a power attack and a shield bash cost half | |

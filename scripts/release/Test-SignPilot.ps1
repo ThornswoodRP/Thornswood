@@ -31,8 +31,8 @@
   else in records\signing.
 
 .EXAMPLE
-  .\scripts\release\Test-SignPilot.ps1 -Sign -Out $env:TEMP\sign-pilot
-  .\scripts\release\Test-SignPilot.ps1 -Verify -Out $env:TEMP\sign-pilot
+  .\scripts\release\Test-SignPilot.ps1 -Sign -Out .\temp\sign-pilot
+  .\scripts\release\Test-SignPilot.ps1 -Verify -Out .\temp\sign-pilot
 #>
 [CmdletBinding()]
 param(
@@ -124,7 +124,7 @@ if ($Verify) {
     } else { Check $false 'provenance.json is there' }
     $why = Get-PublishSignRefusal -Path $exe -ExpectedSigner $ExpectedSigner
     Check (-not $why) ('the Ship gate and the launcher check accept it' + $(if ($why) { ': ' + $why } else { '' }))
-    $bad = Join-Path ([IO.Path]::GetTempPath()) ('sign-pilot-tampered-' + [guid]::NewGuid().ToString('N') + '.exe')
+    $bad = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('sign-pilot-tampered-' + [guid]::NewGuid().ToString('N') + '.exe')
     try {
         # Offset 0x4E is the DOS stub text, inside what Authenticode hashes. The middle of a small signed exe is the signature blob itself, which the hash leaves out, so a change there proves nothing.
         $b = [IO.File]::ReadAllBytes($exe); $b[0x4E] = $b[0x4E] -bxor 0xFF

@@ -122,8 +122,11 @@ if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Finish }
 $fw = Get-WindowsPath 'Microsoft.NET\Framework64\v4.0.30319'
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('tssigner-' + [Guid]::NewGuid().ToString('N'))
-$null = New-Item -ItemType Directory -Force -Path $tmp
 $made = @()
+# The try opens where the folder is made, so a stop anywhere after it still
+# removes it (#4264).
+$null = New-Item -ItemType Directory -Force -Path $tmp
+try {
 
 function Drop-Cert([string]$thumb) {
     foreach ($store in 'My', 'CA', 'Root', 'TrustedPublisher', 'Disallowed') {
@@ -132,7 +135,6 @@ function Drop-Cert([string]$thumb) {
     }
 }
 
-try {
     # Assert-PublishSigned.ps1 compiles this file with Add-Type where it runs
     # on the box (the catalog check), and the box runs PowerShell 7 (#5356),
     # the one running this harness. It is asked in a new process of that

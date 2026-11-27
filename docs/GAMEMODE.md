@@ -1,8 +1,8 @@
 # How gamemode.js is put together
 
 This page is for somebody opening `game\gamemode.js` for the first time. It
-is the whole of Thornswood's server side: 69,961 lines and 6 MB in one file on
-17 October (about 24,000 when this page was written), loaded by skymp5-server. It says where each system lives, which generated
+is the whole of Thornswood's server side: 75,053 lines and 3.5 MB in one file on
+27 November (about 24,000 when this page was written), loaded by skymp5-server. It says where each system lives, which generated
 table each script writes into it, how it reaches the server, how it talks to
 the plugins, what it keeps on disk, and which tests read it.
 
@@ -72,8 +72,14 @@ are [GAMEMODE-SOURCE.md](GAMEMODE-SOURCE.md) (#2181).
 
 A handler returns `false` to block an event and anything else to let it
 through. Most handlers are wrapped in `guard()` (`gamemode.js:guard`), so a throw
-is logged and the event goes on, though the login handler (`mp.onThornswoodLogin`)
-and the flora pick wrapper around `mp.onActivate` are not wrapped in `guard()`. Form ids cross the boundary as descriptors,
+is logged and the event goes on. Three are not: the login handler
+(`mp.onThornswoodLogin`, set to `onLogin` in the door), and two wrappers that
+are set over a guarded handler, so only their own lines are outside
+`guard()`: the flora pick wrapper around `mp.onActivate`
+(`gamemode.js:answerFlora`) and the craft count wrapper around `mp.onCraft`
+(`gamemode.js:countCrafts`). `tests\test-4451-gamemode-coverage.js` fails when
+another handler is set without `guard()` and this paragraph does not name it.
+Form ids cross the boundary as descriptors,
 `"<low 24 bits in hex>:<plugin>"`, never as load order positions.
 
 ## How the blocks find each other
@@ -99,7 +105,7 @@ In file order, top to bottom. Search for a name to find it; the sections have no
 | Respawn resolution | A port of `respawnResolver.ts`: `arrive`, `resolveArrival`. `ensureProperties` declares the actor properties the early blocks use. |
 | Gathering stations | `ORES_BY_BASE`, the stations' cooldown (`COOLDOWN_MS`), `addItem`, `takeItem`. |
 | Class and profession gates | `classGate`, `halfGate`, `creditWork`, `rankStep`. |
-| Starting tools, mining, chopping, charcoal | `TOOLS` and tool wear; salt (`mineSalt`); the swing animation; ore deposits (`DEPOSIT_SIZE`); `mineOre`; chopping blocks (3342-3549, `chopWood`). The kiln is a bench since #2337, answered by nothing here. |
+| Starting tools, mining, chopping, charcoal | `TOOLS` and tool wear; salt (`mineSalt`); the swing animation; ore deposits (`DEPOSIT_SIZE`); `mineOre`; chopping blocks (`chopWood`). The kiln is a bench since #2337, answered by nothing here. |
 | Character creation (chargen) | See "Character creation" below. |
 | Event handlers | `mp.onDying`, `mp.onDeath`, `mp.onRespawn`. `ensureProperties()` and `startChargenTimer()` run at load here. |
 | Scripted activators, harvesting, fishing, hunting | The generated `HARVESTS_BY_BASE`, `FISH_BY_BASE`, `GAME_BY_BASE`, `CROPS_BY_BASE`, `HUNTS_BY_BASE` blocks; `harvest`, `fish`, `game`, `loot` for carcasses, `farmActivate`; `mp.onActivate`, which routes every press; `publishServerBases`. |
@@ -122,6 +128,15 @@ In file order, top to bottom. Search for a name to find it; the sections have no
 | Social | Friends, parties, mutes, journals, the panel, `thornswoodNear`. |
 | Trade | Two people, two offers, both confirm: `begin`, `gold`, `confirm`, `swap`. |
 | Mod settings | Issue #488, added 28 September. The 176 GLOB records of five classic mod menus (`MOD_GLOBALS`), kept per profile in `private\mod-settings.json` from the plugin's `/modset` lines and put back at login through `thornswoodModSettings` and its updateOwner script. `game\tests\test-mod-settings.js`. |
+
+Three handlers are set in blocks the rows above do not name:
+`mp.onUpdateEquipmentAttempt` in the college block (`game\gamemode\college.ts`),
+which takes back a spell the book does not list; `mp.onEquipItemAttempt`, set
+twice, by the strength gate (`strength-weapons.ts`) and then by the cuffs gate
+(`cuffs.ts`), each asking the gate it was set over first; and `mp.onEatItem` in
+injury and disease (`injury-and-disease.ts`), which hears a potion of cure
+disease and anything eaten or drunk for the needs. Which tests drive each
+handler is in [GAMEMODE-COVERAGE.md](GAMEMODE-COVERAGE.md).
 
 ## Startup and settings
 

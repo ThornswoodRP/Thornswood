@@ -209,8 +209,10 @@ for word (`scripts\release\server-bundle-sources.js`), the packages are the
 lockfile's (`yarn check --integrity`), `package.json`, `yarn.lock` and
 `data\scripts` are the fork's byte for byte, and `launch_server.bat` is the
 configure's. Anything else stops it and nothing is written. It warns when the
-fork has uncommitted changes or a source file under `skymp5-server\cpp` or `ts`
-is newer than the binary.
+fork has uncommitted changes or a C++ source under `skymp5-server\cpp` is newer
+than the binary, and records the build anyway. It does not look at `ts`: the
+TypeScript is built into the bundle, never into the binary, and the bundle's
+map holds it to the fork.
 
 ## The client
 
