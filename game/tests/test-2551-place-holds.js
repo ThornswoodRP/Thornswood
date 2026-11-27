@@ -186,7 +186,10 @@ function lift() {
 const code = lift();
 yes('L0 the place name and BUILDING_NAME are in gamemode.js', !!code);
 function placeNamer(mp) {
-  const box = { mp: mp, String: String, Number: Number, Object: Object };
+  const box = { mp: mp, String: String, Number: Number, Object: Object, table: (name) => {
+    if (name !== 'BUILDING_NAME') throw new Error('Unexpected place-name table: ' + name);
+    return NAMES;
+  } };
   vm.createContext(box);
   vm.runInContext(code.names + '\n' + code.spaced + '\n' + code.place + '\nthis.placeName = placeName;', box);
   return box.placeName;
