@@ -192,7 +192,8 @@ jobs:
   # waits for that Deployment's success, which starts this workflow again.
   content:
     name: Find the box's content build
-    if: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'deployment_status' || (github.event.deployment.environment == 'Content' && github.event.deployment_status.state == 'success')) }}
+    # A queued merge's build (#6879) is the merge group's, never a release's.
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'deployment_status' || (github.event.deployment.environment == 'Content' && github.event.deployment_status.state == 'success' && !github.event.deployment.payload.queued)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

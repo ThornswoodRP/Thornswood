@@ -111,6 +111,218 @@ function Get-ThornswoodToolReason([string[]]$Lines) {
     return ''
 }
 
+# THE LIMITED RUN (#6879). Patrick's A on #6879 (26 Nov 2026): a merge the
+# queue holds is built on the box before it lands, and its content checks run
+# over that build, so a pull request that breaks one never reaches main. The
+# queued commit's tools are code nobody has merged yet, so they never run as
+# the box's administrator, which every other run here does: Make-LastPlugin.py
+# and the tool run in a one-shot scheduled task as NT AUTHORITY\LOCAL SERVICE,
+# limited, with the one privilege that lets it walk to its folder
+# (SeChangeNotifyPrivilege) and a SID of its own, NT TASK\Thornswood Limited
+# Build, the way the game servers run the gamemode the merges deploy
+# (scripts\deploy\ServiceAccount.ps1 says why each part is there). So the
+# tools can read the game data and change only the run's folder:
+#
+#   - before anything is laid out, the fail-safe of the services
+#     (Test-ThornswoodServiceCannotReach) reads the rules on every place no
+#     service may read, with the gate's folder added, and the run stops with
+#     nothing run when this account could read one;
+#   - the run's folder is made SYSTEM's, the Administrators' and the task's,
+#     nothing inherited, so the task changes what is in it and nothing else,
+#     and OWNER RIGHTS keeps what it makes from being given to anybody else
+#     (a file's owner is LOCAL SERVICE, which every service is);
+#   - Skyrim's archives and string tables, linked in read only, get a read
+#     rule for the task's SID, once, on the store's own files;
+#   - the task's program is this file's wrapper, which puts itself in a
+#     Windows job that ends every process in it when it ends, so nothing the
+#     tool starts outlives its run; the task ends at its time limit too;
+#   - what the wrapper says and the back.zip it makes are taken only as files
+#     of their own (no link, no reparse point), and Run-OnBox.ps1 takes from
+#     the zip only what the run listed under the paths it watches.
+#
+# The administrator's part (the rest of Get-ThornswoodOnBoxScript) lays the
+# folder out and finds the programs as before; the part from the hashes on
+# (-PartB) runs in the wrapper, and its lines come back in said.txt.
+$ThornswoodLimitedTask = 'Thornswood Limited Build'
+$ThornswoodLimitedMinutes = 40
+# What the fail-safe reads besides the services' own list: the gate's folder,
+# its checkouts, keys and log, and the box's ssh host keys and the keys that
+# let a person in as an administrator. Not the ssh folder itself, which
+# every user may read for sshd_config.
+$ThornswoodLimitedNeverReach = @('C:\Thornswood-Gate') + @(
+    'administrators_authorized_keys', 'ssh_host_ed25519_key', 'ssh_host_ecdsa_key', 'ssh_host_rsa_key', 'ssh_host_dsa_key' |
+        ForEach-Object { 'C:\ProgramData\ssh\' + $_ })
+
+function Get-ThornswoodOnBoxLimitedSid {
+    . (Join-Path $PSScriptRoot '..\deploy\ServiceAccount.ps1')
+    return (Get-ThornswoodTaskSidFromName -TaskName $ThornswoodLimitedTask)
+}
+
+function Get-ThornswoodOnBoxLimitedStartScript([Parameter(Mandatory = $true)][string]$Run) {
+    . (Join-Path $PSScriptRoot '..\deploy\ServiceAccount.ps1')
+    $funcs = ''
+    foreach ($n in 'Get-ThornswoodServiceNeverReach', 'Test-ThornswoodServiceCannotReach') {
+        $funcs += 'function ' + $n + ' {' + (Get-Item ('function:' + $n)).ScriptBlock.ToString() + "}`n"
+    }
+    $extra = (@($ThornswoodLimitedNeverReach | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ', ')
+    $text = @'
+# The limited run (OnBox.ps1, THE LIMITED RUN): the fail-safe, then the run's
+# folder made the task's to change.
+$limitedTask = '__TASK__'
+$limitedSid = '__SID__'
+__FUNCS__
+$limitedProblems = @(Test-ThornswoodServiceCannotReach -Paths (@(Get-ThornswoodServiceNeverReach) + @(__EXTRA__)) -Sids @($limitedSid))
+if ($limitedProblems.Count) { 'STOP. the limited account could read a place no build may read, so nothing ran: ' + ($limitedProblems -join '; '); exit 2 }
+$fsr = [Security.AccessControl.FileSystemRights]
+$tree = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+$flat = [Security.AccessControl.PropagationFlags]::None
+function Rule([string]$Sid, $Rights) { New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($Sid)), $Rights, $tree, $flat, 'Allow') }
+$runAcl = New-Object Security.AccessControl.DirectorySecurity
+$runAcl.SetAccessRuleProtection($true, $false)
+foreach ($s in @('S-1-5-18', 'S-1-5-32-544', [Security.Principal.WindowsIdentity]::GetCurrent().User.Value)) { $runAcl.AddAccessRule((Rule $s $fsr::FullControl)) }
+$runAcl.AddAccessRule((Rule $limitedSid $fsr::Modify))
+$runAcl.AddAccessRule((Rule 'S-1-3-4' $fsr::ReadPermissions))
+[IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo](Get-Item -LiteralPath $run), $runAcl)
+'limited   the run''s folder is SYSTEM''s, the Administrators'' and NT TASK\' + $limitedTask + '''s alone; nothing in a place no service may read is readable to it'
+'@
+    return $text.Replace('__TASK__', $ThornswoodLimitedTask).Replace('__SID__', (Get-ThornswoodTaskSidFromName -TaskName $ThornswoodLimitedTask)).Replace('__FUNCS__', $funcs).Replace('__EXTRA__', $extra)
+}
+
+# The administrator's side once the folder is laid out: the wrapper and what
+# it is given, the read rule on the archives, the task, its wait, and what
+# it said. -PartB is the run itself, as the administrator's run has it.
+function Get-ThornswoodOnBoxLimitedScript {
+    param(
+        [Parameter(Mandatory = $true)][string]$Run,
+        [Parameter(Mandatory = $true)][string]$Tool,
+        [Parameter(Mandatory = $true)][string]$PartB
+    )
+    $wrapper = @'
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$run = '__RUN__'
+$said = Join-Path $run 'said.txt'
+$utf8 = New-Object Text.UTF8Encoding($false)
+& {
+  try {
+    Add-Type -TypeDefinition @"
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class ThornswoodLimitedJob
+{
+    [StructLayout(LayoutKind.Sequential)] struct Basic { public long A, B; public uint LimitFlags; public UIntPtr C, D; public uint E; public UIntPtr F; public uint G, H; }
+    [StructLayout(LayoutKind.Sequential)] struct Io { public ulong A, B, C, D, E, F; }
+    [StructLayout(LayoutKind.Sequential)] struct Extended { public Basic Basic; public Io Io; public UIntPtr A, B, C, D; }
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr job, int kind, ref Extended info, int length);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    static IntPtr held;
+    // A job that ends every process in it when its last handle closes, which
+    // is when this process ends, however it ends; this process goes in it,
+    // and so does everything it starts.
+    public static void Hold()
+    {
+        var job = CreateJobObject(IntPtr.Zero, null);
+        if (job == IntPtr.Zero) throw new Win32Exception();
+        var info = new Extended();
+        info.Basic.LimitFlags = 0x2000;
+        if (!SetInformationJobObject(job, 9, ref info, Marshal.SizeOf(typeof(Extended)))) throw new Win32Exception();
+        if (!AssignProcessToJobObject(job, GetCurrentProcess())) throw new Win32Exception();
+        held = job;
+    }
+}
+"@
+    [ThornswoodLimitedJob]::Hold()
+    $given = [IO.File]::ReadAllText((Join-Path $run 'limited.json')) | ConvertFrom-Json
+    $repo = Join-Path $run 'repo'
+    $data = Join-Path $run 'data'
+    $pluginList = Join-Path $run 'plugins.txt'
+    $orderSettings = Join-Path $run 'server-settings.json'
+    $python = [string]$given.python
+    $exe = [string]$given.exe
+    $words = @($given.words | ForEach-Object { [string]$_ })
+    foreach ($x in @($python, $exe) | Select-Object -Unique) {
+      try { [IO.File]::OpenRead($x).Dispose() }
+      catch { throw ($x + ' cannot be read by the limited account (' + $_.Exception.GetBaseException().Message + '): it is installed for one user only. Install it for every user of the box.') }
+    }
+    $env:PATH = (Split-Path -Parent $python) + ';' + $env:PATH
+    Set-Location -LiteralPath $repo
+    'limited   as ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name + ', in a job that ends what it starts'
+__PARTB__
+  } catch { 'STOP. ' + $_.Exception.GetBaseException().Message + ' (the limited run)' }
+} 2>&1 | ForEach-Object { [IO.File]::AppendAllText($said, ([string]$_) + "`r`n", $utf8) }
+'@
+    $wrapper = $wrapper.Replace('__RUN__', $Run.Replace("'", "''")).Replace('__PARTB__', $PartB)
+    $text = @'
+# The limited run (OnBox.ps1, THE LIMITED RUN): what was found above goes to
+# the wrapper, which the task runs; then what it said, and how it ended.
+$limitedWrapper = Join-Path $run 'limited.ps1'
+$limitedSaid = Join-Path $run 'said.txt'
+[IO.File]::WriteAllText((Join-Path $run 'limited.json'), (ConvertTo-Json -InputObject @{ python = $python; exe = $exe; words = [string[]]$words } -Depth 3), (New-Object Text.UTF8Encoding($false)))
+# The wrapper's text is sent as base64, so nothing in it can end a string here.
+[IO.File]::WriteAllBytes($limitedWrapper, [Convert]::FromBase64String('__WRAPPER64__'))
+if (Test-Path -LiteralPath $store) {
+  foreach ($f in @(Get-ChildItem -LiteralPath $store -File -Recurse)) {
+    $a = Get-Acl -LiteralPath $f.FullName
+    $has = @($a.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object { $_.IdentityReference.Value -eq $limitedSid -and [string]$_.AccessControlType -eq 'Allow' -and (([long][int]$_.FileSystemRights -band 1) -ne 0) }).Count
+    if (-not $has) {
+      $a.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($limitedSid)), ($fsr::ReadAndExecute -bor $fsr::Synchronize), 'Allow')))
+      [IO.FileSystemAclExtensions]::SetAccessControl([IO.FileInfo]$f, [Security.AccessControl.FileSecurity]$a)
+      'limited   NT TASK\' + $limitedTask + ' may read ' + $f.FullName + ' now'
+    }
+  }
+}
+$limitedPs = (Get-Process -Id $PID).Path
+$old = @(Get-ScheduledTask -TaskName $limitedTask -ErrorAction SilentlyContinue)
+foreach ($o in $old) { try { Stop-ScheduledTask -InputObject $o } catch { }; Unregister-ScheduledTask -InputObject $o -Confirm:$false; 'limited   took away the task a run before this one left' }
+$limitedEnded = $false
+$limitedResult = $null
+$limitedWhy = ''
+try {
+  $action = New-ScheduledTaskAction -Execute $limitedPs -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $limitedWrapper + '"') -WorkingDirectory $repo
+  $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\LOCAL SERVICE' -LogonType ServiceAccount -RunLevel Limited -RequiredPrivilege 'SeChangeNotifyPrivilege' -ProcessTokenSidType Unrestricted
+  $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes __MINUTES__) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Priority 7
+  $null = Register-ScheduledTask -TaskName $limitedTask -Action $action -Principal $principal -Settings $settings -Description 'One run of a content tool of a commit not on main yet, as the limited account (scripts/mods/OnBox.ps1, #6879). Made and taken away by the run.' -Force
+  $mapped = ''
+  try { $mapped = (New-Object Security.Principal.NTAccount('NT TASK', $limitedTask)).Translate([Security.Principal.SecurityIdentifier]).Value } catch { }
+  if ($mapped -ne $limitedSid) { $limitedWhy = 'Windows gave the task the SID ' + $mapped + ', not ' + $limitedSid + ', which the folder''s rules name, so nothing ran.' }
+  else {
+    $started = Get-Date
+    Start-ScheduledTask -TaskName $limitedTask
+    'limited   __TOOL__ runs as NT AUTHORITY\LOCAL SERVICE (NT TASK\' + $limitedTask + '), limited, for __MINUTES__ minutes at most'
+    $deadline = $started.AddMinutes(__MINUTES__ + 2)
+    do {
+      Start-Sleep -Seconds 2
+      $t = Get-ScheduledTask -TaskName $limitedTask
+      $i = Get-ScheduledTaskInfo -InputObject $t
+      $ran = $i.LastRunTime -ge $started.AddSeconds(-5)
+    } while (((-not $ran) -or [string]$t.State -eq 'Running' -or [string]$t.State -eq 'Queued') -and (Get-Date) -lt $deadline)
+    $limitedEnded = $ran -and [string]$t.State -ne 'Running' -and [string]$t.State -ne 'Queued'
+    $limitedResult = '0x{0:x}' -f [int64]$i.LastTaskResult
+  }
+} finally {
+  try { Stop-ScheduledTask -TaskName $limitedTask -ErrorAction SilentlyContinue } catch { }
+  try { Unregister-ScheduledTask -TaskName $limitedTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }
+}
+if ($limitedWhy) { 'STOP. ' + $limitedWhy; exit 2 }
+if (-not $limitedEnded) { 'STOP. the limited run had not ended after __MINUTES__ minutes and was stopped, so nothing came back.'; exit 2 }
+foreach ($n in 'said.txt', 'back.zip') {
+  $p = Join-Path $run $n
+  if (-not (Test-Path -LiteralPath $p)) { continue }
+  $it = Get-Item -LiteralPath $p -Force
+  if (($it -isnot [IO.FileInfo]) -or ($it.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $it.LinkType) { 'STOP. the limited run left ' + $n + ' as a link or a folder, not a file of its own, so nothing of it was read.'; exit 2 }
+}
+if (-not (Test-Path -LiteralPath $limitedSaid)) { 'STOP. the limited run said nothing (the task ended with ' + $limitedResult + '), so the tool did not run.'; exit 2 }
+$limitedLines = @([IO.File]::ReadAllLines($limitedSaid))
+$limitedLines
+if (-not @($limitedLines | Where-Object { $_ -cmatch '^EXIT -?\d+$' }).Count) { 'STOP. the limited run ended (the task ended with ' + $limitedResult + ') without saying how the tool ended.'; exit 2 }
+'@
+    $bytes = [Text.Encoding]::UTF8.GetPreamble() + [Text.Encoding]::UTF8.GetBytes($wrapper.Replace("`r`n", "`n").Replace("`n", "`r`n"))
+    return $text.Replace('__WRAPPER64__', [Convert]::ToBase64String([byte[]]$bytes)).Replace('__MINUTES__', [string]$ThornswoodLimitedMinutes).Replace('__TOOL__', $Tool.Replace("'", "''"))
+}
+
 # -Run is the run's own folder on the box, holding tools.zip; -ServerRoot the
 # game server whose plugins folder is copied; -Tool the repository path of
 # the tool, a .py run by Python, a .js by node or a .ps1 by PowerShell 7
@@ -151,7 +363,12 @@ function Get-ThornswoodOnBoxScript {
         # commit holds one yet: nothing generated is committed (#5191), so the
         # first step of a content build, which makes the plugin, runs from a
         # commit with no game\content at all (#6351).
-        [string[]]$Own = @('Thornswood-Content.esp')
+        [string[]]$Own = @('Thornswood-Content.esp'),
+        # Run the tool, and Make-LastPlugin.py before it, as the limited
+        # account and not as the box's administrator (THE LIMITED RUN, at
+        # Get-ThornswoodOnBoxLimitedScript): for a commit that is not on
+        # main yet, the merge queue's (#6879).
+        [switch]$Limited
     )
     foreach ($n in $Own) {
         if ($n -notmatch '^[^\\/:*?"<>|'' \r\n][^\\/:*?"<>|''\r\n]*\.(esp|esm|esl)$') { throw "$n is not a plugin name." }
@@ -173,7 +390,7 @@ function Get-ThornswoodOnBoxScript {
     $wantsSettings = [bool]@($Arguments | Where-Object { $_ -like '*{settings}*' }).Count
     $kind = [IO.Path]::GetExtension($Tool).ToLowerInvariant()
     $toolFar = $Tool.Replace('/', '\')
-    return @"
+    $head = @"
 `$ErrorActionPreference = 'Stop'
 `$ProgressPreference = 'SilentlyContinue'
 # An error nothing below catches says what it was on a STOP line, which
@@ -181,6 +398,7 @@ function Get-ThornswoodOnBoxScript {
 # reason (#6351).
 trap { 'STOP. ' + `$_.Exception.Message + ' (run.ps1 line ' + `$_.InvocationInfo.ScriptLineNumber + ')'; exit 2 }
 $(Get-ThornswoodOnBoxHoldScript -Run $Run)
+$(if ($Limited) { Get-ThornswoodOnBoxLimitedStartScript -Run $Run } else { '' })
 `$repo = Join-Path `$run 'repo'
 `$data = Join-Path `$run 'data'
 `$plugins = '$serverRoot\plugins'
@@ -259,23 +477,6 @@ if (`$$wantsSettings) {
   'settings  ' + `$inData.Count + ' plugin(s) in server-settings.json: ' + `$(if (`$$fromRecord) { `$orderFrom + ', in the run''s data folder' } else { 'the loadOrder of ' + `$orderFrom + ', in the run''s data folder, and nothing else of it' })
 }
 
-`$sha = [Security.Cryptography.SHA256]::Create()
-function Hashes {
-  `$h = @{}
-  foreach (`$top in $watchText) {
-    `$d = Join-Path `$repo `$top
-    if (-not (Test-Path -LiteralPath `$d)) { continue }
-    `$files = `$(if (Test-Path -LiteralPath `$d -PathType Leaf) { @(Get-Item -LiteralPath `$d) } else { @(Get-ChildItem -LiteralPath `$d -File -Recurse) })
-    foreach (`$f in `$files) {
-      `$rel = `$f.FullName.Substring(`$repo.Length + 1).Replace('\', '/')
-      `$s = [IO.File]::OpenRead(`$f.FullName)
-      try { `$h[`$rel] = [BitConverter]::ToString(`$sha.ComputeHash(`$s)) } finally { `$s.Close() }
-    }
-  }
-  return `$h
-}
-`$before = Hashes
-
 # python.exe itself, named by the py launcher: run through py, a quoted
 # path arrived with a space in front of it and Python could not open it.
 # Named for every tool, because Rebuild-ContentTables.ps1 runs Python
@@ -285,23 +486,6 @@ if (-not `$launcher) { 'STOP. there is no Python launcher (py) on the box.'; exi
 `$python = (& `$launcher.Source -3 -c 'import sys; print(sys.executable)' | Select-Object -First 1)
 if (-not `$python -or -not (Test-Path -LiteralPath `$python)) { 'STOP. py -3 named no Python on the box.'; exit 2 }
 `$env:PATH = (Split-Path -Parent `$python) + ';' + `$env:PATH
-# Thornswood-Last.esp is this commit's, made from its recipe out of the run's
-# data folder (#2791): the plugin is not in the repository, so what the copy
-# above put there is the server's, made from whichever recipe it last
-# deployed. When this commit's recipe does not make it here (a plugin it
-# reads is another copy, the content plugin of a pull request), the server's
-# stays and the line says so; Build-LastPlugin.py makes this commit's. It is
-# for a tool that reads the plugin a build made, as Build-StationSites.py
-# measures over the build it lays: the content chain's steps before
-# Build-LastPlugin.py are not given it in their order (Rebuild-ContentTables.ps1,
-# #5191), and that step writes the plugin it makes over this one, for the
-# steps after it.
-`$lastRecipe = Join-Path `$repo 'game\data\last-plugin.recipe'
-if (Test-Path -LiteralPath `$lastRecipe) {
-  `$lastSaid = @(& `$python (Join-Path `$repo 'scripts\mods\Make-LastPlugin.py') --data `$data --recipe `$lastRecipe 2>&1 | ForEach-Object { "`$_".Trim() } | Where-Object { `$_ })
-  if (`$LASTEXITCODE -eq 0) { 'last      Thornswood-Last.esp made from this commit''s recipe: ' + (`$lastSaid -join ' ') }
-  else { 'last      Thornswood-Last.esp is the server''s copy, because this commit''s recipe does not make it here: ' + (`$lastSaid -join ' ') }
-}
 `$words = @()
 switch ('$kind') {
   '.py' { `$exe = `$python }
@@ -321,6 +505,41 @@ switch ('$kind') {
 `$given = @($argText)
 `$words += '"' + (Join-Path `$repo '$toolFar') + '"'
 foreach (`$a in `$given) { `$words += '"' + `$a.Replace('{data}', `$data).Replace('{plugins}', `$pluginList).Replace('{settings}', `$orderSettings).Replace('{repo}', `$repo) + '"' }
+"@
+    $partB = @"
+`$sha = [Security.Cryptography.SHA256]::Create()
+function Hashes {
+  `$h = @{}
+  foreach (`$top in $watchText) {
+    `$d = Join-Path `$repo `$top
+    if (-not (Test-Path -LiteralPath `$d)) { continue }
+    `$files = `$(if (Test-Path -LiteralPath `$d -PathType Leaf) { @(Get-Item -LiteralPath `$d) } else { @(Get-ChildItem -LiteralPath `$d -File -Recurse) })
+    foreach (`$f in `$files) {
+      `$rel = `$f.FullName.Substring(`$repo.Length + 1).Replace('\', '/')
+      `$s = [IO.File]::OpenRead(`$f.FullName)
+      try { `$h[`$rel] = [BitConverter]::ToString(`$sha.ComputeHash(`$s)) } finally { `$s.Close() }
+    }
+  }
+  return `$h
+}
+`$before = Hashes
+# Thornswood-Last.esp is this commit's, made from its recipe out of the run's
+# data folder (#2791): the plugin is not in the repository, so what the copy
+# above put there is the server's, made from whichever recipe it last
+# deployed. When this commit's recipe does not make it here (a plugin it
+# reads is another copy, the content plugin of a pull request), the server's
+# stays and the line says so; Build-LastPlugin.py makes this commit's. It is
+# for a tool that reads the plugin a build made, as Build-StationSites.py
+# measures over the build it lays: the content chain's steps before
+# Build-LastPlugin.py are not given it in their order (Rebuild-ContentTables.ps1,
+# #5191), and that step writes the plugin it makes over this one, for the
+# steps after it.
+`$lastRecipe = Join-Path `$repo 'game\data\last-plugin.recipe'
+if (Test-Path -LiteralPath `$lastRecipe) {
+  `$lastSaid = @(& `$python (Join-Path `$repo 'scripts\mods\Make-LastPlugin.py') --data `$data --recipe `$lastRecipe 2>&1 | ForEach-Object { "`$_".Trim() } | Where-Object { `$_ })
+  if (`$LASTEXITCODE -eq 0) { 'last      Thornswood-Last.esp made from this commit''s recipe: ' + (`$lastSaid -join ' ') }
+  else { 'last      Thornswood-Last.esp is the server''s copy, because this commit''s recipe does not make it here: ' + (`$lastSaid -join ' ') }
+}
 `$env:THORNSWOOD_DATA = `$data
 `$env:PYTHONUTF8 = '1'
 `$env:PYTHONIOENCODING = 'utf-8'
@@ -348,6 +567,8 @@ if (`$changed.Count) {
 foreach (`$c in `$changed) { 'CHANGED ' + `$c }
 'EXIT ' + `$code
 "@
+    if (-not $Limited) { return $head + "`n`n" + $partB }
+    return $head + "`n`n" + (Get-ThornswoodOnBoxLimitedScript -Run $Run -Tool $Tool -PartB $partB)
 }
 
 # The run's folder lives as long as one far process, the keeper's (#2999).
