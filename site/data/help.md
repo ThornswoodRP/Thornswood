@@ -166,7 +166,8 @@ is handed over at the moment its pick is made.
 
 These are the keys a fresh install has. Every one is changed in the game, on
 **Settings** at the foot of the help panel and of the K, P and J panels: press
-Change beside it, then the key you want. It takes effect at once.
+Change beside it, then the key you want. It takes effect at once. Its Screen
+and chat page has the text size too, which draws every panel bigger.
 
 - **Enter** opens the chat, and **/** opens it with the slash already typed.
 - **K** your character panel, **P** your friends and party, **J** your journals.

@@ -407,6 +407,20 @@
   let CHAT_FADE = chatFadeOf(ini);
   let NEEDS_BARS = needsBarsOf(ini);
   /*
+    How big every panel's words are, in percent (#4474), from the Settings
+    panel in the game (TextSize in Thornswood.ini). It goes to the page as
+    window.THORNSWOOD.textSize, where thornswood-scale.js scales every panel
+    by the screen and then by this. Anything that is not one of the choices
+    is 100, as Skyrim draws them now.
+  */
+  const TEXT_SIZE_CHOICES = [100, 115, 130, 150];
+  function textSizeOf(text) {
+    const m = text.match(/^\s*TextSize\s*=\s*(\d+)\s*$/im);
+    const v = m ? Number(m[1]) : 100;
+    return TEXT_SIZE_CHOICES.indexOf(v) >= 0 ? v : 100;
+  }
+  let TEXT_SIZE = textSizeOf(ini);
+  /*
     Where voice lives: https://thornswood.net/voice, or /voice-dev on the dev
     build. Written by the launcher at every Play, the same way VoicePort is,
     and always https since #1304, when the raw port it used to fall back to
@@ -607,6 +621,7 @@
     SKILLS_KEY = iniNumber(ini, 'SkillsKey', SETTINGS_KEYS.SkillsKey);
     CHAT_FADE = chatFadeOf(ini);
     NEEDS_BARS = needsBarsOf(ini);
+    TEXT_SIZE = textSizeOf(ini);
     PARTY_KEY = iniNumber(ini, 'PartyKey', SETTINGS_KEYS.PartyKey);
     JOURNAL_KEY = iniNumber(ini, 'JournalKey', SETTINGS_KEYS.JournalKey);
     FRIEND_KEY = iniNumber(ini, 'FriendKey', SETTINGS_KEYS.FriendKey);
@@ -1542,7 +1557,7 @@
     // Idempotent, so a page the silence watch reloaded gets all of it back.
     T.js('try{if(!window.thornswoodNet){window.THORNSWOOD=' + JSON.stringify({
       host: HOST, port: VOICE_PORT, profileId: lineId, name: '', token: tok, base: VOICE_URL, socket: VOICE_SOCKET_URL,
-      chatFade: CHAT_FADE, needsBars: NEEDS_BARS
+      chatFade: CHAT_FADE, needsBars: NEEDS_BARS, textSize: TEXT_SIZE
     }) + ';}}catch(e){}');
     inject('thornswood-chat.js');
     // rejoinAs only takes the token while the connection is already this
@@ -9599,7 +9614,7 @@
       T.js('window.THORNSWOOD=' + JSON.stringify({
         host: HOST, port: VOICE_PORT, profileId: PROFILE, name: sentName,
         token: '', base: VOICE_URL, socket: VOICE_SOCKET_URL,
-        chatFade: CHAT_FADE, needsBars: NEEDS_BARS
+        chatFade: CHAT_FADE, needsBars: NEEDS_BARS, textSize: TEXT_SIZE
       }) + ';');
       OVERLAYS.forEach(inject);
       // The token itself is never logged. It is what somebody would need to
@@ -11609,6 +11624,7 @@
     return {
       fov: { value: wantedFov || FOV_DEFAULT, min: FOV_MIN, max: FOV_MAX, def: FOV_DEFAULT },
       chatFade: CHAT_FADE, chatChoices: CHAT_FADE_CHOICES, needsBars: NEEDS_BARS,
+      textSize: TEXT_SIZE, textChoices: TEXT_SIZE_CHOICES,
       keys: keys, mods: modKeys(), said: said || ''
     };
   }
@@ -11622,8 +11638,10 @@
      chat page, which reads them off window.THORNSWOOD. */
   function chatSettingsToPage() {
     T.js('try{var c=window.THORNSWOOD=window.THORNSWOOD||{};c.chatFade=' + CHAT_FADE +
-         ';c.needsBars=' + NEEDS_BARS + ';window.thornswoodChat&&window.thornswoodChat.settings&&' +
-         'window.thornswoodChat.settings();}catch(e){}');
+         ';c.needsBars=' + NEEDS_BARS + ';c.textSize=' + TEXT_SIZE +
+         ';window.thornswoodChat&&window.thornswoodChat.settings&&' +
+         'window.thornswoodChat.settings();window.thornswoodScale&&window.thornswoodScale.settings&&' +
+         'window.thornswoodScale.settings();}catch(e){}');
   }
 
   /*
@@ -11687,6 +11705,11 @@
       if (CHAT_FADE_CHOICES.indexOf(v) < 0) { settingsToPage('That is not one of the choices.'); return; }
       value = v === 10 ? null : String(v);
       said = v === 0 ? 'The chat stays on screen all the time.' : 'The chat hides ' + v + ' seconds after its last line.';
+    } else if (name === 'TextSize') {
+      const v = Number(raw);
+      if (TEXT_SIZE_CHOICES.indexOf(v) < 0) { settingsToPage('That is not one of the choices.'); return; }
+      value = v === 100 ? null : String(v);
+      said = v === 100 ? 'Text at its usual size.' : 'Text at ' + v + ' percent.';
     } else if (name === 'NeedsBars') {
       const shown = String(raw) !== '0';
       value = shown ? null : '0';

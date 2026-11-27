@@ -209,6 +209,9 @@
   var BASE_W = 1920, BASE_H = 1080, MAX_SCALE = 2.4;
 
   function scaleFor(w, h) {
+    // The one rule every panel scales by, with the text size (#4474), when
+    // the page has it; the journal's own otherwise.
+    if (window.thornswoodScale) { return window.thornswoodScale.scaleFor(w, h, 1040, 660); }
     var s = Math.min(w / BASE_W, h / BASE_H);
     if (!isFinite(s) || s < 1) { s = 1; }
     return Math.min(s, MAX_SCALE);
@@ -1191,6 +1194,7 @@
     toggle: toggle,
     isOpen: function () { return shown; },
     scaleFor: scaleFor,
+    fit: fit,
     /*
       JournalKey's name, as the front has it bound, so the key that opened
       this closes it wherever it is. A key the front has no name for (#57,
