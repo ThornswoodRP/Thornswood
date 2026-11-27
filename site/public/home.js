@@ -851,7 +851,7 @@ if (AGE_PATHS[here] && !ageOk()) {
      site's own sentence (personSays, what /api/report would answer) and no
      link, because they are signed in already. letIn is null until the site
      answers, and the button waits for it. */
-  var letIn = null, personSays = '', needsSignIn = true;
+  var letIn = null, personSays = '', personInvite = '', needsSignIn = true;
   request('/api/gallery/who', { credentials: 'same-origin' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -859,6 +859,8 @@ if (AGE_PATHS[here] && !ageOk()) {
       letIn = !d.personWhy;
       needsSignIn = d.personWhy === 'sign in';
       personSays = d.personSays || '';
+      // An account not in the Discord is given the way in (#4937).
+      personInvite = /^https:\/\//.test(d.personInvite || '') ? d.personInvite : '';
       personBox();
     })
     .catch(function () { letIn = false; personBox(); });
@@ -870,6 +872,15 @@ if (AGE_PATHS[here] && !ageOk()) {
     sign.hidden = !on || letIn !== false || !needsSignIn;
     no.hidden = !on || letIn !== false || needsSignIn || !personSays;
     no.textContent = personSays;
+    if (personInvite) {
+      var join = document.createElement('a');
+      join.href = personInvite;
+      join.target = '_blank';
+      join.rel = 'noopener';
+      join.textContent = 'Join the Discord';
+      no.appendChild(document.createTextNode(' '));
+      no.appendChild(join);
+    }
     document.getElementById('rIdea').disabled = on;
     form.querySelector('button').disabled = on && !letIn;
   }

@@ -816,7 +816,7 @@ async function handle(req, res) {
     let person = null;
     if (o.kind === 'report') {
       const no = personReportRefusal(w);
-      if (no) return sendJson(res, no.code, { error: no.error });
+      if (no) return sendJson(res, no.code, no.invite ? { error: no.error, invite: no.invite } : { error: no.error });
       const about = reportLine(o.about, 60);
       if (!about) return sendJson(res, 400, { error: 'Nothing was sent: say who it is about in the Who box, then send it again.' });
       const acct = 'acct:' + w.id;
@@ -1869,7 +1869,8 @@ async function handle(req, res) {
      any page load. asked is false when Discord could not be asked and there
      was no earlier answer to use, so a page says that rather than offering a
      sign in to somebody who is signed in. personWhy is what the report page
-     shows under "about a person": /api/report's own words (#1097). */
+     shows under "about a person": /api/report's own words (#1097), and
+     personInvite the Discord's invite when the account is not in it (#4937). */
   if (p === '/api/gallery/who' && req.method === 'GET') {
     const no = personReportRefusal(w);
     return sendJson(res, 200, {
@@ -1880,7 +1881,8 @@ async function handle(req, res) {
       name: w.name || '',
       asked: !(w.id && w.lookupFailed),
       personWhy: no ? no.why : '',
-      personSays: no ? no.error : ''
+      personSays: no ? no.error : '',
+      personInvite: no && no.invite ? no.invite : ''
     });
   }
 

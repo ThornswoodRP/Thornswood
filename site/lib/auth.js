@@ -377,6 +377,12 @@ function personReportRefusal(w) {
   if (!w.play && w.lookupFailed) return { code: 503, why: 'could not ask Discord', error:
     'Thornswood could not ask Discord who you are just now, so a report about a person cannot go yet. ' +
     'Try again in a minute. A problem or an idea goes without it.' };
+  // Not in the server is its own answer (#4937): "ask staff in the Discord"
+  // means nothing to somebody who has left it, and the launcher's doors
+  // already tell the two apart as 'guild' and 'role'.
+  if (!w.inGuild) return { code: 403, why: 'guild', invite: cfg.discord.invite || '', error:
+    'Your Discord account is not in the Thornswood Discord, so it cannot report somebody from here. ' +
+    'Join the Discord, then try again. A problem or an idea goes without it.' };
   if (!w.play) return { code: 403, why: 'role', error: 'Your Discord account is not let into Thornswood ' +
     'yet, so it cannot report somebody from here. Ask staff in the Discord instead.' };
   return null;
