@@ -618,7 +618,7 @@ sp.on('tick', function () {
         if (furnitureState && furnitureState.epoch > press.epoch && furnitureState.ref === facedSeat &&
             furnitureState.enter === (s.enter !== false) && seatObservation &&
             seatObservation.sit === (s.enter === false ? 0 : 3) &&
-            (!seatObservation.ref || seatObservation.ref === facedSeat)) {
+            (s.enter === false ? seatObservation.ref === 0 : seatObservation.ref === facedSeat)) {
           if (s.enter !== false) { confirmedSeatEntry = { epoch: furnitureEpoch, ref: facedSeat }; }
           pass('own furniture' + (s.enter === false ? 'Exit' : 'Enter') + ' and native state for ' + facedSeat.toString(16)); return;
         }
@@ -638,7 +638,7 @@ sp.on('tick', function () {
         seatHold.last = seatObservation.at;
         if (!furnitureState || !furnitureState.enter || furnitureEpoch !== seatHold.epoch ||
             furnitureState.ref !== seatHold.ref || seatObservation.sit !== 3 ||
-            (seatObservation.ref && seatObservation.ref !== seatHold.ref)) {
+            seatObservation.ref !== seatHold.ref) {
           fail('the seat was left or entered again before the full interval'); return;
         }
         if (now - stepAt >= interval) {

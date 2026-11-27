@@ -1400,6 +1400,9 @@ foreach ($scan in @(1,23,36)) {
   yes('only the intentional movement follows the hold and its own Exit ends the wait',
     normal.presses().filter(x => x.arg === 17).length === 1 && normal.steps()[6]?.ok === true);
 
+  const staleExit = seating(); staleExit.advance(12); staleExit.enter(); staleExit.advance(3); staleExit.advance(61, 1000); staleExit.advance(3);
+  staleExit.exit(); staleExit.nativeRef(staleExit.target); staleExit.advance(35);
+  yes('an Exit event with a stale native furniture ref cannot pass standing verification', staleExit.steps()[6]?.ok === false);
   const missingEvent = seating(); missingEvent.advance(12); missingEvent.state(3); missingEvent.advance(35);
   yes('native seated state without furnitureEnter cannot pass acceptance', missingEvent.steps()[3]?.ok === false);
   const otherActor = seating(); otherActor.advance(12); otherActor.enter(0x99); otherActor.advance(35);
@@ -1422,7 +1425,7 @@ foreach ($scan in @(1,23,36)) {
   const gap = seating(); gap.advance(12); gap.enter(); gap.advance(1); gap.exit(); gap.enter(); gap.advance(3);
   yes('an Exit/reentry between entry confirmation and the first hold tick still fails', gap.steps()[4]?.ok === false);
   const flicker = seating(); flicker.advance(12); flicker.enter(); flicker.advance(3); flicker.nativeRef(null); flicker.advance(61, 1000);
-  yes('a null furniture reference with sit3 and the same live entry does not invent an Exit', flicker.steps()[4]?.ok === true);
+  yes('a null native furniture reference cannot verify the exact occupied target', flicker.steps()[4]?.ok === false);
   const switched = seating(); switched.advance(12); switched.enter(); switched.advance(3);
   switched.nativeRef({ getFormID: () => 0x999 }); switched.advance(3);
   yes('native furniture changing to another reference fails the hold', switched.steps()[4]?.ok === false);
@@ -1440,6 +1443,10 @@ foreach ($scan in @(1,23,36)) {
 
 {
   const seatRun = JSON.parse(read('tests/real-client/bench-seat.json')).steps;
+  const defaultSteps = JSON.parse(read('tests/real-client/dev-release.json')).steps;
+  const prefix = defaultSteps.findIndex(s => s.do === 'shot' && s.name === 'in-world') + 1;
+  yes('the separate seat fixture preserves the exact canonical choice/world preamble', prefix > 0 &&
+    JSON.stringify(seatRun.slice(0, prefix)) === JSON.stringify(defaultSteps.slice(0, prefix)));
   const face = seatRun.findIndex(s => s.do === 'face' && s.what === 'seat');
   const hold = seatRun.findIndex(s => s.do === 'wait' && s.for === 'seated');
   const exit = seatRun.findIndex(s => s.do === 'key' && s.code === 17);

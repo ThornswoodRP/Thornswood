@@ -218,15 +218,19 @@ benches. A missing API, no valid seat or lost world is a verification error.
 that exact target after the normal key request, plus native sitting state.
 `wait` with `for: seated` requires a positive interval, the same event epoch
 and native sitting throughout, with no unobserved gap longer than a second.
-A flickering null furniture reference does not override the continuing sit
-state and original entry; a different non-null reference does fail.
-`enter: false` requires the intentional exit's event and native standing.
+Entry and every hold sample require the exact native furniture reference.
+A null or different reference is a verification error even if sit state
+remains seated; this does not claim a transient null is a gameplay defect.
+`enter: false` requires the intentional exit's event, native standing and
+a cleared native furniture reference. The production controls fallback for
+a flickering furniture reference is unchanged.
 
 The run records its existing furniture lines and one bounded
 `seated-observation` receipt with the target, elapsed time, sample count and
 largest sample gap. Review `seat-entered` and `seat-after-minute` screenshots
 for the original standing-on-collision symptom: events/state alone do not
-prove the rendered pose. This fixture does not claim Rest recovery. The next
+prove the rendered pose. If the first-person view hides the body, visual
+acceptance needs an appropriate view or another observer. This fixture does not claim Rest recovery. The next
 phase needs a safe before/after Body Rest observation for the same character
 and session over the existing ten-minute recovery acceptance interval; it
 must not replace missing furniture events with a manufactured rest report.
