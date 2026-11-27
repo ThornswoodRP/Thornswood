@@ -409,6 +409,9 @@ yes('H3 and the Cook has nothing to say to them after it', cookSaid(PID2, at).le
       set: function (v) { n._text = String(v); n.children = []; }
     });
     n.appendChild = function (c) { n.children.push(c); return c; };
+    n.attrs = {};
+    n.setAttribute = function (k, v) { n.attrs[k] = String(v); };
+    n.removeAttribute = function (k) { delete n.attrs[k]; };
     n.querySelector = function (sel) { return (n._q && n._q[sel]) || node('div'); };
     return n;
   }
