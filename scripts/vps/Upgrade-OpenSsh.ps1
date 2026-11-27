@@ -5,12 +5,18 @@
 .DESCRIPTION
   Issue #1043. From 28 Sep 2026 every ssh from One to the box printed
   "** WARNING: connection is not using a post-quantum key exchange
-  algorithm". The box's sshd is Windows Server 2022's own (OpenSSH for
-  Windows 9.5), which Microsoft built without any post-quantum key exchange
-  (vps-openssh.ps1 says how that was measured). Decided by Patrick on
-  22 Oct 2026 (A): the Desk upgrades it at the box's next restart window,
+  algorithm". The box's sshd was then Windows Server 2022's own (OpenSSH
+  for Windows 9.5), which Microsoft built without any post-quantum key
+  exchange (vps-openssh.ps1 says how that was measured). Decided by Patrick
+  on 22 Oct 2026 (A): the Desk upgrades it at the box's next restart window,
   checks the host key is the one scripts\vps\vps.json pins, and checks ssh
   connects with no warning.
+
+  Done on 26 Oct 2026: the box has run OpenSSH for Windows 10.4 since
+  9:42 PM that night, with the three pinned host keys kept, and a login
+  negotiates sntrup761x25519-sha512. That run stopped at its port 22 step
+  (#4040 fixed the cause) and its last steps were done by hand (#1043).
+  This script is kept for rebuilding a box that still has the 9.5 build.
 
   Runs on your machine, or a cloud thread after Setup-CloudSsh.ps1. In this
   order, and it stops at the first thing that is not right:
