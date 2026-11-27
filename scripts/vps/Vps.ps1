@@ -136,10 +136,25 @@ function Invoke-ThornswoodNative($ThornswoodNativeCall) {
 # inside it. It says what it got: answered, refused (an answer from the box:
 # nothing takes connections there), silent, or why it could not try (a name
 # that does not resolve has not looked, so that is not called shut).
+#
+# The name is looked up first, on its own, and the 5 s is the port's alone.
+# Handed the name, BeginConnect looked it up inside the same wait, so a
+# lookup that took more than 5 s to say "no such name" (Windows trying its
+# other name services) was reported as a silent port (#7423).
+function Resolve-ThornswoodAddress([string]$Address) {
+    return @([Net.Dns]::GetHostAddresses($Address))
+}
 function Get-ThornswoodPortTry([string]$Address, [int]$Port) {
+    try { $ips = @(Resolve-ThornswoodAddress $Address) }
+    catch {
+        $e = $_.Exception
+        while ($e.InnerException) { $e = $e.InnerException }
+        return 'not tried: ' + $e.Message
+    }
+    if (-not $ips.Count) { return 'not tried: ' + $Address + ' has no address' }
     $c = New-Object Net.Sockets.TcpClient
     try {
-        $ar = $c.BeginConnect($Address, $Port, $null, $null)
+        $ar = $c.BeginConnect([Net.IPAddress[]]$ips, $Port, $null, $null)
         if (-not $ar.AsyncWaitHandle.WaitOne(5000)) { return 'silent for 5 s' }
         $c.EndConnect($ar)
         return 'answered'
