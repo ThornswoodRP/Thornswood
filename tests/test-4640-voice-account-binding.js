@@ -74,7 +74,20 @@ process.on('message',async m=>{
 process.send({probeReady:true});
 `;
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'thornswood-4640-'));
-fs.writeFileSync(path.join(dir, 'voice-server.js'), source + '\n' + observation);
+// Replace the owned cache pathname immediately after stat/open. A coherent
+// reader must keep the already-open file, not re-open the changed pathname.
+const cacheSwap = `'use strict';
+if(process.env.THORNSWOOD_TEST_CACHE_SWAP==='1'){
+ const io=require('fs'),p=require('path');
+ const target=p.join(process.env.THORNSWOOD_CHAT_DIR,'.account-silences.json');
+ let swapped=false;const stat=io.statSync,open=io.openSync;
+ function replace(file){if(file!==target||swapped)return;swapped=true;
+  io.renameSync(target,target+'.before-swap');io.writeFileSync(target,JSON.stringify({version:1,revision:4,accounts:{}}));}
+ io.statSync=function(file,...args){const result=stat.call(io,file,...args);replace(file);return result;};
+ io.openSync=function(file,...args){const result=open.call(io,file,...args);replace(file);return result;};
+}
+`;
+fs.writeFileSync(path.join(dir, 'voice-server.js'), cacheSwap + source + '\n' + observation);
 fs.copyFileSync(path.join(ROOT, 'voice/headlines.js'), path.join(dir, 'headlines.js'));
 fs.writeFileSync(path.join(dir, 'token-key.txt'), key);
 let current = null, queryId = 0;
@@ -87,9 +100,10 @@ async function until(predicate, name, ms = 3000) {
     await new Promise(resolve => setTimeout(resolve, 10));
   }
 }
-async function start() {
+async function start(swapCache = false) {
   const env = { THORNSWOOD_SITE: 'http://127.0.0.1:' + site.address().port, THORNSWOOD_VOICE_PORT: '0',
     THORNSWOOD_VOICE_BIND: '127.0.0.1', THORNSWOOD_CHAT_DIR: path.join(dir, 'chat'), TEMP: dir, TMP: dir };
+  if (swapCache) env.THORNSWOOD_TEST_CACHE_SWAP = '1';
   for (const name of ['SystemRoot', 'WINDIR']) if (process.env[name]) env[name] = process.env[name];
   const kid = fork(path.join(dir, 'voice-server.js'), [], { cwd: dir, env, silent: true });
   const run = { kid, port: 0, ready: false, pending: new Map() }; children.push(run);
@@ -102,7 +116,8 @@ async function start() {
     if (m.probeReady) run.ready = true;
     if (run.pending.has(m.id)) { run.pending.get(m.id)(m); run.pending.delete(m.id); }
   });
-  await until(() => run.port && run.ready, 'owned voice startup', 10000);
+  await until(() => (run.port && run.ready) || (swapCache && run.kid.exitCode !== null), 'owned voice startup', 10000);
+  if (!run.port || !run.ready) throw Error('the cache replacement prevented coherent startup');
   current = run; return run;
 }
 async function ipc(kind, extra = {}, run = current) {
@@ -298,6 +313,14 @@ async function halt(run) {
     check('expired nonce cannot create or reuse a private association', expired.refused && expiredContext?.account === null && /expired/.test(expiredContext?.why || ''));
     const finalVisibility = JSON.stringify(published) + logs.join('');
     check('denial/replay/restart logs also contain no account or ticket', !privateValues.some(s => finalVisibility.includes(s)));
+    await request('/silenced', { profiles: {}, accountProtocol: 1, accountRevision: 4, accounts: { [A]: (await ipc('state')).now + 60000 } });
+    for (const ws of sockets) await close(ws);
+    await halt(current);
+    await start(true);
+    owner.set(PID, A);
+    const racedToken = await token(PID, good), racedPeer = await join(racedToken.value.token, PID);
+    check('startup uses one bounded opened cache despite pathname replacement', racedPeer.accepted &&
+      (await ipc('state')).peers.find(p => p.id === racedPeer.peer)?.muted === true);
   } catch (error) {
     check('fixture completed without infrastructure failure: ' + error.message, false);
   } finally {

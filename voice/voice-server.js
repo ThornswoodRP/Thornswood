@@ -341,14 +341,25 @@ function accountSilenceList(raw) {
   }
   return result;
 }
+let silenceCacheFd;
 try {
-  if (fs.statSync(ACCOUNT_SILENCE_FILE).size > 20000) throw Error('oversized cache');
-  const cached = JSON.parse(fs.readFileSync(ACCOUNT_SILENCE_FILE, 'utf8'));
+  silenceCacheFd = fs.openSync(ACCOUNT_SILENCE_FILE, 'r');
+  const bytes = Buffer.alloc(20001);
+  let size = 0;
+  while (size < bytes.length) {
+    const read = fs.readSync(silenceCacheFd, bytes, size, bytes.length - size, null);
+    if (!read) break;
+    size += read;
+  }
+  if (size > 20000) throw Error('oversized cache');
+  const cached = JSON.parse(bytes.subarray(0, size).toString('utf8'));
   if (cached.version !== 1 || !Number.isSafeInteger(cached.revision) || cached.revision < 0) throw Error('invalid revision');
   accountSilences = accountSilenceList(cached.accounts);
   accountSilenceRevision = cached.revision;
 } catch (e) {
   if (!e || e.code !== 'ENOENT') throw Error('The private account silence cache needs repair before voice can start.');
+} finally {
+  if (silenceCacheFd !== undefined) fs.closeSync(silenceCacheFd);
 }
 function accountSilencedLeft(peer, now) {
   // A future/legacy unbound peer retains command transport, but cannot evade
@@ -391,13 +402,15 @@ function tellHush(profileId, on) {
 }
 function refreshSilence(profileId, now, clearHead = false) {
   const on = !!silencedLeft(profileId, now);
-  const changed = announcedHush.get(profileId) !== on;
+  // A never-muted join needs no reliable unmute frame. Sending one would
+  // flush an older held roster instead of letting the next join replace it.
+  const changed = (announcedHush.has(profileId) || on) && announcedHush.get(profileId) !== on;
   if (clearHead && on) for (const [, p] of peers) p.ws.send({ t: 'headclear', profileId });
   if (changed) tellHush(profileId, on);
   for (const [, p] of peers) {
     if (p.profileId !== profileId) continue;
     const own = !!silencedLeft(profileId, now, p);
-    if (changed || p.hushOn !== own) p.ws.send({ t: 'hush', profileId, on: own });
+    if (changed || (p.hushOn !== own && (own || p.hushOn !== undefined))) p.ws.send({ t: 'hush', profileId, on: own });
     p.hushOn = own;
   }
 }

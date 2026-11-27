@@ -354,7 +354,8 @@ let DEV = '';
 //
 // Each place that ends a session on purpose says { end } before its kick;
 // test-1157-session-ends.js runs the load order, join pass, seats and staff
-// ones, test-4488-restraints-persist.js runs the unresolved frozen-move end,
+// ones, test-4488-restraints-persist.js runs the unresolved frozen-move and
+// account-freeze ends with replacement-connection identity controls,
 // and this file runs the door's. A restart's kick does not, on purpose:
 // that reconnect is wanted. A kick anywhere else is new and needs the same.
 (function () {
@@ -376,6 +377,7 @@ let DEV = '';
     'seats: endLater',
     'chat commands: clearTheServer',
     'staff: holdPendingMovement',
+    'staff: freezeTick',
     'staff: endLater',
     'staff: command'
   ];
@@ -385,6 +387,9 @@ let DEV = '';
   yes('the door\'s kick is inside turnAway, after the sentence and the end line',
       !!turn && /tell\(pid, TURNED_AWAY\)[\s\S]*line\(pid, \{ end: TURNED_AWAY \}\)[\s\S]*setTimeout\([\s\S]*mp\.kick\(userId\)/.test(turn[0]));
   yes('and the door has no other kick', (DOOR.match(/mp\.kick\(/g) || []).length === 1);
+  const staff = block('staff'), accountEnd = staff && /function freezeTick\(\) \{[\s\S]*?\n  \}/.exec(staff);
+  yes('account-freeze termination verifies identity and sends the end line before its fenced kick', !!accountEnd &&
+    /movementIdentity\(k, a\)[\s\S]*tell\(k, sentence\)[\s\S]*if \(!sameMovementIdentity\(who\)\) continue;[\s\S]*sessionEnds\(k, sentence\)[\s\S]*if \(sameMovementIdentity\(who\)\)[\s\S]*mp\.kick\(who\.user\)/.test(accountEnd[0]));
 })();
 
 done();
