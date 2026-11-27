@@ -49,6 +49,7 @@ if (process.argv[2] === '--strip-metadata') {
 const http   = require('http');
 const tls    = require('tls');
 const { BIND, DATA, EXPOSED, FILES, LEFT_OUT, PORT, UP } = require('./lib/base');
+require('./lib/whole');
 const { siteLog } = require('./lib/log');
 const { cfg } = require('./lib/config');
 require('./lib/pages');

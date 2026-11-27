@@ -47,7 +47,7 @@ let n = 0;
 function site(config) {
   const root = path.join(tmp, 'site' + (n++));
   fs.mkdirSync(path.join(root, 'lib'), { recursive: true });
-  for (const f of ['base.js', 'config.js']) fs.copyFileSync(path.join(LIB, f), path.join(root, 'lib', f));
+  for (const f of ['base.js', 'whole.js', 'config.js']) fs.copyFileSync(path.join(LIB, f), path.join(root, 'lib', f));
   if (config !== null) fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify(config, null, 2));
   return root;
 }
