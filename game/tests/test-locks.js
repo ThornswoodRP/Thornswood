@@ -72,6 +72,7 @@ if (builder && everyM) {
     const locks = {};         // form id -> true or false, as last set
     const refuseLock = {};
     const refuseUnlock = {};
+    const refuseRead = {};
     let resolves = 0, lockCalls = 0;
 
     const sp = {
@@ -91,7 +92,10 @@ if (builder && everyM) {
               locks[f.id] = !!on;
             },
             // A door nobody has touched reads unlocked, as vanilla ships most.
-            isLocked: function () { return !!locks[f.id]; }
+            isLocked: function () {
+              if (refuseRead[f.id]) { throw new Error('door state unavailable'); }
+              return !!locks[f.id];
+            }
           };
         }
       }
@@ -105,7 +109,7 @@ if (builder && everyM) {
     }
     return {
       clock: clock, loaded: loaded, locks: locks,
-      refuseLock: refuseLock, refuseUnlock: refuseUnlock, frame: frame, state: state,
+      refuseLock: refuseLock, refuseUnlock: refuseUnlock, refuseRead: refuseRead, frame: frame, state: state,
       counts: function () { return { resolves: resolves, lockCalls: lockCalls }; },
       reset: function () { resolves = 0; lockCalls = 0; }
     };
@@ -143,6 +147,11 @@ if (builder && everyM) {
     w.frame(release);
     yes('a claim release does not touch an unloaded door', w.locks[A] === true);
     w.loaded[A] = true;
+    w.refuseRead[A] = true;
+    w.clock.now += EVERY + 1;
+    w.frame(release);
+    yes('an unreadable lock stays intact until the game can report its state', w.locks[A] === true);
+    w.refuseRead[A] = false;
     w.refuseUnlock[A] = true;
     w.clock.now += EVERY + 1;
     w.frame(release);

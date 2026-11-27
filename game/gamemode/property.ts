@@ -1872,12 +1872,13 @@
       // A claim removed from the register no longer contributes an open
       // entry. Restore the lock we applied once its reference is available.
       '    var open = (v.open || []).slice();',
+      '    var explicitOpen = applied ? new Set(open) : null;',
       '    if (applied) {',
       '      Object.keys(applied).forEach(function (key) {',
       '        var id = Number(key);',
       '        if (shutMap[id]) {',
       '          if (!claimShut.has(id)) { delete applied[id]; }',
-      '        } else if (open.indexOf(id) < 0) { open.push(id); }',
+      '        } else if (!explicitOpen.has(id)) { open.push(id); }',
       '      });',
       '    }',
       '    for (var j = 0; j < open.length; j++) {',
@@ -1888,7 +1889,9 @@
       // reads a door on __thornswoodPropertyShut that opens as a pick, so
       // a door this script opens is taken off the list first.
       '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[door]; } } catch (e3) { }',
-      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) { }',
+      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) {',
+      '            if (explicitOpen && !explicitOpen.has(door)) { continue; }',
+      '          }',
       '          if (shut !== false) { o.lock(false, false); }',
       '          if (applied) { delete applied[door]; } }',
       '        delete shutMap[door];',
