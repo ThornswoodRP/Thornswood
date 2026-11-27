@@ -67,8 +67,9 @@ what it does not is under "Checks on every download".
   `UpdateRepo` (Thornswood-Releases). That is gone from the launcher: a miss is
   what the caller gets, which reads as no answer rather than as no update, so
   the in play countdown clock is left where it is and the next check, thirty
-  seconds on, asks the site again. `UpdateRepo` and `UpdateToken` stay in
-  `config.json` only so an old one still loads.
+  seconds on, asks the site again. `UpdateRepo` and `UpdateToken` are gone from
+  the launcher's settings: an old `config.json` that still has them loads, and
+  the next save leaves them out.
 - **Launchers in the field.** Every launcher from the #649 cutover on (26 Sep)
   reads the site first, so deleting the repository changes nothing for it: its
   old fallback asks a repository that answers 404 while the site is down, and
@@ -665,8 +666,8 @@ reads a feed that is not split the same as before, so the site can go first.
 - **Host allow list.** https only, and the host must be `github.com`,
   `objects.githubusercontent.com`, `release-assets.githubusercontent.com`,
   `api.github.com` or `thornswood.net`, or under one of them
-  (`Updater.cs:AllowedHosts`). The update token, if any, goes only to
-  `api.github.com` (`Updater.cs:FeedAsk`).
+  (`Updater.cs:AllowedHosts`). No token goes with any of them: the
+  launcher keeps no update token.
 - **sha256.** Required for packs and the client runtime; an empty one refuses
   the download (`Updater.cs:Download`). The launcher's Velopack package is
   held to its channel's feed and to the Release's signed record

@@ -51,6 +51,9 @@ $root = Join-Path $work 'root'
 $from = Join-Path $work 'from'
 $launcherDir = Join-Path $root 'Launcher'
 New-Item -ItemType Directory -Force -Path $launcherDir, $from | Out-Null
+# Everything after the folder is made runs in this try, so a stop part way
+# still ends the stand-in launcher and removes the folder (#4264).
+try {
 
 $destExe = Join-Path $launcherDir 'Thornswood.exe'
 $builtExe = Join-Path $from 'Thornswood.exe'
@@ -164,8 +167,12 @@ Yes 'Stop-Launcher closed the stand-in and waited (~1s+)' ($closedMs -ge 700)
 Yes 'Stop-Launcher printed Closed after the exe was writable' ($closedText -match '(?m)^\s*Closed\s*$')
 try { Yes 'stand-in launcher process has exited' ($proc2.HasExited) } catch { Yes 'stand-in launcher process has exited' $true }
 Wait-Process -Id $holder5.Id -Timeout 10 -ErrorAction SilentlyContinue | Out-Null
-
-Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+} finally {
+    # The stand-ins run from the folder, so they go first.
+    Get-Process -ErrorAction SilentlyContinue | Where-Object { try { $_.Path -and $_.Path.StartsWith($work, [StringComparison]::OrdinalIgnoreCase) } catch { $false } } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 Write-Host ""
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

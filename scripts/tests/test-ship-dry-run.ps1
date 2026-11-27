@@ -29,6 +29,8 @@
     V  -DryRun on dev
     R  a real Ship on main, past the real freshness guard
        (Fresh-Checkout.ps1, #2118) as the harness stand-in it is
+    R2 the same real Ship in a cloud session: its release tag goes on through
+       Set-Ref.ps1, not git (#3314); and outside one, git again (#4358)
     Q  the same real Ship with Fresh-Checkout.ps1 gone: refused on the load,
        before anything is built or called (#3006)
     E  -DryRun on dev, numbered from what the store says dev has published
@@ -197,6 +199,7 @@ function Stub([string]$name, [string]$params, [string]$body) {
     $area = 'release'
     if ($name -eq 'Publish-Discord') { $area = 'ops' }
     if ($name -eq 'Request-Restart') { $area = 'vps' }
+    if ($name -eq 'Set-Ref') { $area = 'ops' }
     $dir = Join-Path $repo ('scripts\' + $area)
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     [IO.File]::WriteAllText((Join-Path $dir ($name + '.ps1')), $text)
@@ -214,6 +217,7 @@ $oldGhTag = $env:TS_GH_TAG
 $oldSite = $env:THORNSWOOD_TEST_SITE_DIR
 $oldScratch = $env:THORNSWOOD_SCRATCH_ROOT
 $oldVps = $env:THORNSWOOD_VPS
+$oldRemote = $env:CLAUDE_CODE_REMOTE
 $ps = (Get-Process -Id $PID).Path
 
 function Invoke-Ship([string[]]$shipArgs) {
@@ -508,6 +512,12 @@ if ($target -match '^repos/[^/]+/[^/]+/actions/workflows/release\.yml/runs\?') {
     # The box a Ship's freshness guard asks about: one that can never be a
     # real server, so the guard knows the stand-in (Fresh-Checkout.ps1).
     $env:THORNSWOOD_VPS = 'harness.invalid'
+    # Whether Ship runs in a cloud session is what picks how its release tag
+    # goes on (Add-ReleaseTag in Release-Name.ps1, #3314): git tag and git push
+    # on a machine, Set-Ref.ps1 in a cloud session. Each case says which it is
+    # about, so none takes it from the session this test runs in (#4358):
+    # every case but R2 runs as a machine, and R2 sets it itself.
+    Remove-Item Env:CLAUDE_CODE_REMOTE -ErrorAction SilentlyContinue
 
     $feed = Join-Path $rel 'version.json'
     $devFeed = Join-Path $relDev 'version.json'
@@ -620,6 +630,43 @@ if ($target -match '^repos/[^/]+/[^/]+/actions/workflows/release\.yml/runs\?') {
     $devNow = [IO.File]::ReadAllText((Get-FeedVersionFile $siteDevDir)) | ConvertFrom-Json
     Yes 'R a main ship preserves the independently published dev feed' ((Hash-SiteFeed $siteDevDir) -eq $devBeforeMain)
     Yes '  and the independently published dev baseline' ((Hash $siteDevBase) -eq $devBaselineBeforeMain)
+
+    # ---- R2: the same real Ship in a cloud session (#3314, #4358) ---------------------
+    # A cloud session's git cannot write refs, so there the tag goes on through
+    # Set-Ref.ps1 (GitHub's git-ref.yml) with the same message, and git makes
+    # no tag and pushes nothing. The stand-in writes down what it was asked and
+    # whether the message file was there to read when it was.
+    Stub 'Set-Ref' '[string]$Tag, [string]$Commit, [string]$MessageFile' (
+        '[IO.File]::AppendAllText($env:TS_DRY_CALLS, ("Set-Ref read the message: " + $(if ($MessageFile -and (Test-Path -LiteralPath $MessageFile) -and (Get-Item -LiteralPath $MessageFile).Length -gt 0) { "yes" } else { "no" }) + "`r`n"))')
+    $env:CLAUDE_CODE_REMOTE = 'true'
+    try {
+        $r2 = Invoke-Ship @("The map marker points at the right door`n- The marker over a house now sits on the door you walk through", '-Root', $root, '-DistRoot', $dist, '-NoPause')
+    } finally { Remove-Item Env:CLAUDE_CODE_REMOTE -ErrorAction SilentlyContinue }
+    Yes ("R2 a real main Ship in a cloud session runs to the end (exit {0})" -f $r2.Code) ($r2.Code -eq 0 -and $r2.Out -match 'Everyone in the world has')
+    if ($r2.Code -ne 0) { $r2.Out -split "`r?`n" | Select-Object -Last 25 | ForEach-Object { Write-Host ("      " + $_) } }
+    $gone = Away $r2
+    $gitRefs = @($gone | Where-Object { $_ -match '^git .*(push|tag)' })
+    Yes ('R2 git makes no tag and pushes nothing' + $(if ($gitRefs.Count) { ' (' + ($gitRefs -join '; ') + ')' } else { '' })) ($gitRefs.Count -eq 0)
+    $setRef = Called $r2 'Set-Ref'
+    Yes ('R2 Set-Ref.ps1 is asked once for release/main/20990101-0000 on the commit the feed names' + $(if ($setRef.Count) { ' (' + ($setRef -join '; ') + ')' } else { '' })) (
+        $setRef.Count -eq 2 -and $setRef[0] -match (' -Commit ' + ('ab12' * 10) + ' -MessageFile \S') -and $setRef[0] -match ' -Tag release/main/20990101-0000$')
+    Yes '  with the tag''s message in the file it is given' ($setRef.Count -eq 2 -and $setRef[1] -eq 'Set-Ref read the message: yes')
+    $at = @{}
+    for ($i = 0; $i -lt $r2.Calls.Count; $i++) {
+        foreach ($k in 'Publish-Update', 'Request-Restart', 'Set-Ref') { if (-not $at.ContainsKey($k) -and $r2.Calls[$i].StartsWith($k)) { $at[$k] = $i } }
+    }
+    Yes 'R2 and only after the publisher has sent the feed, and after the release is announced' (
+        $at.ContainsKey('Set-Ref') -and $at.ContainsKey('Publish-Update') -and $at['Set-Ref'] -gt $at['Publish-Update'] -and
+        $at.ContainsKey('Request-Restart') -and $at['Set-Ref'] -gt $at['Request-Restart'])
+    Yes 'R2 and it says so' ($r2.Out -match 'release/main/20990101-0000 marks ab12ab12ab12, and it is on GitHub')
+    # The machine path again with the stand-in in place, so R2's case is the
+    # session and not the file: R's git tag and push, and no Set-Ref.ps1.
+    $r3 = Invoke-Ship @("The map marker points at the right door`n- The marker over a house now sits on the door you walk through", '-Root', $root, '-DistRoot', $dist, '-NoPause')
+    $gone = Away $r3
+    Yes ('R2 outside a cloud session the same checkout tags with git, and asks Set-Ref.ps1 nothing' + $(if ($r3.Code) { ' (exit ' + $r3.Code + ')' } else { '' })) (
+        $r3.Code -eq 0 -and (Called $r3 'Set-Ref').Count -eq 0 -and
+        @($gone | Where-Object { $_ -match ' push origin refs/tags/release/main/20990101-0000$' }).Count -eq 1)
+    Remove-Item -LiteralPath (Join-Path $repo 'scripts\ops\Set-Ref.ps1') -Force
 
     # ---- Q: the freshness guard is not there (#3006) -----------------------------------
     # Ship loads Fresh-Checkout.ps1 under Stop, so a guard that cannot load
@@ -866,6 +913,7 @@ finally {
     $env:THORNSWOOD_TEST_SITE_DIR = $oldSite
     if ($null -eq $oldScratch) { Remove-Item Env:THORNSWOOD_SCRATCH_ROOT -ErrorAction SilentlyContinue } else { $env:THORNSWOOD_SCRATCH_ROOT = $oldScratch }
     if ($null -eq $oldVps) { Remove-Item Env:THORNSWOOD_VPS -ErrorAction SilentlyContinue } else { $env:THORNSWOOD_VPS = $oldVps }
+    if ($null -eq $oldRemote) { Remove-Item Env:CLAUDE_CODE_REMOTE -ErrorAction SilentlyContinue } else { $env:CLAUDE_CODE_REMOTE = $oldRemote }
     Remove-Item -LiteralPath $T -Recurse -Force -ErrorAction SilentlyContinue
 }
 

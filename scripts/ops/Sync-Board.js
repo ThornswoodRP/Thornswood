@@ -465,7 +465,19 @@ async function run(argv, env, fetchImpl, say) {
   const failed = [];
   for (const n of numbers) {
     try {
-      const issue = (await gh.call('GET', 'repos/' + o.repo + '/issues/' + n)).data;
+      let issue;
+      try { issue = (await gh.call('GET', 'repos/' + o.repo + '/issues/' + n)).data; } catch (e) {
+        // A number a pull request's text names may be a deleted issue (410)
+        // or no issue at all (404): it has no card to put right, so it is said
+        // and the run goes on (#7313; PR #7009 named #2351, deleted, and its
+        // board run 45903823553 went red on 26 Nov 2026). A number given by
+        // hand is still a failure, since whoever gave it meant an issue.
+        if (pull !== null && (e.status === 410 || e.status === 404)) {
+          say('#' + n + (e.status === 410 ? ' was deleted' : ' is no issue of ' + o.repo) + ', so it has no card');
+          continue;
+        }
+        throw e;
+      }
       if (issue.pull_request) { say('#' + n + ' is a pull request; its card is GitHub\'s to keep'); continue; }
       say(await syncIssue(gh, o, issue, board, fresh));
     } catch (e) {
