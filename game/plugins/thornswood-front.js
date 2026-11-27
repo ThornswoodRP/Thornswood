@@ -3409,7 +3409,7 @@
     */
     let doing = '';
     if (type === 29) {
-      let openState = '?', level = '?', held = '?';
+      let openState, level, held;
       // A call that throws puts its error in the line in place of the value.
       try { openState = String(ref.getOpenState()); } catch (err) { openState = '? (' + err + ')'; }
       try { level = String(ref.getLockLevel()); } catch (err) { level = '? (' + err + ')'; }
