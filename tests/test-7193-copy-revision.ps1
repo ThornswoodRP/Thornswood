@@ -28,7 +28,19 @@
     5. nexus-collection.js --copy changes nothing but the page's text, the
        name and the summary, and collection-page.js holds the "dev" name and
        summary to their shape;
-    6. the verb is in nexus-verbs.json, with no parameter that names a file.
+    6. the verb is in nexus-verbs.json, with no parameter that names a file;
+    7. records\collection.json's "dev" { collection, offset } is held to its
+       shape and written back as it was; the newest revision is the Dev
+       collection's plus the offset (Get-NewestRecordedRevision), and a
+       release on the records' newest passes Get-ShipNewestRevisionProblem;
+       the merge publishes to Dev and names everything it hands on in the
+       records' numbers (Publish-CollectionRecord.ps1); a Release names the
+       Dev revision beside the records' (New-SignedManifest.ps1), and the
+       launcher sends a dev install to it (VeloUpdate.cs);
+    8. Promote-Collection.ps1 copies every revision the main collection
+       lacks from Dev, as the main collection's revision of the same number,
+       once, says so for a Release with no Dev collection, and stops before
+       anything is sent on a manifest the records do not agree with.
 
   Needs node and 7-Zip, and says SKIP without 7-Zip. Everything it writes is
   under its own temp folder, which it removes.
@@ -74,6 +86,54 @@ $v = $verbs.verbs.'Copy-NexusRevision'
 Yes '6. Copy-NexusRevision is a Nexus-Run verb of scripts/release/Copy-NexusRevision.ps1' ($null -ne $v -and $v.script -eq 'scripts/release/Copy-NexusRevision.ps1')
 $vp = if ($v) { @($v.params.PSObject.Properties.Name) } else { @() }
 Yes '6. its parameters are the collections, the revisions and the switches, none a file' (($vp | Sort-Object) -join ',' -eq 'Game,New,Number,Revision,Slug,To,WaitSeconds,WhatIf')
+
+# ---- 7: the record's "dev", and the newest revision -------------------------------
+. (Join-Path $rel 'CollectionRecord.ps1')
+. (Join-Path $rel 'CollectionRevision.ps1')
+$real = Read-CollectionRecord (Join-Path $repo 'records\collection.json')
+function Shape($dev, [int]$revision = 13) {
+    $r = $real | ConvertTo-Json -Depth 12 | ConvertFrom-Json
+    $r.revision = $revision
+    if ($null -ne $dev) { $r | Add-Member -NotePropertyName dev -NotePropertyValue $dev -Force }
+    elseif ($r.PSObject.Properties['dev']) { $r.PSObject.Properties.Remove('dev') }
+    return @(Get-CollectionRecordShapeProblems $r)
+}
+Yes '7. the record passes with no "dev" and with a Dev collection and offset' (@(Shape $null).Count -eq 0 -and @(Shape ([pscustomobject]@{ collection = 'dv1abc'; offset = 12 })).Count -eq 0)
+Yes '7. a "dev" that is main''s own collection is refused' ([bool](@(Shape ([pscustomobject]@{ collection = [string]$real.collection; offset = 12 })) -match 'main''s own collection'))
+Yes '7. so are an offset that is not a count, a field it does not know, and a revision not past the offset' (
+    [bool](@(Shape ([pscustomobject]@{ collection = 'dv1abc'; offset = 'x' })) -match 'not a revision count') -and
+    [bool](@(Shape ([pscustomobject]@{ collection = 'dv1abc'; offset = 1; slug = 'x' })) -match 'does not know: slug') -and
+    [bool](@(Shape ([pscustomobject]@{ collection = 'dv1abc'; offset = 13 }) 13) -match 'not past dev\.offset'))
+$withDev = $real | ConvertTo-Json -Depth 12 | ConvertFrom-Json
+$withDev | Add-Member -NotePropertyName dev -NotePropertyValue ([pscustomobject]@{ collection = 'dv1abc'; offset = 12 }) -Force
+# The writer reads fields a plugin leaves out, as its callers do, with no strict mode.
+$text = & { Set-StrictMode -Off; ConvertTo-CollectionRecordText $withDev }
+$back = $text | ConvertFrom-Json
+$again = & { Set-StrictMode -Off; ConvertTo-CollectionRecordText $back }
+Yes '7. the record''s text keeps "dev" after the revision, and reads back to the same text' ($text -match '"revision": \d+,\n  "dev": \{ "collection": "dv1abc", "offset": 12 \},\n' -and $again -ceq $text)
+$fake = Join-Path $T 'fake-repo'
+Put (Join-Path $fake 'records\collection-plugins.json') ('{"version":1,"collection":"7essxf","revision":14,"plugins":[{"name":"A.esp","size":12,"sha256":"' + ('0' * 64) + '"}]}')
+Yes '7. with no records\collection.json there is no Dev collection' ($null -eq (Get-DevCollection $fake))
+Put (Join-Path $fake 'records\collection.json') '{"collection":"7essxf","revision":14,"dev":{"collection":"dv1abc","offset":12}}'
+$dc = Get-DevCollection $fake
+Yes '7. Get-DevCollection reads the slug and offset' ($dc -and $dc.Slug -eq 'dv1abc' -and $dc.Offset -eq 12)
+Yes '7. a release on the records'' newest passes, given the number' ((Get-ShipNewestRevisionProblem -RepoDir $fake -Published 14) -eq '')
+$why = Get-ShipNewestRevisionProblem -RepoDir $fake -Published 13
+Yes '7. one ahead of Dev''s newest names Dev''s numbers and the -Slug to publish with' ($why -match "the Dev collection dv1abc's revision 2" -and $why -match 'newest revision published there is 1' -and $why -match '-Slug dv1abc -Publish 2')
+Put (Join-Path $fake 'records\collection.json') '{"collection":"7essxf","revision":14,"dev":{"collection":"Not A Slug","offset":12}}'
+Yes '7. a "dev" with no slug is a problem, never a guess' ((Get-ShipNewestRevisionProblem -RepoDir $fake -Published 14) -match 'no Dev collection slug')
+$pubText = Get-Content -Raw -LiteralPath (Join-Path $rel 'Publish-CollectionRecord.ps1')
+Yes '7. the merge publishes to the record''s Dev collection, in its own numbers' ($pubText.Contains('$nx = if ($hasDev) { [string]$want.dev.collection } else { [string]$want.collection }') -and
+    $pubText.Contains("NexusPublished.ps1') -Slug `$nx") -and $pubText.Contains('$pubRec = $published + $off') -and $pubText.Contains('Publish = $draft; Slug = $nx') -and $pubText -notmatch '(?<!Record)Slug = \[string\]\$want\.collection')
+Yes '7. and lays it out and hands it on in the records'' numbers, keeping "dev"' ($pubText.Contains('$layParams.RecordSlug = [string]$want.collection; $layParams.RecordRevision = $draftRec') -and
+    $pubText.Contains('$got.revision = $draftRec') -and $pubText.Contains("Add-Member -NotePropertyName dev -NotePropertyValue `$want.dev") -and $pubText.Contains('"published=$draftRec') -and $pubText.Contains('revision = $draftRec; dropped'))
+$manText = Get-Content -Raw -LiteralPath (Join-Path $rel 'New-SignedManifest.ps1')
+Yes '7. a build Release names the Dev revision beside the records''' ($manText.Contains("`$m['devCollection'] = [ordered]@{ slug = `$devc.Slug; revision = `$dn }") -and $manText.Contains('$dn = [int]$m[''collectionRevision''] - $devc.Offset'))
+$vu = Get-Content -Raw -LiteralPath (Join-Path $repo 'launcher\app\VeloUpdate.cs')
+Yes '7. a dev launcher is held to and sent to the Dev collection''s revision, main''s to the main collection''s' ($vu.Contains('bool devOwn = channel == "dev" && devc != null') -and
+    $vu.Contains('ServerCollectionSlug = devOwn ? devc.Slug : "";') -and $vu.Contains('ServerCollectionRevision = devOwn ? devc.Revision : record.CollectionRevision;'))
+$ck = Get-Content -Raw -LiteralPath (Join-Path $repo 'launcher\app\Checks.cs')
+Yes '7. and its Mod Organizer 2 revision, in the records'' numbers, is compared in Dev''s' ($ck.Contains('Updater.ServerRecordRevision - Updater.ServerCollectionRevision') -and $ck.Contains('return mods > 0 ? mods - offset : mods;'))
 
 # ---- 5: the copy in node, and the page's shape -----------------------------------
 New-Item -ItemType Directory -Force -Path $T | Out-Null
@@ -204,7 +264,49 @@ Put $colRec ('{"collection":"7essxf","revision":3,"dev":{"collection":"' + $dev.
 $r = Run @('-Slug', '7essxf', '-Revision', '3', '-To', $dev.slug, '-Number', '2', '-CollectionRecord', $colRec)
 $d2 = @((State).others) | Where-Object { $_.slug -eq $dev.slug } | Select-Object -First 1
 YesR '3. a copy into the collection the record''s "dev" names is named as Dev' ($r.Code -eq 0 -and $d2.latest -eq 2 -and $d2.revisions.'2'.data.collection_manifest.info.name -eq 'Thornswood Dev') $r
-Control @{ addRevision = @{ n = 4; id = 900004; status = 'draft'; archive = $archive } }
+
+# ---- 8: the promotion ----------------------------------------------------------------
+# Dev now has 1 and 2, the records' 3 and 4 (offset 2), and 7essxf is on 3.
+function Promote([string]$manifest, [switch]$WhatIf) {
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = $pwsh
+    $all = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Q (Join-Path $rel 'Promote-Collection.ps1'))) + @(@('-Manifest', $manifest, '-CollectionRecord', $colRec, '-PageRecord', $pageRec, '-Permissions', $perm) | ForEach-Object { Q $_ })
+    if ($WhatIf) { $all += '-WhatIf' }
+    $psi.Arguments = $all -join ' '
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+    $p = [Diagnostics.Process]::Start($psi)
+    $e = $p.StandardError.ReadToEndAsync()
+    $o = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    return [pscustomobject]@{ Code = $p.ExitCode; Out = ($o + $e.Result) }
+}
+$mOld = Join-Path $T 'manifest-old.json'
+Put $mOld '{"schema":1,"tag":"build-1.3.1","collectionRevision":3,"parts":{}}'
+$n0 = @(Writes).Count
+$r = Promote $mOld
+YesR '8. a Release from before the Dev collection copies nothing' ($r.Code -eq 0 -and $r.Out -match 'names no Dev collection' -and @(Writes).Count -eq $n0) $r
+$mOff = Join-Path $T 'manifest-off.json'
+Put $mOff ('{"schema":1,"tag":"build-1.3.2","collectionRevision":4,"devCollection":{"slug":"' + $dev.slug + '","revision":1},"parts":{}}')
+$r = Promote $mOff
+YesR '8. a manifest whose offset the records do not have stops before anything is sent' ($r.Code -eq 1 -and $r.Out -match 'at offset 3' -and @(Writes).Count -eq $n0) $r
+$mNew = Join-Path $T 'manifest-new.json'
+Put $mNew ('{"schema":1,"tag":"build-1.3.3","collectionRevision":4,"devCollection":{"slug":"' + $dev.slug + '","revision":2},"parts":{}}')
+$r = Promote $mNew -WhatIf
+YesR '8. -WhatIf names the copy and sends nothing' ($r.Code -eq 0 -and $r.Out -match ('would copy the Dev collection ' + $dev.slug + '''s revision 2 to the main collection 7essxf as revision 4') -and @(Writes).Count -eq $n0) $r
+$r = Promote $mNew
+$st = State
+YesR '8. it copies Dev''s revision 2 to 7essxf as revision 4 and publishes it' ($r.Code -eq 0 -and $st.collection.latest -eq 4 -and $null -eq $st.collection.draft -and $r.Out -match ('copied ' + $dev.slug + ' 2 to 7essxf 4')) $r
+Yes '8. named Thornswood, with main''s summary' ($st.collection.revisions.'4'.data.collection_manifest.info.name -eq 'Thornswood' -and $st.collection.revisions.'4'.data.collection_manifest.info.summary -eq 'A made-up collection.')
+$n0 = @(Writes).Count
+$r = Promote $mNew
+YesR '8. promoted again, the main collection on that revision is left as it is' ($r.Code -eq 0 -and $r.Out -match 'on revision 4 already' -and @(Writes).Count -eq $n0) $r
+$r = Promote $mOld
+YesR '8. going back to an older Release says the newer revision stays the newest' ($r.Code -eq 0 -and @(Writes).Count -eq $n0) $r
+Put $mOld ('{"schema":1,"tag":"build-1.3.1","collectionRevision":3,"devCollection":{"slug":"' + $dev.slug + '","revision":1},"parts":{}}')
+$r = Promote $mOld
+YesR '8.   with Dev''s revision named too' ($r.Code -eq 0 -and $r.Out -match 'past the 3 main is going back to' -and @(Writes).Count -eq $n0) $r
+
+Control @{ addRevision = @{ n = 5; id = 900005; status = 'draft'; archive = $archive } }
 $n0 = @(Writes).Count
 $r = Run @('-Slug', $dev.slug, '-To', '7essxf')
 YesR '4. a draft waiting in the collection it goes to stops it before anything is sent' ($r.Code -eq 1 -and $r.Out -match 'is a draft waiting' -and @(Writes).Count -eq $n0) $r

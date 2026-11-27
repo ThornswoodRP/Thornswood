@@ -1071,9 +1071,17 @@ if ($lights.Count) {
   # The record is held to its shape and to the revision this starts from
   # (#4279): one that is missing, or of another revision, would only say
   # "does not name it" or "NOT the bytes" about a plugin it was never about.
+  # The records keep the main collection's numbers; the Dev collection's
+  # revision n is the records' n + its offset (#7193).
+  $recOffset = 0
+  if (Test-Path -LiteralPath $CollectionRecord) {
+    $offRec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($CollectionRecord)) $CollectionRecord }
+    if ($offRec.PSObject.Properties['dev'] -and $offRec.dev -and [string]$offRec.dev.collection -eq $Slug) { $recOffset = [int]$offRec.dev.offset }
+  }
+  $baseRec = $BaseRevision + $recOffset
   $plugRec = Step { Read-ThornswoodRecord -Path $PluginRecord -Kind collection-plugins }
   $plugRev = Get-ThornswoodRecordProp $plugRec 'revision'
-  if (-not (Test-ThornswoodWhole $plugRev 1) -or [int64]$plugRev -ne $BaseRevision) { Die ($PluginRecord + ' is the plugins of collection revision ' + $plugRev + ', and this starts from revision ' + $BaseRevision + ', so the light flags made here cannot be held to the bytes One deploys. Record revision ' + $BaseRevision + ' with scripts\mods\New-CollectionPluginRecord.ps1 first.') }
+  if (-not (Test-ThornswoodWhole $plugRev 1) -or [int64]$plugRev -ne $baseRec) { Die ($PluginRecord + ' is the plugins of collection revision ' + $plugRev + ', and this starts from revision ' + $baseRec + $(if ($recOffset) { ' (' + $Slug + '''s ' + $BaseRevision + ')' } else { '' }) + ', so the light flags made here cannot be held to the bytes One deploys. Record revision ' + $baseRec + ' with scripts\mods\New-CollectionPluginRecord.ps1 first.') }
   foreach ($p in @($plugRec.plugins)) { $onOne[([string]$p.name).ToLowerInvariant()] = [string]$p.sha256 }
   $baseCol = Step { ConvertFrom-Json ([IO.File]::ReadAllText($baseJson)) }
   if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force }

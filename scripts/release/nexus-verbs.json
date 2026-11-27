@@ -146,6 +146,8 @@
       "params": {
         "Revision": "^[0-9]{1,4}$",
         "Slug": "^[a-z0-9]{1,16}$",
+        "RecordSlug": "^[a-z0-9]{1,16}$",
+        "RecordRevision": "^[0-9]{1,4}$",
         "GameDomain": "^[a-z0-9]{1,40}$",
         "KeepPlugins": "switch",
         "Modlist": "switch"

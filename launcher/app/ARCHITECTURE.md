@@ -316,16 +316,21 @@ minute, a file once read is kept, and when GitHub says the hour's calls are
 spent nothing more is asked until the time it gives for the reset, and every
 caller is told that time.
 
-`VeloUpdate.cs:75 CheckLauncher()` asks this install's channel for its
+`VeloUpdate.cs:81 CheckLauncher()` asks this install's channel for its
 release: `ChannelSource` reads the newest Releases that carry
 `releases.<channel>.json` (the newest and the `MaxDeltas` before it, for
 deltas) and hands Velopack the newest Release's package, up or down
 (`ChannelRelease`, `AllowVersionDowngrade`), so a promotion of an older build
 reaches the channel too. The collection revision the channel's servers run is
 read from that Release's signed record at the same time
-(`ServerCollectionRevision`, #5767). `VeloUpdate.cs:116 FetchLauncher()`
+(`ServerCollectionRevision`, #5767). On the dev channel it is the Dev
+collection's revision the record names in `devCollection`, and
+`ServerCollectionSlug` sends Vortex, the collection page and every link to
+the Dev collection instead of 7essxf (#7193); `ServerRecordRevision` is the
+same revision in the records' numbers, which the Mod Organizer 2 modlist
+names. `VeloUpdate.cs:145 FetchLauncher()`
 downloads the package into Velopack's own folder and checks it (Velo,
-below), and `VeloUpdate.cs:184 ApplyLauncher()` leaves it to go in once the
+below), and `VeloUpdate.cs:213 ApplyLauncher()` leaves it to go in once the
 launcher has closed. `Version` at the top of Updater.cs is the launcher's
 version, read from the exe: the build passes it as `-p:Version`
 (`scripts\release\LauncherVersion.ps1` works it out, #5179), in a merge

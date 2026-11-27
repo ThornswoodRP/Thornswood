@@ -203,6 +203,16 @@ exit 0
     try { $null = Invoke-ThornswoodCollectionFetch -Work $w2 -Head ([pscustomobject]@{ Slug = '7essxf'; Revision = 6 }) -Repo $fake 6>$null } catch { $threw = $_.Exception.Message }
     $env:STANDIN_END = $null
     Yes 'a Nexus-Run that does not end 0 stops the fetch, with what it said' ($threw -match 'ended 3' -and $threw -match 'asked to fail')
+    # The Dev collection (#7193): the record's revision 14 is Dev's 2 until
+    # main is promoted to it, so it is laid out from Dev, named as the record.
+    New-Item -ItemType Directory -Path (Join-Path $fake 'records') -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $fake 'records\collection.json'), '{"collection":"7essxf","revision":14,"dev":{"collection":"dv1abc","offset":12}}', $utf8)
+    $w3 = Join-Path $tmp 'fetchwork3'
+    New-Item -ItemType Directory -Path $w3 -Force | Out-Null
+    $null = Invoke-ThornswoodCollectionFetch -Work $w3 -Head ([pscustomobject]@{ Slug = '7essxf'; Revision = 14 }) -Repo $fake 6>$null
+    $asked = [IO.File]::ReadAllText((Join-Path $w3 'asked.txt')) -split "`n"
+    Yes 'with a Dev collection it lays the Dev revision out, named as the record names it' ($asked[0] -eq 'Install-NexusRevision -Revision 2 -Slug dv1abc -RecordSlug 7essxf -RecordRevision 14 -KeepPlugins')
+    Remove-Item -LiteralPath (Join-Path $fake 'records\collection.json') -Force
 
     # ---- 3. Install-NexusRevision -KeepPlugins -----------------------------
     $inr = Text 'scripts\release\Install-NexusRevision.ps1'

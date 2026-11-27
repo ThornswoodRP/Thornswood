@@ -23,6 +23,14 @@
       revision               the newest published revision the record has
                              followed; a change leaves it alone, and the
                              records that follow a publish move it
+      dev                    the Dev collection (#7193): { collection,
+                             offset }. A merged change publishes to it, as
+                             its revision (revision - offset), so Vortex
+                             offers main's testers only what main runs;
+                             main's promotion copies the revision to
+                             collection (Copy-NexusRevision.ps1). Every
+                             revision here, the load order's and the
+                             manifests' are main's numbers
       mods                   one entry per Nexus file the collection installs,
                              in modId then fileId order:
                                { modId, fileId, name, plugins, choices?, dropPatch? }
@@ -68,7 +76,7 @@ $script:CollectionGameOwn = @($script:CollectionBaseMasters + '_ResourcePack.esl
 # Thornswood's own plugins: Content goes up from the repository as a mod of
 # the collection, and Last is built on every machine from its recipe.
 $script:CollectionOurs = @('Thornswood-Content.esp', 'Thornswood-Last.esp')
-$script:CollectionRecordKeys = @('version', 'issue', 'what', 'collection', 'game', 'revision', 'mods', 'plugins', 'dropped', 'wipe')
+$script:CollectionRecordKeys = @('version', 'issue', 'what', 'collection', 'game', 'revision', 'dev', 'mods', 'plugins', 'dropped', 'wipe')
 $script:CollectionModKeys = @('modId', 'fileId', 'name', 'plugins', 'choices', 'dropPatch')
 $script:CollectionPluginKeys = @('name', 'enabled', 'master', 'light', 'masters', 'after')
 $script:CollectionDroppedKeys = @('name', 'mod', 'why')
@@ -102,6 +110,14 @@ function Get-CollectionRecordShapeProblems($R) {
     if (-not ($R.game -is [string]) -or $R.game -notmatch '^[a-z0-9]+$') { $out.Add('game is not a Nexus game domain') }
     if (-not ($R.revision -is [int] -or $R.revision -is [long]) -or $R.revision -lt 1) { $out.Add('revision is not a revision number') }
     if ((Get-CollectionKeys $R) -contains 'wipe' -and -not ($R.wipe -is [string] -and $R.wipe.Trim())) { $out.Add('wipe is there but says nobody''s decision') }
+    if ((Get-CollectionKeys $R) -contains 'dev') {
+        $d = $R.dev
+        foreach ($k in (Get-CollectionKeys $d)) { if (@('collection', 'offset') -cnotcontains $k) { $out.Add("dev has a field it does not know: $k") } }
+        if (-not ($d.collection -is [string]) -or $d.collection -notmatch '^[a-z0-9]+$') { $out.Add('dev.collection is not a Nexus collection slug') }
+        elseif ($d.collection -ceq $R.collection) { $out.Add('dev.collection is main''s own collection') }
+        if (-not ($d.offset -is [int] -or $d.offset -is [long]) -or $d.offset -lt 0) { $out.Add('dev.offset is not a revision count') }
+        elseif (($R.revision -is [int] -or $R.revision -is [long]) -and $R.revision -le $d.offset) { $out.Add("revision $($R.revision) is not past dev.offset $($d.offset): the Dev collection's first revision is offset + 1") }
+    }
 
     $mods = @($R.mods)
     if (-not ($R.mods -is [array]) -or -not $mods.Count) { $out.Add('there are no mods') ; $mods = @() }
@@ -537,6 +553,7 @@ function ConvertTo-CollectionRecordText($R) {
     $L.Add('  "collection": ' + (& $q $R.collection) + ',')
     $L.Add('  "game": ' + (& $q $R.game) + ',')
     $L.Add('  "revision": ' + [int]$R.revision + ',')
+    if ((Get-CollectionKeys $R) -contains 'dev') { $L.Add('  "dev": { "collection": ' + (& $q $R.dev.collection) + ', "offset": ' + [int]$R.dev.offset + ' },') }
     if ((Get-CollectionKeys $R) -contains 'wipe') { $L.Add('  "wipe": ' + (& $q $R.wipe) + ',') }
     $L.Add('  "mods": [')
     $mods = @($R.mods)
