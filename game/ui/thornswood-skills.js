@@ -1493,6 +1493,44 @@
     var have = Number((mine.tree || {})[key]) || 0;
     return Math.min(Math.floor(n), have, CAP);
   }
+  /*
+    WHAT A PICK WILL PLACE, BEFORE IT IS SENT (#7168). While creating, a class
+    and a profession are this page's until Confirm, so the server's tree holds
+    nothing of them and the tree read empty until the character was in the
+    world. The server sends its own table of what each pick places
+    (mine.placing, progression's TUNING.placed), and this adds up the picks
+    lit here the way progression's place() does: the profession, then its
+    half or each of a mage's schools, then the class, each kept under CAP. A
+    pick the server already holds is in mine.tree and mine.placed, so only
+    what is still this page's is added. Nothing is added from a pick that is
+    not whole, since the server would refuse it.
+  */
+  function pendingPlaced() {
+    var out = {};
+    var table = mine && mine.placing;
+    if (!creating() || !table || typeof table !== 'object') return out;
+    var tree = (mine && mine.tree) || {};
+    function add(where, key) {
+      var pts = table[where] && table[where][key];
+      if (!pts || typeof pts !== 'object') return;
+      for (var skill in pts) {
+        if (!Object.prototype.hasOwnProperty.call(pts, skill)) continue;
+        var n = Math.floor(Number(pts[skill]) || 0);
+        var was = (Number(tree[skill]) || 0) + (out[skill] || 0);
+        var room = Math.min(n, CAP - was);
+        if (room > 0) out[skill] = (out[skill] || 0) + room;
+      }
+    }
+    var prof = picked.profession;
+    var soft = haveProf() ? null : softProf();
+    if (soft && soft.whole && prof && prof.row) {
+      add('professions', prof.row);
+      (prof.subs || []).forEach(function (sub) { add(prof.row === 'mage' ? 'schools' : 'halves', sub); });
+    }
+    var cls = picked['class'];
+    if (!haveClass() && cls && cls.row) add('classes', cls.row);
+    return out;
+  }
   function placedTotal() {
     var total = 0;
     var attrs = (DATA.tree && DATA.tree.rows) || [];
@@ -1995,6 +2033,13 @@
       if (gv) {
         lead += ' ' + (gv === 1 ? 'One point came' : gv + ' points came') + ' with what you chose, ' +
                 'in green, and ' + (gv === 1 ? 'it does' : 'they do') + ' not move.';
+      }
+      // While creating: what the picks lit here will place once Confirm sends them (#7168).
+      var pend = pendingPlaced(), pn = 0;
+      for (var pk in pend) { if (Object.prototype.hasOwnProperty.call(pend, pk)) pn += pend[pk]; }
+      if (pn) {
+        lead += ' ' + (pn === 1 ? 'One point comes' : pn + ' points come') + ' with the class and profession ' +
+                'chosen here, in green, once Confirm sends them.';
       }
     }
     if (lead) elBody.appendChild(el('p', 'lead', lead));
@@ -3586,14 +3631,16 @@
     var cols = el('div', 'cols');
     var pts = mine ? Number(mine.points) || 0 : 0;
     var tree = (mine && mine.tree) || {};
+    var pending = pendingPlaced();
     var flat = [];
     rows().forEach(function (attr) {
       var col = el('div', 'col');
       col.appendChild(el('div', 'colhead', attr.name));
       (attr.subs || []).forEach(function (s) {
         var idx = flat.length; flat.push(s.key);
-        var have = Number(tree[s.key]) || 0;
-        var given = placedAt(s.key);
+        var coming = pending[s.key] || 0;
+        var have = (Number(tree[s.key]) || 0) + coming;
+        var given = placedAt(s.key) + coming;
         var full = have >= CAP;
         var row = el('div', 'skill' + (idx === rowAt ? ' at' : '') + (full ? ' full' : (have ? ' some' : '')));
         row.appendChild(el('div', 'sn', s.name));

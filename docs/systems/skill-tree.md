@@ -91,6 +91,10 @@ A class places 1, a profession 2, a half 1. A mage also places 1 per
 school they took. Nobody starts with more than a handful, and no
 sub-skill starts near the cap of 5.
 
+While you make a character, the class and profession you pick are not
+sent until Confirm, but the K panel's Skill tree already shows the points
+they will place, in green, as soon as a pick is whole.
+
 Every rank after that gives 1 free point. It goes in any sub-skill that
 is not full. Rank comes from work, not from gold and not from being here
 a long time. See [Professions](professions.md) for how a rank is earned.
