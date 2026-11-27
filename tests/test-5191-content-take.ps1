@@ -22,7 +22,8 @@
        held to its server, and -Keep keeps what -Take took;
     5. merge-release.yml asks for the build before it releases, takes it
        before any part is built, and starts again on a Content Deployment's
-       success, with the release's concurrency on its job;
+       success, with the release's concurrency on its job, and that run
+       releases the merge the box built, every job checking it out (#7050);
     3c. -Newest says SAME KEY or OTHER KEY against this checkout's inputs,
        with same=, key= and commit= for the gate's pick, and -BuildKey
        holds it to a key;
@@ -273,6 +274,17 @@ try {
     Check '5 it keeps what it took as the artifact content-dev, for 90 days, for the harnesses and checkouts that read the tables (-Newest)' (
         $job -match 'Get-ContentBuild\.ps1 -Server dev -Take -Keep' -and $keepAt -gt $takeAt -and
         $job.Substring($keepAt) -match '(?s)^- name: Keep what was taken.*?uses: actions/upload-artifact@[0-9a-f]{40}.*?name: content-dev\s.*?retention-days: 90')
+    $content = $wf.Substring($wf.IndexOf("`n  content:"), $wf.IndexOf("`n  checks-pick:") - $wf.IndexOf("`n  content:"))
+    $builtAt = $content.IndexOf('- name: Which merge the box built')
+    Check '5 the content job works out which merge the box built before it looks for the build, and checks that merge out (#7050)' (
+        $builtAt -gt 0 -and $builtAt -lt $content.IndexOf('- name: Find the build, or ask the box for it') -and
+        $content -match 'Resolve-ContentBuiltCommit -Event \$event -Head \$env:GITHUB_SHA' -and
+        $content -match "(?s)- name: Check out the merge the box built\s+if: \`$\{\{ steps\.built\.outputs\.commit != github\.sha \}\}\s+uses: actions/checkout@[0-9a-f]{40}.*?ref: \`$\{\{ steps\.built\.outputs\.commit \}\}" -and
+        $content -match 'commit: \$\{\{ steps\.built\.outputs\.commit \}\}')
+    $after = $wf.Substring($wf.IndexOf("`n  checks-pick:"))
+    Check '5 every job after it checks out that merge, and the release names it, never the run''s own commit' (
+        ([regex]::Matches($after, 'ref: \$\{\{ needs\.content\.outputs\.commit \}\}')).Count -eq 4 -and
+        $job -match 'RELEASE_SHA: \$\{\{ needs\.content\.outputs\.commit \}\}' -and $job -notmatch '\$env:GITHUB_SHA' -and $job -match '--target \$env:RELEASE_SHA')
     # ------------------------------------------- 6. the content checks (4d)
     $pre = $wf.Substring(0, $wf.IndexOf("`n  release:"))
     Check '6 the content job takes the build it found, held to its key, and hands it to the checks for this run only' (

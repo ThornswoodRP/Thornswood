@@ -70,6 +70,9 @@ if (builder && everyM) {
     const clock = { now: 1700000000000 };
     const loaded = {};        // form id -> true once its cell is in
     const locks = {};         // form id -> true or false, as last set
+    const refuseLock = {};
+    const refuseUnlock = {};
+    const refuseRead = {};
     let resolves = 0, lockCalls = 0;
 
     const sp = {
@@ -83,9 +86,16 @@ if (builder && everyM) {
         from: function (f) {
           if (!f) { return null; }
           return {
-            lock: function (on) { lockCalls++; locks[f.id] = !!on; },
+            lock: function (on) {
+              lockCalls++;
+              if (on ? refuseLock[f.id] : refuseUnlock[f.id]) { throw new Error('door temporarily refused'); }
+              locks[f.id] = !!on;
+            },
             // A door nobody has touched reads unlocked, as vanilla ships most.
-            isLocked: function () { return !!locks[f.id]; }
+            isLocked: function () {
+              if (refuseRead[f.id]) { throw new Error('door state unavailable'); }
+              return !!locks[f.id];
+            }
           };
         }
       }
@@ -98,7 +108,8 @@ if (builder && everyM) {
         body)(ctx, { now: function () { return clock.now; } });
     }
     return {
-      clock: clock, loaded: loaded, locks: locks, frame: frame, state: state,
+      clock: clock, loaded: loaded, locks: locks,
+      refuseLock: refuseLock, refuseUnlock: refuseUnlock, refuseRead: refuseRead, frame: frame, state: state,
       counts: function () { return { resolves: resolves, lockCalls: lockCalls }; },
       reset: function () { resolves = 0; lockCalls = 0; }
     };
@@ -114,6 +125,74 @@ if (builder && everyM) {
     yes('a door in a loaded cell is locked', w.locks[A] === true);
     w.frame({ shut: [], open: [A], at: 2 });
     yes('and unlocked when it stops being shut to you', w.locks[A] === false);
+  }
+
+  {
+    const w = world();
+    w.loaded[A] = true; w.loaded[B] = true; w.loaded[C] = true;
+    w.locks[B] = true; // An authored lock was already there.
+    w.frame({ shut: [A, B, C], claimShut: [A, B], open: [], at: 1 });
+    yes('the ordinary claim locks its door and the separate jail lock still runs', w.locks[A] && w.locks[C]);
+    w.frame({ shut: [], claimShut: [], open: [], at: 2 });
+    yes('ending the claim unlocks the door the claim locked', w.locks[A] === false);
+    yes('ending the claim leaves an authored lock and a jail lock alone', w.locks[B] && w.locks[C]);
+  }
+
+  {
+    const w = world();
+    w.loaded[A] = true;
+    w.frame({ shut: [A], claimShut: [A], open: [], at: 1 });
+    w.loaded[A] = false;
+    const release = { shut: [], claimShut: [], open: [], at: 2 };
+    w.frame(release);
+    yes('a claim release does not touch an unloaded door', w.locks[A] === true);
+    w.loaded[A] = true;
+    w.refuseRead[A] = true;
+    w.clock.now += EVERY + 1;
+    w.frame(release);
+    yes('an unreadable lock stays intact until the game can report its state', w.locks[A] === true);
+    w.refuseRead[A] = false;
+    w.refuseUnlock[A] = true;
+    w.clock.now += EVERY + 1;
+    w.frame(release);
+    yes('a refused unlock leaves the released lock pending', w.locks[A] === true);
+    w.refuseUnlock[A] = false;
+    w.clock.now += EVERY + 1;
+    w.frame(release);
+    yes('the released lock opens when the streamed door accepts it', w.locks[A] === false);
+    w.reset();
+    w.clock.now += EVERY + 1;
+    w.frame(release);
+    yes('a completed release does not keep polling the former claim', w.counts().resolves === 0);
+  }
+
+  {
+    const w = world();
+    w.loaded[A] = true;
+    w.frame({ shut: [A], claimShut: [A], open: [], at: 1 });
+    w.frame({ shut: [], open: [], at: 2 });
+    yes('a payload without the ordinary claim list cannot release a lock by omission', w.locks[A] === true);
+    w.frame({ shut: [A], claimShut: [], open: [], at: 3 });
+    yes('a lock still controlled by the current jail list stays shut', w.locks[A] === true);
+    w.frame({ shut: [], claimShut: [], open: [], at: 4 });
+    yes('a door adopted by another lock authority stays outside claim cleanup', w.locks[A] === true);
+  }
+
+  {
+    const w = world();
+    w.loaded[A] = true;
+    const claimed = { shut: [A], claimShut: [A], open: [], at: 1 };
+    w.frame(claimed);
+    w.locks[A] = false;
+    w.refuseLock[A] = true;
+    w.clock.now += EVERY + 1;
+    w.frame(claimed);
+    yes('a failed re-lock stays on the authoritative shut list', globalThis.__thornswoodPropertyShut[A] === true);
+    w.refuseLock[A] = false;
+    w.frame({ shut: [], claimShut: [], open: [A], at: 2 });
+    w.locks[A] = true;
+    w.frame({ shut: [], claimShut: [], open: [], at: 3 });
+    yes('an explicit successful unlock retires the old claim lock', w.locks[A] === true);
   }
 
   // --------------------------------------------- and it stops doing it constantly
@@ -309,7 +388,7 @@ function liftFn(name) {
   yes('wayOut is in the gamemode', !!parts[0]);
   yes('and mayPass, shutFor and doorsOf are where they were', !!parts[1] && !!parts[2] && !!parts[3]);
 
-  function town(locked) {
+  function town(locked, jailLock) {
     const claims = {};
     claims[HOUSE] = { by: HOLDER, name: 'Holder', locked: locked };
     // No jail in this town: the cells (#502) are tests/test-502-jail-cells.js.
@@ -324,7 +403,7 @@ function liftFn(name) {
       function () { return false; },
       function (d) { return ID[d] || 0; },
       function () { return null; },
-      function () { },
+      function (profileId, shut) { if (jailLock) shut.push(0x502); },
       // 0x113 carries the house's working master key (#2254).
       function (actorId, b) { return actorId === 0x113 && b === HOUSE; });
   }
@@ -344,6 +423,9 @@ function liftFn(name) {
     const s = T.shutFor(0x109, STRANGER);
     yes('a stranger finds both doors in from outside locked, and only those',
         same(s.shut, ['f0:Test.esp', 'b0:Test.esp']));
+    const withJail = town(true, true).shutFor(0x109, STRANGER);
+    yes('the server labels only ordinary claim locks for release tracking',
+        withJail.shut.includes(0x502) && same(withJail.claimShut, ['f0:Test.esp', 'b0:Test.esp']));
     yes('and every way out of the house open, so nobody inside is shut in',
         same(s.open, ['f1:Test.esp', 'b1:Test.esp', 'r1:Test.esp', 'c1:Test.esp']));
     yes('the door up out of the cellar is one of them',

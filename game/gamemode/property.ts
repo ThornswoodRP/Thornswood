@@ -284,6 +284,11 @@
         row.master = { for: Number(c.master.for), no: Number(c.master.no) };
       }
       if (Number.isSafeInteger(c.deed) && c.deed > 0) { row.deed = c.deed; }
+      // A steward's grant (#6894): who granted it and when, or it is the holder's own claim.
+      if (c.granted && typeof c.granted === 'object' && Number(c.granted.by) > 0) {
+        row.granted = { by: Number(c.granted.by), name: String(c.granted.name || 'somebody'),
+                        at: Number(c.granted.at) || at };
+      }
 
       out[k] = row;
       kept++;
@@ -1679,6 +1684,14 @@
                            '. Take it up with them, or with the court.');
       return true;
     }
+    // One property of their own (#6894): a steward grants any more.
+    var own = ownClaimOf(profileId);
+    if (own) {
+      toProfile(profileId, 'You hold ' + nameOf(own) + ' already, and a character claims one property of their ' +
+                           'own. The Steward of ' + (HOLD_TOWN[holdOfBuilding(building)] || 'the hold') +
+                           ' can grant you ' + nameOf(building) + ' instead.');
+      return true;
+    }
     var who = 'somebody';
     try {
       var a = mp.get(actorId, 'appearance');
@@ -1728,6 +1741,113 @@
                       : 'The deed could not be handed over, so say so in the dev channel. ') +
               (master ? masterHandedLine(building) + ' ' : '') +
               'Go in at least once every ' + lapseDays() + ' days or it goes back.');
+    return true;
+  }
+
+  /*
+    ONE PROPERTY OF THEIR OWN (#6894, Patrick, 26 Nov). One character
+    claimed two Whiterun farm plots and a tavern. A character claims one
+    property at its door; a steward grants any more (grant, below). So a
+    claim is refused while the character holds a building it did not get by
+    a steward's grant. A farm is no property claim: plots are farming's, and
+    a field on a held property answers to the house (claimCovering), so
+    its holder works every plot on it. A jail is held by its Jarl's office,
+    not as their own property, and does not count. A deed carried through
+    the door is no claim either: whoever presents it holds the place, and a
+    grant does not go with the deed, so the place counts for its new holder.
+    Claims made before the rule stay until they lapse or are evicted.
+  */
+  function ownClaimOf(profileId) {
+    for (var b in claims) {
+      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
+      var c = claims[b];
+      if (c.by !== profileId || c.granted || jailOfBuilding(b) || !holderOf(b)) { continue; }
+      return b;
+    }
+    return null;
+  }
+
+  /*
+    A STEWARD GRANTS A BUILDING (#6894). At the door of a building nobody
+    holds in their own hold, the Office page of K lists who is in the world
+    with Grant beside each, which sends /office grant <profile>. The
+    building is claimed for that person as their own claim would claim it:
+    a new deed number, the deed and the master key in their pack, the ground
+    outside the door, the same lapse. It is marked granted, so it is not the
+    one property they claim themselves. Staff grant at any door, as they
+    evict, and it goes in the staff log.
+  */
+  function grant(parts, actorId, profileId, toProfile, cmd) {
+    var building = here(actorId);
+    if (!building) {
+      toProfile(profileId, OFFICE_AT_DOOR);
+      return true;
+    }
+    var how = settleAs(profileId, building, cmd);
+    if (!how.as) {
+      toProfile(profileId, how.why);
+      return true;
+    }
+    var pid = Number((parts && parts[2]) || 0) || 0;
+    var them = (pid > 0 && Math.floor(pid) === pid && pid !== profileId) ? onlineActorOf(pid) : 0;
+    if (!them) {
+      toProfile(profileId, 'Pick somebody in the world on the Office page of K.');
+      return true;
+    }
+    var accordGrant = globalThis.__thornswoodEmbassy;
+    if (accordGrant && accordGrant.holds(building)) {
+      toProfile(profileId, accordGrant.CLAIM_REFUSED);
+      return true;
+    }
+    var whoName = personName(them);
+    if (!mayHold(them, pid, building)) {
+      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
+      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' + jailTown + ' holds it.');
+      return true;
+    }
+    var held = holderOf(building);
+    if (held) {
+      toProfile(profileId, nameOf(building) + ' is held by ' + held.name + '. End that claim first to grant it.');
+      return true;
+    }
+    var deed = deedCut + 1;
+    if (!Number.isSafeInteger(deed)) {
+      plog('could not number a new deed for', nameOf(building));
+      toProfile(profileId, 'The register could not number the deed. Ask staff to check it.');
+      return true;
+    }
+    var now = Date.now();
+    var by = personName(actorId);
+    claims[building] = { by: pid, name: whoName, at: now, touched: now, locked: false,
+                         ground: groundHere(actorId), deed: deed,
+                         granted: { by: profileId, name: by, at: now } };
+    deedCut = deed;
+    if (!save()) {
+      delete claims[building];
+      deedCut--;
+      toProfile(profileId, 'The register could not save the grant. Ask staff to check it.');
+      return true;
+    }
+    pushAll();
+    var handed = giveDeed(them, building);
+    var master = handed ? issueMaster(them, building, claims[building]) : 0;
+    if (how.as === 'staff') {
+      staffRecord('grant', actorId, profileId, building, claims[building], settleWhere(building));
+    }
+    plog(by, how.as === 'staff' ? 'as staff' : 'as steward', 'granted', nameOf(building), 'to', whoName,
+         '(profile ' + pid + ')', handed ? 'with the deed' : 'and no deed could be handed over',
+         master ? 'and master key no. ' + master : '');
+    toProfile(profileId, 'You grant ' + nameOf(building) + ' to ' + whoName + '.' +
+              (handed ? ' The deed is in their pack.' : ' The deed could not be handed over, so say so in the dev channel.') +
+              (how.as === 'staff' ? ' It is in the staff log.' : ''));
+    toProfile(pid, by + ' grants you ' + nameOf(building) + '. ' +
+              (handed ? 'The deed is in your pack. Whoever carries it holds the place, ' +
+                        'so keep it somewhere a thief will not look. '
+                      : 'The deed could not be handed over, so say so in the dev channel. ') +
+              (master ? masterHandedLine(building) + ' ' : '') +
+              'Go in at least once every ' + lapseDays() + ' days or it goes back.');
+    redrawPanel(actorId);
+    redrawPanel(them);
     return true;
   }
 
@@ -1842,10 +1962,15 @@
       // and expensive. Failing that way round is the right one: a door that
       // is not locked is a house anybody can walk into.
       '    var sp = ctx.sp;',
+      // Only undo locks this script put on an unlocked ordinary claim door.
+      // The jail list and a lock already present in the game are not ours.
+      '    var claimShut = Array.isArray(v.claimShut) ? new Set(v.claimShut) : null;',
+      '    var applied = st && claimShut ? (st.thornswoodClaimLocks || (st.thornswoodClaimLocks = {})) : null;',
       // Remember which form ids property wants shut (#615), published for
       // anything on the client that asks whether a door is property's to hold.
       '    var shutMap = {};',
       '    for (var i = 0; i < v.shut.length; i++) {',
+      '      shutMap[v.shut[i]] = true;',
       '      try {',
       '        var r = sp.ObjectReference.from(sp.Game.getFormEx(v.shut[i]));',
       // A door in a cell nobody has loaded does not resolve, and there is
@@ -1858,20 +1983,38 @@
       // is a stutter on each heartbeat. If isLocked cannot be read the door
       // is locked anyway, so this fails shut.
       '        if (r) { var was = null; try { was = r.isLocked(); } catch (e2) { }',
-      '          if (was !== true) { r.lock(true, false); } }',
-      '        shutMap[v.shut[i]] = true;',
+      '          if (was !== true) {',
+      '            r.lock(true, false);',
+      '            if (was === false && applied && claimShut.has(v.shut[i])) { applied[v.shut[i]] = true; }',
+      '          } }',
       '      } catch (e) { }',
       '    }',
-      '    for (var j = 0; j < (v.open || []).length; j++) {',
+      // A claim removed from the register no longer contributes an open
+      // entry. Restore the lock we applied once its reference is available.
+      '    var open = (v.open || []).slice();',
+      '    var explicitOpen = applied ? new Set(open) : null;',
+      '    if (applied) {',
+      '      Object.keys(applied).forEach(function (key) {',
+      '        var id = Number(key);',
+      '        if (shutMap[id]) {',
+      '          if (!claimShut.has(id)) { delete applied[id]; }',
+      '        } else if (!explicitOpen.has(id)) { open.push(id); }',
+      '      });',
+      '    }',
+      '    for (var j = 0; j < open.length; j++) {',
       '      try {',
-      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(v.open[j]));',
+      '        var door = open[j];',
+      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(door));',
       // OFF THE PUBLISHED LIST BEFORE IT OPENS (#2680). The front plugin
       // reads a door on __thornswoodPropertyShut that opens as a pick, so
       // a door this script opens is taken off the list first.
-      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[v.open[j]]; } } catch (e3) { }',
-      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) { }',
-      '          if (shut !== false) { o.lock(false, false); } }',
-      '        delete shutMap[v.open[j]];',
+      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[door]; } } catch (e3) { }',
+      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) {',
+      '            if (explicitOpen && !explicitOpen.has(door)) { continue; }',
+      '          }',
+      '          if (shut !== false) { o.lock(false, false); }',
+      '          if (applied) { delete applied[door]; } }',
+      '        delete shutMap[door];',
       '      } catch (e) { }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
@@ -2198,6 +2341,7 @@
         (pass || wayOut(doors[i]) ? open : shut).push(id);
       }
     }
+    var claimShut = shut.slice();
     cellLists(profileId, shut, open);
     /*
       AND THE BUILDINGS THIS CHARACTER HOLDS, as their interior cells (#6883),
@@ -2213,7 +2357,7 @@
         if (cid) { own.push(cid); }
       }
     }
-    return { shut: shut, open: open, own: own };
+    return { shut: shut, open: open, own: own, claimShut: claimShut };
   }
 
   /*
@@ -8480,7 +8624,7 @@
       return claimAway(parts, actorId, profileId, toProfile);
     }
     // A Jarl gives or takes an office of their hold (#2551): the Office page sends it.
-    if (word === '/office') { return officeCmd(parts, actorId, profileId, toProfile); }
+    if (word === '/office') { return officeCmd(parts, actorId, profileId, toProfile, cmd); }
     if (word === '/evict') { return evict(actorId, profileId, toProfile, cmd); }
     // The world's card on the Office page, for staff (#513): the world stage block answers it.
     if (word === '/world') {
@@ -8630,9 +8774,11 @@
     return true;
   }
 
-  function officeCmd(parts, actorId, profileId, toProfile) {
+  function officeCmd(parts, actorId, profileId, toProfile, cmd) {
     var office = String((parts && parts[1]) || '').toLowerCase();
     if (office === 'hold') { return officeHoldHere(parts, actorId, profileId, toProfile); }
+    // A steward grants the free building at the door (#6894). See grant.
+    if (office === 'grant') { return grant(parts, actorId, profileId, toProfile, cmd); }
     var hold = String((parts && parts[2]) || '').toLowerCase();
     var arg = String((parts && parts[3]) || '').trim();
     if (!Object.prototype.hasOwnProperty.call(OFFICE_GIVEN, office) ||
@@ -8972,6 +9118,12 @@
                     // Who owes rent here, the holder and anybody before them (#3893),
                     // each with Rent paid beside them (#3895).
                     owing: rentOwing(building) };
+      // Who in the world a free building may be granted to (#6894), not the
+      // steward themselves: a steward's own property is their own claim.
+      if (!held && (ours || staff)) {
+        view.door.grant = order.filter(function (op) { return op !== pid; })
+          .map(function (op) { return { pid: op, name: names[op] }; }).sort(byName).slice(0, OFFICE_PEOPLE_MAX);
+      }
     }
     // The boards are a steward's own hold's; staff are no steward.
     if (!view.steward) { return view; }

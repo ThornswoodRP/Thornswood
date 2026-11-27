@@ -9410,58 +9410,22 @@ function benchGate(actorId, baseDesc) {
 }
 
 /*
-  The handle, and which recipes want one. Argued for at the call in mp.onCraft.
+  THE CHARCOAL AND THE HANDLE ARE IN THE RECIPES (#1398, #6726).
 
-  Keyed off the family the recipe table already puts on every owned row, so this
-  list is checked against real data rather than against a memory of what Skyrim
-  contains: game\tests\test-1398-fuel.js counts the rows in each of these families and fails if
-  a family here matches nothing, because a family name that has been renamed
-  under it would turn this rule off without a word.
+  docs/systems/professions/smith.md: every forge, skyforge and smelter
+  recipe burns one charcoal of the grade its metal asks for, and a war axe,
+  a battleaxe, a warhammer and a mace take a Tool Handle as well. Until
+  #6726 the server took both after the craft, so the game's own list never
+  named them and a tester only learned of them from a line in chat.
+  Patrick's B on #6726: they are inputs on the records, so the list shows
+  them and the engine takes them like any other input, from the pack or the
+  bench's stock. scripts/dev/Build-FuelTable.js says which recipe takes
+  which (FUEL_BY_RECIPE), scripts/mods/Build-LastPlugin.py writes them into
+  every recipe it copies, and a recipe of a plugin it never copies takes
+  them in each person's game (RECIPES_SET_IN_GAME, below). The
+  Charcoal grade is Skyrim's own Charcoal, which the Charburner's kiln
+  makes.
 */
-const HANDLE_DESC = '15490:Thornswood-Content.esp';
-/*
-  CHARCOAL FOR THE FIRE, BY GRADE (#1398).
-
-  docs/systems/professions/smith.md: "Every forge and every skyforge burns one
-  charcoal. No charcoal of the grade the metal asks for, the piece is not
-  made." Then the grade table, the smelter at the same grade as its metal, and
-  the skyforge one grade poorer. Which grade each recipe asks for is
-  FUEL_BY_RECIPE below, worked out of game\data\recipes.json by
-  scripts\dev\Build-FuelTable.js, because the rows the server carries name
-  neither their bench nor their metal. The rule before this read a bench off
-  the row, no installed row carries one, and so no forge took any charcoal.
-
-  The same shape as the handle: not an ingredient on the record, which would
-  couple this to every smithing plugin, but taken here once the craft is
-  allowed.
-
-  THE GRADE THE TABLE NAMES, AND ONLY THAT GRADE. It used to burn the cheapest
-  piece in the pack, Poor Charcoal first, whatever the metal. A hotter grade
-  is not burned in place of the one asked for: the page says no charcoal of
-  that grade, no piece. Skyrim's own Charcoal is the Charcoal grade, by its
-  name, as it was always taken here.
-*/
-const CHARCOAL_GRADES = [
-  null,
-  { name: 'Poor Charcoal', descs: [ITEMS.charcoalT1] },
-  { name: 'Charcoal', descs: [ITEMS.charcoalT2, ITEMS.charcoal] },
-  { name: 'Charcoal Briquette', descs: [ITEMS.charcoalT3] },
-  { name: 'Coke', descs: [ITEMS.charcoalT4] }
-];
-
-/* Written by scripts\dev\Build-FuelTable.js out of game\data\recipes.json into its table file:
-   every recipe at a forge, a skyforge or a smelter, which prints the counts.
-   Recipe desc -> [grade 1 to 4, the metal that asks for it or nothing, the bench]. */
-const FUEL_BY_RECIPE = table('FUEL_BY_RECIPE');
-
-/** The fuel a recipe burns, { grade, metal, bench }, or null when it burns none. */
-function fuelFor(recipeDesc) {
-  if (!Object.prototype.hasOwnProperty.call(FUEL_BY_RECIPE, recipeDesc)) { return null; }
-  const f = FUEL_BY_RECIPE[recipeDesc];
-  const grade = Number(f && f[0]);
-  if (!CHARCOAL_GRADES[grade]) { return null; }
-  return { grade: grade, metal: String(f[1] || ''), bench: String(f[2] || 'forge') };
-}
 
 /** How many of one item a pack holds, every stack of it counted. */
 function packCount(actorId, itemDesc) {
@@ -9475,57 +9439,6 @@ function packCount(actorId, itemDesc) {
     if (entries[i] && entries[i].baseId === baseId) { n += Number(entries[i].count) || 0; }
   }
   return n;
-}
-
-/** The charcoal of exactly that grade in this pack, or '' when there is none. */
-function charcoalHeld(actorId, grade) {
-  const g = CHARCOAL_GRADES[grade];
-  if (!g) { return ''; }
-  for (let i = 0; i < g.descs.length; i++) {
-    if (g.descs[i] && packCount(actorId, g.descs[i]) > 0) { return g.descs[i]; }
-  }
-  return '';
-}
-
-/** What is said when the grade a piece asks for is not in the pack. */
-function fuelRefusal(fuel) {
-  const grade = CHARCOAL_GRADES[fuel.grade].name;
-  const metal = fuel.metal.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
-  let first;
-  if (fuel.bench === 'smelter') {
-    first = metal ? 'Smelting ' + metal + ' burns ' + grade : 'A smelter burns ' + grade;
-  } else {
-    const at = fuel.bench === 'skyforge' ? 'the skyforge' : 'a forge';
-    first = metal ? metal + ' at ' + at + ' burns ' + grade
-                  : (fuel.bench === 'skyforge' ? 'The skyforge' : 'A forge') + ' burns ' + grade;
-  }
-  return first + ', and you have none. A Charburner makes it from firewood at a kiln.';
-}
-
-/*
-  The four hafted families on the smith page: a war axe, a battleaxe, a
-  warhammer and a mace are a metal head on a wooden haft. Other weapons was
-  on this list too, and in the table that family is the woodcutter's axe and
-  the drum, the flute and the lute, so the instruments were asked for a
-  handle (#1398). An instrument is not a haft.
-*/
-const HAFTED_FAMILIES = ['War axes', 'Battleaxes', 'Warhammers', 'Maces'];
-
-/** True when this recipe makes something fitted to a wooden handle. */
-function wantsAHandle(row) {
-  if (!row || typeof row !== 'object') { return false; }
-  // The three tools ask for a handle in the records, so the rule must not ask
-  // for a second one. Their outputs are the ones TOOLS names.
-  const out = String(row.out || '');
-  for (const key in TOOLS) {
-    if (!Object.prototype.hasOwnProperty.call(TOOLS, key)) { continue; }
-    if (TOOLS[key].give === out) { return false; }
-  }
-  const family = String(row.family || '');
-  for (let i = 0; i < HAFTED_FAMILIES.length; i++) {
-    if (HAFTED_FAMILIES[i] === family) { return true; }
-  }
-  return false;
 }
 
 /*
@@ -10469,7 +10382,7 @@ function handRecipesHidden(actorId) {
   a craft at the new counts matches no record and arrives with no recipe id.
   recipeSetInGame names the recipe from its output, its bench and exactly the
   new counts, and onCraft treats it as that recipe from there: the same gate,
-  charcoal, handle and credit as any other. A craft at the mod's own counts,
+  tool and credit as any other. A craft at the mod's own counts,
   from a game that has not set the new ones yet, matches the record and is
   refused, so nobody pays the coins or the old counts.
 
@@ -10477,8 +10390,27 @@ function handRecipesHidden(actorId) {
 */
 // Written by scripts\dev\Build-Recost.py from game\data\recost.json into its table file.
 // The re-costed recipes of a plugin Thornswood-Last.esp never copies from (#613, #2454),
-// set in each person's game instead: each input as [item, count it had, count it asks].
+// and its forge, skyforge and smelter ones given their charcoal and handle (#6726),
+// set in each person's game instead: each input as [item, count it had, count it asks],
+// an input the record does not name after the ones it does, with 0 for what it had.
 var RECIPES_SET_IN_GAME = table('RECIPES_SET_IN_GAME');
+
+/*
+  THE CHARCOAL AND THE HANDLE IN EACH GAME TOO (#6726).
+
+  Thornswood-Last.esp writes the charcoal and the handle into every forge,
+  skyforge and smelter recipe it copies (the block at the top of this file).
+  Immersive Armors' are never copied (#2454), so Build-Recost.py puts each
+  of those in RECIPES_SET_IN_GAME as well, with the charcoal and the handle
+  as inputs on top of its counts. One its record does not name has 0 for
+  the count it had, and each person's game adds it to its own copy of the
+  record with the fork's TESModPlatform.SetCraftingInput, which SKSE's
+  ConstructibleObject has no call for. Its craft then matches no server
+  record, as a re-costed one does, and recipeSetInGame names it from its
+  output, its bench and the counts with the charcoal and handle in them. A
+  craft at the record's own counts, from a game that has not added them, is
+  refused, so nobody makes one without them.
+*/
 
 var RECIPE_COUNTS_PROPERTY = 'thornswoodRecipeCounts';
 // One stamp per load, so a deploy that changes the table hands it again.
@@ -10504,9 +10436,18 @@ function recipeCountsScript() {
     // A plugin this game does not have lists nothing, so there is nothing to set.
     '      if (!cobj) { continue; }',
     '      var inputs = v.rows[key];',
-    '      if (cobj.getNumIngredients() !== inputs.length) { continue; }',
+    // The inputs the record names come first; the ones it does not (had 0)
+    // are added after them, so a game that added them already has them all.
+    '      var named = 0;',
+    '      while (named < inputs.length && inputs[named][1] > 0) { named++; }',
+    '      var num = cobj.getNumIngredients();',
+    '      if (num !== named && num !== inputs.length) { continue; }',
+    // A client from before the fork's SetCraftingInput cannot add one, so
+    // it leaves the recipe as its record has it, and the server refuses a
+    // craft at those counts (recipeMetadataRefusal).
+    '      if (named < inputs.length && !(sp.TESModPlatform && typeof sp.TESModPlatform.setCraftingInput === "function")) { continue; }',
     '      var same = true;',
-    '      for (var i = 0; i < inputs.length && same; i++) {',
+    '      for (var i = 0; i < num && same; i++) {',
     '        var item = formOf(inputs[i][0]);',
     '        var has = cobj.getNthIngredient(i);',
     '        var count = cobj.getNthIngredientQuantity(i);',
@@ -10514,8 +10455,13 @@ function recipeCountsScript() {
     '               (count === inputs[i][1] || count === inputs[i][2]);',
     '      }',
     '      if (!same) { continue; }',
-    '      for (var n = 0; n < inputs.length; n++) {',
+    '      for (var n = 0; n < named; n++) {',
     '        if (cobj.getNthIngredientQuantity(n) !== inputs[n][2]) { cobj.setNthIngredientQuantity(inputs[n][2], n); }',
+    '      }',
+    // SetCraftingInput sets the count, so asking again changes nothing.
+    '      for (var m = named; m < inputs.length; m++) {',
+    '        var more = formOf(inputs[m][0]);',
+    '        if (more) { sp.TESModPlatform.setCraftingInput(formOf(key), more, inputs[m][2]); }',
     '      }',
     '    }',
     '  } catch (e) { }',
@@ -10652,9 +10598,10 @@ function recipeMovedInGame(craftedItemBaseId, workbenchId, inputs) {
     if (!own.call(RECIPES_MOVED_IN_GAME, desc)) { continue; }
     var row = RECIPES_MOVED_IN_GAME[desc];
     if (row.out !== outDesc || row.to !== benchKey) { continue; }
-    // A recipe whose counts are set in each game too is named by
-    // recipeSetInGame at its new counts, at this bench; its record's own
-    // counts are the ones that game refuses.
+    // A recipe whose counts are set in each game too (re-costed, or given
+    // its charcoal and handle) is named by recipeSetInGame at its new
+    // counts, at this bench; its record's own counts are the ones that game
+    // refuses.
     if (typeof RECIPES_SET_IN_GAME === 'object' && RECIPES_SET_IN_GAME && own.call(RECIPES_SET_IN_GAME, desc)) { continue; }
     var want = {};
     for (var n = 0; n < row.inputs.length; n++) {
@@ -11400,9 +11347,10 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     engine's eighth argument is what it is about to take from them. Asked
     again here, because the building may have changed hands since: a craft
     that draws on chests that are no longer theirs is refused, and nothing
-    leaves the pack or the chests. The charcoal and the handle below come
-    out of the same chests when the pack has none. An engine before fork
-    #116, or a person at a bench with no chests, gets the pack alone.
+    leaves the pack or the chests. The charcoal and the handle are inputs
+    on the record (#6726), so they come out of the same chests as any other
+    input when the pack has none. An engine before fork #116, or a person at
+    a bench with no chests, gets the pack alone.
   */
   const propForStock = globalThis.__thornswoodProperty;
   const stock = (propForStock && typeof propForStock.benchStock === 'function')
@@ -11511,41 +11459,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
   }
 
   /*
-    THE FUEL AND THE HANDLE ARE ASKED FOR BEFORE ANYTHING IS TAKEN (#1398), so
-    a refusal for one never costs the other, and a key is never named for a
-    craft that did not happen. They are taken below, once nothing can refuse.
-  */
-  const fuel = fuelFor(desc);
-  let coal = fuel ? charcoalHeld(actorId, fuel.grade) : '';
-  let coalFrom = actorId;
-  for (let i = 0; fuel && !coal && i < stock.from.length; i++) {
-    coal = charcoalHeld(stock.from[i], fuel.grade);
-    if (coal) { coalFrom = stock.from[i]; }
-  }
-  if (fuel && !coal) {
-    const no = fuelRefusal(fuel);
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', CHARCOAL_GRADES[fuel.grade].name);
-    return false;
-  }
-  const hafted = wantsAHandle(row);
-  let handleFrom = actorId;
-  for (let i = 0; hafted && packCount(handleFrom, HANDLE_DESC) < 1 && i < stock.from.length; i++) {
-    handleFrom = stock.from[i];
-  }
-  if (hafted && packCount(handleFrom, HANDLE_DESC) < 1) {
-    const no = 'A ' + String(row.name || 'that') + ' is fitted to a wooden handle and you ' +
-               'have none. A woodworker cuts them from firewood at a kiln.';
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no handle');
-    return false;
-  }
-  /*
-    THE TRADE'S TOOL (#3162), asked with the fuel and the handle, before
-    anything is taken, and worn below once the craft has gone through. The
-    tool is never an input: an input is taken, and a tool is held and wears.
+    THE TRADE'S TOOL (#3162), asked before anything is taken, and worn
+    below once the craft has gone through. The tool is never an input: an
+    input is taken, and a tool is held and wears.
   */
   const toolKey = benchToolKey(row);
   const noTool = toolKey ? toolGate(actorId, toolKey) : null;
@@ -11574,52 +11490,6 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     say(actorId, no);
     return false;
   }
-  /*
-    THE HANDLE, AND EVERY OTHER HAFTED THING.
-
-    Patrick, 21 September: the woodworker makes handles "that the smith needs
-    for Pickaxes, Shovels, Axes and other items that have wooden handles like
-    that". The pickaxe, the axe and the shovel ask for one in the records, which
-    is where a requirement belongs. The "other items" are the problem: there are
-    Counted rather than guessed, 21 September: 277 of the 3,439 owned rows in
-    tools
-ecipes.json are hafted, and 126 of those are rows the server is
-    actually asked about. They come out of Bethesda's five plugins and half a
-    dozen mods.
-
-    SO IT IS A RULE HERE RATHER THAN 277 OVERRIDES. Overriding another mod's
-    COBJ records couples this plugin to their versions: Immersive Weapons owns a
-    good number of these, and an override is a copy that goes stale silently the
-    day they change one. A rule keyed off the family already on every row covers
-    the same recipes, covers anything added later with no plugin edit at all,
-    and cannot go stale against a mod it has never heard of.
-
-    WHAT IT COSTS TO DO IT THIS WAY, said out loud because it is a real gap:
-    Build-RecipeTable ranks a row by what its INPUTS cost, and it reads inputs
-    out of the records. A handle required here is not in the records, so the
-    table does not know about it and the 269 rows are ranked as though the
-    handle were free. It is worth five gold and a novice woodworker's minute, so
-    the error is small, but it is an error and not a rounding.
-
-    THE FOUR FAMILIES. A haft is a shaft you hold in two hands or one, with the
-    weight at the end: war axes, battleaxes, warhammers and maces, the four the
-    smith page names. Other weapons was a fifth, and in the table it is the
-    woodcutter's axe, which names its handle in its own record, and the drum,
-    the flute and the lute, which are not hafted (#1398). Swords, greatswords
-    and daggers are a tang and a grip rather than a haft. Bows and staves are
-    wooden through and through, which is a different thing from having a
-    handle fitted to them, and a bow that wanted a handle would read as a
-    mistake to anybody holding one.
-  */
-  if (coal && !takeItem(coalFrom, coal, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the charcoal could not be taken');
-    return false;
-  }
-  if (hafted && !takeItem(handleFrom, HANDLE_DESC, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the handle could not be taken');
-    return false;
-  }
-
   // The skill that made the piece is the rank before this craft counts (#3151).
   const margin = qualityMargin(actorId, row);
   if (answer.credit) {
@@ -22622,6 +22492,11 @@ module.exports = {
         row.master = { for: Number(c.master.for), no: Number(c.master.no) };
       }
       if (Number.isSafeInteger(c.deed) && c.deed > 0) { row.deed = c.deed; }
+      // A steward's grant (#6894): who granted it and when, or it is the holder's own claim.
+      if (c.granted && typeof c.granted === 'object' && Number(c.granted.by) > 0) {
+        row.granted = { by: Number(c.granted.by), name: String(c.granted.name || 'somebody'),
+                        at: Number(c.granted.at) || at };
+      }
 
       out[k] = row;
       kept++;
@@ -24017,6 +23892,14 @@ module.exports = {
                            '. Take it up with them, or with the court.');
       return true;
     }
+    // One property of their own (#6894): a steward grants any more.
+    var own = ownClaimOf(profileId);
+    if (own) {
+      toProfile(profileId, 'You hold ' + nameOf(own) + ' already, and a character claims one property of their ' +
+                           'own. The Steward of ' + (HOLD_TOWN[holdOfBuilding(building)] || 'the hold') +
+                           ' can grant you ' + nameOf(building) + ' instead.');
+      return true;
+    }
     var who = 'somebody';
     try {
       var a = mp.get(actorId, 'appearance');
@@ -24066,6 +23949,113 @@ module.exports = {
                       : 'The deed could not be handed over, so say so in the dev channel. ') +
               (master ? masterHandedLine(building) + ' ' : '') +
               'Go in at least once every ' + lapseDays() + ' days or it goes back.');
+    return true;
+  }
+
+  /*
+    ONE PROPERTY OF THEIR OWN (#6894, Patrick, 26 Nov). One character
+    claimed two Whiterun farm plots and a tavern. A character claims one
+    property at its door; a steward grants any more (grant, below). So a
+    claim is refused while the character holds a building it did not get by
+    a steward's grant. A farm is no property claim: plots are farming's, and
+    a field on a held property answers to the house (claimCovering), so
+    its holder works every plot on it. A jail is held by its Jarl's office,
+    not as their own property, and does not count. A deed carried through
+    the door is no claim either: whoever presents it holds the place, and a
+    grant does not go with the deed, so the place counts for its new holder.
+    Claims made before the rule stay until they lapse or are evicted.
+  */
+  function ownClaimOf(profileId) {
+    for (var b in claims) {
+      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
+      var c = claims[b];
+      if (c.by !== profileId || c.granted || jailOfBuilding(b) || !holderOf(b)) { continue; }
+      return b;
+    }
+    return null;
+  }
+
+  /*
+    A STEWARD GRANTS A BUILDING (#6894). At the door of a building nobody
+    holds in their own hold, the Office page of K lists who is in the world
+    with Grant beside each, which sends /office grant <profile>. The
+    building is claimed for that person as their own claim would claim it:
+    a new deed number, the deed and the master key in their pack, the ground
+    outside the door, the same lapse. It is marked granted, so it is not the
+    one property they claim themselves. Staff grant at any door, as they
+    evict, and it goes in the staff log.
+  */
+  function grant(parts, actorId, profileId, toProfile, cmd) {
+    var building = here(actorId);
+    if (!building) {
+      toProfile(profileId, OFFICE_AT_DOOR);
+      return true;
+    }
+    var how = settleAs(profileId, building, cmd);
+    if (!how.as) {
+      toProfile(profileId, how.why);
+      return true;
+    }
+    var pid = Number((parts && parts[2]) || 0) || 0;
+    var them = (pid > 0 && Math.floor(pid) === pid && pid !== profileId) ? onlineActorOf(pid) : 0;
+    if (!them) {
+      toProfile(profileId, 'Pick somebody in the world on the Office page of K.');
+      return true;
+    }
+    var accordGrant = globalThis.__thornswoodEmbassy;
+    if (accordGrant && accordGrant.holds(building)) {
+      toProfile(profileId, accordGrant.CLAIM_REFUSED);
+      return true;
+    }
+    var whoName = personName(them);
+    if (!mayHold(them, pid, building)) {
+      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
+      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' + jailTown + ' holds it.');
+      return true;
+    }
+    var held = holderOf(building);
+    if (held) {
+      toProfile(profileId, nameOf(building) + ' is held by ' + held.name + '. End that claim first to grant it.');
+      return true;
+    }
+    var deed = deedCut + 1;
+    if (!Number.isSafeInteger(deed)) {
+      plog('could not number a new deed for', nameOf(building));
+      toProfile(profileId, 'The register could not number the deed. Ask staff to check it.');
+      return true;
+    }
+    var now = Date.now();
+    var by = personName(actorId);
+    claims[building] = { by: pid, name: whoName, at: now, touched: now, locked: false,
+                         ground: groundHere(actorId), deed: deed,
+                         granted: { by: profileId, name: by, at: now } };
+    deedCut = deed;
+    if (!save()) {
+      delete claims[building];
+      deedCut--;
+      toProfile(profileId, 'The register could not save the grant. Ask staff to check it.');
+      return true;
+    }
+    pushAll();
+    var handed = giveDeed(them, building);
+    var master = handed ? issueMaster(them, building, claims[building]) : 0;
+    if (how.as === 'staff') {
+      staffRecord('grant', actorId, profileId, building, claims[building], settleWhere(building));
+    }
+    plog(by, how.as === 'staff' ? 'as staff' : 'as steward', 'granted', nameOf(building), 'to', whoName,
+         '(profile ' + pid + ')', handed ? 'with the deed' : 'and no deed could be handed over',
+         master ? 'and master key no. ' + master : '');
+    toProfile(profileId, 'You grant ' + nameOf(building) + ' to ' + whoName + '.' +
+              (handed ? ' The deed is in their pack.' : ' The deed could not be handed over, so say so in the dev channel.') +
+              (how.as === 'staff' ? ' It is in the staff log.' : ''));
+    toProfile(pid, by + ' grants you ' + nameOf(building) + '. ' +
+              (handed ? 'The deed is in your pack. Whoever carries it holds the place, ' +
+                        'so keep it somewhere a thief will not look. '
+                      : 'The deed could not be handed over, so say so in the dev channel. ') +
+              (master ? masterHandedLine(building) + ' ' : '') +
+              'Go in at least once every ' + lapseDays() + ' days or it goes back.');
+    redrawPanel(actorId);
+    redrawPanel(them);
     return true;
   }
 
@@ -24180,10 +24170,15 @@ module.exports = {
       // and expensive. Failing that way round is the right one: a door that
       // is not locked is a house anybody can walk into.
       '    var sp = ctx.sp;',
+      // Only undo locks this script put on an unlocked ordinary claim door.
+      // The jail list and a lock already present in the game are not ours.
+      '    var claimShut = Array.isArray(v.claimShut) ? new Set(v.claimShut) : null;',
+      '    var applied = st && claimShut ? (st.thornswoodClaimLocks || (st.thornswoodClaimLocks = {})) : null;',
       // Remember which form ids property wants shut (#615), published for
       // anything on the client that asks whether a door is property's to hold.
       '    var shutMap = {};',
       '    for (var i = 0; i < v.shut.length; i++) {',
+      '      shutMap[v.shut[i]] = true;',
       '      try {',
       '        var r = sp.ObjectReference.from(sp.Game.getFormEx(v.shut[i]));',
       // A door in a cell nobody has loaded does not resolve, and there is
@@ -24196,20 +24191,38 @@ module.exports = {
       // is a stutter on each heartbeat. If isLocked cannot be read the door
       // is locked anyway, so this fails shut.
       '        if (r) { var was = null; try { was = r.isLocked(); } catch (e2) { }',
-      '          if (was !== true) { r.lock(true, false); } }',
-      '        shutMap[v.shut[i]] = true;',
+      '          if (was !== true) {',
+      '            r.lock(true, false);',
+      '            if (was === false && applied && claimShut.has(v.shut[i])) { applied[v.shut[i]] = true; }',
+      '          } }',
       '      } catch (e) { }',
       '    }',
-      '    for (var j = 0; j < (v.open || []).length; j++) {',
+      // A claim removed from the register no longer contributes an open
+      // entry. Restore the lock we applied once its reference is available.
+      '    var open = (v.open || []).slice();',
+      '    var explicitOpen = applied ? new Set(open) : null;',
+      '    if (applied) {',
+      '      Object.keys(applied).forEach(function (key) {',
+      '        var id = Number(key);',
+      '        if (shutMap[id]) {',
+      '          if (!claimShut.has(id)) { delete applied[id]; }',
+      '        } else if (!explicitOpen.has(id)) { open.push(id); }',
+      '      });',
+      '    }',
+      '    for (var j = 0; j < open.length; j++) {',
       '      try {',
-      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(v.open[j]));',
+      '        var door = open[j];',
+      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(door));',
       // OFF THE PUBLISHED LIST BEFORE IT OPENS (#2680). The front plugin
       // reads a door on __thornswoodPropertyShut that opens as a pick, so
       // a door this script opens is taken off the list first.
-      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[v.open[j]]; } } catch (e3) { }',
-      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) { }',
-      '          if (shut !== false) { o.lock(false, false); } }',
-      '        delete shutMap[v.open[j]];',
+      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[door]; } } catch (e3) { }',
+      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) {',
+      '            if (explicitOpen && !explicitOpen.has(door)) { continue; }',
+      '          }',
+      '          if (shut !== false) { o.lock(false, false); }',
+      '          if (applied) { delete applied[door]; } }',
+      '        delete shutMap[door];',
       '      } catch (e) { }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
@@ -24536,6 +24549,7 @@ module.exports = {
         (pass || wayOut(doors[i]) ? open : shut).push(id);
       }
     }
+    var claimShut = shut.slice();
     cellLists(profileId, shut, open);
     /*
       AND THE BUILDINGS THIS CHARACTER HOLDS, as their interior cells (#6883),
@@ -24551,7 +24565,7 @@ module.exports = {
         if (cid) { own.push(cid); }
       }
     }
-    return { shut: shut, open: open, own: own };
+    return { shut: shut, open: open, own: own, claimShut: claimShut };
   }
 
   /*
@@ -30818,7 +30832,7 @@ module.exports = {
       return claimAway(parts, actorId, profileId, toProfile);
     }
     // A Jarl gives or takes an office of their hold (#2551): the Office page sends it.
-    if (word === '/office') { return officeCmd(parts, actorId, profileId, toProfile); }
+    if (word === '/office') { return officeCmd(parts, actorId, profileId, toProfile, cmd); }
     if (word === '/evict') { return evict(actorId, profileId, toProfile, cmd); }
     // The world's card on the Office page, for staff (#513): the world stage block answers it.
     if (word === '/world') {
@@ -30968,9 +30982,11 @@ module.exports = {
     return true;
   }
 
-  function officeCmd(parts, actorId, profileId, toProfile) {
+  function officeCmd(parts, actorId, profileId, toProfile, cmd) {
     var office = String((parts && parts[1]) || '').toLowerCase();
     if (office === 'hold') { return officeHoldHere(parts, actorId, profileId, toProfile); }
+    // A steward grants the free building at the door (#6894). See grant.
+    if (office === 'grant') { return grant(parts, actorId, profileId, toProfile, cmd); }
     var hold = String((parts && parts[2]) || '').toLowerCase();
     var arg = String((parts && parts[3]) || '').trim();
     if (!Object.prototype.hasOwnProperty.call(OFFICE_GIVEN, office) ||
@@ -31310,6 +31326,12 @@ module.exports = {
                     // Who owes rent here, the holder and anybody before them (#3893),
                     // each with Rent paid beside them (#3895).
                     owing: rentOwing(building) };
+      // Who in the world a free building may be granted to (#6894), not the
+      // steward themselves: a steward's own property is their own claim.
+      if (!held && (ours || staff)) {
+        view.door.grant = order.filter(function (op) { return op !== pid; })
+          .map(function (op) { return { pid: op, name: names[op] }; }).sort(byName).slice(0, OFFICE_PEOPLE_MAX);
+      }
     }
     // The boards are a steward's own hold's; staff are no steward.
     if (!view.steward) { return view; }
@@ -33691,6 +33713,15 @@ module.exports = {
     on that life until somebody searches it or the actor stands back up.
     A camp enemy carries a little. Anything good on any other body is rare.
     A person is not searched. A hunter carcass stays on the hunter path.
+
+    NO BODY IS EVER EMPTY (#6715). Patrick, 26 Nov 2026, after a tester
+    searched two bandits in Embershard Mine and was told both times that
+    there was nothing on the body: "nothing should ever drop nothing atleast
+    something small or common or whatever". The wild odds left about seven
+    bodies in ten with nothing at all, so a roll that comes up with no coin
+    and no item takes one common supply (the tier 1 list: a lockpick, salt,
+    bone meal, a strip of leather, bread and the like). The odds of anything
+    better are as they were.
   */
   var BODY_CAMP = { gold: 0.80, goldN: 6, minor: 0.65, decent: 0.08, good: 0.015, rare: 0.002 };
   var BODY_WILD = { gold: 0.20, goldN: 4, minor: 0.12, decent: 0.02, good: 0.005, rare: 0.0005 };
@@ -33802,6 +33833,7 @@ module.exports = {
     if (rng() < odds.decent) pushPick(items, pickWeighted(supplyExact(2), rng));
     if (rng() < odds.good) pushPick(items, pickWeighted(gearOrNovice(), rng));
     if (rng() < odds.rare) pushPick(items, pickWeighted(rarePile(), rng));
+    if (!gold && !items.length) pushPick(items, pickWeighted(supplyExact(1), rng));
     return { gold: gold, items: mergeItems(items), camp: !!camp };
   }
 
@@ -53629,9 +53661,12 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
                  takes twenty to notice is not a fire.
 
       IT CANNOT RUN AWAY WITH ITSELF. Somebody who catches it becomes a source
-      in their own right, which is what "spread" means, but the burn is on a
-      clock and the radius is small, so a crowd standing shoulder to shoulder
-      in a bonfire is the worst it gets and that is a decision they made.
+      in their own right, which is what "spread" means, but a fire is never
+      caught back by anybody it already came through (burnFrom, #6722). The
+      clock alone did not stop it: each catch started a new one, so two
+      people at a fire handed it back and forth until both were dead. Now a
+      fire goes out once it has been through everybody standing there, and
+      only somebody still in the coals keeps setting their neighbours alight.
     */
     burn: { spread: 220, catches: 5000, every: 2000 },
 
@@ -57147,6 +57182,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   var burning = {};        // actorId -> when they last said they were alight
   var burnIdentities = {}; // actorId -> profile, current runtime and life
   var burnStarts = {};     // actual start, independent of whether needs saved
+  /*
+    WHO A FIRE HAS ALREADY BEEN THROUGH (#6722). Each person alight carries
+    the list of people their fire came through: empty for a fire of their own
+    (the coals), the giver's list and the giver for one caught from somebody.
+    A fire is never caught by anybody on its own list. Before this a fire
+    caught from a neighbour was caught back by them once their own had gone
+    out, and back again, so two or three people standing together at a fire
+    kept setting each other alight, 7 health a second, until they died. The
+    list only grows along a chain, so every chain ends, and walking into the
+    coals again is a new fire with an empty list.
+  */
+  var burnFrom = {};       // actorId -> the ids this person's fire came through
+  var burnCaught = {};     // actorId -> { from: list, at } of a catch not yet reported
 
   function burnIdentity(actorId, savedOnly) {
     try {
@@ -57183,6 +57231,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       delete burning[actorId];
       delete burnIdentities[actorId];
       delete burnStarts[actorId];
+      delete burnFrom[actorId];
       publishBurnVisual(actorId, false);
     }
     if (bankHeat) { pushEffects(actorId); }
@@ -57196,7 +57245,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       // A new fire cannot warm the time before the report. A heartbeat also
       // banks the old interval before extending its deadline.
       settle(actorId);
-      if (!wasBurning) { burnStarts[actorId] = Date.now(); }
+      if (!wasBurning) {
+        burnStarts[actorId] = Date.now();
+        // Caught from somebody, the report after the catch: that fire's
+        // list. Anything else is a fire of their own.
+        var got = burnCaught[actorId];
+        burnFrom[actorId] = (got && Date.now() - got.at <= NEEDS.burn.every * 3) ? got.from : [];
+      }
+      delete burnCaught[actorId];
       burning[actorId] = Date.now();
       burnIdentities[actorId] = identity;
       publishBurnVisual(actorId, true);
@@ -57205,7 +57261,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /** Tell one person's client to catch fire for a while. */
-  function catchFire(actorId, ms, why) {
+  function catchFire(actorId, ms, why, from) {
+    if (from) { burnCaught[actorId] = { from: from, at: Date.now() }; }
     try {
       mp.set(actorId, BURN_PROPERTY, {
         ms: Number(ms) || NEEDS.burn.catches,
@@ -57242,11 +57299,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         hereCell = String(mp.get(who, 'worldOrCellDesc') || '');
       } catch (e) { continue; }
       if (!herePos) { continue; }
+      var came = burnFrom[who] || [];
       for (var j = 0; j < online.length; j++) {
         var them = online[j];
         if (them === who) { continue; }
         // Already alight, so there is nothing to catch.
         if (burning[them]) { continue; }
+        // This fire already came through them (#6722).
+        if (came.indexOf(them) !== -1) { continue; }
         try {
           if (String(mp.get(them, 'worldOrCellDesc') || '') !== hereCell) { continue; }
           var p = mp.get(them, 'pos');
@@ -57254,7 +57314,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           var dx = p[0] - herePos[0], dy = p[1] - herePos[1], dz = p[2] - herePos[2];
           if ((dx * dx + dy * dy + dz * dz) > reach) { continue; }
         } catch (e) { continue; }
-        catchFire(them, NEEDS.burn.catches, 'caught');
+        catchFire(them, NEEDS.burn.catches, 'caught', came.concat([who]));
         nlog('fire spread from', who.toString(16), 'to', them.toString(16));
       }
     }
@@ -57488,7 +57548,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   // ==== HAIR_DYES ====
   /* Built by scripts\dev\Build-HairDyeGamemode.js out of game\data\hair-dyes.json and
      game\hair-dye.js. Do not hand edit: change those two and run it again. */
-  var HAIR_DYES = {"about":"Hair dye (#2675). The staff's list: what a dye is carried as, where and how long it steeps, how close you stand to dye somebody else's hair, who may steep, and each dye's colour and what it takes. game/hair-dye.js reads it and names none of it. docs/systems/hair-dye.md says what each field does.","item":"98626:Skyrim.esm","steepSeconds":60,"steepAt":"a5cb3:Skyrim.esm","reach":300,"who":{"anyone":false,"halves":{"haberdasher":"novice","liverywright":"novice"}},"dyes":[{"id":"black","name":"Black Hair Dye","colour":"#1b1918","strength":0.75,"wander":10,"inputs":[{"item":"15482:Thornswood-Content.esp","count":1},{"item":"16e26:Dragonborn.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"brown","name":"Brown Hair Dye","colour":"#4a3020","strength":0.6,"wander":14,"inputs":[{"item":"5076e:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"red","name":"Red Hair Dye","colour":"#7a2418","strength":0.55,"wander":16,"inputs":[{"item":"1b3bd:Skyrim.esm","count":2},{"item":"77e1d:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"deep-red","name":"Deep Red Hair Dye","colour":"#5a1014","strength":0.6,"wander":12,"inputs":[{"item":"4da20:Skyrim.esm","count":1},{"item":"b701a:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"gold","name":"Gold Hair Dye","colour":"#b8945a","strength":0.5,"wander":14,"inputs":[{"item":"4b0ba:Skyrim.esm","count":2},{"item":"2a78:Dawnguard.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"copper","name":"Copper Hair Dye","colour":"#a4512a","strength":0.55,"wander":16,"inputs":[{"item":"889a2:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"blue","name":"Blue Hair Dye","colour":"#2b3f6e","strength":0.5,"wander":18,"inputs":[{"item":"77e1c:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"purple","name":"Purple Hair Dye","colour":"#4e2c5e","strength":0.5,"wander":18,"inputs":[{"item":"77e1e:Skyrim.esm","count":2},{"item":"45c28:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"nightshade","name":"Nightshade Hair Dye","colour":"#2a1a30","strength":0.65,"wander":10,"inputs":[{"item":"516c8:Skyrim.esm","count":1},{"item":"2f44c:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"green","name":"Green Hair Dye","colour":"#3d5a2c","strength":0.5,"wander":18,"inputs":[{"item":"57f91:Skyrim.esm","count":2},{"item":"134aa:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"hair-wash","name":"Hair Wash","wash":true,"strength":0.6,"wander":6,"inputs":[{"item":"34cdd:Skyrim.esm","count":1},{"item":"34cdf:Skyrim.esm","count":1},{"item":"3f7f8:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]}]};
+  var HAIR_DYES = {"about":"Hair dye (#2675). The staff's list: what a dye is carried as, where and how long it steeps, how close you stand to dye somebody else's hair, who may steep, and each dye's colour and what it takes. game/hair-dye.js reads it and names none of it. docs/systems/hair-dye.md says what each field does.","item":"98626:Skyrim.esm","steepSeconds":60,"steepAt":"a5cb3:Skyrim.esm","reach":300,"who":{"anyone":false,"halves":{"haberdasher":"novice","liverywright":"novice"}},"dyes":[{"id":"black","name":"Black Hair Dye","colour":"#1b1918","strength":0.75,"wander":10,"inputs":[{"item":"33760:Skyrim.esm","count":1},{"item":"16e26:Dragonborn.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"brown","name":"Brown Hair Dye","colour":"#4a3020","strength":0.6,"wander":14,"inputs":[{"item":"5076e:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"red","name":"Red Hair Dye","colour":"#7a2418","strength":0.55,"wander":16,"inputs":[{"item":"1b3bd:Skyrim.esm","count":2},{"item":"77e1d:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"deep-red","name":"Deep Red Hair Dye","colour":"#5a1014","strength":0.6,"wander":12,"inputs":[{"item":"4da20:Skyrim.esm","count":1},{"item":"b701a:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"gold","name":"Gold Hair Dye","colour":"#b8945a","strength":0.5,"wander":14,"inputs":[{"item":"4b0ba:Skyrim.esm","count":2},{"item":"2a78:Dawnguard.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"copper","name":"Copper Hair Dye","colour":"#a4512a","strength":0.55,"wander":16,"inputs":[{"item":"889a2:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"blue","name":"Blue Hair Dye","colour":"#2b3f6e","strength":0.5,"wander":18,"inputs":[{"item":"77e1c:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"purple","name":"Purple Hair Dye","colour":"#4e2c5e","strength":0.5,"wander":18,"inputs":[{"item":"77e1e:Skyrim.esm","count":2},{"item":"45c28:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"nightshade","name":"Nightshade Hair Dye","colour":"#2a1a30","strength":0.65,"wander":10,"inputs":[{"item":"516c8:Skyrim.esm","count":1},{"item":"2f44c:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"green","name":"Green Hair Dye","colour":"#3d5a2c","strength":0.5,"wander":18,"inputs":[{"item":"57f91:Skyrim.esm","count":2},{"item":"134aa:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"hair-wash","name":"Hair Wash","wash":true,"strength":0.6,"wander":6,"inputs":[{"item":"34cdd:Skyrim.esm","count":1},{"item":"34cdf:Skyrim.esm","count":1},{"item":"3f7f8:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]}]};
   var HAIR_DYE = (function () {
   var module = { exports: {} };
 'use strict';
@@ -69992,6 +70052,12 @@ const INVENTORY=typeof MERCHANT_SETTLEMENT!=='undefined'?MERCHANT_SETTLEMENT:req
 const copy=value=>JSON.parse(JSON.stringify(value));
 const hash=value=>require('node:crypto').createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Published jobs remain routable while their accepted promises exist.
+// A published job whose goods nothing makes any more is retired by taking it
+// off this list, and given a new id when it comes back with other goods: the
+// four woodworker parcels that asked for Thornswood's Charcoal went when the
+// kiln began making Skyrim's own (#6726), and came back as the four
+// *-charcoal-parcel ids. A retired job is not finished for anybody who had
+// accepted it.
 const publication=Object.freeze({
  'q-whiterun-smith-straps':'8f03bdc903aaf1e37727f54a3e49bfdea5a2b817bc7534ba0111c88d25502734',
  'q-rift-woodworker-hunt-arrows':'84b31663cd265c9b26068ff7343622f04b332ddce394e58b52a55b0b6cbb3a89',
@@ -70074,7 +70140,7 @@ const publication=Object.freeze({
  'q-markarth-smith-expert-parcel':'9f8a055c39abe1c6da78e026d06439129cb9209423504f58d10aab4011fd5a2d',
  'q-markarth-smith-master-parcel':'f9b1854ae2954c03148c0953b29b7f03077aee9842b9a0405a4340d8ff388bec',
  'q-markarth-woodworker-novice-parcel':'8a14d28f769296a7779f86bfe78517a8388e58d86feded698a791cbcefe9538e',
- 'q-markarth-woodworker-advanced-parcel':'83dc5ab0d102b917460dc3ad68b39b8ea25dffaf511f6f0b520356b6b3dd931b',
+ 'q-markarth-woodworker-advanced-charcoal-parcel':'962355eff1861bf51f5bc4f9efa9cacf392b60d0ebadc7a26d3f231f2c09a3cc',
  'q-markarth-woodworker-expert-parcel':'2bdfa338694777b2af3bf7dad169013e990a12f7b92c1c3bc3fb417b0eff8c69',
  'q-markarth-woodworker-master-parcel':'8378ba65a73153a84b4a6dbde433ed97caf1cbd4d3e4167ce52bc5fe8da8c538',
  'q-markarth-tailor-novice-parcel':'41d6dcf835ba00f47aad39321873750c027453c2f72770f22ac49665b6d7c42b',
@@ -70122,7 +70188,7 @@ const publication=Object.freeze({
  'q-morthal-smith-expert-parcel':'419ddedc579950eee90774f768d1b51574f440c2453a2b703f03da5d114355e9',
  'q-morthal-smith-master-parcel':'00d8e6292fbb97467975120876fed4b80579849c1d8ac6c4b2748340c48ae6fd',
  'q-morthal-woodworker-novice-parcel':'1826e4d2d9f8f54abfc7d117dee2a025d9ed97bea817310f72df3509a6e79c41',
- 'q-morthal-woodworker-advanced-parcel':'51ce93d15b6ba610a43424b4a32dc4ea099354575112aa27f0893d87327bdc69',
+ 'q-morthal-woodworker-advanced-charcoal-parcel':'21ee6794881ea168206bf0d18863483b2f7dc71051e331ffd2de7ac89ff1e38a',
  'q-morthal-woodworker-expert-parcel':'0dc1b3f60331ccec3ef609a166dbaf47ff8196d31ebc49b3d780759272cd0f40',
  'q-morthal-woodworker-master-parcel':'189e472f274ba7a5fc2b9c537c23d1fb1a699c6963d4afdd9c0f28b4465ffa2d',
  'q-morthal-tailor-novice-parcel':'020ac422c90a12d91d074c53ab7f1a0e325ff4a85eb8c77bf9031d8a274c40a5',
@@ -70169,9 +70235,9 @@ const publication=Object.freeze({
  'q-winterhold-smith-expert-parcel':'75c5bceb51d5f24af727c4ee968774097754b7cc0f64f10cb415d58330cd7e60',
  'q-winterhold-smith-master-parcel':'59f73bf6d038034fa2c9ac65b1b85a6582c9502c77e512349ef309125969f02d',
  'q-winterhold-woodworker-novice-parcel':'c77c432bc1a72f7da71368a839140359f67880dcc6d2dd928ceee18091aa6339',
- 'q-winterhold-woodworker-advanced-parcel':'7362c2e1c85870d505ba5fad8413d5673fb99cb993b33f4bc09d6a82239f4840',
+ 'q-winterhold-woodworker-advanced-charcoal-parcel':'c39d9aeb843999b7beb1b35e4b1b2849c6bcb9452fee11d1716c677a2f75a0f6',
  'q-winterhold-woodworker-expert-parcel':'2b15efd43ad1a57ffa9519a592e41ee56062e220441bf7cdfd340bd1c359335b',
- 'q-winterhold-woodworker-master-parcel':'22941c4af6bd41eb6aa96c9f29085ea2605fdd89157f091d562305d1e9e5c184',
+ 'q-winterhold-woodworker-master-charcoal-parcel':'871497fa81b6059a848fff092cbea12b2ac78915e7aa0d1ffbd03b83558af572',
  'q-winterhold-tailor-novice-parcel':'4ddea61b68bc9451d942295376ebd20082dc472aa12f5e046cc9960548bf58c8',
  'q-winterhold-tailor-advanced-parcel':'1e25774626e32469e0dae4cf4e949f279d1d6e9f1839ac48a4753a7d7f5fb5e7',
  'q-winterhold-tailor-expert-parcel':'8322953574b8161b13669df1e8f973f9009418f806681e9ecf4ea8b3b8aa0518',
