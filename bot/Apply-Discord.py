@@ -799,12 +799,12 @@ PLAN = [
         topic='Drag the log in. Explain it after.', make=False),
  ]),
  ('In Character', [
-   # Where a playtester picks their hold, which opens that hold's category.
-   # The bot posts the buttons. It was the top of The Holds, which went when
+   # Where a playtester picks the holds whose categories they see, as many
+   # as they like (#7053). The bot posts the buttons. It was the top of The Holds, which went when
    # each hold got a category of its own (#3317).
    dict(kind='text', name='choose-your-hold', key='CHOOSE', mode='testersread',
-        topic="Pick your hold with the buttons below. It opens that hold's "
-              "channels.",
+        topic="Press a hold below to open its channels, and again to close "
+              "them. Pick as many as you like.",
         was=(('The Holds', 'choose-your-hold'),)),
    dict(kind='forum', name='character-introductions', key='CHARS', mode='open',
         topic='Who are you playing? One post each.'),
