@@ -90,11 +90,13 @@ yes('there are scripts to read them against, ' + scripts.length + ' of them', sc
 // what follows it.
 const CITE = /^((?:[\w.-]+[\\/])*)([\w.-]+\.(?:ps1|cs|js|py|md)|Caddyfile):([\s\S]+)$/i;
 const LINES = /^\s*\d[\d\s,-]*$/;
-// FEED.md left WIDE with #5608: the launcher reads no feed any more, so its
-// citations of launcher code are the record of what the launcher did, as
-// docs\archive is. Its .ps1 citations, the scripts that still write the feed
-// until #5783 takes it down, are checked as every page's are.
-const WIDE = ['docs/GAMEMODE.md', 'docs/GLOSSARY.md',
+// FEED.md left WIDE with #5608 and came back with #7383. The launcher reads
+// no feed any more, so most of its launcher names are the record of what the
+// launcher did; those are written as the file and the name apart
+// (`Updater.cs` `Pending`), which is no citation. A name written as one
+// (`GitHub.cs:AssetUrl`) says what today's launcher does, and #7383 found two
+// of those in "Checks on every download" naming code #5608 took out.
+const WIDE = ['docs/FEED.md', 'docs/GAMEMODE.md', 'docs/GLOSSARY.md',
   'docs/VIRUSTOTAL-FALSE-POSITIVE.md', 'docs/systems/commands.md'];
 function isScript(file) { return /\.ps1$/i.test(file); }
 
@@ -200,6 +202,18 @@ pages.forEach(function (p) {
   if (r.count) yes(p + ': every one of its ' + r.count + ' script citations names what the script still holds, by name', r.found.length === 0);
 });
 yes('the pages cite scripts this way at least 50 times, ' + total + ' of them', total >= 50);
+
+// #7383: FEED.md's "Checks on every download" says what today's launcher
+// checks, so it names that code as citations this file holds, not as history.
+{
+  const feed = (read(path.join(ROOT, 'docs/FEED.md')) || '').replace(/\r\n/g, '\n');
+  const at = feed.indexOf('\n## Checks on every download\n');
+  const next = at < 0 ? -1 : feed.indexOf('\n## ', at + 1);
+  const part = at < 0 ? '' : feed.slice(at, next < 0 ? feed.length : next);
+  const cites = part.match(/`[\w.\\/-]+\.cs:[^`]+`/g) || [];
+  yes('FEED.md has its "Checks on every download" section', at >= 0);
+  yes('  and it names the launcher code of each check as a citation, ' + cites.length + ' of them', cites.length >= 4);
+}
 
 // ------------------------------------------------------------ 4. teeth
 {
