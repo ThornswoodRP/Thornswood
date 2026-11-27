@@ -161,6 +161,13 @@ yes('D3 Hroki takes the office of Steward of Haafingar (' + last(HROKI) + ')', /
 w.activate(DOOR, HROKI);
 yes('D3 the steward ends the actual claim without changing the roll (' + say(HROKI, '/evict') + ')',
     !property.holderOf(embassy) && JSON.stringify(roll()) === rollBeforeEviction);
+say(HROKI, '/office grant 1001');
+const grant = property.holderOf(embassy);
+yes('D4 the steward can grant the vacant warehouse to someone off the roll',
+    grant?.by === 1001 && grant.granted?.by === 2000 && !onRoll(ALDIS));
+say(HROKI, '/office grant 1000');
+yes('D5 a second grant respects the existing claim and leaves the roll alone',
+    property.holderOf(embassy)?.by === 1001 && JSON.stringify(roll()) === rollBeforeEviction);
 
 // ------------------------------------------------------------- E. restart --
 const kept = JSON.stringify(roll());
