@@ -70,7 +70,7 @@ function page() {
 }
 
 function rig() {
-  const w = { open: {}, claims: {}, handlers: {}, logs: [], threw: [], clock: 100000, cross: HEX };
+  const w = { open: {}, claims: {}, handlers: {}, logs: [], threw: [], clock: 100000, cross: HEX, camera: 0 };
   const pg = page();
   w.page = pg;
   const near = {};
@@ -85,6 +85,7 @@ function rig() {
     Ui: { isMenuOpen: function (n) { return !!w.open[n]; } },
     Utility: { isInMenuMode: function () { return Object.keys(w.open).some(function (k) { return w.open[k]; }); } },
     Game: {
+      getCameraState: function () { if (w.cameraError) { throw new Error('camera unavailable'); } return w.camera; },
       getCurrentCrosshairRef: function () {
         if (!w.cross) { return null; }
         const id = parseInt(w.cross, 16);
@@ -123,6 +124,32 @@ function rig() {
 }
 
 if (menus && anyClaim && gameMenuOpen && cache && look) {
+  {
+    // #4584's capture asks for both cameras without requiring a different target.
+    const w = rig();
+    const lines = function () { return w.logs.filter(function (l) { return /^looking at /.test(l); }); };
+    w.poll(); w.poll();
+    yes('C1 the first camera is logged once while the same person stays selected',
+        lines().length === 1 && /camera first person/.test(lines()[0]));
+    w.camera = 9; w.poll();
+    yes('C2 switching to third person logs that camera without looking away',
+        lines().length === 2 && /camera third person/.test(lines()[1]) && w.api.looking() === HEX);
+    w.poll(); w.camera = 8; w.poll();
+    yes('C3 repeated polls and the other third-person state do not repeat the same capture', lines().length === 2);
+    w.camera = 0; w.poll(); w.poll();
+    yes('C4 switching back logs first person once again',
+        lines().length === 3 && /camera first person/.test(lines()[2]));
+    w.cross = ''; w.poll(); w.cross = HEX; w.poll(); w.poll();
+    yes('C5 looking away and back records one fresh target entry in the same camera', lines().length === 4);
+    w.cameraError = true; w.poll(); w.poll();
+    yes('C6 an unavailable camera is logged once without losing selection',
+        lines().length === 5 && /camera -1/.test(lines()[4]) && w.api.looking() === HEX);
+    w.cameraError = false; w.camera = NaN; w.poll(); w.poll();
+    yes('C7 a non-finite camera answer does not flood the unavailable-camera capture', lines().length === 5);
+    w.camera = 0; w.poll(); w.poll();
+    yes('C8 camera recovery records its mode once and leaves the prompt intact',
+        lines().length === 6 && /camera first person/.test(lines()[5]) && w.page.shown() && !w.threw.length);
+  }
   {
     const w = rig();
     w.poll();

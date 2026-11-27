@@ -1990,7 +1990,8 @@ function chopWood(actorId, refrId, fromSwing) {
   that build is told so when the block streams in, and it stays gone without
   the loop. The disabled flag is on the reference's change form, so it
   survives a restart; setting it again at every start costs one read each.
-  The plugin's loop stays for launchers from before that client.
+  The plugin's loop went with #5052: the plugin and the client come in one
+  pack, so every client running it has the fork's fix (#2328).
 */
 const BLOCKS_OFF_REFS = ['d6ae9:Skyrim.esm', 'a9ee1:Skyrim.esm', 'abf83:Skyrim.esm'];
 

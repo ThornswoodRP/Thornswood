@@ -36,9 +36,12 @@
 
   HOW. This starts .github/workflows/git-ref.yml on main with what to do,
   waits for the run to end, and prints its answer, the way Say-Staff.ps1 and
-  Read-Board.ps1 do. The workflow runs this script with -OnGitHub on a VPS
-  runner, where the run's own token (contents: write, pull requests read,
-  nothing else) makes the call. No secret is in the session or the workflow.
+  Read-Board.ps1 do. The workflow runs this script with -OnGitHub on GitHub's
+  Windows runner (#3685, #4983), where the run's own token (contents: write,
+  pull-requests: read and actions: write, nothing else) makes the call. This
+  script uses only the first two; the workflow's last step uses actions: write
+  to start release-files.yml after a release tag (#3686). No secret is in the
+  session or the workflow.
   -Fork starts the fork's .github/workflows/thornswood-git-ref.yml instead,
   on GitHub's hosted runner (free in that public repository), which deletes
   a branch by the same rules written into it; it makes no tags. -Ops starts

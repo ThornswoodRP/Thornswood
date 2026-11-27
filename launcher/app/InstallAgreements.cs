@@ -118,8 +118,7 @@ namespace Thornswood
         /// Writes Profile\accepted.json in the install. The site not answering
         /// is not a stop: the boxes were ticked whatever it says, and a page
         /// it did not answer for is recorded with an empty hash. A record that
-        /// cannot be written is said, and the install's own check of the
-        /// record then stops it before anything is installed.
+        /// cannot be written is (Write).
         /// </summary>
         public static void Record(string profileDir, DateTime at, Action<string> say)
         {
@@ -137,14 +136,32 @@ namespace Thornswood
                     }
                 }
             }
+            Write(profileDir, at, shas);
+        }
+
+        /// <summary>
+        /// Profile\accepted.json, written, or a stop that says why it was not.
+        ///
+        /// Until #4712 a write that failed was said in one line and setup went
+        /// on, so the steps' own check then stopped it with "Setup found no
+        /// note that you accepted", which blamed answers the person had just
+        /// given and sent them round again into the same failure. The stop is
+        /// here now, before the steps start, and it names the file, what
+        /// Windows refused and what to do.
+        /// </summary>
+        public static void Write(string profileDir, DateTime at, string[] shas)
+        {
+            string file = Path.Combine(profileDir, AcceptedFile);
             try
             {
                 Directory.CreateDirectory(profileDir);
-                File.WriteAllText(Path.Combine(profileDir, AcceptedFile), Json(at, shas), new UTF8Encoding(false));
+                File.WriteAllText(file, Json(at, shas), new UTF8Encoding(false));
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
-                say("Could not note what you accepted: " + Failure.Say("InstallAgreements, noting what was accepted", e));
+                // The file is named once, in the lead; the reason says "it".
+                throw new InstallStop("Setup could not save what you accepted to " + file + ", so nothing was installed: " +
+                                      Failure.Say("InstallAgreements, noting what was accepted", e, "it"));
             }
         }
     }

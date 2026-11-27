@@ -99,7 +99,8 @@ function made() {
 
 function doorReferenceOverrides(manifest) {
   return new Set(['gatesUnlocked', 'riftwealdUnlocked', 'claimableDoorsUnlocked',
-    'authoredDoorsUnlocked', 'authoredDoorsDirectActivation'].flatMap(key => manifest[key] || []));
+    'authoredDoorsUnlocked', 'authoredDoorsDirectActivation'].flatMap(key => manifest[key] || [])
+    .concat(manifest.cisternPassage?.enabled || [], manifest.cisternPassage?.disabled || []));
 }
 
 module.exports = { NAME, made, want, doorReferenceOverrides };

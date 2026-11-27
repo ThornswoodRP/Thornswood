@@ -38,7 +38,10 @@
 //      writes, or a folder the build writes into that git holds nothing in
 //      (#6893: test-5191-gamemode-tables.js lists game/gamemode-tables and
 //      ran over the old build when a pull request added a table); a folder
-//      git holds files in, such as game/data, is not enough.
+//      git holds files in, such as game/data, is not enough. The text is the
+//      harness's and that of each code file it requires (test-merchant-role-
+//      stage.js names the tables only through tests/gamemode-tables.js);
+//      a data file it requires is not read for names.
 'use strict';
 const path = require('path');
 const REPO = path.join(__dirname, '..');
@@ -95,10 +98,30 @@ for (const [what, c] of [
   ['the gate list', { status: 'M', path: 'tests/gate-excluded.txt' }],
   ['a test helper', { status: 'M', path: 'tests/Windows.ps1' }],
   ['the records the gate step reads', { status: 'M', path: 'records/build-runners.json' }],
+  ['another runner record, whose offBox list sets the share on One (#4293)', { status: 'M', path: 'records/pr-build-runners.json' }],
+  ['a new runner record', { status: 'A', path: 'records/sign-runners.json' }],
   ['a type change', { status: 'T', path: 'docs/a.md' }],
 ]) {
   r = pick([c]);
   yes(what + ' runs the whole gate', r.full && r.run.length === gate.length);
+}
+// What Run-Gate.ps1 reads for its share is what forces (#4293): its own
+// filter for the runner records, and the box's record by name.
+{
+  const fs0 = require('fs');
+  const rg = fs0.readFileSync(path.join(REPO, 'scripts', 'dev', 'Run-Gate.ps1'), 'utf8');
+  const fn = rg.slice(rg.indexOf('function Get-MachineBuilds'), rg.indexOf('\n}\n', rg.indexOf('function Get-MachineBuilds')));
+  const filters = [...fn.matchAll(/-Filter '([^']+)'/g)].map(m => m[1]);
+  const named = [...fn.matchAll(/Join-Path \$records '([^']+)'/g)].map(m => m[1]);
+  yes('Get-MachineBuilds reads the runner records by a filter and the box\'s by name (' + filters.concat(named).join(', ') + ')',
+    filters.length >= 1 && named.length >= 1);
+  const forced = (p) => A.FORCE.some(f => f[0].test(p));
+  for (const f of filters) {
+    const sample = 'records/' + f.replace('*', 'any');
+    yes('a record its filter ' + f + ' reads, such as ' + sample + ', runs the whole gate', forced(sample));
+  }
+  for (const n of named) yes('records/' + n + ', which it reads by name, runs the whole gate', forced('records/' + n));
+  yes('a record that is not a runner record does not', !forced('records/github-repo-settings.json'));
 }
 r = pick([{ status: 'M', path: '.github/workflows/board-status.yml' }, { status: 'M', path: 'tests/README.md' }]);
 yes('another workflow, or the tests README, is a file like any other', !r.full);
@@ -321,6 +344,22 @@ try {
   yes('a harness that names a folder all of build is held back over a build of other inputs (' + (r.why[tables] || 'not held') + ')',
       r.run.indexOf(tables) >= 0 && /names game\/gamemode-tables, which the build writes/.test(r.why[tables]));
   yes('  one that names only a folder git holds files in is not (' + (r.why[other] || 'not held') + ')', r.run.indexOf(other) < 0);
+  fs.mkdirSync(path.join(REPO, 'temp'), { recursive: true });
+  const tmp = fs.mkdtempSync(path.join(REPO, 'temp', '3114-'));
+  try {
+    const rel = path.relative(REPO, tmp).split(path.sep).join('/');
+    fs.writeFileSync(path.join(tmp, 'tables.js'), "module.exports = require('path').join(__dirname, 'game/gamemode-tables');\n");
+    fs.writeFileSync(path.join(tmp, 'rows.json'), '{"where": "game/gamemode-tables"}\n');
+    fs.writeFileSync(path.join(tmp, 'test-through.js'), "const dir = require('./tables');\n");
+    fs.writeFileSync(path.join(tmp, 'test-data.js'), "const rows = require('./rows.json');\n");
+    const through = rel + '/test-through.js', data = rel + '/test-data.js';
+    cmap.harnesses[through] = { always: 'did not pass when traced (exit 1)' };
+    cmap.harnesses[data] = { always: 'did not pass when traced (exit 1)' };
+    const req = A.staleChecks(cmap, [through, data], base, head, ['game/gamemode-tables/NEW_TABLE.json'], ['scripts/dev']);
+    yes('  one whose required code names that folder is held back too (' + (req.why[through] || 'not held') + ')',
+        req.run.indexOf(through) >= 0 && new RegExp('names game/gamemode-tables through ' + rel + '/tables\\.js').test(req.why[through]));
+    yes('  one that requires only a data file naming it is not', req.run.indexOf(data) < 0);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   const same = A.staleChecks(cmap, [tables], base, base, ['game/gamemode-tables/NEW_TABLE.json'], ['scripts/dev']);
   yes('  and with no input changed nothing is held', same.run.length === 0 && same.changed === 0);
 }

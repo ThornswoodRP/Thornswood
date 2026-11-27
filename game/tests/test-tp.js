@@ -15,6 +15,11 @@
 // has to beat a partial one, and an ambiguous word has to ask rather than
 // guess. Sending somebody to the wrong Hall of the Dead is worse than asking.
 //
+// #7172: "/tp Mixwater Mill" found nothing. A village is no building, so no
+// row of BUILDING_NAME names it, and it is none of the towns. S10 checks the
+// carriage and ferry stops: by name, by part of it, landing where a ride
+// lands, and never in a town's place.
+//
 // Read only.
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in game\tests\, the repository is two folders up
 const fs = require('fs');
@@ -232,6 +237,52 @@ if (api && NAME && BYDOOR) {
     yes('S9 /tp reads the rest of the line, because place names have spaces',
         /parts\.slice\(1\)\.join\(' '\)/.test(cmd));
   }
+}
+
+// S10 (#7172): every carriage and ferry stop by its name, out of the real
+// carriages block, which the server loads beside this one.
+{
+  const vm = require('vm');
+  const a = src.indexOf('// ==== thornswood carriages ====');
+  const b = src.indexOf('// ==== end thornswood carriages ====');
+  const box = { mp: { get() { return undefined; } }, console: { log() { } }, Date: Date };
+  box.globalThis = box;
+  let C = null;
+  try { if (a >= 0 && b > a) { vm.runInNewContext(src.slice(a, b), box); C = box.__thornswoodCarriages; } } catch (e) { C = null; }
+  yes('S10 the carriages block loads and holds its stops', !!C && Array.isArray(C.STOPS) && C.STOPS.length > 0);
+  const before = rig();
+  yes('S10 with no carriages loaded the towns still resolve', !!before && !!before.findPlace('whiterun').where);
+  globalThis.__thornswoodCarriages = C;
+  const api2 = rig();
+  const mill = C ? C.STOPS.find(function (st) { return st.name === 'Mixwater Mill'; }) : null;
+  if (api2 && mill) {
+    const r = api2.findPlace('mixwater mill');
+    yes('S10 /tp mixwater mill finds the carriage stop', !!r.where && r.where.town === 'Mixwater Mill');
+    yes('S10 and lands where a ride there lands: its world, its spot, its facing',
+        !!r.where && r.where.desc === mill.world && JSON.stringify(r.where.pos) === JSON.stringify(mill.pos) &&
+        JSON.stringify(r.where.rot) === JSON.stringify([0, 0, mill.rot]));
+    const part = api2.findPlace('mixwater');
+    yes('S10 part of the name is enough, as for a building', !!part.where && part.where.town === 'Mixwater Mill');
+    const ferry = api2.findPlace('heartwood mill');
+    yes('S10 a ferry landing is a stop too', !!ferry.where && ferry.where.town === 'Heartwood Mill');
+    const town = api2.findPlace('whiterun');
+    yes('S10 a town keeps its own spot: a stop of the same name never takes it',
+        !!town.where && town.where.town === 'Whiterun' && JSON.stringify(town.where.pos) === '[19189.1,-12006.5,-4558.4]');
+    let every = true;
+    const missing = [];
+    const seen = {};
+    C.STOPS.forEach(function (st) {
+      const k = st.name.toLowerCase();
+      if (seen[k]) { return; }
+      seen[k] = true;
+      const got = api2.findPlace(k);
+      if (!got.where) { every = false; missing.push(st.name); }
+    });
+    yes('S10 every stop\'s name takes a staff member somewhere' + (missing.length ? ': not ' + missing.join(', ') : ''), every);
+  } else {
+    yes('S10 Mixwater Mill is a stop of the carriages block', false);
+  }
+  delete globalThis.__thornswoodCarriages;
 }
 
 console.log('');

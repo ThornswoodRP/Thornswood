@@ -17,7 +17,9 @@
 // layout record kept each .pex's sha256 and size and nothing it calls.
 //
 // --read appends one JSON line per compiled script to reads.jsonl: for a .pex
-// the file, for a .bsa every .pex under its scripts folder. It runs once per
+// the file, for a .bsa every .pex under its scripts folder, or one line with
+// scripts 0 for an archive that holds none (#7000: 22 texture and mesh
+// archives in revision 12 read as never read without it). It runs once per
 // mod while Install-NexusRevision -Record still has the mod unpacked, since
 // -Record deletes each copy before the next mod is unpacked.
 //
@@ -201,6 +203,10 @@ function readFiles(out, files) {
     if (/\.bsa$/i.test(file)) {
       let found;
       try { found = M.archiveScripts(file); } catch (e) { lines.push({ file: file, inner: '', error: 'the archive would not read: ' + e.message }); continue; }
+      // An archive with no scripts folder (textures, meshes, sounds) is read
+      // all the same, and says so, so --record can tell it from one that was
+      // never read.
+      if (!Object.keys(found).length) { lines.push({ file: file, inner: '', scripts: 0 }); continue; }
       for (const k of Object.keys(found).sort()) {
         const inner = 'scripts\\' + k + '.pex';
         let bytes;
@@ -214,7 +220,7 @@ function readFiles(out, files) {
     }
   }
   fs.appendFileSync(out, lines.map(function (l) { return JSON.stringify(l) + '\n'; }).join(''));
-  return lines.length;
+  return lines.filter(function (l) { return l.scripts !== 0; }).length;
 }
 
 // --------------------------------------------------------------- --record ---
@@ -246,9 +252,11 @@ function record(readsFile, placedFile, outFile) {
   const order = (placed.plugins || []).map(String);
   const scripts = [];
   const missingReads = [];
+  const noScripts = [];
   for (const f of placed.files || []) {
     const lines = byFull[f.full];
     if (!lines) { missingReads.push(f.rel); continue; }
+    if (lines.every(function (l) { return l.scripts === 0; })) { noScripts.push(f.rel); continue; }
     const loose = /^Data\\Scripts\\[^\\]+\.pex$/i.test(f.rel);
     const rank = loose ? Infinity : archiveRank(f.rel, order);
     for (const l of lines) {
@@ -316,8 +324,9 @@ function record(readsFile, placedFile, outFile) {
       unsettled: ['caller', 'instruction', 'call', 'type', 'function', 'why']
     },
     about: 'Every compiled script the layout places, loose or in an archive, and the calls each makes to native functions: caller is "<state>.<function>" (the empty state is ""), or "<property>.get" or ".set"; instruction is its place in that function; call is method, static or parent. A call the collection cannot settle (no script of the type in it, or a type not written down) is under unsettled with why. taken is whether this is the copy the game reads. Metadata only.',
-    counts: { scripts: out.length, taken: out.filter(function (r) { return r.taken; }).length, nativeCalls: nativeCalls, unsettled: unsettled, wouldNotRead: broken, filesNotRead: missingReads.length },
+    counts: { scripts: out.length, taken: out.filter(function (r) { return r.taken; }).length, nativeCalls: nativeCalls, unsettled: unsettled, wouldNotRead: broken, filesNotRead: missingReads.length, archivesWithoutScripts: noScripts.length },
     filesNotRead: missingReads,
+    archivesWithoutScripts: noScripts,
     scripts: out
   };
   fs.writeFileSync(outFile, JSON.stringify(doc) + '\n');
