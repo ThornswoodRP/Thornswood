@@ -113,6 +113,9 @@ eval(grab('function send('));
 // send() and rangeReply() put each answer's nonce into the CSP (#3216).
 eval(grab('function cspFor('));
 eval(grab('function rangeReply('));
+// The feed's assets are sent through streamFile, and found with isFile (#4402).
+const { pipeline } = require('stream');
+eval(grab('function isFile(') + '\n' + grab('function streamFile('));
 const verSrc = route('const feedVer = p.match(', "if (feedVer && req.method === 'GET')");
 const watchSrc = route('const feedWatch = p.match(', "if (feedWatch && req.method === 'GET')");
 const assetSrc = route('const feedAsset = p.match(', "if (feedAsset && req.method === 'GET')");

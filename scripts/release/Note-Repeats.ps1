@@ -13,7 +13,7 @@
       right things" and its two lines twice: at 9:45 AM by
       Deploy-DevGamemode -Note, and at 9:50 AM by the dev Ship that carried
       the same change to the launcher, with the same note. The run notes in
-      the ops repo's ops\claude-queue had asked for exactly that (one $note for both).
+      the ops repo had asked for exactly that (one $note for both).
     - The dev feed's 7:08 AM "A new launcher" said again two lines of the
       6:32 AM "Clearer launcher messages and a visible axe" (the Ready card,
       the Open Steam button), because the launcher those lines describe went
@@ -153,7 +153,7 @@ function Get-ChannelPosts([string]$Channel, [string]$SiteDir, [string]$SiteUrl =
                                           date = [string](Get-NoteRepeatField $n 'date'); where = "the $key launcher's News" })
         }
     }
-    $dir = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-said-' + [Guid]::NewGuid().ToString('N'))
+    $dir = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('thornswood-said-' + [Guid]::NewGuid().ToString('N'))
     try {
         $got = Receive-FeedStore $key -Dir $dir -Files @('announced.json') -SiteDir $SiteDir
         $f = Join-Path $dir 'announced.json'

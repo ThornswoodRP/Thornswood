@@ -430,10 +430,10 @@ file carries outside code and the file does not carry that project's notice.
 <!-- engine-pin:fork -->
 The six files recorded in `records\client-build.json` correspond to
 https://github.com/ThornswoodRP/skymp, branch `thornswood/engine-changes`,
-commit `09c76fbb` (in full, `09c76fbbf4b9f4a0826ef58266ac9171672dbaf0`). That
+commit `5ab5845b` (in full, `5ab5845b0d293823a56b857ea11ea25d9a310624`). That
 is upstream skyrim-multiplayer/skymp at `2849e676` with Thornswood's changes on
 top, and every one of those changes is in
-https://github.com/ThornswoodRP/skymp/compare/2849e676...09c76fbb.
+https://github.com/ThornswoodRP/skymp/compare/2849e676...5ab5845b.
 <!-- /engine-pin:fork -->
 Check-Secrets.ps1 stops a release whose copy of any of the six is not the
 recorded sha256 (client-not-recorded-build), and Sync-Client.ps1 puts in the
@@ -702,7 +702,7 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,550 bytes, from commit
-`09c76fbb`, the commit the client record names.
+`5ab5845b`, the commit the client record names.
 Its build.js is 2,445,110
 bytes, sha256
 `781bfbb02a2ccedd982092bbf770ffe1442df78098722344b04a8ca9357af7e4`, and every
@@ -1507,15 +1507,15 @@ rewrite takes it out (#3684).
 <!-- engine-pin:servers -->
 - The game server's native module, `scam_native.node`, recorded in
   `records\server-build.json`, is AGPL-3.0. That record and the client record
-  name `09c76fbbf4b9f4a0826ef58266ac9171672dbaf0` on the public fork. The
+  name `5ab5845b0d293823a56b857ea11ea25d9a310624` on the public fork. The
   server module and the six client files were built from that commit, which
   is upstream at `2849e676` with every change in
-  https://github.com/ThornswoodRP/skymp/compare/2849e676...09c76fbb. Each change
+  https://github.com/ThornswoodRP/skymp/compare/2849e676...5ab5845b. Each change
   is a merged pull request of the fork, and the pull request here that moved
   the pin lists the ones it brought in.
   The server module's SHA256
-  is `e433f6ecabdbe4fd35c8d76c44829630b6c73c5648cd1c71607d93c9af08ca73`, built
-  2026-11-27T03:25:04Z. This is the recorded next release, not a deployment
+  is `1aec30f626fa1c618e4fa1c9ea9338d7fb068498d73138f0f393ca832f0b6dc8`, built
+  2026-11-27T06:23:46Z. This is the recorded next release, not a deployment
   claim. Main remains on `0714e444047a994b1013dfe4cac187aef29ad65a` until this goes
   out.
   <!-- /engine-pin:servers -->
@@ -1552,7 +1552,7 @@ Corresponding Source is the fork at the commit each record names. The six
 client files and the game server module, at the one commit both records name:
 
 <!-- engine-pin:source -->
-https://github.com/ThornswoodRP/skymp/tree/09c76fbbf4b9f4a0826ef58266ac9171672dbaf0
+https://github.com/ThornswoodRP/skymp/tree/5ab5845b0d293823a56b857ea11ea25d9a310624
 
 For the engine Main runs until then:
 

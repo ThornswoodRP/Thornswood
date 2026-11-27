@@ -236,7 +236,7 @@ if ($UseLocal) {
         if ($still.Count) { Die 'the server has not exited, so nothing was thrown away.' }
     }
 
-    $tmp = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-reset.ps1'
+    $tmp = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('thornswood-reset-' + [Guid]::NewGuid().ToString('N') + '.ps1')
     Set-Content -LiteralPath $tmp -Value $body -Encoding UTF8
     & pwsh -NoProfile -ExecutionPolicy Bypass -File $tmp -Root $Local
     $resetCode = $LASTEXITCODE
@@ -262,7 +262,7 @@ else {
 
     # Both files in one scp and the job in one ssh session, so it is two
     # passwords rather than more.
-    $dir = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-reset-' + [Guid]::NewGuid().ToString('N'))
+    $dir = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('thornswood-reset-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     $tmp = Join-Path $dir 'thornswood-reset.ps1'
     $tmpRun = Join-Path $dir 'thornswood-reset-run.ps1'

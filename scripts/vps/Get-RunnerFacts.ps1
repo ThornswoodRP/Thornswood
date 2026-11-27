@@ -8,6 +8,14 @@
   runs it beside Get-ProdFacts.ps1 (issue #2165), whose listeners say which
   loopback services any account on the box, a runner's included, can reach.
 
+  A read that fails is said, never left empty (#4286): an empty value reads
+  as nothing to worry about in Check-RunnerIsolation. The service list stops
+  the script if it cannot be read, so an empty list means no runner is
+  installed; an account that does not translate keeps an empty SID and no
+  firewall count (an empty SID matched every rule); a local group whose
+  members cannot be listed is named in groupsUnread; a path whose ACL cannot
+  be read is 'not read', and only one that does not exist is 'missing'.
+
   For each actions.runner.* service:
     account, SID and local groups;
     for each production path in -Paths, which rights its ACL gives that
@@ -22,11 +30,13 @@
 [CmdletBinding()]
 param(
     [switch]$Define,
+    # Every path records\runner-isolation.json lists under noReach and
+    # writeOnly; tests\test-runner-isolation.ps1 holds the two together.
     [string[]]$Paths = @(
         'C:\Thornswood-Docs\config.json', 'C:\Thornswood-Docs\feed', 'C:\Thornswood-Docs\feed-dev',
         'C:\Thornswood-Bot\bot.env.json', 'C:\Thornswood-Backup', 'C:\Thornswood-Backup\key.txt',
         'C:\Thornswood-Server\private', 'C:\Thornswood-Server-Dev\private', 'C:\Thornswood-Server\world',
-        'C:\Thornswood-Deploys', 'C:\Thornswood-Caddy', 'C:\Thornswood-Watch', 'C:\Thornswood-Admin', 'C:\Thornswood-Dumps',
+        'C:\Thornswood-Deploys', 'C:\Thornswood-Caddy', 'C:\Thornswood-Watch', 'C:\Thornswood-Admin', 'C:\Thornswood-Agent', 'C:\Thornswood-BotPass', 'C:\Thornswood-Dumps',
         'C:\ProgramData\ssh', 'C:\Users\Administrator')
 )
 
@@ -63,28 +73,37 @@ function ConvertTo-PlainRules($Acl) {
 }
 
 function Get-RunnerFacts {
-    $ErrorActionPreference = 'SilentlyContinue'
+    $ErrorActionPreference = 'Stop'
     $runners = @()
     $svcs = @(Get-CimInstance Win32_Service | Where-Object Name -like 'actions.runner.*')
+    $localGroups = @(Get-LocalGroup)
     foreach ($s in $svcs) {
         $acct = ([string]$s.StartName) -replace '^\.\\', ''
         $sid = try { (New-Object Security.Principal.NTAccount($acct)).Translate([Security.Principal.SecurityIdentifier]).Value } catch { '' }
-        $groups = @(Get-LocalGroup | Where-Object { @(Get-LocalGroupMember -Group $_ -EA SilentlyContinue | ForEach-Object { [string]$_.SID }) -contains $sid } | ForEach-Object { $_.Name })
-        $gsids = @(Get-LocalGroup | Where-Object { $groups -contains $_.Name } | ForEach-Object { [string]$_.SID })
+        $groups = @(); $unread = @()
+        if ($sid) {
+            foreach ($g in $localGroups) {
+                try { if (@(Get-LocalGroupMember -Group $g | ForEach-Object { [string]$_.SID }) -contains $sid) { $groups += $g.Name } }
+                catch { $unread += $g.Name }
+            }
+        }
+        $gsids = @($localGroups | Where-Object { $groups -contains $_.Name } | ForEach-Object { [string]$_.SID })
         # Every service logon also carries Everyone, Authenticated Users and SERVICE.
-        $sids = @($sid) + $gsids + @('S-1-1-0', 'S-1-5-11', 'S-1-5-6')
+        $sids = @(@($sid) + $gsids + @('S-1-1-0', 'S-1-5-11', 'S-1-5-6') | Where-Object { $_ })
         $reach = [ordered]@{}
         foreach ($p in $Paths) {
             if (-not (Test-Path -LiteralPath $p)) { $reach[$p] = 'missing'; continue }
-            $reach[$p] = Get-AclReach (ConvertTo-PlainRules (Get-Acl -LiteralPath $p)) $sids
+            $reach[$p] = try { Get-AclReach (ConvertTo-PlainRules (Get-Acl -LiteralPath $p)) $sids } catch { 'not read' }
         }
         $exe = ([string]$s.PathName).Trim('"') -replace '"?\s.*$', ''
         $root = Split-Path -Parent (Split-Path -Parent $exe)
         $temp = Join-Path $root '_work\_temp'
         $left = @(Get-ChildItem -LiteralPath $temp -Recurse -File -Force -EA SilentlyContinue)
-        $fw = @(Get-NetFirewallRule -PolicyStore ActiveStore -EA SilentlyContinue | Where-Object { $_.Owner -eq $sid -or ([string]($_ | Get-NetFirewallSecurityFilter).LocalUser) -match [regex]::Escape($sid) }).Count
+        # With no SID there is nothing to count rules for: an empty one matched every rule.
+        $fw = $null
+        if ($sid) { $fw = @(Get-NetFirewallRule -PolicyStore ActiveStore | Where-Object { $_.Owner -eq $sid -or ([string]($_ | Get-NetFirewallSecurityFilter).LocalUser) -match [regex]::Escape($sid) }).Count }
         $runners += [ordered]@{
-            service = $s.Name; account = $acct; sid = $sid; state = $s.State; groups = $groups
+            service = $s.Name; account = $acct; sid = $sid; state = $s.State; groups = $groups; groupsUnread = $unread
             root = $root; hasCredentials = (Test-Path -LiteralPath (Join-Path $root '.credentials'))
             workFolders = @(Get-ChildItem -LiteralPath (Join-Path $root '_work') -Directory -Force -EA SilentlyContinue).Count
             tempLeftFiles = $left.Count

@@ -94,8 +94,15 @@ its timers and the minute line's count of each run at about 2.5 s of the
 
 ## Walking
 
-Movement follows walkable triangles in the local region. It retains the saved
-height above the navigation surface and crosses only verified reciprocal edges.
+Movement follows walkable triangles in the local region, on the navigation
+surface, and crosses only verified reciprocal edges. Each game moves a server's
+NPC with translateTo, which neither falls nor collides, so the height the server
+sends is the height everybody sees. A walker found above or below its navmesh,
+where it was placed or where something moved it, is set down onto it where it
+stands, as the game drops a placed actor onto the floor (#6474: until 27 Nov
+2026 a walker kept its placement's height over the navmesh wherever it walked,
+and floated up to 96 units above the ground). The minute report's heights line
+says how far off each was found and how many stand off it now.
 Missing or corrupt geometry, an unsuitable saved position, or a displacement
 outside the prepared region pauses activity. The NPC remains loaded and owned by
 the server. A reliable stopped snapshot prevents continued walking extrapolation.
@@ -149,7 +156,11 @@ and staff, Djinn's choice on 17 Oct) or `'staff'`.
 
 Native inherited aggression, confidence, and current faction membership inform
 target selection. Common membership and ally or friend reactions suppress
-spontaneous hostility. Accepted damage can provoke temporary retaliation.
+spontaneous hostility. An NPC whose AI data has the aggro radius on also
+fights a person inside the larger of its warn or attack and attack radius,
+whatever its aggression, as the game itself does (#6493): an Aggressive
+skeever has no Enemy faction toward people, and it attacks them through its
+radius (1,500 units). The warn radius alone starts no fight. Accepted damage can provoke temporary retaliation.
 Confidence zero flees along safe local navigation. Targets are read again before
 an attack; disconnected human identities and profiles are protected immediately.
 Melee uses owned equipped weapons, or unarmed damage, with the existing native

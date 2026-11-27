@@ -645,6 +645,12 @@ async function join(standing, status, channel) {
     sendJson: function (r, c, obj) { sent = { code: c, obj: obj }; return sent; },
     console: { log: function () { }, error: function () { } }
   };
+  // The routes read their body with lib/http.js bodyObject (#4382): JSON, and an object.
+  if (env.body && !env.bodyObject) env.bodyObject = async function () {
+    const v = JSON.parse(await env.body.apply(null, arguments));
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+    return v;
+  };
   const names = Object.keys(env);
   const fn = new AsyncFunction(names.join(','), route + '\nreturn "fell through";');
   try { await fn.apply(null, names.map(function (n) { return env[n]; })); }

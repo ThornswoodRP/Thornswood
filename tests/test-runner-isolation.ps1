@@ -21,6 +21,14 @@ foreach ($s in $check, $collector) {
     T ($errs.Count -eq 0) ((Split-Path -Leaf $s) + ' parses')
 }
 $craw = Get-Content -LiteralPath $collector -Raw
+# #4286: the collector reads every path the record holds runners away from;
+# one it is not asked for comes back unchecked, which the check counts as a risk.
+$rec = Get-Content (Join-Path $repo 'records\runner-isolation.json') -Raw | ConvertFrom-Json
+$pathsParam = [Management.Automation.Language.Parser]::ParseFile($collector, [ref]$null, [ref]$null).ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Paths' }
+$collected = @($pathsParam.DefaultValue.SafeGetValue())
+$uncollected = @(@($rec.noReach) + @($rec.writeOnly) | Where-Object { $collected -notcontains $_ })
+T (-not $uncollected.Count) ('the collector reads every path in records\runner-isolation.json' + $(if ($uncollected.Count) { ', not ' + ($uncollected -join ', ') } else { '' }))
+T ($craw -match "function Get-RunnerFacts \{\s*\`$ErrorActionPreference = 'Stop'") 'the collector stops on a read that fails instead of printing it as empty (#4286)'
 T ($craw -notmatch '(?m)^\s*[^#\n]*\b(Set-|Remove-|New-Item|Stop-|Start-|Restart-|Register-|Unregister-|Disable-|Enable-|Add-LocalGroupMember|icacls)\w*') 'the collector calls nothing that changes anything'
 T ($craw -notmatch 'Get-Content') 'the collector reads no file contents'
 $xraw = Get-Content -LiteralPath $check -Raw
@@ -42,16 +50,22 @@ $x = Get-AclReach @(@{ Sid = 'S-1-5-32-544'; Type = 'Allow'; Rights = $R -bor $W
 T (-not $x.read -and -not $x.write) 'Administrators only is no reach'
 
 # ---- comparison -------------------------------------------------------------
-$rec = Get-Content (Join-Path $repo 'records\runner-isolation.json') -Raw | ConvertFrom-Json
-function Facts {
+# Two box runners, as records\build-runners.json numbers them.
+function Reach {
     $reach = [ordered]@{}
     foreach ($p in $rec.noReach) { $reach[$p] = [ordered]@{ read = $false; write = $false; denied = $true } }
     $reach['C:\Thornswood-Dumps'] = [ordered]@{ read = $false; write = $true; denied = $false }
+    $reach
+}
+function Facts {
     [ordered]@{
         runner = [ordered]@{ takenUtc = '2026-10-11T12:00:00Z'; host = 'STANDIN'; machineEnvNames = @('THORNSWOOD_SITE')
-            runners = @([ordered]@{ service = 'actions.runner.X.thornswood-vps'; account = 'thornswood-runner'; sid = 'S-1-5-21-1-2-3-1001'; state = 'Running'
-                groups = @('Users', 'GITHUB_ActionsRunner_G1'); root = 'C:\Thornswood-Runner'; hasCredentials = $true; workFolders = 3
-                tempLeftFiles = 0; tempOldestHours = 0; firewallRules = 12; reach = $reach }) }
+            runners = @(foreach ($n in 1, 2) {
+                $sfx = $(if ($n -gt 1) { '' + $n } else { '' })
+                [ordered]@{ service = 'actions.runner.X.thornswood-vps' + $(if ($sfx) { '-' + $sfx } else { '' }); account = 'thornswood-runner' + $sfx; sid = 'S-1-5-21-1-2-3-100' + $n; state = 'Running'
+                    groups = @('Users', 'GITHUB_ActionsRunner_G1'); groupsUnread = @(); root = 'C:\Thornswood-Runner' + $sfx; hasCredentials = $true; workFolders = 3
+                    tempLeftFiles = 0; tempOldestHours = 0; firewallRules = 12; reach = (Reach) }
+            }) }
         prod = [ordered]@{ listeners = @(@{ proto = 'tcp'; address = '127.0.0.1'; port = 3001; process = 'node' }) }
         github = [ordered]@{ private = $true; forkPr = @{ run_workflows_from_fork_pull_requests = $false }; workflowToken = @{ default_workflow_permissions = 'read' }
             runners = @(@{ name = 'thornswood-vps'; labels = @('self-hosted', 'thornswood-vps') }); collaborators = 3 }
@@ -181,6 +195,29 @@ try {
     T ($x.Out -match 'RISK  network thornswood-runner outbound') 'no outbound limit on a runner account is a risk'
     T ($x.Out -match 'RISK  env GH_TOKEN') 'a token-shaped machine variable every job inherits is a risk, by name only'
     T ($x.Out -match 'RISK  github visibility' -and $x.Out -match 'RISK  github fork pull requests' -and $x.Out -match 'RISK  github default workflow token') 'public repo, fork workflows and a write token are risks'
+
+    # ---- what was not collected is a risk, never fine (#4286) --------------
+    $e = Facts; $e.runner.runners = @()
+    $x = Run $e $wfOk
+    T ($x.Code -eq 1 -and $x.Out -match 'RISK  runner runner services in the facts: expected at least one, found none' -and $x.Out -match 'RISK  runner box runner 1 \(thornswood-vps\)' -and $x.Out -match 'RISK  runner box runner 2 \(thornswood-vps-2\)') 'facts with no runner are a risk, not zero risk, and each box runner the records number is named'
+    $e = Facts; $e.runner.runners = @($e.runner.runners[0])
+    $x = Run $e $wfOk
+    T ($x.Out -match 'RISK  runner box runner 2 \(thornswood-vps-2\): expected in the facts, found not in the facts' -and $x.Out -notmatch 'RISK  runner box runner 1') '  and so is one box runner missing beside the others'
+    $e = Facts; $e.runner.runners[0].reach.Remove('C:\Thornswood-Agent'); $e.runner.runners[0].reach['C:\Thornswood-BotPass'] = 'not read'; $e.runner.runners[0].reach['C:\Thornswood-Watch'] = 'missing'
+    $e.runner.runners[0].reach.Remove('C:\Thornswood-Dumps')
+    $x = Run $e $wfOk
+    T ($x.Out -match 'RISK  reach thornswood-runner C:\\Thornswood-Agent: expected no read, no write, found not checked') 'a path the facts do not hold is a risk, not fine'
+    T ($x.Out -match 'RISK  reach thornswood-runner C:\\Thornswood-BotPass: expected no read, no write, found not read') '  and so is one whose ACL could not be read'
+    T ($x.Out -match 'RISK  reach thornswood-runner C:\\Thornswood-Dumps: expected write, no read, found not checked') '  and a write-only path not checked'
+    T ($x.Out -notmatch 'RISK  reach thornswood-runner C:\\Thornswood-Watch' -and $x.Report -match '\| reach \| thornswood-runner C:\\Thornswood-Watch \| no read, no write \| missing \| ok \|') '  while a path that does not exist on the box is fine'
+    $e = Facts; $e.runner.runners[0].sid = ''; $e.runner.runners[0].groups = @(); $e.runner.runners[0].firewallRules = 12
+    $x = Run $e $wfOk
+    T ($x.Out -match 'RISK  account thornswood-runner SID: expected the account translates to a SID, found none') 'an account with no SID is a risk'
+    T ($x.Out -match 'RISK  network thornswood-runner outbound: expected [^\n]*found not counted, the account has no SID') '  and its firewall count is not taken as a limit'
+    T ($x.Out -match 'RISK  account thornswood-runner groups: [^\n]*not read, the account has no SID') '  and neither are its groups'
+    $e = Facts; $e.runner.runners[0].groupsUnread = @('Administrators')
+    $x = Run $e $wfOk
+    T ($x.Out -match 'RISK  account thornswood-runner groups: [^\n]*not read: Administrators') 'a forbidden group whose members could not be listed is a risk'
 
     $r2 = Get-Content (Join-Path $repo 'records\runner-isolation.json') -Raw | ConvertFrom-Json
     $r2.intentional = @([pscustomobject]@{ area = 'network'; item = 'thornswood-runner outbound'; why = 'stand-in reason' })

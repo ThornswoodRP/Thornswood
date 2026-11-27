@@ -55,6 +55,12 @@ namespace Thornswood
             [JsonPropertyName("launcherVersion")] public string LauncherVersion { get; set; }
             /// <summary>The collection revision the Release's servers run (#5767); 0 in a record from before it.</summary>
             [JsonPropertyName("collectionRevision")] public int CollectionRevision { get; set; }
+            /// <summary>
+            /// The Dev collection and its revision that is collectionRevision
+            /// (#7193); null in a record from before it. Dev's launchers send
+            /// Vortex to it, main's to the main collection.
+            /// </summary>
+            [JsonPropertyName("devCollection")] public ChannelCollection DevCollection { get; set; }
             [JsonPropertyName("parts")] public Dictionary<string, PartFile[]> Parts { get; set; }
 
             /// <summary>The file of <paramref name="part"/> called <paramref name="name"/>, or null.</summary>
@@ -66,6 +72,13 @@ namespace Thornswood
                     if (f != null && string.Equals(f.Name, name, StringComparison.Ordinal)) return f;
                 return null;
             }
+        }
+
+        /// <summary>A collection on Nexus and one revision of it, as the record names them.</summary>
+        public sealed class ChannelCollection
+        {
+            [JsonPropertyName("slug")] public string Slug { get; set; }
+            [JsonPropertyName("revision")] public int Revision { get; set; }
         }
 
         public sealed class GameFile

@@ -16,7 +16,7 @@
       the Release.
     - The gate has the verbs Deploy-Release (-Tag build-<...> and
       -Environment dev, site or discord only) and Install-DeployAgent
-      (-Status, -Pass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only). -Main
+      (-Status, -KeptPass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only). -Main
       has agent.json name main (#5181) and -NoMain takes it off; with
       neither it is kept.
     - Deploy-Release.ps1 and Install-DeployAgent.ps1 send the box scripts that
@@ -122,7 +122,7 @@ try {
     Yes '  -Tag takes build-<...> and nothing else' (('build-20261101.12' -match $d.params.Tag) -and -not ('build-1; rm' -match $d.params.Tag) -and -not ('agent-v1.0.1' -match $d.params.Tag))
     $v = $verbs.verbs.'Install-DeployAgent'
     Yes 'the gate has Install-DeployAgent' ($null -ne $v -and $v.script -eq 'scripts/deploy/Install-DeployAgent.ps1')
-    Yes '  with -Status, -Pass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only, and -NoPause fixed' ((@($v.params.PSObject.Properties.Name) -join ',') -eq 'Status,Pass,Tag,NoBotPass,EndHung,Main,NoMain' -and (@($v.fixed) -join ',') -eq '-NoPause' -and
+    Yes '  with -Status, -KeptPass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only, and -NoPause fixed' ((@($v.params.PSObject.Properties.Name) -join ',') -eq 'Status,KeptPass,Tag,NoBotPass,EndHung,Main,NoMain' -and (@($v.fixed) -join ',') -eq '-NoPause' -and
         $v.params.NoBotPass -eq 'switch' -and $v.params.EndHung -eq 'switch' -and $v.params.Main -eq 'switch' -and $v.params.NoMain -eq 'switch')
     Yes '  -Tag takes agent-v<a.b.c> and nothing else' (('agent-v1.0.12' -match $v.params.Tag) -and -not ('agent-v1.0.12; rm' -match $v.params.Tag) -and -not ('build-1' -match $v.params.Tag))
 
@@ -187,10 +187,10 @@ try {
             Yes '  and every error the copy''s server threw in its tick or caught there, with the lines around it, which the last lines miss' (
                 $null -ne $st -and $st.Text.Contains("Select-String -LiteralPath `$srv -Pattern 'in server\.tick|index\.ts:192:' -Context 12,8") -and
                 $st.Text.Contains("'server\bot-pass-server.log'"))
-            $kp = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '20261101-234130-unnamed')
-            Yes '  and -Status -Pass prints that kept pass from passes\' ($null -ne $kp -and $kp.Parses -and $kp.Text.Contains("'C:\Thornswood-BotPass\passes\20261101-234130-unnamed'"))
-            $bad = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '..\..\Windows')
-            Yes '  and -Pass that is not a kept pass''s name sends nothing' ($null -eq $bad -or -not $bad.Text)
+            $kp = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-KeptPass', '20261101-234130-unnamed')
+            Yes '  and -Status -KeptPass prints that kept pass from passes\' ($null -ne $kp -and $kp.Parses -and $kp.Text.Contains("'C:\Thornswood-BotPass\passes\20261101-234130-unnamed'"))
+            $bad = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-KeptPass', '..\..\Windows')
+            Yes '  and -KeptPass that is not a kept pass''s name sends nothing' ($null -eq $bad -or -not $bad.Text)
             Yes '  and only once dev''s engine has the bot client (skymp #137)' ($t.Contains("Contains('createBotClient')") -and $t.IndexOf("Contains('createBotClient')") -lt $t.IndexOf('Register-ScheduledTask -TaskName $passTask'))
             Yes '  and names the folder in agent.json only once the task is set up' ($t.Contains('-NotePropertyName botPassRoot') -and $t.Contains('$noPass = [bool]0'))
             $off = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-NoBotPass')
