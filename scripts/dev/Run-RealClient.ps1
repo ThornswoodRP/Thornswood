@@ -50,6 +50,10 @@ param(
     [int]$Minutes = 20,
     [int]$PlayMinutes = 15,
     [switch]$Publish,
+    # The Dev Deployment the run is for, which the watcher names: the run
+    # goes on that one, not on whichever is newest when it ends, as a dev
+    # release can land while a run is going. Left out, the newest.
+    [string]$Deployment = '',
     [string]$Repo = 'ThornswoodRP/Thornswood'
 )
 
@@ -711,7 +715,12 @@ $summary = @(
 Say "Result: $result. $note"
 
 if ($Publish) {
-    $dep = gh api "repos/$Repo/deployments?environment=Dev&per_page=1" | ConvertFrom-Json | Select-Object -First 1
+    if ($Deployment) {
+        $dep = gh api "repos/$Repo/deployments/$Deployment" | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0) { throw "Could not read Deployment $Deployment to put the run on." }
+    } else {
+        $dep = gh api "repos/$Repo/deployments?environment=Dev&per_page=1" | ConvertFrom-Json | Select-Object -First 1
+    }
     if (-not $dep -or -not $dep.payload.release) { throw 'No Dev Deployment with a release to put the run on.' }
     $tag = $dep.payload.release
     $zip = Join-Path (Split-Path $Out) ("real-client-$runId.zip")

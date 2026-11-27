@@ -106,7 +106,7 @@ yes('Config keeps no update token any more, so it has nothing to protect',
 const dSave = body(read('launcher/app/Discord.cs'), 'static void Save(string t, string who, string pic)');
 yes('Discord.Save protects the ticket', dSave.indexOf('Secrets.Protect(t ?? "")') >= 0);
 yes('and it is the argument to the write, so a throw leaves the ticket file alone',
-    /File\.WriteAllText\(TicketFile, Secrets\.Protect\(t \?\? ""\)\)/.test(dSave));
+    /WholeFile\.WriteText\(TicketFile, Secrets\.Protect\(t \?\? ""\), /.test(dSave));
 yes('and that write is inside a try that logs',
     dSave.indexOf('try') >= 0 && dSave.indexOf('try') < dSave.indexOf('Secrets.Protect(t ?? "")') &&
     /catch \(Exception ex\) \{ Swallow\.Note\("Discord\.Save"/.test(dSave));

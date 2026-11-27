@@ -60,6 +60,7 @@ $taskName = 'Thornswood real game run'
 # started again every five minutes.
 function Get-WatchVerdict($deployment, [string[]]$started, [bool]$gameOpen, [bool]$locked, [double]$idleMinutes, [int]$idleNeeded, [bool]$runGoing) {
     if (-not $deployment) { return 'no Dev Deployment' }
+    if (-not $deployment.state) { return 'the newest Dev Deployment has no status yet' }
     if ($deployment.state -ne 'success') { return "the newest Dev Deployment is $($deployment.state), not success" }
     if (@($deployment.lines | Where-Object { ([string]$_).StartsWith('Real game run:') }).Count) { return 'the newest Dev Deployment has had its run' }
     if (@($started) -contains [string]$deployment.id) { return 'a run was started for the newest Dev Deployment already; watch.log and its run folder say how it went' }
@@ -175,7 +176,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Could not make a worktree at $($dep.sha)" }
     Note "Deployment $($dep.id) ($($dep.payload.release)): starting the run from $($dep.sha)."
     try {
-        $runArgs = @('-NoProfile', '-NonInteractive', '-File', (Join-Path $tree 'scripts\dev\Run-RealClient.ps1'), '-Publish', '-Out', (Join-Path $dir ((Get-Date).ToString('yyyyMMdd-HHmmss'))))
+        $runArgs = @('-NoProfile', '-NonInteractive', '-File', (Join-Path $tree 'scripts\dev\Run-RealClient.ps1'), '-Publish', '-Deployment', [string]$dep.id, '-Out', (Join-Path $dir ((Get-Date).ToString('yyyyMMdd-HHmmss'))))
         if ($Root) { $runArgs += @('-Root', $Root) }
         & (Get-Command pwsh).Source @runArgs
         Note "Deployment $($dep.id): the run ended with exit code $LASTEXITCODE."

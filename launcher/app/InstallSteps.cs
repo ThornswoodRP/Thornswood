@@ -863,7 +863,8 @@ namespace Thornswood
                     o.WriteTo(w);
                 // UTF-8 with no byte order mark: the game stops dead on one,
                 // and the launcher's Config reads it either way.
-                File.WriteAllBytes(path, ms.ToArray());
+                // Whole or not at all (#4702), as the launcher's own Save.
+                WholeFile.Write(path, ms.ToArray());
             }
         }
 

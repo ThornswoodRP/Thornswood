@@ -848,15 +848,17 @@ foreach ($scan in @(1,23,36)) {
   }
 }
 
-// Facing a bed (#6712): the step stands the character 90 units out from
-// the nearest bed in the cell, on its side, turned to it; the crosshair wait
-// sees it; a pause waits its time; lying down is a results line.
+// Facing a bed (#6712): the step tries the spots on the nearest bed's four
+// sides, 45 units clear of its bounds, nearest first, and stands at the
+// first from which the crosshair lands on it; the crosshair wait sees it; a
+// pause waits its time; lying down is a results line.
 {
   function ref(id, name, x, y, bed) {
     return {
       bed: bed, getFormID: function () { return id; },
       getBaseObject: function () { return { getName: function () { return name; } }; },
-      getPositionX: function () { return x; }, getPositionY: function () { return y; }, getPositionZ: function () { return 64; }
+      getPositionX: function () { return x; }, getPositionY: function () { return y; }, getPositionZ: function () { return 64; },
+      getAngleZ: function () { return 0; }, getWidth: function () { return 100; }, getLength: function () { return 200; }, getHeight: function () { return 50; }
     };
   }
   const chair = ref(0x101, 'Chair', 10, 10, false);
@@ -870,40 +872,60 @@ foreach ($scan in @(1,23,36)) {
     { do: 'end' }
   ] });
   g.box.Thornswood.isBedRef = function (r) { return !!(r && r.bed); };
-  const cell = { getNumRefs: function (t) { return t === 40 ? refs.length : 0; }, getNthRef: function (i) { return refs[i]; } };
-  const at = { x: 0, y: 0, angle: null };
+  let firstPerson = 0;
+  g.box.skyrimPlatform.Game.forceFirstPerson = function () { firstPerson++; };
+  const cell = { getNumRefs: function (t) { return t === 40 ? refs.length : 0; }, getNthRef: function (i) { return refs[i]; }, getName: function () { return 'The Bannered Mare'; } };
+  const at = { x: 0, y: 0, angle: null, tried: [] };
   g.world.cell = cell;
+  // A wall on the bed's left (the side nearest the character): from there
+  // the crosshair meets the wall. From its foot it meets the bed.
+  Object.defineProperty(g.world, 'crosshair', { get: function () { return at.y < -100 ? near : null; } });
   g.world.pc = {
     getParentCell: function () { return cell; },
-    getPositionX: function () { return at.x; }, getPositionY: function () { return at.y; },
-    setPosition: function (x, y) { at.x = x; at.y = y; },
+    getPositionX: function () { return at.x; }, getPositionY: function () { return at.y; }, getPositionZ: function () { return 64; },
+    setPosition: function (x, y) { at.x = x; at.y = y; at.tried.push([Math.round(x), Math.round(y)]); },
     setAngle: function (x, y, z) { at.angle = [x, y, z]; }
   };
-  for (let i = 0; i < 5; i++) { g.frame(16); }
   const steps = function () { return g.lines().filter(function (l) { return l.t === 'step'; }); };
+  for (let i = 0; i < 40 && steps().length < 2; i++) { g.frame(100); }
   const faced = steps()[0];
-  yes('face bed passes and names the nearest bed', !!faced && faced.ok && /before bed 103 "Bed", 2 bed\(s\) in the cell, it was 300 units off/.test(faced.note));
-  yes('  and stands 90 units out on the side the character was on', Math.round(at.x) === 210 && Math.round(at.y) === 0);
-  yes('  turned to the bed, heading east (90), looking a little down', !!at.angle && Math.round(at.angle[2]) === 90 && at.angle[0] > 0);
-  yes('the crosshair wait holds while no bed is under it', steps().length === 1);
-  g.world.crosshair = near;
-  g.frame(16); g.frame(16);
-  yes('  and passes once one is', steps().length === 2 && steps()[1].ok && /bed 103/.test(steps()[1].note));
+  yes('face bed passes and names the nearest bed', !!faced && faced.ok && /before bed 103 "Bed" from its foot, 2 bed\(s\) in the cell, it was 300 units off/.test(faced.note));
+  yes('  trying its sides nearest first, 45 units clear of its bounds', JSON.stringify(at.tried.slice(0, 2)) === JSON.stringify([[205, 0], [300, -145]]));
+  yes('  and says the side the crosshair did not find it from', /not from left \(nothing under the crosshair\)/.test(faced.note));
+  yes('  turned to the bed (heading north from its foot), looking down at it, in first person', !!at.angle && Math.round(at.angle[2]) === 0 && at.angle[0] > 30 && at.angle[0] < 50 && firstPerson === 1);
+  yes('  and the crosshair wait after it passes', steps().length >= 2 && steps()[1].ok && /bed 103/.test(steps()[1].note));
+  const t0 = steps().length;
   g.frame(1000);
-  yes('a pause has not passed before its time', steps().length === 2);
+  yes('a pause has not passed before its time', steps().length === t0);
   g.frame(600); g.frame(16);
-  yes('  and passes after it', steps().length >= 3 && steps()[2].ok);
+  yes('  and passes after it', steps().length >= t0 + 1 && steps()[t0].ok && steps()[t0].do === 'wait');
   g.fire('furnitureEnter', { actor: { getFormID: function () { return 0x14; } }, target: near });
   g.fire('furnitureEnter', { actor: { getFormID: function () { return 0x999; } }, target: near });
   const sat = g.lines().filter(function (l) { return l.t === 'furniture'; });
   yes('lying down in a bed is a results line, the character\'s own only', sat.length === 1 && sat[0].enter === true && sat[0].bed === true && /103/.test(sat[0].ref));
+}
+// A bed the crosshair finds from none of its sides fails, naming each.
+{
+  const g = game({ steps: [{ do: 'face', what: 'bed' }, { do: 'end' }] });
+  g.box.Thornswood.isBedRef = function (r) { return !!(r && r.bed); };
+  const bed = { bed: true, getFormID: function () { return 0x200; }, getBaseObject: function () { return { getName: function () { return 'Bed'; } }; },
+    getPositionX: function () { return 0; }, getPositionY: function () { return 0; }, getPositionZ: function () { return 0; },
+    getAngleZ: function () { return 90; }, getWidth: function () { return 100; }, getLength: function () { return 200; }, getHeight: function () { return 50; } };
+  const cell = { getNumRefs: function () { return 1; }, getNthRef: function () { return bed; } };
+  g.world.cell = cell;
+  g.world.pc = { getParentCell: function () { return cell; }, getPositionX: function () { return 500; }, getPositionY: function () { return 0; }, getPositionZ: function () { return 0; },
+    setPosition: function () {}, setAngle: function () {} };
+  for (let i = 0; i < 30; i++) { g.frame(100); }
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('face bed fails when the crosshair finds the bed from none of its four sides, naming them', st.length && st[0].ok === false &&
+      /from none of its sides: .*right.*left.*foot.*head|from none of its sides: (?=.*right)(?=.*left)(?=.*foot)(?=.*head)/.test(st[0].note));
 }
 {
   const g = game({ steps: [{ do: 'face', what: 'bed' }, { do: 'end' }] });
   g.box.Thornswood.isBedRef = function (r) { return !!(r && r.bed); };
   const cell = { getNumRefs: function () { return 0; }, getNthRef: function () { return null; } };
   g.world.cell = cell;
-  g.world.pc = { getParentCell: function () { return cell; }, getPositionX: function () { return 0; }, getPositionY: function () { return 0; } };
+  g.world.pc = { getParentCell: function () { return cell; }, getPositionX: function () { return 0; }, getPositionY: function () { return 0; }, getPositionZ: function () { return 0; } };
   for (let i = 0; i < 4; i++) { g.frame(16); }
   const st = g.lines().filter(function (l) { return l.t === 'step'; });
   yes('face bed in a cell with no bed fails and says so', st.length && st[0].ok === false && /no bed among the 0 furniture/.test(st[0].note));
@@ -945,6 +967,80 @@ foreach ($scan in @(1,23,36)) {
   yes('  the next task runs and passes', tasks[1].task === '202' && tasks[1].ok === true);
   yes('  and the run ends failed, naming the failed task', !!done && done.ok === false && /test task\(s\) failed: #101/.test(done.note));
 }
+// The cell wait: not in the Bannered Mare skips the trip's steps when the
+// character is there already, and the wait for it fails naming where it is.
+{
+  const cell = { name: 'The Bannered Mare' };
+  const g = game({ steps: [
+    { do: 'wait', for: 'cell', name: 'Bannered Mare', in: false, timeout: 300, skip: 2 },
+    { do: 'wait', for: 'time', ms: 99999 }, { do: 'wait', for: 'time', ms: 99999 },
+    { do: 'wait', for: 'cell', name: 'Bannered Mare', timeout: 300 },
+    { do: 'wait', for: 'cell', name: 'Jorrvaskr', timeout: 300, task: 9 },
+    { do: 'end' }
+  ] });
+  g.world.cell = { getName: function () { return cell.name; } };
+  for (let i = 0; i < 20; i++) { g.frame(50); }
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('the cell wait skips the trip when the character is in the Bannered Mare already', st.length >= 4 && st[0].ok && /so the next 2 step\(s\) are skipped/.test(st[0].note) && st[1].note === 'skipped' && st[2].note === 'skipped');
+  yes('  then sees it there', st[3].ok && st[3].note === 'in The Bannered Mare');
+  yes('  and a wait for another cell fails naming the one it is in', st.length >= 5 && st[4].ok === false && /the character is in The Bannered Mare/.test(st[4].note));
+}
+// A key with ifMenu presses only while one of those menus is open, and the
+// shut wait holds until none is.
+{
+  const g = game({ steps: [
+    { do: 'key', code: 1, ifMenu: ['InventoryMenu', 'TweenMenu'] },
+    { do: 'key', code: 1, ifMenu: ['InventoryMenu', 'TweenMenu'] },
+    { do: 'wait', for: 'shut', menus: ['InventoryMenu', 'TweenMenu'], timeout: 5000 },
+    { do: 'end' }
+  ] });
+  g.frame(16);
+  let st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('a key with ifMenu is not pressed while none of its menus is open', st.length >= 1 && st[0].ok && /so not pressed/.test(st[0].note) &&
+      !g.lines().some(function (l) { return l.t === 'ask' && l.do === 'key'; }));
+  g.menu('InventoryMenu', true);
+  g.frame(16);
+  const asked = g.lines().filter(function (l) { return l.t === 'ask' && l.do === 'key'; });
+  yes('  and pressed while one is', asked.length === 1 && asked[0].arg === 1);
+  g.ack({}); g.frame(16);
+  g.frame(16); g.frame(16);
+  st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('  and the shut wait holds while it is still open', st.length === 2);
+  g.menu('InventoryMenu', false); g.frame(16);
+  st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('  and passes once it shut', st.length >= 3 && st[2].ok);
+}
+// The dev release run: after the world, every step belongs to a task, so a
+// failure stops only its own part (26 Nov: the inventory step ended the run
+// and nothing after it ran), and each task after the first starts by
+// shutting whatever a failed one left open.
+{
+  const dev = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json'))).steps;
+  const tt = JSON.parse(read(path.join('tests', 'real-client', 'test-tasks.json'))).steps;
+  const cut = dev.findIndex(function (x) { return x.do === 'shot' && x.name === 'in-world'; });
+  const after = dev.slice(cut + 1, -1);
+  yes('the dev release run puts every step after the world in a task', after.length > 0 && after.every(function (x) { return x.task !== undefined; }));
+  function starts(list) {
+    const out = [];
+    for (let i = 1; i < list.length; i++) {
+      if (list[i].task !== undefined && list[i].task !== list[i - 1].task) { out.push(i); }
+    }
+    return out;
+  }
+  function clean(list, i) {
+    return list[i].do === 'key' && list[i].code === 1 && Array.isArray(list[i].ifMenu) && list[i].ifMenu.indexOf('InventoryMenu') >= 0 &&
+      list[i + 1].for === 'shut' && JSON.stringify(list[i + 1].menus) === JSON.stringify(list[i].ifMenu) &&
+      list[i + 2].do === 'page' && /thornswoodJournal/.test(list[i + 2].js);
+  }
+  const ds = starts(dev).slice(1), ts = starts(tt);
+  yes('  and every task after its first starts by shutting what was left open', ds.length >= 3 && ds.every(function (i) { return clean(dev, i); }));
+  yes('  the same in the test-task run, for every task', ts.length >= 7 && ts.every(function (i) { return clean(tt, i); }));
+  const bed = dev.findIndex(function (x) { return x.do === 'page' && /\/tp bannered/.test(x.js || ''); });
+  yes('  the trip to the inn is skipped when the character is in it already', bed > 0 && dev[bed - 1].for === 'cell' && dev[bed - 1].in === false && dev[bed - 1].skip === 3 &&
+      dev[bed + 1].menu === 'Loading Menu' && dev[bed + 1].skip === 1 && dev[bed + 2].for === 'world' && dev[bed + 3].for === 'cell' && dev[bed + 3].in !== false);
+  const jShut = dev.findIndex(function (x, i) { return i > cut && x.do === 'page' && /isOpen\(\)\?'shut'/.test(x.js || ''); });
+  yes('  and J shutting our journal is checked, not only the game\'s', jShut > cut && dev[jShut - 1].code === 36);
+}
 // The test-task list starts as the dev-release run does, up to the world,
 // and every step after that belongs to a test task.
 {
@@ -952,7 +1048,29 @@ foreach ($scan in @(1,23,36)) {
   const tt = JSON.parse(read(path.join('tests', 'real-client', 'test-tasks.json'))).steps;
   const cut = dev.findIndex(function (x) { return x.do === 'shot' && x.name === 'in-world'; });
   yes('test-tasks.json joins the world with dev-release.json\'s own steps', cut > 0 && JSON.stringify(tt.slice(0, cut + 1)) === JSON.stringify(dev.slice(0, cut + 1)));
-  yes('  and every step after that carries its test task, but the end', tt.slice(cut + 1, -1).every(function (x) { return x.task !== undefined; }) && tt[tt.length - 1].do === 'end');
+  const firstTidy = tt.findIndex(function (x) { return x.tidy === true; });
+  const tasksEnd = firstTidy > 0 ? firstTidy : tt.length - 1;
+  yes('  and every step after that carries its test task, but the tidy steps and the end', tt.slice(cut + 1, tasksEnd).every(function (x) { return x.task !== undefined; }) &&
+      tt.slice(tasksEnd, -1).every(function (x) { return x.tidy === true && x.task === undefined; }) && tt[tt.length - 1].do === 'end');
+  // The journal tasks (2135, 5429, 2563) press what the panel draws, so
+  // every id and button they name is one thornswood-journal.js makes, J is
+  // the front's journal key, and the limits they check are the panel's.
+  const jsOf = function (task) { return tt.filter(function (x) { return x.task === task && x.do === 'page'; }).map(function (x) { return x.js; }).join('\n'); };
+  const jr = read(path.join('game', 'ui', 'thornswood-journal.js'));
+  const front = read(path.join('game', 'plugins', 'thornswood-front.js'));
+  const jAll = [2135, 5429, 2563].map(jsOf).join('\n') + tt.filter(function (x) { return x.tidy; }).map(function (x) { return x.js; }).join('\n');
+  const ids = (jAll.match(/#ts-journal-[a-z]+/g) || []).filter(function (v, i, a) { return a.indexOf(v) === i; });
+  yes('  its journal steps name only ids the journal panel makes', ids.length >= 4 && /var ID = 'ts-journal';/.test(jr) &&
+      ids.every(function (id) { return jr.indexOf("ID + '-" + id.slice(12)) >= 0; }));
+  const verbs = (jAll.match(/act\('[a-z]+'\)/g) || []).map(function (v) { return v.slice(5, -2); });
+  yes('  and only its buttons', verbs.length >= 3 && verbs.every(function (v) { return jr.indexOf('data-do="' + v + '"') >= 0; }) &&
+      /data-new="1"/.test(jr) && /data-book="/.test(jr) && /data-page="/.test(jr));
+  yes('  J is the journal key they press', tt.filter(function (x) { return [2135, 5429, 2563].indexOf(x.task) >= 0 && x.do === 'key' && !x.ifMenu; }).every(function (x) { return x.code === 36; }) &&
+      /iniNumber\(ini, 'JournalKey', 36\)/.test(front));
+  yes('  a page holds 4,000 characters, as the long-page task checks', /var PAGE_CHARS = 4000;/.test(jr) && /maxLength!==4000/.test(jsOf(2563)));
+  yes('  and the presses of New are judged after the panel\'s wait for an answer', /var NEW_WAIT_MS = 3000;/.test(jr) &&
+      tt.filter(function (x) { return x.task === 2135 && x.for === 'time'; }).every(function (x) { return x.ms > 3000; }));
+  yes('  every page step\'s script parses', tt.every(function (x) { if (x.do !== 'page') { return true; } try { new Function('return ' + x.js); return true; } catch (e) { return false; } }));
   const tp = read(path.join('game', 'gamemode', 'teleport.ts'));
   yes('  its dice check reads the lines the server writes', /rwho \+ ' rolls ' \+ rsides \+ ': ' \+ total/.test(tp) && /rwho \+ ' rolls ' \+ rcount \+ 'x' \+ rsides \+ ': ' \+ rolls\.join\(' \+ '\) \+ ' = ' \+ total/.test(tp) && /'The number is the sides: /.test(tp));
 }
@@ -1012,6 +1130,8 @@ foreach ($scan in @(1,23,36)) {
   yes('its worktrees and temp hang off the clone, found through git\'s shared directory',
       /rev-parse --git-common-dir/.test(WATCH) && /\$repoRoot = Split-Path -Parent/.test(WATCH));
   yes('-Now runs at once when asked, skipping only the idle wait', /\[switch\]\$Now/.test(WATCH) && /if \(\$Now\) \{ \$IdleMinutes = 0 \}/.test(WATCH));
+  yes('the run goes on the Deployment it was started for, not the newest when it ends',
+      /'-Deployment', \[string\]\$dep\.id/.test(WATCH) && /\[string\]\$Deployment = ''/.test(RUNNER) && /deployments\/\$Deployment"/.test(RUNNER));
   yes('-Uninstall takes the watcher\'s worktree off too', /if \(\$Uninstall\) \{[\s\S]*?worktree remove --force \$watcher/.test(WATCH));
   const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
   if (ver.status === 0) {
@@ -1027,7 +1147,8 @@ foreach ($scan in @(1,23,36)) {
       "'F ' + (V $d @() $false $false 3 $false)\n" +
       "'G ' + (V $d @() $false $false 30 $true)\n" +
       "'H ' + (V ([pscustomobject]@{ id = '8'; state = 'in_progress'; lines = @() }) @() $false $false 30 $false)\n" +
-      "'I ' + (V $null @() $false $false 30 $false)\n";
+      "'I ' + (V $null @() $false $false 30 $false)\n" +
+      "'J ' + (V ([pscustomobject]@{ id = '9'; state = $null; lines = @() }) @() $false $false 30 $false)\n";
     const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
     const out = (r.stdout || '') + (r.stderr || '');
     const said = function (k) { const m = new RegExp('^' + k + ' (.*)$', 'm').exec(out); return m ? m[1].trim() : ''; };
@@ -1040,6 +1161,7 @@ foreach ($scan in @(1,23,36)) {
     yes('not while its own run is going', /still going/.test(said('G')));
     yes('not before the Deployment has succeeded', /in_progress, not success/.test(said('H')));
     yes('and not with no Deployment', said('I') === 'no Dev Deployment');
+    yes('a Deployment with no status yet is said so, not with a blank', said('J') === 'the newest Dev Deployment has no status yet');
     if (said('A') !== 'run') { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
   }
 }

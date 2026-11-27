@@ -373,8 +373,11 @@ namespace Thornswood
         {
             try
             {
-                File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(this, ConfigJson.Writer.Config));
-                Secrets.LockDown(path);
+                // Whole or not at all (#4702): written in place, a launcher
+                // stopped mid-write left a short file that Load reads as no
+                // settings, and a dev install turned into a main one. Locked
+                // to this account before it takes config.json's place.
+                WholeFile.Write(path, JsonSerializer.SerializeToUtf8Bytes(this, ConfigJson.Writer.Config), Secrets.LockDown);
             }
             // Still no throw, so every caller behaves as it did, but a Save
             // that failed now says so in launcher.log. It used to be the

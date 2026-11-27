@@ -84,7 +84,6 @@
     { "modId": 59818, "fileId": 794129, "name": "Crash Logger SSE AE VR - PDB support - Skyrim PDBs", "plugins": [] },
     { "modId": 60033, "fileId": 248867, "name": "Nemesis Unlimited Behavior Engine", "plugins": [] },
     { "modId": 61007, "fileId": 351287, "name": "Oakwood", "plugins": ["AnotherOakwood.esp"] },
-    { "modId": 61719, "fileId": 258619, "name": "MCM Recorder", "plugins": ["McmRecorder.esp"] },
     { "modId": 62775, "fileId": 798218, "name": "TrueHUD", "plugins": ["TrueHUD.esl"] },
     { "modId": 64339, "fileId": 635566, "name": "Better Third Person Selection (AE - SE)", "plugins": ["BetterThirdPersonSelection.esp"] },
     { "modId": 72347, "fileId": 798533, "name": "Precision", "plugins": ["Precision.esp"] },
@@ -207,7 +206,6 @@
     { "name": "AwBaldandShavedHair.esp", "master": false, "light": true, "masters": ["Skyrim.esm", "Update.esm"], "after": [] },
     { "name": "BetterThirdPersonSelection.esp", "master": false, "light": true, "masters": ["Skyrim.esm"], "after": [] },
     { "name": "HammerHair.esp", "master": false, "light": true, "masters": ["Skyrim.esm"], "after": [] },
-    { "name": "McmRecorder.esp", "master": false, "light": true, "masters": ["Skyrim.esm"], "after": [] },
     { "name": "RaceMenuMorphsHIMBO.esp", "master": false, "light": true, "masters": [], "after": [] },
     { "name": "QuickLootIE.esp", "master": false, "light": true, "masters": ["Skyrim.esm"], "after": [] },
     { "name": "KhisartinBeards.esp", "master": false, "light": true, "masters": ["Skyrim.esm"], "after": [] },
@@ -230,5 +228,7 @@
     { "name": "CBBE.esp", "enabled": false, "master": false, "light": false, "masters": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "Dragonborn.esm"], "after": ["RaceMenu.esp"] },
     { "name": "RaceMenuMorphsCBBE.esp", "enabled": false, "master": false, "light": false, "masters": ["Skyrim.esm"], "after": ["RaceMenuPlugin.esp", "CBBE.esp"] }
   ],
-  "dropped": []
+  "dropped": [
+    { "name": "McmRecorder.esp", "mod": 61719, "why": "Its forms are its menu (the McmRecorder quest and four messages) and one MISC, McmRecorder_MessageText, with a single persistent reference of it in WEMerchantChests, the game's storage cell nobody can reach, which Thornswood-Last.esp already carries initially disabled; nothing in a character's inventory or a server table is one of them. Its menu cannot run here, because it needs JContainers, which the collection does not carry (it came in only for SunHelm's first-run recording, and SunHelm left with #480). Its loose SKI_ConfigBase.pex and SKI_ConfigManager.pex go with it, so every SkyUI and MCM Helper menu runs on SkyUI's own base again instead of one that calls into JContainers. Patrick, 26 Nov 2026, option A on #4511, measured on One's game folder the same day." }
+  ]
 }

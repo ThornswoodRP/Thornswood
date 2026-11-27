@@ -12,16 +12,20 @@ from bot_core import (STAFF_IDS, STAFF_NAMES, _role_tokens, _who_hits, by_name,
     client, log)
 
 
-# #choose-your-hold, where a Playtester picks the hold their character calls
-# home. The ping buttons were here until 12 Nov 2026; they are in #welcome
-# now (bot_pings.py).
+# #choose-your-hold, where a Playtester picks which holds' channels they see.
+# The ping buttons were here until 12 Nov 2026; they are in #welcome now
+# (bot_pings.py).
 #
 # The hold channels are private: each hold's category is open to its own
-# Citizen, Jarl and officers and to staff, so picking a hold here is what
-# opens it. One
-# hold per person. Picking another takes the old Citizen role away, and
-# pressing the one you already have leaves it. Jarl roles are never touched
-# here; a Jarl is appointed, not picked.
+# Citizen, Jarl and officers and to staff, so a Citizen role is what opens
+# it. A pick here is not where a character lives in the game, only which hold
+# channels somebody sees in Discord, so they keep the clutter down to the
+# holds they want (Patrick, 27 Nov 2026, #7053: "let people click on more
+# than one hold and than be able to remove holds they dont want to have access
+# to anymore"). So each button is that hold alone: pressing it opens the hold,
+# pressing it again closes it, and the other holds are left as they are.
+# Until #7053 there was one hold per person and a second pick took the first
+# away. Jarl roles are never touched here; a Jarl is appointed, not picked.
 #
 # Only somebody with the Member role, or a staff role, can use it. The channel
 # is hidden from everybody else already, and this is the second lock, so a
@@ -38,10 +42,10 @@ HOLDS = ['Whiterun', 'Solitude', 'Windhelm', 'Riften', 'Markarth',
 # The towns a hold role can name: every hold, Raven Rock included.
 OFFICE_TOWNS = list(HOLDS)
 
-HOLD_PANEL = ('**Choose your hold**\n\n'
-              'Pick the hold your character calls home and its channels open '
-              'to you. One hold at a time: picking another moves you there, '
-              'and pressing the one you have leaves it.')
+HOLD_PANEL = ('**Choose your holds**\n\n'
+              'Press a hold to open its channels, and press it again to close '
+              'them. Open as many as you like. This only picks which hold '
+              'channels you see here, not where your character lives.')
 
 
 def _citizen(hold):
@@ -74,6 +78,17 @@ async def _say(interaction, text):
     await interaction.response.send_message(text, ephemeral=True)
 
 
+def _open_now(roles):
+    """The holds these roles open, in the panel's order, said in words.
+       Worked out from the roles the press leaves, not read back from the
+       member: Discord sends the changed member later, on its own event."""
+    have = set(r.name.lower() for r in roles)
+    held = [h for h in HOLDS if _citizen(h).lower() in have]
+    if not held:
+        return 'You have no holds open.'
+    return 'Your holds: %s.' % ', '.join(held)
+
+
 async def pick_hold(interaction, hold):
     guild, who = interaction.guild, interaction.user
     if guild is None or not _may_pick(who):
@@ -89,20 +104,14 @@ async def pick_hold(interaction, hold):
         return
     try:
         if role in who.roles:
-            await who.remove_roles(role, reason='Left their hold in #choose-your-hold')
-            await _say(interaction, 'You are no longer a citizen of %s.' % hold)
-            return
-        old = [r for r in who.roles
-               if r.name.lower().startswith('citizen of ') and r != role
-               and _can_give(guild, r)]
-        if old:
-            await who.remove_roles(*old, reason='Moved hold in #choose-your-hold')
-        await who.add_roles(role, reason='Picked in #choose-your-hold')
-        said = 'You are now a citizen of %s. Its channel is open to you.' % hold
-        if old:
-            said += ' You are no longer a citizen of %s.' % ', '.join(
-                r.name[len('Citizen of '):] for r in old)
-        await _say(interaction, said)
+            await who.remove_roles(role, reason='Closed a hold in #choose-your-hold')
+            now = [r for r in who.roles if r != role]
+            said = 'The %s channels are closed to you now.' % hold
+        else:
+            await who.add_roles(role, reason='Opened a hold in #choose-your-hold')
+            now = list(who.roles) + [role]
+            said = 'The %s channels are open to you now.' % hold
+        await _say(interaction, said + ' ' + _open_now(now))
     except Exception:
         log('hold pick failed:\n' + traceback.format_exc())
         await _say(interaction, 'That did not go through. Try again, or ask staff.')

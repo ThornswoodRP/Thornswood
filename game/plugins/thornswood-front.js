@@ -3038,6 +3038,7 @@
     if (cleared) { say('cleared the owner of ' + cleared + ' bed(s) already here'); }
   }));
 
+
   sp.on('activate', guard('activate', (e) => {
     // Declared here, once, for the whole handler. It used to be declared
     // further down, after the door block, and a const is not usable
@@ -3232,6 +3233,128 @@
       reActivating = false;
       say('  re-activating ' + (name || 'it') + ' threw: ' + err);
     }
+  }));
+
+  /*
+    A BUILDING YOU HOLD IS YOURS TO USE (#6883).
+
+    Main, 26 Nov: after claiming a Whiterun tavern its storage could not be
+    used without the game's red Steal, even after signing out and back in,
+    and a Riften building did the same. The claim is the server's register,
+    and nothing told the game: what Skyrim calls theft is its own ownership,
+    on the cell (the tavern belongs to its keeper) and on references in it
+    (a chest, a plate, a sack), read in this game from the plugin records.
+    So every container and loose thing in a claimed building still belonged
+    to the people it had in vanilla.
+
+    The server now puts the interior cells this character holds on the lock
+    list (own), and the lock script hands the list here. A held building
+    that is loaded is made the character's own, the way the game makes a
+    bought house the player's: the cell's owner, and every container and
+    item in it that had an owner of its own. What each had before is kept,
+    and a building that is no longer held (a lapse, an eviction, a deed
+    handed on, another character) is given back its owners, so somebody
+    else's building and everything in it is still theirs. A thing whose cell
+    is not loaded when it is given back is given back when that cell loads.
+    Beds are left to the bed code above, which clears them for everybody.
+
+    Only the holder: the bench reads "chests you own" the same way (#3159),
+    and a key or a guest's night lets somebody in, not take what is there.
+  */
+  // CONT, ARMO, BOOK, INGR, LIGH, MISC, WEAP, AMMO, KEYM, ALCH, SLGM, SCRL.
+  const OWN_REF_TYPES = [28, 26, 27, 30, 31, 32, 41, 42, 45, 46, 52, 23];
+  let ownWanted = [];
+  const ownKept = {};   // cell id -> { taken, cell: [actor, faction] | null, refs: { ref id: [actor, faction] } }
+
+  function ownerIds(x) {
+    const a = x.getActorOwner(), f = x.getFactionOwner();
+    return [a ? a.getFormID() : 0, f ? f.getFormID() : 0];
+  }
+  function putOwner(x, was) {
+    if (was[0]) { x.setActorOwner(sp.ActorBase.from(sp.Game.getFormEx(was[0]))); }
+    else if (was[1]) { x.setFactionOwner(sp.Faction.from(sp.Game.getFormEx(was[1]))); }
+    else { x.setActorOwner(null); }
+  }
+
+  function takeCell(id, me) {
+    const cell = sp.Cell.from(sp.Game.getFormEx(id));
+    if (!cell || !cell.isAttached()) { return 0; }
+    const rec = ownKept[id] || (ownKept[id] = { taken: false, cell: null, refs: {} });
+    if (!rec.cell) { rec.cell = ownerIds(cell); }
+    cell.setActorOwner(me);
+    const mine = me.getFormID();
+    let n = 0;
+    for (let t = 0; t < OWN_REF_TYPES.length; t++) {
+      const count = cell.getNumRefs(OWN_REF_TYPES[t]);
+      for (let i = 0; i < count; i++) {
+        const ref = cell.getNthRef(i, OWN_REF_TYPES[t]);
+        if (!ref) { continue; }
+        const rid = ref.getFormID();
+        if (Object.prototype.hasOwnProperty.call(rec.refs, rid)) { continue; }
+        const was = ownerIds(ref);
+        if ((!was[0] && !was[1]) || was[0] === mine) { continue; }
+        rec.refs[rid] = was;
+        ref.setActorOwner(me);
+        n++;
+      }
+    }
+    rec.taken = true;
+    return n;
+  }
+
+  function giveCellBack(id) {
+    const rec = ownKept[id];
+    if (rec.taken) {
+      const cell = sp.Cell.from(sp.Game.getFormEx(Number(id)));
+      if (cell && rec.cell) { putOwner(cell, rec.cell); rec.cell = null; rec.taken = false; }
+    }
+    for (const rid in rec.refs) {
+      if (!Object.prototype.hasOwnProperty.call(rec.refs, rid)) { continue; }
+      const ref = sp.ObjectReference.from(sp.Game.getFormEx(Number(rid)));
+      if (!ref) { continue; }   // not loaded: given back when its cell loads
+      putOwner(ref, rec.refs[rid]);
+      delete rec.refs[rid];
+    }
+    if (!rec.taken && !Object.keys(rec.refs).length) { delete ownKept[id]; }
+  }
+
+  // loaded: a cell that has just finished loading, whose things are all there
+  // now, so a held one is gone through again for any that were not yet.
+  function settleOwnCells(loaded) {
+    const pc = sp.Game.getPlayer();
+    const me = pc ? pc.getActorBase() : null;
+    if (!me) { return; }
+    for (const key in ownKept) {
+      if (Object.prototype.hasOwnProperty.call(ownKept, key) && ownWanted.indexOf(Number(key)) < 0) {
+        giveCellBack(key);
+      }
+    }
+    for (let i = 0; i < ownWanted.length; i++) {
+      const rec = ownKept[ownWanted[i]];
+      if (rec && rec.taken && ownWanted[i] !== loaded) { continue; }
+      const first = !(rec && rec.taken);
+      const n = takeCell(ownWanted[i], me);
+      if (first && ownKept[ownWanted[i]] && ownKept[ownWanted[i]].taken) {
+        say('a building this character holds is theirs to use: ' + ownWanted[i].toString(16) +
+            ', ' + n + ' thing(s) in it that had an owner');
+      }
+    }
+  }
+
+  function wantOwnCells(ids) {
+    ownWanted = (Array.isArray(ids) ? ids : []).map(Number).filter((x) => x > 0);
+    settleOwnCells();
+  }
+
+  // The lock script calls this on every change and heartbeat (property.ts).
+  globalThis.__thornswoodOwnCells = guard('own cells', wantOwnCells);
+  sp.on('cellFullyLoaded', guard('own cells loaded', (e) => {
+    settleOwnCells(e && e.cell ? e.cell.getFormID() : 0);
+  }));
+  sp.once('update', guard('own cells at start', () => {
+    let ids = [];
+    try { ids = globalThis.__thornswoodPropertyOwn || []; } catch (e) { ids = []; }
+    wantOwnCells(ids);
   }));
 
   /*
@@ -3631,6 +3754,20 @@
   let afterEnded = 0;            // when the last mining spell ended, 0 for none
   let afterWaitEquip = false;    // a line is still owed for the next equip
   let afterEvents = {};          // event names written since the last end, once each
+  /*
+    THE START OF A SPELL TOO (#4549). The session logs of 23 Nov 2026 have
+    a spell that ended with the character sitting nowhere (sit 0) and the
+    weapon out, where every other spell ended in the mining state (sit 3):
+    IdlePickaxeEnter was asked for and not taken, and that spell is the one
+    a Main tester reported, with the pickaxe drawn, the pickaxe gone, the ore
+    with no swing, and no normal movement until the pickaxe came off. So the
+    same line is written as the idle is asked for and half a second into it,
+    which says whether it was taken and what the character was in when it
+    was asked for, and the events of the three seconds before it are written
+    in one line, which shows the sheathe the gamemode asks for first.
+  */
+  const AFTER_BEFORE_MS = 3000;
+  let afterRecent = [];          // [name, when] of the last events, newest last
 
   /*
     ONLY THE CHARACTER'S OWN EQUIP COUNTS. The game sends equip and unequip
@@ -3674,7 +3811,17 @@
           const name = String(ctx.animEventName || '');
           if (!name) { return; }
           const now = Date.now();
-          if (MINE_START.test(name)) { afterPick = true; return; }
+          if (MINE_START.test(name)) {
+            afterPick = true;
+            const before = afterRecent.filter((r) => now - r[1] <= AFTER_BEFORE_MS)
+              .map((r) => r[0] + ' ' + (r[1] - now) + 'ms').join(', ');
+            say('after mining: before ' + name + ': ' + (before || 'no events in the last ' + AFTER_BEFORE_MS + 'ms'));
+            afterRecent = [];
+            afterAsked.push(['as ' + name + ' was asked for', now], ['0.5 s into ' + name, now + 500]);
+            return;
+          }
+          afterRecent.push([name, now]);
+          if (afterRecent.length > 12) { afterRecent.shift(); }
           if (/^idlechairexitstart$/i.test(name) && afterPick) {
             afterPick = false;
             afterEnded = now;
@@ -5122,21 +5269,37 @@
       and it never set anybody on fire. getFurnitureReference is the engine's
       own answer for which station you are at.
     */
+    /*
+      AND NOBODY THE GAME HAS SEATED IS STANDING IN THE COALS (#6722). A
+      cooking spit or pot stands over its own campfire: in Skyrim.esm 87 of
+      the 203 cooking stations near a lit fire are within FIRE_INSIDE of it,
+      12 to 90 units from the fire's centre, so starting to cook moved the
+      cook into the catch and set them alight, 7 health a second for as long
+      as they cooked. A person at a station, on a bench or on a chair is
+      where the furniture put them, not where they walked; they are warmed
+      as before and never caught. Standing up and walking into the fire
+      still catches.
+    */
     fireFlame = -1;
+    let seated = false;
+    let warmest = -1;
     try {
       const furn = pc.getFurnitureReference ? pc.getFurnitureReference() : null;
       if (furn) {
+        seated = true;
         const b = furn.getBaseObject();
         const id = b ? b.getFormID() : 0;
         if (id) {
           const ids = fireIdList();
           for (let f = 0; f < ids.length; f++) {
-            if (ids[f] === id) { return fireNearest(px, py, pz, fireSpotsHere(pc), 0); }
+            if (ids[f] === id) { warmest = 0; break; }
           }
         }
       }
     } catch (e) { }
-    return fireNearest(px, py, pz, fireSpotsHere(pc), -1);
+    const best = fireNearest(px, py, pz, fireSpotsHere(pc), warmest);
+    if (seated) { fireFlame = -1; }
+    return best;
   }
 
   sp.on('update', guard('race read', raceReadTick));
