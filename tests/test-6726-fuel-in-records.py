@@ -239,11 +239,13 @@ yes('4 and the table is the same as before for a load order with no fuel',
     json.loads(br.in_game_table(data, recipes, fuel_file({}), policy)) ==
     {'22:' + IA: {'name': 'Steel Buckler', 'out': '214a3:' + IA, 'bench': '88105:Skyrim.esm',
                   'inputs': [['5ace5:Skyrim.esm', 1, 2], ['f:Skyrim.esm', 50, 0]]}})
-src = open(os.path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py'), encoding='utf-8').read()
+with open(os.path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py'), encoding='utf-8') as f:
+    src = f.read()
 yes('4 the plugin reads RECIPES_SET_IN_GAME for them, writes no table of its own, and counts both halves',
     "gamemode_tables.read('RECIPES_SET_IN_GAME', tables_dir)" in src and 'FUELED_IN_GAME' not in src and
     "'recipesFueled': len(fuels)" in src and "'recipesFueledInGame': len(fueled_in_game)" in src)
-chain = json.load(open(os.path.join(ROOT, 'scripts', 'mods', 'content-tables.json'), encoding='utf-8'))
+with open(os.path.join(ROOT, 'scripts', 'mods', 'content-tables.json'), encoding='utf-8') as f:
+    chain = json.load(f)
 order = [s['tool'] for s in chain['steps']]
 step = chain['steps'][order.index('scripts/mods/Build-LastPlugin.py')]
 recost = chain['steps'][order.index('scripts/dev/Build-Recost.py')]

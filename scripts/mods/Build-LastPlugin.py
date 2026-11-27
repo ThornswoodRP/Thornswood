@@ -1842,12 +1842,13 @@ def build(data_dir, tables_dir=None):
     hold_only_cells -= set(hold_cells)
 
     # 5. The re-costed smith recipes (#613).
-    recipes = recost_entries(json.load(open(RECOST, encoding='utf-8')), plugins, win)
+    with open(RECOST, encoding='utf-8') as f:
+        recipes = recost_entries(json.load(f), plugins, win)
 
     # 8. The recipes moved to their trade's bench (#3120). One a never-copied
     # plugin has, or wins, is moved in each person's game instead.
-    moves, moved_in_game = move_entries(json.load(open(RECIPES, encoding='utf-8')), plugins, win, canon,
-                                        blocked, carries)
+    with open(RECIPES, encoding='utf-8') as f:
+        moves, moved_in_game = move_entries(json.load(f), plugins, win, canon, blocked, carries)
 
     # 8b. The charcoal and the handle (#1398, #6726): every forge, skyforge
     # and smelter recipe takes the charcoal its grade asks for, and a hafted
@@ -1855,8 +1856,9 @@ def build(data_dir, tables_dir=None):
     # and takes them (Patrick's B on #6726). One a never-copied plugin has,
     # or wins, takes them in each person's game instead, from
     # RECIPES_SET_IN_GAME, which Build-Recost.py writes.
-    fuels, fueled_in_game = fuel_entries(json.load(open(FUEL, encoding='utf-8')),
-                                         gamemode_tables.read('RECIPES_SET_IN_GAME', tables_dir),
+    with open(FUEL, encoding='utf-8') as f:
+        fuel = json.load(f)
+    fuels, fueled_in_game = fuel_entries(fuel, gamemode_tables.read('RECIPES_SET_IN_GAME', tables_dir),
                                          plugins, win, canon, blocked, carries)
 
     # 9. The recipes freed of Skyrim's perks (#4826).
