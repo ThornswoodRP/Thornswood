@@ -4337,74 +4337,6 @@
   }
 
   /*
-    ------------------------------------- three chopping blocks, taken away
-
-    Djinn, 22 September, "Removal from area - Woodworking chopping Blocks":
-    Solitude, Solitude Stables and Dragon Bridge, with a coordinate each.
-    Patrick: "I want them actually removed and not there visible anymore."
-
-    THE SERVER CANNOT DO THIS AND NEITHER CAN A GAMEMODE. Refusing the press
-    only makes a block that does nothing, which is what the first attempt did
-    and is not what was asked: the block is still standing there. Deleting a
-    placed reference means editing the plugin that placed it, which is a
-    rebuild, a pack, and a server that will not start if it goes wrong.
-
-    So it is done where it can be done. Skyrim Platform runs on the machine
-    that is drawing the block and ObjectReference.disable is the engine's own
-    "this is not here", the same call the game uses for every object a quest
-    takes out of the world. Every person running this plugin stops seeing them,
-    which is everybody.
-
-    BY FORM ID, MEASURED FROM THE PLUGINS. Djinn, 24 September, on dev, with
-    three screenshots of a Wood Chopping Block and "E Use" under the
-    crosshair: "The ones I gave you coords for are not removed". So every
-    placed reference in the load order was read (99 plugins, last one wins)
-    for what stands at each of his points:
-
-      Solitude          d6ae9:Skyrim.esm, 103 units from the point, in
-                        SolitudeWorld. Skyrim.esm files it in the cell at
-                        -16,25; Populated Cities Towns Villages
-                        Legendary.esp overrides it into a PERSISTENT
-                        reference in that worldspace's persistent cell.
-      Solitude Stables  a9ee1:Skyrim.esm, 61 units away, Tamriel, an
-                        ordinary reference in the cell at -19,23.
-      Dragon Bridge     abf83:Skyrim.esm, 132 units away, Tamriel, a
-                        PERSISTENT reference in Tamriel's persistent cell,
-                        standing in the cell at -25,19.
-
-    All three are base 7022e, WoodChoppingBlock. No other of the 128 placed
-    blocks on the three chopping block bases is within 400 units of any
-    point; the nearest is 4,638 units from Dragon Bridge.
-
-    So the walk of the cell somebody stands in was the wrong question twice
-    over. Two of the three are filed under a persistent cell rather than
-    the cell they stand in, and the third could only be found from inside
-    its own cell, not from the one next to it. Asking for the three by form id
-    finds each one wherever the person stands and cannot catch a fourth.
-    Whether the engine also lists a persistent reference under its exterior
-    cell at run time was not measured, because that needs the game running;
-    asking by form id does not depend on it. The base and the position are
-    still checked, once, so an override that moved one or made it something
-    else leaves it alone and says so.
-
-    AGAIN WHENEVER IT COMES BACK, which is the other half of the report.
-    SkyMP's own client puts it back. Every time the server streams a
-    Skyrim.esm reference to this machine (walking into range, coming back
-    after leaving, reconnecting), the fork's skymp5-client remoteServer.ts
-    onCreateActorMessage calls ModelApplyUtils.applyModelIsDisabled(refr,
-    !!msg.props['disabled']), and the server writes that flag as
-    "isDisabled" (skymp5-server CreateActorMessage.h), so it always reads
-    false and the client calls refr.enable(true). The old code marked a
-    site done after its first disable and never looked again. Now each
-    site is checked every four seconds while somebody is near it, and
-    taken out again when it is back, with one line each time.
-
-    ONLY WHEN SOMEBODY IS NEAR. An ordinary reference is not in memory until
-    its cell loads, and nothing is asked of the game from anywhere else, so
-    away from these three places the cost is one distance sum per site every
-    four seconds.
-  */
-  /*
     ======================= WALKING A CELL FOR A BASE =======================
 
     Game.findClosestReferenceOfType FINDS PERSISTENT REFERENCES, and almost
@@ -4421,13 +4353,13 @@
 
     Neither was a table problem or a radius problem. Cell.getNumRefs and
     getNthRef see everything in the cell, temporary references included, so
-    that is what the fire probe uses now. The chopping blocks moved on again,
-    to their own form ids: see the note above this one.
+    that is what the fire probe uses now. The chopping blocks are held
+    disabled by the server now (#495, #5052), so nothing here looks for them.
 
     THE FORM TYPES ARE THE FILTER AND THEY MATTER: walking every reference in
     an exterior cell is thousands of native calls. Activator 24, static 34,
     movable static 36 and furniture 42 are the four the fire table is built
-    from, and the chopping blocks are furniture.
+    from.
   */
   const CELL_TYPES = [24, 34, 36, 42];
 
@@ -4543,103 +4475,6 @@
     }
     return true;
   }
-
-  const BLOCK_BASES = [0x7022e, 0xa91bf, 0x10f575];
-  // ref is the placed reference at the point, read out of the plugins on
-  // 24 September (see "three chopping blocks, taken away" above). All three
-  // are Skyrim.esm's own, which is always load index 00, so the local id is
-  // the id the game uses.
-  const BLOCKS_GONE = [
-    { where: 'Solitude', pos: [-64263, 106003.5, -8377.8], ref: 0xd6ae9 },
-    { where: 'Solitude Stables', pos: [-76193.3, 96600.6, -11435], ref: 0xa9ee1 },
-    { where: 'Dragon Bridge', pos: [-101780.7, 80484.5, -12522.7], ref: 0xabf83 }
-  ];
-  const BLOCK_FIND = 400;      // how close to the point the block has to be
-  const BLOCK_NEAR = 6000;     // how close YOU have to be for it to be loaded
-  const blockDone = {};        // never again this session: not ours, or it threw
-  const blockChecked = {};     // base and position read once and right
-  const blockTook = {};        // how many times each has been taken out
-  let blockAt = 0;
-
-  sp.on('update', guard('blocksgone', () => {
-    const now = Date.now();
-    if (now - blockAt < 4000) { return; }
-    blockAt = now;
-
-    let pc = null;
-    try { pc = sp.Game.getPlayer(); } catch (e) { return; }
-    if (!pc) { return; }
-    let px = 0, py = 0, pz = 0;
-    try { px = pc.getPositionX(); py = pc.getPositionY(); pz = pc.getPositionZ(); }
-    catch (e) { return; }
-
-    for (let i = 0; i < BLOCKS_GONE.length; i++) {
-      if (blockDone[i]) { continue; }
-      const site = BLOCKS_GONE[i];
-      const dx = px - site.pos[0], dy = py - site.pos[1], dz = pz - site.pos[2];
-      if (Math.sqrt(dx * dx + dy * dy + dz * dz) > BLOCK_NEAR) { continue; }
-
-      /*
-        ASKED FOR BY FORM ID, NOT WALKED FOR. A walk of the parent cell can
-        only find a block filed under the cell the person stands in, and two
-        of these three are filed under a persistent cell instead. See the
-        note over BLOCKS_GONE. Nothing back is an ordinary reference whose
-        cell has not loaded yet, which is not a failure: it is asked for
-        again in four seconds.
-      */
-      let ref = null;
-      try { ref = sp.ObjectReference.from(sp.Game.getFormEx(site.ref)); } catch (e) { ref = null; }
-      if (!ref) { continue; }
-
-      // Checked once: the id was measured, and a load order that changes
-      // what stands there must leave it alone rather than take something
-      // else out of the world.
-      if (!blockChecked[i]) {
-        let why = '';
-        try {
-          const base = ref.getBaseObject();
-          const id = base ? base.getFormID() : 0;
-          const dx2 = ref.getPositionX() - site.pos[0];
-          const dy2 = ref.getPositionY() - site.pos[1];
-          const dz2 = ref.getPositionZ() - site.pos[2];
-          const off = Math.sqrt(dx2 * dx2 + dy2 * dy2 + dz2 * dz2);
-          if (BLOCK_BASES.indexOf(id) < 0) {
-            why = 'its base is ' + id.toString(16) + ', which is not a chopping block';
-          } else if (off > BLOCK_FIND) {
-            why = 'it stands ' + Math.round(off) + ' units from the point';
-          }
-        } catch (e) {
-          why = 'it could not be read: ' + e;
-        }
-        if (why) {
-          say('left the ' + site.where + ' reference ' + site.ref.toString(16) + ' alone: ' + why);
-          blockDone[i] = true;
-          continue;
-        }
-        blockChecked[i] = true;
-      }
-
-      let gone = false;
-      try { gone = ref.isDisabled(); } catch (e) { gone = false; }
-      if (gone) { continue; }
-      try {
-        // disable answers a promise. Nothing waits on it: the block either
-        // goes or it does not, and a failure is worth one line, not a stall.
-        const p = ref.disable(false);
-        if (p && typeof p.then === 'function') { p.then(function () { }, function () { }); }
-        blockTook[i] = (blockTook[i] || 0) + 1;
-        if (blockTook[i] === 1) {
-          say('took the chopping block at ' + site.where + ' out of the world');
-        } else {
-          say('the ' + site.where + ' chopping block came back and was taken out again (' +
-              blockTook[i] + ' times this session)');
-        }
-      } catch (e) {
-        say('could not take the ' + site.where + ' chopping block out: ' + e);
-        blockDone[i] = true;   // do not try it every four seconds forever
-      }
-    }
-  }));
 
   /*
     ------------------------------------------- where you are standing

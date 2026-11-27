@@ -11,8 +11,10 @@
 // gamemode now disables the three on the server at start.
 //
 // Drives the real disableBlocksOff out of game/gamemode.js against a fake mp,
-// and reads the client source in engine/skymp for the name it reads. Read
-// only.
+// reads the client source in engine/skymp for the name it reads, and reads
+// thornswood-front.js for the old four second loop, which went with #5052:
+// with the server holding the three and the client told so, it had nothing
+// left to do. Read only.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -81,11 +83,21 @@ if (fs.existsSync(rs) && fs.existsSync(hdr)) {
   const server = fs.readFileSync(hdr, 'utf8');
   const sent = (/\.Serialize\("([A-Za-z]*[Dd]isabled)"/.exec(server) || [])[1];
   yes('the server sends the flag as isDisabled', sent === 'isDisabled');
-  yes('the client reads isDisabled when an object arrives', /applyModelIsDisabled\(refr, !!\(msg\.props\['isDisabled'\]/.test(client));
+  yes('the client reads isDisabled when an object arrives',
+      /disabled: !!\(msg\.props\['isDisabled'\]/.test(client) &&
+      /applyModelIsHarvestedAndDisabled\(refr, flags\.harvested, flags\.disabled\)/.test(client));
   yes('and in a property update', /msg\.propName === 'isDisabled'/.test(client));
 } else {
   console.log('SKIP  the engine source is not here (git submodule update --init engine/skymp)');
 }
+
+// ---- and the front plugin no longer takes them out itself (#5052) -----------
+const FRONT = process.env.FRONT || path.join(ROOT, 'game', 'plugins', 'thornswood-front.js');
+const front = fs.readFileSync(FRONT, 'utf8').split(String.fromCharCode(13)).join('');
+yes('the front plugin has no chopping block loop', front.indexOf("guard('blocksgone'") < 0 &&
+    !/BLOCKS_GONE|BLOCK_BASES/.test(front));
+yes('and names none of the three references',
+    !/0xd6ae9|0xa9ee1|0xabf83/i.test(front));
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
