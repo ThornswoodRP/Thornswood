@@ -28,8 +28,8 @@
     E  A wolf's bite is a bite, and bleeds.
     F  Left open, the bite bleeds her down, not dead (#4607): she bleeds no
        further while down. Nobody stands her up, and after 3 minutes the
-       death goes through with no killer, the wake at the temple, the wound
-       still on her, the bleed stopped and the down over.
+       death goes through with no killer, the wake at the temple, the bite
+       cleared, the broken arm kept, the bleed stopped and the down over (#6616).
     G  Staff write an agreed scar; clearing her wounds does not clear it.
     H  With no bandage left Corvin is told so. The server restarts: her
        bandaged cut and the scar are as they were.
@@ -177,6 +177,7 @@ yes('E1 a wolf\'s bite is a bite, and bleeds (' + answer + ')', answer === 'You 
 // -------------------------------------------------------- F. bled down --
 function down(a) { return (w.prop(a, 'thornswoodDown') || {}).down === true; }
 const deathsBefore = w.logged(/\bdeath \S+ in /).length;
+const breakBeforeDeath = JSON.stringify(wounds(BRENNA, 'break'));
 for (let s = 0; s < 120 && !down(BRENNA) && !w.row(BRENNA).isDead; s++) { w.run(1000); }
 yes('F1 left open, the bite bleeds her down, not dead (' + hp(BRENNA) + ', ' + JSON.stringify(rec(BRENNA).down) + ')',
   down(BRENNA) && !w.row(BRENNA).isDead && !!rec(BRENNA).down && hp(BRENNA) > 0);
@@ -188,9 +189,10 @@ const bledOut = w.logged(/\bdeath \S+ in /).slice(deathsBefore);
 yes('F3 nobody stands her up, and after 3 minutes the death goes through with no killer (' + bledOut.join(' | ') + ')',
   w.row(BRENNA).isDead === true && bledOut.length === 1 && !/killer=/.test(bledOut[0]));
 w.run(26000);
-yes('F4 she wakes at the temple, the bite still on her, the bleed stopped and the down over (' + w.row(BRENNA).worldOrCellDesc + ', ' + JSON.stringify(wounds(BRENNA, 'bite')) + ')',
+yes('F4 she wakes at the temple, the bite cleared, the broken arm kept and the down over (' + w.row(BRENNA).worldOrCellDesc + ', ' + JSON.stringify(wounds(BRENNA, 'bite')) + ')',
   w.row(BRENNA).isDead === false && w.row(BRENNA).worldOrCellDesc === TEMPLE.desc &&
-  wounds(BRENNA, 'bite').length === 1 && wounds(BRENNA, 'bite')[0].bleed === false && wounds(BRENNA, 'break').length === 1 &&
+  wounds(BRENNA).length === 1 && wounds(BRENNA, 'bite').length === 0 &&
+  JSON.stringify(wounds(BRENNA, 'break')) === breakBeforeDeath && wounds(BRENNA).every(function (wound) { return !wound.bleed; }) &&
   !down(BRENNA) && !rec(BRENNA).down);
 
 // -------------------------------------------------------- G. staff --
