@@ -375,10 +375,14 @@ Yes '  the trusted Look checkout records the Main base for Make and Push' (
 Yes '  the maker hands back a bundle over that exact base and push checks against its local copy' (
     $make -match 'git bundle create \$f "\$env:PIN_BASE\.\.engine-pin/next"' -and
     $push -match 'git diff --name-only \$main engine-pin/next')
-Yes '  push refuses a stale Main before minting its write token' (
-    $push -match 'git/ref/heads/main' -and
-    $push -match '\$currentMain -ne \$main' -and
-    $push.IndexOf('git/ref/heads/main') -lt $push.IndexOf('id: app'))
+Yes '  push refuses a Main base that is no longer on main before minting its write token' (
+    $push -match 'compare/\$main\.\.\.main" --jq \.status' -and
+    $push -match "\`$onMain -notin @\('identical', 'ahead'\)" -and
+    $push.IndexOf('compare/$main...main') -lt $push.IndexOf('id: app'))
+# #7239: main moving on while make runs (3 to 9 minutes) is no reason to drop
+# the pin. Behind main alone is no reason (#4523), and runs 208 and 209 on the
+# night of 26 Nov 2026 were lost that way.
+Yes '  and a base only behind main is pushed, not refused (#7239)' ($push -notmatch 'git/ref/heads/main' -and $push -notmatch 'currentMain')
 Yes '  push holds the pin to one commit on main with only a pin''s paths before it pushes' ($push -match 'is not one commit on main' -and $push -match 'changes more than a pin' -and $push.IndexOf('changes more than a pin') -lt $push.IndexOf('push --force'))
 Yes '  push pushes the branch, then opens or updates the pull request' ($push.IndexOf('push --force') -ge 0 -and $push.IndexOf('push --force') -lt $push.IndexOf('Open-EnginePinPr.ps1'))
 # #5256: the robot's own App token pushes and opens, so the pull request
