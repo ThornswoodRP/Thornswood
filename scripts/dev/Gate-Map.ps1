@@ -94,8 +94,8 @@ foreach ($run in $runs) {
     }
     $art = @($arts.artifacts | Where-Object { [string]$_.name -eq $Artifact -and -not $_.expired } | Select-Object -First 1)
     if (-not $art.Count) { Say ('Passed over ' + $what + ': it kept no ' + $Artifact + ' artifact that has not expired (the trace was refused, or the gate did not finish).'); continue }
-    $zip = Join-Path ([IO.Path]::GetTempPath()) ('gate-map-' + $art[0].id + '.zip')
-    $into = Join-Path ([IO.Path]::GetTempPath()) ('gate-map-' + $art[0].id)
+    $zip = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('gate-map-' + $art[0].id + '.zip')
+    $into = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('gate-map-' + $art[0].id)
     try {
         # The answer is a redirect to the zip, and PowerShell 7 drops the
         # token on it, as it should.

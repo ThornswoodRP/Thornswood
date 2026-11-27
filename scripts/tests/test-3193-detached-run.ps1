@@ -37,7 +37,12 @@
          - a run whose starting session is still open waits for it to end
            before any of its script runs, and one whose session does not
            end within its limit runs nothing and is ERROR and END 1 (#3214:
-           Install-Bridge's run stopped the bridge its own start rode).
+           Install-Bridge's run stopped the bridge its own start rode);
+         - the start takes away a run's script, report and session file
+           more than a day old, and keeps a younger run's and day old files
+           named another way (#4273);
+         - a start Windows refuses says so with what it said, exits 1, and
+           leaves no script, session file or report (#4273).
   Setup-Domain.ps1's use of it is in tests\test-setup-domain-taskonly.ps1.
   Starts only the PowerShell processes it waits for, in the scratch
   folder it removes; nothing leaves this machine.
@@ -205,6 +210,41 @@ try {
     Write-Host 'A run that ends without exit, after a program that exited 5:'
     $c = Invoke-Run "cmd.exe /c exit 5`r`n'went on'"
     Yes '  END 0, the script''s own end, not the program''s 5' (($c.Lines -join '|') -eq 'went on|END 0')
+
+    Write-Host ''
+    Write-Host 'A start with a day old run in the folder, a young one, and files named another way (#4273):'
+    # The start takes away a run's files more than a day old before it writes
+    # its own: its script, its report and its session file. Anything younger
+    # may be a run still going, and a file not named as a run's is not its.
+    $old = [DateTime]::UtcNow.AddDays(-2)
+    $oldId = 'thornswood-run-' + ('a' * 32)
+    $youngId = 'thornswood-run-' + ('b' * 32)
+    $oldFiles = @(($oldId + '.ps1'), ($oldId + '.log'), ($oldId + '.ps1.session'))
+    $keep = @(($youngId + '.ps1'), ($youngId + '.log'), ($youngId + '.ps1.session'), 'thornswood-run-notarun.ps1', ('thornswood-run-' + ('c' * 32) + '.txt'), 'other.ps1')
+    foreach ($n in $oldFiles + $keep) { [IO.File]::WriteAllText((Join-Path $scratch $n), 'x') }
+    foreach ($n in $oldFiles + @($keep | Select-Object -Skip 3)) { [IO.File]::SetLastWriteTimeUtc((Join-Path $scratch $n), $old) }
+    foreach ($n in @($keep | Select-Object -First 3)) { [IO.File]::SetLastWriteTimeUtc((Join-Path $scratch $n), [DateTime]::UtcNow.AddHours(-1)) }
+    $sw = Invoke-Run "'swept'"
+    Yes '  the run itself goes as before' (($sw.Lines -join '|') -eq 'swept|END 0')
+    Yes ('  the day old run''s script, report and session file are gone') (@($oldFiles | Where-Object { Test-Path -LiteralPath (Join-Path $scratch $_) }).Count -eq 0)
+    Yes ('  the young run''s three are kept') (@($keep | Select-Object -First 3 | Where-Object { Test-Path -LiteralPath (Join-Path $scratch $_) }).Count -eq 3)
+    Yes ('  and so are day old files not named as a run''s') (@($keep | Select-Object -Skip 3 | Where-Object { Test-Path -LiteralPath (Join-Path $scratch $_) }).Count -eq 3)
+    foreach ($n in $keep) { Remove-Item -LiteralPath (Join-Path $scratch $n) -Force -ErrorAction SilentlyContinue }
+
+    Write-Host ''
+    Write-Host 'A start that Windows refuses (#4273):'
+    # Win32_Process Create answering other than 0: here a stand-in for
+    # Invoke-CimMethod in front of the start, as a function goes before a
+    # cmdlet of the same name. The harness writes the session file the
+    # start would have written over an ssh session.
+    $f = Get-ThornswoodDetachedRun -Script "'never'" -Folder $scratch
+    [IO.File]::WriteAllText($f.File + '.session', '1')
+    $refused = Invoke-Box ("function Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 9; ProcessId = 0 } }`r`n" + $f.Start)
+    $refused.Out | ForEach-Object { Write-Host ('      ' + $_) }
+    Yes '  it says the run could not be started, with what Windows said, and exits 1' (
+        $refused.Code -eq 1 -and ($refused.Out -join '|') -eq 'the run could not be started (Win32_Process Create said 9). Nothing of it ran.')
+    Yes '  and leaves no script, no session file and no report behind' (
+        -not (Test-Path -LiteralPath $f.File) -and -not (Test-Path -LiteralPath ($f.File + '.session')) -and -not (Test-Path -LiteralPath $f.Log))
 }
 finally {
     Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue

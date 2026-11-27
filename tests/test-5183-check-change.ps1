@@ -53,6 +53,10 @@ try {
     $dev = Join-Path (Join-Path $sr 'scripts') 'dev'
     $null = New-Item -ItemType Directory -Force -Path $dev
     foreach ($f in 'Check-Change.ps1', 'Affected-Harnesses.js') { Copy-Item -LiteralPath (Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') $f) -Destination $dev }
+    # Check-Change.ps1 takes its scratch folders from it (#4264)
+    $rel = Join-Path (Join-Path $sr 'scripts') 'release'
+    $null = New-Item -ItemType Directory -Force -Path $rel
+    Copy-Item -LiteralPath (Join-Path (Join-Path (Join-Path $repo 'scripts') 'release') 'Get-ScratchDir.ps1') -Destination $rel
     $notes = Join-Path (Join-Path $sr 'tools') 'ReleaseNotes'
     $null = New-Item -ItemType Directory -Force -Path $notes
     foreach ($f in 'ReleaseNotes.csproj', 'packages.lock.json', 'NoteRules.cs', 'Program.cs') { Copy-Item -LiteralPath (Join-Path (Join-Path (Join-Path $repo 'tools') 'ReleaseNotes') $f) -Destination $notes }

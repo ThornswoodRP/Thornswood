@@ -57,9 +57,14 @@ $fake = [ordered]@{
 # The hour long join token from before #1322, which nine packs carried.
 $fakeV1 = 'v1' + '.42.' + '1790000000000' + '.' + ('Fake' * 10) + 'FAK'
 
+# A GitHub App installation token of the shape GitHub gives since 2 Oct
+# 2026 (#6188): ghs_, the App's id, an underscore and a JWT, about 520
+# characters. The older ghs_ shape is the github-token entry above.
+$fakeInstall = 'ghs' + '_' + '1234567' + '_' + 'eyJ' + ('Fake' * 30) + '.' + ('Fake' * 80) + '.' + ('Fa-k_e' * 12)
+
 # True when the output carries any planted value, or the tail of one.
 function Test-Leaks([string]$out) {
-    foreach ($v in @($fake.Values) + $fakeV1) {
+    foreach ($v in @($fake.Values) + $fakeV1 + $fakeInstall) {
         if ($out.Contains($v)) { return $true }
         if ($out.Contains($v.Substring($v.Length - 12))) { return $true }
     }
@@ -145,6 +150,7 @@ try {
         Write-Utf8 (Join-Path $tree ('notes\' + $k + '.txt')) ("line one`nline two`nsee " + $fake[$k] + " here`n")
     }
     Write-Utf8 (Join-Path $tree 'notes\voice-join-token-v1.txt') ("line one`nline two`nsee " + $fakeV1 + " here`n")
+    Write-Utf8 (Join-Path $tree 'notes\github-installation-token.txt') ("line one`nline two`nsee " + $fakeInstall + " here`n")
     # Something untracked is never opened: the tree is what git tracks.
     Write-Utf8 (Join-Path $tree 'loose\unadded.txt') ($fake['discord-webhook'] + "`n")
     Invoke-Git $tree @('add', 'notes')
@@ -155,6 +161,7 @@ try {
         yes ("rule $k names the file and line 3") ($r.Out.Contains('notes/' + $k + '.txt:3  ' + $k))
     }
     yes 'and the older v1 join token shape is still voice-join-token' ($r.Out.Contains('notes/voice-join-token-v1.txt:3  voice-join-token'))
+    yes 'and an installation token of GitHub''s new shape is github-token' ($r.Out.Contains('notes/github-installation-token.txt:3  github-token'))
     yes 'no planted value, or the tail of one, is in the output' (-not (Test-Leaks $r.Out))
     yes 'a file git does not track is not read' (-not $r.Out.Contains('unadded'))
 
