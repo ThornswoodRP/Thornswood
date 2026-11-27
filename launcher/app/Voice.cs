@@ -93,6 +93,9 @@ namespace Thornswood
         // What the game's indicator asks about. It has no microphone and no
         // peer connections any more, so the only honest answer comes from here.
         static volatile bool micOk;
+        // The microphone is open and push to talk held, but it gives nothing
+        // but digital silence, so nobody hears a word (#6470, MicSilence).
+        static volatile bool micSilent;
         static volatile bool talking;
         static volatile int peerCount;
         static volatile string voiceMode = "local";
@@ -579,6 +582,18 @@ namespace Thornswood
                 return;
             }
 
+            if (kind == "micsilent")
+            {
+                bool now = text == "1";
+                if (now == micSilent) return;
+                micSilent = now;
+                PublishStatus();
+                Say(now ? "Voice: your microphone is sending no sound, so nobody can hear you. Choose another " +
+                          "microphone under Microphone in the launcher's settings, then restart the launcher."
+                        : "Voice: your microphone is sending sound again");
+                return;
+            }
+
             if (kind == "status")
             {
                 if (text == "mic ready") micOk = true;
@@ -614,7 +629,7 @@ namespace Thornswood
         // and no silent branch:
         //
         //   voice-status.txt   written here, read by the game
-        //                      "<mic> <peers> <talking> <mode>"
+        //                      "<mic> <peers> <talking> <mode> <silent>"
         //   voice-ptt.txt      written by the game, read here
         //                      "<on> <mode>"
         //   voice-muted.txt    written by the game, read here
@@ -673,10 +688,13 @@ namespace Thornswood
         {
             try
             {
+                // The fifth word came with #6470; a game older than that reads
+                // the first four and leaves it.
                 string line = (micOk ? "1" : "0") + " " +
                               peerCount.ToString(CultureInfo.InvariantCulture) + " " +
                               (talking ? "1" : "0") + " " +
-                              (voiceMode ?? "local");
+                              (voiceMode ?? "local") + " " +
+                              (micSilent ? "1" : "0");
                 if (line == lastStatusLine) return;
                 lastStatusLine = line;
                 WriteChannel("voice-status.txt", line);
@@ -903,6 +921,7 @@ namespace Thornswood
                         // microphone and no connections now, and asking it
                         // about either only ever returned no.
                         string body = "{\"mic\":" + (micOk ? "true" : "false") +
+                                      ",\"silent\":" + (micSilent ? "true" : "false") +
                                       ",\"peers\":" + peerCount +
                                       ",\"talking\":" + (talking ? "true" : "false") + "}";
 
