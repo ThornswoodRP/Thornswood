@@ -21,49 +21,60 @@
     5. a freeze with a process still holding a port: exit 1, NOT FROZEN
     6. a freeze with no backup written: exit 1, NOT FROZEN
     7. a freeze with -NoBackup and nothing left: exit 0, FROZEN
+
+  -ScriptPath runs the cases against another copy of the script, such as
+  main's from before the fix.
 #>
+[CmdletBinding()]
+param([string]$ScriptPath)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Root = Split-Path -Parent $PSScriptRoot
-$Script = Join-Path (Join-Path (Join-Path $Root 'scripts') 'vps') 'vps-freeze.ps1'
+if (-not $ScriptPath) { $ScriptPath = Join-Path (Join-Path (Join-Path $Root 'scripts') 'vps') 'vps-freeze.ps1' }
+$Script = $ScriptPath
 $pwshExe = (Get-Process -Id $PID).Path
 
 $script:pass = 0
 $script:fail = 0
+$script:last = ''
 function Yes([string]$what, [bool]$cond) {
     if ($cond) { $script:pass++; Write-Host "PASS  $what" }
-    else { $script:fail++; Write-Host "FAIL  $what" }
+    else { $script:fail++; Write-Host "FAIL  $what"; if ($script:last) { $script:last -split "`n" | ForEach-Object { Write-Host ('      | ' + $_) } } }
 }
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('ts-4219-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 $child = Join-Path $tmp 'run.ps1'
 [IO.File]::WriteAllText($child, @'
-param([string]$Target, [string[]]$Pass = @())
-$state = @{}
-foreach ($t in 'Thornswood Watch', 'Thornswood Server', 'Thornswood Dev Server', 'Thornswood Docs', 'Thornswood Voice', 'Thornswood Dev Voice') { $state[$t] = 'Ready' }
-$svc = @{ Status = 'Stopped' }
+param([string]$Target)
+$Pass = @{ BackupRoot = $env:TS4219_ROOT }
+foreach ($a in ("$env:TS4219_ARGS" -split '\|' | Where-Object { $_ })) { $Pass[$a.TrimStart('-')] = $true }
+# Global and named apart from anything in vps-freeze.ps1: a function's
+# script: scope here would be the freeze script's own when it calls them.
+$global:TsTasks = @{}
+foreach ($t in 'Thornswood Watch', 'Thornswood Server', 'Thornswood Dev Server', 'Thornswood Docs', 'Thornswood Voice', 'Thornswood Dev Voice') { $global:TsTasks[$t] = 'Ready' }
+$global:TsSvc = @{ Status = 'Stopped' }
 function Get-ScheduledTask { [CmdletBinding()] param([string]$TaskName)
-  if (-not $state.ContainsKey($TaskName)) { return $null }
-  return [pscustomobject]@{ TaskName = $TaskName; State = $state[$TaskName]; Principal = [pscustomobject]@{ UserId = 'LOCAL SERVICE' } }
+  if (-not $global:TsTasks.ContainsKey($TaskName)) { return $null }
+  return [pscustomobject]@{ TaskName = $TaskName; State = $global:TsTasks[$TaskName]; Principal = [pscustomobject]@{ UserId = 'LOCAL SERVICE' } }
 }
 function Start-ScheduledTask { [CmdletBinding()] param([string]$TaskName)
   if ($env:TS4219_TASK -eq $TaskName) { Write-Error ('The task ' + $TaskName + ' could not be started (stand-in)'); return }
-  $state[$TaskName] = 'Running'
+  $global:TsTasks[$TaskName] = 'Running'
 }
-function Stop-ScheduledTask { [CmdletBinding()] param([string]$TaskName) $state[$TaskName] = 'Ready' }
+function Stop-ScheduledTask { [CmdletBinding()] param([string]$TaskName) $global:TsTasks[$TaskName] = 'Ready' }
 function Enable-ScheduledTask { [CmdletBinding()] param([string]$TaskName)
   if ($env:TS4219_WATCH) { Write-Error 'Access is denied (stand-in)'; return }
-  $state[$TaskName] = 'Ready'
+  $global:TsTasks[$TaskName] = 'Ready'
 }
-function Disable-ScheduledTask { [CmdletBinding()] param([string]$TaskName) $state[$TaskName] = 'Disabled' }
-function Get-Service { [CmdletBinding()] param([string]$Name) return [pscustomobject]@{ Name = $Name; Status = $svc.Status } }
+function Disable-ScheduledTask { [CmdletBinding()] param([string]$TaskName) $global:TsTasks[$TaskName] = 'Disabled' }
+function Get-Service { [CmdletBinding()] param([string]$Name) return [pscustomobject]@{ Name = $Name; Status = $global:TsSvc.Status } }
 function Start-Service { [CmdletBinding()] param([string]$Name)
   if ($env:TS4219_SVC) { Write-Error 'Service ThornswoodBot cannot be started (stand-in)'; return }
-  $svc.Status = 'Running'
+  $global:TsSvc.Status = 'Running'
 }
-function Stop-Service { [CmdletBinding()] param([string]$Name, [switch]$Force) $svc.Status = 'Stopped' }
+function Stop-Service { [CmdletBinding()] param([string]$Name, [switch]$Force) $global:TsSvc.Status = 'Stopped' }
 function Get-NetUDPEndpoint { [CmdletBinding()] param([int]$LocalPort) return @() }
 function Get-NetTCPConnection { [CmdletBinding()] param([int]$LocalPort, [string]$State)
   if ($env:TS4219_HOLDER -and $LocalPort -eq 3001) { return @([pscustomobject]@{ OwningProcess = 4242 }) }
@@ -82,8 +93,11 @@ function Invoke-Freeze([string[]]$pass, [hashtable]$envs = @{}) {
     foreach ($k in 'TS4219_TASK', 'TS4219_SVC', 'TS4219_WATCH', 'TS4219_HOLDER') { Set-Item -Path "env:$k" -Value $(if ($envs.ContainsKey($k)) { $envs[$k] } else { '' }) }
     $backup = Join-Path $tmp ('backup-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $backup | Out-Null
-    $out = @(& $pwshExe -NoProfile -NonInteractive -File $child -Target $Script -Pass (@($pass) + @('-BackupRoot', $backup)) 2>&1 | ForEach-Object { [string]$_ })
-    return [pscustomobject]@{ Code = $LASTEXITCODE; Out = ($out -join "`n") }
+    $env:TS4219_ARGS = (@($pass) -join '|'); $env:TS4219_ROOT = $backup
+    $out = @(& $pwshExe -NoProfile -NonInteractive -File $child -Target $Script 2>&1 | ForEach-Object { [string]$_ })
+    $code = $LASTEXITCODE
+    $script:last = ($out -join "`n")
+    return [pscustomobject]@{ Code = $code; Out = ($out -join "`n") }
 }
 
 try {
@@ -109,7 +123,7 @@ try {
     $r = Invoke-Freeze @('-NoBackup')
     Yes "7. a freeze with -NoBackup and nothing left: exit 0, FROZEN (exit $($r.Code))" ($r.Code -eq 0 -and $r.Out -match 'FROZEN: nothing on the old box' -and $r.Out -notmatch 'NOT FROZEN')
 } finally {
-    foreach ($k in 'TS4219_TASK', 'TS4219_SVC', 'TS4219_WATCH', 'TS4219_HOLDER') { Remove-Item -Path "env:$k" -ErrorAction SilentlyContinue }
+    foreach ($k in 'TS4219_TASK', 'TS4219_SVC', 'TS4219_WATCH', 'TS4219_HOLDER', 'TS4219_ARGS', 'TS4219_ROOT') { Remove-Item -Path "env:$k" -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
