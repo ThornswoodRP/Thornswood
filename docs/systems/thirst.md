@@ -63,9 +63,10 @@ out.
 
 The clock, the bands, the 20, the ale curve and the potion sip of 5 are
 in the server, and so is cold speeding thirst. So is where the water
-came from: the server keeps whether each bottle was filled at a well,
-a river or the sea, gives it that water's thirst, and drinking takes
-the worst you carry first. See [Drink](drink.md), Where this is. A
+came from: a bottle filled at a well is Glacier Water and one filled at
+the water bucket is River Water, each an item of its own that keeps it
+wherever the bottle goes, and a drink gives the thirst of the bottle
+drunk. See [Drink](drink.md), Where this is. A
 soup, stew or chowder adds its 10 thirst on top of its hunger, by its
 group in game/data/food-groups.json. See [Food](food.md). The bed is
 the one the server saw them lie down in, by whose it is, the same as

@@ -328,6 +328,7 @@ const WRITERS = {
   'outer/addItemsAtomic': [1, 'adds verified fish, hanging-game and carcass descriptor bundles; the caller audit below pins those paths'],
   'outer/takeItem': [1, 'only takes things away'],
   'outer/takeItemById': [1, 'only takes things away'],
+  'needs/boilCarried': [1, 'a finished boil turns the River Water a pack holds into the same count of Glacier Water (#4790): bottles of water, never gold'],
   'outer/giveShift': [1, 'the shift, out of CHARGEN.shift'],
   'outer/rieklingShift': [1, 'a new riekling\'s shift taken back and its own plain clothes, out of CHARGEN.rieklingShift, put in (#614): clothing descriptors, never gold'],
   'outer/giveItems': [1, 'descriptor pairs, and nothing calls it (checked below)'],
@@ -942,6 +943,7 @@ function goldDescriptors(text) {
     'row.out': 'Grand Chef\'s second batch, the output of a Cook row of RECIPES_BY_ID (#1398), and section 5 says no recipe makes gold',
     'KEY_INGOT': 'puts back the iron ingot a key at a forge took a line before, when the key could not be handed over (#1637); an iron ingot, not a coin',
     'NEEDS.waterItems.full': 'a bottle of water for the empty bottle a well took a line before, a constant of the needs block (#1382); Glacier Water, not a coin',
+    'fullDesc': 'the bottle of water fillBottle hands over for the empty bottle it took a line before, NEEDS.waterItems.full at a well or NEEDS.waterItems.river at the water bucket (#4790); water, not a coin',
     'NEEDS.waterItems.empty': 'puts back the empty bottle a well took, when the water could not be handed over (#1382); not a coin',
     'CUFFS_DESC': 'one pair of Prisoner\'s Cuffs (10e039:Skyrim.esm, clothing), a constant of the cuffs block (#2573): issued to a guard with none at most once a day, or moved from guard to prisoner and back, never gold'
   };

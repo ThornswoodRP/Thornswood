@@ -497,8 +497,8 @@ CONTENTS = (
     # feasts and brews (#3152) share one row, which keeps the description
     # under its 512.
     (r'(ALCH ThornswoodFood|COBJ ThornswoodRecipe)(Tea|Feast|Brew|Seasoned)\w+$'
-     r'|ALCH Thornswood(FoodBurntMeal|FoodFine\w+|FoodSpoiled)$'
-     r'|COBJ ThornswoodRecipeEmptyBottleFromMilk|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled)Effect$'
+     r'|ALCH Thornswood(FoodBurntMeal|FoodFine\w+|FoodSpoiled|FoodRiverWater)$'
+     r'|COBJ ThornswoodRecipeEmptyBottleFromMilk|MGEF Thornswood(TeaSteep|Burnt|Fine|Feast|Brew|Spoiled|RiverWater)Effect$'
      r'|MGEF ThornswoodSeasoned(Guard|Stamina)$',
      'own', 'food and drink'),
     (r'(MISC ThornswoodQuest\w+|ACTI ThornswoodQuestLedgerSource)$', 'own', 'quest items'),
@@ -1160,6 +1160,26 @@ WELL_BUCKET_BOUNDS = (-18, -18, 0, 18, 18, 46)
 # river water is), placed where game\data\station-sites.json, kind river,
 # measures.
 RIVER_BUCKET = 0x5018031
+# RIVER WATER (#4790): the bottle the water bucket fills, a record of its own.
+# The client names what it drinks by record alone, so while every filled
+# bottle was Glacier Water (13f598:WindhelmSSE.esp, NEEDS.waterItems.full)
+# the server kept a count of where the water came from on the person who
+# filled it, and the count stayed behind when a bottle left the pack: a river
+# bottle handed on drank as clean water, and the giver's next clean bottle
+# drank as river water. The same reason spoiled food is its own record
+# (SPOILED_FOOD). A bottle of river water now is one wherever it goes, and
+# boiling at a cook fire turns it into Glacier Water. It wears Skyrim's Mead
+# bottle (34c5d:Skyrim.esm), read from the masters as a fine dish's look is,
+# is worth nothing, carries no vendor keyword, and its one effect is a script
+# effect with no script, as the spoiled food's is, saying what the server
+# does.
+RIVER_WATER = 0x5018040
+RIVER_WATER_EFFECT = 0x5018041
+RIVER_WATER_EDID = 'ThornswoodFoodRiverWater'
+RIVER_WATER_NAME = 'River Water'
+RIVER_WATER_LOOK = '34c5d:Skyrim.esm'
+RIVER_WATER_EFFECT_WORDS = ('Unboiled. It can foul you. A minute at a cook fire boils it '
+                            'into clean water.')
 # THE STUDY DESK (#1387). Patrick, 22 October 2026, A on #1387: a semester at
 # the College is taken at a study desk in the College halls, not a command.
 # Skyrim's NobleDesk01 (STAT 0xD70EC) is a static, which raises no activation,
@@ -1592,6 +1612,31 @@ def spoiled_records():
             # Worth nothing, no auto calc and a food item, no addiction, the eating sound.
             (b'ENIT', struct.pack('<iIIfI', 0, 0x3, 0, 0.0, SPOILED_EAT_SOUND)),
             (b'EFID', struct.pack('<I', SPOILED_EFFECT)), (b'EFIT', struct.pack('<fII', 0.0, 0, 0))])]
+
+
+def river_water_records(masters_dir, plugin_masters, problems):
+    """River water and its effect (#4790). See RIVER_WATER. A look that
+    cannot be read is added to problems and nothing comes back."""
+    look = dish_look(masters_dir, RIVER_WATER_LOOK, plugin_masters, problems)
+    if look is None:
+        return []
+
+    def field(t):
+        return [(t2, b) for t2, b in look if t2 == t]
+    enit = field(b'ENIT')[0][1]
+    sound = struct.unpack_from('<I', enit, 16)[0] if len(enit) >= 20 else 0
+    data = bytearray(TEA_EFFECT_DATA)
+    struct.pack_into('<I', data, 0, TEA_EFFECT_FLAGS)
+    return [
+        own_record(b'MGEF', RIVER_WATER_EFFECT, [
+            (b'EDID', zstr('ThornswoodRiverWaterEffect')), (b'FULL', zstr('Unboiled')),
+            (b'DATA', bytes(data)), (b'SNDD', b''), (b'DNAM', zstr(RIVER_WATER_EFFECT_WORDS))]),
+        own_record(b'ALCH', RIVER_WATER, [
+            (b'EDID', zstr(RIVER_WATER_EDID))] + field(b'OBND') + [(b'FULL', zstr(RIVER_WATER_NAME))] +
+            field(b'MODL') + field(b'MODT') + field(b'YNAM') + field(b'ZNAM') + field(b'DATA') + [
+            # Worth nothing, no auto calc and a food item, no addiction, the mead's drinking sound.
+            (b'ENIT', struct.pack('<iIIfI', 0, 0x3, 0, 0.0, sound)),
+            (b'EFID', struct.pack('<I', RIVER_WATER_EFFECT)), (b'EFIT', struct.pack('<fII', 0.0, 0, 0))])]
 
 
 def food_groups():
@@ -2903,6 +2948,7 @@ def main():
     try:
         quality_made = quality_records(args.masters, args.plugins, plugin_masters, problems)
         seasoned_made = seasoned_records(args.masters, args.plugins, plugin_masters, problems)
+        water_made = river_water_records(args.masters, plugin_masters, problems)
     except (KeyError, ValueError) as e:
         print('')
         print('STOP. game\\data\\food-groups.json has no usable cooking records (%s). '
@@ -2916,7 +2962,7 @@ def main():
         print('Nothing was written.')
         return 1
 
-    records = own + house + wood + quality_made + seasoned_made
+    records = own + house + wood + quality_made + seasoned_made + water_made
     by_edid = {}
     for r in records:
         other = by_edid.get(r.editor_id())
@@ -3069,6 +3115,7 @@ def main():
     print('  %d Dwarven scrap recipes of Skyrim.esm on no bench (#613)' % len(scrap))
     print('  %d cooking quality records (#2906)' % len(quality_made))
     print('  %d seasoned dish and recipe records (#4610)' % len(seasoned_made))
+    print('  %d river water records (#4790)' % len(water_made))
     kinds = {}
     for r in want.values():
         b = struct.unpack_from('<I', dict(subrecords(r.data))[b'NAME'])[0]
