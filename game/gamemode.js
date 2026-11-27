@@ -11566,6 +11566,16 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
     log(actorId.toString(16), 'was refused', desc, '(' + (row && row.name || 'recipe') + '):', refusal);
     return false;
   }
+  // The trade's tool (#3162), asked now the way mp.onCraft asks it, so a
+  // missing tool is said before the wait and not when it is over (#6804).
+  const toolKey = row && typeof row === 'object' ? benchToolKey(row) : null;
+  const noTool = toolKey ? toolGate(actorId, toolKey) : null;
+  if (noTool) {
+    notify(actorId, noTool);
+    say(actorId, noTool);
+    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', toolFor(toolKey).name);
+    return false;
+  }
   const size = craftSize(row, workbenchId);
   mp.set(actorId, 'craftWork', { ms: CRAFT_WORK_MS[size] });
 
@@ -38572,6 +38582,14 @@ return module.exports;
       // at creation. The panel draws these as placed rather than spent, and
       // nothing takes one back out.
       placed: s.placed || {},
+      /*
+        What each class, profession, half and school places (#7168), the
+        table progression's place() reads, sent only while creating. Then a
+        class and a profession are the panel's until Confirm, so the panel adds
+        up what its own picks will place and the tree shows them before the
+        server has them. In the world every pick is already sent and in tree.
+      */
+      placing: creating && P.TUNING ? P.TUNING.placed : undefined,
       points: s.points || 0,
       perks: P.perks(s),
       /*
