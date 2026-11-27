@@ -98,10 +98,30 @@ for (const [what, c] of [
   ['the gate list', { status: 'M', path: 'tests/gate-excluded.txt' }],
   ['a test helper', { status: 'M', path: 'tests/Windows.ps1' }],
   ['the records the gate step reads', { status: 'M', path: 'records/build-runners.json' }],
+  ['another runner record, whose offBox list sets the share on One (#4293)', { status: 'M', path: 'records/pr-build-runners.json' }],
+  ['a new runner record', { status: 'A', path: 'records/sign-runners.json' }],
   ['a type change', { status: 'T', path: 'docs/a.md' }],
 ]) {
   r = pick([c]);
   yes(what + ' runs the whole gate', r.full && r.run.length === gate.length);
+}
+// What Run-Gate.ps1 reads for its share is what forces (#4293): its own
+// filter for the runner records, and the box's record by name.
+{
+  const fs0 = require('fs');
+  const rg = fs0.readFileSync(path.join(REPO, 'scripts', 'dev', 'Run-Gate.ps1'), 'utf8');
+  const fn = rg.slice(rg.indexOf('function Get-MachineBuilds'), rg.indexOf('\n}\n', rg.indexOf('function Get-MachineBuilds')));
+  const filters = [...fn.matchAll(/-Filter '([^']+)'/g)].map(m => m[1]);
+  const named = [...fn.matchAll(/Join-Path \$records '([^']+)'/g)].map(m => m[1]);
+  yes('Get-MachineBuilds reads the runner records by a filter and the box\'s by name (' + filters.concat(named).join(', ') + ')',
+    filters.length >= 1 && named.length >= 1);
+  const forced = (p) => A.FORCE.some(f => f[0].test(p));
+  for (const f of filters) {
+    const sample = 'records/' + f.replace('*', 'any');
+    yes('a record its filter ' + f + ' reads, such as ' + sample + ', runs the whole gate', forced(sample));
+  }
+  for (const n of named) yes('records/' + n + ', which it reads by name, runs the whole gate', forced('records/' + n));
+  yes('a record that is not a runner record does not', !forced('records/github-repo-settings.json'));
 }
 r = pick([{ status: 'M', path: '.github/workflows/board-status.yml' }, { status: 'M', path: 'tests/README.md' }]);
 yes('another workflow, or the tests README, is a file like any other', !r.full);
