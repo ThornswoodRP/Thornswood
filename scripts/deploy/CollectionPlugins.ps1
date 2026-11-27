@@ -13,8 +13,11 @@
 
       { "version": 1,
         "builtBy": "scripts/mods/New-CollectionPluginRecord.ps1",
-        "collection": "7essxf", "revision": 12,
+        "collection": "7essxf", "revision": <n>,
         "plugins": [ { "name": "3BBB.esp", "size": 20257, "sha256": "ce4f..." } ] }
+
+  <n> is the revision records\collection.json is on: each published revision
+  moves it, so it is not written here as a number.
 
   scripts\mods\New-CollectionPluginRecord.ps1 writes it from a folder.
 

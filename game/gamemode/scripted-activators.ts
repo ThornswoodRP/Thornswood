@@ -2618,6 +2618,83 @@ function showsPick(refrId) {
 })();
 
 /*
+  THE BASES WHOSE PRESS WAITS FOR THE SERVER (#4598).
+
+  The client blocks a press by record type: containers, items, actors, doors,
+  plants, trees and benches wait for the server's answer. A chopping block is
+  furniture that is no bench, and an ore vein is an activator, so neither
+  waited. The presser's own Skyrim sat them at the block, or ran the vein's
+  MineOreScript, before the server had said whether they may, and chopWood
+  could only end the swing after it had started.
+
+  Since skymp#166 the client takes the bases the server names, as the custom
+  packet { customPacketType: 'serverFirstBases', bases: [runtime form ids] },
+  and blocks every reference of them the way it blocks a bench. A refused
+  press then changes nothing on that machine, and an allowed one comes back
+  as the server's own activation. The client forgets the list with each
+  connection (resetServerFirstActivation in networkingService.ts), so it is
+  sent once to every connection: a character's connection is its GUID, the
+  same identity join-pass.ts reads, and a new one is told again.
+
+  CHOPPING_BLOCKS and ORES_BY_BASE are the whole of it. Benches, doors,
+  plants and trees already wait by their type.
+*/
+(function serverFirstBases() {
+  const ids = [];
+  const seen = {};
+  function add(desc) {
+    const id = idOf(desc);
+    // 0 is a plugin that is not loaded: nothing of it can be pressed.
+    if (id && !seen[id]) { seen[id] = true; ids.push(id); }
+  }
+  for (let i = 0; i < CHOPPING_BLOCKS.length; i++) { add(CHOPPING_BLOCKS[i]); }
+  for (const veinBase in ORES_BY_BASE) {
+    if (Object.prototype.hasOwnProperty.call(ORES_BY_BASE, veinBase)) { add(veinBase); }
+  }
+  const packet = JSON.stringify({ customPacketType: 'serverFirstBases', bases: ids });
+  // actorId to the connection it was last sent on.
+  const told = {};
+
+  function connection(userId) {
+    if (typeof mp.getUserGuid !== 'function') { return 'user ' + userId; }
+    let guid = '';
+    try { guid = String(mp.getUserGuid(userId) || ''); } catch (e) { guid = ''; }
+    return guid ? 'guid ' + guid : '';
+  }
+
+  function tell() {
+    let online = [];
+    try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { online = []; }
+    const here = {};
+    for (let i = 0; i < online.length; i++) {
+      const actorId = online[i];
+      let userId = -1;
+      try { userId = mp.getUserByActor(actorId); } catch (e) { userId = -1; }
+      if (userId === undefined || userId === null || userId < 0) { continue; }
+      const conn = connection(userId);
+      if (!conn) { continue; }
+      here[actorId] = true;
+      if (told[actorId] === conn) { continue; }
+      told[actorId] = conn;
+      try {
+        mp.sendCustomPacket(userId, packet);
+      } catch (e) {
+        log('could not tell', Number(actorId).toString(16), 'which bases wait for the server:', e);
+      }
+    }
+    for (const k in told) {
+      if (Object.prototype.hasOwnProperty.call(told, k) && !here[k]) { delete told[k]; }
+    }
+  }
+
+  const g = globalThis;
+  if (g.__thornswoodServerFirstTimer) { clearInterval(g.__thornswoodServerFirstTimer); }
+  g.__thornswoodServerFirstTimer = setInterval(guard('serverFirstBases', tell), 1000);
+  g.__thornswoodServerFirst = { bases: ids, tell: tell };
+  log(ids.length, 'bases wait for the server before the client acts on them');
+})();
+
+/*
   The bases this server answers for, published where the client can read them.
 
   thornswood-front.js re-activates every ACTI it sees, because a handful of

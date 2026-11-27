@@ -922,6 +922,23 @@
       menuAgain = null;
       return;
     }
+    /*
+      Or the world loaded after the pick (#7098). skymp5-client loads the
+      world with a save of its own only once it has taken a pick
+      (remoteServer.ts, while __thornswoodInWorld is down), so a load after
+      the pick is the client having taken it. The world flag alone said so
+      only once no menu was open, and creation is all menus: on main on
+      24 Nov the pick was said again every 2 s through creation, and at 90 s
+      the log said the client never took it, with the character already in
+      the creation hall. loadedOutOfWorld is the loadGame handler's, beside
+      the update tick.
+    */
+    if (loadedOutOfWorld && loadedOutOfWorld >= menuChosenAt) {
+      log('menu: the world loaded for profile', menuChosenId, 'so the client took the choice');
+      menuChosenId = 0;
+      menuAgain = null;
+      return;
+    }
     if (now - menuChosenAt > MENU_SAY_FOR) {
       if (!menuGiveUpTold) {
         menuGiveUpTold = true;
@@ -2612,6 +2629,9 @@
 
   T.setTyping = wantTyping;
   T.isTyping = function () { return !!claims.chat; };
+  // The game menu that takes keys right now, by name, or '' (busyMenuOpen).
+  // The voice plugin's lock and mode keys stand down while one is up (#4799).
+  T.keyboardMenu = function () { return busyMenuOpen(); };
 
   // Said once, so a log with nothing in it can be told apart from a log that
   // never had anything to say. If this line is missing, the plugin is not being
@@ -5827,6 +5847,84 @@
     return ': ' + bits.join(', ');
   }
 
+  /*
+    WHERE A LOAD PUTS THE CHARACTER, AND WHICH CAMERA IT IS IN (#6593, #6594).
+
+    Dev Test #1 on 18 Nov: one tester spawned up in the air, another spawned
+    in first person with the mouse wheel doing nothing for a while. Their logs
+    could not say either. The first feet height came from a place line 35 to
+    50 s after the load, and the camera only from a "looking at" line, which
+    needs somebody in front of you.
+
+    So after each arrival (the first world, a new cell indoors, a new
+    worldspace, or a jump of more than 2000 units, which is a teleport), this
+    writes where the feet are, whether the game has the character in the air
+    and which camera it is in. It writes at 0.25, 1, 3 and 6 s after the
+    arrival, so a fall shows as the height dropping and a camera change shows
+    when it came. It reads only and changes nothing.
+  */
+  function landingSaid(pc) {
+    const bits = [];
+    let z = NaN;
+    try { z = Number(pc.getPositionZ()); } catch (e) { z = NaN; }
+    bits.push('feet at ' + (isFinite(z) ? Math.round(z) : 'unknown'));
+    let air = 'unknown';
+    try { air = pc.getAnimationVariableBool('bInJumpState') ? 'yes' : 'no'; } catch (e) { air = 'unknown'; }
+    bits.push('in the air ' + air);
+    let cam = -1;
+    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
+    bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
+    let menu = 'unknown';
+    try { menu = sp.Utility.isInMenuMode() ? 'yes' : 'no'; } catch (e) { menu = 'unknown'; }
+    bits.push('menu ' + menu);
+    return bits.join(', ');
+  }
+
+  // Where the character is, as a key that changes only on an arrival: the
+  // cell indoors, the worldspace outdoors, so walking across exterior cells is
+  // not one.
+  function landingKey(pc) {
+    let cell = null;
+    try { cell = pc.getParentCell(); } catch (e) { cell = null; }
+    let inside = false;
+    try { inside = !!(cell && cell.isInterior()); } catch (e) { inside = false; }
+    if (inside) {
+      try { return 'cell ' + cell.getFormID().toString(16); } catch (e) { return 'cell ?'; }
+    }
+    let world = null;
+    try { world = pc.getWorldSpace(); } catch (e) { world = null; }
+    try { return 'world ' + (world ? world.getFormID().toString(16) : '?'); } catch (e) { return 'world ?'; }
+  }
+
+  const LAND_AFTER = [250, 1000, 3000, 6000];
+  const LAND_JUMP = 2000;
+  let landWas = null;     // { key, x, y, z } at the last look
+  let landAt = 0;         // when the last arrival was seen
+  let landNext = LAND_AFTER.length;
+  let landLookAt = 0;
+  sp.on('update', guard('landing', () => {
+    const now = Date.now();
+    if (now < landLookAt) { return; }
+    landLookAt = now + 100;
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { landWas = null; return; }
+    let x = 0, y = 0, z = 0;
+    try { x = pc.getPositionX(); y = pc.getPositionY(); z = pc.getPositionZ(); } catch (e) { return; }
+    const key = landingKey(pc);
+    let arrived = !landWas || landWas.key !== key;
+    if (!arrived) {
+      const dx = x - landWas.x, dy = y - landWas.y, dz = z - landWas.z;
+      arrived = dx * dx + dy * dy + dz * dz > LAND_JUMP * LAND_JUMP;
+    }
+    landWas = { key: key, x: x, y: y, z: z };
+    if (arrived) { landAt = now; landNext = 0; return; }
+    if (landNext < LAND_AFTER.length && now - landAt >= LAND_AFTER[landNext]) {
+      log('landing: ' + LAND_AFTER[landNext] + 'ms after arriving in ' + key + ', ' + landingSaid(pc));
+      landNext++;
+    }
+  }));
+
   // A claim is a variable read, so it is asked every frame and a panel takes
   // the prompt down in the frame it opens, not on the next poll.
   sp.on('update', guard('crosshair', () => {
@@ -8986,6 +9084,7 @@
     ['CFTO.esp', 0x14c6c], ['Dragonborn.esm', 0x182ae], ['Dragonborn.esm', 0x2582b]
   ];
   let rideDriverIds = null;
+  let rideDriverNoneSaid = false;
 
   /*
     THE RIDE PANEL WAITS FOR THE MOD'S CONVERSATION (#1635). The same E opens
@@ -9041,23 +9140,37 @@
     if (found) {
       rideDriverIds = out;
       say('carriage and ferry drivers: ' + found + ' of ' + RIDE_DRIVER_BASES.length + ' bases found');
+    } else if (!rideDriverNoneSaid) {
+      // A press on a person found none of them, so E on a driver is a
+      // press on nobody we know (#4581). Said once; asked again next press.
+      rideDriverNoneSaid = true;
+      say('carriage and ferry drivers: none of ' + RIDE_DRIVER_BASES.length + ' bases found');
     }
     return out;
   }
+
+  // Whether a reference is a carriage or ferry driver: a person whose base
+  // is one of the drivers'. 43 is kNPC.
+  function isRideDriverRef(ref) {
+    if (!ref) { return false; }
+    try {
+      const base = ref.getBaseObject();
+      if (!base || base.getType() !== 43) { return false; }
+      const baseId = base.getFormID() >>> 0;
+      return !!baseId && !!rideDriverIdSet()[baseId];
+    } catch (err) { return false; }
+  }
+  // The scripted real game run (thornswood-test.js) faces a driver and knows
+  // him by the same rule, so the driver it presses E on is one this press
+  // takes (#4581).
+  T.isRideDriverRef = isRideDriverRef;
 
   function driverPress(e) {
     if (!e || e.userEventName !== 'Activate') { return false; }
     if (claims.chat || busyMenuOpen()) { return false; }
     let ref = null;
     try { ref = sp.Game.getCurrentCrosshairRef(); } catch (err) { ref = null; }
-    if (!ref) { return false; }
-    let baseId = 0;
-    try {
-      const base = ref.getBaseObject();
-      if (!base || base.getType() !== 43) { return false; }
-      baseId = base.getFormID() >>> 0;
-    } catch (err) { return false; }
-    if (!baseId || !rideDriverIdSet()[baseId]) { return false; }
+    if (!ref || !isRideDriverRef(ref)) { return false; }
     let hex = '';
     let localId = 0;
     try {
@@ -9358,6 +9471,61 @@
   let lastToken = '';
   let tokenAt = 0;
 
+  /*
+    BACK IN THE WORLD AFTER LEAVING IT (#4615).
+
+    Every way out of the world (the idle check, the server ending the session,
+    a refused connection, Change character, the server going down) clears
+    __thornswoodInWorld and quits to the main menu. Only the first arrival
+    above set it again, so after a return the world was up and the flag still
+    said it was not: the idle check never started again, the choice went on
+    being said to the client for ninety seconds, and so did everything else
+    that asks whether the world is there.
+
+    What says a world came back is the load: skymp5-client loads the world
+    with a save of its own once it takes a pick (remoteServer.ts, while the
+    flag is down), so a load while the flag is down is an arrival like the
+    first. It is recorded on loadGame, and the flag goes up on the first
+    update after it with a character, no menu, and the game connected. Not
+    the main menu: update does not run there (the Papyrus VM's OnUpdate sends
+    it, and the main menu has none), which is why the menu code runs on tick.
+    The connection is asked because a leave's own last frames still have the
+    old world with a character and no menu, and arriving in them would tell
+    skymp5-client it is already in a game, so the pick would load no world
+    (alreadyInAGame). Every leave closes the connection before it quits, and
+    a pick opens it again (relogAs) before the world loads. The first cut of
+    this waited for the main menu in update and so never fired (#4615).
+
+    The page is not loaded again, unlike the first arrival: it outlived the
+    world on purpose, with its chat moved to whoever was picked (pickedAgain),
+    so only what the first arrival does for the world itself is done again.
+  */
+  let loadedOutOfWorld = 0;
+  sp.on('loadGame', guard('world load', () => {
+    let here = false;
+    try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+    if (!here) { loadedOutOfWorld = Date.now(); }
+  }));
+  function cameBack(now) {
+    if (!loadedOutOfWorld) { return false; }
+    let here = false;
+    try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+    // The first arrival counted it.
+    if (here) { loadedOutOfWorld = 0; return false; }
+    let up = false;
+    try { up = !!sp.mpClientPlugin.isConnected(); } catch (e) { up = false; }
+    if (!up || gameMenuOpen()) { return false; }
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { return false; }
+    try { globalThis.__thornswoodInWorld = true; } catch (e) { /* a plain property of globalThis, which nothing here locks */ }
+    log('back in the world as profile', PROFILE, Math.round((now - loadedOutOfWorld) / 1000) + 's after it loaded');
+    loadedOutOfWorld = 0;
+    if (choiceUp()) { menuGone(); }
+    menuPhase = 9;
+    return true;
+  }
+
   sp.on('update', guard('tick', () => {
     const now = Date.now();
 
@@ -9405,6 +9573,9 @@
       }
       return;
     }
+
+    // Back in the world after leaving it (#4615).
+    if (cameBack(now)) { return; }
 
     /*
       The focus arbiter waits until our own overlays are in.
@@ -9645,7 +9816,12 @@
       }
     }
     if (leaving && now - leaving > 5000) {
-      leaving = now + 3600000;   // never twice
+      /* Once per outage (#4774). This used to push leaving an hour ahead,
+         which brought the countdown and the quit back an hour later, at the
+         menu or in whatever world the person was in by then. The outage ends
+         here: checkServer stands down until they are in a world again. */
+      leaving = 0;
+      quitFor = true;
       // No longer in the world, and said so before the quit rather than after,
       // because after it there is no tick to say it in.
       try { globalThis.__thornswoodInWorld = false; } catch (e) { }
@@ -9806,9 +9982,29 @@
   let leavingSaid = 0;
   /* When the server last said a countdown was running. See PROBE_STRIKES. */
   let toldRestarting = 0;
+  /* The quit for an outage has run, and nothing is watched until the person
+     is in a world again: there is no game connection left to lose (#4774).
+     The world flag is set by the first arrival in the tick above; coming
+     back after leaving the world does not set it again yet, which is #4615,
+     so until that lands the check stays off for the rest of the session. */
+  let quitFor = false;
 
   function checkServer(now) {
     if (!probe || leaving) return;
+    if (quitFor) {
+      let here = false;
+      try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+      if (!here) return;
+      // A new world, so a new watch: none of the last outage carries over.
+      quitFor = false;
+      strikes = 0;
+      probing = false;
+      lastProbe = 0;
+      leftClosed = false;
+      leavingSaid = 0;
+      toldRestarting = 0;
+      log('in a world again, watching the server again');
+    }
     if (probing && now - probeStartedAt > PROBE_DEADLINE_MS) {
       probing = false;
       log('the server has not answered in', PROBE_DEADLINE_MS / 1000, 'seconds');
@@ -9907,6 +10103,16 @@
 
     closingGame goes up first, so the race menu closing as the game comes
     apart is told as /racedown, not as a finished face.
+
+    The connection to the game server is closed before the exit (#6724).
+    exitProcess ends the process without closing it, so the server never
+    heard this game leave and held it for its own 60 s timeout, and the same
+    account picking again inside that minute was turned away as a second
+    game (24 Nov, main: three refusals 1 to 3 s after a close). destroyClient
+    puts the client down, and the client's own shutdown says goodbye to the
+    server and returns once the server has it (fork #204, at most 500 ms).
+    It is done only when exitProcess is there to follow it, so a game that
+    cannot close stays connected.
   */
   function closeGame(from) {
     closingGame = true;
@@ -9925,6 +10131,8 @@
     let asked = false;
     try {
       if (sp.win32 && typeof sp.win32.exitProcess === 'function') {
+        try { sp.mpClientPlugin.destroyClient(); log('menu: closed the connection to the game server'); }
+        catch (e) { log('menu: could not close the connection to the game server:', e); }
         sp.win32.exitProcess();
         asked = true;
       }

@@ -339,6 +339,8 @@ fix gets a fresh test task.
   Main one in #test-tasks once it closes. A newer `Server: Dev` comment
   replaces the older Dev post; put every measurement the issue still needs
   in the newest. Put what was measured on the issue.
+### The known issues
+
 - **#known-issues.** An open issue labelled `Main Findings` or `Dev
   Findings` whose fix has not landed: it has no test task and is not in
   Done. The bot takes the post down the moment a `Test task:` comment is
@@ -363,6 +365,17 @@ fix gets a fresh test task.
       Where: <where it happens>
       How to avoid it: <what a tester can do meanwhile, if anything>
       What is being done: <where the fix stands>
+
+  A pull request keeps it current (#7080). One that names an open finding
+  (Refs, Closes, Fixes or Resolves) and carries no test task for it carries
+  that issue's known issue as it will stand after the merge, as a block
+  `Known issue for #N: <title>` with the lines above under it, or
+  `Known issue for #N: unchanged` when nothing changes for testers. The
+  check "Test tasks in the pull request" holds the block to the bot's rules
+  and refuses a pull request that names an open finding with neither, and
+  Done on merge writes the block on the issue as its newest `Known issue:`
+  comment. The engine pin's own pull request is not asked: the fork's pull
+  requests are where those changes are said.
 - **One post per issue per forum, never two.** A changed test task or known
   issue is an edit of its comment, or a newer comment, never a second post
   by hand. Never post a test task by hand (`/test-task`) for something on

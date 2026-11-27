@@ -55,6 +55,16 @@ Server: Dev
 Build: <the dev release or commit it needs>
 1. Steps with the files, commands and log lines.
 What should happen: what each prints or shows.
+A pull request that names an open Main or Dev finding and carries no test
+task for it says what is true for testers after the merge instead, which the
+merge writes on the issue for #known-issues:
+Known issue for #N: <title, at most 45 characters>
+Server: Main
+What happens: ...
+Where: ...
+How to avoid it: ...
+What is being done: ...
+or "Known issue for #N: unchanged" when nothing changes for them.
 One test task per issue and kind; never post one by hand in Discord. The
 check "Test tasks in the pull request" holds every block to the bot's post
 rules before the merge; when it is red, edit this body and it runs again.

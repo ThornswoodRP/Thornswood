@@ -59,7 +59,8 @@ function harness() {
   const world = { here: false };
   const T = { js: function (s) { said.push(s); } };
   const log = function () { logs.push(Array.prototype.join.call(arguments, ' ')); };
-  const fn = new Function('log', 'T', 'globalThis', block +
+  // loadedOutOfWorld is the loadGame handler's, beside the update tick (#7098).
+  const fn = new Function('log', 'T', 'globalThis', 'let loadedOutOfWorld = 0;\n' + block +
     '\nreturn {' +
     '  say: keepSayingChoice,' +
     '  chose: function (id, at) { menuChosenId = id; menuChosenAt = at; menuSaidAt = at; },' +
