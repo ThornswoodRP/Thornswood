@@ -112,11 +112,13 @@ try {
     $drivers = '[front] 20:10:01.000 carriage and ferry drivers: 27 of 27 bases found'
     $asked = '[front] 20:10:01.010 asked the server where driver 1bbbf6d goes'
     $page = '[front] 20:09:00.000 the ride panel is in'
+    $arrived = '[front] 20:10:01.300 the server sent the ride panel for driver 1bbbf6d'
+    $waits = '[front] 20:10:01.310 the ride panel waits for the Dialogue Menu to close'
     $claimed = '[front] 20:10:03.000 focus claimed by ride (holding: ride)'
     $released = '[front] 20:10:09.000 focus released by ride (holding: nobody)'
     $threw = '[front] 20:10:05.000 ride panel opens threw: TypeError: x is undefined'
     Set-Logs 'key-one-secret' 'Someone Secret' @{
-        'thornswood-front.log' = ($page + "`n[front] 20:09:30.000 door: Whiterun`n" + $drivers + "`n" + $asked + "`n" + $claimed + "`n" + $threw + "`n[front] 20:10:08.000 focus claimed by journal (holding: ride, journal)`n" + $released)
+        'thornswood-front.log' = ($page + "`n[front] 20:09:30.000 door: Whiterun`n" + $drivers + "`n" + $asked + "`n" + $arrived + "`n" + $waits + "`n" + $claimed + "`n" + $threw + "`n[front] 20:10:08.000 focus claimed by journal (holding: ride, journal)`n" + $released)
         'launcher.log' = '2026-11-26 20:08:33  Starting the game on launcher 1.3.128, game files of build-1.3.128, borderless.'
         'skyrim-platform.log' = '[20:10:01:000] asked the server where driver not this log'
     } 2
@@ -133,9 +135,9 @@ try {
     Yes '  and their time in UTC' ($out -match '\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC\s+Main\s+press\s+/ride e 1bbbf6d')
     Yes '  and none of the other lines, nor one from before the window' (-not $out.Contains('/lock') -and -not $out.Contains('where is the ride') -and -not $out.Contains('1bbbf00'))
     Yes 'it prints the driver lines of the set' ($out.Contains($drivers) -and $out.Contains($asked) -and $out.Contains($page) -and
-        $out.Contains($claimed) -and $out.Contains($threw) -and $out.Contains($released))
+        $out.Contains($arrived) -and $out.Contains($waits) -and $out.Contains($claimed) -and $out.Contains($threw) -and $out.Contains($released))
     Yes '  in the order the log has them' ($out.IndexOf($page) -lt $out.IndexOf($drivers) -and $out.IndexOf($drivers) -lt $out.IndexOf($asked) -and
-        $out.IndexOf($asked) -lt $out.IndexOf($claimed) -and $out.IndexOf($claimed) -lt $out.IndexOf($threw) -and $out.IndexOf($threw) -lt $out.IndexOf($released))
+        $out.IndexOf($asked) -lt $out.IndexOf($arrived) -and $out.IndexOf($arrived) -lt $out.IndexOf($waits) -and $out.IndexOf($waits) -lt $out.IndexOf($claimed) -and $out.IndexOf($claimed) -lt $out.IndexOf($threw) -and $out.IndexOf($threw) -lt $out.IndexOf($released))
     Yes '  and leaves out the rest of the log, and the other logs' (-not $out.Contains('door: Whiterun') -and -not $out.Contains('claimed by journal') -and
         -not $out.Contains('not this log'))
     Yes 'it names the launcher the set ran on' ($out.Contains('on launcher 1.3.128'))

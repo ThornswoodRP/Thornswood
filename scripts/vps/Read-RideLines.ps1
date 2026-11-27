@@ -29,8 +29,11 @@
     (C:\Thornswood-Docs\data\session-logs), which a cloud thread cannot open
     (#6230). Their thornswood-front.log says whether the plugin found the
     drivers' bases ("carriage and ferry drivers: "), whether a press was
-    sent ("asked the server where driver", from #7092), whether the panel's
-    page was in ("the ride panel is in"), whether the panel took the
+    sent ("asked the server where driver"), whether the page was in ("the
+    ride panel is in"), whether the server's panel arrived, what it waited
+    for and whether it was left unopened out of reach (#7206: "the server
+    sent the ride panel", "the ride panel waits for", "the ride panel is not
+    opened"), whether the panel took the
     keyboard ("focus claimed by ride"), and any error in the handlers on the
     way ("keys threw", "ride panel ... threw", "ride distance threw").
 
@@ -65,7 +68,7 @@ Set-StrictMode -Version Latest
 # thornswood-front.js's words (rideDriverIdSet, driverPress, the page's
 # ride:ready, claimFocus and guard). Every line of that log is
 # "[front] <clock> <text>". Change them together.
-$FrontLine = '^\[front\] \S+ (?:carriage and ferry drivers: |asked the server where driver |the ride panel is in|focus (?:claimed|released) by ride\b|keys threw:|ride panel (?:waits|opens) threw:|ride distance threw:)'
+$FrontLine = '^\[front\] \S+ (?:carriage and ferry drivers: |asked the server where driver |the ride panel is in|the server sent the ride panel |the ride panel (?:waits for |is not opened: )|focus (?:claimed|released) by ride\b|keys threw:|ride panel (?:waits|opens) threw:|ride distance threw:)'
 # The lines the front plugin sends on E (driverPress, merchantPress) and the
 # ride panel's own (thornswood-ride.js).
 $ChatLine = '^/(?:ride(?: |$)|merchant e )'
@@ -142,7 +145,7 @@ foreach ($f in @(Get-ChildItem -LiteralPath $Folder -Filter '*.json' -File | Whe
                 # The page coming in and a key handler's error are in every
                 # session; a set says something about drivers only with one
                 # of the drivers' own lines.
-                if ($line -match '\] \S+ (?:carriage and ferry drivers: |asked the server where driver |focus (?:claimed|released) by ride\b|ride )') { $drivers = $true }
+                if ($line -match '\] \S+ (?:carriage and ferry drivers: |asked the server where driver |the server sent the ride panel |the ride panel (?:waits for |is not opened: )|focus (?:claimed|released) by ride\b|ride )') { $drivers = $true }
             }
         }
     }
