@@ -702,12 +702,12 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,260 bytes, from commit
-`728a6191`, the commit the client record names.
-<!-- /engine-pin:front -->
-Its build.js is 2,444,820
-bytes, sha256
+`728a6191`, the commit the client record names. Its build.js is
+2,444,820 bytes, sha256
 `a67a1a146f104891d879d360c06d40e7c9051aac859bd6fd4d207f432be4416f`, and every
-font in it is one the record names. From `b21c4eb9` to `befb8364` the one
+font in it is one the record names.
+<!-- /engine-pin:front -->
+From `b21c4eb9` to `befb8364` the one
 change in what webpack builds is fork pull request 41: Big Shoulders in
 place of Bankir-Retro and icomoon, and the interface's Russian button text
 and perk descriptions in English. Before it, the dev feed's release
