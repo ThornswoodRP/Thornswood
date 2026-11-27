@@ -278,18 +278,33 @@ foreach ($m in @($curMap, $tgtMap)) {
 if ($notThisMachine) { Say ("  left out {0} record entries naming one machine's own files; they never leave it" -f $notThisMachine) 'DarkGray' }
 # ==== end thornswood no one machine's files in a rollback ====
 
+# ==== thornswood what stays with the launcher in a rollback ====
 # The six client runtime files stay with the launcher, and so does its source
-# record (:src:), because the launcher is not rolled back.
+# record (:src:), because the launcher is not rolled back. So does the in-game
+# UI build (#4252): build.js, the hashed assets it names and the list of them
+# (Ship-Rules.ps1, "What is ours under UI"), which every Ship builds from the
+# same fork commit as the client (Build-Front.ps1). Taking an older one back
+# put a UI from one commit beside a client from another, and the pack's source
+# note named the checkout's commit for a build.js that was not built from it.
+# index.html and the thornswood-* files are ours, and go back with the rest.
 $clientKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 if (Test-Path -LiteralPath $clientRecord) {
     $cb = ConvertFrom-ThornswoodJson (Get-Content -LiteralPath $clientRecord -Raw) $clientRecord
     foreach ($n in @($cb.files.PSObject.Properties.Name)) { [void]$clientKeys.Add($n) }
 }
-function Test-StaysWithLauncher([string]$k) { return ($k.StartsWith(':src:') -or $clientKeys.Contains($k)) }
+function Test-FrontBuildKey([string]$k) {
+    $ui = 'Data\Platform\UI\'
+    if (-not $k.StartsWith($ui, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    $leaf = $k.Substring($ui.Length)
+    if ($leaf.Contains('\')) { return $false }
+    return ($leaf -ieq 'build.js' -or $k -ieq $ShipUiAssetsRel -or (Test-ShipUiHashedAssetName $leaf))
+}
+function Test-StaysWithLauncher([string]$k) { return ($k.StartsWith(':src:') -or $clientKeys.Contains($k) -or (Test-FrontBuildKey $k)) }
 
 $newMap = @{}
 foreach ($k in @($tgtMap.Keys)) { if (-not (Test-StaysWithLauncher $k)) { $newMap[$k] = [string]$tgtMap[$k] } }
 foreach ($k in @($curMap.Keys)) { if (Test-StaysWithLauncher $k) { $newMap[$k] = [string]$curMap[$k] } }
+# ==== end thornswood what stays with the launcher in a rollback ====
 # Said again below, only once every file of the new record is on the site
 # beside it (#1050); what is gone is worked out below too.
 foreach ($k in @($newMap.Keys)) { if ($k -eq $RecordFilesKey -or $k.StartsWith(':gone:')) { $newMap.Remove($k) } }
@@ -310,17 +325,17 @@ foreach ($pair in @(@($curMap, 'cur'), @($tgtMap, 'tgt'))) {
     }
 }
 foreach ($d in $delete) { if (-not $newMap.ContainsKey(':gone:' + $d)) { $newMap[':gone:' + $d] = 'removed' } }
-$keptClient = @($tgtMap.Keys | Where-Object { $clientKeys.Contains($_) -and [string]$tgtMap[$_] -ne [string]$curMap[$_] }).Count
+$keptClient = @(@($tgtMap.Keys) + @($curMap.Keys) | Sort-Object -Unique | Where-Object { -not $_.StartsWith(':') -and (Test-StaysWithLauncher $_) -and [string]$tgtMap[$_] -ne [string]$curMap[$_] }).Count
 if (-not $write.Count -and -not $delete.Count -and -not $listMoved) {
     Die ("$tgtId left the same game files and plugin list as the feed has now" +
-         $(if ($keptClient) { ', apart from the client runtime, which stays with the launcher' } else { '' }) + '. Nothing to send.')
+         $(if ($keptClient) { ', apart from the client runtime and the in-game UI built with it, which stay with the launcher' } else { '' }) + '. Nothing to send.')
 }
 $writeBytes = [int64]0
 foreach ($k in $write) { $writeBytes += [int64](([string]$newMap[$k]).Split(':')[0]) }
 Say ("  {0:n0} file(s) go back to how {1} had them ({2:n1} MB)" -f $write.Count, $tgtId, ($writeBytes / 1MB)) $(if ($write.Count) { 'Green' } else { 'DarkGray' })
 Say ("  {0:n0} file(s) the later releases added are taken out" -f $delete.Count) $(if ($delete.Count) { 'Yellow' } else { 'DarkGray' })
 if ($listMoved) { Say '  the plugin list goes back too' 'Yellow' }
-if ($keptClient) { Say '  the client runtime stays with the launcher, which is not rolled back' 'DarkGray' }
+if ($keptClient) { Say '  the client runtime and the in-game UI built with it stay with the launcher, which is not rolled back' 'DarkGray' }
 
 # ------------------------------------------------------------ the bytes
 Head 'Finding the files'
