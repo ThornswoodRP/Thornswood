@@ -917,17 +917,14 @@
   }
 
   /*
-    THE REST OF THE JAIL RULES (#502). Patrick, 12 October: jails can be
-    claimed by the Jarl only, and the rest as written on the issue: no timer,
+    THE REST OF THE JAIL RULES (#502): no timer,
     release by that hold's guards, lockpicking allowed, the game's jail keys
     open nothing, /stuck does not move someone out of a locked cell, and
     dying in a cell wakes at a temple.
 
-    THE JARL ONLY. A jail building (JAIL_BUILDING, read out of the world with
-    the cells) is the Jarl of its hold's to claim, and nobody else's: claim()
-    refuses anybody else, the line under the crosshair offers nobody else the
-    claim, and a deed presented at its door by anybody else is paper. Read as
-    the Jarl of that jail's hold, because the office is of one hold.
+    A building containing cells is an ordinary claimable place (#7071).
+    Holding it grants no guard authority: its actual cell locks remain the
+    hold's guards' responsibility and are never overridden by a claim.
 
     THE GAME'S JAIL KEYS. Each cell door's lock names a key the game made
     (JAIL_KEY), and a key in somebody's pack opens that lock in their own
@@ -956,10 +953,9 @@
     return Object.prototype.hasOwnProperty.call(JAIL_BUILDING, b) ? JAIL_BUILDING[b] : null;
   }
 
-  /** May this person hold this building: anybody, but a jail is its hold's Jarl's alone. */
+  /** Building ownership grants no guard authority over its actual cells. */
   function mayHold(actorId, profileId, building) {
-    var jh = jailOfBuilding(building);
-    return !jh || isJarlOf(profileId, jh);
+    return true;
   }
 
   /** The hold whose cell door a key the game made opens, or null, by the key's descriptor. */
@@ -8985,45 +8981,6 @@
   }
 
   /*
-    THE JAIL RULE, APPLIED TO THE CLAIMS MADE BEFORE IT, ONCE (#502).
-
-    Patrick, 12 October evening: jail claims made before the jail rule end
-    once, and then the rule holds. Before #2497 anybody could claim a jail
-    building; since, only the Jarl of its hold may, and since #2551 the Jarl
-    is whoever holds that hold's Jarl role. So at the first server start with
-    the rule, every claim on a jail building whose holder is not that hold's
-    Jarl ends, each logged by building, holder and profile, and
-    steps.jailRule records that it ran, in the same save. With no such claim
-    nothing ends and the mark is still written. It runs here, after every
-    part of the register is read, because save() writes all of them, and it
-    never runs again: a claim after this is made under the rule.
-
-    The holder is read on record (__thornswoodOfficesOnRecord): at server
-    start nobody has sent a pass, and this is about a claim the server
-    already holds, not a press arriving now.
-  */
-  function endPreRuleJailClaims() {
-    if (steps.jailRule) { return 0; }
-    var ended = 0;
-    for (var b in claims) {
-      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
-      var hold = jailOfBuilding(b);
-      if (!hold) { continue; }
-      // The character that holds the hold's Jarl office (#2551), read on record.
-      if (officesOfProfile(claims[b].by, true).jarl.indexOf(hold) !== -1) { continue; }
-      plog('law: the jail rule ends', claims[b].name + '\'s claim (profile ' + claims[b].by + ') on',
-           nameOf(b) + ', made before only the Jarl of', hold, 'could hold it');
-      keepOwed(b, claims[b], Date.now());
-      delete claims[b];
-      ended++;
-    }
-    steps.jailRule = Date.now();
-    save();
-    plog('law: the jail rule was applied to the claims made before it once:', ended, 'claim(s) ended');
-    return ended;
-  }
-
-  /*
     WHAT A DELETED CHARACTER HELD, LET GO (#2351, Patrick's A of 16 October:
     "Delete-Person.ps1 writes a list, and the gamemode releases those entries
     at its next start"). Asked once, as this block loads and before
@@ -9180,7 +9137,6 @@
 
   if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('property', release); }
   rolesRead();
-  endPreRuleJailClaims();
 
   ready();
   g.__thornswoodProperty = {
@@ -9215,7 +9171,7 @@
     isJarl: isJarl, isJarlOf: isJarlOf, jarlHoldsOf: jarlHoldsOf, isCourtOf: isCourtOf,
     rolesRead: rolesRead, held: function () { return JSON.parse(JSON.stringify(law.held)); },
     isSteward: isSteward, isStewardOf: isStewardOf, stewardHoldsOf: stewardHoldsOf,
-    endPreRuleJailClaims: endPreRuleJailClaims, steps: function () { return Object.assign({}, steps); },
+    steps: function () { return Object.assign({}, steps); },
     // What a deleted character held, let go at server start (#2351).
     release: release,
     isGuard: isGuard, guardHoldsOf: guardHoldsOf, jailHoldOf: jailHoldOf, cellLocked: cellLocked,

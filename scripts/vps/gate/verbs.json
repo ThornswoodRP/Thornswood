@@ -973,6 +973,7 @@
         "scripts/dev/OwnPlugins.ps1",
         "scripts/dev/bsa.py",
         "scripts/dev/claimable_doors.py",
+        "scripts/dev/claim_sites.py",
         "scripts/dev/gamemode_tables.py",
         "scripts/dev/own_plugins.py",
         "scripts/dev/riftweald.py",
