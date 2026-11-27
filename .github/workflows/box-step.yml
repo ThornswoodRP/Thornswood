@@ -19,9 +19,13 @@
 #     days, for a close no event reached.
 # docs/guide/the-board.md, "Box steps", is the rule.
 #
-# The run's own token, issues write only. No secret, and nothing reaches the
-# box. Every action is named by a full length commit SHA with its tag in the
-# comment, for the reason build.yml gives.
+# The run's own token, issues write only. No secret. Every action is named by
+# a full length commit SHA with its tag in the comment, for the reason
+# build.yml gives.
+#
+# WHERE IT RUNS. GitHub's ubuntu-latest (#3685, #4266): an issue opened,
+# edited or closed starts it, and anyone can open an issue on a public
+# repository, so it never reaches the box. A few seconds an issue.
 name: Box step
 on:
   issues:
