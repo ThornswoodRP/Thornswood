@@ -78,7 +78,9 @@ vm.createContext(fixtureContext);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'test-merchant-trading.js'),'utf8').split('const roleMarket=')[0],fixtureContext);
 for(const merchant of roster.merchants.filter(row=>row.bookHold==='whiterun')) {
   const f=fixture(),descs=new Map(),records=new Map();
-  function id(desc) {if(desc==='a')return 10;const value=desc==='a:Skyrim.esm'?10:f.resolve(desc);descs.set(value,desc);return value;}
+  // The trading character (10, formDesc 'a') and Skyrim's Lockpick (a:Skyrim.esm, a role good) are two
+  // identities, so the Lockpick takes its own ID like every other good (#7219).
+  function id(desc) {if(desc==='a')return 10;const value=f.resolve(desc);descs.set(value,desc);return value;}
   for(const row of roster.merchants) {
     const base=id(row.base),reference=id(row.reference),data=Buffer.alloc(4);data.writeUInt32LE(base);
     records.set(base,{id:base,type:'NPC_',flags:0,fields:[]});
