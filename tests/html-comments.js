@@ -8,8 +8,8 @@
   A harness that reads a file past its comments strips them the way the site
   does: noComments in site\lib\pages.js, lifted out of the site's lines block
   as the lines harnesses lift it, so there is one copy of it in JavaScript.
-  One pass of /<!--[\s\S]*?-->/ can leave a new "<!--" behind, which is why
-  no harness carries its own.
+  One pass of the lazy comment pattern can leave a new "<!--" behind,
+  which is why no harness carries its own.
 */
 const siteFiles = require('./site-files');
 
