@@ -9353,6 +9353,48 @@
   let lastToken = '';
   let tokenAt = 0;
 
+  /*
+    BACK IN THE WORLD AFTER LEAVING IT (#4615).
+
+    Every way out of the world (the idle check, the server ending the session,
+    a refused connection, Change character, the server going down) clears
+    __thornswoodInWorld and quits to the main menu. Only the first arrival
+    above set it again, so after a return the world was up and the flag still
+    said it was not: the idle check never started again, the choice went on
+    being said to the client for ninety seconds, and so did everything else
+    that asks whether the world is there.
+
+    So the arrival is noticed the same way as the first: a character and no
+    menu. Only after the main menu has been seen since leaving, because the
+    quit takes a few frames to land, and in those frames the old world is
+    still there; arriving in them would tell skymp5-client it is already in a
+    game, and then the pick would load no world (remoteServer.ts,
+    alreadyInAGame).
+
+    The page is not loaded again, unlike the first arrival: it outlived the
+    world on purpose, with its chat moved to whoever was picked (pickedAgain),
+    so only what the first arrival does for the world itself is done again.
+  */
+  let awaySawMenu = false;
+  function cameBack(now) {
+    let here = false;
+    try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+    if (here) { awaySawMenu = false; return false; }
+    let atMenu = false;
+    try { atMenu = !!sp.Ui.isMenuOpen('Main Menu'); } catch (e) { atMenu = false; }
+    if (atMenu) { awaySawMenu = true; return false; }
+    if (!awaySawMenu || gameMenuOpen()) { return false; }
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { return false; }
+    awaySawMenu = false;
+    try { globalThis.__thornswoodInWorld = true; } catch (e) { }
+    if (choiceUp()) { menuGone(); }
+    menuPhase = 9;
+    log('back in the world as profile', PROFILE);
+    return true;
+  }
+
   sp.on('update', guard('tick', () => {
     const now = Date.now();
 
@@ -9400,6 +9442,9 @@
       }
       return;
     }
+
+    // Back in the world after leaving it (#4615).
+    if (cameBack(now)) { return; }
 
     /*
       The focus arbiter waits until our own overlays are in.
