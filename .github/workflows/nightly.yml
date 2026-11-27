@@ -454,7 +454,7 @@ jobs:
         # report job names this share as having left no report and is red,
         # so the failure is said where the report is read.
         continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: harness-report-${{ matrix.shard }}
           path: ${{ runner.temp }}/harness-report/share.xml
@@ -511,7 +511,7 @@ jobs:
           exit $code
       - name: Keep the merged report with the run
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: harness-report
           path: ${{ runner.temp }}/harness-report.xml

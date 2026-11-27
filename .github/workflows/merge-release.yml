@@ -263,7 +263,7 @@ jobs:
         run: ./scripts/release/Get-ContentBuild.ps1 -Server dev -Take -Keep '${{ runner.temp }}/content-taken'
       - name: Hand the build to the content checks
         if: ${{ steps.find.outputs.found == 'yes' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: content-taken
           path: |
@@ -523,7 +523,7 @@ jobs:
       # Get-ContentBuild.ps1 -Newest), newest first. Reading it needs Actions
       # read only, which a pull request's token has.
       - name: Keep what was taken
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: content-dev
           path: |
