@@ -28,10 +28,12 @@ const cases = [
     prof:'tailor',half:'haberdasher',bench:moved['231c6:Hothtrooper44_ArmorCompilation.esp'].from,
     reason:/not made at this bench/},
   // Since #7184 the Eyepatch lists its Leather Strips, not the gold every
-  // game takes out, so it is novice work; its refusal is the missing shears,
-  // which only a recipe the server took for the Eyepatch gets (an unknown one
-  // is told it takes different materials, as above).
-  {label:'recosted recipe', desc:'286a:Hothtrooper44_ArmorCompilation.esp',
+  // game takes out, so it is novice work. Another trade is still refused,
+  // and a Haberdasher with no shears is told so before any wait (#7226).
+  {label:'recosted recipe, another trade', desc:'286a:Hothtrooper44_ArmorCompilation.esp',
+    prof:'smith',half:'platewright',remapped:true,reason:/Only a Haberdasher/,
+    inputs:recosted['286a:Hothtrooper44_ArmorCompilation.esp'].inputs.filter(x => x[2]).map(x => ({item:x[0],count:x[2]}))},
+  {label:'recosted recipe, no shears', desc:'286a:Hothtrooper44_ArmorCompilation.esp',
     prof:'tailor',half:'haberdasher',remapped:true,reason:/pair of shears/,
     inputs:recosted['286a:Hothtrooper44_ArmorCompilation.esp'].inputs.filter(x => x[2]).map(x => ({item:x[0],count:x[2]}))},
   {label:'moved recipe', desc:'231c6:Hothtrooper44_ArmorCompilation.esp',
@@ -59,9 +61,13 @@ function fixture(desc, index, options = {}) {
 }
 cases.forEach((row,index) => Object.assign(row,fixture(row.desc,index,row)));
 const normal = fixture('dca01:Skyrim.esm',cases.length);
+const eyepatchDesc = '286a:Hothtrooper44_ArmorCompilation.esp';
+const noviceRecosted = fixture(eyepatchDesc,cases.length+1,{prof:'tailor',half:'haberdasher',remapped:true,
+  inputs:recosted[eyepatchDesc].inputs.filter(x => x[2]).map(x => ({item:x[0],count:x[2]}))});
+w.row(noviceRecosted.actor).inventory.entries.push({baseId:w.idOf('1b000:Thornswood-Content.esp'),count:1});
 yes('the whole gamemode loads',w.boot());
 if (!w.loaded()) { t.done(w); }
-cases.concat(normal).forEach(row => w.arrive(row.actor));
+cases.concat(normal,noviceRecosted).forEach(row => w.arrive(row.actor));
 w.run(30000);
 const pack = actor => JSON.stringify(w.row(actor).inventory);
 const character = actor => JSON.stringify(w.row(actor).thornswoodCharacter);
@@ -100,6 +106,23 @@ yes('allowed completion spends the original inputs and nothing more, and makes o
   w.count(actor,craft.output) === craft.count
   && craft.inputs.every((x,i) => w.count(actor,x.baseId) === beforeInputs[i]-x.count)
   && (craft.inputs.some(x => x.baseId === COAL) || w.count(actor,COAL) === beforeCoal));
+{
+  const {actor,bench,craft} = noviceRecosted;
+  const beforePack = pack(actor), beforeCharacter = character(actor), beforeCoal = w.count(actor,COAL);
+  const beforeInputs = craft.inputs.map(x => w.count(actor,x.baseId));
+  const beforeCompletion = completed(), begin = w.now();
+  let unchanged = false;
+  const made = w.craft(actor,bench,craft,() => {
+    unchanged = pack(actor) === beforePack && character(actor) === beforeCharacter;
+  });
+  yes('canonical novice Eyepatch remains allowed after recosting without preflight spending',
+    rows[eyepatchDesc].rank === 'novice' && unchanged && made.started && made.made && made.workMs === 5000
+    && w.now() === begin+5000 && completed() === beforeCompletion+1);
+  yes('novice recosted completion spends its canonical inputs once and makes one output',
+    w.count(actor,craft.output) === craft.count
+    && craft.inputs.every((x,i) => w.count(actor,x.baseId) === beforeInputs[i]-x.count)
+    && w.count(actor,COAL) === beforeCoal);
+}
 const unknown = {recipe:w.idOf('abcdef:Skyrim.esm'),output:w.idOf('abcdee:Skyrim.esm'),inputs:[]};
 const unclassified = w.craft(actor,bench,unknown);
 yes('a recipe with no known row retains its existing allowance and default time',
