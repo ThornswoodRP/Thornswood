@@ -7,7 +7,8 @@ DELETED = 0x20
 COMPRESSED = 0x40000
 DESC = re.compile(r'[1-9a-f][0-9a-f]{0,5}:[^:\\/]+\.(?:esm|esp|esl)', re.I)
 # xEdit's wbActionFlag defines XACT as uint32 action bits, never a form ID.
-PLAIN = {b'EDID': None, b'DATA': (24,), b'XSCL': (4,), b'XAPD': (1,), b'XACT': (4,)}
+PLAIN = {b'EDID': None, b'DATA': (24,), b'XSCL': (4,), b'XAPD': (1,), b'XACT': (4,),
+         b'ONAM': (0,)}  # REFR Open by Default is an empty marker, retained in place.
 WITH_FORM = {
     b'NAME': ((4,), (0,)),
     b'XOWN': ((4,), (0,)),

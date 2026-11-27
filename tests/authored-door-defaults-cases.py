@@ -112,6 +112,33 @@ class Defaults(unittest.TestCase):
             with self.subTest(size=size), self.assertRaisesRegex(SystemExit, 'XACT'):
                 L.authored_doors.copy_pairs(plugins[0], [(b'XACT', bytes(size))], None)
 
+    def test_census_open_by_default_shape_survives_real_serializer_and_recipe(self):
+        # e796b:Skyrim.esm census shape, with fixture-only reference IDs.
+        source = [(b'NAME', PACK(0x500)), (b'XACT', PACK(13)), (b'XESP', PACK(0x403, 1)),
+                  (b'XAPD', b'\1'), (b'XAPR', PACK(0x404, 0x3f800000)), (b'ONAM', b'')]
+        plugins, winners = activation_world(lambda rows: rows.update({0x101: source[1:]}))
+        src = plugins[0]; entry = winners[b'REFR', ('skyrim.esm', 0x101)]
+        pairs = L.subrecords(src.data(entry))
+        self.assertEqual([tag for tag, _ in pairs], [tag for tag, _ in source] + [b'DATA'])
+        numbers = L.Renumber(); numbers.masters = ['skyrim.esm']
+        cooked = L.authored_doors.copy_pairs(src, pairs, numbers)
+        cell = src.gid(entry.ctx[1]); ce = winners[b'CELL', cell]
+        made = {'achr': [], 'refr': [(entry.fid, entry.flags, L.pack_subrecords(cooked), entry)],
+                'cell': {cell: (ce.fid, ce.flags, src.data(ce), ce)}, 'wrld': {}, 'qust': [],
+                'lctn': [], 'cobj': [], 'alch': []}
+        final = L.read_plugin(L.write_plugin(made, ['Skyrim.esm'], plugins, numbers), 'Thornswood-Last.esp', 1)
+        recipe, _ = L.make_recipe(final.buf, made, plugins)
+        self.assertEqual(L.last_recipe.apply(recipe, lambda name: src.buf, lambda name: None), final.buf)
+        winning = L.winners(plugins + [final], {b'REFR'})[b'REFR', ('skyrim.esm', 0x101)]
+        self.assertEqual(L.subrecords(final.data(winning)),
+                         [(tag, b'\0' if tag == b'XAPD' else body) for tag, body in pairs])
+
+    def test_nonempty_open_by_default_marker_still_refuses(self):
+        plugins, _ = world()
+        for size in (1, 2, 4, 8):
+            with self.subTest(size=size), self.assertRaisesRegex(SystemExit, 'ONAM'):
+                L.authored_doors.copy_pairs(plugins[0], [(b'ONAM', bytes(size))], None)
+
     def test_copy_clears_parent_only_flag_and_preserves_link_ordinals_and_delay(self):
         plugins, _ = world()
         numbers = L.Renumber()
