@@ -365,7 +365,7 @@ game\gamemode\staff-spells.ts 11
 game\gamemode\staff.ts 9
 game\gamemode\strength-weapons.ts 1
 game\gamemode\stuck.ts 7
-game\gamemode\teleport.ts 17
+game\gamemode\teleport.ts 15
 game\gamemode\thalmor-patrols.ts 4
 game\gamemode\the-benches.ts 2
 game\gamemode\the-class-and-profession-gates.ts 1
