@@ -31,6 +31,21 @@ function upload(name,bytes,allow,cap=4096,hang=false) {
     if(hang) req.write(bytes);else req.end(bytes);
   });
 }
+/* An upload held open (#4587): it has sent part of its file and not the
+   rest, the way a slow connection does, until finish() sends the rest. Each
+   is finished at the end whatever happened, so a failed check does not leave
+   one open for its five minute deadline. */
+const held=[];
+function hold(name) {
+  const req=new PassThrough();req.headers={};req.complete=false;
+  let resolve;const done=new Promise(r=>{resolve=r;});
+  const res={finish:resolve,destroy:()=>resolve({status:0})};
+  box.receiveUpload(req,res,name,4096,null,saved=>resolve({status:200,name:saved}));
+  req.write(Buffer.from('part one '));
+  const h={done,finish(){if(!req.writableEnded){req.complete=true;req.end(Buffer.from('part two'));}return done;}};
+  held.push(h);
+  return h;
+}
 async function main(){
   const png=Buffer.from('89504e470d0a1a0a00000000','hex');
   const valid=await upload('screen.png',png,['.png']);assert.equal(valid.status,200);
@@ -54,12 +69,22 @@ async function main(){
   for(let i=0;i<40;i++)assert.equal((await upload('a.log',Buffer.from('x'),null)).status,200);
   const blocked=await upload('a.log',Buffer.from('x'),null);assert.equal(blocked.status,429);
   assert(Number(blocked.headers['Retry-After'])>0,'retry-after on quota');
+  // Two at once from one connection, and no third (#4587).
+  key='at-once';
+  const first=hold('one.log'),second=hold('two.log');
+  const third=await upload('three.log',Buffer.from('x'),null);
+  assert.equal(third.status,429,'a third upload while two are open is refused, got '+third.status);
+  assert(Number(third.headers['Retry-After'])>0,'retry-after on the third at once');
+  assert.equal((await first.finish()).status,200,'the first of the two still finishes');
+  const fourth=await upload('four.log',Buffer.from('x'),null);
+  assert.equal(fourth.status,200,'once one of the two has finished, the next is taken, got '+fourth.status);
+  assert.equal((await second.finish()).status,200,'and so does the second');
   // Boundary validation covers every advertised picture and recording type.
   assert(box.mediaSignature('.jpg',Buffer.from('ffd8ff','hex')));
   assert(box.mediaSignature('.gif',Buffer.from('GIF89a')));
   assert(box.mediaSignature('.webp',Buffer.from('RIFF0000WEBP')));
   assert(box.mediaSignature('.mp4',Buffer.from('0000ftyp')));
   assert(box.mediaSignature('.webm',Buffer.from('1a45dfa3','hex')));
-  console.log('PASS upload signatures, byte caps, deadlines, cleanup, hourly rate cap and retry guidance');
+  console.log('PASS upload signatures, byte caps, deadlines, cleanup, hourly rate cap, two at once and retry guidance');
 }
-main().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>fs.rmSync(work,{recursive:true,force:true}));
+main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await Promise.all(held.map(h=>h.finish()));fs.rmSync(work,{recursive:true,force:true});});
