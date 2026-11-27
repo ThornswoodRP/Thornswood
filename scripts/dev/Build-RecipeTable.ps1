@@ -1575,6 +1575,12 @@ if ($RACE_LOCKED -and (Test-Path -LiteralPath $racesJson)) {
 
 $WOODWRIGHT_TAKES_SPEARS = $true
 $SPEAR_WORDS = @('Spear', 'Pike', 'Halberd', 'FishingRod', 'Fishing Rod', 'FishingPole', 'Fishing Pole')
+# The fishing pole words alone, for the rule that gives a pole the Woodwright
+# when it is a MISC record rather than a WEAP (below, after the house parts).
+# Not the spear words: outside a WEAP, "Spear" is in the name of two
+# Playable Rieklings spell tomes and "Pike" is a fish, and that rule gave
+# both tomes to the Woodwright (#5886).
+$FISHING_POLE_WORDS = @('FishingRod', 'Fishing Rod', 'FishingPole', 'Fishing Pole')
 
 # WHAT NOBODY MAKES AT ALL.
 #
@@ -3855,7 +3861,7 @@ foreach ($desc in $recipes.Keys) {
         # spear sits under WEAP and a fishing pole is a MISC record, so it has
         # never once been reached: that is why the poles sat here with the
         # ingots while the spears went where he asked.
-        if ($WOODWRIGHT_TAKES_SPEARS -and ((MatchesWord $o.Edid $SPEAR_WORDS) -or (MatchesWord $o.Name $SPEAR_WORDS))) {
+        if ($WOODWRIGHT_TAKES_SPEARS -and ((MatchesWord $o.Edid $FISHING_POLE_WORDS) -or (MatchesWord $o.Name $FISHING_POLE_WORDS))) {
             $ownerName = 'Woodworker'; $half = 'Woodwright'
             $reason = 'the output is a fishing pole, a shaft of wood with a line on it, and a MISC record rather than a WEAP so the spear rule above never sees it'
         } else {
