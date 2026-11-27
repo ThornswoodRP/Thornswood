@@ -31,6 +31,7 @@
 
 game/tests/test-balance-ladders.ps1  fails on main: three recipes are more than one rung out with no reason (#7100)
 game/tests/test-other-server-name-gone.js  own step in build.yml, "Check the other server's name stays out"
+game/tests/test-smith-charcoal.js  fails on main: it reads fuel-by-recipe.json, which only a content build of #7072 makes, and none has been kept since it merged on 26 Nov (#6879)
 launcher/tests/test-app-manifest.ps1  needs a built exe, and reads the setup program and the .NET Framework compiler (Launcher-Csc.ps1) that went with #4823 and #4824; its port is with the launcher harnesses (#4823)
 launcher/tests/test-play-progress.ps1  fails on main: its lifted launcher code no longer builds (#7100)
 launcher/tests/test-play-stuck-game.ps1  fails on main: its lifted launcher code no longer builds (#7100)
