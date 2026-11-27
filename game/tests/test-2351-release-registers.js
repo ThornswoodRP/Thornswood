@@ -19,7 +19,8 @@
        name them; their posts come down with their words off; a job they took
        goes back on the board; gold owed to them stops being held; the drop
        box keeps every coin with their name off; their bed nights end; what
-       was owed into their pack goes
+       was owed into their pack goes; the holders' word to them goes, and
+       a word they were in names them no more
     B  the books stay balanced: every hold's ledger (funds) is the same coin
        for coin, never less than what is still held, and the drop box holds
        the same gold
@@ -229,6 +230,15 @@ function registers(dir) {
     // Gold owed into a pack and not yet in it (#4258), theirs and somebody else's.
     owing: { [P1]: [{ id: 'owed-1', entries: [{ baseId: GOLD, count: 10 }], line: '' }],
              [PY]: [{ id: 'owed-2', entries: [{ baseId: GOLD, count: 4 }], line: '' }] },
+    // The holders' word (#2680, #4786): a pick of their door, a pick they were
+    // in with somebody else, a deed one of their characters presented, and
+    // a word that is nothing of theirs.
+    word: { list: [
+      { kind: 'pick', building: 'b1:Skyrim.esm', holder: P1, by: [PY], at: NOW, last: NOW, count: 1, due: NOW + 60000, looks: ['an Orc man'], sent: 0 },
+      { kind: 'pick', building: 'b2:Skyrim.esm', holder: PY, by: [P1, PZ], at: NOW, last: NOW, count: 2, due: NOW + 60000, looks: ['a Breton woman', 'a Nord man'], sent: 0 },
+      { kind: 'deed', building: 'b3:Skyrim.esm', holder: PZ, by: [P2], at: NOW, last: NOW, count: 1, due: NOW + 60000, looks: ['a Khajiit woman'], sent: NOW },
+      { kind: 'pick', building: 'b3:Skyrim.esm', holder: PZ, by: [PY], at: NOW, last: NOW, count: 1, due: NOW + 60000, looks: ['an Imperial man'], sent: 0 }
+    ] },
     // The jail rule ran long ago, as on every server, so a start writes nothing of its own.
     steps: { jailRule: NOW },
     boards: {
@@ -501,6 +511,16 @@ try {
   yes('P17 what was owed into their pack goes, the others\' stays (#4258)',
       !!prop.owing && prop.owing[P1] === undefined && !!prop.owing[PY] && prop.owing[PY].length === 1 &&
       prop.owing[PY][0].entries[0].count === 4);
+  const word = (prop.word && prop.word.list) || [];
+  const wordWas = JSON.parse(before['property.json']).word.list;
+  yes('P19 a word to them goes, and nothing left in the word book names them (#4786)',
+      word.length === 3 && word.every(function (w) { return w.holder !== P1 && w.holder !== P2 && w.by.indexOf(P1) === -1 && w.by.indexOf(P2) === -1; }));
+  yes('P20 a pick they were in keeps its count and times for its holder, with them out and its looks cleared',
+      word[0].holder === PY && JSON.stringify(word[0].by) === JSON.stringify([PZ]) && word[0].count === 2 &&
+      word[0].at === NOW && word[0].due === NOW + 60000 && word[0].looks.length === 0 && word[0].sent === 0);
+  yes('P21 a deed they presented, already sent, keeps its time and names nobody',
+      word[1].kind === 'deed' && word[1].holder === PZ && word[1].by.length === 0 && word[1].looks.length === 0 && word[1].sent === NOW);
+  yes('P22 a word that is nothing of theirs is as it was', JSON.stringify(word[2]) === JSON.stringify(wordWas[3]));
   yes('P18 rent they still owed on a place they no longer held goes; somebody else\'s stays (#3893)',
       JSON.stringify(prop.arrears) === JSON.stringify({ 'b2:Skyrim.esm': [{ by: PY, name: 'Yours', owed: 5, at: NOW }] }));
 
@@ -591,7 +611,7 @@ try {
   // ---- L
   const all = run.logged.join('\n');
   yes('L1 the log says counts: property ' + (L[2] || '').replace('release: property: ', ''),
-      /^release: property: claims 1, masterKeys 1, offices 2, posts 2, handedBack 1, owed 1, lines 5, box 1, boxRecord 2, guests 2, owing 1, arrears 1$/.test(L[2] || ''));
+      /^release: property: claims 1, masterKeys 1, offices 2, posts 2, handedBack 1, owed 1, lines 5, box 1, boxRecord 2, guests 2, owing 1, arrears 1, words 3$/.test(L[2] || ''));
   yes('L2 and never a name, a profile id or a form id of theirs, in any line of this start',
       !/Mine|Also mine|my words/.test(all) &&
       [P1, P2, A1, A2].every(function (n) { return !new RegExp('\\b(' + n + '|' + n.toString(16) + ')\\b', 'i').test(all); }));
