@@ -81,9 +81,11 @@ function thornswoodBusyWork(ms) { const until = Date.now() + ms; let x = 0; whil
     yes('the timer looks every 5 seconds', timers[0].ms === 5000);
 
     const req = path.join(data, 'profile.json'), out = path.join(data, 'profiles');
+    // Read off the folder's listing, not by checking req and then writing it.
+    const requestLeft = () => fs.readdirSync(data).includes('profile.json');
     fs.writeFileSync(req, JSON.stringify({ seconds: 1 }));
     tick();
-    yes('the request is picked up and deleted', !fs.existsSync(req));
+    yes('the request is picked up and deleted', !requestLeft());
     const busy = setInterval(() => thornswoodBusyWork(40), 50);
     const wrote = await until('written', () => fs.existsSync(path.join(out, 'newest.txt')), 5000);
     clearInterval(busy);
@@ -110,7 +112,7 @@ function thornswoodBusyWork(ms) { const until = Date.now() + ms; let x = 0; whil
     tick();
     await wait(300);
     yes('a request it cannot read is deleted and said, and fires nothing',
-      !fs.existsSync(req) && said.some(l => /cpu profile request was not readable/.test(l)) && said.filter(l => /sampling for/.test(l)).length === n);
+      !requestLeft() && said.some(l => /cpu profile request was not readable/.test(l)) && said.filter(l => /sampling for/.test(l)).length === n);
   } catch (e) {
     failed++; console.log('FAIL  it threw: ' + (e && e.stack || e));
   } finally {
