@@ -108,7 +108,11 @@ Yes '-Mode takes notice and restart and nothing else' (
 Yes '-Why is there for the restart wording' ($params.ContainsKey('Why'))
 
 # ---- and the warning comes before anything stops ------------------------------
-$top = @($ast.EndBlock.Statements)
+# Since #4264 most of the deploy is the body of one try, whose finally removes
+# the run's own scratch folder, so the order is read through that try's body.
+$top = @($ast.EndBlock.Statements | ForEach-Object {
+    if ($_ -is [System.Management.Automation.Language.TryStatementAst] -and $_.Finally -and
+        $_.Finally.Extent.Text -match '\$runScratch') { $_.Body.Statements } else { $_ } })
 # Since #3196 the warning, the stop and the swap are the body of the one if a
 # restart takes, after the reload that needs none of them, so their order is
 # read inside it, and nothing before it may stop the server.

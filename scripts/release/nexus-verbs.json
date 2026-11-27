@@ -3,10 +3,40 @@
   "what": "Every Nexus script a session can run with the key it does not hold, and all it can run (scripts/release/Nexus-Run.ps1 reads this, through scripts/vps/gate/GateRules.ps1, the rules the deploy gate holds a line to). A verb is one script of main, run by .github/workflows/nexus-run.yml with only the parameters named here. A parameter's rule is 'switch' (no value), 'text' (the text rule below) or a pattern its value must match whole. 'fixed' goes on every run of that verb. 'lists' are parameters whose value is several, split on commas. 'out' is the parameter Nexus-Run sets to a folder of the run's own and sends back sealed. Three are Nexus-Run's own and never reach the script: Send-NexusFile's -PackRoot, -Pack and -PackName, which zip files of main into the archive it uploads. New-NexusRevision's -Archive is never given: Nexus-Run downloads each -FileId from Nexus, the archive that was uploaded as that file. Its -Add names a JSON file of main whose archives Nexus-Run downloads the same way. Its -Rule names a JSON file of main under records, which the script reads as main holds it. Read-NexusFile downloads the one file it names itself, and keeps nothing. Anything a script takes from a file of the machine it runs on (-Archive of your own, -From, -Layout, -CollectionArchive, -Game) is One's, with the key file there. 'reads' names every file of code the verb's script runs, as scripts/ops/Verb-Files.js finds them, so that auto-merge holds a change to any of them for Patrick as it holds the script: node scripts/ops/Verb-Files.js --write puts them in, and tests/test-6184-verb-files.js fails when a verb runs a file its reads does not name (#6184).",
   "text": "^[A-Za-z0-9][A-Za-z0-9 .,:;'()!?_+&/-]{0,399}$",
   "verbs": {
+    "Copy-NexusRevision": {
+      "script": "scripts/release/Copy-NexusRevision.ps1",
+      "reads": [
+        "scripts/release/Build-Launcher.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
+        "scripts/release/LauncherVersion.ps1",
+        "scripts/release/Nexus.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/SevenZip.ps1",
+        "scripts/release/Sign-Artifact.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/release/collection-page.js",
+        "scripts/release/collection-permissions.js",
+        "scripts/release/nexus-collection.js"
+      ],
+      "timeoutMinutes": 30,
+      "fixed": ["-NoPause"],
+      "params": {
+        "Slug": "^[a-z0-9]{1,16}$",
+        "Revision": "^[0-9]{1,4}$",
+        "To": "^[a-z0-9]{1,16}$",
+        "New": "switch",
+        "Number": "^[0-9]{1,4}$",
+        "Game": "^[a-z0-9]{1,40}$",
+        "WaitSeconds": "^[0-9]{1,4}$",
+        "WhatIf": "switch"
+      }
+    },
     "Set-NexusKey": {
       "script": "scripts/release/Set-NexusKey.ps1",
       "reads": [
         "scripts/release/Build-Launcher.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/Nexus.ps1",
         "scripts/release/Read-JsonFile.ps1",
@@ -23,6 +53,7 @@
       "script": "scripts/release/Send-NexusFile.ps1",
       "reads": [
         "scripts/release/Build-Launcher.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/Nexus.ps1",
         "scripts/release/Read-JsonFile.ps1",
@@ -85,6 +116,7 @@
         "Slug": "^[a-z0-9]{1,16}$",
         "Game": "^[a-z0-9]{1,40}$",
         "Publish": "^[0-9]{1,4}$",
+        "CategoryFrom": "^[a-z0-9]{1,16}$",
         "WaitSeconds": "^[0-9]{1,4}$",
         "WhatIf": "switch"
       }
@@ -118,6 +150,8 @@
       "params": {
         "Revision": "^[0-9]{1,4}$",
         "Slug": "^[a-z0-9]{1,16}$",
+        "RecordSlug": "^[a-z0-9]{1,16}$",
+        "RecordRevision": "^[0-9]{1,4}$",
         "GameDomain": "^[a-z0-9]{1,40}$",
         "KeepPlugins": "switch",
         "Modlist": "switch",

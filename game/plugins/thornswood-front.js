@@ -9156,11 +9156,39 @@
   }
 
   // except: the menu that is closing right now, which is not in the way.
+  // What the panel waited on is said once a wait (#4581): no press on a
+  // driver from 15 to 27 November opened it, and the log said nothing after
+  // "asked the server where driver ... goes".
+  let rideWaitSaid = '';
   function rideOpenIfFree(except) {
     if (rideState !== 'waiting') { return; }
-    if (!rideInReach()) { rideState = ''; return; }
-    if (busyMenuOpenNow(except)) { return; }
+    if (!rideInReach()) {
+      rideState = '';
+      say('the ride panel is not opened: driver ' + (rideDriver >>> 0).toString(16) + ' is out of reach (' + rideApart() + ')');
+      return;
+    }
+    const busy = busyMenuOpenNow(except);
+    if (busy) {
+      if (rideWaitSaid !== busy) { rideWaitSaid = busy; say('the ride panel waits for the ' + busy + ' to close'); }
+      return;
+    }
+    rideWaitSaid = '';
     T.js('try{window.thornswoodRide&&window.thornswoodRide.open();}catch(e){}');
+  }
+
+  // How far the driver pressed is, for the line above: a distance, or why none.
+  function rideApart() {
+    if (!rideDriver) { return 'no driver kept'; }
+    try {
+      const pc = sp.Game.getPlayer();
+      const ref = sp.ObjectReference.from(sp.Game.getFormEx(rideDriver));
+      if (!pc) { return 'no character'; }
+      if (!ref) { return 'he is not loaded'; }
+      const dx = pc.getPositionX() - ref.getPositionX();
+      const dy = pc.getPositionY() - ref.getPositionY();
+      const dz = pc.getPositionZ() - ref.getPositionZ();
+      return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz)) + ' apart, reach ' + RIDE_REACH;
+    } catch (err) { return 'unreadable: ' + err; }
   }
 
   function rideDriverIdSet() {
@@ -10492,7 +10520,10 @@
       return;
     }
     // The ride panel (#1635): see THE RIDE PANEL WAITS above.
-    if (what === 'ride:wants') { rideState = 'waiting'; rideOpenIfFree(''); return; }
+    if (what === 'ride:wants') {
+      say('the server sent the ride panel for driver ' + (rideDriver >>> 0).toString(16));
+      rideState = 'waiting'; rideOpenIfFree(''); return;
+    }
     if (what === 'ride:opened') { rideState = 'up'; T.claimFocus('ride', true); return; }
     if (what === 'ride:closed') {
       T.claimFocus('ride', false);

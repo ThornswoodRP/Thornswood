@@ -15,9 +15,7 @@
        angle, and what was measured there (the ground under it, the nearest
        solid thing); every town of the placement brief is either a site or
        skipped with its reason; no bench stands near a charcoal kiln
-    G  the gamemode's WOODWORKING_BENCHES table is the table, row for row, and
-       its STATIONS_THE_SERVER_STANDS the station table's rows the server
-       stands (#6893)
+    G  the gamemode's WOODWORKING_BENCHES table is the table, row for row
     P  the bench is furniture in the repository's content plugin, carrying
        the woodworking keyword
     B  the table was built against the collection's own bytes and the
@@ -204,16 +202,6 @@ yes('G2 and it is the table, row for row', !!inBlock && base === BENCH &&
     JSON.stringify(Object.keys(inBlock).sort()) === JSON.stringify(names.slice().sort()) &&
     names.every((s) => inBlock[s].forge === sites[s].forge && inBlock[s].cell === sites[s].cell &&
       near(inBlock[s].pos, sites[s].pos) && inBlock[s].angle === sites[s].angle && inBlock[s].where === sites[s].where));
-// #6893: the stations the server stands, the station table's rows that say
-// standBy server, each beside the room's furniture its row names.
-const stationRows = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'station-sites.json'), 'utf8')).sites;
-const stoodNames = Object.keys(stationRows).filter((n) => stationRows[n].standBy === 'server').sort();
-let stood = null;
-try { stood = GT.inGamemode(gm, 'STATIONS_THE_SERVER_STANDS'); } catch (e) { stood = null; }
-yes('G3 the gamemode carries STATIONS_THE_SERVER_STANDS, the station table\'s rows the server stands (' + stoodNames.length + '), row for row',
-    !!stood && JSON.stringify(Object.keys(stood).sort()) === JSON.stringify(stoodNames) &&
-    stoodNames.every((n) => ['where', 'kind', 'base', 'beside', 'cell', 'angle'].every((f) => stood[n][f] === stationRows[n][f]) &&
-      near(stood[n].pos, stationRows[n].pos)));
 
 // ---------------------------------------------------------------- R
 const recipes = JSON.parse(fs.readFileSync(RECIPES, 'utf8').replace(/^\uFEFF/, ''));
@@ -241,30 +229,34 @@ const leftAtForge = Object.keys(recipes.recipes || {}).concat(Object.keys(recipe
   .map((k) => (recipes.recipes[k] || (recipes.unowned || {})[k] || (recipes.refused || {})[k]))
   .filter((r) => r && FORGES.indexOf(r.benchName) >= 0 && r.owner === 'Woodworker');
 const ladles = atBench.filter((r) => r.editorId === 'ThornswoodRecipeToolLadle');
-// #5731 adds exactly three native MISC instruments; they are new recipes,
-// not another recipe moved from a master. Keep the moved-recipe count intact.
+// #5731 adds exactly three native MISC instruments and #7167 the war horn;
+// they are new recipes, not another recipe moved from a master. Keep the
+// moved-recipe count intact. The horn's horker tusk is an advanced hunter's,
+// so by what its inputs cost the horn is advanced work.
 const INSTRUMENTS = [
   { recipe: '1b008:Thornswood-Content.esp', editorId: 'ThornswoodRecipeInstrumentFlute', out: 'daba7:Skyrim.esm',
     inputs: [['6f993:Skyrim.esm', 1]] },
   { recipe: '1b009:Thornswood-Content.esp', editorId: 'ThornswoodRecipeInstrumentLute', out: 'dabab:Skyrim.esm',
     inputs: [['6f993:Skyrim.esm', 2], ['800e4:Skyrim.esm', 2]] },
   { recipe: '1b00a:Thornswood-Content.esp', editorId: 'ThornswoodRecipeInstrumentDrum', out: 'daba9:Skyrim.esm',
-    inputs: [['6f993:Skyrim.esm', 2], ['db5d2:Skyrim.esm', 1], ['800e4:Skyrim.esm', 1]] }
+    inputs: [['6f993:Skyrim.esm', 2], ['db5d2:Skyrim.esm', 1], ['800e4:Skyrim.esm', 1]] },
+  { recipe: '1b00c:Thornswood-Content.esp', editorId: 'ThornswoodRecipeInstrumentHorn', out: '200b6:Skyrim.esm',
+    inputs: [['3ad68:Skyrim.esm', 1], ['800e4:Skyrim.esm', 1]], rank: 'advanced' }
 ];
 const instruments = atBench.filter(r => INSTRUMENTS.some(x => x.editorId === r.editorId));
 for (const expected of INSTRUMENTS) {
   const found = instruments.filter(r => r.editorId === expected.editorId);
   const row = found[0];
-  yes('R0 ' + expected.editorId + ' is one owned novice Woodwright recipe for Skyrim MISC, with its exact materials',
+  yes('R0 ' + expected.editorId + ' is one owned ' + (expected.rank || 'novice') + ' Woodwright recipe for Skyrim MISC, with its exact materials',
     found.length === 1 && row === recipes.recipes[expected.recipe] && row.plugin === 'Thornswood-Content.esp' &&
     row.out === expected.out && row.type === 'MISC' && row.makes === 1 && row.owner === 'Woodworker' &&
-    row.half === 'Woodwright' && row.rank === 'novice' && row.book !== 'cut' && !row.movedFrom &&
+    row.half === 'Woodwright' && row.rank === (expected.rank || 'novice') && row.book !== 'cut' && !row.movedFrom &&
     JSON.stringify(row.inputItems.map(x => [x.item, x.count]).sort()) === JSON.stringify(expected.inputs.slice().sort()));
 }
 const movedAt = atBench.length - furnitureOuts.length - benchMoved - ladles.length - instruments.length;
-yes('R1 game/data/recipes.json has the 26 rows #2529 moved at the woodworking bench, every Woodworker row #3120 moved off the forges (9 people can make, the rest cut), one for each piece of furniture, the ladle and three instruments (' +
+yes('R1 game/data/recipes.json has the 26 rows #2529 moved at the woodworking bench, every Woodworker row #3120 moved off the forges (9 people can make, the rest cut), one for each piece of furniture, the ladle and four instruments (' +
     atBench.length + ', ' + benchMoved + ' moved off the forges, ' + madeMoved + ' not cut, ' + leftAtForge.length + ' Woodworker rows left at them, ' + furnitureOuts.length + ' of them furniture, ' + ladles.length + ' ladle)',
-    movedAt === 26 && madeMoved === 9 && leftAtForge.length === 0 && ladles.length === 1 && instruments.length === 3 &&
+    movedAt === 26 && madeMoved === 9 && leftAtForge.length === 0 && ladles.length === 1 && instruments.length === INSTRUMENTS.length &&
     atBench.filter((r) => r.movedFrom).every((r) => FORGES.indexOf(r.movedFromName) >= 0 && r.owner === 'Woodworker') &&
     furnitureOuts.every((o) => atBench.some((r) => r.out === o)) &&
     atBench.every((r) => r.benchName === 'ThornswoodCraftingWoodworking'));

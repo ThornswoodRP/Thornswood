@@ -220,6 +220,21 @@ function Get-ThornswoodCollectionStore {
     }
 }
 
+# The Nexus-Run line that lays the record's revision out. With a Dev
+# collection (records\collection.json's dev, #7193) a revision is on Nexus
+# first as Dev's, its number less the offset, and reaches the main
+# collection only when main is promoted to it; dev's server is deployed
+# before that, so the revision is laid out from Dev and named as the record
+# names it (-RecordSlug -RecordRevision), which the store holds it to.
+function Get-ThornswoodCollectionFetchLine($Head, [string]$Repo) {
+    . (Join-Path $PSScriptRoot '..\release\CollectionRevision.ps1')
+    $dev = Get-DevCollection $Repo
+    if ($dev -and $Head.Revision -gt $dev.Offset) {
+        return ('Install-NexusRevision -Revision ' + ($Head.Revision - $dev.Offset) + ' -Slug ' + $dev.Slug + ' -RecordSlug ' + $Head.Slug + ' -RecordRevision ' + $Head.Revision + ' -KeepPlugins')
+    }
+    return ('Install-NexusRevision -Revision ' + $Head.Revision + ' -Slug ' + $Head.Slug + ' -KeepPlugins')
+}
+
 # The fetch on the box: Nexus-Run's Install-NexusRevision -KeepPlugins for
 # the record's revision, with the box admin App's token for this run alone,
 # its scratch in $Work so its answer is the only one there. Returns the
@@ -235,7 +250,7 @@ function Invoke-ThornswoodCollectionFetch {
     . (Join-Path $Repo 'scripts\vps\admin\ShipAccess.ps1')
     $token = Get-ThornswoodShipAccess -Repo $Repo -AdminState $AdminState
     $pwsh = (Get-Process -Id $PID).Path
-    $line = 'Install-NexusRevision -Revision ' + $Head.Revision + ' -Slug ' + $Head.Slug + ' -KeepPlugins'
+    $line = Get-ThornswoodCollectionFetchLine $Head $Repo
     $hadScratch = $env:THORNSWOOD_SCRATCH_ROOT
     $env:THORNSWOOD_SCRATCH_ROOT = $Work
     $env:GH_TOKEN = $token

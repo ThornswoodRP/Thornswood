@@ -328,6 +328,12 @@
   Publishes this revision number, which has to be the draft. Nothing else is
   done in that run.
 
+.PARAMETER CategoryFrom
+  With -Publish, for a collection that has no category: the collection whose
+  category it is given first, since Nexus publishes no revision of a
+  collection without one (#7193). The Dev collection made on 27 Nov 2026 had
+  none: -Slug <its slug> -Publish 1 -CategoryFrom 7essxf.
+
 .PARAMETER Discard
   Throws this revision number away, which has to be the draft, as DISCARDING
   A DRAFT above says. Nothing else is done in that run.
@@ -382,6 +388,7 @@ param(
   [string]$Slug = '7essxf',
   [string]$Game = 'skyrimspecialedition',
   [int]$Publish = 0,
+  [string]$CategoryFrom = '',
   [int]$Discard = 0,
   [string]$Permissions,
   [string]$CollectionRecord,
@@ -565,10 +572,12 @@ $Replicate = @($Replicate | ForEach-Object { ([string]$_).Split(',') } | ForEach
 if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Object { $_ -notmatch '^[1-9][0-9]{0,11}$' }).Count -or @($Replicate | Select-Object -Unique).Count -ne $Replicate.Count)) {
   Die '-Replicate needs a nonempty list of distinct positive Nexus file ids.'
 }
+if ($CategoryFrom -and -not $Publish) { Die '-CategoryFrom goes with -Publish: it gives a collection with no category one before its draft is published.' }
+if ($CategoryFrom -and $CategoryFrom -notmatch '^[a-z0-9]+$') { Die ('-CategoryFrom ' + $CategoryFrom + ' is not a collection slug.') }
 [void](Step { Read-NexusKey })
 Say ('  key from ' + $script:NexusKeyFrom) 'DarkGray'
 
-$q = '{ collection(slug: "' + $Slug + '", domainName: "' + $Game + '") { id name latestPublishedRevision { id revisionNumber } draftRevisionNumber } }'
+$q = '{ collection(slug: "' + $Slug + '", domainName: "' + $Game + '") { id name category { id name } latestPublishedRevision { id revisionNumber } draftRevisionNumber } }'
 $col = Get-NexusField (Step { Invoke-NexusGraph $q $null ('Reading collection ' + $Slug) }) 'collection'
 $colId = [string](Get-NexusField $col 'id')
 if (-not $colId) { Die ('Nexus has no collection ' + $Slug + ' on ' + $Game + '.') }
@@ -588,6 +597,18 @@ if ($Publish) {
   Say ('  revision ' + $Publish + ' is ' + $status + ' (id ' + $revId + ')')
   if ($status -ne 'draft') { Die ('Revision ' + $Publish + ' is ' + $status + ', not a draft, so there is nothing to publish.') }
   if ($Publish -le $latest) { Die ('Revision ' + $Publish + ' is not after the published revision ' + $latest + '.') }
+  # Nexus publishes no revision of a collection without a category (#7193).
+  $giveCat = 0; $giveCatName = ''
+  if (-not (Get-NexusField $col 'category')) {
+    if (-not $CategoryFrom) { Die ('Collection ' + $Slug + ' has no category, and Nexus publishes no revision of a collection without one. Run this again with -CategoryFrom <the collection whose category it takes>, such as -CategoryFrom 7essxf.') }
+    $cq = '{ collection(slug: "' + $CategoryFrom + '", domainName: "' + $Game + '") { id name category { id name } } }'
+    $cc = Get-NexusField (Get-NexusField (Step { Invoke-NexusGraph $cq $null ('Reading collection ' + $CategoryFrom) }) 'collection') 'category'
+    $giveCat = if ($cc) { [int](Get-NexusField $cc 'id') } else { 0 }
+    $giveCatName = if ($cc) { [string](Get-NexusField $cc 'name') } else { '' }
+    if ($giveCat -lt 1) { Die ('Collection ' + $CategoryFrom + ' has no category either, so ' + $Slug + ' cannot take one from it.') }
+    Say ('  ' + $Slug + ' has no category; it takes ' + $CategoryFrom + '''s, "' + $giveCatName + '" (' + $giveCat + ')')
+  }
+  elseif ($CategoryFrom) { Say ('  ' + $Slug + ' has a category already, so -CategoryFrom ' + $CategoryFrom + ' changes nothing') 'Yellow' }
   # The draft's own collection.json, the one Vortex installs, held to what
   # each mod's page allows before it goes public (#3649).
   $pnode = Get-Command node -ErrorAction SilentlyContinue
@@ -608,10 +629,15 @@ if ($Publish) {
   Test-ModPermissions $pnode.Source $pjson ('revision ' + $Publish)
   $mut = 'mutation publishRevision($revisionId: ID!) { publishRevision(revisionId: $revisionId) { success } }'
   if ($WhatIf) {
+    if ($giveCat) { Say ('  would send PATCH /v3/collections/' + $colId + '  {"category_id":' + $giveCat + '}') 'Yellow' }
     Say ('  would send the GraphQL mutation publishRevision(revisionId: "' + $revId + '")') 'Yellow'
     Write-Host ''; Say 'Nothing was written.' 'Green'
     if (-not $NoPause) { [void](Read-Host 'Enter to close') }
     exit 0
+  }
+  if ($giveCat) {
+    Step { Set-NexusCollectionCategory $colId $giveCat ('Giving ' + $Slug + ' ' + $CategoryFrom + '''s category') }
+    $script:Done.Add($Slug + ' given ' + $CategoryFrom + '''s category "' + $giveCatName + '" (' + $giveCat + ')')
   }
   $res = Step { Invoke-NexusGraph $mut ([ordered]@{ revisionId = $revId }) ('Publishing revision ' + $Publish) }
   if ((Get-NexusField (Get-NexusField $res 'publishRevision') 'success') -ne $true) { Die ('Nexus answered the publish of revision ' + $Publish + ' without saying it succeeded. Look at the collection''s page before running this again.') }
@@ -1109,9 +1135,17 @@ if ($lights.Count) {
   # The record is held to its shape and to the revision this starts from
   # (#4279): one that is missing, or of another revision, would only say
   # "does not name it" or "NOT the bytes" about a plugin it was never about.
+  # The records keep the main collection's numbers; the Dev collection's
+  # revision n is the records' n + its offset (#7193).
+  $recOffset = 0
+  if (Test-Path -LiteralPath $CollectionRecord) {
+    $offRec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($CollectionRecord)) $CollectionRecord }
+    if ($offRec.PSObject.Properties['dev'] -and $offRec.dev -and [string]$offRec.dev.collection -eq $Slug) { $recOffset = [int]$offRec.dev.offset }
+  }
+  $baseRec = $BaseRevision + $recOffset
   $plugRec = Step { Read-ThornswoodRecord -Path $PluginRecord -Kind collection-plugins }
   $plugRev = Get-ThornswoodRecordProp $plugRec 'revision'
-  if (-not (Test-ThornswoodWhole $plugRev 1) -or [int64]$plugRev -ne $BaseRevision) { Die ($PluginRecord + ' is the plugins of collection revision ' + $plugRev + ', and this starts from revision ' + $BaseRevision + ', so the light flags made here cannot be held to the bytes One deploys. Record revision ' + $BaseRevision + ' with scripts\mods\New-CollectionPluginRecord.ps1 first.') }
+  if (-not (Test-ThornswoodWhole $plugRev 1) -or [int64]$plugRev -ne $baseRec) { Die ($PluginRecord + ' is the plugins of collection revision ' + $plugRev + ', and this starts from revision ' + $baseRec + $(if ($recOffset) { ' (' + $Slug + '''s ' + $BaseRevision + ')' } else { '' }) + ', so the light flags made here cannot be held to the bytes One deploys. Record revision ' + $baseRec + ' with scripts\mods\New-CollectionPluginRecord.ps1 first.') }
   foreach ($p in @($plugRec.plugins)) { $onOne[([string]$p.name).ToLowerInvariant()] = [string]$p.sha256 }
   $baseCol = Step { ConvertFrom-Json ([IO.File]::ReadAllText($baseJson)) }
   if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force }
@@ -1236,8 +1270,16 @@ if ($adds.Count -or $rules.Count -or $Remove.Count) {
 # mods this revision installs, and stops when one is not.
 if (-not (Test-Path -LiteralPath $PageRecord)) { Die ('There is no page record at ' + $PageRecord + ', so the revision would go out with the text of the one before it. Nothing was built.') }
 $pageDoc = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($PageRecord)) $PageRecord }
-$swaps.Add([ordered]@{ page = $pageDoc })
-Say ('  the page''s text, from ' + $PageRecord) 'DarkGray'
+# The Dev collection's revisions go out with Dev's own name and summary, the
+# page record's "dev"; records\collection.json's "dev" says which collection
+# that is (#7193).
+$toDev = $false
+if (Test-Path -LiteralPath $CollectionRecord) {
+  $devRec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($CollectionRecord)) $CollectionRecord }
+  $toDev = [bool]($devRec.PSObject.Properties['dev'] -and $devRec.dev -and [string]$devRec.dev.collection -eq $Slug)
+}
+$swaps.Add([ordered]@{ page = $pageDoc; dev = $toDev })
+Say ('  the page''s text, from ' + $PageRecord + $(if ($toDev) { ', with the Dev collection''s name and summary' } else { '' })) 'DarkGray'
 $swapsJson = Join-Path $scratch 'swaps.json'
 $payloadJson = Join-Path $scratch 'payload.json'
 # Deep enough for an added mod's choices: steps, groups, choices.
