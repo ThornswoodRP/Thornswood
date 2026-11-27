@@ -2109,11 +2109,13 @@ namespace Thornswood
             try
             {
                 Directory.CreateDirectory(Paths.LocalAD);
+                // Not from a shipped list that switches nothing on (#6327).
+                bool listUsable = Verify.ShippedListProblem() == null;
                 foreach (string n in new string[] { "plugins.txt", "loadorder.txt" })
                 {
                     string shipped = Path.Combine(Paths.Golden, n);
                     string dest = Path.Combine(Paths.LocalAD, n);
-                    if (!File.Exists(shipped)) continue;
+                    if (!File.Exists(shipped) || !listUsable) continue;
                     // A pack or Fix before the folder existed already wrote
                     // this Profile file (#1234). Make keeps it. Golden fills
                     // only a missing file, on Make and on Refresh, so a

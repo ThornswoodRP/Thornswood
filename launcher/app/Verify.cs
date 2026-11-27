@@ -206,15 +206,26 @@ namespace Thornswood
             // Paths.Live is already the right file for both shapes of install.
             string live = Path.Combine(Paths.Live, "plugins.txt");
 
-            if (!File.Exists(golden))
+            // No list to hold the order against, or one that switches nothing
+            // on (#6327). Until 27 Nov a missing list was one issue that did
+            // not block, and the return skipped the server order, the bytes
+            // and the other servers' clients, so Play went ahead with any
+            // load order and the Mod list row said it matched. An empty list
+            // called every plugin not part of this build, and Fix then copied
+            // it over the live one and switched everything off. Either way
+            // nothing here can say whether this machine matches the server,
+            // so Play waits, and Fix writes nothing from it (SettleLoadOrder).
+            string shipped = ShippedListProblem();
+            if (shipped != null)
             {
-                issues.Add(Issue.Of(IssueKind.Plugins, "This build shipped without a reference plugin list, so there is nothing to compare against.",
-                                    null, "The next update carries one. Fix cannot make it up.", false));
+                issues.Add(Issue.Of(IssueKind.Plugins, shipped, null, NoShippedList, true));
+                Remember(issues, cfg);
                 return issues;
             }
             if (!File.Exists(live))
             {
                 issues.Add(Issue.Of(IssueKind.Plugins, "Your plugins.txt is missing.", "Fix puts the shipped one back.", Retry, true));
+                Remember(issues, cfg);
                 return issues;
             }
 
@@ -428,9 +439,20 @@ namespace Thornswood
                 try { issues.AddRange(Bytes(cfg)); } catch (Exception ex) { Swallow.Note("Verify.Run, Bytes", ex); }
             }
 
-            // Only a server-aware Run is remembered as the shared truth. A
-            // local-only Run(null) from Checks.All must not overwrite a Scan,
-            // or the checklist drifts from the card on the next redraw.
+            Remember(issues, cfg);
+            return issues;
+        }
+
+        /// <summary>
+        /// Keeps a Run's issues as LastIssues, which the Mods and Mod list
+        /// rows read. Only a server-aware Run is remembered as the shared
+        /// truth. A local-only Run(null) from Checks.All must not overwrite a
+        /// Scan, or the checklist drifts from the card on the next redraw.
+        /// Every return of Run comes through here: until 27 Nov the early
+        /// ones did not, so the rows kept an older Run's answer (#6327).
+        /// </summary>
+        static void Remember(List<Issue> issues, Config cfg)
+        {
             if (cfg != null)
             {
                 LastIssues = issues;
@@ -441,7 +463,27 @@ namespace Thornswood
                 LastIssues = issues;
                 LastUsedServer = false;
             }
-            return issues;
+        }
+
+        const string NoShippedList = "Play waits for a release that carries the list, because without it nothing can say whether your load order is the server's. Fix does not make one up.";
+
+        /// <summary>
+        /// What is wrong with the plugin list this build shipped,
+        /// Profile\Default\plugins.txt, or null when it is there and switches
+        /// at least one plugin on (#6327). That list is the reference Scan
+        /// holds the live one against and the one Fix and every update write
+        /// into the game's, so a missing one leaves nothing to compare, and
+        /// an empty one, or one of comments alone, would switch every plugin
+        /// off wherever it was copied.
+        /// </summary>
+        public static string ShippedListProblem()
+        {
+            string golden = Path.Combine(Paths.Golden, "plugins.txt");
+            if (!File.Exists(golden))
+                return "This build has no plugin list of its own (Profile\\Default\\plugins.txt), so there is nothing to hold your load order against.";
+            if (Enabled(golden).Count == 0)
+                return "This build's plugin list (Profile\\Default\\plugins.txt) switches no plugin on, so there is nothing to hold your load order against.";
+            return null;
         }
 
         // ------------------------------------------------------------ bytes
@@ -1336,6 +1378,11 @@ namespace Thornswood
         /// </summary>
         public static int SettleLoadOrder()
         {
+            // A list that is missing or switches nothing on is never written
+            // over the game's (#6327): an empty one there turned every plugin
+            // off. Its loadorder.txt goes with it, since the two are one order.
+            // Scan says why (ShippedListProblem) and Play waits.
+            if (ShippedListProblem() != null) return 0;
             int n = 0;
             foreach (string f in new string[] { "plugins.txt", "loadorder.txt" })
             {
