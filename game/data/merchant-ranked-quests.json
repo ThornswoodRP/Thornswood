@@ -8641,7 +8641,7 @@
       }
     },
     {
-      "id": "q-markarth-woodworker-advanced-charcoal-parcel",
+      "id": "q-markarth-woodworker-advanced-parcel",
       "name": "Charcoal and Iron Arrow",
       "text": "The Woodworker in the Reach needs 2 Charcoal and 24 Iron Arrow for stone-road supplies. Bring the complete parcel back to this specialist. Existing or traded goods qualify.",
       "kind": "commission",
@@ -8661,14 +8661,14 @@
       },
       "goods": [
         {
-          "item": "33760:Skyrim.esm",
+          "item": "15482:Thornswood-Content.esp",
           "count": 2,
           "recipe": {
             "reference": "15486:Thornswood-Content.esp",
             "owner": "Woodworker",
             "half": "Charburner",
             "rank": "advanced",
-            "out": "33760:Skyrim.esm",
+            "out": "15482:Thornswood-Content.esp",
             "makes": 1,
             "bench": "1547f:Thornswood-Content.esp",
             "inputItems": [
@@ -14915,7 +14915,7 @@
       }
     },
     {
-      "id": "q-morthal-woodworker-advanced-charcoal-parcel",
+      "id": "q-morthal-woodworker-advanced-parcel",
       "name": "Charcoal and Crossbow",
       "text": "The Woodworker in Hjaalmarch needs 2 Charcoal and 1 Crossbow for marsh-road supplies. Bring the complete parcel back to this specialist. Existing or traded goods qualify.",
       "kind": "commission",
@@ -14935,14 +14935,14 @@
       },
       "goods": [
         {
-          "item": "33760:Skyrim.esm",
+          "item": "15482:Thornswood-Content.esp",
           "count": 2,
           "recipe": {
             "reference": "15486:Thornswood-Content.esp",
             "owner": "Woodworker",
             "half": "Charburner",
             "rank": "advanced",
-            "out": "33760:Skyrim.esm",
+            "out": "15482:Thornswood-Content.esp",
             "makes": 1,
             "bench": "1547f:Thornswood-Content.esp",
             "inputItems": [
@@ -21141,7 +21141,7 @@
       }
     },
     {
-      "id": "q-winterhold-woodworker-advanced-charcoal-parcel",
+      "id": "q-winterhold-woodworker-advanced-parcel",
       "name": "Nordic Bow and Charcoal",
       "text": "The Woodworker in Winterhold needs 2 Nordic Bow and 1 Charcoal for winter supplies. Bring the complete parcel back to this specialist. Existing or traded goods qualify.",
       "kind": "commission",
@@ -21209,14 +21209,14 @@
           }
         },
         {
-          "item": "33760:Skyrim.esm",
+          "item": "15482:Thornswood-Content.esp",
           "count": 1,
           "recipe": {
             "reference": "15486:Thornswood-Content.esp",
             "owner": "Woodworker",
             "half": "Charburner",
             "rank": "advanced",
-            "out": "33760:Skyrim.esm",
+            "out": "15482:Thornswood-Content.esp",
             "makes": 1,
             "bench": "1547f:Thornswood-Content.esp",
             "inputItems": [
@@ -21374,7 +21374,7 @@
       }
     },
     {
-      "id": "q-winterhold-woodworker-master-charcoal-parcel",
+      "id": "q-winterhold-woodworker-master-parcel",
       "name": "Coke and Charcoal",
       "text": "The Woodworker in Winterhold needs 2 Coke and 2 Charcoal for winter supplies. Bring the complete parcel back to this specialist. Existing or traded goods qualify.",
       "kind": "commission",
@@ -21421,14 +21421,14 @@
           }
         },
         {
-          "item": "33760:Skyrim.esm",
+          "item": "15482:Thornswood-Content.esp",
           "count": 2,
           "recipe": {
             "reference": "15486:Thornswood-Content.esp",
             "owner": "Woodworker",
             "half": "Charburner",
             "rank": "advanced",
-            "out": "33760:Skyrim.esm",
+            "out": "15482:Thornswood-Content.esp",
             "makes": 1,
             "bench": "1547f:Thornswood-Content.esp",
             "inputItems": [
