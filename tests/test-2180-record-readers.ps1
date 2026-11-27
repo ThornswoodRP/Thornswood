@@ -179,10 +179,14 @@ try {
         Yes 'the committed collection-plugins.json reads through own_plugins.read_collection_plugins' ($n -match '^\d+$' -and [int]$n -gt 50)
     }
 
-    # The header of CollectionPlugins.ps1 shows the record as it is now.
+    # The header of CollectionPlugins.ps1 shows the record's shape. Its
+    # revision is a placeholder, not a number: each published revision moves
+    # the record's, and a number written by hand went stale at every one
+    # (8 against 11, then 11 against $realRev, #6606).
     $cph = Src 'scripts\deploy\CollectionPlugins.ps1'
     $ex = [regex]::Match($cph, '"revision": (\d+)')
-    Yes "CollectionPlugins.ps1's example names revision $realRev, the one the record is on" ($ex.Success -and [int]$ex.Groups[1].Value -eq $realRev)
+    Yes "CollectionPlugins.ps1's example names no revision by number (the record is on $realRev)" (-not $ex.Success)
+    Yes '  it gives the revision as <n>, and says it is the one the record is on' ($cph.Contains('"revision": <n>') -and $cph -match '<n> is the revision')
 } finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
