@@ -21,7 +21,8 @@
 
   THE SERVER MUST BE STOPPED. It holds change forms in memory and writes them
   out on its own schedule, so editing them underneath a running server just gets
-  the edit overwritten.
+  the edit overwritten. So this stops, changing nothing, while the server whose
+  world -World is holds its game port (World-Server.ps1, #4243).
 #>
 #Requires -Version 7
 [CmdletBinding(SupportsShouldProcess)]
@@ -35,9 +36,10 @@ param(
 $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missing stops here (#3006)
 if (-not (Test-Path -LiteralPath $World)) { throw "not found: $World" }
 
-if (Get-Process -Name node -ErrorAction SilentlyContinue) {
-    Write-Host 'A node process is running. If that is the Thornswood server, stop it first or this edit will be overwritten.' -ForegroundColor Yellow
-}
+# A running server writes its change forms back over the edit (#4243).
+. (Join-Path $PSScriptRoot 'World-Server.ps1')
+$up = Get-ThornswoodWorldServerStop $World
+if ($up) { Write-Host "STOP. $up Nothing was changed." -ForegroundColor Red; exit 1 }
 
 # The characters' change forms, by the one rule (#5168, Release-List.ps1): a
 # runtime form's id in lowercase hex and no plugin, 0.json or 1f.json, with a

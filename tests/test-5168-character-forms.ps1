@@ -98,7 +98,9 @@ try {
     function Run([string[]]$arg) {
         $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
         try {
-            $out = @(& pwsh -NoProfile -NonInteractive -File $AppearancePs @arg 2>&1 | ForEach-Object { "$_" })
+            # Through ServerPorts.ps1, which holds no game port, so this does
+            # not stop on what this machine runs (#4243).
+            $out = @(& pwsh -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'ServerPorts.ps1') $AppearancePs @arg 2>&1 | ForEach-Object { "$_" })
             return @{ out = $out; code = $LASTEXITCODE }
         }
         finally { $ErrorActionPreference = $eap }

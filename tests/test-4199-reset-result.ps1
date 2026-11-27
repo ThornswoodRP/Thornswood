@@ -68,8 +68,11 @@ function Block([string]$forms) {
     $at = Get-Date
     foreach ($s in 0..180) { Put (Join-Path $forms ('_discarded-' + $at.AddSeconds($s).ToString('yyyyMMdd-HHmmss'))) 'in the way' }
 }
+# Through tests\ServerPorts.ps1, which holds no game port, so New-Character
+# does not stop on what this machine runs (#4243).
+$Ports = Join-Path $PSScriptRoot 'ServerPorts.ps1'
 function Run([string]$file, [string[]]$arg) {
-    $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file @arg 2>&1 | ForEach-Object { "$_" })
+    $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Ports $file @arg 2>&1 | ForEach-Object { "$_" })
     return @{ Code = $LASTEXITCODE; Said = ($said -join "`n") }
 }
 

@@ -15,7 +15,8 @@
 
   THE SERVER MUST BE STOPPED. It holds change forms in memory and writes them on
   its own schedule, so deleting them underneath a running server just gets them
-  written straight back.
+  written straight back. So this stops, throwing nothing away, while the server
+  whose world -World is holds its game port (World-Server.ps1, #4243).
 
   WHAT THE SERVER STILL HOLDS OF THE CHARACTER IS LET GO AT ITS NEXT START
   (#2673, as Reset-Character.ps1 does since #2668). A guild trader keys its
@@ -44,10 +45,6 @@ $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missin
 
 if (-not (Test-Path -LiteralPath $World)) { throw "not found: $World" }
 $World = (Resolve-Path -LiteralPath $World).ProviderPath.TrimEnd('\')
-
-if (Get-Process -Name node -ErrorAction SilentlyContinue) {
-    Write-Host 'A node process is running. If that is the Thornswood server, stop it first or this will be undone.' -ForegroundColor Yellow
-}
 
 # The characters' change forms, by the one rule (#5168, Release-List.ps1): a
 # runtime form's id in lowercase hex and no plugin, 0.json or 1f.json, with a
@@ -80,6 +77,10 @@ if (-not (Read-ThornswoodReleaseList $list).ok) {
     Write-Host "STOP. $list is not a list of deleted characters, so nothing was thrown away. Look at it, then run this again." -ForegroundColor Red
     exit 1
 }
+# A running server writes the change forms straight back (#4243).
+. (Join-Path $Here 'World-Server.ps1')
+$up = Get-ThornswoodWorldServerStop $World
+if ($up) { Write-Host "STOP. $up Nothing was thrown away." -ForegroundColor Red; exit 1 }
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $bin = Join-Path $World "_discarded-$stamp"
