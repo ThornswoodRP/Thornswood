@@ -62,6 +62,14 @@ function textProblems(page, ids, where) {
       if (n && typeof n.said === 'string' && n.said && says(plain, n.said)) out.push(f + ' says "' + n.said + '", which the page must not: ' + n.why);
     }
   }
+  // Dev's own summary is held to the same words as the page's (#7193).
+  const devSummary = page.dev && typeof page.dev.summary === 'string' ? page.dev.summary : '';
+  for (const m of marks(devSummary)) {
+    if (!ids.has(m.modId)) out.push('dev.summary names ' + m.said + ' (mod ' + m.modId + '), which ' + where + ' does not install.');
+  }
+  for (const n of (Array.isArray(page.notSaid) ? page.notSaid : [])) {
+    if (devSummary && n && typeof n.said === 'string' && n.said && says(render(devSummary), n.said)) out.push('dev.summary says "' + n.said + '", which the page must not: ' + n.why);
+  }
   const lines = render(page.description).split(/\r?\n/);
   // An address given as its own text, bare or in <...>, in any of the
   // page's texts: a screen reader spells it out, and nothing says where it
@@ -96,6 +104,19 @@ function shapeProblems(page) {
   else if (/[\r\n]/.test(page.summary)) out.push('summary is more than one line.');
   if (typeof page.description !== 'string' || !page.description.trim()) out.push('description is empty.');
   if (typeof page.installInstructions !== 'string') out.push('installInstructions is not text.');
+  // The collection's name on Nexus, and Dev's own name and summary (#7193).
+  // Nexus takes a name of 3 to 36 characters.
+  const named = (n) => typeof n === 'string' && n.trim().length >= 3 && n.length <= 36 && !/[\r\n]/.test(n);
+  if (page.name !== undefined && !named(page.name)) out.push('name is not a collection name of 3 to 36 characters on one line.');
+  if (page.dev !== undefined) {
+    if (!page.dev || typeof page.dev !== 'object' || Array.isArray(page.dev)) out.push('dev is not the Dev collection\'s name and summary.');
+    else {
+      if (!named(page.dev.name)) out.push('dev.name is not a collection name of 3 to 36 characters on one line.');
+      else if (page.name !== undefined && page.dev.name === page.name) out.push('dev.name is the same as name, so nobody could tell the two collections apart.');
+      if (typeof page.dev.summary !== 'string' || !page.dev.summary.trim() || /[\r\n]/.test(page.dev.summary)) out.push('dev.summary is not one line of text.');
+      if (page.dev.slug !== undefined && (typeof page.dev.slug !== 'string' || !/^[a-z0-9]+$/.test(page.dev.slug) || page.dev.slug === page.collection)) out.push('dev.slug is not the slug of a collection other than ' + page.collection + '.');
+    }
+  }
   if (!Array.isArray(page.notSaid)) out.push('notSaid is not a list.');
   else page.notSaid.forEach((n, i) => {
     if (!n || typeof n.said !== 'string' || !n.said.trim() || typeof n.why !== 'string' || !n.why.trim()) out.push('notSaid row ' + (i + 1) + ' is not the words and why.');
@@ -119,7 +140,11 @@ function sendable(page, ids) {
   const out = shapeProblems(page);
   if (!out.length) out.push.apply(out, textProblems(page, ids instanceof Set ? ids : new Set(ids), 'the new revision'));
   if (out.length) throw new Error('The collection page, records/collection-page.json, cannot go out: ' + out.join(' '));
-  return { summary: render(page.summary), description: render(page.description), installInstructions: render(page.installInstructions) };
+  return {
+    summary: render(page.summary), description: render(page.description), installInstructions: render(page.installInstructions),
+    name: typeof page.name === 'string' ? page.name : '',
+    dev: page.dev && typeof page.dev === 'object' ? { name: page.dev.name, summary: render(page.dev.summary) } : null
+  };
 }
 
 // Compare the public GraphQL text to what the publisher sends. Only line

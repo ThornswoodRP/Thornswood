@@ -357,7 +357,7 @@ function setMasterFlags(collection, swaps) {
   MASTER_FLAGS.set(collection, flags);
 }
 // An entry that only says something about the revision changes nothing by itself.
-function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'masterFlags' || k === 'page'); }
+function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'masterFlags' || k === 'page' || k === 'dev'); }
 
 function setUnlisted(collection, swaps) {
   const set = new Set();
@@ -940,9 +940,49 @@ function applyPage(collection, swaps) {
   collection.info.summary = text.summary;
   collection.info.description = text.description;
   collection.info.installInstructions = text.installInstructions;
+  // The collection's name and summary for its channel (#7193): Dev has a
+  // collection of its own, so its revisions go out named as Dev's, and a
+  // revision copied to main's collection goes out named as main's again.
+  if (text.name) collection.info.name = text.name;
+  if (entries[0].dev === true) {
+    if (!text.dev) stop('The page is sent to the Dev collection, and records/collection-page.json gives no "dev" name and summary for it.');
+    collection.info.name = text.dev.name;
+    collection.info.summary = text.dev.summary;
+  }
+}
+
+// A published revision copied into another collection (#7193): the same
+// archive and every entry as it is, with only the page's text, name and
+// summary for the collection it goes to. Anything else in info that would
+// change stops it.
+function copyRevision(collection, page, channel) {
+  if (!collection || !collection.info || !Array.isArray(collection.mods)) stop('collection.json has no info and mods, so it is not a collection Vortex wrote.');
+  if (channel !== 'main' && channel !== 'dev') stop('The channel a copy goes to is main or dev, not ' + channel + '.');
+  const before = JSON.stringify(Object.assign({}, collection, { info: null }));
+  const info = Object.assign({}, collection.info);
+  applyPage(collection, [{ page: page, dev: channel === 'dev' }]);
+  if (JSON.stringify(Object.assign({}, collection, { info: null })) !== before) stop('The copy changed more than the page.');
+  for (const k of Object.keys(Object.assign({}, info, collection.info))) {
+    if (['name', 'summary', 'description', 'installInstructions'].indexOf(k) >= 0) continue;
+    if (JSON.stringify(info[k]) !== JSON.stringify(collection.info[k])) stop('The copy changed info.' + k + ', which only the page may change.');
+  }
+  return collection;
 }
 
 function main(argv) {
+  if (argv[0] === '--copy') {
+    if (argv.length !== 6) stop('usage: nexus-collection.js --copy <collection.json> <page.json> <main|dev> <out collection.json> <out payload.json>');
+    let collection, page;
+    try { collection = JSON.parse(fs.readFileSync(argv[1], 'utf8')); }
+    catch (e) { stop(argv[1] + ' is not JSON this can read: ' + e.message); }
+    try { page = JSON.parse(fs.readFileSync(argv[2], 'utf8').replace(/^\ufeff/, '')); }
+    catch (e) { stop(argv[2] + ' is not JSON this can read: ' + e.message); }
+    copyRevision(collection, page, argv[3]);
+    fs.writeFileSync(argv[4], JSON.stringify(collection, undefined, 2));
+    fs.writeFileSync(argv[5], JSON.stringify(payloadOf(collection)));
+    process.stdout.write('copy\tname\t' + collection.info.name + '\n');
+    return;
+  }
   if (argv[0] === '--check-tags') {
     if (argv.length !== 4) stop('usage: nexus-collection.js --check-tags <published folder> <draft folder> <mod numbers>');
     const path = require('path');
@@ -983,4 +1023,4 @@ if (require.main === module) {
     process.exitCode = 1;
   }
 }
-module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyReplicate, applyRule, applyRemove, applyPage, checkRefreshedTags, checkReplicated, checkRepairFiles, filterInfo, toV3CollectionPayload };
+module.exports = { payloadOf, copyRevision, applySwaps, applyAdd, applyPatch, applyReplicate, applyRule, applyRemove, applyPage, checkRefreshedTags, checkReplicated, checkRepairFiles, filterInfo, toV3CollectionPayload };
