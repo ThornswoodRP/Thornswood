@@ -51,6 +51,14 @@
     no card       an open issue of the repository, made before the board was
                   read, with no card, when the open issues are read too
                   (-Issues, or gh; -NoIssues skips).
+    waiting gone  a row of scripts\dev\Check-Makers.waiting.json whose issue
+                  is not one of the repository's open issues, when the open
+                  issues are read too (#6022). Check-Makers.js fails the build
+                  on an item nobody makes unless a row there names the open
+                  issue that will give it a maker, but the build cannot read
+                  the board, so it only checks that the row has a #N. When the
+                  board was re-filed on 30 Oct, the issues 110 rows named were
+                  deleted and the build stayed green.
   An archived card is left out of every check but "no card".
 
   Exits:
@@ -67,8 +75,12 @@ param(
     # @<when it was made> or without. Without it they are read with gh,
     # every page.
     [string]$Issues,
-    # Skip "no card", and with it the read of the open issues.
+    # Skip "no card" and "waiting gone", and with them the read of the open
+    # issues.
     [switch]$NoIssues,
+    # The list of items nobody makes yet, each with the issue that will give
+    # it a maker. Left out, the repository's own.
+    [string]$Waiting,
     [string]$GitHubRepo = 'ThornswoodRP/Thornswood',
     # Define the functions and stop, which is how the harness loads them.
     [switch]$Load
@@ -96,10 +108,13 @@ function Get-CardName($c) {
 
 # Every rule a card or the board breaks, as an ordered table rule -> lines.
 # board is board.json as an object; open is the numbers of the repository's
-# open issues, or $null when they were not read.
-function Find-BoardDrift($board, [string]$repo, $open) {
+# open issues made before the board was read, or $null when they were not
+# read. allOpen is every open issue's number, made before the read or after,
+# and waiting is the rows of Check-Makers.waiting.json; "waiting gone" is
+# checked only when both are given.
+function Find-BoardDrift($board, [string]$repo, $open, $allOpen = $null, $waiting = $null) {
     $out = [ordered]@{}
-    foreach ($k in 'no order', 'shared order', 'no status', 'closed open', 'open done', 'statuses', 'workflows', 'no card') { $out[$k] = New-Object System.Collections.Generic.List[string] }
+    foreach ($k in 'no order', 'shared order', 'no status', 'closed open', 'open done', 'statuses', 'workflows', 'no card', 'waiting gone') { $out[$k] = New-Object System.Collections.Generic.List[string] }
 
     $statuses = @(Get-Prop $board 'statuses')
     if (($statuses -join '|') -ne ($StatusOptions -join '|')) {
@@ -131,6 +146,20 @@ function Find-BoardDrift($board, [string]$repo, $open) {
         $carded = @{}
         foreach ($c in $cards) { if ((Get-Prop $c 'repo') -eq $repo -and $null -ne (Get-Prop $c 'number')) { $carded[[int](Get-Prop $c 'number')] = $true } }
         foreach ($n in @($open | Sort-Object)) { if (-not $carded.ContainsKey([int]$n)) { $out['no card'].Add(('#{0}' -f $n)) } }
+    }
+    if ($null -ne $allOpen -and $null -ne $waiting) {
+        $isOpen = @{}
+        foreach ($n in @($allOpen)) { $isOpen[[int]$n] = $true }
+        # A row with no #N is Check-Makers.js's own failure, so it is not
+        # named twice here.
+        $rows = @(@($waiting) | Where-Object { [string](Get-Prop $_ 'issue') -match '^#\d+$' })
+        foreach ($g in @($rows | Group-Object { [int]([string](Get-Prop $_ 'issue')).Substring(1) } | Sort-Object { [int]$_.Name })) {
+            if ($isOpen.ContainsKey([int]$g.Name)) { continue }
+            $names = @($g.Group | ForEach-Object { [string](Get-Prop $_ 'name') } | Sort-Object -Unique)
+            $shown = @($names | Select-Object -First 3) -join ', '
+            if ($names.Count -gt 3) { $shown += (' and {0} more' -f ($names.Count - 3)) }
+            $out['waiting gone'].Add(('#{0} is not open, and {1} {2} on it: {3}' -f $g.Name, $g.Count, $(if ($g.Count -eq 1) { 'row waits' } else { 'rows wait' }), $shown))
+        }
     }
     return $out
 }
@@ -166,12 +195,19 @@ try { $b = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Board).Path) | Con
 if (-not (Get-Prop $b 'items')) { Die "$Board has no cards in it, so it is not a board.json Read-Board.ps1 wrote." }
 
 $open = $null
+$allOpen = $null
+$waitingRows = $null
 if (-not $NoIssues) {
+    if (-not $Waiting) { $Waiting = Join-Path (Split-Path -Parent $PSScriptRoot) (Join-Path 'dev' 'Check-Makers.waiting.json') }
+    if (-not (Test-Path -LiteralPath $Waiting)) { Die "there is no $Waiting, so the issues its rows wait on cannot be checked; pass -Waiting, or -NoIssues to skip it." }
+    try { $w = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Waiting).Path) | ConvertFrom-Json } catch { Die "$Waiting is not JSON: $($_.Exception.Message)" }
+    if ($null -eq $w -or -not $w.PSObject.Properties['items']) { Die "$Waiting has no items, so it is not Check-Makers.waiting.json." }
+    $waitingRows = @(Get-Prop $w 'items')
     if ($Issues) {
         if (-not (Test-Path -LiteralPath $Issues)) { Die "there is no $Issues." }
         $lines = [IO.File]::ReadAllLines((Resolve-Path -LiteralPath $Issues).Path)
     } else {
-        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Die 'there is no gh here to read the open issues with; pass -Issues, or -NoIssues to skip "no card".' }
+        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Die 'there is no gh here to read the open issues with; pass -Issues, or -NoIssues to skip "no card" and "waiting gone".' }
         # Page by page until a page comes back short: gh's --paginate follows
         # GitHub's next links, which name the repository by its id, and the
         # cloud's proxy refuses those (measured 26 Oct 2026). The issues list
@@ -189,14 +225,17 @@ if (-not $NoIssues) {
             if ([int]$words[0] -lt 100) { break }
         }
     }
-    try { $open = Get-OpenIssueNumbers $lines ([string](Get-Prop $b 'read_at')) } catch { Die ("the open issues did not read as numbers: " + $_.Exception.Message) }
+    try {
+        $open = Get-OpenIssueNumbers $lines ([string](Get-Prop $b 'read_at'))
+        $allOpen = Get-OpenIssueNumbers $lines ''
+    } catch { Die ("the open issues did not read as numbers: " + $_.Exception.Message) }
 }
 
-$drift = Find-BoardDrift $b $GitHubRepo $open
+$drift = Find-BoardDrift $b $GitHubRepo $open $allOpen $waitingRows
 $cards = @(Get-Prop $b 'items')
 $openCards = @($cards | Where-Object { (Get-Prop $_ 'state') -eq 'OPEN' -and -not [bool](Get-Prop $_ 'archived') })
 Write-Host ('{0} cards read at {1}, {2} of them open and not archived' -f $cards.Count, (Get-Prop $b 'read_at'), $openCards.Count)
-if ($null -ne $open) { Write-Host ('{0} open issues on {1}' -f $open.Count, $GitHubRepo) } else { Write-Host '"no card" skipped: the open issues were not read' }
+if ($null -ne $open) { Write-Host ('{0} open issues on {1}; {2} rows of {3} wait on one' -f $allOpen.Count, $GitHubRepo, $waitingRows.Count, $Waiting) } else { Write-Host '"no card" and "waiting gone" skipped: the open issues were not read' }
 $unread = Get-Prop $b 'workflows_unread'
 if ($unread) { Write-Host ('"workflows" not checked: the board''s workflows were not read ({0}). Auto-close issue must be off; a person checks it on the board''s Workflows page.' -f $unread) -ForegroundColor DarkYellow }
 
