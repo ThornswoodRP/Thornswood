@@ -63,6 +63,7 @@ jobs:
             scripts/ops
             scripts/vps/gate/verbs.json
             scripts/release/nexus-verbs.json
+            records/remote-commands.json
           sparse-checkout-cone-mode: false
       - name: The pin robot's token
         id: app

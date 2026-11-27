@@ -22,8 +22,10 @@
 //      own (a queue entry the run's token makes starts no checks).
 //   5. the two skips (Patrick's yes on Bramble's card, 2 Nov 2026): one that
 //      changes what runs on the live box, or what a verb reads from main
-//      such as the keys in scripts/vps/box-keys (#5726), stays off unless it
-//      is Patrick's,
+//      such as the keys in scripts/vps/box-keys (#5726), or a script that
+//      changes the box over ssh itself as records/remote-commands.json maps
+//      it, Reset-Character.ps1 among them (#7443), stays off unless it is
+//      Patrick's,
 //      and a Bot's stays off until Bramble approved its head.
 //   6. outside work (Patrick, 8 Nov 2026): one labelled 'outside work' stays
 //      off whoever opened it, and the sweep asks GitHub for the labels.
@@ -92,6 +94,40 @@ yes('  Patrick\'s that adds a key goes on', on5(pr(37, { headRefName: 'patrick-k
 yes('  a folder entry holds only what is under it', A.boxFiles(['scripts/vps/box-keys-notes.md', 'scripts/vps/box-keys/a.json'], ['scripts/vps/box-keys/']).join(' ') === 'scripts/vps/box-keys/a.json');
 yes('  and says it changes what runs on the live box, naming the file', /changes what runs on the live box \(\.github\/workflows\/build-pr\.yml\)/.test(judge5(pr(30, Object.assign({}, worker, { paths: ['.github/workflows/build-pr.yml'] })))[1]));
 yes('  Dependabot\'s workflow bump stays off too', !on5(pr(31, { author: { login: 'dependabot' }, headRefName: 'dependabot/github_actions/x', paths: ['.github/workflows/build.yml'] })));
+// #7443: a script that changes the box over ssh outside the gate verbs, as
+// records/remote-commands.json maps it, is held like a verb's script.
+const held = A.boxScripts(REPO);
+const remote = A.remoteScripts(REPO);
+yes('5 the record\'s scripts that change the box are read too (' + remote.length + '), Reset-Character.ps1 among them',
+  remote.indexOf('scripts/ops/Reset-Character.ps1') >= 0 && scripts.indexOf('scripts/ops/Reset-Character.ps1') < 0 &&
+  held.indexOf('scripts/ops/Reset-Character.ps1') >= 0 && scripts.every((x) => held.indexOf(x) >= 0));
+const record = JSON.parse(read(A.REMOTE_RECORD)).calls;
+const onlyThese = (s) => record.filter((r) => r.script === s).every((r) => A.CHANGES_NOTHING.indexOf(r.class) >= 0);
+yes('  a script whose every call only reads or carries its caller\'s is not',
+  record.some((r) => onlyThese(r.script)) && record.filter((r) => onlyThese(r.script)).every((r) => remote.indexOf(r.script) < 0));
+for (const f of ['scripts/ops/Reset-Character.ps1', 'scripts/vps/Harden-VPS.ps1', 'scripts/deploy/Rotate-BotToken.ps1']) {
+  yes('5 a Claude session\'s that changes ' + f + ' stays off', !A.judge(pr(33, { headRefName: 'claude/x', paths: [f] }), 'main', held)[0]);
+}
+yes('  and Patrick\'s own goes on', A.judge(pr(34, { headRefName: 'patrick-reset', paths: ['scripts/ops/Reset-Character.ps1'] }), 'main', held)[0]);
+{
+  const os = require('os');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tw7443-'));
+  const write = (calls) => { fs.mkdirSync(path.join(root, 'records'), { recursive: true }); fs.writeFileSync(path.join(root, A.REMOTE_RECORD), JSON.stringify({ calls })); };
+  try {
+    write([{ script: 'a.ps1', class: 'admin' }, { script: 'b.ps1', class: 'read-status' }, { script: 'c.ps1', class: 'transport' },
+      { script: 'd.ps1', class: 'stage' }, { script: 'e.ps1', class: 'something new' }, { script: 'f.ps1' }, { script: 'a.ps1', class: 'swap' }]);
+    yes('  a class that is not read-status or transport counts, a new one or none too, each script once',
+      A.remoteScripts(root).join(' ') === 'a.ps1 d.ps1 e.ps1 f.ps1');
+    write([]);
+    let threw = '';
+    try { A.remoteScripts(root); } catch (e) { threw = e.message; }
+    yes('  a record with no calls stops the run rather than holding nothing', /lists no calls/.test(threw));
+    write([{ class: 'admin' }]);
+    threw = '';
+    try { A.remoteScripts(root); } catch (e) { threw = e.message; }
+    yes('  and so does a call with no script', /no script/.test(threw));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+}
 yes('5 Patrick\'s that changes them goes on', on5(pr(32, { headRefName: 'patrick-gate', paths: ['.github/workflows/build-pr.yml', 'scripts/vps/gate/GateRules.ps1', 'scripts/ops/Reset-Npcs.ps1'] })));
 // Ops #353 (Patrick's A on his page, 15 Nov 2026): a Claude session's
 // branch is opened with Patrick's sign-in, and counts as his only for what
@@ -180,9 +216,9 @@ function fake(pages, refuse) {
   yes('5 a file past the first hundred is read: one changing a workflow there stays off',
     code === 0 && JSON.stringify(f.enabled()) === '["PR_41"]' && f.calls.some(c => c.q === A.FILES && c.v.number === 40 && c.v.after === 'c1') &&
     said.some(l => /^#40 left: it changes what runs on the live box/.test(l)));
-  yes('5 the workflow checks out the verb lists beside the script, and the script reads them',
-    /\n          sparse-checkout: \|\n            scripts\/ops\n            scripts\/vps\/gate\/verbs\.json\n            scripts\/release\/nexus-verbs\.json\n          sparse-checkout-cone-mode: false\n/.test(wf) &&
-    /verbScripts\(require\('path'\)\.join\(__dirname, '\.\.', '\.\.'\)\)/.test(read('scripts/ops/Auto-Merge.js')));
+  yes('5 the workflow checks out the verb lists and the remote command record beside the script, and the script reads them',
+    /\n          sparse-checkout: \|\n            scripts\/ops\n            scripts\/vps\/gate\/verbs\.json\n            scripts\/release\/nexus-verbs\.json\n            records\/remote-commands\.json\n          sparse-checkout-cone-mode: false\n/.test(wf) &&
+    /boxScripts\(require\('path'\)\.join\(__dirname, '\.\.', '\.\.'\)\)/.test(read('scripts/ops/Auto-Merge.js')));
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
