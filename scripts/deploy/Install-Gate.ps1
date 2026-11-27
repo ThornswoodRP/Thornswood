@@ -383,7 +383,7 @@ $content = @{}
 foreach ($f in $Files) {
     # The blob's own bytes: Start-Process writes git's output to the file as
     # it comes, where a PowerShell pipe would decode and re-encode it.
-    $tmp = [IO.Path]::GetTempFileName()
+    $tmp = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('gate-blob-' + [Guid]::NewGuid().ToString('N'))
     try {
         $p = Start-Process -FilePath (Get-Command git).Source -ArgumentList @('-C', "`"$RepoRoot`"", 'cat-file', 'blob', "HEAD:$f") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $tmp
         if ($p.ExitCode -ne 0) { Die "HEAD has no $f. Nothing was changed." }

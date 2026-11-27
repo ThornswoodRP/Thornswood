@@ -123,8 +123,8 @@ if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Obj
 if ($RefreshTag.Count -and $Replicate.Count) { Stop-Record '-RefreshTag and -Replicate each go in a revision of their own.' }
 
 if (-not $Record) { $Record = Join-Path $Repo 'records/collection.json' }
-$base = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
-$Work = Join-Path $base ('thornswood-collection-record-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+$name = 'thornswood-collection-record-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+$Work = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP $name } else { & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') $name }
 if (-not $Out) { $Out = Join-Path $Work 'out' }
 New-Item -ItemType Directory -Force -Path $Work, $Out | Out-Null
 $shell = (Get-Process -Id $PID).Path

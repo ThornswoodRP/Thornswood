@@ -238,8 +238,7 @@ function Get-RootEntries([string]$path) {
 }
 $rootBefore = Get-RootEntries $Root
 if (-not $OutDir) {
-    $base = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
-    $OutDir = Join-Path $base ('harness-out-' + $Shard)
+    $OutDir = $(if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP ('harness-out-' + $Shard) } else { & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('harness-out-' + $Shard) })
 }
 if ($Summary -and -not $Report) { $Report = Join-Path $OutDir 'report.xml' }
 if ($Report) { $Report = [IO.Path]::GetFullPath($Report) }

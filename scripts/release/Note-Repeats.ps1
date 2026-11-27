@@ -153,7 +153,7 @@ function Get-ChannelPosts([string]$Channel, [string]$SiteDir, [string]$SiteUrl =
                                           date = [string](Get-NoteRepeatField $n 'date'); where = "the $key launcher's News" })
         }
     }
-    $dir = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-said-' + [Guid]::NewGuid().ToString('N'))
+    $dir = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('thornswood-said-' + [Guid]::NewGuid().ToString('N'))
     try {
         $got = Receive-FeedStore $key -Dir $dir -Files @('announced.json') -SiteDir $SiteDir
         $f = Join-Path $dir 'announced.json'
