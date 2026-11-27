@@ -13,8 +13,8 @@
   Whiterun and a prisoner, each office by its Discord role since #2551 (the
   door hands the block the roles as __thornswoodOffices). The real spoils block, the real stuck block and
   the real respawn resolver run beside it. It checks:
-    - the tables: each hold's jail building and the keys the game made for
-      the cells, and game/data/jails.json saying the same;
+    - the tables: each hold's jail building and the compiled cell defaults,
+      and game/data/jails.json saying the same;
     - the claim: only the Jarl of the jail's hold is offered it, may make it,
       or takes it by presenting its deed; a house anywhere is as it was;
     - the keys: none lies on the floor (#3077) and a press on one is not
@@ -71,6 +71,7 @@ const JAIL_DOOR = table('  var', 'JAIL_DOOR');
 const JAIL_NAME = table('  var', 'JAIL_NAME');
 const JAIL_BUILDING = table('  var', 'JAIL_BUILDING');
 const JAIL_KEY = table('  var', 'JAIL_KEY');
+const JAIL_SHUT = table('  var', 'JAIL_SHUT');
 const DATA = table('const', 'DATA');
 yes('the jail building and jail key tables are in the generated block', !!JAIL_BUILDING && !!JAIL_KEY && !!DATA);
 if (!JAIL_BUILDING || !JAIL_KEY || !JAIL_DOOR || !BUILDING_BY_DOOR) { done(); } else {
@@ -89,20 +90,27 @@ let jails = null;
 try { jails = JSON.parse(read(path.join(REPO_DIR, 'game', 'data', 'jails.json'))); } catch (e) { jails = null; }
 const keysJson = {};
 const cellsJson = {};
+const shutJson = {};
 if (jails && jails.jails) {
   Object.keys(jails.jails).forEach(function (h) {
     cellsJson[jails.jails[h].cell] = h;
     const ds = jails.jails[h].doors || {};
-    Object.keys(ds).forEach(function (d) { if (ds[d].lock && ds[d].lock.key) { keysJson[ds[d].lock.key] = h; } });
+    Object.keys(ds).forEach(function (d) {
+      const lock = ds[d].lock;
+      if (lock) shutJson[d] = true;
+      if (lock && lock.key) keysJson[lock.key] = h;
+    });
   });
 }
 yes('T3 game/data/jails.json names the same buildings', JSON.stringify(Object.keys(cellsJson).sort()) ===
     JSON.stringify(Object.keys(JAIL_BUILDING).sort()) &&
     Object.keys(cellsJson).every(function (c) { return cellsJson[c] === JAIL_BUILDING[c]; }));
 yes('T4 and every key a cell door\'s lock names is a jail key, to its hold (' + Object.keys(JAIL_KEY).length + ')',
-    Object.keys(keysJson).length > 0 && JSON.stringify(Object.keys(keysJson).sort()) === JSON.stringify(Object.keys(JAIL_KEY).sort()) &&
+    JSON.stringify(Object.keys(keysJson).sort()) === JSON.stringify(Object.keys(JAIL_KEY).sort()) &&
     Object.keys(keysJson).every(function (k) { return keysJson[k] === JAIL_KEY[k]; }));
-yes('T5 Whiterun\'s own jail key is among them', JAIL_KEY['5aec4:Skyrim.esm'] === 'whiterun');
+yes('T5 the compiled cell doors have no authored locks or keys', !!JAIL_SHUT &&
+    Object.keys(shutJson).length === 0 && Object.keys(JAIL_SHUT).length === 0 &&
+    Object.keys(JAIL_KEY).length === 0);
 
 // ============================================================== the server
 const clock = { t: Date.UTC(2026, 9, 12, 20, 0, 0) };
@@ -349,7 +357,7 @@ const KEY_W = idOf('5aec4:Skyrim.esm');   // WhiterunJailKey
 const KEY_HOUSE = idOf('1234:Skyrim.esm');
 const SWORD = idOf('12eb7:Skyrim.esm');
 const CHEST = 0x000a0001;
-Object.keys(JAIL_KEY).forEach(function (k) { kinds[idOf(k)] = 'KEYM'; });
+kinds[KEY_W] = 'KEYM';
 kinds[KEY_HOUSE] = 'KEYM';
 kinds[SWORD] = 'WEAP';
 kinds[0x0000000f] = 'MISC';
@@ -364,9 +372,9 @@ vm.runInNewContext(spoilsBlock, kbox, { filename: 'gamemode.js spoils' });
 const spoils = kbox.__thornswoodSpoils;
 // The world hands no jail key out, so the spoils block keeps no list of them:
 // no chest holds one the world put there (#3078) and none lies on the floor
-// (#3077). The keys stay in JAIL_KEY for the doors.
+// (#3077). A carried old key is still an ordinary item to this block.
 yes('K1 the spoils block keeps no jail key list, because nothing in the world hands one out',
-    spoils.isJailKey === undefined && !/JAIL_KEY/.test(spoilsBlock) && Object.keys(JAIL_KEY).length > 0);
+    spoils.isJailKey === undefined && !/JAIL_KEY/.test(spoilsBlock));
 // No jail key lies where the game put it: Thornswood-Last.esp switches every
 // placed item off (#3077), so the block answers no press on a floor key.
 yes('K2 a press on a key is never refused by the spoils block, a jail key or any other (#3077)',
