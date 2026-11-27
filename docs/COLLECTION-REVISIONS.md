@@ -38,7 +38,13 @@ says how. From Nexus to a release it goes like this:
 4. The dev server takes the new order from the box's store of the revision
    (`scripts/deploy/CollectionStore.ps1`), and a dev release names the
    revision. Main follows from the feed only when Patrick says so for that
-   build.
+   build, and its promotion copies the revision to 7essxf.
+
+Since #7193 a new revision is published to the Dev collection first, so
+Vortex offers it only to Dev's testers until main runs it. The records keep
+7essxf's numbers: Dev's revision is the records' revision less the `dev`
+offset in `records/collection.json`. [COLLECTION-CHANGES.md](COLLECTION-CHANGES.md#main-and-dev-have-a-collection-each)
+says how the two move.
 
 For revision 13, steps 1 and 2 are done. It takes out one plugin,
 McmRecorder.esp, and leaves the order of every other plugin as revision 12
