@@ -336,8 +336,16 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
     return sendJson(res, 413, { error: 'that file is over ' + Math.round(cap / 1048576) + ' MB' });
   }
   const offered = String(asked || 'file').split(/[\\/]/).pop();
-  const safe = offered.replace(/[^A-Za-z0-9._ -]/g, '_').replace(/^[. ]+/, '')
-                      .slice(0, 90) || 'file';
+  /* At most 90 characters, cut from the end of the name and not its
+     extension: cut as a whole, a long "....png" lost its .png and the
+     gallery refused it as the wrong kind of file (#4952). An "extension"
+     as long as the cap is no extension, and the whole name is cut. */
+  const clean = offered.replace(/[^A-Za-z0-9._ -]/g, '_').replace(/^[. ]+/, '');
+  const dot = path.extname(clean);
+  const keep = dot.length > 1 && dot.length < 90 ? dot : '';
+  const safe = keep
+    ? (clean.slice(0, clean.length - keep.length).slice(0, 90 - keep.length) || 'file') + keep
+    : clean.slice(0, 90) || 'file';
   if (allow) {
     const ext = path.extname(safe).toLowerCase();
     if (allow.indexOf(ext) < 0) {
