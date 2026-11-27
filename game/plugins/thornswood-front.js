@@ -9902,6 +9902,16 @@
 
     closingGame goes up first, so the race menu closing as the game comes
     apart is told as /racedown, not as a finished face.
+
+    The connection to the game server is closed before the exit (#6724).
+    exitProcess ends the process without closing it, so the server never
+    heard this game leave and held it for its own 60 s timeout, and the same
+    account picking again inside that minute was turned away as a second
+    game (24 Nov, main: three refusals 1 to 3 s after a close). destroyClient
+    puts the client down, and the client's own shutdown says goodbye to the
+    server and returns once the server has it (fork #204, at most 500 ms).
+    It is done only when exitProcess is there to follow it, so a game that
+    cannot close stays connected.
   */
   function closeGame(from) {
     closingGame = true;
@@ -9920,6 +9930,8 @@
     let asked = false;
     try {
       if (sp.win32 && typeof sp.win32.exitProcess === 'function') {
+        try { sp.mpClientPlugin.destroyClient(); log('menu: closed the connection to the game server'); }
+        catch (e) { log('menu: could not close the connection to the game server:', e); }
         sp.win32.exitProcess();
         asked = true;
       }
