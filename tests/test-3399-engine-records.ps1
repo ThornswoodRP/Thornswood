@@ -142,10 +142,11 @@ try {
     $null = New-Item -ItemType Directory -Force -Path $gh
     [IO.File]::WriteAllText((Join-Path $gh 'run.json'), '{"id":40400000000,"path":".github/workflows/engine.yml","status":"completed","conclusion":"success","html_url":"https://github.com/ThornswoodRP/Thornswood/actions/runs/40400000000"}', $utf8)
     # The jobs as GitHub reports them for a green engine.yml run since the
-    # VPS fallback went (#4983): run 45953186706 of 27 Nov 2026 has these two
-    # and no other (#4260). The fixture had a green run over a failed job,
-    # which GitHub never reports.
-    [IO.File]::WriteAllText((Join-Path $gh 'jobs.json'), '{"jobs":[{"id":222,"name":"Engine build","conclusion":"success"},{"id":333,"name":"Wake the engine pin","conclusion":"success"}]}', $utf8)
+    # VPS fallback went (#4983) and the fork commit got its own job (#7333):
+    # run 46003764347 of 27 Nov 2026 has these three and no other (#4260).
+    # The fixture had a green run over a failed job, which GitHub never
+    # reports.
+    [IO.File]::WriteAllText((Join-Path $gh 'jobs.json'), '{"jobs":[{"id":111,"name":"Which fork commit","conclusion":"success"},{"id":222,"name":"Engine build","conclusion":"success"},{"id":333,"name":"Wake the engine pin","conclusion":"success"}]}', $utf8)
     $fx = [IO.File]::ReadAllText((Join-Path $gh 'run.json')) | ConvertFrom-Json
     $fxJobs = @(([IO.File]::ReadAllText((Join-Path $gh 'jobs.json')) | ConvertFrom-Json).jobs)
     Yes '3. the fixture is a run GitHub could report: green, so every job in it succeeded (#4260)' ([string]$fx.conclusion -eq 'success' -and @($fxJobs | Where-Object { [string]$_.conclusion -ne 'success' }).Count -eq 0)
