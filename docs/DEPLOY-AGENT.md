@@ -393,7 +393,7 @@ a copy of dev that nobody plays on:
    `C:\Thornswood-BotPass\passes\<when it last wrote>-<its Deployment>`
    (`run\pass.txt` names the Deployment; a pass from an agent before that is
    kept as `unnamed`). The newest 30 stay, and of a log past 8 MiB its end.
-   `Install-DeployAgent -Status` lists them and `-Status -Pass <name>` prints
+   `Install-DeployAgent -Status` lists them and `-Status -KeptPass <name>` prints
    one.
 
 The bot pass rides in the gamemode Release as a part of its own, `bot`
@@ -513,6 +513,38 @@ it, never with the script's own download (#6359). A pull request
 whose content inputs are not that build's leaves out the content checks that
 read an input it changed, since they would hold its new sources to the old
 tables; the merge release runs them.
+
+### A merge the queue holds
+
+Patrick's A on #6879 (26 Nov 2026): a merge is built on the box while the
+merge queue holds it, so its content checks run before it lands, and a red
+one drops it from the queue.
+
+- The ask is a Deployment to **Content** like main's, with the queued commit
+  beside the key: `{"content": "<key>", "server": "dev", "queued": "<commit>"}`.
+  The agent asks the gate for `Build-Content -Server dev -Queued <commit>`.
+- The verb builds that commit only when it is the head of one of the
+  queue's `gh-readonly-queue/main/` branches on GitHub. It lays the commit
+  out in a worktree of the gate's checkout and runs main's own scripts over
+  it, never the commit's.
+- Every tool of the commit, and Make-LastPlugin.py before each one, runs on
+  the box as its limited account, never as its administrator: a one-shot
+  task as `NT AUTHORITY\LOCAL SERVICE`, limited, with a SID of its own
+  (`NT TASK\Thornswood Limited Build`), in a job that ends whatever it
+  starts. It may read the game data and change only its run's folder. The
+  services' fail-safe runs first and stops the run when this account could
+  read a place no service may read, the gate's folder among them
+  (`scripts/mods/OnBox.ps1`, THE LIMITED RUN).
+- The build is kept apart, in `C:\Thornswood-ContentBuilds\queue-<server>\<key>`,
+  and goes on a draft of its own, `content-queue-<server>-<key>`, the
+  newest 8 kept. No release takes it: the merge release builds the merge
+  again once it is on main, and it ignores the success of a queued ask.
+- Each queued ask is built, oldest first, and an ask for main never passes
+  over one, since each merge group waits on its own commit. The newest ask
+  for main still stands for every older ask for main.
+- `Build-Content -Limited` builds main the same way and says whether every
+  file is the administrator's build of the same key (MATCHES or DIFFERS):
+  how the limited run is measured on the box.
 
 ## Release news
 

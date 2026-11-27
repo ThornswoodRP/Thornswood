@@ -525,6 +525,79 @@ try { (function () {
         (rows.slice(0, 5).map(function (r) {
           return r.k + ' ' + r.ms.toFixed(0) + 'ms/' + r.runs + ' worst ' + r.worst.toFixed(1) + 'ms';
         }).join('; ') || 'nothing ran'));
+    netLines(secs);
+  }
+
+  /*
+    WHAT EACH CONNECTION DID, one "net:" line a person a minute (#5053).
+
+    "The dev server lags, worst at the Whiterun market" was measured on 26 Nov
+    2026 from every source the box holds, and none of them showed it: the
+    server was 5 to 7% of one core with its loop p99 at 8 ms, and testers'
+    games drew the market as fast as anywhere outdoors. Nothing on the server
+    or in the games said what a connection did, so lag between the server and
+    one person could be neither shown nor ruled out. The engine's transport
+    knows (mp.getConnectionStats, fork PR #202), and this says it beside where
+    the person stood:
+
+      ping       the transport's last, average and lowest round trip
+      sent       bytes a second to this person over the minute, on the wire,
+                 resends included; resent, the part sent again
+      received   bytes a second from them
+      waiting    messages queued to send right now, and sent but not yet
+                 acknowledged; a queue that grows is the server sending
+                 faster than the link takes it
+      loss       the packets lost since they connected
+      and "held back by congestion control" when the transport is slowing
+      itself down for this link.
+
+    READ IT AS the same person in the market and elsewhere: a ping, a queue
+    or a rate that rises only in the market is the server's traffic there,
+    and one that is high everywhere is the person's link. Reads only.
+  */
+  const netWas = {};
+  function netLines(secs) {
+    let people = [];
+    try { people = mp.get(0, 'onlinePlayers') || []; } catch (e) { people = []; }
+    if (!people.length) { return; }
+    if (typeof mp.getConnectionStats !== 'function') {
+      log('net: not measured; this engine has no getConnectionStats');
+      return;
+    }
+    const seen = {};
+    const kib = function (bytes) { return (bytes / secs / 1024).toFixed(1); };
+    for (let i = 0; i < people.length; i++) {
+      const actor = people[i];
+      let user = -1, s = null;
+      try { user = mp.getUserByActor(actor); } catch (e) { user = -1; }
+      if (typeof user !== 'number' || user < 0) { continue; }
+      try { s = mp.getConnectionStats(user); } catch (e) { s = null; }
+      if (!s || typeof s !== 'object') { continue; }
+      const key = user + ':' + actor;
+      seen[key] = true;
+      const was = netWas[key];
+      netWas[key] = { sent: s.bytesSent, resent: s.bytesResent, got: s.bytesReceived };
+      let rates = 'its first minute';
+      if (was && s.bytesSent >= was.sent && s.bytesReceived >= was.got) {
+        rates = 'sent ' + kib(s.bytesSent - was.sent) + ' KiB/s, resent ' +
+                kib(Math.max(0, s.bytesResent - was.resent)) + ' KiB/s, received ' +
+                kib(s.bytesReceived - was.got) + ' KiB/s';
+      }
+      let cell, at = '?';
+      try { cell = String(mp.get(actor, 'worldOrCellDesc') || '?'); } catch (e) { cell = '?'; }
+      try {
+        const pos = mp.get(actor, 'pos');
+        if (pos && pos.length >= 2) { at = Math.round(pos[0]) + ',' + Math.round(pos[1]); }
+      } catch (e) { at = '?'; }
+      log('net: ' + (actor >>> 0).toString(16) + ' in ' + cell + ' at ' + at + ': ping ' + s.lastPingMs +
+          'ms (average ' + s.averagePingMs + ', lowest ' + s.lowestPingMs + '), ' + rates + ', ' +
+          s.messagesWaiting + ' waiting to send, ' + s.messagesToResend + ' unacknowledged, loss ' +
+          (Number(s.packetLoss || 0) * 100).toFixed(1) + '%' +
+          (s.limitedByCongestion ? ', held back by congestion control' : ''));
+    }
+    for (const k in netWas) {
+      if (Object.prototype.hasOwnProperty.call(netWas, k) && !seen[k]) { delete netWas[k]; }
+    }
   }
 
   g.__thornswoodServerBeat = { timer: setInterval(function () {
@@ -11564,6 +11637,16 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
     notify(actorId, refusal);
     say(actorId, refusal);
     log(actorId.toString(16), 'was refused', desc, '(' + (row && row.name || 'recipe') + '):', refusal);
+    return false;
+  }
+  // The trade's tool (#3162), asked now the way mp.onCraft asks it, so a
+  // missing tool is said before the wait and not when it is over (#6804).
+  const toolKey = row && typeof row === 'object' ? benchToolKey(row) : null;
+  const noTool = toolKey ? toolGate(actorId, toolKey) : null;
+  if (noTool) {
+    notify(actorId, noTool);
+    say(actorId, noTool);
+    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', toolFor(toolKey).name);
     return false;
   }
   const size = craftSize(row, workbenchId);
@@ -28459,22 +28542,6 @@ module.exports = {
   // table files. game\data\woodworking-benches.json says what was measured at each spot.
   var WOODWORKING_BENCH_BASE = table('WOODWORKING_BENCH_BASE');
   var WOODWORKING_BENCHES = table('WOODWORKING_BENCHES');
-  /*
-    THE STATIONS THE SERVER STANDS (#6893). game\data\station-sites.json
-    measures where each station stands (scripts\dev\Build-StationSites.py),
-    and Thornswood-Content.esp places them, except in a cell of a plugin that
-    is not one of its masters, where it cannot: North Keep's inn has no
-    cooking station, and North Keep.esp's room is such a cell. Those rows say
-    standBy server, and the server stands them here, the way it stands the
-    benches: once, at start, with no timer, next to the room's own furniture
-    the row names (beside), which the server loads, since MoveTo takes a
-    reference into a cell only next to one already there. Skyrim's own
-    cooking pot is the base, the pot every inn's cook uses, so the bench
-    table (BENCH_BY_BASE) already knows it as a cookpot. The ids are kept
-    beside the benches' in benches.json. Build-WoodworkingBenches.py writes
-    the table and holds each row's furniture to the load order.
-  */
-  var STATIONS_THE_SERVER_STANDS = table('STATIONS_THE_SERVER_STANDS');
 
   function benchBookPath() {
     var path = require('path');
@@ -28485,13 +28552,10 @@ module.exports = {
     var out = {};
     var raw = benchRead.doc;
     if (!raw || typeof raw !== 'object') { return out; }
-    var tables = [WOODWORKING_BENCHES, STATIONS_THE_SERVER_STANDS];
-    for (var t = 0; t < tables.length; t++) {
-      for (var site in tables[t]) {
-        if (!Object.prototype.hasOwnProperty.call(tables[t], site)) { continue; }
-        var id = Number(raw[site]) >>> 0;
-        if (id) { out[site] = id; }
-      }
+    for (var site in WOODWORKING_BENCHES) {
+      if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
+      var id = Number(raw[site]) >>> 0;
+      if (id) { out[site] = id; }
     }
     return out;
   }
@@ -28541,49 +28605,11 @@ module.exports = {
     return true;
   }
 
-  /* Stand this station where STATIONS_THE_SERVER_STANDS says. Answers whether it stands. */
-  function standStation(site) {
-    var s = STATIONS_THE_SERVER_STANDS[site];
-    if (!s) { return false; }
-    var nextTo = 0;
-    try { nextTo = mp.getIdFromDesc(s.beside) >>> 0; } catch (e) { nextTo = 0; }
-    var at = '';
-    try { at = nextTo ? String(mp.get(nextTo, 'worldOrCellDesc') || '') : ''; } catch (e2) { at = ''; }
-    if (!nextTo || at !== s.cell) {
-      plog('stations: nothing to stand', site + '\'s', s.kind, 'next to:', 'the furniture', s.beside,
-           'is not in', s.cell, '(the server has it in', (at || 'no cell') + ')');
-      return false;
-    }
-    var id = benchRefs[site] || 0;
-    if (refAt(id, s.base, s.cell, s.pos, s.angle)) { return true; }
-    try {
-      if (!refStands(id, s.base, '')) {
-        var base = placedBase(s.base);
-        if (!base) { plog('stations: the', s.kind, 'record', s.base, 'is not in the load order'); return false; }
-        id = mp.place(base);
-      }
-      refCall('SetAngle', id, [0, 0, s.angle]);
-      moveOnto(id, nextTo, s.pos);
-    } catch (e3) {
-      plog('stations: could not stand', site + '\'s', s.kind + ':', e3);
-      return false;
-    }
-    benchRefs[site] = id;
-    saveBenchRefs();
-    plog('stations: stood', site + '\'s', s.kind, Number(id).toString(16), 'in', s.cell, 'at',
-         s.pos.join(','), 'turned', s.angle, 'beside', s.beside);
-    return true;
-  }
-
-  /* Every woodworking bench, and every station the server stands, where it should be, once, at start. */
+  /* Every woodworking bench stood where it should be, once, when the server starts. */
   function standBenches() {
     for (var site in WOODWORKING_BENCHES) {
       if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
       standBench(site);
-    }
-    for (var station in STATIONS_THE_SERVER_STANDS) {
-      if (!Object.prototype.hasOwnProperty.call(STATIONS_THE_SERVER_STANDS, station)) { continue; }
-      standStation(station);
     }
   }
 
@@ -32020,8 +32046,6 @@ module.exports = {
     standBench: standBench, standBenches: standBenches,
     benchRefs: function () { return Object.assign({}, benchRefs); },
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
-    STATIONS_THE_SERVER_STANDS: STATIONS_THE_SERVER_STANDS,
-    standStation: standStation,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
     itemName: itemName, baseItemName: baseItemName
@@ -32885,15 +32909,39 @@ module.exports = {
   */
   var pressedBy = {};
 
+  /*
+    WHAT A PRESS FOUND IS SAID (#4581). Every press on a driver that people
+    made from 15 to 27 November reached this server as /ride e with the
+    driver's own id (Read-RideLines, the chat logs), and not one opened the
+    panel, while the server said nothing about any of them. So each press
+    says here which of the three ways it went, with what decided it: the
+    base the server read for that id when it is no driver's, where both
+    stood when he was out of reach, and the stop when his panel was sent.
+    One line a press, and a press is somebody's E.
+  */
+  function pressSaid(driverId, actorId, what) {
+    plog('E on ' + (Number(driverId) >>> 0).toString(16) + ' by ' + (Number(actorId) >>> 0).toString(16) + ': ' + what);
+  }
+
+  function placeSaid(p) {
+    return p ? p.cell + ' ' + p.pos.map(Math.round).join(',') : 'nowhere the server can read';
+  }
+
   function pressDriver(actorId, driverId) {
-    var base = '';
-    try { base = String(mp.get(driverId, 'baseDesc') || ''); } catch (e) { base = ''; }
+    var base = '', why = '';
+    try { base = String(mp.get(driverId, 'baseDesc') || ''); } catch (e) { base = ''; why = String(e && e.message || e); }
     var stop = stopByBase(base);
-    if (!stop) { return null; }
+    if (!stop) {
+      pressSaid(driverId, actorId, 'no driver, its base is ' + (base || 'unreadable' + (why ? ' (' + why + ')' : '')));
+      return null;
+    }
     var me = placeOf(actorId), them = placeOf(driverId);
     if (!me || !them || me.cell !== them.cell || apart(me.pos, them.pos) > RIDE_REACH) {
+      pressSaid(driverId, actorId, stop.driver + ' at ' + stop.key + ' is out of reach: the person at ' + placeSaid(me) +
+                ', the driver at ' + placeSaid(them) + (me && them && me.cell === them.cell ? ', ' + Math.round(apart(me.pos, them.pos)) + ' apart' : ''));
       return { stop: stop, far: true };
     }
+    pressSaid(driverId, actorId, stop.driver + ' at ' + stop.key + ', ' + Math.round(apart(me.pos, them.pos)) + ' apart: the panel is sent');
     pressedBy[actorId] = { stop: stop.key, driver: driverId, at: Date.now() };
     return { stop: stop, far: false };
   }
@@ -38631,6 +38679,14 @@ return module.exports;
       // at creation. The panel draws these as placed rather than spent, and
       // nothing takes one back out.
       placed: s.placed || {},
+      /*
+        What each class, profession, half and school places (#7168), the
+        table progression's place() reads, sent only while creating. Then a
+        class and a profession are the panel's until Confirm, so the panel adds
+        up what its own picks will place and the tree shows them before the
+        server has them. In the world every pick is already sent and in tree.
+      */
+      placing: creating && P.TUNING ? P.TUNING.placed : undefined,
       points: s.points || 0,
       perks: P.perks(s),
       /*
@@ -69140,7 +69196,14 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
     missing.forEach(id=>knownFactions.add(id));
     return s;
   }
-  function hostile(a,b) {
+  // Whether a starts a fight with b, d away. Aggression and faction
+  // reactions count within SIGHT. A person inside the larger of a's warn or
+  // attack and attack radius counts too unless a is their friend, whatever
+  // a's aggression: the game's own rule for the aggro radius, read from its
+  // code (#6493). An Aggressive skeever has no Enemy faction toward people,
+  // so without the radius it never attacked them.
+  const SIGHT=1200;
+  function hostile(a,b,d) {
     let enemy=false,friend=false;
     for(const f of a.factions) for(const g of b.factions) {
       // Friendship and common membership suppress conflicting enemy entries.
@@ -69148,14 +69211,17 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       friend ||= f.id===g.id || r===2 || r===3;
       enemy ||= r===1;
     }
-    if(friend || a.aggression===0) return false;
-    return a.aggression===3 || (a.aggression===2 && !friend) || (a.aggression===1 && enemy);
+    if(friend) return false;
+    if(b.isHuman && d<=Math.max(a.aggroRadius[1],a.aggroRadius[2])) return true;
+    if(a.aggression===0 || d>SIGHT) return false;
+    return a.aggression===3 || a.aggression===2 || (a.aggression===1 && enemy);
   }
   function validState(s) {
     return s && Number.isInteger(s.cellOrWorld) && Array.isArray(s.pos) &&
       s.pos.length===3 && s.pos.every(Number.isFinite) && Array.isArray(s.rot) &&
       s.rot.length===3 && s.rot.every(Number.isFinite) && Number.isInteger(s.aggression) &&
       s.aggression>=0 && s.aggression<=3 && Number.isInteger(s.confidence) && s.confidence>=0 && s.confidence<=4 &&
+      Array.isArray(s.aggroRadius) && s.aggroRadius.length===3 && s.aggroRadius.every(r=>Number.isFinite(r) && r>=0) &&
       Number.isFinite(s.meleeReach) && s.meleeReach>=0 && Number.isFinite(s.meleeAllowance) &&
       s.meleeAllowance>=16 && s.meleeAllowance<=96;
   }
@@ -69469,10 +69535,10 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       retaliation=true;
       targetState=humans.get(target) || actors.get(target).state;
     } else {
-      let best=1200;
+      let best=Infinity;
       for(const [id,h] of humans) {
         const d=h.cellOrWorld===a.cell ? distance(h.pos,a.pos) : Infinity;
-        if(d<best && hostile(s,h)) {target=id;targetState=h;best=d;}
+        if(d<best && hostile(s,h,d)) {target=id;targetState=h;best=d;}
       }
       // NPC combat uses the same spatial index when nobody is connected.
       // Inspect a bounded local sample rather than comparing the full cast.
@@ -69484,7 +69550,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
           const other=actors.get(id);
           if(!other || other.state.isDead || other.state.isDisabled) continue;
           const d=distance(other.pos,a.pos);
-          if(d<best && hostile(s,other.state)) {target=id;targetState=other.state;best=d;}
+          if(d<best && hostile(s,other.state,d)) {target=id;targetState=other.state;best=d;}
           if(++inspected>=32) break search;
         }
       }
@@ -69496,7 +69562,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
         const live=nativeCall('getNpcAIState',target);
         if(!validState(live) || live.isDead || live.isDisabled || (live.isHuman && !live.isConnected) || live.cellOrWorld!==a.cell ||
             distance(a.pos,live.pos)>4096 || !withinHome(a,live.pos)) {target=0;targetState=null;}
-        else if(!retaliation && !hostile(s,factionData(live))) {target=0;targetState=null;}
+        else if(!retaliation && !hostile(s,factionData(live),distance(a.pos,live.pos))) {target=0;targetState=null;}
         else targetState=live;
       } catch(e) {target=0;targetState=null;}
     }

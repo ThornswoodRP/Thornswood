@@ -57,7 +57,7 @@ for(const [i,key] of expectedKeys.entries()) {
 // Every old station and every new quest placement is accounted for. An extra
 // accidental placement cannot hide behind filtering to the station bases.
 const stations=JSON.parse(fs.readFileSync(path.join(root,'game/data/station-sites.json'),'utf8')).sites;
-const expected=new Set(Object.values(stations).filter(r=>r.standBy!=='server').concat(Object.values(doc.sites)).map(r=>fid(r.ref)));
+const expected=new Set(Object.values(stations).concat(Object.values(doc.sites)).map(r=>fid(r.ref)));
 assert.deepEqual(new Set([...records].filter(([,r])=>r.tag==='REFR').map(([id])=>id)),expected);
 // Content can precede its runtime release. The newly placed FLOR markers
 // must not become ordinary unbounded fishing while that controller is absent.

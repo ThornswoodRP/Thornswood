@@ -15,9 +15,7 @@
        angle, and what was measured there (the ground under it, the nearest
        solid thing); every town of the placement brief is either a site or
        skipped with its reason; no bench stands near a charcoal kiln
-    G  the gamemode's WOODWORKING_BENCHES table is the table, row for row, and
-       its STATIONS_THE_SERVER_STANDS the station table's rows the server
-       stands (#6893)
+    G  the gamemode's WOODWORKING_BENCHES table is the table, row for row
     P  the bench is furniture in the repository's content plugin, carrying
        the woodworking keyword
     B  the table was built against the collection's own bytes and the
@@ -204,16 +202,6 @@ yes('G2 and it is the table, row for row', !!inBlock && base === BENCH &&
     JSON.stringify(Object.keys(inBlock).sort()) === JSON.stringify(names.slice().sort()) &&
     names.every((s) => inBlock[s].forge === sites[s].forge && inBlock[s].cell === sites[s].cell &&
       near(inBlock[s].pos, sites[s].pos) && inBlock[s].angle === sites[s].angle && inBlock[s].where === sites[s].where));
-// #6893: the stations the server stands, the station table's rows that say
-// standBy server, each beside the room's furniture its row names.
-const stationRows = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'station-sites.json'), 'utf8')).sites;
-const stoodNames = Object.keys(stationRows).filter((n) => stationRows[n].standBy === 'server').sort();
-let stood = null;
-try { stood = GT.inGamemode(gm, 'STATIONS_THE_SERVER_STANDS'); } catch (e) { stood = null; }
-yes('G3 the gamemode carries STATIONS_THE_SERVER_STANDS, the station table\'s rows the server stands (' + stoodNames.length + '), row for row',
-    !!stood && JSON.stringify(Object.keys(stood).sort()) === JSON.stringify(stoodNames) &&
-    stoodNames.every((n) => ['where', 'kind', 'base', 'beside', 'cell', 'angle'].every((f) => stood[n][f] === stationRows[n][f]) &&
-      near(stood[n].pos, stationRows[n].pos)));
 
 // ---------------------------------------------------------------- R
 const recipes = JSON.parse(fs.readFileSync(RECIPES, 'utf8').replace(/^\uFEFF/, ''));

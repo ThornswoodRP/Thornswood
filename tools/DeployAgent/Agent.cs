@@ -507,6 +507,7 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
         // Only the service builds content, through the gate; a single look
         // (once) leaves its Deployments to it.
         if (cfg.Environments[env].Kind == ContentBuild.Kind && Content == null) return;
+        if (cfg.Environments[env].Kind == ContentBuild.Kind) { await PassContent(env, ct); return; }
         var deps = await gh.Deployments(cfg.Environments[env].GitHubEnvironment, 10, ct);
         if (deps.Count == 0) return;
         var newest = deps[0];
@@ -518,6 +519,29 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
             log($"{env}: deployment {d.Id} is older than {newest.Id} and was never applied; marked inactive");
         }
         await Apply(env, newest, ct);
+    }
+
+    /// <summary>The content build's asks (#6879). The newest ask for main's
+    /// build stands for every older one, which are marked inactive: the gate
+    /// builds main as it is. Each ask for a queued merge is its own, since
+    /// each merge group waits on its own commit's build. The oldest ask left
+    /// unanswered is applied, one a pass.</summary>
+    async Task PassContent(string env, CancellationToken ct)
+    {
+        var deps = await gh.Deployments(cfg.Environments[env].GitHubEnvironment, 15, ct);
+        var open = new List<Deployment>();
+        foreach (var d in deps) if ((await gh.Statuses(d.Id, ct)).Count == 0) open.Add(d);
+        if (open.Count == 0) return;
+        // Newest first, as GitHub lists them, answered or not.
+        var newestMain = deps.FirstOrDefault(d => !ContentBuild.IsQueued(d.Payload));
+        foreach (var d in open.Where(d => !ContentBuild.IsQueued(d.Payload) && d.Id != newestMain!.Id).ToList())
+        {
+            await gh.SetStatus(d.Id, "inactive", $"not applied: deployment {newestMain!.Id} came after it and builds main as it is", "", ct);
+            log($"{env}: deployment {d.Id} is older than {newestMain!.Id} and was never applied; marked inactive");
+            open.Remove(d);
+        }
+        if (open.Count == 0) return;
+        await Apply(env, open.OrderBy(d => d.Id).First(), ct);
     }
 
     /// <summary>Reads the payload a Deployment carries: the Release tag. GitHub
