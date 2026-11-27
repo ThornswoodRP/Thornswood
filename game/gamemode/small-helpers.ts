@@ -481,7 +481,7 @@ try { (function () {
                 kib(Math.max(0, s.bytesResent - was.resent)) + ' KiB/s, received ' +
                 kib(s.bytesReceived - was.got) + ' KiB/s';
       }
-      let cell = '?', at = '?';
+      let cell, at = '?';
       try { cell = String(mp.get(actor, 'worldOrCellDesc') || '?'); } catch (e) { cell = '?'; }
       try {
         const pos = mp.get(actor, 'pos');
