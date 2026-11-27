@@ -32,7 +32,7 @@ function lift(src, start, end) {
 
 // ------------------------------------------------------------ the server --
 {
-  const body = lift(prop, '  function shutFor(actorId, profileId) {', '\n    return { shut: shut, open: open, own: own };\n  }');
+  const body = lift(prop, '  function shutFor(actorId, profileId) {', '\n  }');
   yes('server: shutFor can be lifted out', !!body);
   if (body) {
     const make = new Function('claims', 'doorsOf', 'mayPass', 'wayOut', 'jailHoldOf', 'cellLists', 'idOf',
@@ -90,7 +90,7 @@ if (block) {
   const said = [];
   const g = {};
   const sp = {
-    Game: { getPlayer: () => ({ getActorBase: () => me }), getFormEx: id => (unloaded.has(Number(id)) ? null : forms[Number(id)] || null) },
+    Game: { getPlayer: () => ({ getBaseObject: () => me }), getFormEx: id => (unloaded.has(Number(id)) ? null : forms[Number(id)] || null) },
     Cell: { from: f => f }, ObjectReference: { from: f => f }, ActorBase: { from: f => f }, Faction: { from: f => f },
     on: (name, fn) => { handlers[name] = fn; }, once: (name, fn) => { handlers['once ' + name] = fn; }
   };

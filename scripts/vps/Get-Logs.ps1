@@ -11,11 +11,15 @@
   here it was a line nobody would have grepped for, sitting next to one that
   was.
 
-  So this one filters nothing. It copies the tail of each log into
-  Thornswood-Repo\logs and tells you where it put them.
+  So this one filters nothing unless asked to. It copies the tail of each
+  log into Thornswood-Repo\logs and tells you where it put them.
 
-      .\Get-Logs.ps1                pull the last 4000 lines of each
+      .\Get-Logs.ps1                pull the last 4000 lines of each, from the last 2 days
       .\Get-Logs.ps1 -Lines 40000   pull a lot more
+      .\Get-Logs.ps1 -Days 5        the rolled generations written in the last 5 days
+      .\Get-Logs.ps1 -Days 0        every rolled generation the box keeps
+      .\Get-Logs.ps1 -Match "Loading character,chargen"
+                                    only the lines holding any of those words, the last -Lines of them
       .\Get-Logs.ps1 -All           pull the whole thing, however big it is
 
   What comes back:
@@ -34,7 +38,9 @@
   For every log that rolls (server, thornswood, voice, site, bot), its
   rolled generations come down too, under the same names: the box is asked
   once which of them it has, and exactly those are read, so a pull never
-  asks for a file that is not there. The rollers keep five, so that is .1
+  asks for a file that is not there. Only the ones written in the last
+  -Days days come down (2 unless said; 0 is all of them): see the note on
+  -Days below for why. The rollers keep five, so that is .1
   through .5 at most, except server.log, which server-log.js rolls by its
   time since #2349 (server.log.<when>, up to 30 days of them, newest first),
   and voice.log and thornswood.log, which it rolls the same way since #2166
@@ -63,6 +69,30 @@ param(
       because the interesting thing is usually the difference.
     #>
     [switch]$Dev,
+    <#
+      THE WINDOW, IN DAYS (#7060). A rolled generation comes down only when
+      the box last wrote it inside the last -Days days, so it holds lines
+      from that window; the current file always comes. 0 brings every one.
+
+      Since server.log rolls by its time (#2349, up to 30 days kept) and
+      thornswood.log the same way (#2166, up to 90), a pull brought every
+      generation, each with its own -Lines tail: about 77 MB on 27 Nov 2026,
+      for -Lines 4000 and for -Lines 150000 alike, because each day's file
+      is shorter than either. The gate sends back at most 64 MB (Gate.ps1),
+      so from a cloud thread Get-Logs never came back at all, and the logs
+      of a playtest three days before (#6724) could not be read. A window
+      that is said is what makes a pull fit, and a day nobody asked about
+      does not come down.
+    #>
+    [int]$Days     = 2,
+    <#
+      ONLY THE LINES THAT HOLD ONE OF THESE (#7060). Words split on commas,
+      each matched as plain text, case aside, never as a pattern: the gate
+      takes no pipe or backslash in a line, so a pattern could not be said
+      through it anyway. The box keeps the matching lines of each file, the
+      last -Lines of them, and only those come down. Empty is every line.
+    #>
+    [string]$Match = '',
     [switch]$NoPause
 )
 
@@ -177,14 +207,19 @@ $wanted = foreach ($base in $logs) {
         (Split-Path -Leaf $base.Path).Replace("'", "''"),
         $(if ($base.ContainsKey('Rolls') -and $base.Rolls) { '$true' } else { '$false' })
 }
+# A generation the box last wrote before this is older than the window (-Days).
 $listing = @'
+$since = if (DAYS -gt 0) { (Get-Date).ToUniversalTime().AddDays(-DAYS) } else { [datetime]::MinValue }
 foreach ($w in @(WANTED)) {
     if (-not (Test-Path -LiteralPath $w.Dir -PathType Container)) { continue }
     $rx = '^' + [regex]::Escape($w.Leaf) + $(if ($w.Rolls) { '(\.\d+)?$' } else { '$' })
-    Get-ChildItem -LiteralPath $w.Dir -File | Where-Object { $_.Name -match $rx } | ForEach-Object { $_.FullName }
+    Get-ChildItem -LiteralPath $w.Dir -File |
+        Where-Object { $_.Name -match $rx -and ($_.Name -ieq $w.Leaf -or $_.LastWriteTimeUtc -ge $since) } |
+        ForEach-Object { $_.FullName }
 }
 '@
-$listing = $listing.Replace('WANTED', ($wanted -join ', '))
+$window = [Math]::Max(0, $Days)
+$listing = $listing.Replace('WANTED', ($wanted -join ', ')).Replace('DAYS', [string]$window)
 $listing += "`n" + @'
 if (Test-Path -LiteralPath 'DEPLOYDIR' -PathType Container) {
     Get-ChildItem -LiteralPath 'DEPLOYDIR' -File | Where-Object { $_.Name -match 'DEPLOYLEAF' } | ForEach-Object { $_.FullName }
@@ -210,7 +245,13 @@ function Read-Box([string]$Remote) {
     }
 }
 
+# The words for -Match, each one plain text in single quotes on the box.
+$words = @(([string]$Match).Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$matching = if ($words.Count) { "@(" + (($words | ForEach-Object { "'" + $_.Replace("'", "''") + "'" }) -join ', ') + ")" } else { '' }
+
 Head 'Pulling'
+Say ("  {0}{1}" -f $(if ($window) { "the rolled generations written in the last $window day(s)" } else { 'every rolled generation the box keeps' }),
+     $(if ($words.Count) { ', only the lines holding ' + ($words -join ' or ') } else { '' })) 'DarkGray'
 
 $box = Read-Box $listing
 if ($box.Code -ne 0) {
@@ -269,7 +310,19 @@ if ($box.Code -ne 0) {
               hand back one enormous string with the tail applied to nothing.
             #>
             $tail = if ($All) { '' } else { " -Tail $Lines" }
-            $read = Read-Box ("Get-Content -LiteralPath '{0}'{1}" -f $f.Path.Replace("'", "''"), $tail)
+            $at = $f.Path.Replace("'", "''")
+            <#
+              With -Match the box picks the lines (Select-String reads the file
+              where it is) and keeps the last -Lines of them, so only those
+              cross; a file with none comes down empty.
+            #>
+            $ask = if ($matching) {
+                $last = if ($All) { '' } else { " | Select-Object -Last $Lines" }
+                "@(Select-String -LiteralPath '{0}' -SimpleMatch -Pattern {1} | ForEach-Object {{ `$_.Line }}){2}" -f $at, $matching, $last
+            } else {
+                "Get-Content -LiteralPath '{0}'{1}" -f $at, $tail
+            }
+            $read = Read-Box $ask
 
             # A read that failed is said, and nothing is written for it. A roll
             # between the question and the read is the one ordinary way to get

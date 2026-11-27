@@ -1091,7 +1091,7 @@
       if (!needCharacter()) return;
       var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
       var propertyPosts = g.__thornswoodProperty;
-      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job' && postPayload[0] !== 'wanted') ||
           !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
           (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
           typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||

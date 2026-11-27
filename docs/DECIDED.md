@@ -33,6 +33,10 @@ link, and the old line goes.
   A bounty or wanted poster that people write and post themselves is
   allowed; only Skyrim's own bounty system is off. 21 Oct 2026,
   [#3174](https://github.com/EvilPatrick06/Thornswood/issues/3174#issuecomment-6333339753).
+- **Pickpocketing is between people only.** A sneaking person can
+  pickpocket another person with Skyrim's own steal window; nobody can
+  pickpocket an NPC. 26 Nov 2026,
+  [#6622](https://github.com/ThornswoodRP/Thornswood/issues/6622).
 - **Hold laws and smuggling are roleplay only.** A Jarl posts the hold's law
   on the notice board and guards enforce it; nothing in the game checks goods
   or runs smuggling. 21 Oct 2026,

@@ -223,7 +223,7 @@ pwsh scripts/vps/Box-Run.ps1 -Line 'Check-Site'
 pwsh scripts/vps/Box-Run.ps1 -Line 'Get-Logs -Lines 300'
 ```
 
-`Check-Site` says whether the website answers. `Get-Logs` brings the tail of the site, bot, game server, and voice logs back to your machine and prints the folder. `-Lines 40000` pulls more.
+`Check-Site` says whether the website answers. `Get-Logs` brings the tail of the site, bot, game server, and voice logs back to your machine and prints the folder. `-Lines 40000` pulls more. Older rolled copies come only from the last 2 days unless `-Days 5` says otherwise (`-Days 0` is all of them), and `-Match "Loading character,chargen"` keeps only the lines holding one of those words, so a pull from a cloud thread fits under what the gate sends back.
 
 The machines that hold a key from before 31 Oct keep it; `docs\BOX-ACCESS.md` in the private ops repo has those, and the secrets table below says how one is changed.
 

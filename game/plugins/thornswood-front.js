@@ -3321,8 +3321,11 @@
   // loaded: a cell that has just finished loading, whose things are all there
   // now, so a held one is gone through again for any that were not yet.
   function settleOwnCells(loaded) {
+    // The character's own record, the one a bought house is set to. Skyrim
+    // Platform has no getActorBase: Papyrus writes it as a script function
+    // over GetBaseObject, and only natives reach plugins (#7089).
     const pc = sp.Game.getPlayer();
-    const me = pc ? pc.getActorBase() : null;
+    const me = pc ? sp.ActorBase.from(pc.getBaseObject()) : null;
     if (!me) { return; }
     for (const key in ownKept) {
       if (Object.prototype.hasOwnProperty.call(ownKept, key) && ownWanted.indexOf(Number(key)) < 0) {
@@ -5163,21 +5166,37 @@
       and it never set anybody on fire. getFurnitureReference is the engine's
       own answer for which station you are at.
     */
+    /*
+      AND NOBODY THE GAME HAS SEATED IS STANDING IN THE COALS (#6722). A
+      cooking spit or pot stands over its own campfire: in Skyrim.esm 87 of
+      the 203 cooking stations near a lit fire are within FIRE_INSIDE of it,
+      12 to 90 units from the fire's centre, so starting to cook moved the
+      cook into the catch and set them alight, 7 health a second for as long
+      as they cooked. A person at a station, on a bench or on a chair is
+      where the furniture put them, not where they walked; they are warmed
+      as before and never caught. Standing up and walking into the fire
+      still catches.
+    */
     fireFlame = -1;
+    let seated = false;
+    let warmest = -1;
     try {
       const furn = pc.getFurnitureReference ? pc.getFurnitureReference() : null;
       if (furn) {
+        seated = true;
         const b = furn.getBaseObject();
         const id = b ? b.getFormID() : 0;
         if (id) {
           const ids = fireIdList();
           for (let f = 0; f < ids.length; f++) {
-            if (ids[f] === id) { return fireNearest(px, py, pz, fireSpotsHere(pc), 0); }
+            if (ids[f] === id) { warmest = 0; break; }
           }
         }
       }
     } catch (e) { }
-    return fireNearest(px, py, pz, fireSpotsHere(pc), -1);
+    const best = fireNearest(px, py, pz, fireSpotsHere(pc), warmest);
+    if (seated) { fireFlame = -1; }
+    return best;
   }
 
   sp.on('update', guard('race read', raceReadTick));

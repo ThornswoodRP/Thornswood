@@ -327,15 +327,21 @@ function Get-GameProcess {
     Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
-function Invoke-GameKey([IntPtr]$handle, $code) {
+# $code is the key; $with are keys held down with it, pressed first and let
+# go last (W under Alt, for a sprint); $holdMs is how long they are all held.
+function Invoke-GameKey([IntPtr]$handle, $code, [int]$holdMs = 120, $with = @()) {
     # These plans use ordinary set-1 make codes. Extended/E1 keys require
     # another encoding; refuse them instead of silently sending another key.
-    $scan = 0
-    if (-not [int]::TryParse([string]$code, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$scan) -or
-        $scan -lt 1 -or $scan -gt 0x7f) {
-        return @{ ok = $false; note = "unsupported non-extended scan code $code" }
+    $codes = @()
+    foreach ($c in @(@($with | Where-Object { $null -ne $_ }) + @($code))) {
+        $scan = 0
+        if (-not [int]::TryParse([string]$c, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$scan) -or
+            $scan -lt 1 -or $scan -gt 0x7f) {
+            return @{ ok = $false; note = "unsupported non-extended scan code $c" }
+        }
+        $codes += [uint16]$scan
     }
-    $code = [uint16]$scan
+    if ($holdMs -lt 120 -or $holdMs -gt 10000) { return @{ ok = $false; note = "a hold of $holdMs ms is outside 120 to 10000" } }
     if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         if (-not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
@@ -348,33 +354,44 @@ function Invoke-GameKey([IntPtr]$handle, $code) {
         return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho() }
     }
     $why = ''
+    $pressed = @()
     try {
-        $down = [ThornswoodRealClient.Win]::SendScan($code, $false)
-        if ($down -ne 1) { $why = "SendInput sent $down of 1 key-down events" }
-        else {
-            # A human-length tap, below key-repeat delay. The pinned engine's
-            # DInputHook samples GetDeviceState for its CEF listener: down+up
-            # in one SendInput can be gone before that snapshot, even though
-            # native buffered menus saw it (b0b869cb, main.cpp MyInputListener).
-            Start-Sleep -Milliseconds 120
+        foreach ($k in $codes) {
+            # Counted before it is sent: a down that failed or threw may still
+            # have reached Windows, so it is released all the same.
+            $pressed += $k
+            $down = [ThornswoodRealClient.Win]::SendScan($k, $false)
+            if ($down -ne 1) { $why = "SendInput sent $down of 1 key-down events" + $(if ($codes.Count -gt 1) { " for $k" } else { '' }); break }
+        }
+        if (-not $why) {
+            # A human-length tap, below key-repeat delay, unless the step
+            # asks for a hold. The pinned engine's DInputHook samples
+            # GetDeviceState for its CEF listener: down+up in one SendInput
+            # can be gone before that snapshot, even though native buffered
+            # menus saw it (b0b869cb, main.cpp MyInputListener).
+            Start-Sleep -Milliseconds $holdMs
             if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
                 $why = 'the game window lost the keyboard during input; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho()
             }
         }
     } catch { $why = 'the key press failed: ' + $_.Exception.Message }
     finally {
-        # Release even if down, the hold, or the focus check failed. This is
-        # cleanup, including after focus loss; no second key-down is tried.
-        try {
-            $up = [ThornswoodRealClient.Win]::SendScan($code, $true)
-            if ($up -ne 1) { $why += "; SendInput sent $up of 1 key-up events" }
-        } catch { $why += '; the key release failed: ' + $_.Exception.Message }
+        # Release every key that was sent down, last first, even if a down, the
+        # hold, or the focus check failed. This is cleanup, including after
+        # focus loss; no second key-down is tried.
+        for ($i = $pressed.Count - 1; $i -ge 0; $i--) {
+            try {
+                $up = [ThornswoodRealClient.Win]::SendScan($pressed[$i], $true)
+                if ($up -ne 1) { $why += "; SendInput sent $up of 1 key-up events" + $(if ($codes.Count -gt 1) { " for $($pressed[$i])" } else { '' }) }
+            } catch { $why += '; the key release failed: ' + $_.Exception.Message }
+        }
     }
     if ($why) { return @{ ok = $false; note = $why.TrimStart(';', ' ') } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         return @{ ok = $false; note = 'the game window lost the keyboard during input' }
     }
-    return @{ ok = $true; note = 'key-down, held 120 ms, key-up; game window focused' }
+    $what = if ($codes.Count -gt 1) { 'keys ' + ($codes -join '+') } else { 'key-down' }
+    return @{ ok = $true; note = "$what, held $holdMs ms, key-up; game window focused" }
 }
 
 # ---------------------------------------------------------------- the run --
@@ -601,10 +618,12 @@ try {
                         Say "shot $name ($how)"
                     } elseif ($o.do -eq 'key') {
                         $handle = if ($proc) { $proc.MainWindowHandle } else { [IntPtr]::Zero }
-                        $delivery = Invoke-GameKey $handle $o.arg
+                        # A held key comes as { code, hold, with }; a tap as its code.
+                        $delivery = if ($o.arg -is [int] -or $o.arg -is [long] -or $o.arg -is [string]) { Invoke-GameKey $handle $o.arg }
+                                    else { Invoke-GameKey $handle $o.arg.code ([int]$o.arg.hold) @($o.arg.with) }
                         $reply.ok = $delivery.ok
                         $reply.note = $delivery.note
-                        Say "key $($o.arg): $($delivery.note) (ok=$($delivery.ok))"
+                        Say "key $(($o.arg | ConvertTo-Json -Compress)): $($delivery.note) (ok=$($delivery.ok))"
                     } elseif ($o.do -eq 'end') { $ended = $true }
                     [IO.File]::WriteAllText($ackFile, ($reply | ConvertTo-Json -Compress))
                 }

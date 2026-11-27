@@ -29,6 +29,7 @@ Scripts that build, verify and manage Thornswood's plugins, recipes and mod asse
 | [Find-MissingMasters.ps1](Find-MissingMasters.ps1) | Reads the TES4 header of every plugin in Data and reports any master that is no longer present. |
 | [Generated.ps1](Generated.ps1) | Shared helpers for building and checking Thornswood's animation and body files. |
 | [last_recipe.py](last_recipe.py) | Recipe generator for Thornswood-Last.esp from installed plugins (#2791). |
+| [List-GameDataOnBox.ps1](List-GameDataOnBox.ps1) | The deploy gate's List-GameData verb: runs a read-only lister of the game's records against a server's plugins on the box (#5736). |
 | [List-SalvagedRecords.py](List-SalvagedRecords.py) | Writes content-salvaged.json tracking records remade from the salvaged plugin (#2553). |
 | [LoadOrder.ps1](LoadOrder.ps1) | The load order as the game counts it, and how to put a plugin list into the server's order. |
 | [Make-LastPlugin.py](Make-LastPlugin.py) | Makes Thornswood-Last.esp from its recipe on the box or client (#2791). |
