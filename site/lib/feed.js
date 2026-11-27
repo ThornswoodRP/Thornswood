@@ -496,17 +496,24 @@ function newestSetup(channel) {
   askSetups();
   return setups[channel] || null;
 }
-/* THE RELEASE ROUTE (#5608). The launcher holds no token, and asked without
-   one GitHub allows sixty calls an hour from an address, which a household
-   of launchers sharing one would spend on a single update. So the launcher
-   asks GitHub nothing: it reads the list of Releases from this site
-   (/api/launcher/releases, releaseList) and fetches each file of a Release
-   from /release/<tag>/<name> here, which answers 302 to where GitHub keeps
-   it (releaseAsset, then assetLocation). Its Velopack feed and packages, the
-   signed release record and its lists (VeloUpdate.cs, VeloRecord.cs), and an
-   old launcher's move program (feedMove) all go this way. Only a tag of
-   letters, digits, dots, hyphens and underscores has a route, which every
-   build and main Release has.
+/* THE RELEASE ROUTE (#5608), FOR LAUNCHERS FROM BEFORE #5796. The launcher
+   of today never asks this site for an update: it reads its channel's
+   Releases from GitHub's API itself, with no token (launcher\app\GitHub.cs,
+   Velo.cs), so an update never waits on thornswood.net (Patrick, 11 Nov
+   2026). Two older launchers still come here, and each takes its next
+   update this way:
+   - a Velopack launcher built from #5615 (9 Nov 2026) until #5796 (11 Nov),
+     that is main-build-1.3.20 or dev build-1.3.24 and older. It reads the
+     list of Releases from this site (/api/launcher/releases, releaseList)
+     and fetches each file of a Release, its Velopack feed and packages and
+     the signed release record and its lists, from /release/<tag>/<name>
+     here, which answers 302 to where GitHub keeps it (releaseAsset, then
+     assetLocation);
+   - the launcher from before Velopack, whose move program (feedMove) the
+     feed names at /release/<tag>/<name>, a host that launcher allows.
+   So the routes stay while either may still be installed somewhere (#7248).
+   Only a tag of letters, digits, dots, hyphens and underscores has a route,
+   which every build and main Release has.
 
    Which asset a name is comes from what GitHub already said: the list of the
    newest hundred Releases (releaseList) and the setup programs' Releases
@@ -572,7 +579,8 @@ function assetIds(assets) {
   }
   return files;
 }
-/* The Releases as the launcher reads them (/api/launcher/releases): the
+/* The Releases as a launcher from before #5796 reads them
+   (/api/launcher/releases, THE RELEASE ROUTE above): the
    newest hundred, published, each with its tag, when it was published and
    its files, each file's address this site's Release route. GitHub's own
    shape, so Velopack's GithubSource reads it as it is (VeloUpdate.cs
