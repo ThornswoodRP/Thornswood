@@ -645,6 +645,7 @@
   var footKey = '';        // the same for the foot
   var keyName = 'K';       // SkillsKey as bound, until the front says otherwise (#1919)
   var progRows = [];       // the value half of each progress line on the page, in order
+  var progBars = [];       // and its bar (#7173), or null on a line that has no numbers to fill one
   var progKey = '';        // the same for those lines: their words, so a tick writes once
   var candidate = null;    // who the look prompt's K opened the page on: { id, name, halves: [{ h, k }] } (#1634)
   var endArmed = null;     // an End pressed once, waiting for the second press: { key, at }
@@ -760,12 +761,17 @@
     // so it wins the tie whatever the rest of the row is.
     '#ts-skills .skill.some .pip.given,#ts-skills .skill.full .pip.given,#ts-skills .skill .pip.given{',
     'background:#7fb877;border-color:#9fcf92}',
-    // how far off the next rank is, one line per half, above the tree. Words
-    // and a number, never a bar: a bar with no number on it says nothing.
+    // how far off the next rank is, one line per half, above the tree. Words,
+    // a number and a bar (#7173): the bar shows how far, the words how many,
+    // so neither is drawn without the other.
     '#ts-skills .progress{max-width:680px;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid rgba(198,170,109,.18)}',
     '#ts-skills .prow{display:flex;align-items:baseline;gap:18px;padding:4px 0}',
     '#ts-skills .prow .pk{flex:0 0 150px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;color:rgba(198,170,109,.85)}',
-    '#ts-skills .prow .pv{flex:1 1 auto;min-width:0;font-size:14px;color:#d9cfb4}',
+    '#ts-skills .prow .pv{flex:0 0 auto;min-width:0;font-size:14px;color:#d9cfb4}',
+    '#ts-skills .prow .pbar{flex:1 1 auto;min-width:60px;max-width:260px;height:8px;align-self:center;',
+    'border:1px solid rgba(198,170,109,.45);background:rgba(0,0,0,.35)}',
+    '#ts-skills .prow .pfill{height:100%;background:#c6aa6d}',
+    '#ts-skills .prow .pbar.done .pfill{background:#7fb877}',
     '#ts-skills .plus{width:26px;height:26px;border:1px solid rgba(198,170,109,.55);color:#e9d19b;display:grid;place-items:center;',
     'font-size:18px;line-height:1;background:rgba(0,0,0,.25);cursor:pointer}',
     '#ts-skills .plus.off{opacity:.25;pointer-events:none}',
@@ -1588,11 +1594,16 @@
       if (!p || typeof p !== 'object') continue;
       var next = p.next ? (RANK_NAMES[p.next] || cap(p.next)) : '';
       if (!next) continue;
-      var left = null;
-      if (p.need !== undefined && p.need !== null) left = Number(p.need) - (Number(p.done) || 0);
+      var left = null, bar = null;
+      if (p.need !== undefined && p.need !== null) {
+        var need = Number(p.need), done = Number(p.done) || 0;
+        left = need - done;
+        // The bar (#7173) is the same two numbers: how much of need is done.
+        if (isFinite(need) && need > 0) bar = { done: Math.max(0, Math.min(done, need)), need: need };
+      }
       else if (p.left !== undefined && p.left !== null) left = Number(p.left);
       if (left === null || !isFinite(left)) continue;
-      out.push({ k: labelOf(k),
+      out.push({ k: labelOf(k), next: next, bar: bar,
                  t: left > 0 ? next + ' in ' + left + ' more' + (p.unit ? ' ' + p.unit : '') : next + ' earned' });
     }
     return out;
@@ -1605,7 +1616,7 @@
     somebody who is reading it.
   */
   function progressShape() {
-    return progressLines().map(function (p) { return p.k; });
+    return progressLines().map(function (p) { return p.k + (p.bar ? ' bar' : ''); });
   }
 
   /*
@@ -1849,10 +1860,40 @@
     if (!progRows.length) return;
     var prog = progressLines();
     if (prog.length !== progRows.length) return;   // the shape moved; the rebuild has it
-    var key = JSON.stringify(prog.map(function (p) { return p.t; }));
+    var key = progWords(prog);
     if (key === progKey) return;
     progKey = key;
-    for (var i = 0; i < prog.length; i++) progRows[i].textContent = prog[i].t;
+    for (var i = 0; i < prog.length; i++) {
+      progRows[i].textContent = prog[i].t;
+      if (progBars[i]) fillBar(progBars[i], prog[i]);
+    }
+  }
+  // What decides a write: the words and how full each bar is.
+  function progWords(prog) {
+    return JSON.stringify(prog.map(function (p) { return [p.t, p.bar ? p.bar.done + '/' + p.bar.need : '']; }));
+  }
+  /*
+    One bar toward the next rank (#7173), filled to done of need. It carries
+    the same numbers for a screen reader as the words beside it carry for
+    the eye.
+  */
+  function makeBar(p) {
+    var bar = el('div', 'pbar');
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-label', p.k + ', toward ' + p.next);
+    bar.setAttribute('aria-valuemin', '0');
+    bar.appendChild(el('div', 'pfill'));
+    fillBar(bar, p);
+    return bar;
+  }
+  function fillBar(bar, p) {
+    var b = p.bar;
+    bar.setAttribute('aria-valuemax', String(b.need));
+    bar.setAttribute('aria-valuenow', String(b.done));
+    bar.setAttribute('aria-valuetext', p.t);
+    var whole = b.done >= b.need;
+    if (whole) bar.classList.add('done'); else bar.classList.remove('done');
+    bar.firstChild.style.width = (Math.round(1000 * b.done / b.need) / 10) + '%';
   }
 
   function drawHead() {
@@ -2026,6 +2067,7 @@
     resetOfficeArm();
     elBody.textContent = '';
     progRows = [];   // whatever was on the page is gone with it
+    progBars = [];
     progKey = '';
     var lead = DATA[section] ? DATA[section].lead : '';
     if (section === 'tree') {
@@ -3625,12 +3667,15 @@
         // Kept, so drawProgress can write the number into it without the
         // body being torn down around it.
         var pv = el('div', 'pv', p.t);
+        var bar = p.bar ? makeBar(p) : null;
+        if (bar) prow.appendChild(bar);
         prow.appendChild(pv);
         progRows.push(pv);
+        progBars.push(bar);
         pw.appendChild(prow);
       });
       elBody.appendChild(pw);
-      progKey = JSON.stringify(prog.map(function (p) { return p.t; }));
+      progKey = progWords(prog);
     }
     var cols = el('div', 'cols');
     var pts = mine ? Number(mine.points) || 0 : 0;

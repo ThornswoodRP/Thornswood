@@ -99,6 +99,11 @@ Every rank after that gives 1 free point. It goes in any sub-skill that
 is not full. Rank comes from work, not from gold and not from being here
 a long time. See [Professions](professions.md) for how a rank is earned.
 
+Above the tree on K, one line for each class, half and school that can
+still climb names the next rank and how much work is left, with a bar
+filled to the work done so far. A rank earned and waiting, such as a
+sister half held until a Master takes you on, shows a full bar.
+
 ## Where this is
 
 The fifteen sub-skills, the cap of 5, the per-point numbers, the placed
