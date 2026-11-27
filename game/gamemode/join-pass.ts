@@ -533,9 +533,15 @@
     var now = Date.now();
     var asked = Number(e && e.profileId) || 0;
     var staff = g.__thornswoodStaff;
-    if (!staff || typeof staff.restraintAdmission !== 'function' || !staff.restraintAdmission(asked)) {
+    if (!staff || typeof staff.restraintAdmission !== 'function' || !staff.restraintAdmission(asked, undefined, true)) {
       console.log('[thornswood] login of profile ' + asked + ' refused: staff restraint authority is unavailable or movement awaits staff resolution');
       return 0;
+    }
+    if (staff.accountFreezesActive && staff.accountFreezesActive()) {
+      var proof = loginProof(e, now);
+      if (!proof.ok || proof.p !== asked || proof.why) return 0;
+      var pass = readPass(e.proof.pass, passKey(now), now, serverName());
+      if (!pass.ok || !staff.restraintAdmission(asked, pass.d)) return 0;
     }
     if (!e || !e.proof) {
       console.log('[thornswood] login of profile ' + asked + ' on user ' + (e && e.userId) +

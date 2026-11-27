@@ -15241,9 +15241,15 @@ log('gamemode loaded:',
     var now = Date.now();
     var asked = Number(e && e.profileId) || 0;
     var staff = g.__thornswoodStaff;
-    if (!staff || typeof staff.restraintAdmission !== 'function' || !staff.restraintAdmission(asked)) {
+    if (!staff || typeof staff.restraintAdmission !== 'function' || !staff.restraintAdmission(asked, undefined, true)) {
       console.log('[thornswood] login of profile ' + asked + ' refused: staff restraint authority is unavailable or movement awaits staff resolution');
       return 0;
+    }
+    if (staff.accountFreezesActive && staff.accountFreezesActive()) {
+      var proof = loginProof(e, now);
+      if (!proof.ok || proof.p !== asked || proof.why) return 0;
+      var pass = readPass(e.proof.pass, passKey(now), now, serverName());
+      if (!pass.ok || !staff.restraintAdmission(asked, pass.d)) return 0;
     }
     if (!e || !e.proof) {
       console.log('[thornswood] login of profile ' + asked + ' on user ' + (e && e.userId) +
@@ -32724,7 +32730,8 @@ module.exports = {
     if (ai.isDead !== false) { return unavailable; }
     var frozen = g.__thornswoodStaffState && g.__thornswoodStaffState.frozen;
     if (!frozen || typeof frozen !== 'object' || Array.isArray(frozen)) { return unavailable; }
-    if (frozen[profileId]) {
+    var staff = g.__thornswoodStaff;
+    if (staff && staff.frozenFor ? staff.frozenFor(profileId) : frozen[profileId]) {
       return { line: 'Staff have you frozen in place, so you cannot ride. Nothing was taken.' };
     }
     return { line: '', identity: identity };
@@ -45728,6 +45735,7 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // PLAYER_WORDS for the same reason. See the staff block.
                '/kick', '/freeze', '/unfreeze', '/bring', '/silence',
                '/unsilence', '/warn', '/spawnat', '/ban', '/unban', '/note',
+               '/freezeaccount', '/unfreezeaccount', '/silenceaccount', '/unsilenceaccount',
                // One character or the whole account, and a character killed
                // for good (#1010).
                '/banaccount', '/unbanaccount', '/pk',
@@ -47808,7 +47816,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       // The listing above answers whether or not the sweep found anybody. The
       // move is the part that needs a character to move.
       if (!needCharacter()) { return; }
-      if (staffLogTp && staffLogTp.state && staffLogTp.state.frozen[profileId]) {
+      if (staffLogTp && (staffLogTp.frozenFor ? staffLogTp.frozenFor(profileId) : staffLogTp.state && staffLogTp.state.frozen[profileId])) {
         toProfile(profileId, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
         return;
       }
@@ -64556,7 +64564,8 @@ module.exports = {
       return;
     }
     var frozen = g.__thornswoodStaffState && g.__thornswoodStaffState.frozen;
-    if (frozen && frozen[pid]) {
+    var staff = g.__thornswoodStaff;
+    if (staff && staff.frozenFor ? staff.frozenFor(pid) : frozen && frozen[pid]) {
       tell(pid, 'Staff have you frozen in place, so /stuck cannot move you. Wait here and ' +
                 'somebody will talk to you.');
       slog('profile ' + pid + ' refused: frozen by staff');
@@ -64685,6 +64694,8 @@ module.exports = {
     { role: 'playtester', syntax: '/where', text: 'Read your current location and facing.' },
     { role: 'staff', syntax: '/silence <person> [length] [why], /unsilence <person>', text: 'Silence or restore speech.' },
     { role: 'staff', syntax: '/freeze <person> [why], /unfreeze <person>', text: 'Hold someone in place or release them.' },
+    { role: 'staff', syntax: '/freezeaccount <person> [why], /unfreezeaccount <person>', text: 'Account freeze: holds the original character and refuses alternate admission. Unavailable unless account mode is enabled and ready.' },
+    { role: 'staff', syntax: '/silenceaccount <person> [length] [why], /unsilenceaccount <person>', text: 'Account speech restraint across character changes. Unavailable unless account mode is enabled and ready.' },
     { role: 'staff', syntax: '/goto <person>, /bring <person>, /tp <person> <place>', text: 'Move yourself to someone, or move them.' },
     { role: 'staff', syntax: '/give <person> <item> [count], /spawnat <person> <creature> [count]', text: 'Give items or spawn nearby.' },
     { role: 'staff', syntax: '/warn <person> <why>, /kick <person> [why]', text: 'Warn someone or end their session.' },
@@ -64897,6 +64908,7 @@ module.exports = {
 
   var WORDS_STAFF = ['/kick', '/freeze', '/unfreeze', '/bring', '/goto',
                      '/silence', '/unsilence', '/warn', '/spawnat',
+                     '/freezeaccount', '/unfreezeaccount', '/silenceaccount', '/unsilenceaccount',
                      '/ban', '/unban', '/note', '/banaccount', '/unbanaccount', '/pk', '/unpk',
                      '/hurt', '/despawn', '/craftstaff'];
   var DESPAWN_REACH = 1500;         // units: about 21 m, the creature beside or near you
@@ -64938,6 +64950,7 @@ module.exports = {
   function currentRestraints() { return g.__thornswoodRestraintGeneration === restraintGeneration; }
   function object(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
   function profileKey(k) { return /^[1-9][0-9]*$/.test(k) && Number.isSafeInteger(Number(k)); }
+  function accountKey(k) { return typeof k === 'string' && /^[0-9]{1,32}$/.test(k); }
   function vector(v) { return Array.isArray(v) && v.length === 3 && v.every(function (n) { return typeof n === 'number' && Number.isFinite(n); }); }
   function anchor(v) {
     if (!object(v) || typeof v.desc !== 'string' || !v.desc || v.desc.length > 512 ||
@@ -64955,12 +64968,12 @@ module.exports = {
     return out;
   }
   function restraintDocument(v) {
-    if (!object(v) || v.version !== 1 || !Number.isSafeInteger(v.revision) || v.revision < 0 ||
+    if (!object(v) || (v.version !== 1 && v.version !== 2) || !Number.isSafeInteger(v.revision) || v.revision < 0 ||
         !object(v.frozen) || !object(v.silenced)) { throw new Error('invalid restraint book'); }
     var wipes = v.clearedWipes === undefined ? [] : v.clearedWipes;
     if (!Array.isArray(wipes) || wipes.some(function (id) { return typeof id !== 'string' || !/^[0-9a-f]{32}$/.test(id); }) ||
         new Set(wipes).size !== wipes.length) { throw new Error('invalid freeze-wipe receipts'); }
-    var out = { version: 1, revision: v.revision, frozen: {}, silenced: {}, clearedWipes: wipes.slice() };
+    var out = { version: v.version, revision: v.revision, frozen: {}, silenced: {}, clearedWipes: wipes.slice() };
     Object.keys(v.frozen).forEach(function (k) {
       if (!profileKey(k)) { throw new Error('invalid frozen profile'); }
       out.frozen[k] = anchor(v.frozen[k]);
@@ -64973,7 +64986,30 @@ module.exports = {
       }
       out.silenced[k] = { until: s.until, by: s.by };
     });
+    if (v.version === 1 && (v.accountFrozen !== undefined || v.accountSilenced !== undefined)) throw new Error('account controls require version 2');
+    if (v.version === 2) {
+      if (!object(v.accountFrozen) || !object(v.accountSilenced)) throw new Error('invalid account control maps');
+      out.accountFrozen = {}; out.accountSilenced = {};
+      Object.keys(v.accountFrozen).forEach(function (account) {
+        var row = v.accountFrozen[account];
+        if (!accountKey(account) || !object(row) || !profileKey(String(row.profile))) throw new Error('invalid account freeze');
+        out.accountFrozen[account] = { profile: Number(row.profile), anchor: anchor(row.anchor) };
+      });
+      Object.keys(v.accountSilenced).forEach(function (account) {
+        var row = v.accountSilenced[account];
+        if (!accountKey(account) || !object(row) || !profileKey(String(row.profile)) ||
+            !Number.isSafeInteger(row.until) || row.until <= 0 || !Number.isSafeInteger(row.by) || row.by <= 0) throw new Error('invalid account silence');
+        out.accountSilenced[account] = { profile: Number(row.profile), until: row.until, by: row.by };
+      });
+    }
     return out;
+  }
+  function restraintSnapshot(revision) {
+    var doc = { version: 1, revision: revision, frozen: state.frozen, silenced: state.silenced, clearedWipes: restraintWipes };
+    if (Object.keys(state.accountFrozen || {}).length || Object.keys(state.accountSilenced || {}).length) {
+      doc.version = 2; doc.accountFrozen = state.accountFrozen; doc.accountSilenced = state.accountSilenced;
+    }
+    return doc;
   }
   function restraintUnavailable(why) {
     restraintsReady = false;
@@ -64994,6 +65030,7 @@ module.exports = {
   }
   function acceptRestraints(doc, bytes) {
     state.frozen = doc.frozen; state.silenced = doc.silenced;
+    state.accountFrozen = doc.accountFrozen || {}; state.accountSilenced = doc.accountSilenced || {};
     restraintRevision = doc.revision; restraintBytes = bytes; restraintsReady = true;
     g.__thornswoodRestraintBookKnown = restraintFile;
     restraintWipes = doc.clearedWipes;
@@ -65023,8 +65060,11 @@ module.exports = {
     if (!restraintReady()) { return false; }
     try {
       if (readRestraintBytes() !== restraintBytes) { throw new Error('restraint book changed outside its current writer'); }
-      var doc = restraintDocument({ version: 1, revision: restraintRevision + 1, frozen: state.frozen, silenced: state.silenced, clearedWipes: restraintWipes });
+      var doc = restraintDocument(restraintSnapshot(restraintRevision + 1));
       change(doc);
+      if (Object.keys(doc.accountFrozen || {}).length || Object.keys(doc.accountSilenced || {}).length) {
+        doc.version = 2; doc.accountFrozen = doc.accountFrozen || {}; doc.accountSilenced = doc.accountSilenced || {};
+      } else { doc.version = 1; delete doc.accountFrozen; delete doc.accountSilenced; }
       doc = restraintDocument(doc);
       var next = encodeRestraints(doc);
       var writeError = null;
@@ -65053,15 +65093,17 @@ module.exports = {
       var unseen = wipes.filter(function (id) { return restraintWipes.indexOf(id) === -1; });
       var freezes = Object.keys(state.frozen).filter(function (pid) { return unseen.length || who.profile(pid); });
       var silences = Object.keys(state.silenced).filter(function (pid) { return who.profile(pid); });
+      var accountFreezes = unseen.length ? Object.keys(state.accountFrozen) : [];
       var saved = true;
-      if (freezes.length || silences.length || unseen.length) {
+      if (freezes.length || silences.length || unseen.length || accountFreezes.length) {
         saved = saveRestraints(function (doc) {
           freezes.forEach(function (pid) { delete doc.frozen[pid]; });
           silences.forEach(function (pid) { delete doc.silenced[pid]; });
+          accountFreezes.forEach(function (account) { delete doc.accountFrozen[account]; });
           doc.clearedWipes = doc.clearedWipes.concat(unseen);
         });
       }
-      return { saved: saved, counts: { freezes: freezes.length, silences: silences.length, wipes: unseen.length } };
+      return { saved: saved, counts: { freezes: freezes.length + accountFreezes.length, silences: silences.length, wipes: unseen.length } };
     });
   }
   // Bans made here, until the door's next list carries them; and who is
@@ -65285,7 +65327,8 @@ module.exports = {
     } catch (e) { return false; }
   }
   function holdPendingMovement(who, caller) {
-    tell(caller, 'Movement may already have occurred, but its frozen position could not be confirmed and saved. The character is held out until staff check the problem and explicitly /unfreeze ' + who.pid + '.');
+    var release = accountFreeze(who.pid) ? '/unfreezeaccount ' + who.pid + (state.frozen[who.pid] ? ' and /unfreeze ' + who.pid : '') : '/unfreeze ' + who.pid;
+    tell(caller, 'Movement may already have occurred, but its frozen position could not be confirmed and saved. The character is held out until staff check the problem and explicitly ' + release + '.');
     log('staff restraints: profile ' + who.pid + ' has pending movement; no teleport retry or rollback was requested');
     var sentence = 'A staff move could not be confirmed and saved. Staff must resolve your frozen character before you return.';
     if (!sameMovementIdentity(who)) { return; }
@@ -65304,13 +65347,15 @@ module.exports = {
     var frozen, who;
     if (!currentRestraints()) { tell(caller, 'The staff module was reloaded. Use the current command again.'); return false; }
     if (!restraintReady()) { tell(caller, 'Staff restraint authority is unavailable. No movement was requested.'); return false; }
-    frozen = state.frozen[movedPid];
+    frozen = frozenFor(movedPid);
     if (frozen) {
       if (frozen.pending) { tell(caller, 'That frozen character already has unresolved movement. Check the problem and explicitly /unfreeze ' + movedPid + '.'); return false; }
       try { who = movementIdentity(movedPid, mover); }
       catch (e) { tell(caller, 'The server could not verify that character. No movement was requested.'); return false; }
       if (!requireRestraintSave(caller, function (doc) {
-        doc.frozen[movedPid].pending = { desc: dest.desc, pos: dest.pos.slice(), rot: dest.rot.slice() };
+        frozenAnchors(movedPid, doc).forEach(function (value) {
+          value.pending = { desc: dest.desc, pos: dest.pos.slice(), rot: dest.rot.slice() };
+        });
       })) { return false; }
       if (!sameMovementIdentity(who)) { holdPendingMovement(who, caller); return false; }
     }
@@ -65319,7 +65364,9 @@ module.exports = {
     var observed = placeOf(mover);
     if (frozen) {
       if (!observed || !sameMovementIdentity(who) || !saveRestraints(function (doc) {
-        observed.by = frozen.by; doc.frozen[movedPid] = observed;
+        frozenAnchors(movedPid, doc).forEach(function (value) {
+          value.desc = observed.desc; value.pos = observed.pos.slice(); value.rot = observed.rot.slice(); delete value.pending;
+        });
       })) { holdPendingMovement(who, caller); return false; }
     }
     if (!samePlace(observed, dest)) {
@@ -65335,39 +65382,174 @@ module.exports = {
   }
 
   // ------------------------------------------------------------ silence --
+  function accountOnRecord(pid) {
+    try { var value = g.__thornswoodAccountOf && g.__thornswoodAccountOf(pid); return accountKey(value) ? value : ''; }
+    catch (e) { return ''; }
+  }
+  function verifiedAccount(pid) {
+    var jp = g.__thornswoodJoinPass, seen = g.__thornswoodPassSeen;
+    try {
+      var pass = seen && seen.passes && seen.passes[pid];
+      return jp && jp.proven(pid, Date.now()) && pass && accountKey(pass.d) ? pass.d : '';
+    } catch (e) { return ''; }
+  }
+  function identityAccount(pid) { return verifiedAccount(pid) || accountOnRecord(pid); }
+  function accountFreeze(pid, doc) {
+    var account = identityAccount(pid), entries = (doc || state).accountFrozen || {};
+    var row = account && entries[account];
+    return row && row.profile === Number(pid) ? row.anchor : null;
+  }
+  function frozenFor(pid) { return accountFreeze(pid) || state.frozen[pid] || null; }
+  function frozenAnchors(pid, doc) {
+    var values = [], character = doc.frozen[pid], account = accountFreeze(pid, doc);
+    if (character) values.push(character);
+    if (account) values.push(account);
+    return values;
+  }
+  function accountFreezesActive() { return Object.keys(state.accountFrozen || {}).length > 0; }
+  function restraintAdmission(pid, account, beforeProof) {
+    if (!restraintReady() || (state.frozen[pid] && state.frozen[pid].pending)) return false;
+    if (beforeProof || !accountFreezesActive()) return true;
+    var owner = account === undefined ? identityAccount(pid) : account;
+    if (!accountKey(owner)) return false;
+    var row = state.accountFrozen[owner];
+    return !row || (row.profile === Number(pid) && !row.anchor.pending);
+  }
   function silencedFor(pid) {
-    var s = state.silenced[pid];
-    if (!s) { return 0; }
-    if (Date.now() >= s.until) { return 0; }
-    return Math.max(1, Math.ceil((s.until - Date.now()) / 60000));
+    var now = Date.now(), s = state.silenced[pid], until = s ? s.until : 0;
+    var account = identityAccount(pid), entries = state.accountSilenced || {};
+    if (account && entries[account]) until = Math.max(until, entries[account].until);
+    if (!account) Object.keys(entries).forEach(function (key) { until = Math.max(until, entries[key].until); });
+    return until > now ? Math.max(1, Math.ceil((until - now) / 60000)) : 0;
+  }
+  var accountVoiceAt = 0, accountVoiceReady = false;
+  function accountModeReady() {
+    return settings().thornswoodAccountRestraints === true && accountVoiceReady &&
+      Date.now() - accountVoiceAt <= SILENCE_PUSH_MS * 2 &&
+      online().every(function (actor) { return !!verifiedAccount(profileOf(actor)); });
+  }
+
+  function accountCommand(word, words, pid, me) {
+    var clearing = word === '/unfreezeaccount' || word === '/unsilenceaccount';
+    var freezing = word === '/freezeaccount' || word === '/unfreezeaccount';
+    var explicit = clearing && /^account:[0-9]{1,32}$/.test(words[0] || '');
+    var them = explicit ? { pid: 0, name: 'Account', rest: words.slice(1) } : takePerson(words);
+    var mine = verifiedAccount(pid), owner = explicit ? words[0].slice(8) :
+      (them.actorId ? verifiedAccount(them.pid) : accountOnRecord(them.pid));
+    if (!mine || !owner) { tell(pid, 'A verified account identity is unavailable. Nothing changed.'); return true; }
+    if (mine === owner) { tell(pid, 'You cannot change a restraint on your account.'); return true; }
+    var entries = freezing ? state.accountFrozen : state.accountSilenced;
+    var previous = entries[owner];
+    if (!clearing && !accountModeReady()) { tell(pid, 'Account restraint mode is unavailable or not ready. Nothing changed.'); return true; }
+    if (clearing && !previous) { tell(pid, 'That account has no ' + (freezing ? 'freeze' : 'silence') + '.'); return true; }
+    var value, mins = SILENCE_DEFAULT_MIN, reason = (them.rest || []).join(' ').trim();
+    if (!clearing && freezing) {
+      if (!them.actorId) { tell(pid, 'The original character must be online to freeze its account.'); return true; }
+      if (previous && (previous.profile !== them.pid || previous.anchor.pending)) {
+        tell(pid, 'Release the existing account freeze before changing its original character or unresolved movement.'); return true;
+      }
+      var spot = placeOf(them.actorId);
+      if (!spot) { tell(pid, 'The original character position is unavailable. Nothing changed.'); return true; }
+      spot.by = pid; value = { profile: them.pid, anchor: spot };
+    } else if (!clearing) {
+      var rest = them.rest || [];
+      if (rest.length) {
+        var length = banLength(rest[0]);
+        if (length > 0 && Number.isFinite(length)) { mins = Math.min(SILENCE_MAX_MIN, length); reason = rest.slice(1).join(' ').trim(); }
+        else if (/^[+-]?(?:\d|\.)/.test(rest[0]) || length === 0) {
+          tell(pid, 'That silence length is not valid. Nothing changed.'); return true;
+        }
+      }
+      value = { profile: them.pid, until: Date.now() + mins * 60000, by: pid };
+    }
+    if (!freezing) {
+      var accounts = {}, profiles = {};
+      Object.keys(state.accountSilenced).forEach(function (key) { accounts[key] = state.accountSilenced[key].until; });
+      Object.keys(state.silenced).forEach(function (key) { profiles[key] = state.silenced[key].until; });
+      if (clearing) delete accounts[owner]; else accounts[owner] = value.until;
+      if (Buffer.byteLength(JSON.stringify({ profiles: profiles, accountProtocol: 1, accountRevision: restraintRevision + 1, accounts: accounts })) > 20000) {
+        tell(pid, 'The voice restraint list is full. Nothing changed.'); return true;
+      }
+    }
+    if (!requireRestraintSave(pid, function (doc) {
+      if (!doc.accountFrozen) doc.accountFrozen = {};
+      if (!doc.accountSilenced) doc.accountSilenced = {};
+      var target = freezing ? doc.accountFrozen : doc.accountSilenced;
+      if (clearing) delete target[owner]; else target[owner] = value;
+    })) return true;
+    function completed(ok) {
+      if (!ok) {
+        tell(pid, 'The account silence change was saved; voice confirmation is pending. Do not repeat the command.');
+        record(word.slice(1) + 'pending', pid, me, them.pid || previous.profile, them.name, reason, clearing ? 0 : mins);
+        return;
+      }
+      var remains = them.pid && (freezing ? frozenFor(them.pid) : silencedFor(them.pid));
+      tell(pid, clearing ? ('Account ' + (freezing ? 'freeze' : 'silence') + ' lifted.' + (remains ? ' The character restraint still applies.' : '')) :
+        (freezing ? 'Froze ' + them.name + "'s account. Other characters on it cannot enter." : 'Silenced ' + them.name + "'s account for " + mins + ' minutes.'));
+      record(word.slice(1), pid, me, them.pid || previous.profile, them.name, reason, freezing || clearing ? 0 : mins);
+      online().forEach(function (actor) {
+        var target = profileOf(actor);
+        if (identityAccount(target) !== owner) return;
+        var held = freezing ? frozenFor(target) : silencedFor(target);
+        tell(target, clearing ? ('Staff lifted the account ' + (freezing ? 'freeze' : 'silence') +
+          (held ? '; your character restraint still applies.' : '.')) :
+          (freezing ? 'Staff froze your account. This character stays here; your other characters cannot enter.' :
+            'Staff silenced your account for ' + mins + ' minutes. Voice and speech stop across your characters.'));
+      });
+    }
+    if (freezing) { completed(true); freezeTick(); } else pushSilenced(completed);
+    return true;
   }
 
   /* The whole list to the voice service, which holds back their lines. */
-  function pushSilenced() {
-    if (!http || !restraintReady()) { return; }
+  function pushSilenced(confirmed) {
+    var finished = false;
+    function finish(ok) { if (finished) return; finished = true; if (confirmed) confirmed(ok); }
+    if (!http || !restraintReady()) { finish(false); return; }
     var now = Date.now();
     var list = {};
     var expired = Object.keys(state.silenced).filter(function (k) { return state.silenced[k].until <= now; });
-    if (expired.length) {
-      saveRestraints(function (doc) { expired.forEach(function (k) { delete doc.silenced[k]; }); });
+    var expiredAccounts = Object.keys(state.accountSilenced || {}).filter(function (k) { return state.accountSilenced[k].until <= now; });
+    if (expired.length || expiredAccounts.length) {
+      saveRestraints(function (doc) {
+        expired.forEach(function (k) { delete doc.silenced[k]; });
+        expiredAccounts.forEach(function (k) { delete doc.accountSilenced[k]; });
+      });
       // Pruning can discover a changed or unreadable book. Keep voice's last
       // confirmed list until the private authority can be read again.
-      if (!restraintsReady) { return; }
+      if (!restraintsReady) { finish(false); return; }
     }
     for (var k in state.silenced) {
       if (!Object.prototype.hasOwnProperty.call(state.silenced, k)) { continue; }
       if (state.silenced[k].until > now) { list[k] = state.silenced[k].until; }
     }
-    var body = JSON.stringify({ profiles: list });
+    var accounts = {};
+    Object.keys(state.accountSilenced || {}).forEach(function (key) { accounts[key] = state.accountSilenced[key].until; });
+    var revision = restraintRevision;
+    var body = JSON.stringify({ profiles: list, accountProtocol: 1, accountRevision: revision, accounts: accounts });
+    if (Buffer.byteLength(body) > 20000) { accountVoiceReady = false; finish(false); return; }
     try {
       var req = http.request({
         host: '127.0.0.1', port: voicePort(), path: '/silenced', method: 'POST', timeout: 2000,
         headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }
-      }, function (res) { try { res.resume(); } catch (e) { } });
-      req.on('error', function () { });
-      req.on('timeout', function () { req.destroy(); });
+      }, function (res) {
+        var reply = '', size = 0;
+        if (res.statusCode !== 200) { accountVoiceReady = false; try { res.resume(); } catch (e) { } finish(false); return; }
+        res.on('data', function (chunk) { size += chunk.length; if (size <= 4096) reply += chunk; });
+        res.on('end', function () {
+          if (!currentRestraints()) { finish(false); return; }
+          var value = null; try { value = JSON.parse(reply); } catch (e) { }
+          var applied = size <= 4096 && value && value.accountProtocol === 1 && value.accountRevision === revision;
+          accountVoiceReady = applied && value.accountReady === true;
+          if (accountVoiceReady) accountVoiceAt = Date.now();
+          finish(!!applied && restraintRevision === revision);
+        });
+        res.on('error', function () { accountVoiceReady = false; finish(false); });
+      });
+      req.on('error', function () { accountVoiceReady = false; finish(false); });
+      req.on('timeout', function () { accountVoiceReady = false; finish(false); req.destroy(); });
       req.end(body);
-    } catch (e) { }
+    } catch (e) { accountVoiceReady = false; finish(false); }
   }
 
   // ------------------------------------------------------------- freeze --
@@ -65376,12 +65558,23 @@ module.exports = {
   function freezeTick() {
     if (!currentRestraints()) { return; }
     var now = Date.now();
-    for (var k in state.frozen) {
-      if (!Object.prototype.hasOwnProperty.call(state.frozen, k)) { continue; }
-      var f = state.frozen[k];
+    var players = online();
+    for (var i = 0; i < players.length; i++) {
+      var a = players[i], k = profileOf(a), account = identityAccount(k);
+      var scope = account && (state.accountFrozen || {})[account];
+      if (accountFreezesActive() && (!account || (scope && scope.profile !== k))) {
+        var who;
+        try { who = movementIdentity(k, a); } catch (e) { continue; }
+        var sentence = 'An account freeze prevents this character from entering. Staff must release the account.';
+        tell(k, sentence);
+        if (!sameMovementIdentity(who)) continue;
+        try { sessionEnds(k, sentence); } catch (e) { log('staff restraints: account-freeze session notice failed'); }
+        if (sameMovementIdentity(who)) { try { mp.kick(who.user); } catch (e) { } }
+        continue;
+      }
+      var f = frozenFor(k);
+      if (!f) continue;
       if (f.pending) { continue; }
-      var a = actorFor(Number(k));
-      if (!a) { continue; }
       var here = placeOf(a);
       if (!here) { continue; }
       var dx = here.pos[0] - f.pos[0], dy = here.pos[1] - f.pos[1], dz = here.pos[2] - f.pos[2];
@@ -65462,7 +65655,7 @@ module.exports = {
   function doAimed(a, pid, actorId, me, look) {
     var them = a.them;
     if (!them.actorId) { tell(pid, them.why); return true; }
-    if (a.kind === 'tp' && them.pid === pid && state.frozen[pid]) {
+    if (a.kind === 'tp' && them.pid === pid && frozenFor(pid)) {
       tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
       return true;
     }
@@ -65966,11 +66159,11 @@ module.exports = {
     }
 
     var me = actorId ? nameOf(actorId) : ('profile ' + pid);
-    if (['/freeze', '/unfreeze', '/silence', '/unsilence'].indexOf(word) !== -1 && !restraintReady()) {
+    if (['/freeze', '/unfreeze', '/silence', '/unsilence', '/freezeaccount', '/unfreezeaccount', '/silenceaccount', '/unsilenceaccount'].indexOf(word) !== -1 && !restraintReady()) {
       tell(pid, 'Staff restraint authority is unavailable. The private restraint book must be repaired before changing it.');
       return true;
     }
-    if (word === '/goto' && state.frozen[pid]) {
+    if (word === '/goto' && frozenFor(pid)) {
       tell(pid, 'Staff have you frozen in place, so you cannot teleport yourself. Ask another staff member to move or release you.');
       return true;
     }
@@ -66023,6 +66216,9 @@ module.exports = {
       return doAimed(aimed(word, words), pid, actorId, me, look);
     }
     if (word === '/unpk') { return unpk(words, pid, me); }
+    if (['/freezeaccount', '/unfreezeaccount', '/silenceaccount', '/unsilenceaccount'].indexOf(word) !== -1) {
+      return accountCommand(word, words, pid, me);
+    }
     if (word === '/ban' || word === '/unban' || word === '/note' ||
         word === '/banaccount' || word === '/unbanaccount' || word === '/pk') {
       return banOrNote(word, words, pid, me, takePerson(words));
@@ -66039,9 +66235,10 @@ module.exports = {
       if (!state.silenced[them.pid]) { tell(pid, them.name + ' is not silenced.'); return true; }
       if (!requireRestraintSave(pid, function (doc) { delete doc.silenced[them.pid]; })) { return true; }
       pushSilenced();
-      tell(them.pid, 'Staff have let you speak again.');
-      tell(pid, them.name + ' can speak again.');
-      record('unsilence', pid, me, them.pid, them.name, '', 0);
+      var stillSilenced = silencedFor(them.pid);
+      tell(them.pid, stillSilenced ? 'Your account silence still applies.' : 'Staff have let you speak again.');
+      tell(pid, stillSilenced ? 'The account silence still applies.' : them.name + ' can speak again.');
+      record(stillSilenced ? 'unsilencepartial' : 'unsilence', pid, me, them.pid, them.name, '', 0);
       return true;
     }
     if (word === '/unfreeze') {
@@ -66049,9 +66246,10 @@ module.exports = {
       if (them.pid === pid) { tell(pid, 'That is you.'); return true; }
       if (!state.frozen[them.pid]) { tell(pid, them.name + ' is not frozen.'); return true; }
       if (!requireRestraintSave(pid, function (doc) { delete doc.frozen[them.pid]; })) { return true; }
-      tell(them.pid, 'Staff have let you go. You can move again.');
-      tell(pid, them.name + ' can move again.');
-      record('unfreeze', pid, me, them.pid, them.name, '', 0);
+      var stillFrozen = frozenFor(them.pid);
+      tell(them.pid, stillFrozen ? 'Your account freeze still applies.' : 'Staff have let you go. You can move again.');
+      tell(pid, stillFrozen ? 'The account freeze still applies.' : them.name + ' can move again.');
+      record(stillFrozen ? 'unfreezepartial' : 'unfreeze', pid, me, them.pid, them.name, '', 0);
       return true;
     }
     if (word === '/silence') {
@@ -66176,7 +66374,7 @@ module.exports = {
     command: command, find: find, takePerson: takePerson, unproven: unproven, record: record,
     authorizeTool: authorizeTool, tell: tell, nameOf: nameOf, actorFor: actorFor,
     freezeTick: freezeTick, pushSilenced: pushSilenced, silencedFor: silencedFor,
-    restraintAdmission: function (pid) { return restraintReady() && !(state.frozen[pid] && state.frozen[pid].pending); },
+    restraintAdmission: restraintAdmission, accountFreezesActive: accountFreezesActive, frozenFor: frozenFor,
     banSweep: banSweep, banLength: banLength, bansNow: bansNow, pkNow: pkNow,
     state: state, REFUSED: REFUSED, WORDS: WORDS_STAFF
   };
@@ -67677,7 +67875,7 @@ function createNpcMerchantPurses(api,data,storage) {
       }
       var from=place(actor),to=place(person.actorId);
       if(!staff.state||!staff.state.frozen){throw new Error('Staff restraint state is unavailable.');}
-      if(staff.state.frozen[pid]){staff.tell(pid,'Staff have frozen you in place.');return true;}
+      if(staff.frozenFor?staff.frozenFor(pid):staff.state.frozen[pid]){staff.tell(pid,'Staff have frozen you in place.');return true;}
       var cuffs=g.__thornswoodCuffs,property=g.__thornswoodProperty,stuck=g.__thornswoodStuck;
       if(!cuffs||!cuffs.cuffedBy||!property||!property.lockedJailHere||!stuck||!stuck.teleported){
         throw new Error('Movement safeguards are unavailable.');
@@ -72785,7 +72983,8 @@ function questItemBlocked(baseId) {
   function movementRefusal(pid, actor) {
     var state = g.__thornswoodStaffState;
     if (!state || !state.frozen) { return 'The staff restraint state is unavailable.'; }
-    if (state.frozen[pid]) { return 'Staff have frozen you in place.'; }
+    var staff = g.__thornswoodStaff;
+    if (staff && staff.frozenFor ? staff.frozenFor(pid) : state.frozen[pid]) { return 'Staff have frozen you in place.'; }
     // The jail helper treats an unreadable cell as outside jail. Establish
     // a readable authoritative location before asking that existing helper.
     place(actor);

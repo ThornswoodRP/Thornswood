@@ -519,7 +519,8 @@
     if (ai.isDead !== false) { return unavailable; }
     var frozen = g.__thornswoodStaffState && g.__thornswoodStaffState.frozen;
     if (!frozen || typeof frozen !== 'object' || Array.isArray(frozen)) { return unavailable; }
-    if (frozen[profileId]) {
+    var staff = g.__thornswoodStaff;
+    if (staff && staff.frozenFor ? staff.frozenFor(profileId) : frozen[profileId]) {
       return { line: 'Staff have you frozen in place, so you cannot ride. Nothing was taken.' };
     }
     return { line: '', identity: identity };

@@ -33,8 +33,15 @@ function boot(w, prior) {
   class Clock extends Date { static now() { return w.now; } }
   function request(opts, cb) {
     const req = { on() { return req; }, destroy() {}, end(body) {
-      if (opts.path === '/silenced') r.posts.push(JSON.parse(body));
-      if (cb) cb({ resume() {}, on() {} });
+      const doc = opts.path === '/silenced' ? JSON.parse(body) : null;
+      if (doc) r.posts.push(doc);
+      const handlers = {};
+      if (cb) cb({ statusCode: w.voiceFailure ? 503 : 200, resume() {}, on(event, fn) { handlers[event] = fn; } });
+      if (doc && w.voiceProtocol === 1) {
+        const ack = { accountProtocol: 1, accountRevision: doc.accountRevision, accountReady: w.voiceBound !== false };
+        if (handlers.data) handlers.data(Buffer.from(JSON.stringify(ack)));
+        if (handlers.end) handlers.end();
+      }
     } };
     return req;
   }
@@ -69,6 +76,7 @@ function boot(w, prior) {
       if (w.noticeFault && pid === (w.noticeFaultPid || PID)) throw new Error('injected notice transport failure');
       r.told.push({ pid, text });
     },
+    __thornswoodAccountOf: pid => (w.accounts || {})[pid] || '',
     __thornswoodSayLine: (pid, message) => {
       r.sessionEvents.push(['line', pid, message.end]);
       if (w.afterEnd) w.afterEnd();
@@ -76,7 +84,7 @@ function boot(w, prior) {
     mp: {
       getServerSettings: () => {
         if (w.settingsFault) throw new Error('injected unavailable server settings');
-        return { privDir: w.dir, forBotDir: path.join(w.dir, 'for-bot') };
+        return { privDir: w.dir, forBotDir: path.join(w.dir, 'for-bot'), thornswoodAccountRestraints: w.accountMode === true };
       },
       get(id, key) {
         if (!id && key === 'onlinePlayers') return w.online.slice();
@@ -132,6 +140,27 @@ function boot(w, prior) {
     return r.told.slice(before).filter(x => x.pid === PID).map(x => x.text).join('\n');
   };
   return r;
+}
+const ACCOUNT = '900000000000000001', STAFF_ACCOUNT = '900000000000000002', OTHER_ACCOUNT = '900000000000000003';
+const ALT = 2003, OTHER = 3003;
+function accountWorld(options = {}) {
+  const w = Object.assign(fresh(), { accountMode: true, voiceProtocol: 1,
+    accounts: { [PID]: STAFF_ACCOUNT, [TARGET]: ACCOUNT, [ALT]: ACCOUNT, [OTHER]: OTHER_ACCOUNT } }, options);
+  fs.writeFileSync(path.join(w.dir, 'door.json'), JSON.stringify({ passKey: 'fixture-only-4640-pass-key' }));
+  const r = boot(w);
+  for (const pid of [PID, TARGET, ALT, OTHER]) r.box.__thornswoodPassSeen.passes[pid] = { x: w.now + 3600000, d: w.accounts[pid] };
+  return { w, r };
+}
+function loginAccount(w, pid, account) {
+  const crypto = require('node:crypto');
+  const key = 'fixture-only-4640-pass-key';
+  fs.writeFileSync(path.join(w.dir, 'door.json'), JSON.stringify({ passKey: key }));
+  const payload = Buffer.from(JSON.stringify({ p: pid, d: account, x: w.now + 60000, i: w.now, s: 'main' })).toString('base64url');
+  const id = crypto.createHmac('sha256', key).update('jp1.' + payload).digest('base64url');
+  const pass = 'jp1.' + payload + '.' + id, nonce = 'fixture-connection-nonce';
+  const own = crypto.createHmac('sha256', key).update('jpk1.' + id).digest('base64url');
+  return { userId: 2, profileId: pid, nonce, proof: { pass,
+    mac: crypto.createHmac('sha256', own).update('jlp1.' + nonce).digest('base64url') } };
 }
 try {
   test('freeze and remaining silence survive a genuinely cold staff reload before first voice publication', () => {
@@ -488,6 +517,171 @@ try {
     w.fault = ''; const three = boot(w);
     assert.equal(three.box.__thornswoodStaffState.frozen[TARGET], undefined);
     assert.equal(three.box.__thornswoodStaff.silencedFor(TARGET), 30);
+  });
+  test('account controls are unavailable without explicit opt-in and compatible voice', () => {
+    for (const options of [{ accountMode: false }, { voiceProtocol: 0 }, { voiceBound: false }, { voiceFailure: true }]) {
+      const { w, r } = accountWorld(options), before = fs.readFileSync(w.file, 'utf8');
+      assert.match(r.command('/silenceaccount ' + TARGET + ' 30m'), /unavailable|not ready/i);
+      assert.equal(fs.readFileSync(w.file, 'utf8'), before);
+    }
+  });
+  test('account silence covers alternate characters without widening a character silence', () => {
+    const { w, r } = accountWorld();
+    r.command('/silence ' + TARGET + ' 10m');
+    assert.equal(r.box.__thornswoodStaff.silencedFor(ALT), 0);
+    assert.match(r.command('/silenceaccount ' + TARGET + ' 30m'), /Silenced/);
+    assert.equal(r.box.__thornswoodStaff.silencedFor(ALT), 30);
+    assert.equal(r.box.__thornswoodStaff.silencedFor(OTHER), 0);
+    assert.equal(r.posts.at(-1).accounts[ACCOUNT], w.now + 30 * 60000);
+  });
+  test('account freeze holds its origin but refuses an alternate without copying the anchor', () => {
+    const { w, r } = accountWorld();
+    assert.match(r.command('/freezeaccount ' + TARGET), /Froze/);
+    assert.equal(r.box.__thornswoodStaff.restraintAdmission(ALT, ACCOUNT), false);
+    assert.equal(r.box.__thornswoodStaff.restraintAdmission(OTHER, OTHER_ACCOUNT), true);
+    assert.equal(r.box.__thornswoodStaff.state.frozen[ALT], undefined);
+    w.where[B].pos = [9000, 9000, 9000]; r.box.__thornswoodStaff.freezeTick();
+    assert.deepEqual(w.where[B].pos, [5000, 6000, 700]);
+  });
+  test('native admission verifies account proof only for active account freezes', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    assert.equal(r.box.mp.onThornswoodLogin({ profileId: ALT, userId: 2, proof: null }), 0);
+    assert.equal(r.box.mp.onThornswoodLogin(loginAccount(w, ALT, ACCOUNT)), 0);
+    assert.equal(r.box.mp.onThornswoodLogin(loginAccount(w, OTHER, OTHER_ACCOUNT)), -1);
+    assert.equal(r.box.mp.onThornswoodLogin(loginAccount(w, TARGET, ACCOUNT)), -1);
+  });
+  test('cold account controls retain original deadlines and survive same-account character changes', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET); r.command('/silenceaccount ' + TARGET + ' 30m');
+    assert.equal(JSON.parse(fs.readFileSync(w.file)).version, 2);
+    w.now += 10 * 60000; const two = boot(w);
+    assert.equal(two.box.__thornswoodStaff.silencedFor(ALT), 20);
+    assert.equal(two.box.__thornswoodStaff.restraintAdmission(ALT, ACCOUNT), false);
+  });
+  test('staff cannot release account controls through another character of their own account', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET); r.command('/silenceaccount ' + TARGET + ' 30m');
+    w.accounts[PID] = ACCOUNT; r.box.__thornswoodPassSeen.passes[PID].d = ACCOUNT;
+    const before = fs.readFileSync(w.file, 'utf8');
+    assert.match(r.command('/unfreezeaccount ' + ALT), /your account|you/i);
+    assert.match(r.command('/unsilenceaccount ' + ALT), /your account|you/i);
+    assert.equal(fs.readFileSync(w.file, 'utf8'), before);
+  });
+  test('partial scope lifts preserve the other scope and say it remains', () => {
+    const { r } = accountWorld(); r.command('/freeze ' + TARGET); r.command('/freezeaccount ' + TARGET);
+    r.command('/silence ' + TARGET + ' 10m'); r.command('/silenceaccount ' + TARGET + ' 30m');
+    assert.match(r.command('/unfreeze ' + TARGET), /account.*still|still.*account/i);
+    assert.match(r.command('/unsilence ' + TARGET), /account.*still|still.*account/i);
+    assert.equal(r.box.__thornswoodStaff.silencedFor(ALT), 30);
+    assert.equal(r.box.__thornswoodStaff.restraintAdmission(ALT, ACCOUNT), false);
+  });
+  test('account controls have explicit recovery after the original profile is unlinked', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET); r.command('/silenceaccount ' + TARGET + ' 30m');
+    delete w.accounts[TARGET]; delete w.accounts[ALT]; w.online = [A];
+    assert.match(r.command('/unfreezeaccount account:' + ACCOUNT), /Account freeze.*lifted/i);
+    assert.match(r.command('/unsilenceaccount account:' + ACCOUNT), /Account silence.*lifted/i);
+    assert.equal(JSON.parse(fs.readFileSync(w.file)).version, 1, 'old readers become usable only after all account controls clear');
+  });
+  test('failed account writes never activate a new control or report success', () => {
+    const { w, r } = accountWorld(); w.fault = 'before'; const before = fs.readFileSync(w.file, 'utf8');
+    assert.doesNotMatch(r.command('/freezeaccount ' + TARGET), /Froze/);
+    assert.doesNotMatch(r.command('/silenceaccount ' + TARGET + ' 30m'), /Silenced/);
+    assert.equal(fs.readFileSync(w.file, 'utf8'), before);
+    assert.equal(r.box.__thornswoodStaff.silencedFor(ALT), 0);
+  });
+  test('person deletion cannot erase an account punishment', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET); r.command('/silenceaccount ' + TARGET + ' 30m');
+    releaseRequest(w, { profiles: [TARGET] }); const two = boot(w);
+    assert.equal(two.box.__thornswoodStaff.restraintAdmission(ALT, ACCOUNT), false);
+    assert.equal(two.box.__thornswoodStaff.silencedFor(ALT), 30);
+  });
+  test('world wipe clears account freeze anchors but retains timed account silences', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET); r.command('/silenceaccount ' + TARGET + ' 30m');
+    releaseRequest(w, { profiles: [], clearFreezes: true, freezeWipeIds: ['a'.repeat(32)] }); const two = boot(w);
+    assert.equal(two.box.__thornswoodStaff.restraintAdmission(ALT, ACCOUNT), true);
+    assert.equal(two.box.__thornswoodStaff.silencedFor(ALT), 30);
+  });
+  test('account aliases retain staff and proven-connection permissions before any write', () => {
+    const { w, r } = accountWorld(), before = fs.readFileSync(w.file, 'utf8');
+    for (const word of ['/freezeaccount', '/unfreezeaccount', '/silenceaccount', '/unsilenceaccount']) {
+      const parts = [word, String(TARGET), '30m'];
+      r.box.__thornswoodStaff.command({ proven: true }, word, parts, PID, A, () => false, {});
+      r.box.__thornswoodStaff.command({ proven: false }, word, parts, PID, A, () => true, {});
+    }
+    assert.equal(fs.readFileSync(w.file, 'utf8'), before);
+    assert.equal(r.box.__thornswoodStaff.silencedFor(ALT), 0);
+  });
+  test('an unverified online target cannot create an account control', () => {
+    const { w, r } = accountWorld(), before = fs.readFileSync(w.file, 'utf8');
+    delete r.box.__thornswoodPassSeen.passes[TARGET];
+    assert.match(r.command('/freezeaccount ' + TARGET), /verified.*unavailable/i);
+    assert.match(r.command('/silenceaccount ' + TARGET + ' 30m'), /verified.*unavailable/i);
+    assert.equal(fs.readFileSync(w.file, 'utf8'), before);
+  });
+  test('account deadlines expire durably without renewing or erasing character controls', () => {
+    const { w, r } = accountWorld();
+    r.command('/silenceaccount ' + TARGET + ' 10m'); r.command('/silence ' + TARGET + ' 30m');
+    w.now += 11 * 60000; r.box.__thornswoodStaff.pushSilenced();
+    assert.equal(r.box.__thornswoodStaff.silencedFor(ALT), 0);
+    assert.equal(r.box.__thornswoodStaff.silencedFor(TARGET), 19);
+    assert.equal(JSON.parse(fs.readFileSync(w.file)).version, 1);
+    assert.equal(r.posts.at(-1).accounts[ACCOUNT], undefined);
+  });
+  test('active account freeze rejects missing, tampered and mismatched native account proof', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    const wrongPid = loginAccount(w, OTHER, OTHER_ACCOUNT); wrongPid.profileId = ALT;
+    const invalidMac = loginAccount(w, OTHER, OTHER_ACCOUNT); invalidMac.proof.mac = 'invalid';
+    const unknown = loginAccount(w, OTHER, '');
+    for (const event of [wrongPid, invalidMac, unknown]) assert.equal(r.box.mp.onThornswoodLogin(event), 0);
+    assert.equal(r.box.__thornswoodStaff.restraintAdmission(OTHER, OTHER_ACCOUNT), true);
+  });
+  test('staff moves preserve both account and character anchors through restart', () => {
+    const { w, r } = accountWorld(); r.command('/freeze ' + TARGET); r.command('/freezeaccount ' + TARGET);
+    r.command('/bring ' + TARGET);
+    const doc = JSON.parse(fs.readFileSync(w.file));
+    assert.deepEqual(doc.frozen[TARGET].pos, w.where[A].pos);
+    assert.deepEqual(doc.accountFrozen[ACCOUNT].anchor.pos, w.where[A].pos);
+    assert.equal(doc.accountFrozen[ACCOUNT].anchor.pending, undefined);
+    const two = boot(w); w.where[B].pos = [9000, 9000, 9000]; two.box.__thornswoodStaff.freezeTick();
+    assert.deepEqual(Array.from(w.where[B].pos), Array.from(w.where[A].pos));
+  });
+  test('pending account movement holds its origin admission until explicit account release', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    w.afterMove = () => { w.fault = 'before'; };
+    r.command('/bring ' + TARGET);
+    assert.ok(JSON.parse(fs.readFileSync(w.file)).accountFrozen[ACCOUNT].anchor.pending);
+    assert.equal(r.box.__thornswoodStaff.restraintAdmission(TARGET, ACCOUNT), false);
+    assert.equal(r.box.__thornswoodStaff.restraintAdmission(OTHER, OTHER_ACCOUNT), true);
+  });
+  test('unknown book versions and version1 account payloads fail admission without dropping controls', () => {
+    for (const version of [1, 3]) {
+      const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+      const doc = JSON.parse(fs.readFileSync(w.file)); doc.version = version;
+      fs.writeFileSync(w.file, JSON.stringify(doc));
+      const two = boot(w);
+      assert.equal(two.box.__thornswoodStaff.restraintAdmission(OTHER, OTHER_ACCOUNT), false);
+      assert.equal(JSON.parse(fs.readFileSync(w.file)).version, version);
+    }
+  });
+  test('missing voice acknowledgement reports saved pending rather than completed or silently rolling back', () => {
+    const { w, r } = accountWorld(); w.voiceFailure = true;
+    const answer = r.command('/silenceaccount ' + TARGET + ' 30m');
+    assert.match(answer, /saved.*pending/i); assert.doesNotMatch(answer, /Silenced/);
+    assert.equal(r.box.__thornswoodStaff.silencedFor(ALT), 30);
+    assert.ok(JSON.parse(fs.readFileSync(w.file)).accountSilenced[ACCOUNT]);
+    assert.match(r.command('/freezeaccount ' + TARGET), /unavailable|not ready/i);
+  });
+  test('an already-online alternate is ended without teleporting it to the origin anchor', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    w.targetProfile = ALT; w.where[B].pos = [9000, 8000, 7000];
+    const moves = w.moves.length; r.box.__thornswoodStaff.freezeTick();
+    assert.deepEqual(r.kicked, [2]); assert.equal(w.moves.length, moves);
+    assert.ok(r.sessionEvents.some(row => row[0] === 'line' && row[1] === ALT));
+    assert.deepEqual(w.where[B].pos, [9000, 8000, 7000]);
+  });
+  test('account-freeze termination cannot kick a replacement connection after its notice', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    w.targetProfile = ALT; w.afterEnd = () => { w.guid = 'replacement-connection'; };
+    r.box.__thornswoodStaff.freezeTick();
+    assert.equal(r.kicked.length, 0);
   });
 } finally {
   const resolved = path.resolve(TEMP);

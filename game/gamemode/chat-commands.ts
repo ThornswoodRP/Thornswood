@@ -118,6 +118,7 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // PLAYER_WORDS for the same reason. See the staff block.
                '/kick', '/freeze', '/unfreeze', '/bring', '/silence',
                '/unsilence', '/warn', '/spawnat', '/ban', '/unban', '/note',
+               '/freezeaccount', '/unfreezeaccount', '/silenceaccount', '/unsilenceaccount',
                // One character or the whole account, and a character killed
                // for good (#1010).
                '/banaccount', '/unbanaccount', '/pk',

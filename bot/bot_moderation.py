@@ -45,10 +45,18 @@ _MOD_DID = {
     'kick': 'removed %s from the world',
     'freeze': 'froze %s in place',
     'unfreeze': 'let %s move again',
+    'freezeaccount': 'froze the account of %s',
+    'unfreezeaccount': 'lifted the account freeze of %s',
+    'unfreezepartial': 'lifted the character freeze of %s; the account freeze remains',
     'bring': 'brought %s to them',
     'goto': 'went to %s',
     'silence': 'silenced %s',
     'unsilence': 'let %s speak again',
+    'silenceaccount': 'silenced the account of %s',
+    'unsilenceaccount': 'lifted the account silence of %s',
+    'silenceaccountpending': 'saved an account silence for %s; voice confirmation is pending',
+    'unsilenceaccountpending': 'saved an account silence lift for %s; voice confirmation is pending',
+    'unsilencepartial': 'lifted the character silence of %s; the account silence remains',
     'warn': 'warned %s',
     'give': 'gave %s',
     'spawn': 'spawned beside %s',
@@ -202,7 +210,7 @@ def moderation_text(where, row):
         minutes = int(row.get('minutes') or 0)
     except (TypeError, ValueError):
         minutes = 0
-    if row['did'] == 'silence' and minutes > 0:
+    if row['did'] in ('silence', 'silenceaccount') and minutes > 0:
         did += ' for %d minute%s' % (minutes, '' if minutes == 1 else 's')
     why = clean(row.get('why'), 300)
     head = ('**Staff on the site:**' if where == 'site'

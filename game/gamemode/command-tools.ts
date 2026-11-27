@@ -60,6 +60,8 @@
     { role: 'playtester', syntax: '/where', text: 'Read your current location and facing.' },
     { role: 'staff', syntax: '/silence <person> [length] [why], /unsilence <person>', text: 'Silence or restore speech.' },
     { role: 'staff', syntax: '/freeze <person> [why], /unfreeze <person>', text: 'Hold someone in place or release them.' },
+    { role: 'staff', syntax: '/freezeaccount <person> [why], /unfreezeaccount <person>', text: 'Account freeze: holds the original character and refuses alternate admission. Unavailable unless account mode is enabled and ready.' },
+    { role: 'staff', syntax: '/silenceaccount <person> [length] [why], /unsilenceaccount <person>', text: 'Account speech restraint across character changes. Unavailable unless account mode is enabled and ready.' },
     { role: 'staff', syntax: '/goto <person>, /bring <person>, /tp <person> <place>', text: 'Move yourself to someone, or move them.' },
     { role: 'staff', syntax: '/give <person> <item> [count], /spawnat <person> <creature> [count]', text: 'Give items or spawn nearby.' },
     { role: 'staff', syntax: '/warn <person> <why>, /kick <person> [why]', text: 'Warn someone or end their session.' },

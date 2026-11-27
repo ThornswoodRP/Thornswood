@@ -1,5 +1,13 @@
 # The test harnesses
 
+Run `node tests/test-4640-voice-account-binding.js` for real loopback HTTP and
+WebSocket account binding, silence, restart, expiry and privacy controls. It
+uses an owned child and a synthetic Site, without a real account or server.
+Run `node tests/test-4488-restraints-persist.js` for the actual private book,
+staff account commands, signed alternate-admission fence and character-only
+compatibility. Account mode remains disabled pending the separate deployment
+and rollback acceptance described in the Staff commands guide.
+
 Run `python tests/claimable-door-unlocks-cases.py` for the four individually
 reviewed authored-lock records. These controls use synthetic plugin fixtures,
 the actual door-table builder, record reader/writer and recipe reconstruction.

@@ -37,7 +37,8 @@
   function movementRefusal(pid, actor) {
     var state = g.__thornswoodStaffState;
     if (!state || !state.frozen) { return 'The staff restraint state is unavailable.'; }
-    if (state.frozen[pid]) { return 'Staff have frozen you in place.'; }
+    var staff = g.__thornswoodStaff;
+    if (staff && staff.frozenFor ? staff.frozenFor(pid) : state.frozen[pid]) { return 'Staff have frozen you in place.'; }
     // The jail helper treats an unreadable cell as outside jail. Establish
     // a readable authoritative location before asking that existing helper.
     place(actor);
