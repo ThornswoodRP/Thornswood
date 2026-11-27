@@ -585,7 +585,7 @@ try:
         yes('Owner still closes a Faction Leader ticket as staff',
             ask.response.said
             and ask.response.said[0][0].startswith('Closed by')
-            and fac.edited and fac.edited[0].get('archived'))
+            and any(e.get('archived') for e in fac.edited))
 
         uma = Person(205, 'Uma', [Role('Lead Something', rid=88)])
         bot.UPPER_STAFF_IDS = {88}
@@ -598,7 +598,7 @@ try:
         yes('a role ID in UPPER_STAFF_ROLES closes a Faction Leader ticket',
             ask.response.said
             and ask.response.said[0][0].startswith('Closed by')
-            and fac2.edited and fac2.edited[0].get('archived'))
+            and any(e.get('archived') for e in fac2.edited))
 
         ask = CloseAsk(uma, jarl)
         asyncio.run(bot.close_here(ask))
