@@ -1,0 +1,247 @@
+{
+  "about": "Dev acceptance evidence for #6621: use one ordinary local seat, remain seated for a minute, then get up. Native events and state are required. Rest recovery and visual collision still require separate acceptance. Never run automatically merely by adding this fixture.",
+  "steps": [
+    {
+      "do": "page",
+      "why": "the choice page is up and ours",
+      "js": "!!window.thornswoodSelect && !!document.getElementById('ts-select')",
+      "timeout": 300000
+    },
+    {
+      "do": "shot",
+      "name": "choice-page"
+    },
+    {
+      "do": "page",
+      "why": "past the scroll the way a person goes: the sealed scroll, then Continue",
+      "timeout": 60000,
+      "js": "(function(){var i=document.querySelector('#ts-select .intro');if(!i||getComputedStyle(i).display==='none')return 'no scroll';var o=i.querySelector('.open');if(o&&Number(getComputedStyle(o).opacity)>0.9){i.querySelector('.go').click();return 'continued';}var c=i.querySelector('.closed');if(c)c.click();return '';})()"
+    },
+    {
+      "do": "page",
+      "why": "the slots are drawn",
+      "js": "(function(){var i=document.querySelector('#ts-select .intro');if(i&&getComputedStyle(i).display!=='none')return '';return document.querySelectorAll('#ts-select .list > *').length;})()",
+      "timeout": 30000
+    },
+    {
+      "do": "shot",
+      "name": "slots"
+    },
+    {
+      "do": "page",
+      "why": "Play the run's own character, the slot named Adventurer that the run made (26 Nov, 8:48 AM), never the last played: at 2:08 PM on 26 Nov the run joined as Pattie, Patrick's own dev character, because the page picks the last played slot. Until the page says it is joining",
+      "timeout": 120000,
+      "js": "(function(){var t=document.querySelector('#ts-select .status');var w=t?t.textContent:'';if(/seat|Joining|creation hall|loading|line/i.test(w))return w;var cs=document.querySelectorAll('#ts-select .slot');for(var i=0;i<cs.length;i++){var n=cs[i].querySelector('.name');if(n&&n.textContent==='Adventurer'){cs[i].onclick();return '';}}return '!no slot holds the run\\'s own character, Adventurer';})()"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "RaceSex Menu",
+      "open": true,
+      "timeout": 90000,
+      "skip": 9,
+      "why": "a character this server has not got is made first: the race menu opens in the hall. A character it has goes straight to the world, and the race menu steps are skipped"
+    },
+    {
+      "do": "shot",
+      "name": "race-menu"
+    },
+    {
+      "do": "key",
+      "code": 19,
+      "why": "R, the race menu's Done"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "MessageBoxMenu",
+      "open": true,
+      "timeout": 5000,
+      "skip": 2,
+      "why": "the question whether the face is done, when there is one"
+    },
+    {
+      "do": "key",
+      "code": 28,
+      "why": "Enter takes the box's first answer"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "MessageBoxMenu",
+      "open": false,
+      "timeout": 5000,
+      "why": "the question is answered"
+    },
+    {
+      "do": "page",
+      "why": "a second and a half for the name box, which is inside the race menu and says no menu of its own",
+      "timeout": 15000,
+      "js": "(function(){var k='__ts5197name';window[k]=window[k]||Date.now();return Date.now()-window[k]>1500;})()"
+    },
+    {
+      "do": "key",
+      "code": 28,
+      "why": "Enter accepts the name the box holds"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "RaceSex Menu",
+      "open": false,
+      "timeout": 20000,
+      "why": "the face is done"
+    },
+    {
+      "do": "page",
+      "why": "after the face the server moves the character on to choosing and opens the K panel; until its answer comes the panel still holds the face step's view, which says not creating, so the step after this one cannot yet tell a new character from a placed one (26 Nov, 1:44 PM: it read placed 21 ms after the race menu closed and the K panel opened after)",
+      "timeout": 30000,
+      "js": "(function(){var k=window.thornswoodSkills;return !!(k&&k.isCreating&&k.isCreating()===true);})()"
+    },
+    {
+      "do": "page",
+      "why": "a character still in the hall, new or made in an earlier run, takes Starting Location, Whiterun, Review, Confirm on the K panel as a person does; one the server has placed already skips the shot and the trip to town",
+      "skip": 2,
+      "skipIf": "placed",
+      "timeout": 120000,
+      "js": "(function(){if(window.__ts5197home)return window.__ts5197home;var k=window.thornswoodSkills;if(!k||!k.isCreating)return '';var made=k.isCreating();if(made===null)return '';if(!made)return 'placed';var r=document.getElementById('ts-skills');if(!r||r.className==='gone')return '';var nav=[].slice.call(r.querySelectorAll('.nav .navrow'));function row(k){for(var i=0;i<nav.length;i++){var e=nav[i].querySelector('.k');if(e&&e.textContent===k)return nav[i];}return null;}var home=row('Starting Location'),review=row('Review');if(!home||!review)return '';var hv=home.querySelector('.v');if(hv&&/\\bneed\\b/.test(hv.className)){if(!/\\bon\\b/.test(home.className)){home.click();return '';}var cards=[].slice.call(r.querySelectorAll('.body .card'));var pick=null;for(var j=0;j<cards.length;j++){var n=cards[j].querySelector('.name');if(n&&/^Whiterun/.test(n.textContent)){pick=cards[j];break;}}if(!pick)pick=cards[0];if(pick)pick.click();return '';}if(!/\\bon\\b/.test(review.className)){review.click();return '';}var c=r.querySelector('[data-act=\"confirm\"]');if(c&&!/\\boff\\b/.test(c.className)){c.click();window.__ts5197home='confirmed '+(hv?hv.textContent:'');return window.__ts5197home;}return '';})()"
+    },
+    {
+      "do": "shot",
+      "name": "home-chosen"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 60000,
+      "why": "off to the town"
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "why": "in the world, no loading screen",
+      "timeout": 300000
+    },
+    {
+      "do": "shot",
+      "name": "in-world"
+    },
+    {
+      "do": "wait",
+      "for": "cell",
+      "name": "Bannered Mare",
+      "in": false,
+      "timeout": 3000,
+      "skip": 3,
+      "why": "a Whiterun character arrives in the Bannered Mare, and a run leaves it there; there /tp would move it with no loading screen, so the trip's three steps are skipped",
+      "task": 6621
+    },
+    {
+      "do": "page",
+      "js": "(function(){if(window.__tsSeatTp){return 'sent';}var n=window.thornswoodNet;if(!n||!n.say){return '';}n.say('/tp bannered',{quiet:true});window.__tsSeatTp=1;return 'sent';})()",
+      "timeout": 30000,
+      "why": "to an inn with beds, once: /tp bannered, which the run's account may run as a dev (#6712)",
+      "task": 6621
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 30000,
+      "skip": 1,
+      "why": "the loading screen of the trip; none in 30 s means the trip was refused, and the cell check after says where the character is",
+      "task": 6621
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "why": "in the Bannered Mare",
+      "task": 6621
+    },
+    {
+      "do": "wait",
+      "for": "cell",
+      "name": "Bannered Mare",
+      "timeout": 30000,
+      "why": "in the Bannered Mare",
+      "task": 6621
+    },
+    {
+      "do": "face",
+      "what": "seat",
+      "timeout": 10000,
+      "why": "closest free ordinary chair or bench in this room",
+      "task": 6621
+    },
+    {
+      "do": "wait",
+      "for": "crosshair",
+      "what": "seat",
+      "timeout": 10000,
+      "task": 6621
+    },
+    {
+      "do": "shot",
+      "name": "seat-prompt",
+      "task": 6621
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "why": "one ordinary use press",
+      "task": 6621
+    },
+    {
+      "do": "wait",
+      "for": "furniture",
+      "enter": true,
+      "timeout": 10000,
+      "why": "one fresh own enter for this exact seat and native sitting",
+      "task": 6621
+    },
+    {
+      "do": "shot",
+      "name": "seat-entered",
+      "task": 6621
+    },
+    {
+      "do": "wait",
+      "for": "seated",
+      "ms": 60000,
+      "timeout": 65000,
+      "why": "a full observed minute without an exit, reentry or native unseating",
+      "task": 6621
+    },
+    {
+      "do": "shot",
+      "name": "seat-after-minute",
+      "task": 6621
+    },
+    {
+      "do": "key",
+      "code": 17,
+      "why": "intentional movement to stand up",
+      "task": 6621
+    },
+    {
+      "do": "wait",
+      "for": "furniture",
+      "enter": false,
+      "timeout": 10000,
+      "why": "own exit for this seat and native standing",
+      "task": 6621
+    },
+    {
+      "do": "shot",
+      "name": "seat-exited",
+      "task": 6621
+    },
+    {
+      "do": "end"
+    }
+  ]
+}

@@ -31,6 +31,9 @@
 //   {"do":"page","js":"<an expression>"}   true, a number or a word passes
 //   {"do":"shot","name":"journal-open"}
 //   {"do":"key","code":36}                 a DirectInput scan code (J is 36)
+//   {"do":"face","what":"seat"}            closest free ordinary local seat
+//   {"do":"wait","for":"furniture","enter":true}
+//   {"do":"wait","for":"seated","ms":60000}
 //   {"do":"face","what":"bed"}             stand before the nearest bed in the cell
 //   {"do":"wait","for":"crosshair","what":"bed"}
 //   {"do":"face","what":"driver","ref":"bbf6d:CFTO.esp"}  stand before that driver
@@ -88,6 +91,7 @@ try { fs.unlinkSync(RUN); } catch (e) { log('could not delete the run file, so t
 
 const runId = String(run.id || '');
 const steps = run.steps;
+const observesSeats = steps.some(s => s && (s.what === 'seat' || s.for === 'seated' || s.for === 'furniture'));
 
 function write(obj) {
   obj.run = runId;
@@ -127,6 +131,10 @@ sp.on('menuClose', function (e) {
 // called in this context"), so what a step needs from the game is read or
 // done here and left for the step to pick up.
 let inWorld = false;
+let crosshairSeat = '';
+let facedSeat = 0, furnitureEpoch = 0, furnitureState = null;
+let seatObservation = null, seatPress = null, seatExitPress = null, seatHold = null, confirmedSeatEntry = null;
+const furnitureEvents = [];
 let crosshairBed = '';     // the bed under the crosshair now, or ''
 let crosshairDriver = '';  // the carriage or ferry driver under it, or ''
 let faceAsked = '';        // what a face step wants stood before
@@ -140,6 +148,22 @@ const moves = [];          // { t, z, sprint, drawn } a frame, for watch steps
 function isBed(ref) {
   const T = globalThis.Thornswood;
   return !!(T && typeof T.isBedRef === 'function' && T.isBedRef(ref));
+}
+function isSeat(ref) {
+  try {
+    const base = ref && ref.getBaseObject();
+    return !!(base && base.getType() === 40 && /\b(chair|bench|stool)\b/i.test(String(base.getName() || '')) &&
+      !isBed(ref) && typeof sp.getWorkbenchType === 'function' && sp.getWorkbenchType(base.getFormID()) === 0 &&
+      typeof ref.isFurnitureInUse === 'function' && ref.isFurnitureInUse(false) === false);
+  } catch (e) { return false; }
+}
+function noteFurniture(e, enter) {
+  if (!observesSeats) { return; }
+  let id = 0;
+  try { id = e.target ? e.target.getFormID() >>> 0 : 0; } catch (err) { log('seat event target is unavailable:', err); }
+  furnitureState = { epoch: ++furnitureEpoch, ref: id, enter: enter, at: Date.now() };
+  furnitureEvents.push(furnitureState);
+  if (furnitureEvents.length > 32) { furnitureEvents.shift(); }
 }
 function refName(ref) {
   let id = 0, name = '';
@@ -166,6 +190,7 @@ const EYE_HEIGHT = 115;
 // seam's is their middle, from the floor the character is on (a seam sits on
 // a wall, so its own height is no floor).
 const FACE_KINDS = {
+  seat: { types: [40], is: isSeat, standOnRef: true, aim: function (h) { return Math.min(60, h * 0.6); } },
   bed: { types: [40], is: function (r) { return isBed(r); }, standOnRef: true, aim: function (h) { return Math.min(60, h * 0.6); } },
   door: { types: [29], is: function () { return true; }, standOnRef: false, aim: function () { return 100; } },
   vein: { types: [40, 24], is: function (r) { const b = r.getBaseObject(); return !!b && /vein/i.test(String(b.getName() || '')); }, standOnRef: false, aim: function (h) { return h * 0.5; } }
@@ -178,6 +203,16 @@ function faceStart(what) {
   if (!cell) { return { ok: false, note: 'not in a cell' }; }
   const T = globalThis.Thornswood;
   if (what === 'bed' && (!T || typeof T.isBedRef !== 'function')) { return { ok: false, note: 'thornswood-front.js shares no isBedRef, so this build cannot tell a bed' }; }
+  if (what === 'seat') {
+    facedSeat = 0;
+    if (!T || typeof T.isBedRef !== 'function' || typeof sp.getWorkbenchType !== 'function') {
+      return { ok: false, note: 'seat verification needs the bed classifier and native getWorkbenchType' };
+    }
+    if (typeof pc.getSitState !== 'function' || typeof pc.getFurnitureReference !== 'function' ||
+        pc.getSitState() !== 0 || pc.getFurnitureReference()) {
+      return { ok: false, note: 'seat verification must start standing outside furniture' };
+    }
+  }
   const px = pc.getPositionX(), py = pc.getPositionY(), pz = pc.getPositionZ();
   let best = null, bestD = Infinity, beds = 0, n = 0;
   kind.types.forEach(function (type) {
@@ -219,6 +254,7 @@ function faceStep() {
     let on = '';
     try { const r = sp.Game.getCurrentCrosshairRef(); on = r ? refName(r) : ''; } catch (e) { log('could not read the crosshair:', e); }
     if (on === f.name) {
+      if (f.what === 'seat') { facedSeat = f.bed.getFormID() >>> 0; }
       faceTry = null;
       return { ok: true, note: 'before ' + f.what + ' ' + f.name + ' from its ' + f.spots[f.k].side + ', ' + f.beds + ' ' + f.what + '(s) in the cell, it was ' + f.off + ' units off' + (f.missed.length ? '; not from ' + f.missed.join(', ') : '') };
     }
@@ -318,12 +354,24 @@ sp.on('update', function () {
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
   try { cellName = cell ? String(cell.getName() || '') : ''; } catch (e) { cellName = ''; log('could not read the cell name:', e); }
   crosshairBed = '';
+  crosshairSeat = '';
   crosshairDriver = '';
   try {
     const r = sp.Game.getCurrentCrosshairRef();
     if (r && isBed(r)) { crosshairBed = refName(r); }
+    if (observesSeats && r && isSeat(r)) { crosshairSeat = refName(r); }
     if (r && isDriver(r)) { crosshairDriver = refName(r); }
   } catch (e) { log('could not read the crosshair:', e); }
+  if (observesSeats) {
+    seatObservation = null;
+    try {
+      const pc = sp.Game.getPlayer();
+      if (pc && inWorld) {
+        const ref = pc.getFurnitureReference();
+        seatObservation = { at: Date.now(), sit: pc.getSitState(), ref: ref ? ref.getFormID() >>> 0 : 0 };
+      }
+    } catch (e) { log('seat verification could not read native state:', e); }
+  }
   if (faceAsked && !faceDone) {
     try {
       if (faceAsked === 'driver') { faceDone = faceDriver(faceRef); }
@@ -345,12 +393,14 @@ sp.on('update', function () {
 sp.on('furnitureEnter', function (e) {
   try {
     if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
+    noteFurniture(e, true);
     write({ t: 'furniture', enter: true, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
   } catch (err) { log('could not note sitting down:', err); }
 });
 sp.on('furnitureExit', function (e) {
   try {
     if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
+    noteFurniture(e, false);
     write({ t: 'furniture', enter: false, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
   } catch (err) { log('could not note getting up:', err); }
 });
@@ -605,6 +655,7 @@ function next() {
   stepAt = Date.now();
   waitingAsk = 0;
   pageId = '';
+  seatHold = null;
 }
 // The failing step of a task has had its screenshot: the task is failed and
 // the run goes on at the next task's first step.
@@ -622,6 +673,7 @@ function failTask() {
   faceRef = '';
   faceDone = null;
   faceTry = null;
+  seatPress = null; seatExitPress = null; seatHold = null; confirmedSeatEntry = null;
   gearAsk = null;
   gearDone = null;
 }
@@ -707,7 +759,45 @@ sp.on('tick', function () {
         if (inWorld && here === want) { pass(cellName ? 'in ' + cellName : 'in an unnamed cell'); return; }
       } else if (s.for === 'crosshair') {
         if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
+        if (s.what === 'seat' && crosshairSeat) { pass('seat ' + crosshairSeat); return; }
         if (s.what === 'driver' && crosshairDriver) { pass('driver ' + crosshairDriver); return; }
+      } else if (s.for === 'furniture') {
+        if (!inWorld || !seatObservation || now - seatObservation.at >= 1000) { fail('seat verification lost the world or native updates'); return; }
+        const press = s.enter === false ? seatExitPress : seatPress;
+        if (!facedSeat || !press || press.ref !== facedSeat) { fail('seat verification has no matching normal key press'); return; }
+        const entries = furnitureEvents.filter(e => e.epoch > press.epoch && e.ref === facedSeat && e.enter);
+        if (s.enter !== false && entries.length > 1) { fail('one seat press produced repeated furnitureEnter events'); return; }
+        if (furnitureState && furnitureState.epoch > press.epoch && furnitureState.ref === facedSeat &&
+            furnitureState.enter === (s.enter !== false) && seatObservation &&
+            seatObservation.sit === (s.enter === false ? 0 : 3) &&
+            (s.enter === false ? seatObservation.ref === 0 : seatObservation.ref === facedSeat)) {
+          if (s.enter !== false) { confirmedSeatEntry = { epoch: furnitureEpoch, ref: facedSeat }; }
+          pass('own furniture' + (s.enter === false ? 'Exit' : 'Enter') + ' and native state for ' + facedSeat.toString(16)); return;
+        }
+        if (late) { fail('seat verification saw no fresh own furniture' + (s.enter === false ? 'Exit' : 'Enter') + ' and matching native state for ' + facedSeat.toString(16) + ' in ' + limit + ' ms'); return; }
+      } else if (s.for === 'seated') {
+        const interval = Number(s.ms);
+        if (!Number.isFinite(interval) || interval <= 0) { fail('seat verification needs a positive interval'); return; }
+        if (!inWorld || !seatObservation || now - seatObservation.at >= 1000) { fail('seat verification lost the world or native updates'); return; }
+        if (!confirmedSeatEntry || confirmedSeatEntry.epoch !== furnitureEpoch || confirmedSeatEntry.ref !== facedSeat) {
+          fail('the confirmed seat entry changed before the hold'); return;
+        }
+        if (!seatHold) { seatHold = { epoch: furnitureEpoch, ref: facedSeat, last: seatObservation.at, samples: 0, maxGap: 0 }; }
+        const sampleGap = seatObservation.at - seatHold.last;
+        if (sampleGap > 1000) { fail('seat verification has an unobserved world gap of ' + sampleGap + ' ms'); return; }
+        seatHold.maxGap = Math.max(seatHold.maxGap, sampleGap);
+        if (!seatHold.samples || seatObservation.at !== seatHold.last) { seatHold.samples++; }
+        seatHold.last = seatObservation.at;
+        if (!furnitureState || !furnitureState.enter || furnitureEpoch !== seatHold.epoch ||
+            furnitureState.ref !== seatHold.ref || seatObservation.sit !== 3 ||
+            seatObservation.ref !== seatHold.ref) {
+          fail('the seat was left or entered again before the full interval'); return;
+        }
+        if (now - stepAt >= interval) {
+          write({ t: 'seated-observation', ref: facedSeat.toString(16), ms: now - stepAt, samples: seatHold.samples, maxGap: seatHold.maxGap });
+          pass('remained in seat ' + facedSeat.toString(16) + ' for ' + (now - stepAt) + ' ms');
+        }
+        return;
       } else if (s.for === 'running') {
         // The world runs while a menu is up: update, which the game sends
         // only while it is not paused, kept coming for ms with no gap of a
@@ -817,6 +907,8 @@ sp.on('tick', function () {
       }
       if (!waitingAsk) {
         if (s.do === 'key') {
+          if (observesSeats && facedSeat && Number(s.code) === 18) { seatPress = { epoch: furnitureEpoch, ref: facedSeat }; }
+          if (observesSeats && facedSeat && Number(s.code) === 17) { seatExitPress = { epoch: furnitureEpoch, ref: facedSeat }; }
           inventoryKey = s.inventoryTrace === true
             ? { i: at, code: Number(s.code), until: now + INVENTORY_TRACE_MS, down: false, up: false }
             : null;
