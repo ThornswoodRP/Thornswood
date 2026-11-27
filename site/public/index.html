@@ -46,6 +46,11 @@
 </div>
 
 <div id="shell">
+  <!-- Past the tabs to the open page (#4368): every tab comes before main,
+       and under 900px the nav stays on screen as a sticky bar. hub.js takes
+       the click and puts focus on the page's heading, as a tab change does,
+       so the address never gets a #main the hub would read as a page change. -->
+  <a class="skip" href="#main">Skip to content</a>
   <nav>
     <a class="brand" href="/hub"><img src="/logo-28.webp" srcset="/logo-28.webp 1x, /logo-56.webp 2x, /logo-84.webp 3x" alt="" width="22" height="22">Thornswood</a>
     <a class="backout" href="/">&larr; the public site</a>
@@ -57,7 +62,7 @@
          reader reads it. -->
     <p class="said" id="hubsaid" role="status" aria-live="polite"></p>
   </nav>
-  <main><div class="wrap" id="page"></div></main>
+  <main id="main" tabindex="-1"><div class="wrap" id="page"></div></main>
 </div>
 
 <script src="/copies.js"></script>
