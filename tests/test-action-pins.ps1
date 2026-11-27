@@ -178,7 +178,9 @@ foreach ($want in 'build.yml', 'nightly.yml', 'merge-release.yml', 'drop-claims.
 # tests\test-5185-board-sync.js. board-read.yml runs one action since #5185,
 # the board App's token. promote-main.yml (#5181) runs one since #4825, the
 # checkout, for MergeRelease.ps1, which finds main's launcher package.
-$noActions = @('drop-claims.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'clone-report.yml', 'pr-events.yml', 'engine-pin-aside.yml')
+# engine-pin-forward.yml (#7100) checks out nothing either: it asks GitHub's
+# compare API about the two pins with the job's read token.
+$noActions = @('drop-claims.yml', 'expire-claims.yml', 'done-on-merge.yml', 'area-label.yml', 'clone-report.yml', 'pr-events.yml', 'engine-pin-aside.yml', 'engine-pin-forward.yml')
 
 $all = @()
 foreach ($f in $files) {
