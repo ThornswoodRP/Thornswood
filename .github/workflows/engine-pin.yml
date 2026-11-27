@@ -57,7 +57,7 @@
 # runs nothing but this repository's own scripts and git. Both jobs use the
 # main commit checked out by look, so a later main push cannot change which
 # shallow checkout verifies the bundle. Push verifies one commit over that
-# base, checks its allowed paths and confirms main is still current, then
+# base, checks its allowed paths and confirms that base is still on main, then
 # force pushes engine-pin/next and opens or updates the pull
 # request (Open-EnginePinPr.ps1). The pull request is the only way the pin
 # reaches main: Bramble merges it under the merge rule like any other, and
@@ -292,13 +292,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host '::error::the pin changes could not be read'; exit 1 }
           if ($bad.Count) { Write-Host "::error::engine-pin/next changes more than a pin: $($bad -join ', ')"; exit 1 }
 
-          $currentMain = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha
-          if ($LASTEXITCODE -ne 0 -or $currentMain -notmatch '^[0-9a-f]{40}$') {
-            Write-Host '::error::the current main commit could not be read'
+          # The base must still be a commit of main. Main moving on past it
+          # while make ran is no reason to stop: main moves on every merge,
+          # and the pull request merges through the queue over main as it is
+          # then, the way EnginePin.ps1 keeps a pin that is only behind main
+          # (#4523). Two runs on 26 Nov 2026 (Mountain) were lost to that (#7239).
+          $onMain = gh api "repos/$env:GITHUB_REPOSITORY/compare/$main...main" --jq .status
+          if ($LASTEXITCODE -ne 0 -or $onMain -notmatch '^(identical|ahead|behind|diverged)$') {
+            Write-Host '::error::main could not be compared with the Main base from look'
             exit 1
           }
-          if ($currentMain -ne $main) {
-            Write-Host "::error::main moved from $main to $currentMain while preparing the pin. Start a new Engine pin run on main."
+          if ($onMain -notin @('identical', 'ahead')) {
+            Write-Host "::error::the Main base $main is no longer a commit of main ($onMain). Start a new Engine pin run on main."
             exit 1
           }
           git show --stat --format='%H %s' engine-pin/next
