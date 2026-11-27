@@ -105,6 +105,12 @@ Yes 'Read-CursorLines takes -Days, a number, and nothing else' ((Words 'Read-Cur
 # What the game wrote about mining (#4549): the same.
 Yes 'Read-MiningLines takes -Days, a number, and nothing else' ((Words 'Read-MiningLines -Days 7') -eq '-Days|7' -and (Words 'Read-MiningLines') -eq '' -and
     (Words 'Read-MiningLines -Days week') -eq 'REFUSED' -and (Words 'Read-MiningLines -Folder x') -eq 'REFUSED')
+# The read-only listers of Skyrim's own data (#5736): a lister by its short
+# name and a server, never a path or a script of the caller's.
+Yes 'List-GameData takes a named lister and a server, and nothing else' ((Words 'List-GameData -Lister KillMoveIdles') -eq '-Lister|KillMoveIdles' -and
+    (Words 'List-GameData -Lister ToolRecords -Server dev') -eq '-Lister|ToolRecords|-Server|dev' -and
+    (Words 'List-GameData -Lister scripts/dev/List-CellRefs.py') -eq 'REFUSED' -and (Words 'List-GameData -Lister CellRefs') -eq 'REFUSED' -and
+    (Words 'List-GameData -Lister KillMoveIdles -Runner x') -eq 'REFUSED')
 # The box's read only checks, which only One could run before (the cloud
 # reaches neither game port nor the box's shell): each takes nothing a caller
 # could steer, and Check-ProdParity sends its facts and report back.
