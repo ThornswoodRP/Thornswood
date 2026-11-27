@@ -24,7 +24,10 @@ builders' half on small records made here, without the game:
   4  Build-Recost.py's RECIPES_SET_IN_GAME: a never-copied fueled recipe is
      its inputs [item, had, had], an item it names asking more, then the
      added ones [item, 0, n]; a re-costed one takes them on top of its new
-     counts; a carried or a copied one is not in it; and the content chain
+     counts; a carried or a copied one is not in it; a recipe one plugin
+     owns and a never-copied one wins (wonBy in recipes.json) is in it and
+     held under notCopied, as the plugin's own test says, and the plugin
+     builds from that table; and the content chain
      builds the file first, then the table, then the plugin, and nothing
      writes a table of its own for them;
   5  the item each grade is: Poor Charcoal, Skyrim's own Charcoal, the
@@ -239,6 +242,52 @@ yes('4 and the table is the same as before for a load order with no fuel',
     json.loads(br.in_game_table(data, recipes, fuel_file({}), policy)) ==
     {'22:' + IA: {'name': 'Steel Buckler', 'out': '214a3:' + IA, 'bench': '88105:Skyrim.esm',
                   'inputs': [['5ace5:Skyrim.esm', 1, 2], ['f:Skyrim.esm', 50, 0]]}})
+# A recipe one plugin owns and a never-copied one wins, the way
+# Hothtrooper44_ArmorCompilation.esp wins da0c03:Update.esm: the plugin
+# leaves it to each game, so the table has to hold it, and holds it only by
+# reading wonBy. Built from 1's load order and handed to 1's fuel_entries.
+won_rows = {'recipes': {
+    '20:' + IA: {'name': 'Wolf Shield', 'out': '214a1:' + IA, 'bench': 'f46ce:Skyrim.esm', 'wonBy': IA,
+                 'inputItems': [{'item': '5ace5:Skyrim.esm', 'name': 'Steel Ingot', 'count': 3}]},
+    '14:Skyrim.esm': {'name': 'Iron Dagger', 'out': '13983:Skyrim.esm', 'bench': '88105:Skyrim.esm', 'wonBy': IA,
+                      'inputItems': [{'item': '5ace4:Skyrim.esm', 'name': 'Iron Ingot', 'count': 1}]},
+    '10:Skyrim.esm': {'name': 'Iron Mace', 'out': '13982:Skyrim.esm', 'bench': '88105:Skyrim.esm',
+                      'wonBy': 'Skyrim.esm', 'inputItems': []},
+}}
+ia_policy = {'notCopiedFrom': [{'plugin': IA}]}
+won_table = json.loads(br.in_game_table({'notCopied': []}, won_rows, fuel, ia_policy))
+yes('4 a recipe a never-copied plugin wins is in it, with its inputs and what it takes on top',
+    won_table.get('14:Skyrim.esm') == {'name': 'Iron Dagger', 'out': '13983:Skyrim.esm', 'bench': '88105:Skyrim.esm',
+                                       'inputs': [['5ace4:Skyrim.esm', 1, 1], ['33760:Skyrim.esm', 0, 1],
+                                                  [HANDLE_ITEM, 0, 1]]} and
+    sorted(won_table) == ['14:Skyrim.esm', '20:' + IA])
+yes('4 and the plugin builds from that table, leaving both to each game',
+    stops(bl.fuel_entries, fuel, won_table, plugins, win, canon, blocked, never) == '' and
+    sorted(r['recipe'] for r in bl.fuel_entries(fuel, won_table, plugins, win, canon, blocked, never)[1]) ==
+    ['14:Skyrim.esm', '20:' + IA])
+owner_only = {'recipes': {k: {f: v for f, v in r.items() if f != 'wonBy'} for k, r in won_rows['recipes'].items()}}
+yes('4 read by its owner alone, the table misses it and the plugin stops (the content builds after #7072)',
+    'Build-Recost.py' in stops(bl.fuel_entries, fuel, json.loads(br.in_game_table({'notCopied': []}, owner_only, fuel,
+                                                                                 ia_policy)),
+                               plugins, win, canon, blocked, never))
+GOLD = {'item': 'f:Skyrim.esm', 'name': 'Gold', 'count': 50}
+coins = {'recipes': {
+    '40:Skyrim.esm': {'name': 'Won', 'owner': 'Smith', 'benchName': 'CraftingSmithingForge', 'wonBy': IA,
+                      'inputItems': [{'item': '5ace4:Skyrim.esm', 'name': 'Iron Ingot', 'count': 2}, GOLD]},
+    '41:Skyrim.esm': {'name': 'Own', 'owner': 'Smith', 'benchName': 'CraftingSmithingForge', 'wonBy': 'Skyrim.esm',
+                      'inputItems': [{'item': '5ace4:Skyrim.esm', 'name': 'Iron Ingot', 'count': 2}, GOLD]},
+    '42:' + IA: {'name': 'Theirs', 'owner': 'Smith', 'benchName': 'CraftingSmithingForge', 'wonBy': IA,
+                 'inputItems': [{'item': '5ace4:Skyrim.esm', 'name': 'Iron Ingot', 'count': 2}, GOLD]},
+}}
+built = br.build(coins, None, ia_policy)
+yes('4 a re-costed recipe a never-copied plugin wins is held under notCopied, saying who wins it, as its own are',
+    [r['recipe'] for r in built['recipes']] == ['41:Skyrim.esm'] and
+    sorted(r['recipe'] for r in built['notCopied']) == ['40:Skyrim.esm', '42:' + IA] and
+    IA + ' wins it' in next(r['whyNot'] for r in built['notCopied'] if r['recipe'] == '40:Skyrim.esm'))
+with open(os.path.join(ROOT, 'scripts', 'dev', 'Build-RecipeTable.ps1'), encoding='utf-8-sig') as f:
+    table_src = f.read()
+yes('4 recipes.json writes wonBy, the plugin whose copy the game uses, on owned and unowned rows',
+    table_src.count(', "wonBy": \' + (JsonStr $') == 2 and '"wonBy": \' + (JsonStr \'the plugin whose copy' in table_src)
 with open(os.path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py'), encoding='utf-8') as f:
     src = f.read()
 yes('4 the plugin reads RECIPES_SET_IN_GAME for them, writes no table of its own, and counts both halves',

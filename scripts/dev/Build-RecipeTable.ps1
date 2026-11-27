@@ -5627,6 +5627,7 @@ $doc.Add('  "sisterHalf": ' + (JsonStr 'classes.md gives you the novice work of 
 $doc.Add('  "needs": ' + (JsonStr 'the recipe''s own conditions, read out of its CTDA subrecords. An empty list means anybody standing at the bench can make it. serverSees false means the fork has no function for that condition and the server answers True, so the only thing enforcing it is the crafting menu on the machine in front of the person, which hides the recipe rather than refusing it.') + ',')
 $doc.Add('  "default": ' + (JsonStr 'a recipe id this table does not carry is one nobody owns, and anybody may make it') + ',')
 $doc.Add('  "movedFrom": ' + (JsonStr 'on a row its mod put at a bench its trade does not work at (TRADE_BENCHES, #3120): the bench keyword the mod put it at, and movedFromName its editor id. bench and benchName are where it is made now, its trade''s home bench. scripts\mods\Build-LastPlugin.py carries the move in Thornswood-Last.esp, or hands it to each person''s game for a plugin it never copies from.') + ',')
+$doc.Add('  "wonBy": ' + (JsonStr 'the plugin whose copy of the recipe the game uses, the last in the load order to carry it, beside plugin, the file it belongs to, on an owned row and an unowned one. They differ for a recipe a mod overrides, and scripts\dev\Build-Recost.py reads both, as scripts\mods\Build-LastPlugin.py does, to tell a recipe Thornswood-Last.esp never copies (#6726): Hothtrooper44_ArmorCompilation.esp wins da0c03:Update.esm.') + ',')
 $doc.Add('  "fires": ' + (JsonStr 'false means the server is never asked about this recipe. CraftService::RecipeItemsMatch throws out the armour table (adb78) and the sharpening wheel (88108) before it considers anything, so tempering never reaches onCraft.') + ',')
 $doc.Add('  "count": ' + ($owned.Count + $unowned.Count + $refusedRows.Count) + ',')
 $doc.Add('  "owned": ' + $owned.Count + ',')
@@ -5792,7 +5793,7 @@ foreach ($desc in $owned.Keys) {
              ', "family": ' + (JsonStr $r.Family) + ', "familyFrom": ' + (JsonStr $r.FamilyFrom) +
              ', "fires": ' + $firesTxt + ', "canBeMadeOnDayOne": ' + $dayOneTxt +
              ', "needs": ' + $needsTxt +
-             ', "plugin": ' + (JsonStr $r.Plugin) +
+             ', "plugin": ' + (JsonStr $r.Plugin) + ', "wonBy": ' + (JsonStr $r.SeenIn) +
              ', "nameFrom": ' + (JsonStr $r.NameFrom) +
              ', "why": ' + (JsonStr $r.Reason) +
              ', "rankFrom": ' + (JsonStr $r.RankFrom) +
@@ -5829,6 +5830,7 @@ foreach ($desc in $unowned.Keys) {
     $doc.Add('    ' + (JsonStr $desc) + ': { "editorId": ' + (JsonStr $u.Edid) +
              ', "out": ' + (JsonStr $u.OutDesc) + ', "name": ' + (JsonStr $u.OutName) +
              ', "type": ' + (JsonStr $u.OutType) + ', "benchName": ' + (JsonStr $u.BenchName) +
+             $(if ($recipes.Contains($desc)) { ', "wonBy": ' + (JsonStr $recipes[$desc].SeenIn) } else { '' }) +
              ', "why": ' + (JsonStr $u.Why) + ' }' + $comma)
 }
 $doc.Add('  }')

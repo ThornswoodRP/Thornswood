@@ -212,6 +212,20 @@ def never_copied(policy):
             {c.lower() for r in rows for c in r.get('carried', [])})
 
 
+def not_copied(desc, row, blocked, carried):
+    """True for a recipe Thornswood-Last.esp never copies: its own file, or
+    the plugin that wins it (wonBy in recipes.json), is one the policy never
+    copies from, and the policy does not carry it. The same test as the
+    plugin's own (Build-LastPlugin.py, fuel_entries and step 6), so a recipe
+    one plugin owns and a never-copied one overrides is held here as it is
+    there: da0c03:Update.esm, won by Hothtrooper44_ArmorCompilation.esp,
+    stopped every content build after #7072 because only its owner was read
+    here (#6726)."""
+    origin = desc.split(':', 1)[1]
+    won = (row or {}).get('wonBy') or origin
+    return (origin.lower() in blocked or won.lower() in blocked) and ('COBJ ' + desc).lower() not in carried
+
+
 def build(recipes, previous, policy=None):
     metal = metals(recipes)
     kept = {r['recipe']: r for r in (previous or {}).get('recipes', [])}
@@ -262,11 +276,17 @@ def build(recipes, previous, policy=None):
     # 2026, #2454: Immersive Armors is used as-is and nothing built from it
     # is handed on). It is still a peer, because the game still asks it.
     blocked, carried = never_copied(policy)
-    held = [r for r in recost if r['recipe'].split(':', 1)[1].lower() in blocked
-            and ('COBJ ' + r['recipe']).lower() not in carried]
+    held = [r for r in recost if not_copied(r['recipe'], recipes['recipes'].get(r['recipe']), blocked, carried)]
     for r in held:
-        r['whyNot'] = ('%s is a plugin last-plugin-policy.json never copies from (notCopiedFrom), so its '
-                       'recipe is not overridden' % r['recipe'].split(':', 1)[1])
+        row = recipes['recipes'].get(r['recipe']) or {}
+        origin = r['recipe'].split(':', 1)[1]
+        won = row.get('wonBy') or origin
+        if origin.lower() in blocked:
+            r['whyNot'] = ('%s is a plugin last-plugin-policy.json never copies from (notCopiedFrom), so its '
+                           'recipe is not overridden' % origin)
+        else:
+            r['whyNot'] = ('%s wins it, a plugin last-plugin-policy.json never copies from (notCopiedFrom), so '
+                           'the recipe is not overridden' % won)
     recost = [r for r in recost if r not in held]
     coins = sum(1 for r in recost if 'coins' in r['why'])
     return {
@@ -326,7 +346,8 @@ def in_game_table(data, recipes, fuel=None, policy=None):
                              'inputs': [[i['item'], i['count'], i['to']] for i in r['inputs']]}
     blocked, carried = never_copied(policy)
     for desc in sorted((fuel or {}).get('recipes', {})):
-        if desc.split(':', 1)[1].lower() not in blocked or ('COBJ ' + desc).lower() in carried:
+        if not not_copied(desc, recipes['recipes'].get(desc) or recipes.get('unowned', {}).get(desc),
+                          blocked, carried):
             continue
         if desc not in rows:
             row = recipes['recipes'].get(desc)
