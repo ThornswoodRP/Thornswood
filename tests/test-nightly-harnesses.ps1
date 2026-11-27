@@ -21,7 +21,10 @@
        and the summary is still printed;
     4. nightly.yml runs it once for each share in its matrix, tells it how
        many shares the matrix has, keeps one share's failure from cancelling
-       the other, and gives it a budget inside the job's minutes;
+       the other, and gives it a budget inside the job's minutes; the
+       matrix, -Of, the job's name and the harness report's count all come
+       from the "shares" job's one number, whose list is run here and is 1
+       to that number (#4298);
     5. -Only (#2970) runs the harnesses named, split by commas or spaces, and
        no others, in the order given, refuses a name that is no harness
        before anything runs, and is red when a named one fails;
@@ -159,16 +162,38 @@ try {
 
     # ---- 4. the workflow ------------------------------------------------------
     $y = [IO.File]::ReadAllText((Join-Path $repo '.github\workflows\nightly.yml'))
-    $calls = @([regex]::Matches($y, 'Nightly-Harnesses\.ps1 -Shard \$\{\{ matrix\.shard \}\} -Of (\d+) -BudgetSeconds (\d+)'))
-    Yes 'nightly.yml runs Nightly-Harnesses.ps1 for the share its matrix names, once' ($calls.Count -eq 1)
+    $calls = @([regex]::Matches($y, 'Nightly-Harnesses\.ps1 -Shard \$\{\{ matrix\.shard \}\} -Of \$\{\{ strategy\.job-total \}\} -BudgetSeconds (\d+)'))
+    Yes 'nightly.yml runs Nightly-Harnesses.ps1 for the share its matrix names, once, -Of its matrix''s length (#4298)' ($calls.Count -eq 1)
     $job = [regex]::Match($y, '(?s)(?m)^  harnesses:\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\z)').Groups[1].Value
-    $shards = @([regex]::Match($job, '(?m)^\s+shard:\s*\[([^\]]*)\]').Groups[1].Value -split '\s*,\s*' | Where-Object { $_ })
-    $of = $(if ($calls.Count) { [int]$calls[0].Groups[1].Value } else { 0 })
-    Yes ("  in a job of its own whose matrix is the shares 1 to $of (" + ($shards -join ', ') + ")") ($shards.Count -ge 2 -and (($shards -join ',') -eq ((1..$of) -join ',')))
+    Yes '  in a job of its own named for its share of the matrix''s length' ($job -match ('(?m)^    name: Test harnesses \(' + [regex]::Escape('${{ matrix.shard }} of ${{ strategy.job-total }}') + '\)\s*$'))
+    Yes '  whose matrix is the "shares" job''s list' ($job -match '(?m)^    needs: shares\s*$' -and $job -match ('(?m)^\s+shard: ' + [regex]::Escape('${{ fromJSON(needs.shares.outputs.list) }}') + '\s*$'))
+    $yCode = (($y -split "`r?`n") | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+    Yes '  and no number of shares is typed anywhere else in the workflow' ($yCode -notmatch '(?m)^\s+shard:\s*\[' -and $yCode -notmatch '-Of \d' -and $yCode -notmatch '-Expect \d' -and $yCode -notmatch '\bof \d+\)')
+    $sj = [regex]::Match($y, '(?s)(?m)^  shares:\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\z)').Groups[1].Value
+    $count = [regex]::Match($sj, '(?s)run: \|\s*\r?\n(.*)').Groups[1].Value
+    $count = (($count -split "`r?`n") | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
+    Yes '  the "shares" job gives its list and count as outputs' ($sj -match ('(?m)^      list: ' + [regex]::Escape('${{ steps.count.outputs.list }}')) -and $sj -match ('(?m)^      count: ' + [regex]::Escape('${{ steps.count.outputs.count }}')))
+    $outFile = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-shares-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.txt')
+    $savedOut = $env:GITHUB_OUTPUT
+    try {
+        [IO.File]::WriteAllText($outFile, '')
+        $env:GITHUB_OUTPUT = $outFile
+        & ([scriptblock]::Create($count))
+        $o = @{}
+        foreach ($l in [IO.File]::ReadAllLines($outFile)) { $k, $v = $l -split '=', 2; $o[$k] = $v }
+    } finally {
+        $env:GITHUB_OUTPUT = $savedOut
+        Remove-Item -LiteralPath $outFile -Force -ErrorAction SilentlyContinue
+    }
+    $of = [int]$o['count']
+    $shards = @(($o['list'] | ConvertFrom-Json) | ForEach-Object { [string]$_ })
+    Yes ("  and its list, run here, is the shares 1 to its count of $of (" + ($shards -join ', ') + ")") ($of -ge 2 -and (($shards -join ',') -eq ((1..$of) -join ',')))
+    $rj = [regex]::Match($y, '(?s)(?m)^  harness-report:\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\z)').Groups[1].Value
+    Yes '  and the harness report waits for that many reports' ($rj -match '(?m)^    needs: \[shares, harnesses\]\s*$' -and $rj -match ('(?m)^\s+SHARES: ' + [regex]::Escape('${{ needs.shares.outputs.count }}')) -and $rj -match '-Expect \(\[int\]\$env:SHARES\)')
     Yes '  where one share failing does not cancel the other' ($job -match '(?m)^\s+fail-fast:\s*false\s*$')
     Yes '  on GitHub''s Windows runner, a runner a share (#4983)' ($job -match ('(?m)^\s+runs-on: ' + [regex]::Escape('windows-latest') + '\s*$'))
     $minutes = [int][regex]::Match($job, '(?m)^\s+timeout-minutes:\s*(\d+)').Groups[1].Value
-    $budget = $(if ($calls.Count) { [int]$calls[0].Groups[2].Value } else { 0 })
+    $budget = $(if ($calls.Count) { [int]$calls[0].Groups[1].Value } else { 0 })
     Yes ("  with a budget ($budget s) that leaves room inside the job's $minutes minutes for the rest of it") ($budget -gt 0 -and $minutes -gt 0 -and $budget -le ($minutes * 60 - 180))
     Yes '  and the old inline harness loop is gone from the workflow' ($y -notmatch 'function Run-One' -and $y -notmatch 'function Kill-Left')
 
