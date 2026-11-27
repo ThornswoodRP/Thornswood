@@ -162,7 +162,7 @@
 # and Online.AskPort write it), the in play update check's hand back to the
 # window, and the install and removal paths in Updater.cs. 173 are left,
 # below. Each is later work on its own path; converting one lowers its line.
-AutoJoin.cs 3
+AutoJoin.cs 2
 Chars.cs 7
 Checks.cs 19
 ClientRuntime.cs 1
@@ -181,7 +181,6 @@ InstallWindow.cs 3
 Junction.cs 1
 Keep.cs 5
 LastPlugin.cs 7
-Mics.cs 1
 OwnGame.cs 22
 OwnGameClean.cs 2
 OwnGameKinds.cs 2
@@ -353,7 +352,7 @@ game\gamemode\merchant-trading-bundle.ts 7
 game\gamemode\mod-settings.ts 6
 game\gamemode\needs.ts 21
 game\gamemode\npc-server-runtime.ts 2
-game\gamemode\property.ts 43
+game\gamemode\property.ts 41
 game\gamemode\scripted-activators.ts 8
 game\gamemode\season.ts 5
 game\gamemode\server-manifest.ts 1

@@ -16,8 +16,10 @@
 
   pieces(prop) is the source a harness that lifts single functions out of
   the property block puts beside them: packFirst, goldCut, the landings,
-  and packs wired to that harness's own save(). A landing the harness did
-  not lift what it needs for is never called.
+  what is owed into a pack and packTick, which pays it (#4258), and packs
+  wired to that harness's own save(). A landing the harness did not lift
+  what it needs for is never called. A harness that pays somebody calls
+  packTick after the move, as the server's tick does.
 */
 
 function receipts(mp) {
@@ -93,20 +95,31 @@ function cut(text, start, end) {
   return text.slice(a, b + end.length);
 }
 
-const LANDINGS = ['landBoxGold', 'landBoxLeft', 'landPost', 'landLetter', 'landHaul'];
+const LANDINGS = ['landBoxGold', 'landBoxLeft', 'landPost', 'landLetter', 'landHaul', 'landOwed'];
+// What is owed into a pack and the tick that pays it (#4258).
+const OWING = ['owe', 'giveCut', 'payOwed', 'packTick'];
 
 function pieces(prop) {
   return [
     cut(prop, '  // -- pack first (#4901), begin --', '  // -- pack first (#4901), end --'),
     cut(prop, '  function goldCut(', '\n  }\n'),
     LANDINGS.map(function (n) { return cut(prop, '  function ' + n + '(', '\n  }\n'); }).join('\n'),
+    OWING.map(function (n) { return cut(prop, '  function ' + n + '(', '\n  }\n'); }).join('\n'),
     'var debits = [];',
+    'var owing = {};',
+    // The line a payout lands with, to whoever it was owed to, through the harness's own notify and say.
+    'var tellPerson = function (pid, line) {',
+    '  var to = line && typeof onlineActorOf === "function" ? onlineActorOf(Number(pid)) : 0;',
+    '  if (to && typeof notify === "function") { notify(to, line); }',
+    '  if (to && typeof say === "function") { say(to, line); }',
+    '};',
+    'var newId = globalThis.crypto.randomUUID.bind(globalThis.crypto);',
     'var packs = packFirst(mp, function () { return debits; }, function () { save(); return true; }, {',
-    "  'box-gold': landBoxGold, 'box-left': landBoxLeft, post: landPost, letter: landLetter, haul: landHaul",
+    "  'box-gold': landBoxGold, 'box-left': landBoxLeft, post: landPost, letter: landLetter, haul: landHaul, owed: landOwed",
     "}, function () { }, 'thornswoodPropertyDebit', function (land, row, paid) {",
     '  debits.splice(debits.indexOf(row), 1);',
     '  const line = land(row, paid); save(); return line;',
-    '}, globalThis.crypto.randomUUID.bind(globalThis.crypto), mp.admitPackDebit);'
+    '}, newId, mp.admitPackDebit);'
   ].join('\n');
 }
 
@@ -131,4 +144,4 @@ function attachScenarioReservation(world) {
   };
 }
 
-module.exports = { receipts: receipts, pieces: pieces, LANDINGS: LANDINGS, attachScenarioReservation: attachScenarioReservation };
+module.exports = { receipts: receipts, pieces: pieces, LANDINGS: LANDINGS, OWING: OWING, attachScenarioReservation: attachScenarioReservation };

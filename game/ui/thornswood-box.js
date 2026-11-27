@@ -148,16 +148,7 @@
   }
 
   function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
-  }
-
-  function drawContents() {
     if (!root) { return; }
-    var keptGold = field(ID + '-gold');
-    var keptFor = field(ID + '-for');
-    var keptCount = field(ID + '-count');
-    var keptSlot = field(ID + '-slot');
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
     var d = data || {};
@@ -175,7 +166,7 @@
     }
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
-      out += '<div class="row"><span class="nm">' + rowLine(r, officer) + '</span><span class="tools">';
+      out += '<div class="row" data-row-key="row:' + esc(r.n) + '"><span class="nm">' + rowLine(r, officer) + '</span><span class="tools">';
       if (r.count > 1) {
         out += '<input class="n" id="' + ID + '-take-' + esc(r.n) + '" aria-label="Count to take" placeholder="all">';
       }
@@ -230,15 +221,8 @@
       }
     }
 
-    body.innerHTML = out;
-    var g = document.getElementById(ID + '-gold');
-    if (g && keptGold) { g.value = keptGold; }
-    var f = document.getElementById(ID + '-for');
-    if (f && keptFor) { f.value = keptFor; }
-    var c = document.getElementById(ID + '-count');
-    if (c && keptCount) { c.value = keptCount; }
-    var s = document.getElementById(ID + '-slot');
-    if (s && keptSlot) { s.value = keptSlot; }
+    // In place, so what is being typed and its focus outlast the update (#4475).
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(body, out, d.hold || d.where || ''); } else { body.innerHTML = out; }
     var buttons = body.querySelectorAll('button[data-do]');
     for (var b = 0; b < buttons.length; b++) { buttons[b].onclick = onDo; }
   }

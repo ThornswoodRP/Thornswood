@@ -430,10 +430,10 @@ file carries outside code and the file does not carry that project's notice.
 <!-- engine-pin:fork -->
 The six files recorded in `records\client-build.json` correspond to
 https://github.com/ThornswoodRP/skymp, branch `thornswood/engine-changes`,
-commit `7c5345db` (in full, `7c5345dbc0c2aab02413625c8dbc515bac7ebc48`). That
+commit `728a6191` (in full, `728a6191a7c15b9932182467303d2ff5fca58853`). That
 is upstream skyrim-multiplayer/skymp at `2849e676` with Thornswood's changes on
 top, and every one of those changes is in
-https://github.com/ThornswoodRP/skymp/compare/2849e676...7c5345db.
+https://github.com/ThornswoodRP/skymp/compare/2849e676...728a6191.
 <!-- /engine-pin:fork -->
 Check-Secrets.ps1 stops a release whose copy of any of the six is not the
 recorded sha256 (client-not-recorded-build), and Sync-Client.ps1 puts in the
@@ -702,7 +702,7 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,260 bytes, from commit
-`7c5345db`, the commit the client record names.
+`728a6191`, the commit the client record names.
 <!-- /engine-pin:front -->
 Its build.js is 2,444,820
 bytes, sha256
@@ -1319,6 +1319,11 @@ which Thornswood's help panel replaced; and Creations and Installed Content,
 the Creation Club, since Thornswood is Special Edition only. It ships no more
 than the five above do, and `$ShipMadeFromMods` keeps it out the same way.
 
+The SkyUI Team's inventory menu (`interface\inventorymenu.swf` in
+`SkyUI_SE.bsa`) uses the mapped inventory key to close (#7008). The launcher
+applies the recipe to the original from SkyUI 6.11 SE (Nexus Mods file 749043).
+`$ShipMadeFromMods` keeps the movie out of packs.
+
 `Data\SKSE\Plugins\QuickLootIE.json` does ship: QuickLoot IE 4.1.3's own
 settings file (Nexus Mods mod 120075, file 806802, which revisions 4 and 5
 both install) with one line added, which sets its loot menu's columns to
@@ -1494,15 +1499,15 @@ rewrite takes it out (#3684).
 <!-- engine-pin:servers -->
 - The game server's native module, `scam_native.node`, recorded in
   `records\server-build.json`, is AGPL-3.0. That record and the client record
-  name `7c5345dbc0c2aab02413625c8dbc515bac7ebc48` on the public fork. The
+  name `728a6191a7c15b9932182467303d2ff5fca58853` on the public fork. The
   server module and the six client files were built from that commit, which
   is upstream at `2849e676` with every change in
-  https://github.com/ThornswoodRP/skymp/compare/2849e676...7c5345db. Each change
+  https://github.com/ThornswoodRP/skymp/compare/2849e676...728a6191. Each change
   is a merged pull request of the fork, and the pull request here that moved
   the pin lists the ones it brought in.
   The server module's SHA256
-  is `1e99903659d118bf03124f0f8584f48a5c805727b1d8abff11848a61b3bde652`, built
-  2026-11-26T21:09:38Z. This is the recorded next release, not a deployment
+  is `39f58b33ae14c26424ec228003747b39eb8dbe061cc7e2524176b14ebdf04b18`, built
+  2026-11-26T22:40:35Z. This is the recorded next release, not a deployment
   claim. Main remains on `0714e444047a994b1013dfe4cac187aef29ad65a` until this goes
   out.
   <!-- /engine-pin:servers -->
@@ -1539,7 +1544,7 @@ Corresponding Source is the fork at the commit each record names. The six
 client files and the game server module, at the one commit both records name:
 
 <!-- engine-pin:source -->
-https://github.com/ThornswoodRP/skymp/tree/7c5345dbc0c2aab02413625c8dbc515bac7ebc48
+https://github.com/ThornswoodRP/skymp/tree/728a6191a7c15b9932182467303d2ff5fca58853
 
 For the engine Main runs until then:
 

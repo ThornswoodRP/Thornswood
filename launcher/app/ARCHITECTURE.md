@@ -267,7 +267,7 @@ The thirty-two keys in `config.json` and what reads each:
 | `ServerFolder` | `""` | `SkyMp.cs` (where it looks for a local server) | No |
 | `VoicePort` | `"7778"` | `Config.VoiceSocket()`, `Voice.cs` proximity voice socket port | No |
 | `VoiceUrl` | `""` | `Config.VoiceBase()`, `Config.VoiceSocket()`, `Voice.cs` | No |
-| `MicrophoneName` | `""` | `Mics.cs` (copied into `Thornswood.ini` at Play), `ShellAudioSettings.cs` | Yes (recording input selector) |
+| `MicrophoneName` | `""` | `Mics.cs` (the device voice opens), `ShellAudioSettings.cs` | Yes (recording input selector) |
 | `AudioOutputId` | `""` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (audio output selector) |
 | `AudioOutputName` | `""` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (audio output selector) |
 | `AudioOutputConfigured` | `false` | `AudioOutput.cs`, `ShellAudioSettings.cs` | Yes (marked when output chosen) |
@@ -993,7 +993,7 @@ cleared at once.
 | 15 | `ShellPlay.cs:273 Enforce.Apply` | Settings a mod rewrites on the way out, put back; SkyrimPlatform at its normal log level with no text window; one actor draw distance for everybody (#963). Then `ShellPlay.cs:277 CrashDump.Apply`: the full crash snapshot on only when the person ticked it in Settings (#2626), and with it on, those whose crash staff marked looked at deleted, and any past the newest two (#2319). | `Game\Data\SKSE\Plugins\OpenAnimationReplacer.ini`, `SkyrimPlatform.ini`, `CrashLogger.ini`, `Profile\MyGames\SkyrimPrefs.ini`; old `crash-*.dmp` in `Profile\MyGames\SKSE` deleted |
 | 16 | `ShellPlay.cs:284 AutoJoin.Apply` | `AutoJoin.cs:124 Apply()`: the server address and port, and where the client fetches the server's load order, through Hold.Around. SkyMP has no join screen; this file is the whole of joining. | `skymp5-client-settings.txt` when it changes |
 | 17 | `ShellPlay.cs:293 ThornIni.Ensure` | The template, if the file is missing. | `Game\Data\SKSE\Plugins\Thornswood.ini` |
-| 18 | `ShellPlay.cs:296 Mics.Apply` | This machine's microphone name, the voice port and the voice address. | `Thornswood.ini` |
+| 18 | `ShellPlay.cs:296 Mics.Apply` | The voice port and the voice address, for the game's overlay; an old `MicrophoneName` line is taken out (#4667). | `Thornswood.ini` |
 | 18a | `ShellPlay.cs:311 GeneratedHere.Ensure` | Off the window's thread, awaited. The behavior files and the covered bodies (#3715), built with the collection's own Pandora and BodySlide only when `generated.txt` is missing or stale: the mod list, the files the tools read, the build list compiled into the launcher, or a built file changed. A build that stops, or any body in the folder that is nude, stops Play with a message box saying why (#405). | when it builds: `Game\Data\meshes\actors\*\behaviors`, `characters`, `animationdatasinglefile.txt` and `animationsetdatasinglefile.txt`, the six bodies in `character assets`, BodySlide's own copies of its settings, presets and groups, and `Profile\OwnGame\generated.txt`; `Profile\OwnGame\build-generated` while it runs |
 | 19 | `ShellPlay.cs:341 EnsureServer` | `ShellPlay.cs:106 EnsureServer()`: `SkyMp.Up` connects to the resources port. A server elsewhere that does not answer is asked about; one on this machine is started. | `Profile\server.pid` and `server.log`, local server only |
 | 20 | `ShellPlay.cs:348 Keep.Restore` | Last thing before the game that can still say no, so nothing is left parked by a refusal. Our Data\Platform files back from `Profile\Keep`; other servers' plugins parked. | changed files in `Game\Data\Platform`; `Profile\Parked\*` and `parked.txt` |
@@ -1087,6 +1087,12 @@ snapshot beside it), `Shell.cs:2635 Checks.LastRunFrom` (a
 warning if that session ran some other Skyrim), and `Shell.cs:2648 Verify.Run`
 on a pool thread. A game closed for an update then fetches and installs it
 (`Shell.cs:2684 CheckUpdatesBackground`).
+
+The window then comes back to the front (`win.Activate`) with the keyboard
+on its frame rather than on Play: the game's start moved it there
+(`MainWindow.FocusOffButtons`), because the window gives the keyboard back
+to the last control that had it, and a key still going to the game pressed
+Play and started it again (#4550, `launcher\tests\test-4550-play-after-quit.ps1`).
 
 ### Closing the launcher
 

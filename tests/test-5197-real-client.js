@@ -91,7 +91,10 @@ function game(opts) {
     printConsole: function () { },
     getPlatformVersion: function () { return 'test'; },
     browser: { executeJavaScript: function (src) { pageRuns.push(src); } },
-    Game: { getPlayer: function () { return { getParentCell: function () { return world.cell; } }; } }
+    Game: {
+      getPlayer: function () { return world.pc || { getParentCell: function () { return world.cell; } }; },
+      getCurrentCrosshairRef: function () { return world.crosshair || null; }
+    }
   };
   const FakeDate = { now: function () { return now; }, parse: Date.parse };
   const sandbox = {
@@ -107,10 +110,13 @@ function game(opts) {
     return String(files[OUT] || '').split('\n').filter(Boolean).map(function (l) { return JSON.parse(l); });
   }
   return {
-    files: files, handlers: handlers, world: world, pageRuns: pageRuns, lines: lines,
+    files: files, handlers: handlers, world: world, pageRuns: pageRuns, lines: lines, box: sandbox, fire: fire,
     // A frame: time moves on by ms, then update and tick, as the game sends them.
     frame: function (ms) { now += ms || 16; fire('update'); fire('tick'); },
+    // A frame of a paused game: tick comes, update does not.
+    tickOnly: function (ms) { now += ms || 16; fire('tick'); },
     menu: function (name, open) { fire(open ? 'menuOpen' : 'menuClose', { name: name }); },
+    button: function (ev) { fire('buttonEvent', ev); },
     page: function () { fire('browserMessage', { arguments: [].slice.call(arguments) }); },
     // The runner's half: answer every ask so far.
     ack: function (reply) {
@@ -134,6 +140,56 @@ function game(opts) {
   const g = game({ dev: false, steps: [{ do: 'end' }] });
   yes('no dev answer on disk: the plugin hooks nothing, even with a run file there', Object.keys(g.handlers).length === 0);
   yes('and leaves the file alone', !!g.files[RUN] && !g.files[OUT]);
+}
+
+// Inventory input receipts contain only the scripted key and bounded state.
+{
+  const g = game({ steps: [
+    { do: 'key', code: 23, inventoryTrace: true },
+    { do: 'wait', for: 'menu', menu: 'InventoryMenu', open: false },
+    { do: 'shot', name: 'inventory-closed' },
+    { do: 'key', code: 23 },
+    { do: 'end' }
+  ] });
+  const receipts = () => g.lines().filter(l => l.t === 'inventory-key');
+  const event = { device: 0, code: 23, isDown: true, isUp: false, userEventName: 'Quick Inventory' };
+  g.button(event);
+  yes('an inventory trace is idle before the runner is asked', receipts().length === 0);
+  g.menu('InventoryMenu', true);
+  g.frame();
+  g.button({ ...event, code: 36 });
+  g.button({ ...event, device: 2 });
+  g.button({ ...event, isRepeating: true });
+  g.button({ ...event, isHeld: true });
+  g.button({ ...event, userEventName: '' });
+  g.button(event);
+  g.ack();
+  g.frame(300);
+  g.menu('InventoryMenu', false);
+  g.frame();
+  g.button({ ...event, isDown: false, isUp: true, userEventName: 'ignored event name' });
+  const got = receipts();
+  yes('records one physical down and later up even after the release wait has already passed',
+    got.length === 2 && got[0].phase === 'down' && got[1].phase === 'up' && got.every(l => l.i === 0) && got[0].inventoryOpen && !got[1].inventoryOpen);
+  yes('receipts distinguish no action and another action without storing raw action values',
+    got.length === 2 && got[0].action === 'none' && got[1].action === 'other' && !JSON.stringify(got).includes('ignored event name'));
+  g.frame();
+  g.ack();
+  g.frame(300);
+  g.frame();
+  g.button(event);
+  yes('an untraced key step retires the inventory probe', receipts().length === 2);
+}
+{
+  const g = game({ steps: [{ do: 'key', code: 23, inventoryTrace: true }, { do: 'end' }] });
+  const event = { device: 0, code: 23, isDown: true, userEventName: 'Quick Inventory' };
+  g.frame();
+  g.button(event);
+  g.frame(6000);
+  g.button({ ...event, isDown: false, isUp: true });
+  const receipts = g.lines().filter(l => l.t === 'inventory-key');
+  yes('a named Inventory action is reported and releases past the trace deadline are ignored',
+    receipts.length === 1 && receipts[0].action === 'inventory');
 }
 
 // --------------------------------------------------------- a whole run ----
@@ -789,6 +845,224 @@ foreach ($scan in @(1,23,36)) {
     yes('a line still being written is not read yet', /PART \[\]/.test(out));
     if (!/GOT \[Windows/.test(out)) { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// Facing a bed (#6712): the step stands the character 90 units out from
+// the nearest bed in the cell, on its side, turned to it; the crosshair wait
+// sees it; a pause waits its time; lying down is a results line.
+{
+  function ref(id, name, x, y, bed) {
+    return {
+      bed: bed, getFormID: function () { return id; },
+      getBaseObject: function () { return { getName: function () { return name; } }; },
+      getPositionX: function () { return x; }, getPositionY: function () { return y; }, getPositionZ: function () { return 64; }
+    };
+  }
+  const chair = ref(0x101, 'Chair', 10, 10, false);
+  const far = ref(0x102, 'Bed', 1000, 1000, true);
+  const near = ref(0x103, 'Bed', 300, 0, true);
+  const refs = [chair, far, near];
+  const g = game({ steps: [
+    { do: 'face', what: 'bed' },
+    { do: 'wait', for: 'crosshair', what: 'bed', timeout: 2000 },
+    { do: 'wait', for: 'time', ms: 1500 },
+    { do: 'end' }
+  ] });
+  g.box.Thornswood.isBedRef = function (r) { return !!(r && r.bed); };
+  const cell = { getNumRefs: function (t) { return t === 40 ? refs.length : 0; }, getNthRef: function (i) { return refs[i]; } };
+  const at = { x: 0, y: 0, angle: null };
+  g.world.cell = cell;
+  g.world.pc = {
+    getParentCell: function () { return cell; },
+    getPositionX: function () { return at.x; }, getPositionY: function () { return at.y; },
+    setPosition: function (x, y) { at.x = x; at.y = y; },
+    setAngle: function (x, y, z) { at.angle = [x, y, z]; }
+  };
+  for (let i = 0; i < 5; i++) { g.frame(16); }
+  const steps = function () { return g.lines().filter(function (l) { return l.t === 'step'; }); };
+  const faced = steps()[0];
+  yes('face bed passes and names the nearest bed', !!faced && faced.ok && /before bed 103 "Bed", 2 bed\(s\) in the cell, it was 300 units off/.test(faced.note));
+  yes('  and stands 90 units out on the side the character was on', Math.round(at.x) === 210 && Math.round(at.y) === 0);
+  yes('  turned to the bed, heading east (90), looking a little down', !!at.angle && Math.round(at.angle[2]) === 90 && at.angle[0] > 0);
+  yes('the crosshair wait holds while no bed is under it', steps().length === 1);
+  g.world.crosshair = near;
+  g.frame(16); g.frame(16);
+  yes('  and passes once one is', steps().length === 2 && steps()[1].ok && /bed 103/.test(steps()[1].note));
+  g.frame(1000);
+  yes('a pause has not passed before its time', steps().length === 2);
+  g.frame(600); g.frame(16);
+  yes('  and passes after it', steps().length >= 3 && steps()[2].ok);
+  g.fire('furnitureEnter', { actor: { getFormID: function () { return 0x14; } }, target: near });
+  g.fire('furnitureEnter', { actor: { getFormID: function () { return 0x999; } }, target: near });
+  const sat = g.lines().filter(function (l) { return l.t === 'furniture'; });
+  yes('lying down in a bed is a results line, the character\'s own only', sat.length === 1 && sat[0].enter === true && sat[0].bed === true && /103/.test(sat[0].ref));
+}
+{
+  const g = game({ steps: [{ do: 'face', what: 'bed' }, { do: 'end' }] });
+  g.box.Thornswood.isBedRef = function (r) { return !!(r && r.bed); };
+  const cell = { getNumRefs: function () { return 0; }, getNthRef: function () { return null; } };
+  g.world.cell = cell;
+  g.world.pc = { getParentCell: function () { return cell; }, getPositionX: function () { return 0; }, getPositionY: function () { return 0; } };
+  for (let i = 0; i < 4; i++) { g.frame(16); }
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('face bed in a cell with no bed fails and says so', st.length && st[0].ok === false && /no bed among the 0 furniture/.test(st[0].note));
+}
+{
+  let list = [];
+  try { list = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json')) || '{}').steps || []; } catch (e) { list = []; }
+  const tp = list.filter(function (x) { return x.do === 'page' && /\/tp bannered/.test(x.js || ''); });
+  yes('the bed steps go to an inn with one /tp, sent once though a page step is asked again every half second',
+      tp.length === 1 && /if\(window\.__tsBedTp\)\{return 'sent';\}/.test(tp[0].js) && /window\.__tsBedTp=1/.test(tp[0].js) &&
+      /    say: function \(text, how\)/.test(read(path.join('game', 'ui', 'thornswood-chat.js'))));
+  const face = list.findIndex(function (x) { return x.do === 'face'; });
+  yes('  then face a bed, wait for its prompt and use it with E', face > 0 && list[face + 1].for === 'crosshair' && list.slice(face, face + 4).some(function (x) { return x.do === 'key' && x.code === 18; }));
+  yes('  and press T in the same room', list.slice(face).some(function (x) { return x.do === 'key' && x.code === 20; }));
+}
+{
+  const FRONT_SRC = read(path.join('game', 'plugins', 'thornswood-front.js'));
+  yes('front shares its bed rule as Thornswood.isBedRef, the one the face step uses', /T\.isBedRef = isBedRef;/.test(FRONT_SRC) && /T\.isBedRef\(ref\)/.test(PLUGIN));
+}
+
+// Test tasks (#5197): a failing step ends its task, not the run, after its
+// screenshot; the next task runs; each task gets one results line; the run
+// ends failed and names the failed tasks.
+{
+  const g = game({ steps: [
+    { do: 'wait', for: 'menu', menu: 'Nope', open: true, timeout: 100, task: 101 },
+    { do: 'shot', name: 'never', task: 101 },
+    { do: 'wait', for: 'time', ms: 10, task: 202 },
+    { do: 'wait', for: 'time', ms: 10, task: 202 },
+    { do: 'end' }
+  ] });
+  for (let i = 0; i < 12; i++) { g.frame(50); g.ack({ ok: true }); }
+  const L = g.lines();
+  const tasks = L.filter(function (l) { return l.t === 'task'; });
+  const shots = L.filter(function (l) { return l.t === 'ask' && l.do === 'shot'; }).map(function (l) { return l.arg; });
+  const done = L.filter(function (l) { return l.t === 'done'; })[0];
+  yes('a failing step of a task takes its fail shot and fails only that task', shots.indexOf('fail-0') >= 0 && shots.indexOf('never') < 0 &&
+      tasks.length === 2 && tasks[0].task === '101' && tasks[0].ok === false && /waited 100 ms for Nope/.test(tasks[0].note));
+  yes('  the next task runs and passes', tasks[1].task === '202' && tasks[1].ok === true);
+  yes('  and the run ends failed, naming the failed task', !!done && done.ok === false && /test task\(s\) failed: #101/.test(done.note));
+}
+// The test-task list starts as the dev-release run does, up to the world,
+// and every step after that belongs to a test task.
+{
+  const dev = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json'))).steps;
+  const tt = JSON.parse(read(path.join('tests', 'real-client', 'test-tasks.json'))).steps;
+  const cut = dev.findIndex(function (x) { return x.do === 'shot' && x.name === 'in-world'; });
+  yes('test-tasks.json joins the world with dev-release.json\'s own steps', cut > 0 && JSON.stringify(tt.slice(0, cut + 1)) === JSON.stringify(dev.slice(0, cut + 1)));
+  const firstTidy = tt.findIndex(function (x) { return x.tidy === true; });
+  const tasksEnd = firstTidy > 0 ? firstTidy : tt.length - 1;
+  yes('  and every step after that carries its test task, but the tidy steps and the end', tt.slice(cut + 1, tasksEnd).every(function (x) { return x.task !== undefined; }) &&
+      tt.slice(tasksEnd, -1).every(function (x) { return x.tidy === true && x.task === undefined; }) && tt[tt.length - 1].do === 'end');
+  // The journal tasks (2135, 5429, 2563) press what the panel draws, so
+  // every id and button they name is one thornswood-journal.js makes, J is
+  // the front's journal key, and the limits they check are the panel's.
+  const jsOf = function (task) { return tt.filter(function (x) { return x.task === task && x.do === 'page'; }).map(function (x) { return x.js; }).join('\n'); };
+  const jr = read(path.join('game', 'ui', 'thornswood-journal.js'));
+  const front = read(path.join('game', 'plugins', 'thornswood-front.js'));
+  const jAll = [2135, 5429, 2563].map(jsOf).join('\n') + tt.filter(function (x) { return x.tidy; }).map(function (x) { return x.js; }).join('\n');
+  const ids = (jAll.match(/#ts-journal-[a-z]+/g) || []).filter(function (v, i, a) { return a.indexOf(v) === i; });
+  yes('  its journal steps name only ids the journal panel makes', ids.length >= 4 && /var ID = 'ts-journal';/.test(jr) &&
+      ids.every(function (id) { return jr.indexOf("ID + '-" + id.slice(12)) >= 0; }));
+  const verbs = (jAll.match(/act\('[a-z]+'\)/g) || []).map(function (v) { return v.slice(5, -2); });
+  yes('  and only its buttons', verbs.length >= 3 && verbs.every(function (v) { return jr.indexOf('data-do="' + v + '"') >= 0; }) &&
+      /data-new="1"/.test(jr) && /data-book="/.test(jr) && /data-page="/.test(jr));
+  yes('  J is the journal key they press', tt.filter(function (x) { return [2135, 5429, 2563].indexOf(x.task) >= 0 && x.do === 'key'; }).every(function (x) { return x.code === 36; }) &&
+      /iniNumber\(ini, 'JournalKey', 36\)/.test(front));
+  yes('  a page holds 4,000 characters, as the long-page task checks', /var PAGE_CHARS = 4000;/.test(jr) && /maxLength!==4000/.test(jsOf(2563)));
+  yes('  and the presses of New are judged after the panel\'s wait for an answer', /var NEW_WAIT_MS = 3000;/.test(jr) &&
+      tt.filter(function (x) { return x.task === 2135 && x.for === 'time'; }).every(function (x) { return x.ms > 3000; }));
+  yes('  every page step\'s script parses', tt.every(function (x) { if (x.do !== 'page') { return true; } try { new Function('return ' + x.js); return true; } catch (e) { return false; } }));
+  const tp = read(path.join('game', 'gamemode', 'teleport.ts'));
+  yes('  its dice check reads the lines the server writes', /rwho \+ ' rolls ' \+ rsides \+ ': ' \+ total/.test(tp) && /rwho \+ ' rolls ' \+ rcount \+ 'x' \+ rsides \+ ': ' \+ rolls\.join\(' \+ '\) \+ ' = ' \+ total/.test(tp) && /'The number is the sides: /.test(tp));
+}
+// The world-runs wait: passes while updates keep coming, fails on a pause.
+{
+  const g = game({ steps: [{ do: 'wait', for: 'running', ms: 300, task: 7 }, { do: 'end' }] });
+  for (let i = 0; i < 10; i++) { g.frame(50); }
+  const ran = g.lines().filter(function (l) { return l.t === 'task'; });
+  yes('the world-runs wait passes while updates keep coming', ran.length === 1 && ran[0].task === '7' && ran[0].ok === true);
+}
+{
+  const g = game({ steps: [{ do: 'wait', for: 'running', ms: 5000, task: 8 }, { do: 'end' }] });
+  g.frame(16);
+  // Ticks for 1.6 s with no update between them.
+  for (let i = 0; i < 4; i++) { g.tickOnly(400); }
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('  and fails when the game stops sending updates (a paused world)', st.length && st[0].ok === false && /sent no update for \d+ ms/.test(st[0].note));
+}
+
+// The inventory is closed with a second I, the way Patrick wants it to
+// close (26 Nov): the run checks that it does, rather than going round it
+// with Tab or Escape.
+{
+  let list = [];
+  try { list = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json')) || '{}').steps || []; } catch (e) { list = []; }
+  const shut = list.findIndex(function (x) { return x.do === 'wait' && x.menu === 'InventoryMenu' && x.open === false; });
+  yes('the key before the inventory close wait is a second I (23)', shut > 0 && list[shut - 1].do === 'key' && list[shut - 1].code === 23);
+}
+
+// The game's own logs are kept with the run, since the next game start
+// writes over them (26 Nov: #6619's "Owner outfit" lines were gone).
+{
+  const RUN = read(path.join('scripts', 'dev', 'Run-RealClient.ps1')) || '';
+  yes('the run keeps the SKSE logs its game wrote, under game\\',
+      /\$runStarted = Get-Date/.test(RUN) && /'Profile\\MyGames\\SKSE'/.test(RUN) &&
+      /Filter '\*\.log' -File \| Where-Object \{ \$_\.LastWriteTime -ge \$runStarted \}/.test(RUN) &&
+      /Join-Path \$Out 'game'/.test(RUN));
+  yes('  read while the game may still hold them, as launcher.log is', /\[IO\.File\]::Open\(\$f\.FullName, 'Open', 'Read', 'ReadWrite'\)/.test(RUN));
+  yes('  and kept before the summary is written, so they go up with the run', RUN.indexOf("Join-Path $Out 'game'") > 0 && RUN.indexOf("Join-Path $Out 'game'") < RUN.indexOf("Compress-Archive"));
+}
+
+// The watcher starts a run by itself after a dev release (#5197's Done when:
+// nobody at the PC), once per Deployment, and never over somebody's game,
+// on a locked PC, or while somebody is using it.
+{
+  const cp = require('child_process');
+  const WATCH = read(path.join('scripts', 'dev', 'Watch-RealClient.ps1')) || '';
+  yes('the watcher is there and names its rule', /function Get-WatchVerdict/.test(WATCH));
+  yes('it makes the run from the Deployment\'s own commit, in a worktree that goes afterwards',
+      /worktree add -q --detach \$tree \$dep\.sha/.test(WATCH) && /finally \{\s*git -C \$repoRoot worktree remove --force \$tree/.test(WATCH));
+  yes('it marks a Deployment started before the run, so a run that stops early is not started again',
+      WATCH.indexOf('Add-Content -LiteralPath $startedFile') > 0 && WATCH.indexOf('Add-Content -LiteralPath $startedFile') < WATCH.indexOf("Run-RealClient.ps1'), '-Publish'"));
+  yes('the task runs the watcher from its own worktree, moved to origin/main before every look',
+      /\$watcher = Join-Path \$repoRoot 'worktrees\\real-client-watcher'/.test(WATCH) &&
+      /\$look = "git -C '\$watcher' fetch -q origin main; git -C '\$watcher' checkout -q --detach origin\/main; & '" \+ \(Join-Path \$watcher 'scripts\\dev\\Watch-RealClient\.ps1'\)/.test(WATCH) &&
+      /-Command "' \+ \$look/.test(WATCH));
+  yes('its worktrees and temp hang off the clone, found through git\'s shared directory',
+      /rev-parse --git-common-dir/.test(WATCH) && /\$repoRoot = Split-Path -Parent/.test(WATCH));
+  yes('-Now runs at once when asked, skipping only the idle wait', /\[switch\]\$Now/.test(WATCH) && /if \(\$Now\) \{ \$IdleMinutes = 0 \}/.test(WATCH));
+  yes('-Uninstall takes the watcher\'s worktree off too', /if \(\$Uninstall\) \{[\s\S]*?worktree remove --force \$watcher/.test(WATCH));
+  const ver = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+  if (ver.status === 0) {
+    const file = path.join(REPO_DIR, 'scripts', 'dev', 'Watch-RealClient.ps1').replace(/'/g, "''");
+    const script = "$ErrorActionPreference = 'Stop'\n. '" + file + "'\n" +
+      "$d = [pscustomobject]@{ id = '7'; state = 'success'; lines = @('Deployed build-1.3.130') }\n" +
+      "function V($dep, $started, $open, $locked, $idle, $going) { Get-WatchVerdict $dep $started $open $locked $idle 10 $going }\n" +
+      "'A ' + (V $d @() $false $false 30 $false)\n" +
+      "'B ' + (V ([pscustomobject]@{ id = '7'; state = 'success'; lines = @('Real game run: failed. 22 of 38 steps passed.', 'Deployed') }) @() $false $false 30 $false)\n" +
+      "'C ' + (V $d @('7') $false $false 30 $false)\n" +
+      "'D ' + (V $d @() $true $false 30 $false)\n" +
+      "'E ' + (V $d @() $false $true 30 $false)\n" +
+      "'F ' + (V $d @() $false $false 3 $false)\n" +
+      "'G ' + (V $d @() $false $false 30 $true)\n" +
+      "'H ' + (V ([pscustomobject]@{ id = '8'; state = 'in_progress'; lines = @() }) @() $false $false 30 $false)\n" +
+      "'I ' + (V $null @() $false $false 30 $false)\n";
+    const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
+    const out = (r.stdout || '') + (r.stderr || '');
+    const said = function (k) { const m = new RegExp('^' + k + ' (.*)$', 'm').exec(out); return m ? m[1].trim() : ''; };
+    yes('a new successful Deployment, nothing open, unlocked, idle: it runs', said('A') === 'run');
+    yes('a Deployment that has had its run is not run again', /has had its run/.test(said('B')));
+    yes('nor one it started a run for already', /was started for the newest Dev Deployment already/.test(said('C')));
+    yes('not over an open launcher or game', /launcher or the game is open/.test(said('D')));
+    yes('not on the lock screen', /lock screen/.test(said('E')));
+    yes('not while somebody is using the PC', /somebody used the PC 3 minute/.test(said('F')));
+    yes('not while its own run is going', /still going/.test(said('G')));
+    yes('not before the Deployment has succeeded', /in_progress, not success/.test(said('H')));
+    yes('and not with no Deployment', said('I') === 'no Dev Deployment');
+    if (said('A') !== 'run') { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
   }
 }
 

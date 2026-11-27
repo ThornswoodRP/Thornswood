@@ -170,6 +170,8 @@ function box(p, args) {
   let said = [];
   inDir(function () {
     W.command('/dropbox', ['/dropbox'].concat(args || []), p.a, p.pid, function (pid, m) { said.push(m); });
+    // What is taken out is owed into the pack, and lands on the server's next tick (#4258).
+    W.settlePacks();
   });
   return { view: shown[p.a], said: said.join(' ') };
 }

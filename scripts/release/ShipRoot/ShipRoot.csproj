@@ -140,6 +140,7 @@
     <Compile Include="$(ThornswoodApp)Verify.cs" />
     <Compile Include="$(ThornswoodApp)VortexProfileState.cs" />
     <Compile Include="$(ThornswoodApp)Watched.cs" />
+    <Compile Include="$(ThornswoodApp)WholeFile.cs" />
   </ItemGroup>
 
   <!-- The records OwnGame and the client runtime read out of the exe, under

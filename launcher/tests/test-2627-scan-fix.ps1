@@ -522,8 +522,8 @@ namespace Thornswood
             Yes("a light plugin whose release copy is not the server's is refused, and said", refused && !File.Exists(Path.Combine(data, "Thornswood-Last.esp")));
             List<Issue> still = Verify.Run(cfg);
             Issue stillOrder = Find(still, IssueKind.Plugins, "light position");
-            Yes("then the light order is still found, and what will put it right is the next update",
-                stillOrder != null && stillOrder.WhatWill.IndexOf("does not have the copy the server runs yet", StringComparison.Ordinal) >= 0 && Clean(stillOrder.WhatWill));
+            Yes("then the light order is still found, and what will put it right is the channel's newer release",
+                stillOrder != null && stillOrder.WhatWill.IndexOf("does not have the copy the server runs", StringComparison.Ordinal) >= 0 && Clean(stillOrder.WhatWill));
 
             // No package to take a copy from, and a release that does not
             // ship the plugin: nothing is written, and nothing is asked of the

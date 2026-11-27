@@ -18,8 +18,8 @@
        off another's claim, their office is let go, before rolesRead could
        name them; their posts come down with their words off; a job they took
        goes back on the board; gold owed to them stops being held; the drop
-       box keeps every coin with their name off; their bed nights and takings
-       go
+       box keeps every coin with their name off; their bed nights end; what
+       was owed into their pack goes
     B  the books stay balanced: every hold's ledger (funds) is the same coin
        for coin, never less than what is still held, and the drop box holds
        the same gold
@@ -226,6 +226,9 @@ function registers(dir) {
         next: 4
       }
     },
+    // Gold owed into a pack and not yet in it (#4258), theirs and somebody else's.
+    owing: { [P1]: [{ id: 'owed-1', entries: [{ baseId: GOLD, count: 10 }], line: '' }],
+             [PY]: [{ id: 'owed-2', entries: [{ baseId: GOLD, count: 4 }], line: '' }] },
     // The jail rule ran long ago, as on every server, so a start writes nothing of its own.
     steps: { jailRule: NOW },
     boards: {
@@ -242,8 +245,7 @@ function registers(dir) {
     guests: {
       'b2:Skyrim.esm': { [P1]: { by: PY, at: NOW, name: 'Mine' }, [PZ]: { by: PY, at: NOW, name: 'Theirs' } },
       'b1:Skyrim.esm': { [PY]: { by: P1, at: NOW, name: 'Yours' } }
-    },
-    takings: { [P1]: 10, [PY]: 4 }
+    }
   });
   w('farm-claims.json', { at: NOW, claims: {
     [P1]: { by: P1, name: 'Mine', at: NOW, cell: '3c:Skyrim.esm', x: 0, y: 0 },
@@ -496,7 +498,9 @@ try {
   const beds = j(dir, 'beds.json');
   yes('P16 their night, and the guests of the building they held, end; somebody else\'s guest stays',
       !beds.guests['b2:Skyrim.esm'][P1] && !!beds.guests['b2:Skyrim.esm'][PZ] && !beds.guests['b1:Skyrim.esm']);
-  yes('P17 the takings kept for them go, the others\' stay', beds.takings[P1] === undefined && beds.takings[PY] === 4);
+  yes('P17 what was owed into their pack goes, the others\' stays (#4258)',
+      !!prop.owing && prop.owing[P1] === undefined && !!prop.owing[PY] && prop.owing[PY].length === 1 &&
+      prop.owing[PY][0].entries[0].count === 4);
   yes('P18 rent they still owed on a place they no longer held goes; somebody else\'s stays (#3893)',
       JSON.stringify(prop.arrears) === JSON.stringify({ 'b2:Skyrim.esm': [{ by: PY, name: 'Yours', owed: 5, at: NOW }] }));
 
@@ -587,7 +591,7 @@ try {
   // ---- L
   const all = run.logged.join('\n');
   yes('L1 the log says counts: property ' + (L[2] || '').replace('release: property: ', ''),
-      /^release: property: claims 1, masterKeys 1, offices 2, posts 2, handedBack 1, owed 1, lines 5, box 1, boxRecord 2, guests 2, takings 1, arrears 1$/.test(L[2] || ''));
+      /^release: property: claims 1, masterKeys 1, offices 2, posts 2, handedBack 1, owed 1, lines 5, box 1, boxRecord 2, guests 2, owing 1, arrears 1$/.test(L[2] || ''));
   yes('L2 and never a name, a profile id or a form id of theirs, in any line of this start',
       !/Mine|Also mine|my words/.test(all) &&
       [P1, P2, A1, A2].every(function (n) { return !new RegExp('\\b(' + n + '|' + n.toString(16) + ')\\b', 'i').test(all); }));

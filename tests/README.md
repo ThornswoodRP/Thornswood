@@ -1,5 +1,17 @@
 # The test harnesses
 
+Run `python tests/claimable-door-unlocks-cases.py` for the four individually
+reviewed authored-lock records. These controls use synthetic plugin fixtures,
+the actual door-table builder, record reader/writer and recipe reconstruction.
+They do not open an installed game. A full content build must still pass the
+exact source/record/dependency guards before the change can be released.
+
+Run `python tests/riftweald-unlock-cases.py` for the exact Riftweald door and
+bolt record controls. It uses synthetic plugins, the real record writer and
+reader, and the real door-table builder; no installed game or native build is
+needed. The real content build must separately pass the strict winning-record
+guards before this change can be accepted for release.
+
 ## What they are
 
 Every `test-*.js` and `test-*.ps1` here checks one thing the scripts, the

@@ -63,6 +63,16 @@ function textProblems(page, ids, where) {
     }
   }
   const lines = render(page.description).split(/\r?\n/);
+  // An address given as its own text, bare or in <...>, in any of the
+  // page's texts: a screen reader spells it out, and nothing says where it
+  // goes. A link has words for its text, [the words](address) (#4234).
+  for (const f of FIELDS) {
+    render(page[f]).split(/\r?\n/).forEach((raw, i) => {
+      const left = raw.replace(/\[[^\]]+\]\(https?:\/\/[^)\s]+\)/g, '');
+      const m = /https?:\/\/[^\s>)]+/.exec(left);
+      if (m) out.push(f + ' line ' + (i + 1) + ' gives ' + m[0] + ' as a bare address. Give it words for its text: [the words](' + m[0] + ')');
+    });
+  }
   let heads = 0;
   lines.forEach((raw, i) => {
     const l = raw.trim();

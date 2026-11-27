@@ -419,24 +419,27 @@
     return keyName ? 'Escape or ' + keyName + ' closes this.' : 'Escape closes this.';
   }
 
+  // The double quote too, since a request's key goes in an attribute, which
+  // is double quoted (#4475), and a group book's name can hold one.
   function esc(s) {
     return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // In place, so the focused control outlasts the update (#4475).
+  function put(host, html, subject) {
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, subject); } else { host.innerHTML = html; }
   }
 
   function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
-  }
-
-  function drawContents() {
     resetDestructive();
     if (!root) { return; }
     var body = root.querySelector('#' + ID + '-body');
     var sub = root.querySelector('#' + ID + '-sub');
     var foot = root.querySelector('#' + ID + '-foot');
     if (!data) {
-      body.innerHTML = '<div class="none">Waiting for the server.</div>';
+      put(body, '<div class="none">Waiting for the server.</div>');
       sub.textContent = '';
       foot.textContent = '';
       return;
@@ -452,7 +455,10 @@
         : (data.offer.kind === 'dye' ? 'offers to dye your hair with ' + esc(data.offer.about || 'a hair dye')
         : (data.offer.kind === 'book' ? 'invites you into ' + esc(data.offer.about || 'a group book')
                                             : 'is offering to trade'))));
-      html += '<div class="ask"><span class="who"><span class="kicker">Request</span><b>' + esc(data.offer.name) +
+      // Keyed by the request, so a new request gets new answer buttons and a
+      // press meant for the last one cannot answer this one (#4475).
+      html += '<div class="ask" data-row-key="' + esc(['offer', data.offer.kind, data.offer.from, data.offer.about || ''].join(':')) +
+              '"><span class="who"><span class="kicker">Request</span><b>' + esc(data.offer.name) +
               '</b> ' + what + '</span>' +
               '<button class="go" data-do="yes">Accept</button>' +
               '<button data-do="no">Refuse</button></div>';
@@ -610,7 +616,7 @@
             'a change inside the game files rather than on this server.' +
             '</div></div>';
 
-    body.innerHTML = html;
+    put(body, html);
     sub.textContent = (data.friends ? data.friends.length : 0) + ' friend' +
                       ((data.friends && data.friends.length === 1) ? '' : 's');
     foot.textContent = closesLine();
@@ -804,13 +810,14 @@
       It comes from the plugin rather than from the server's own push to this
       page, because the plugin is already reading that property for the map
       markers and a page cannot read a plugin's variables. One source, two
-      uses.
+      uses. Only the strip reads it: the panel shows nothing of where
+      anybody is, so a move redraws the strip and leaves the panel alone
+      (#4475), where it used to be drawn again five times a second.
     */
     setWhere: function (list) {
       where = Array.isArray(list) ? list : [];
       ensureStrip();
       drawStrip();
-      if (shown) { draw(); }
     },
     /* For anybody checking whether the strip is doing anything. */
     strip: function () { return where.length; }

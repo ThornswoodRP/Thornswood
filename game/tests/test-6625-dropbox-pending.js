@@ -43,7 +43,8 @@ function rig(){
   yes('the same token on another box cannot acknowledge the deposit',p.sent.length===1&&p.waiting());
   p.reply({hold:'windhelm',goldRequest:token,said:'Gold put in.',at:5});
   yes('the matching box receipt restores its controls',!p.waiting());
-  p.click();const next=p.token();
+  // The view went to another box and back, so its fields are new (#4475): type the amount again.
+  p.amount('10');p.click();const next=p.token();
   yes('a fresh press after the answer sends a distinct request',p.sent.length===2&&next!==token);
   p.reply({goldRequest:token,at:6});p.click();
   yes('a stale earlier receipt cannot release a newer deposit',p.sent.length===2&&p.waiting());

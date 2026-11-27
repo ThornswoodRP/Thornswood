@@ -100,7 +100,9 @@
     },
     {
       "do": "page",
-      "why": "a character still in the hall, new or made in an earlier run, takes Starting Location, Whiterun, Review, Confirm on the K panel as a person does; one the server has placed already skips the shot and the trip to town", "skip": 2, "skipIf": "placed",
+      "why": "a character still in the hall, new or made in an earlier run, takes Starting Location, Whiterun, Review, Confirm on the K panel as a person does; one the server has placed already skips the shot and the trip to town",
+      "skip": 2,
+      "skipIf": "placed",
       "timeout": 120000,
       "js": "(function(){if(window.__ts5197home)return window.__ts5197home;var k=window.thornswoodSkills;if(!k||!k.isCreating)return '';var made=k.isCreating();if(made===null)return '';if(!made)return 'placed';var r=document.getElementById('ts-skills');if(!r||r.className==='gone')return '';var nav=[].slice.call(r.querySelectorAll('.nav .navrow'));function row(k){for(var i=0;i<nav.length;i++){var e=nav[i].querySelector('.k');if(e&&e.textContent===k)return nav[i];}return null;}var home=row('Starting Location'),review=row('Review');if(!home||!review)return '';var hv=home.querySelector('.v');if(hv&&/\\bneed\\b/.test(hv.className)){if(!/\\bon\\b/.test(home.className)){home.click();return '';}var cards=[].slice.call(r.querySelectorAll('.body .card'));var pick=null;for(var j=0;j<cards.length;j++){var n=cards[j].querySelector('.name');if(n&&/^Whiterun/.test(n.textContent)){pick=cards[j];break;}}if(!pick)pick=cards[0];if(pick)pick.click();return '';}if(!/\\bon\\b/.test(review.className)){review.click();return '';}var c=r.querySelector('[data-act=\"confirm\"]');if(c&&!/\\boff\\b/.test(c.className)){c.click();window.__ts5197home='confirmed '+(hv?hv.textContent:'');return window.__ts5197home;}return '';})()"
     },
@@ -158,8 +160,129 @@
       "why": "the game's own journal stays shut"
     },
     {
+      "do": "page",
+      "js": "(function(){if(window.__tsBedTp){return 'sent';}var n=window.thornswoodNet;if(!n||!n.say){return '';}n.say('/tp bannered',{quiet:true});window.__tsBedTp=1;return 'sent';})()",
+      "timeout": 30000,
+      "why": "to an inn with beds, once: /tp bannered, which the run's account may run as a dev (#6712)"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 60000
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "why": "in the Bannered Mare"
+    },
+    {
+      "do": "face",
+      "what": "bed",
+      "why": "stand before the nearest bed, turned to it"
+    },
+    {
+      "do": "wait",
+      "for": "crosshair",
+      "what": "bed",
+      "timeout": 10000
+    },
+    {
+      "do": "shot",
+      "name": "bed-prompt",
+      "why": "what the bed's prompt says"
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "why": "E, use the bed"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 1500,
+      "why": "long enough for the game's answer to show, short of its fading"
+    },
+    {
+      "do": "shot",
+      "name": "bed-used",
+      "why": "lying down, or the message the game gave"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Sleep/Wait Menu",
+      "open": true,
+      "timeout": 8000,
+      "skip": 3,
+      "why": "a bed that takes the character opens Sleep/Wait; results.jsonl says whether they lay down"
+    },
+    {
+      "do": "shot",
+      "name": "bed-sleep-menu"
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "why": "Escape leaves the menu"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Sleep/Wait Menu",
+      "open": false,
+      "timeout": 10000
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 4000,
+      "why": "getting up out of the bed"
+    },
+    {
+      "do": "key",
+      "code": 20,
+      "why": "T, Wait, in the same room"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 1500
+    },
+    {
+      "do": "shot",
+      "name": "wait-key",
+      "why": "the Wait menu, or the message the game gave"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Sleep/Wait Menu",
+      "open": true,
+      "timeout": 5000,
+      "skip": 3
+    },
+    {
+      "do": "shot",
+      "name": "wait-menu"
+    },
+    {
+      "do": "key",
+      "code": 1
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Sleep/Wait Menu",
+      "open": false,
+      "timeout": 10000
+    },
+    {
       "do": "key",
       "code": 23,
+      "inventoryTrace": true,
       "why": "I, the inventory"
     },
     {
@@ -175,7 +298,9 @@
     },
     {
       "do": "key",
-      "code": 23
+      "code": 23,
+      "why": "a second I closes the inventory, as Patrick wants; on 26 Nov it did not yet (Tab and Escape did), and a fix for that is in hand, so this step fails until it lands",
+      "inventoryTrace": true
     },
     {
       "do": "wait",

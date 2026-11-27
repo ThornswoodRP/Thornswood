@@ -158,6 +158,8 @@ yes('E2 the box shows her own 60', !!mine && mine.indexOf('60') >= 0);
 const item = (P().dropbox().windhelm.items || []).filter(function (x) { return x.by === 1000 && x.kind === 'gold'; })[0];
 yes('E2 the box holds it as hers, with the rent it paid', !!item && item.count === 60 && item.rent && item.rent[0].amount === 50);
 w.say(BRENNA, '/dropbox take ' + item.n + ' 60');
+// What is taken out is owed into the pack, and the server's pack tick pays it (#4258).
+w.run(1300);
 yes('E3 taking her gold back out returns it and owes the rent again (' + last(BRENNA) + ')',
     gold(BRENNA) === g0 && claimOnDisk().rent.owed === 50);
 w.activate(FRONT, ALDIS);

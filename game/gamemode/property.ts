@@ -297,7 +297,8 @@
     try {
       var text = JSON.stringify({ claims: claims, arrears: arrears,
         funds: funds, notices: notices, boards: boards, steps: steps,
-        masters: masterCut, deedCut: deedCut, dropbox: dropbox, word: wordBook, debits: debits }, null, 1);
+        masters: masterCut, deedCut: deedCut, dropbox: dropbox, word: wordBook, debits: debits,
+        owing: owing }, null, 1);
       if (durable === true) {
         if (registerRead.bad) { throw new Error('the property register could not be read at startup'); }
         var file = registerPath();
@@ -320,6 +321,8 @@
   var wordBook = loadWord();
   // Read with the rest, before anything can save, so no write leaves them out (#4901).
   var debits = loadDebits();
+  // And what is owed into a pack (#4258), for the same reason.
+  var owing = loadOwing();
 
   function loadDeedCut() {
     var saved = registerRead.doc && registerRead.doc.deedCut;
@@ -1872,6 +1875,14 @@
       '      } catch (e) { }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
+      // The buildings this character holds (#6883): the front plugin makes
+      // them and what is in them theirs, and gives back any no longer held.
+      '    try {',
+      '      globalThis.__thornswoodPropertyOwn = v.own || [];',
+      '      if (typeof globalThis.__thornswoodOwnCells === "function") { globalThis.__thornswoodOwnCells(v.own || []); }',
+      // The plugin's hook is guard()ed and logs its own failure; this only
+      // keeps the doors above locked if the hand over itself throws.
+      '    } catch (e) { /* the doors above are already done */ }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
@@ -2188,7 +2199,21 @@
       }
     }
     cellLists(profileId, shut, open);
-    return { shut: shut, open: open };
+    /*
+      AND THE BUILDINGS THIS CHARACTER HOLDS, as their interior cells (#6883),
+      for the client to make the building and what is in it theirs, so its
+      storage is not theft. After the loop, because mayPass asked holderOf of
+      every claim and a lapsed one is gone from claims by now.
+    */
+    var own = [];
+    for (var h in claims) {
+      if (!Object.prototype.hasOwnProperty.call(claims, h)) { continue; }
+      if (profileId && claims[h] && claims[h].by === profileId) {
+        var cid = idOf(h);
+        if (cid) { own.push(cid); }
+      }
+    }
+    return { shut: shut, open: open, own: own };
   }
 
   /*
@@ -3334,9 +3359,9 @@
 
     Only the payouts docs/systems/trading-company.md names take coin off a
     ledger: a haul's pay to its hauler, and a haul's pay back to its poster.
-    A letter's 15 is the other, and payHeld pays that. The caller puts the
-    same count back into a pack in the same step (payOut), so the coin was
-    already in the world: this counts it off, and creates nothing.
+    A letter's 15 is the other, and payHeld pays that. The caller owes the
+    same count into a pack in the same register write (owe, #4258), so the
+    coin was already in the world: this counts it off, and creates nothing.
 
     HELD PAY STAYS ON THE LEDGER. An open letter's 15 (#1374: letter, not
     down, pay above 0), an open haul's pay and an open job's reward (#2554)
@@ -3394,8 +3419,8 @@
     if (mayWithdraw(hold, amount, releasing)) { return false; }
     var key = String(hold).toLowerCase();
     var n = Number(amount);
+    // Its callers write the register once whatever the gold went to is in it too (#4258).
     funds[key] = (Number(funds[key]) || 0) - n;
-    save();
     plog(n, 'gold off', key + '\'s ledger:', String(reason || 'no reason given'));
     return true;
   }
@@ -3784,17 +3809,12 @@
     var have = Number(it.count) || 0;
     var n = (count === undefined || count === null || count === '') ? have : Math.floor(Number(count));
     if (!(n > 0) || n > have) { return 'There are not that many.'; }
-    if (Number(it.baseId) === GOLD_ID) {
-      if (!payOut(actorId, n)) { return 'Your pack could not be written.'; }
-    } else {
-      var inv = null;
-      try { inv = mp.get(actorId, 'inventory'); } catch (e) { return 'Your pack could not be read.'; }
-      var entries = (inv && inv.entries) || [];
-      var give = JSON.parse(JSON.stringify(it.entry || { baseId: it.baseId }));
-      give.count = n;
-      entries.push(give);
-      try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return 'Your pack could not be written.'; }
-    }
+    // Owed to them in the register, with the row down by the same, in one
+    // write; the pack takes it from there once its own save says so (#4258).
+    var give = Number(it.baseId) === GOLD_ID ? { baseId: GOLD_ID }
+                                             : JSON.parse(JSON.stringify(it.entry || { baseId: it.baseId }));
+    give.count = n;
+    if (!owe(profileId, give, '')) { return 'The server cannot tell who you are right now. Nothing was taken.'; }
     var back = 0;
     if (own && Array.isArray(it.rent)) {
       /*
@@ -3834,7 +3854,8 @@
     plog(who, '(profile ' + profileId + ') took', n, it.what, 'out of', hold + '\'s drop box, put in by', it.name,
          back ? '(' + back + ' rent owed again)' : '');
     return 'You took ' + (n > 1 ? n + ' ' : '') + (it.what || 'it') + ' out of the box.' +
-           (back ? ' ' + back + ' gold of rent is owed again.' : '');
+           (back ? ' ' + back + ' gold of rent is owed again.' : '') +
+           ' It goes into your pack once your pack is saved, in a moment.';
   }
 
   /*
@@ -4289,10 +4310,11 @@
     NO GOLD MOVES FOR A NIGHT. It is paid in a trade between two people, and
     the server keeps no price. The book is beds.json beside the register
     rather than a field on a claim, so the register's own reader and writer
-    are untouched. The book is guests and takings and nothing else: the
-    prices and paid nights #1392's book held are not read (#3265). Kept gold
-    is handed to its holder once, the next time they are in the world, and
-    leaves the book then. Nothing adds to it any more.
+    are untouched. The book is guests and nothing else: the prices, paid
+    nights and kept takings #1392's book held are not read (#3265, #4258).
+    The takings were gold handed to a holder from a second file with nothing
+    tying it to the pack, and nothing had added to them since #3265; the
+    alpha carries no data over, so they went rather than move.
   */
   // INVENTED: far enough to stand beside a double bed and press it, near
   // enough that the next room's bed is not this one.
@@ -4423,9 +4445,9 @@
   }
 
   /* Rebuilt field by field, the same discipline as the register: a guest is
-     a holder, a time and a name, and kept takings are gold. */
+     a holder, a time and a name. */
   function loadBedBook() {
-    var out = { guests: {}, takings: {} };
+    var out = { guests: {} };
     var raw = bedRead.doc;
     if (!raw || typeof raw !== 'object') { return out; }
     var now = Date.now();
@@ -4444,14 +4466,6 @@
         var gst = bedHas(guests[b], who) ? guests[b][who] : null;
         if (!gst || typeof gst !== 'object') { continue; }
         add(b, who, Number(gst.by) || 0, Number(gst.at) || 0, gst.name);
-      }
-    }
-    var takings = (raw.takings && typeof raw.takings === 'object') ? raw.takings : {};
-    for (var tp in takings) {
-      if (!bedHas(takings, tp) || tp === '__proto__') { continue; }
-      var gold = Number(takings[tp]) || 0;
-      if ((Number(tp) || 0) > 0 && gold > 0 && Math.floor(gold) === gold) {
-        out.takings[tp] = gold;
       }
     }
     return out;
@@ -4478,7 +4492,7 @@
 
   function saveBedBook() {
     try {
-      storeWrite(bedBookPath(), JSON.stringify({ guests: bedBook.guests, takings: bedBook.takings }, null, 1), bedRead);
+      storeWrite(bedBookPath(), JSON.stringify({ guests: bedBook.guests }, null, 1), bedRead);
       return true;
     } catch (e) {
       plog('could not write the bed book:', e);
@@ -4486,7 +4500,7 @@
     }
   }
 
-  var bedRead = storeRead(bedBookPath(), 'inn guest or kept takings');
+  var bedRead = storeRead(bedBookPath(), 'inn guest');
   var bedBook = loadBedBook();
 
   // ------------------------------------------------------------ the beds --
@@ -4745,32 +4759,6 @@
     return v.line || 'That bed does not count for you now.';
   }
 
-  /*
-    Gold #1392 kept for a holder who was away, into their pack now they are
-    here. Once: it leaves the book as it is handed over, and nothing adds to
-    the book any more.
-  */
-  function payTakings(online) {
-    var owed = false;
-    for (var k in bedBook.takings) { if (bedHas(bedBook.takings, k)) { owed = true; break; } }
-    if (!owed) { return; }
-    var changed = false;
-    for (var i = 0; i < online.length; i++) {
-      var pid = profileOf(online[i]);
-      if (!pid || !bedHas(bedBook.takings, pid)) { continue; }
-      var gold = Number(bedBook.takings[pid]) || 0;
-      if (gold > 0 && !payOut(online[i], gold)) { continue; }
-      delete bedBook.takings[pid];
-      changed = true;
-      if (gold > 0) {
-        plog('handed', gold, 'gold of nights to', personName(online[i]));
-        tellBed(online[i], 'While you were away, ' + gold + ' gold was paid for nights in your beds. ' +
-                           'It is in your pack.');
-      }
-    }
-    if (changed) { saveBedBook(); }
-  }
-
   /* The holder's K panel again, so its property page shows tonight's guests. */
   function redrawPanel(actorId) {
     var c = g.__thornswoodCharacter;
@@ -4829,7 +4817,6 @@
         tellBed(who, why);
       }
     }
-    payTakings(online);
     // A night that ran out leaves the book and the holder's property page.
     var ended = pruneGuests();
     var changed = false;
@@ -6184,13 +6171,14 @@
 
   function commitPackDebit(land, row, paid) {
     var original = { claims: claims, arrears: arrears, funds: funds, notices: notices,
-                     dropbox: dropbox, debits: debits };
+                     dropbox: dropbox, owing: owing, debits: debits };
     var draft = JSON.parse(JSON.stringify(original));
     claims = draft.claims;
     arrears = draft.arrears;
     funds = draft.funds;
     notices = draft.notices;
     dropbox = draft.dropbox;
+    owing = draft.owing;
     debits = debits.filter(function (debit) { return debit !== row; });
     var committed = false;
     try {
@@ -6204,11 +6192,14 @@
         funds = original.funds;
         notices = original.notices;
         dropbox = original.dropbox;
+        owing = original.owing;
         debits = original.debits;
       }
     }
   }
 
+  /* A marker for a take, and the name of a row owed into a pack (#4258). */
+  var newId = require('crypto').randomUUID;
   var packs = packFirst(mp, function () { return debits; }, function () { return save(true); }, {
     'box-gold': landBoxGold,
     'box-left': landBoxLeft,
@@ -6216,46 +6207,142 @@
     'letter': landLetter,
     'haul': landHaul,
     'parcel': landParcel,
-    'parcel-hand': landParcelHand
-  }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, require('crypto').randomUUID, admitPackDebit);
+    'parcel-hand': landParcelHand,
+    'owed': landOwed
+  }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, newId, admitPackDebit);
 
   if (g.__thornswoodPackTimer) { try { clearInterval(g.__thornswoodPackTimer); } catch (e) { plog('the old pack timer would not stop:', e); } }
   g.__thornswoodPackTimer = setInterval(
-    guard('packTick', packs.settle), 1000);
+    guard('packTick', packTick), 1000);
 
   /*
-    THE LEDGER PAYING OUT, and only a letter's held courier pay, #1374.
+    ------------------------------------------- OWED INTO A PACK (#4258)
 
-    takeGold destroys a fee from a pack and the fee is counted on the hold's
-    ledger. This is the other half docs/systems/gold.md describes: it creates
-    the same count back into a pack, and payHeld takes it off that ledger in
-    the same step, so the coin was already in the world and packs plus ledger
-    add up to the same after. payHeld pays a letter's own `pay`, which
-    postLetter took from the sender, never more than the ledger holds. Its
-    other caller is payTakings in the beds, which hands a holder the gold
-    #1392 kept for them while they were away, once (#1603).
+    A payout is two stores: the register says the gold or the thing is no
+    longer held (the box row down, the ledger down, the post's pay at 0),
+    and the pack gets it. The engine saves the pack with the character,
+    later, and the register is written now, so a payout that wrote the pack
+    first and the register second paid twice whenever the register's write
+    failed or the server stopped before it: the pack was saved with the
+    gold, the register came back still holding it, and it was paid again.
+
+    So nothing writes a payout into a pack any more. What the register
+    stops holding becomes, in the same register and the same write, a row
+    owed to that profile: owing[profile] is a list of { id, entries, line }.
+    The register can never hold it twice, whenever it is written, because
+    the row and the change that made it are one object. payOwed takes the
+    rows into a pack through packFirst, the step every take out of a pack
+    uses (#4901): the debit row for the credit is written durably first,
+    then the pack and its marker together, and landOwed takes the rows off
+    the register only once the engine says the pack was saved with that
+    marker. A pack that was not saved with it lands nothing, the rows stay
+    owed, and the next tick pays them. Either way the gold is in exactly one
+    place: owed in the register, or in the pack.
   */
-  function payOut(actorId, amount) {
-    var count = Math.floor(Number(amount) || 0);
-    if (!(count > 0)) { return false; }
-    var inv = null;
-    try { inv = mp.get(actorId, 'inventory'); } catch (e) { return false; }
-    var entries = (inv && inv.entries) || [];
-    var put = false;
-    for (var i = 0; i < entries.length && !put; i++) {
-      var e = entries[i];
-      if (e && e.baseId === GOLD_ID) { e.count = (Number(e.count) || 0) + count; put = true; }
-    }
-    if (!put) { entries.push({ baseId: GOLD_ID, count: count }); }
-    try { mp.set(actorId, 'inventory', { entries: entries }); } catch (e2) { return false; }
+  function owe(profileId, entry, line) {
+    var pid = Math.floor(Number(profileId)) || 0;
+    var count = Math.floor(Number(entry && entry.count)) || 0;
+    if (!(pid > 0) || !(count > 0) || !(Number(entry.baseId) > 0)) { return false; }
+    var row = JSON.parse(JSON.stringify(entry));
+    row.count = count;
+    var key = String(pid);
+    if (!Object.prototype.hasOwnProperty.call(owing, key)) { owing[key] = []; }
+    owing[key].push({ id: newId(), entries: [row], line: String(line || '') });
     return true;
+  }
+
+  /* Rebuilt field by field, the same discipline as the rest of the register. */
+  function loadOwing() {
+    var raw = registerRead.doc && registerRead.doc.owing;
+    var out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { return out; }
+    var rows = 0;
+    for (var k in raw) {
+      if (!Object.prototype.hasOwnProperty.call(raw, k) || !/^[1-9][0-9]{0,15}$/.test(k) || !Array.isArray(raw[k])) { continue; }
+      var list = [];
+      for (var i = 0; i < raw[k].length; i++) {
+        var r = raw[k][i];
+        if (!r || typeof r.id !== 'string' || !r.id || !Array.isArray(r.entries)) { continue; }
+        var entries = r.entries.filter(function (e) {
+          return e && typeof e === 'object' && Number.isInteger(e.baseId) && e.baseId > 0 &&
+                 Number.isInteger(e.count) && e.count > 0;
+        });
+        if (entries.length) { list.push({ id: r.id, entries: entries, line: String(r.line || '') }); }
+      }
+      if (list.length) { out[k] = list; rows += list.length; }
+    }
+    if (rows) { plog('read', rows, 'payout(s) owed into a pack'); }
+    return out;
+  }
+
+  /* What is owed, added to a pack's entries: gold onto the first stack of it, a thing as its own entry. */
+  function giveCut(rows) {
+    return function (entries) {
+      for (var r = 0; r < rows.length; r++) {
+        for (var j = 0; j < rows[r].entries.length; j++) {
+          var give = JSON.parse(JSON.stringify(rows[r].entries[j]));
+          var put = false;
+          if (Number(give.baseId) === GOLD_ID) {
+            for (var i = 0; i < entries.length && !put; i++) {
+              var e = entries[i];
+              if (e && e.baseId === GOLD_ID) { e.count = (Number(e.count) || 0) + give.count; put = true; }
+            }
+          }
+          if (!put) { entries.push(give); }
+        }
+      }
+      return { entries: entries, taken: [] };
+    };
+  }
+
+  /* The owed rows a pack was saved with come off the register. Answers their lines, for whoever they were owed to. */
+  function landOwed(row, landed) {
+    if (!landed) { return ''; }
+    var key = String(row.data.pid);
+    var paid = {};
+    row.data.ids.forEach(function (id) { paid[id] = true; });
+    var list = Object.prototype.hasOwnProperty.call(owing, key) ? owing[key] : [];
+    var left = list.filter(function (r) { return !paid[r.id]; });
+    if (left.length) { owing[key] = left; } else { delete owing[key]; }
+    return row.data.lines.filter(Boolean).join(' ');
+  }
+
+  /* Everything owed to somebody in the world, into their pack, one take at a time. */
+  function payOwed() {
+    if (!packs.ready()) { return; }
+    var keys = Object.keys(owing);
+    for (var k = 0; k < keys.length; k++) {
+      var list = owing[keys[k]];
+      if (!Array.isArray(list) || !list.length) { continue; }
+      var to = onlineActorOf(Number(keys[k]));
+      if (!to) { continue; }
+      var rows = JSON.parse(JSON.stringify(list));
+      var r = packs.begin(to, giveCut(rows), 'owed', {
+        pid: Number(keys[k]),
+        ids: rows.map(function (x) { return x.id; }),
+        lines: rows.map(function (x) { return x.line; })
+      });
+      if (r.line) { tellPerson(Number(keys[k]), r.line); }
+    }
+  }
+
+  function packTick() {
+    packs.settle();
+    payOwed();
   }
 
   /*
     A letter's held pay, or a job's reward (#2554), out of its hold's ledger
-    into one pack. A haul's is handHaul's. Answers what was paid, 0 when
-    nothing is held, or -1 when it could not be paid and nothing changed.
-    n.pay goes to 0 once paid, so it is paid once.
+    and owed into one pack (#4258), in the same register. A haul's is
+    handHaul's. Answers what was paid, 0 when nothing is held, or -1 when it
+    could not be paid and nothing changed. n.pay goes to 0 once paid, so it
+    is paid once.
+
+    THE LEDGER PAYING OUT (#1374). takeGold destroys a fee from a pack and
+    the fee is counted on the hold's ledger. This is the other half
+    docs/systems/gold.md describes: the same count comes off that ledger and
+    is owed into a pack, so the coin was already in the world, and packs
+    plus ledgers plus what is owed add up to the same after.
   */
   function payHeld(hold, n, actorId) {
     var amount = (n && n.job && !n.haul) ? (Math.floor(Number(n.pay)) || 0) : 0;
@@ -6264,7 +6351,7 @@
       plog('a letter in', hold, 'holds', amount, 'and the ledger has only', funds[hold], '; nothing paid');
       return -1;
     }
-    if (!payOut(actorId, amount)) { return -1; }
+    if (!owe(profileOf(actorId), { baseId: GOLD_ID, count: amount }, '')) { return -1; }
     funds[hold] = (Number(funds[hold]) || 0) - amount;
     n.pay = 0;
     return amount;
@@ -7544,9 +7631,10 @@
     and a pack is written only while its owner is in the world. When the
     hauler on a confirm, or the poster on a drop or a steward's cancel, is
     away, the haul still comes down, and what is theirs stays held on the
-    ledger as owed to them (handHaul). haulTick hands it over the next time
-    they are in the world, the way a bed's takings wait for a holder who is
-    away (#1392). Nothing else can spend it in the meantime.
+    ledger as owed to them (handHaul). haulTick moves it off the ledger into
+    what the register owes them the next time they are in the world, and
+    the pack takes it from there (#4258). Nothing else can spend it in the
+    meantime.
   */
   var HAUL_EVERY_MS = 5000;
 
@@ -7765,8 +7853,9 @@
 
   /*
     A haul's held gold to one person: `amount` of what n holds on `hold`'s
-    ledger, to the profile `toPid`. In the world, it goes into their pack now
-    and the same comes off the ledger. Away, nothing leaves the ledger: n holds
+    ledger, to the profile `toPid`. In the world, the same comes off the
+    ledger and is owed into their pack in the same register write, and the
+    pack takes it from there (#4258). Away, nothing leaves the ledger: n holds
     it as owed to them, and haulTick hands it over when they are next in the
     world. Either way n.pay is 0 after, so the haul is paid once. `owedFor` is
     'hauled' or 'back', for the line they read then.
@@ -7787,16 +7876,19 @@
       plog(amount, 'gold held on', hold + '\'s ledger for', toPid, 'until they are in the world:', reason);
       return { owed: true, to: 0 };
     }
-    if (!payOut(to, amount)) { return { why: 'their pack could not be written.' }; }
+    if (!owe(toPid, { baseId: GOLD_ID, count: amount }, '')) { return { why: 'the server cannot tell who they are.' }; }
     withdraw(hold, amount, reason, n);
     n.pay = 0;
+    save();
     return { owed: false, to: to };
   }
 
   /*
-    What a haul, a letter or a job (#2554) owes somebody who was away, into
-    their pack now they are in the world, and off the ledger it was held on. A ledger that cannot pay it
-    is written to the log once a boot, and the gold stays held.
+    What a haul, a letter or a job (#2554) owes somebody who was away, off
+    the ledger it was held on and owed into their pack now they are in the
+    world, in one register write; the pack takes it from there (#4258), and
+    the line below is what they read when it lands. A ledger that cannot pay
+    it is written to the log once a boot, and the gold stays held.
   */
   var haulShort = {};
   function haulTick() {
@@ -7826,12 +7918,6 @@
           }
           continue;
         }
-        if (!payOut(to, owed)) { continue; }
-        withdraw(hold, owed, (n.letter ? 'letter ' + (j + 1) + ' for ' + (n.to || 'somebody')
-                              : n.haul ? 'haul ' + (j + 1) + ' to ' + n.dest
-                              : 'job ' + (j + 1)) + ', held for somebody who was away', n);
-        n.owed = 0;
-        save();
         var line = n.owedFor === 'carried'
           ? 'You handed over the parcel for ' + (n.to || 'somebody') + ' from ' + hold + '. The ' + owed +
             ' gold for carrying it is in your pack.'
@@ -7853,10 +7939,14 @@
             ((Number(n.kept) || 0) ? ' The company kept ' + n.kept + '.' : '')
           : 'While you were away, your haul to ' + n.dest + ' came down. The ' + owed +
             ' gold pay is back in your pack. The fee stays with ' + hold + '.';
-        plog('handed', owed, 'gold of a', n.letter ? 'letter' : (n.haul ? 'haul' : 'job'), 'in', hold,
+        if (!owe(Number(n.owedTo), { baseId: GOLD_ID, count: owed }, line)) { continue; }
+        withdraw(hold, owed, (n.letter ? 'letter ' + (j + 1) + ' for ' + (n.to || 'somebody')
+                              : n.haul ? 'haul ' + (j + 1) + ' to ' + n.dest
+                              : 'job ' + (j + 1)) + ', held for somebody who was away', n);
+        n.owed = 0;
+        save();
+        plog('owed', owed, 'gold of a', n.letter ? 'letter' : (n.haul ? 'haul' : 'job'), 'in', hold,
              'to', personName(to));
-        try { notify(to, line); } catch (e2) { }
-        try { say(to, line); } catch (e3) { }
       }
     }
   }
@@ -8963,7 +9053,9 @@
                   the hold's officers may take it; the box's record keeps every
                   line with their name off it
       beds        a night they were let sleep, and every guest of a building
-                  they held, ends; the takings #1392 kept for them go
+                  they held, ends
+      owing       gold or goods owed into their pack and not yet in it
+                  (#4258) go
 
     THE BOOKS STAY BALANCED BECAUSE NO COIN MOVES. Not a hold's ledger
     (funds), not the box, not a pack. A release only changes who a coin is
@@ -8972,9 +9064,9 @@
     hold's, as the fee always was, so funds is unchanged and never smaller
     than what is still held (mayWithdraw). The box keeps every coin it had.
     Lines are anonymised, never cut, so every count in the box's record and
-    every number on a board still adds up. The one thing that goes is the
-    bed takings kept for them: no ledger counts that gold, it was theirs
-    alone, and it goes with them like the gold in their pack.
+    every number on a board still adds up. The one thing that goes is what
+    the register owed into their pack (#4258): no ledger counts it, it was
+    theirs alone, and it goes with them like the gold in their pack.
 
     The three files are written only when something in them changed, and
     the answer says whether every write that was needed took, so the list
@@ -8985,7 +9077,7 @@
     var mine = function (pid) { var n = Number(pid) || 0; return n > 0 && who.profile(n); };
     var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
     var c = { claims: 0, masterKeys: 0, offices: 0, posts: 0, handedBack: 0, owed: 0, lines: 0,
-              box: 0, boxRecord: 0, guests: 0, takings: 0, arrears: 0 };
+              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0 };
     var reg = false, lawChanged = false, beds = false;
     var b;
     for (b in claims) {
@@ -9075,8 +9167,8 @@
       }
       if (!Object.keys(row).length) { delete bedBook.guests[bb]; }
     }
-    for (var tp in bedBook.takings) {
-      if (bedHas(bedBook.takings, tp) && mine(tp)) { delete bedBook.takings[tp]; c.takings++; beds = true; }
+    for (var op in owing) {
+      if (has(owing, op) && mine(op)) { c.owing += owing[op].length; delete owing[op]; reg = true; }
     }
     var saved = true;
     if (reg && !save()) { saved = false; }
@@ -9132,7 +9224,7 @@
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
-    deposit: deposit, takeGold: takeGold, settlePacks: packs.settle, LEDGER_HOLDS: LEDGER_HOLDS,
+    deposit: deposit, takeGold: takeGold, settlePacks: packTick, LEDGER_HOLDS: LEDGER_HOLDS,
     withdraw: withdraw, mayWithdraw: mayWithdraw, heldOn: heldOn,
     haulTenth: haulTenth, haulTick: haulTick, saleCuts: saleCuts, inCompany: inCompany,
     holdStanding: holdStanding,

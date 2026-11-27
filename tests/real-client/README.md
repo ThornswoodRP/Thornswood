@@ -46,8 +46,10 @@ pwsh scripts\dev\Run-RealClient.ps1
 ```
 
 It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
-`results.jsonl`, the launcher's log for the run and a `.png` for each
-screenshot. `-Root` names another install (the default is
+`results.jsonl`, the launcher's log for the run, a `.png` for each
+screenshot, and under `game\` the game's own logs that the run's game wrote
+(`skyrim-platform.log` with the plugins' Trace lines, and the Thornswood
+logs beside it), which the next game start writes over. `-Root` names another install (the default is
 the install `scripts\release\Where.ps1 Install` finds, with the launcher the
 setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, and `-Publish` puts
 the run on a draft Release of its own, `real-client-<run>`, and a line on the
@@ -82,6 +84,23 @@ and then closes the launcher's window as a person does. A launcher ended by
 force puts nothing back. If either folder still points at the build after
 the run, the run fails and names it.
 
+## After each dev release, by itself
+
+On One, `pwsh scripts\dev\Watch-RealClient.ps1 -Install`, run once from
+`C:\Thornswood-Repo` as the person signed in, makes a task that looks every
+five minutes. It starts one run for the newest Dev Deployment that has
+succeeded and has no "Real game run:" line yet, from that Deployment's own
+commit, when no launcher or game is open, the PC is not on the lock screen
+and nobody has used the keyboard or mouse for ten minutes. Each Deployment is
+run once, pass or fail. The task runs the script from
+`worktrees\real-client-watcher`, which `-Install` makes and each look moves
+to origin/main first, so it never runs a stale copy from the shared clone.
+Every look is a line in `temp\real-client\watch.log` of the clone;
+`-Uninstall` takes the task and that worktree off. To run the newest
+Deployment at once, without the ten idle minutes, run
+`pwsh worktrees\real-client-watcher\scripts\dev\Watch-RealClient.ps1 -Now -Root C:\Thornswood`
+from the clone and keep off the keyboard and mouse while it runs.
+
 ## How a step is written
 
 One object per step, in order. Each takes `timeout` in milliseconds (30000
@@ -98,10 +117,39 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
 | `{"do":"key","code":36}` | Windows accepted a scan-code down, a 120 ms hold and a separate up, with game-window focus checks before and after (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
+| `{"do":"face","what":"bed"}` | the character stands 90 units out from the nearest bed in its cell, on the side it was on, turned to the bed and looking a little down, as somebody walks up to use one. A bed is what `thornswood-front.js` clears the owner of (its `isBedRef`). No bed in the cell fails the step. |
+| `{"do":"wait","for":"crosshair","what":"bed"}` | a bed is under the crosshair, so the game shows its prompt. |
+| `{"do":"wait","for":"running","ms":10000}` | the game kept sending updates for that long with no gap of a second, so the world was not paused (a menu that should leave the world running, #6408). |
+| `{"do":"wait","for":"time","ms":1500}` | that long has gone by. Only before a shot of something the game shows for a moment and gives no event for, like its message when a bed refuses. |
 | `{"do":"end"}` | always; the runner closes the game. |
+
+Any step may carry `"task": <issue>`, the test task it checks. A failing
+step of a task takes its `fail-<step>` screenshot and ends that task only:
+the run goes on at the next task's first step. Each task gets one results
+line, `{"t":"task","task":"6408","ok":true}`, or with `ok` false the step
+and why, and the run ends failed naming every failed task.
+`tests\real-client\test-tasks.json` is the list of test tasks one character
+checks alone; run it with `-Steps tests\real-client\test-tasks.json`.
+A step with `"tidy": true` and no task puts back what the tasks made (the
+journal tasks' scratch journals are thrown away), whether they passed or
+not; it comes after every task, and if it fails the run ends there.
+Its journal steps press the panel's buttons from a page step, as the click
+would, and leave the run's own journals apart from the character's by the
+ids it had before the first one.
+
+Sitting down and getting up are results lines of their own,
+`{"t":"furniture","enter":true,"bed":true,"ref":"..."}`, the character's
+only, so a run says whether it lay down in a bed (#6712). The list goes to
+the Bannered Mare with `/tp bannered`, sent once from a page step, which the
+run's account may run because it is on the dev list.
 
 `tests\test-5197-real-client.js` runs the plugin against a fake game and
 checks every list here only uses these steps.
+
+The two inventory key steps set `inventoryTrace` to record whether Skyrim
+reported the scripted keyboard down and up. The result records menu state
+and whether the game named the Inventory action. The Windows input receipt
+and the following inventory open or close check are reported separately.
 
 The runner replies with the request number, `ok` and `note` in
 `thornswood-test-ack.txt`. Use the runner and plugin from the same checkout:

@@ -51,10 +51,10 @@ with no account.
 <!-- engine-pin:credits -->
 The server's engine recorded for the next release, `scam_native.node`, is
 built from one commit,
-[`7c5345db`](https://github.com/ThornswoodRP/skymp/tree/7c5345dbc0c2aab02413625c8dbc515bac7ebc48).
+[`728a6191`](https://github.com/ThornswoodRP/skymp/tree/728a6191a7c15b9932182467303d2ff5fca58853).
 That commit starts from
 [SkyMP](https://github.com/skyrim-multiplayer/skymp) at `2849e676`, and
-[every change Thornswood made](https://github.com/ThornswoodRP/skymp/compare/2849e676...7c5345db)
+[every change Thornswood made](https://github.com/ThornswoodRP/skymp/compare/2849e676...728a6191)
 is the difference between the two.
 <!-- /engine-pin:credits -->
 
@@ -229,7 +229,8 @@ the GPL-3.0-or-later, and so is this file.
 value to weight** show no gold value on Thornswood, because an item here has
 no gold price. **SkyUI's journal** has no saving, loading, Skyrim help or
 Creation Club on its System page, because Thornswood keeps your character on
-the server and has its own help. They are the work of the SkyUI Team, the
+the server and has its own help. **SkyUI's inventory** closes with its mapped
+key. These menus are the work of the SkyUI Team, the
 SkyHUD Team and Ahzaab, moreHUD's author. Thornswood ships none of those
 files: the launcher makes them on your computer from your own copy of each
 mod.

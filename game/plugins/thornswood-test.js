@@ -31,6 +31,12 @@
 //   {"do":"page","js":"<an expression>"}   true, a number or a word passes
 //   {"do":"shot","name":"journal-open"}
 //   {"do":"key","code":36}                 a DirectInput scan code (J is 36)
+//   {"do":"face","what":"bed"}             stand before the nearest bed in the cell
+//   {"do":"wait","for":"crosshair","what":"bed"}
+//   {"do":"wait","for":"time","ms":1500}   a pause, so a shot catches a message
+//   {"do":"wait","for":"running","ms":10000}  the world kept running that long
+// Any step may carry "task": <issue>; a failing one ends that test task and
+// the run goes on with the next.
 //   {"do":"end"}
 // Each takes "timeout" in milliseconds (30000 when not given). The run stops
 // at the first step that fails, after a screenshot named fail-<step>, and
@@ -64,6 +70,7 @@ const OUT = 'Data/Platform/thornswood-test-results.jsonl';
 const ACK = 'Data/Platform/thornswood-test-ack.txt';
 const DEV = '../Profile/dev-allowed.txt';
 const TIMEOUT = 30000;
+const INVENTORY_TRACE_MS = 5000;
 
 function log() {
   try { sp.printConsole('[test] ' + Array.prototype.slice.call(arguments).join(' ')); } catch (e) { }
@@ -114,11 +121,87 @@ sp.on('menuClose', function (e) {
 });
 
 // In the world: read on update, which only runs once there is a game.
+// The steps run on tick, where a call into the game is refused ("can't be
+// called in this context"), so what a step needs from the game is read or
+// done here and left for the step to pick up.
 let inWorld = false;
+let crosshairBed = '';     // the bed under the crosshair now, or ''
+let faceAsked = '';        // what a face step wants stood before
+let faceDone = null;       // { ok, note } once the update has done it
+function isBed(ref) {
+  const T = globalThis.Thornswood;
+  return !!(T && typeof T.isBedRef === 'function' && T.isBedRef(ref));
+}
+function refName(ref) {
+  let id = 0, name = '';
+  try { id = ref.getFormID(); } catch (e) { log('could not read a reference id:', e); }
+  try { const b = ref.getBaseObject(); name = b ? String(b.getName() || '') : ''; } catch (e) { log('could not read a reference name:', e); }
+  return (id >>> 0).toString(16) + (name ? ' "' + name + '"' : '');
+}
+// Stand 90 units out from the nearest bed in the cell, on the side the
+// person is on, turned to it and looking a little down, as somebody walks
+// up to a bed to use it. 40 is kFurniture.
+function faceBed() {
+  const pc = sp.Game.getPlayer();
+  const cell = pc ? pc.getParentCell() : null;
+  if (!cell) { return { ok: false, note: 'not in a cell' }; }
+  const T = globalThis.Thornswood;
+  if (!T || typeof T.isBedRef !== 'function') { return { ok: false, note: 'thornswood-front.js shares no isBedRef, so this build cannot tell a bed' }; }
+  const px = pc.getPositionX(), py = pc.getPositionY();
+  let best = null, bestD = Infinity, beds = 0;
+  const n = cell.getNumRefs(40);
+  for (let i = 0; i < n; i++) {
+    const ref = cell.getNthRef(i, 40);
+    if (!ref || !isBed(ref)) { continue; }
+    beds++;
+    const d = Math.hypot(ref.getPositionX() - px, ref.getPositionY() - py);
+    if (d < bestD) { bestD = d; best = ref; }
+  }
+  if (!best) { return { ok: false, note: 'no bed among the ' + n + ' furniture in this cell' }; }
+  const bx = best.getPositionX(), by = best.getPositionY(), bz = best.getPositionZ();
+  const dx = px - bx, dy = py - by, len = Math.hypot(dx, dy) || 1;
+  const sx = bx + dx / len * 90, sy = by + dy / len * 90;
+  pc.setPosition(sx, sy, bz);
+  // Papyrus angles are degrees. Heading 0 is north (+y), turning clockwise;
+  // a positive x looks down.
+  pc.setAngle(20, 0, Math.atan2(bx - sx, by - sy) * 180 / Math.PI);
+  return { ok: true, note: 'before bed ' + refName(best) + ', ' + beds + ' bed(s) in the cell, it was ' + Math.round(bestD) + ' units off' };
+}
+let lastUpdateAt = 0;
+const updateTimes = [];
+function updatesSince(t) {
+  let n = 0;
+  for (let i = updateTimes.length - 1; i >= 0 && updateTimes[i] >= t; i--) { n++; }
+  return n;
+}
 sp.on('update', function () {
+  lastUpdateAt = Date.now();
+  updateTimes.push(lastUpdateAt);
+  if (updateTimes.length > 2000) { updateTimes.splice(0, updateTimes.length - 2000); }
   let cell = null;
   try { const pc = sp.Game.getPlayer(); cell = pc ? pc.getParentCell() : null; } catch (e) { cell = null; }
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
+  crosshairBed = '';
+  try { const r = sp.Game.getCurrentCrosshairRef(); if (r && isBed(r)) { crosshairBed = refName(r); } } catch (e) { log('could not read the crosshair:', e); }
+  if (faceAsked && !faceDone) {
+    try { faceDone = faceAsked === 'bed' ? faceBed() : { ok: false, note: 'cannot face a ' + faceAsked }; }
+    catch (e) { faceDone = { ok: false, note: 'facing threw: ' + e }; }
+  }
+});
+
+// Sitting down and getting up, the character's own only, as results lines:
+// whether somebody lay down in a bed is what #6712 asks.
+sp.on('furnitureEnter', function (e) {
+  try {
+    if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
+    write({ t: 'furniture', enter: true, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
+  } catch (err) { log('could not note sitting down:', err); }
+});
+sp.on('furnitureExit', function (e) {
+  try {
+    if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
+    write({ t: 'furniture', enter: false, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
+  } catch (err) { log('could not note getting up:', err); }
 });
 
 // Every message the page sends, kept with when it came, so a step can look
@@ -177,8 +260,30 @@ let waitingAsk = 0;    // the ask this step waits on
 let pageId = '';       // the page question this step waits on
 let pageAskedAt = 0;
 let failing = false;   // the fail screenshot is being taken
+let failNote = '';     // what the failing step said
 let finished = false;
 let passed = 0;
+// Test tasks (#5197): steps that carry "task": <issue> belong to that test
+// task. One that fails ends its task, not the run: the run goes on at the
+// first step of the next task, so one list checks many tasks and each has its
+// own "task" results line, passed or failed.
+const failedTasks = [];
+let inventoryKey = null;
+
+// Windows acknowledging a press and Skyrim routing it are two observations.
+// Only explicitly traced script steps can log their own requested key.
+if (steps.some(s => s && s.do === 'key' && s.inventoryTrace === true)) {
+  sp.on('buttonEvent', function (e) {
+    if (finished || failing || !inventoryKey || Date.now() > inventoryKey.until ||
+        !e || e.device !== 0 || e.code !== inventoryKey.code || e.isRepeating || e.isHeld) return;
+    const phase = e.isDown && !e.isUp ? 'down' : e.isUp && !e.isDown ? 'up' : '';
+    if (!phase || inventoryKey[phase]) return;
+    inventoryKey[phase] = true;
+    const action = e.userEventName === 'Quick Inventory' ? 'inventory' : e.userEventName ? 'other' : 'none';
+    write({ t: 'inventory-key', i: inventoryKey.i, phase: phase, action: action,
+      inventoryOpen: !!openMenus['InventoryMenu'] });
+  });
+}
 
 function pass(note) {
   write({ t: 'step', i: at, do: steps[at].do, ok: true, ms: Date.now() - stepAt, note: note || '' });
@@ -188,6 +293,7 @@ function pass(note) {
 function fail(note) {
   write({ t: 'step', i: at, do: steps[at].do, ok: false, ms: Date.now() - stepAt, note: note || '' });
   log('step', at, 'failed:', note);
+  failNote = String(note || '');
   failing = true;
   waitingAsk = ask('shot', 'fail-' + at);
   stepAt = Date.now();
@@ -208,12 +314,36 @@ function skipOn(note) {
     next();
   }
 }
+function taskOf(i) {
+  const s = steps[i];
+  return s && s.task !== undefined ? String(s.task) : '';
+}
 function next() {
+  const task = taskOf(at);
   at++;
+  if (task && taskOf(at) !== task && failedTasks.indexOf(task) < 0) { write({ t: 'task', task: task, ok: true }); }
   prevAt = stepAt;
   stepAt = Date.now();
   waitingAsk = 0;
   pageId = '';
+}
+// The failing step of a task has had its screenshot: the task is failed and
+// the run goes on at the next task's first step.
+function failTask() {
+  const task = taskOf(at);
+  failedTasks.push(task);
+  write({ t: 'task', task: task, ok: false, step: at, note: failNote });
+  failing = false;
+  while (at < steps.length && taskOf(at) === task) { at++; }
+  prevAt = stepAt;
+  stepAt = Date.now();
+  waitingAsk = 0;
+  pageId = '';
+  faceAsked = '';
+  faceDone = null;
+}
+function tasksNote() {
+  return failedTasks.length ? 'test task(s) failed: ' + failedTasks.map(function (t) { return '#' + t; }).join(', ') : '';
 }
 function end(ok, note) {
   finished = true;
@@ -234,10 +364,12 @@ sp.on('tick', function () {
   const now = Date.now();
 
   if (failing) {
-    if (acked(waitingAsk) || now - stepAt > TIMEOUT) { end(false, 'step ' + at + ' failed'); }
+    if (acked(waitingAsk) || now - stepAt > TIMEOUT) {
+      if (taskOf(at)) { failTask(); } else { end(false, ['step ' + at + ' failed', tasksNote()].filter(Boolean).join('; ')); }
+    }
     return;
   }
-  if (at >= steps.length) { end(true); return; }
+  if (at >= steps.length) { end(failedTasks.length === 0, tasksNote()); return; }
 
   const s = steps[at] || {};
   const limit = Number(s.timeout) || TIMEOUT;
@@ -255,6 +387,18 @@ sp.on('tick', function () {
         if (since !== undefined && since >= prevAt) { pass(want ? 'it opened and closed again before this tick' : 'it closed and opened again before this tick'); return; }
       } else if (s.for === 'world') {
         if (inWorld) { pass(); return; }
+      } else if (s.for === 'crosshair') {
+        if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
+      } else if (s.for === 'running') {
+        // The world runs while a menu is up: update, which the game sends
+        // only while it is not paused, kept coming for ms with no gap of a
+        // second (#6408, #6428).
+        if (lastUpdateAt && now - lastUpdateAt >= 1000) { fail('the game sent no update for ' + (now - lastUpdateAt) + ' ms, so the world stood still'); return; }
+        if (now - stepAt >= (Number(s.ms) || 0)) { pass(updatesSince(stepAt) + ' updates in ' + (now - stepAt) + ' ms'); return; }
+        return;
+      } else if (s.for === 'time') {
+        if (now - stepAt >= (Number(s.ms) || 0)) { pass(); return; }
+        return;
       } else if (s.for === 'message') {
         const want = Array.isArray(s.match) ? s.match : [];
         for (let i = messages.length - 1; i >= 0; i--) {
@@ -266,7 +410,7 @@ sp.on('tick', function () {
         return;
       }
       if (late) {
-        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : 'the world');
+        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : s.for === 'crosshair' ? 'a ' + s.what + ' under the crosshair' : 'the world');
         if (Number(s.skip) > 0) { skipOn(what); } else { fail(what); }
       }
       return;
@@ -293,9 +437,28 @@ sp.on('tick', function () {
       }
       return;
     }
+    case 'face': {
+      if (!faceAsked) { faceAsked = String(s.what || ''); faceDone = null; return; }
+      if (faceDone) {
+        const done = faceDone;
+        faceAsked = ''; faceDone = null;
+        if (done.ok) { pass(done.note); } else { fail(done.note); }
+        return;
+      }
+      if (late) { faceAsked = ''; fail('no update came in ' + limit + ' ms to stand before a ' + s.what); }
+      return;
+    }
     case 'shot':
     case 'key': {
-      if (!waitingAsk) { waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) : Number(s.code)); return; }
+      if (!waitingAsk) {
+        if (s.do === 'key') {
+          inventoryKey = s.inventoryTrace === true
+            ? { i: at, code: Number(s.code), until: now + INVENTORY_TRACE_MS, down: false, up: false }
+            : null;
+        }
+        waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) : Number(s.code));
+        return;
+      }
       const reply = readAck(waitingAsk);
       if (reply) {
         if (s.do === 'key' && reply.ok !== true) {
@@ -309,7 +472,7 @@ sp.on('tick', function () {
     case 'end':
       write({ t: 'step', i: at, do: 'end', ok: true, ms: 0, note: '' });
       passed++;
-      end(true);
+      end(failedTasks.length === 0, tasksNote());
       return;
     default:
       fail('no such step: ' + s.do);

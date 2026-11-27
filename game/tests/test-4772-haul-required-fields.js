@@ -57,7 +57,9 @@ for(const mode of ['redraw','close','compose']){
  test(mode+' lifecycle control starts with native missing-field validation',()=>assert(f.validity.customError));
  if(mode==='redraw')p.feed();else if(mode==='close')p.api.close();else p.press(p.doc.querySelector('[data-do="compose"]'));
  if(p.field('haul'))p.field('haul').value='Timber';
- test(mode+' retires stale owned error and the removed haul handler',()=>{assert.equal(f.validity.customError,false);assert.equal(f.getAttribute('aria-invalid'),null);const before=p.sent.length;handler.call(old);assert.equal(p.sent.length,before);});
+ // An update keeps the form and its button (#4475): a press after it sends the haul as now written.
+ test(mode+' retires stale owned error and '+(mode==='redraw'?'keeps the live haul button':'the removed haul handler'),()=>{assert.equal(f.validity.customError,false);assert.equal(f.getAttribute('aria-invalid'),null);const before=p.sent.length;handler.call(old);
+  if(mode==='redraw'){assert.equal(p.button(),old);assert.equal(p.sent.length,before+1);}else assert.equal(p.sent.length,before);});
 }
 for(const delivery of ['sent','queued','throws']){
  const p=rig(),calls=[],values=p.values();p.win.thornswoodNet.say=line=>{calls.push(line);if(delivery==='throws')throw Error('after queue');return delivery==='sent';};p.press(p.button());

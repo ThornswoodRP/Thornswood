@@ -878,7 +878,14 @@ namespace Thornswood
             return (missing.Count > 0 && wrong.Count == 0) ? "Client files missing" : "Client files not this build's";
         }
 
-        public static List<Check> All(Config cfg)
+        /// <summary>
+        /// The rows. collectionRevision is the revision of the collection
+        /// Vortex installed, when the caller has already read it: DrawStatus
+        /// reads it once a draw and hands it in, so the Mods row and the card
+        /// above Play judge the same reading (#6944). Left at -1 it is read
+        /// here.
+        /// </summary>
+        public static List<Check> All(Config cfg, int collectionRevision = -1)
         {
             // The game these rows are about. With the own folder chosen and not
             // made yet (#1226) Paths.Game is Profile\Payload, Thornswood's own
@@ -919,7 +926,17 @@ namespace Thornswood
                 try { issues = Verify.Run(null); }
                 catch { issues = new List<Issue>(); }
             }
-            l.Add(ModsRow(plugins, issues));
+            // The collection revision, for the Mods row (#6944). Without it
+            // the row said "94 plugins" in green while Play was held for a
+            // collection one revision behind the server, and so did the Ready
+            // card: "Everything checks out" over UPDATE THE MODS FIRST.
+            int mine = 0;
+            if (!string.IsNullOrEmpty(cfg.CollectionUrl))
+            {
+                try { mine = collectionRevision < 0 ? CollectionRevision(cfg) : collectionRevision; }
+                catch (Exception ex) { Swallow.Note("Checks.All, collection revision", ex); }
+            }
+            l.Add(ModsRow(plugins, issues, mine));
             l.Add(ModListRow(issues));
 
             string[] foreign = ForeignClients();
@@ -944,8 +961,16 @@ namespace Thornswood
         /// list but not in Data (Verify FileMissing), because the Mods page
         /// is gone and "94 plugins" / "1 missing" without names was not enough.
         /// Falls back to the enabled-plugin count when nothing is missing.
+        ///
+        /// Then the collection revision (#6944): mine is the one Vortex
+        /// installed, and a full list of plugins from an older or newer
+        /// revision than the server's fails here, because Play is held for it
+        /// (Shell.CollectionProblem) and a green row beside a shut Play said
+        /// nothing was wrong. Only past MostPluginsWithoutCollection, where
+        /// Shell.CollectionProblem asks the revision too, so the row and the
+        /// card above Play give the same answer.
         /// </summary>
-        static Check ModsRow(int plugins, List<Issue> issues)
+        static Check ModsRow(int plugins, List<Issue> issues, int mine)
         {
             var missing = new List<string>();
             if (issues != null)
@@ -966,9 +991,32 @@ namespace Thornswood
             if (missing.Count > 0)
                 return new Check("Mods", false, MissingDetail(missing))
                        { Problem = missing.Count == 1 ? "1 mod missing" : missing.Count + " mods missing" };
+            int wants = Updater.ServerCollectionRevision;
+            string off = plugins > MostPluginsWithoutCollection ? RevisionProblem(mine, wants) : "";
+            if (off == "stale")
+                return new Check("Mods", false, "revision " + mine + ", the server's is " + wants) { Problem = "Mods need updating" };
+            if (off == "ahead")
+                return new Check("Mods", false, "revision " + mine + ", the server's is " + wants) { Problem = "Mods ahead of the server" };
             if (plugins <= MostPluginsWithoutCollection)
                 return new Check("Mods", false, plugins + " plugins") { Problem = "Mods not installed" };
             return new Check("Mods", true, plugins + " plugins");
+        }
+
+        /// <summary>
+        /// Which way the collection revision installed here (mine) is off
+        /// from the one the server was built against (wants, #5767): "stale"
+        /// behind it, "ahead" in front of it, and "" when they match or either
+        /// reads as 0. The one comparison, for the Mods row and for
+        /// Shell.CollectionProblem, which holds Play on it (#6944).
+        /// </summary>
+        public static string RevisionProblem(int mine, int wants)
+        {
+            if (mine > 0 && wants > 0)
+            {
+                if (mine < wants) return "stale";
+                if (mine > wants) return "ahead";
+            }
+            return "";
         }
 
         /// <summary>

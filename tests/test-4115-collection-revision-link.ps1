@@ -108,7 +108,7 @@ Yes 'the Diagnostics ahead card has no button' ($status.Contains('installing; Pl
 Yes 'CollectionCard leaves the button out when asked' ((Method $packs 'static Control CollectionCard(string title, string body, bool button = true)').Contains('if (button)'))
 
 # ---- why updates wait -------------------------------------------------------
-$wait = Method $shell 'static string[] CollectionWait()'
+$wait = Method $shell 'static string[] CollectionWait(int revision = -1)'
 Yes 'CollectionWait names behind, ahead and not installed' ($wait.Contains('problem == "stale"') -and $wait.Contains('problem == "ahead"') -and $wait.Contains('"The collection is not installed yet."'))
 Yes 'the update log no longer says not installed for every case' (-not $update.Contains('Log("The collection is not installed yet'))
 # Since #5608 no update waits on the collection: the one update is the

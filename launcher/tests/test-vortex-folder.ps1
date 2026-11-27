@@ -96,7 +96,7 @@ if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 # Config, OwnGame and Verify read their JSON through LooseString.cs, and
 # Verify fetches a release's plugin through Http.cs, which nothing here
 # reaches (#4823).
-$real = @('Steam.cs', 'OwnGame.cs', 'Verify.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Http.cs') |
+$real = @('Steam.cs', 'OwnGame.cs', 'Verify.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Http.cs', 'WholeFile.cs') |
     ForEach-Object { Join-Path $AppPath $_ }
 # Config.Save reports a failed write through Swallow.Note since pull request
 # 311, and Swallow needs nothing but Paths. Taken only where it exists, so the

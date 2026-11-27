@@ -156,13 +156,11 @@ namespace Thornswood
             if (!collectionBarUp && !collectionNoteUp) return;
             bool barWasUp = collectionBarUp;
             DrawStatus();
-            if (!barWasUp || collectionBarUp)
-            {
-                if (barWasUp && revision > 0)
-                    LogOnly("Vortex now has collection revision " + revision + " installed; the server's is " + Updater.ServerCollectionRevision + ".");
-                return;
-            }
-            Log("Vortex now has collection revision " + revision + " installed, the one the server was built against. Checking for the updates that waited on it, then scanning and fixing.");
+            // While the card stays up, DrawStatus has written what Play waits
+            // for now (SayCollectionHold, #6944), and when it came down, that
+            // Play no longer waits; what follows here is what happens next.
+            if (!barWasUp || collectionBarUp) return;
+            Log("Vortex now has collection revision " + revision + " installed. Checking for the updates that waited on it, then scanning and fixing.");
             // Scan and Fix follow the answer (FixAfterVortex), once the
             // update it brings has been taken or left on the card (#5200).
             fixAfterVortex = true;

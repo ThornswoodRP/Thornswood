@@ -365,12 +365,21 @@ try {
     e.savePack(ALICE.a);
     settle(dir, W);
     const said = command(dir, W, ALICE, '/unpin 1');
+    // The 25 back is owed into her pack and lands through packFirst once it is saved (#4258).
+    settle(dir, W);
+    e.savePack(ALICE.a);
+    settle(dir, W);
     const doc = register(dir);
     yes('E1 the sender takes it down before anybody carries it: the 25 comes back and the dagger is in the drop box for her ("' +
         said.slice(0, 90) + '")', e.count(ALICE.a, GOLD) === 480 && boxDaggers(doc, ALICE.pid) === 1 &&
         parcels(doc)[0].down && places(e, doc).join() === '1,0,1');
     const row = ((((doc.dropbox || {})[HOLD] || {}).items) || []).filter(function (x) { return x.baseId === DAGGER; })[0];
-    if (row) { inDir(dir, function () { W.command('/dropbox', ['/dropbox', 'take', String(row.n)], ALICE.a, ALICE.pid, function () { }); }); }
+    if (row) {
+      inDir(dir, function () { W.command('/dropbox', ['/dropbox', 'take', String(row.n)], ALICE.a, ALICE.pid, function () { }); });
+      settle(dir, W);
+      e.savePack(ALICE.a);
+      settle(dir, W);
+    }
     yes('E2 and takes it back out of the box as her own', !!row && e.count(ALICE.a, DAGGER) === 2 && boxDaggers(register(dir)) === 0);
   }
   {

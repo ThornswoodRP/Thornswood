@@ -65,7 +65,7 @@ yes('Paths.Skyrim is the Steam copy while OwnFirst and Game otherwise',
     /public static string Skyrim \{ get \{ return OwnFirst \? SteamCopy : Game; \} \}/.test(paths));
 yes('Paths.SkyrimExe is SkyrimSE.exe in it',
     /public static string SkyrimExe \{ get \{ return Path\.Combine\(Skyrim, "SkyrimSE\.exe"\); \} \}/.test(paths));
-const all = member(checks, 'public static List<Check> All(Config cfg)');
+const all = member(checks, 'public static List<Check> All(Config cfg, int collectionRevision = -1)');
 yes('Checks.All reads the game by the same rule, so the rows and the facts cannot disagree',
     /string game = Paths\.OwnFirst \? Paths\.SteamCopy : Paths\.Game;/.test(all));
 yes('Exe, Loader and MpClient stay under Game, so no writer is pointed at the Steam copy',

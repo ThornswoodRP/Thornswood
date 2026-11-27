@@ -496,7 +496,7 @@
       }
     }
     html += boardsSide();
-    side.innerHTML = html;
+    put(side, html, 'side');
 
     var items = side.querySelectorAll('button[data-book],button[data-new],button[data-shared]');
     for (var k = 0; k < items.length; k++) {
@@ -602,7 +602,7 @@
     var bv = data && data.boards;
     var read = bv && bv.read;
     if (!read) {
-      main.innerHTML = '<div class="none">Pick a town under Boards to read its notice board.</div>';
+      put(main, '<div class="none">Pick a town under Boards to read its notice board.</div>');
       return;
     }
     var out = '<div class="from">The notice board in ' + esc(read.where || read.hold) +
@@ -650,7 +650,7 @@
     if (jobs.length) {
       out += '<div class="none">A job is handed back at the board it came from.</div>';
     }
-    main.innerHTML = out;
+    put(main, out);
   }
 
   function groupBook() {
@@ -676,7 +676,7 @@
 
   function drawGroup(main) {
     var book = groupBook();
-    if (!book) { main.innerHTML = '<div class="none">Gone.</div>'; return; }
+    if (!book) { put(main, '<div class="none">Gone.</div>'); return; }
     var out = '<div class="from">' + esc(book.name) + ', ' + esc(book.kind) + '</div>';
     if (book.read) {
       out += '<b>People</b>';
@@ -778,7 +778,7 @@
     if (book.leave) {
       out += '<div class="bar"><button data-g="leave">Leave</button></div>';
     }
-    main.innerHTML = out;
+    put(main, out);
     var actions = main.querySelectorAll('button[data-g]');
     for (var a = 0; a < actions.length; a++) {
       actions[a].onclick = onGroup;
@@ -950,21 +950,21 @@
 
     if (readingShared >= 0) {
       var sh = ((data && data.shared) || [])[readingShared];
-      if (!sh) { main.innerHTML = '<div class="none">Gone.</div>'; return; }
+      if (!sh) { put(main, '<div class="none">Gone.</div>'); return; }
       var out = '<div class="from">' + esc(sh.title) + ', from ' + esc(sh.from) +
                 (sh.whole ? ' (the whole journal)' : ' (shared pages)') + '</div>';
       for (var i = 0; i < sh.pages.length; i++) {
         out += '<div style="margin-bottom:22px"><b>' + esc(sh.pages[i].title) + '</b>' +
                '<div class="read">' + esc(sh.pages[i].text) + '</div></div>';
       }
-      main.innerHTML = out;
+      put(main, out);
       return;
     }
 
     var book = bookOf(openBook);
     if (!book) {
       if (boardsShown()) { drawBoards(main); return; }
-      main.innerHTML = '<div class="none">Pick a journal on the left, or start one.</div>';
+      put(main, '<div class="none">Pick a journal on the left, or start one.</div>');
       return;
     }
 
@@ -1014,7 +1014,7 @@
         '<textarea id="' + ID + '-text" aria-label="Page text" maxlength="' + PAGE_CHARS + '">' + esc(pageDraft ? pageDraft.text : (page.text || '')) + '</textarea>';
     }
 
-    main.innerHTML = html;
+    put(main, html);
 
     var pages = main.querySelectorAll('button[data-page]');
     for (var q = 0; q < pages.length; q++) {
@@ -1144,12 +1144,17 @@
     }
   }
 
-  function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
+  // In place, so what is being typed and its focus outlast the update (#4475).
+  // The main page's controls are new ones whenever it shows something else.
+  function put(host, html, subject) {
+    if (subject === undefined) {
+      var bv = data && data.boards;
+      subject = JSON.stringify([openGroup, readingShared, openBook, openPage, bv && bv.read && bv.read.hold]);
+    }
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, subject); } else { host.innerHTML = html; }
   }
 
-  function drawContents() {
+  function draw() {
     if (!root || !shown) { return; }
     clearGroupFieldError();
     resetDestructive();
