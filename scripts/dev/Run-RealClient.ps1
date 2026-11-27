@@ -284,6 +284,15 @@ namespace ThornswoodRealClient {
       return SendInput(1, i, Marshal.SizeOf(typeof(INPUT)));
     }
 
+    // A single signed WHEEL_DELTA. Called only by the explicit local trace.
+    public static uint SendWheel(int delta) {
+      INPUT[] i = new INPUT[1];
+      i[0].type = 0;
+      i[0].u.mi.mouseData = unchecked((uint)delta);
+      i[0].u.mi.dwFlags = 0x0800; // MOUSEEVENTF_WHEEL
+      return SendInput(1, i, Marshal.SizeOf(typeof(INPUT)));
+    }
+
     // The game window's picture, the game and our page over it. PrintWindow
     // with PW_RENDERFULLCONTENT asks the window for its own frame, which
     // works for a DirectX window behind another one; the screen is copied
@@ -377,9 +386,36 @@ function Invoke-GameKey([IntPtr]$handle, $code) {
     return @{ ok = $true; note = 'key-down, held 120 ms, key-up; game window focused' }
 }
 
+function Invoke-GameWheel([IntPtr]$handle, $delta) {
+    $amount = 0
+    if (-not [int]::TryParse([string]$delta, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$amount) -or
+        ($amount -ne 120 -and $amount -ne -120)) {
+        return @{ ok = $false; note = 'unsupported wheel delta; only one signed detent is allowed' }
+    }
+    if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle -and
+        -not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
+        return @{ ok = $false; note = 'Windows refused game focus; no wheel sent' }
+    }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        return @{ ok = $false; note = 'the game window is not in front; no wheel sent' }
+    }
+    try { $sent = [ThornswoodRealClient.Win]::SendWheel($amount) }
+    catch { return @{ ok = $false; note = 'the wheel input failed' } }
+    if ($sent -ne 1) { return @{ ok = $false; note = 'SendInput did not accept one wheel event' } }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        return @{ ok = $false; note = 'the game window lost focus during wheel input' }
+    }
+    return @{ ok = $true; note = 'one wheel event accepted by Windows; game handling is unconfirmed' }
+}
+
 # ---------------------------------------------------------------- the run --
 $stepsJson = Get-Content -LiteralPath $Steps -Raw | ConvertFrom-Json
+if ($Publish -and @($stepsJson.steps | Where-Object { $_.cameraTrace -eq $true }).Count) {
+    throw 'Camera trace stays local; -Publish cannot be used with cameraTrace steps.'
+}
 $run = [ordered]@{ id = $runId; steps = $stepsJson.steps }
+$wheelRequests = [Collections.Generic.HashSet[int]]::new()
 foreach ($f in @($resultsFile, $ackFile)) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } }
 [IO.File]::WriteAllText($runFile, ($run | ConvertTo-Json -Depth 8))
 [IO.File]::WriteAllText($ackFile, '0')
@@ -605,6 +641,19 @@ try {
                         $reply.ok = $delivery.ok
                         $reply.note = $delivery.note
                         Say "key $($o.arg): $($delivery.note) (ok=$($delivery.ok))"
+                    } elseif ($o.do -eq 'wheel') {
+                        $handle = if ($proc) { $proc.MainWindowHandle } else { [IntPtr]::Zero }
+                        $wheelIndex = 0
+                        $validWheel = $o.run -ceq $runId -and [int]::TryParse([string]$o.i, [ref]$wheelIndex) -and
+                            $wheelIndex -ge 0 -and $wheelIndex -lt $stepsJson.steps.Count
+                        $plannedWheel = if ($validWheel) { $stepsJson.steps[$wheelIndex] } else { $null }
+                        if ($plannedWheel -and $plannedWheel.do -eq 'wheel' -and $plannedWheel.cameraTrace -eq $true -and
+                            $plannedWheel.delta -ceq $o.arg -and $wheelRequests.Count -lt 8 -and $wheelRequests.Add($wheelIndex)) {
+                            $delivery = Invoke-GameWheel $handle $o.arg
+                        } else { $delivery = @{ ok = $false; note = 'wheel request does not match an unused opted-in plan step' } }
+                        $reply.ok = $delivery.ok
+                        $reply.note = $delivery.note
+                        Say "wheel $($o.arg): $($delivery.note) (ok=$($delivery.ok))"
                     } elseif ($o.do -eq 'end') { $ended = $true }
                     [IO.File]::WriteAllText($ackFile, ($reply | ConvertTo-Json -Compress))
                 }
