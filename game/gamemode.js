@@ -6162,8 +6162,9 @@ mp.onDeath = guard('onDeath', function (actorId, killerId) {
   if (!(pid > 0)) { return; }
 
   /*
-    THE WOUNDS COME WITH YOU (#1383, death.md): the record stays as it was,
-    and only the bleed stops, in the injury and disease block's died().
+    THE TEMPLE CLEANS THE CUTS (#6616, death.md): the injury and disease
+    block's died() clears the cuts, bites and burns and keeps the breaks,
+    the crooked heals and every disease.
   */
   try {
     const hurt = globalThis.__thornswoodHurt;
@@ -58778,7 +58779,7 @@ module.exports = {
   somebody else, a healing spell landing on them, or a healing potion
   stands them up at a quarter of their health (standUp). Nobody does in
   DOWN.minutes, and the tick lets the death through (wake): the ordinary
-  wake at the temple, with the wounds they had. Staff seeing who is down,
+  wake at the temple, with the breaks and diseases they had. Staff seeing who is down,
   confirming the outcome and changing the minutes is #6409; a potion brewed
   at a lab standing somebody up is #6407.
   ============================================================================
@@ -59229,7 +59230,24 @@ module.exports = {
       if (stage === 'caught') { continue; }
       out.push(WORDS[rec.ills[k].k] + (stage === 'bad' ? ', bad' : ''));
     }
-    return out;
+    return once(out);
+  }
+
+  /*
+    ONE LINE FOR ONE KIND (#6616). Every wound is a line, so three bites in a
+    fight with skeevers were three "Open bite" lines down the edge of the
+    screen, and a tester read them as the same line drawn again and again.
+    Lines that read the same are one line now, with how many after it, in
+    the order the first of them came: "Open bite (3)".
+  */
+  function once(list) {
+    var order = [], count = {};
+    for (var i = 0; i < list.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(count, list[i])) { count[list[i]]++; continue; }
+      count[list[i]] = 1;
+      order.push(list[i]);
+    }
+    return order.map(function (l) { return count[l] > 1 ? l + ' (' + count[l] + ')' : l; });
   }
 
   function tell(actorId, line) {
@@ -59996,21 +60014,25 @@ module.exports = {
   }
 
   /*
-    A DEATH. The temple stopped the death and did not wash the cuts
-    (death.md), so every wound and disease stays on the record. The bleed
-    stops: the wake is the death being stopped, and a cut still bleeding in
-    the temple would kill again before anybody could reach it (Patrick's
-    answer on #1383, 4 October). The fire goes out with the body.
+    A DEATH. The temple's wake clears the cuts, bites and burns, and keeps
+    the breaks, the crooked heals and every disease (Patrick's answer B on
+    #6616, 27 November; death.md). Before it the record kept every wound,
+    and somebody woke with the same row of open cuts each time they died.
+    Nothing left bleeds: the cuts and bites are gone, and a cut still
+    bleeding in the temple would kill again before anybody could reach it
+    (Patrick's answer on #1383, 4 October). The fire goes out with the body.
   */
   function died(actorId) {
     delete fires[actorId];
     var needs = g.__thornswoodNeeds;
     if (needs && needs.clearBurning) { needs.clearBurning(actorId); }
     var rec = read(actorId);
-    var any = false;
+    var kept = [];
     for (var i = 0; i < rec.wounds.length; i++) {
-      if (rec.wounds[i].bleed) { rec.wounds[i].bleed = false; any = true; }
+      if (rec.wounds[i].k === 'break') { rec.wounds[i].bleed = false; kept.push(rec.wounds[i]); }
     }
+    var any = kept.length !== rec.wounds.length;
+    rec.wounds = kept;
     // Down ends with the death (#4607): the wake is the temple's. Their machine
     // is told by what it was last sent, because the wake's own death has
     // already taken the down off the record (wake, below).
@@ -60113,7 +60135,7 @@ module.exports = {
     THE CLOCK RAN OUT with nobody standing them up: the death goes through.
     wake tells goDown to let the next one go, and health written to nothing
     is that death, through the engine's own onDying and onDeath, so the wake
-    is the temple's with the wounds they had (died, above). A write the
+    is the temple's with the breaks and diseases they had (died, above). A write the
     engine refuses puts the down back, so the record never says less than
     the truth.
   */

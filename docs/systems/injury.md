@@ -14,20 +14,22 @@ everything short of that, and the step just before it.
 3. Down. Health would have hit zero. You cannot fight or cast. You can
    talk.
 4. Up, still hurt, if someone stabilizes you.
-5. The temple, if nobody does and the rules allow the wake. The wounds
-   come with you. The temple stopped the death. It did not wash the cuts.
+5. The temple, if nobody does and the rules allow the wake. The temple
+   cleans and closes your cuts, bites and burns. A break, a crooked heal
+   and a disease come with you.
 
 ## Down
 
 The clock is 3 real minutes.
 
 If the world did it (a draugr, a fall, a fire with no killer), and
-nobody stabilizes you, you wake in the temple with the wounds you had.
+nobody stabilizes you, you wake in the temple with the breaks and
+diseases you had.
 
 If another person did it, the 3 minutes are when the question gets
 asked, out of character. Death and a loss that rewrites you need a yes.
-That rule is [Death](death.md). Silence is the temple, with the wounds
-you already had, and no new loss.
+That rule is [Death](death.md). Silence is the temple, with the breaks
+and diseases you already had, and no new loss.
 
 Stabilize with a bandage, a healing spell, or a potion. Health returns
 to 25% of its max, not to full. The potion is still the sip in
@@ -159,7 +161,7 @@ from Tend their wounds, a healing spell landing on them, or a healing
 potion they drink stands them up at 25%, or what they have if that is
 more. A blow on somebody down does not kill them, and nobody bleeds
 while down. After 3 minutes the death goes through, and the wake is
-the temple's with the wounds they had. A potion brewed at a lab does
+the temple's with the breaks and diseases they had. A potion brewed at a lab does
 not stand anybody up yet (#6407).
 
 Not in yet:
