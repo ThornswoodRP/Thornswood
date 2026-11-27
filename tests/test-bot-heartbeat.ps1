@@ -131,7 +131,13 @@ $bad = @($words | Where-Object { -not $_ -or $_ -match '[^\x00-\x7F]' -or $_ -ma
 Yes 'every reason is plain ASCII, never says player, and leaves the full stop to the message' ($bad.Count -eq 0)
 
 # ---- the whole watcher, on a fake clock ---------------------------------------
-$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'HeldProblem', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
+# Every probe and action test-watch-alerts.ps1 stands in for, so nothing here
+# asks the machine's own ports or ends a real task (#5898).
+$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'ReadyProblem', 'HeldProblem', 'EndTask', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
+$alertsAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'test-watch-alerts.ps1'), [ref]$null, [ref]$null)
+$alertsFake = $alertsAst.Find({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and "$($n.Left)" -eq '$fake' }, $true)
+$notFaked = @(if ($alertsFake) { $alertsFake.Right.Expression.FindAll({ param($n) $n -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true) | ForEach-Object { $_.Value } | Where-Object { $fake -notcontains $_ } })
+Yes ('this stands in for every probe and action test-watch-alerts.ps1 does' + $(if ($notFaked.Count) { ', not ' + ($notFaked -join ', ') } else { '' })) ($alertsFake -and $notFaked.Count -eq 0)
 $body = @()
 foreach ($s in $inner.EndBlock.Statements) {
     if ($s -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $fake -contains $s.Name) { continue }
@@ -183,6 +189,10 @@ function SiteAnswers($url) { return $true }
 function BotAlive() { return $script:alive }
 function BotProcs() { if ($script:alive) { return @(@{ Id = 4242; Started = $script:procStart }) } return @() }
 function HealthProblem($url) { return '' }
+# The tunnel's /ready (#5334), which test-watch-alerts.ps1 holds; here it is fine.
+function ReadyProblem($url) { return '' }
+# Ending a task that runs and does not work, by its port's process: here it ends nothing real.
+function EndTask($task, $port) { $script:runs += ('end ' + $task); return ('ended ' + $task) }
 # The website's readiness (#4448), which test-4448-site-ready.ps1 holds; here it is fine.
 function HeldProblem($url) { return '' }
 function HowItEnded($task) { return '' }
