@@ -20,7 +20,7 @@
     7. the changed paths are staged (exact paths, nothing else), and the pull
        request's title and body are written to -TitleFile and -BodyFile: the
        fork pull requests the move brings in, the Thornswood issues they name
-       as Refs lines, and their Test tasks (EnginePin.ps1,
+       as Refs lines, and their Test tasks and authored known issues (EnginePin.ps1,
        Get-EnginePinNotes, says the shapes).
 
   It commits nothing and sends nothing: GitHub is only read, through gh.
@@ -145,9 +145,10 @@ $body.Add('')
 $body.Add('## For the Thornswood team'); $body.Add('')
 foreach ($i in $notes.Issues) { $body.Add("Refs #$i") }
 foreach ($t in $notes.TestTasks) { $body.Add(''); $body.Add($t) }
+foreach ($k in $notes.KnownIssues) { $body.Add(''); $body.Add($k) }
 $body.Add('')
-# The heading ends the last Test task block, as it does in the pull request
-# template: with no heading, the Test tasks check reads the ticked lines below
+# The heading ends the last task or known-issue block, as in the pull request
+# template: with no heading, the metadata check reads the ticked lines below
 # as the block's own steps and refuses their code (#5240).
 $body.Add('### Which parts it touches, and what runs after the merge'); $body.Add('')
 $body.Add('- [x] The live server build, or the live settings')
