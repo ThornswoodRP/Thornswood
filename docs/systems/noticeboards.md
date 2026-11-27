@@ -4,6 +4,15 @@ One board a town. You stand at it to post, to read the one in front of
 you, and to take a job. Reading another town's board does not require
 standing there: J has every one, under Boards.
 
+## Contents
+
+- [Where a board is](#where-a-board-is)
+- [The drop box](#the-drop-box)
+- [A notice and a job](#a-notice-and-a-job)
+- [What the board shows](#what-the-board-shows)
+- [Taking, handing back, taking down](#taking-handing-back-taking-down)
+- [Where this is](#where-this-is)
+
 ## Where a board is
 
 The object is the message board. One stands at every board, wherever
@@ -160,6 +169,30 @@ You post from the board. A notice sent from the other side of the
 province is not a notice. A letter is the same: you write it standing
 there.
 
+A parcel is a letter with something in it (#4560). Send a parcel, on
+the board's panel, asks who it is for, what goes in it, picked from your
+pack (not gold, and nothing you are wearing), how many, a letter to go
+with it, and the courier's pay. It costs 20 for the board and the pay
+you name, at least 15 (Patrick, 12 Nov), held the way a haul's pay is.
+The gold and what you picked leave your pack together, and the parcel
+is on the board once your pack is saved; if they are not there, nothing
+is posted and nothing is taken. While it is up, what is in it is held
+with the parcel on the hold's ledger, never in your pack and never in
+the drop box.
+
+The wall shows a sealed parcel and who it is for. It is taken like a
+letter and handed over the same way, face to face: looking at the named
+person within about 10 metres, E hands it over. What is in it goes into
+their pack, and the parcel comes off the board once their pack is saved
+with it. The courier's pay comes out of the ledger then. A server that
+stops between the two never loses it or makes two: it is still on the
+board for the courier to hand over, or it is in the recipient's pack and
+delivered. Taken down before it is carried, by you or by a guard or the
+Jarl, the pay comes back to you and what was in it goes into this
+hold's drop box under your name, where you take it back like anything
+you put in. While it is going into somebody's pack it cannot be put back
+or taken down.
+
 ## What the board shows
 
 Clicking the board shows the one you are standing at. J shows any
@@ -252,6 +285,14 @@ suggested answer, because every letter is already taken and U, the
 other key on a person, is Let sleep here, which can be up at the same
 time. Nothing is typed for a letter, and no help text names a line
 for one.
+
+Parcels are in the server and on the panel (#4560): Send a parcel on the
+board's panel with the pack's stacks from the server, the 20 and a pay of
+15 or more, the stack held on the parcel, Take, Put it back, Hand over
+on the look prompt into the recipient's pack, the courier paid once that
+pack is saved, and a take down sending the stack to the drop box for its
+sender. Each move of the stack is one pack written with a receipt and the
+register written only once that pack is saved (#4901). Nothing is typed.
 
 Hauls are in the server, on the panel: Send a haul, the 30 fee and
 the pay on the ledger, the pay and the destination on the wall, and
