@@ -713,6 +713,11 @@ issue where the card did.
 - **#6394 stays on main though it merged without a card, at bd19971 (main
   367fbec).** (dec_VWpbidKGxPqQrR2NEW_32A) 16 Nov 2026,
   [#6359](https://github.com/ThornswoodRP/Thornswood/issues/6359#issuecomment-6922076527).
+- **#7249 closes without a replacement, and its branch
+  magpie/7244-joined-tables goes with it: holding the harnesses that load
+  every table out of the gate stepped around the check.**
+  (dec_4IrQiPq54nspktCAR8Vfbw) 27 Nov 2026,
+  [#7260](https://github.com/ThornswoodRP/Thornswood/issues/7260#issuecomment-7212084178).
 
 ### Languages and code
 
