@@ -677,6 +677,14 @@ jobs:
           & python tests/test-4507-killmove-idles.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Check the armour material reader
+        shell: pwsh
+        run: |
+          # Issue #4650: scripts/dev/List-ArmourMaterials.py read against the
+          # small masters it builds.
+          & python tests/test-4650-armour-materials.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run the voice service's /health harness
         shell: pwsh
         run: |
