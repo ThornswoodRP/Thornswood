@@ -117,6 +117,7 @@ These name an install file or this read me without testing the install.
 - `test-check-words.ps1`: writes a stand-in `installer/README.md` in its own scratch folder and never reads this one.
 - `test-3682-github-front.js`: names InstallWindow.cs to say where the install's log is written; it checks only that the crash form names that log.
 - `site/tests/test-4496-install-steps-order.js`: reads InstallSteps.cs's closing lines for the order of the steps after the installer, and checks that the join, Downloads and help pages give them in that order; it tests those pages, not the install.
+- `test-4449-comments-now.js`: reads InstallSteps.cs's comment on config.json to check it no longer says the file holds a server password; it tests that comment, not the install.
 
 
 ## Why the install is in the launcher
