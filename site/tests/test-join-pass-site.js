@@ -388,4 +388,4 @@ async function main() {
   process.exitCode = fail ? 1 : 0;
 }
 
-main().catch(function (e) { console.log('FAIL  threw: ' + (e && e.stack ? e.stack : e)); process.exitCode = 1; });
+main().catch(function (e) { console.log('FAIL  threw: ' + String(e && e.stack ? e.stack : e).replace(/\n/g, '\n      ')); process.exitCode = 1; });

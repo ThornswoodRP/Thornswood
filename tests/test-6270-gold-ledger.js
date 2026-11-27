@@ -411,6 +411,6 @@ const dayOf = (t) => { const d = new Date(t); const two = (n) => (n < 10 ? '0' :
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
-  console.log('FAIL  the harness itself stopped: ' + (e && e.stack || e));
+  console.log('FAIL  the harness itself stopped: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   process.exitCode = 1;
 });

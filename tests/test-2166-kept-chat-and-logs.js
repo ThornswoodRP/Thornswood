@@ -138,7 +138,7 @@ async function keptChatOnASite() {
     yes('nothing about the copies was said as a failure', out.indexOf('kept-chat-retention') < 0, out);
   } catch (err) {
     fail++;
-    console.log('FAIL  the kept-chat harness threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the kept-chat harness threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
   await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000).unref(); });
 }

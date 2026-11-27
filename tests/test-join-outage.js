@@ -251,4 +251,4 @@ const yes = (w, c) => {
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
-})().catch((e) => { console.log('FAIL  the harness threw: ' + (e && e.stack || e)); process.exitCode = 1; });
+})().catch((e) => { console.log('FAIL  the harness threw: ' + String(e && e.stack || e).replace(/\n/g, '\n      ')); process.exitCode = 1; });

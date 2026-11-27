@@ -240,7 +240,7 @@ async function main() {
       !/not signed yet/i.test(words) && !/publisher Unknown/i.test(words));
 }
 
-main().catch((e) => { fail++; console.log('FAIL  ' + (e && e.stack || e)); }).then(() => {
+main().catch((e) => { fail++; console.log('FAIL  ' + String(e && e.stack || e).replace(/\n/g, '\n      ')); }).then(() => {
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) { }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');

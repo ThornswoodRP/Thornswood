@@ -175,7 +175,7 @@ function grab(name) {
         r.status === 200 && shown.indexOf('late000000000007') < 0 && shown.indexOf('new0000000000004') >= 0);
   } catch (err) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the harness itself threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
   await new Promise((ok) => {
     srv.on('exit', ok);

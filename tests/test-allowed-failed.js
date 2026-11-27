@@ -317,7 +317,7 @@ const RATE = 'rate limited by Discord';
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
-  console.log('FAIL  the harness threw: ' + (e && e.stack || e));
+  console.log('FAIL  the harness threw: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   console.log('');
   console.log(pass + ' passed, ' + (fail + 1) + ' failed');
   process.exitCode = 1;

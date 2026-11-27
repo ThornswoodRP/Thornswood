@@ -314,7 +314,7 @@ function partSeven() {
   partSeven();
 })().catch((e) => {
   fail++;
-  console.log('FAIL  the harness itself: ' + (e && e.stack || e));
+  console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
 }).then(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log('\n' + pass + ' passed, ' + fail + ' failed' + (skip ? ', ' + skip + ' skipped' : ''));

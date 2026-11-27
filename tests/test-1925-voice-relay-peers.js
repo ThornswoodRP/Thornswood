@@ -741,7 +741,7 @@ function partFour() {
   partFour();
 })().catch((e) => {
   fail++;
-  console.log('FAIL  the harness itself: ' + (e && e.stack || e));
+  console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
 }).then(async () => {
   if (roomFeed) clearInterval(roomFeed);
   pages.forEach(closePage);

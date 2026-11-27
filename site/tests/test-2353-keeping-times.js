@@ -286,7 +286,7 @@ async function sweep() {
         ['inbox.json', 'moderation.log'].every((f, i) => fs.statSync(D('for-bot', f)).mtimeMs === mtimes[i]));
   } catch (err) {
     fail++;
-    console.log('FAIL  the site harness threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the site harness threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
 
@@ -382,7 +382,7 @@ function gameServer() {
     yes('no files yet is nothing to say', said.length === 0, said.join(' | '));
   } catch (err) {
     fail++;
-    console.log('FAIL  the game harness threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the game harness threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { }
 

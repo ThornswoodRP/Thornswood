@@ -216,7 +216,7 @@ const said = (r) => r.status + ' ' + r.text.slice(0, 300);
       !/uncaught exception|unhandled rejection/i.test(out), out.slice(-2000));
   } catch (err) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (err && err.stack ? err.stack : err) + '\n' + out.slice(-2000));
+    console.log('FAIL  the harness itself threw: ' + String((err && err.stack ? err.stack : err) + '\n' + out.slice(-2000)).replace(/\n/g, '\n      '));
   }
   await new Promise((ok) => {
     srv.on('exit', ok);

@@ -324,7 +324,7 @@ const answered = (ok, json) => Promise.resolve({ ok: ok, status: ok ? 200 : 404,
     yes('G6 and a good one is taken (' + said(r) + ')', r.status === 200 && !!r.json && r.json.ok === true);
   } catch (err) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the harness itself threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
   await new Promise((ok) => {
     if (srv.exitCode !== null) return ok();

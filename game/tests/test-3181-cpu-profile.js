@@ -114,7 +114,7 @@ function thornswoodBusyWork(ms) { const until = Date.now() + ms; let x = 0; whil
     yes('a request it cannot read is deleted and said, and fires nothing',
       !requestLeft() && said.some(l => /cpu profile request was not readable/.test(l)) && said.filter(l => /sampling for/.test(l)).length === n);
   } catch (e) {
-    failed++; console.log('FAIL  it threw: ' + (e && e.stack || e));
+    failed++; console.log('FAIL  it threw: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   } finally {
     process.chdir(cwd);
     timers.length = 0;

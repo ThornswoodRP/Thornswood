@@ -237,4 +237,4 @@ const checked = (r) => r.status === 200 && !!r.doc && typeof r.doc.token === 'st
   if (exited === null) { await new Promise((ok) => { srv.once('exit', ok); srv.kill(); }); }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
-})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exitCode = 1; });
+})().catch((e) => { console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      ')); process.exitCode = 1; });

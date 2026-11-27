@@ -304,7 +304,7 @@ function blockDelete(name) {
         /if \(!a \|\| !a\.ok\) alert\(\(a && a\.error\)/.test(hub));
   } catch (err) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the harness itself threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
 
   await new Promise((ok) => {

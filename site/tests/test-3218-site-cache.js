@@ -237,6 +237,6 @@ function named(html) {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
 }, function (e) {
-  console.log('FAIL  the harness threw: ' + (e && e.stack ? e.stack : e));
+  console.log('FAIL  the harness threw: ' + String(e && e.stack ? e.stack : e).replace(/\n/g, '\n      '));
   process.exitCode = 1;
 });

@@ -766,4 +766,4 @@ async function serverChecks() {
   await serverChecks();
   await boxChecks();
   done();
-})().catch((err) => { console.log('FAIL  ' + (err && err.stack || err)); fail++; done(); });
+})().catch((err) => { console.log('FAIL  ' + String(err && err.stack || err).replace(/\n/g, '\n      ')); fail++; done(); });

@@ -239,7 +239,7 @@ async function pageChecks(apiHtml) {
     const got = await siteChecks();
     await pageChecks(got.dlBody || '<h1>Download</h1>');
   } catch (e) {
-    fail++; console.log('FAIL  the harness itself threw: ' + (e && e.stack || e));
+    fail++; console.log('FAIL  the harness itself threw: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   } finally {
     if (srv && srv.exitCode === null) {
       const gone = new Promise((r) => srv.once('exit', r));

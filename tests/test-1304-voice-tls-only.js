@@ -285,4 +285,4 @@ for (const list of Object.values(os.networkInterfaces())) {
   process.exitCode = fail ? 1 : 0;
   for (const s of started) { s.kill(); }
   setTimeout(() => {}, 150);
-})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); for (const s of started) { s.kill(); } process.exitCode = 1; });
+})().catch((e) => { console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      ')); for (const s of started) { s.kill(); } process.exitCode = 1; });

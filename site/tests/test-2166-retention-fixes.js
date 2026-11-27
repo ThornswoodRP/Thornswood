@@ -134,7 +134,7 @@ async function trouble() {
     yes('no sign-in retention failure was said', out.indexOf('signin-retention') < 0, out);
   } catch (err) {
     fail++;
-    console.log('FAIL  the trouble harness threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the trouble harness threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
   await new Promise((ok) => {
     srv.on('exit', ok);

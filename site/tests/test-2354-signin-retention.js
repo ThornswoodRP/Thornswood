@@ -135,7 +135,7 @@ function ask(where) {
     yes('and nothing more is said', out.slice(again).indexOf('signin-retention') < 0);
   } catch (err) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the harness itself threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
   await new Promise((ok) => {
     srv.on('exit', ok);

@@ -564,7 +564,7 @@ function page() {
     await values();
   } catch (e) {
     fail++;
-    console.log('FAIL  the run itself threw: ' + (e && e.stack || e));
+    console.log('FAIL  the run itself threw: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   }
   console.log('');
   console.log(pass + ' passed, ' + fail + ' failed');

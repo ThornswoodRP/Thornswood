@@ -161,7 +161,7 @@ function stop(s) {
         named.length === 0);
   } catch (err) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (err && err.stack ? err.stack : err));
+    console.log('FAIL  the harness itself threw: ' + String(err && err.stack ? err.stack : err).replace(/\n/g, '\n      '));
   }
   await stop(site);
   fs.rmSync(dir, { recursive: true, force: true });
