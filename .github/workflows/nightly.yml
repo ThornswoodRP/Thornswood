@@ -18,8 +18,10 @@
 # Any failure opens an issue on the board, or adds to the one already open,
 # and the first night everything passes closes it (Nightly-Issue.ps1),
 # with a link to the run; the last lines of each harness job name every
-# harness that failed and the ten slowest. Runs at 03:00 Mountain (09:00
-# UTC), when nobody is playing, and by hand from the Actions tab.
+# harness that failed and the ten slowest. Runs at 9:00 AM UTC, when nobody
+# is playing, and by hand from the Actions tab. GitHub's schedule is in UTC
+# and does not move with daylight saving, so in Mountain time that is 2:00 AM
+# in winter (MST) and 3:00 AM in summer (MDT) (#4290).
 #
 # Three jobs since #2357. On 12 Oct the one job that ran everything used 43
 # of its 45 minutes, nearly all of it the harnesses (692 of them, 2,587 s
