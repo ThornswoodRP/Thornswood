@@ -157,21 +157,26 @@
       <Setter Property="FontSize" Value="12"/><Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template">
         <ControlTemplate>
-          <Border Name="b" Background="Transparent">
-            <ContentPresenter Name="PART_ContentPresenter"
-                              Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
+          <Grid>
+            <Border Name="b" Background="Transparent">
+              <ContentPresenter Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <!-- The focus ring (#4725): drawn only on keyboard focus, so it is
+                 never what hover looks like. -->
+            <Rectangle Name="ring" RadiusX="2" RadiusY="2" Margin="5" IsVisible="False" IsHitTestVisible="False"
+                       Stroke="{DynamicResource Ink}" StrokeThickness="1.5" StrokeDashArray="2,2"/>
+          </Grid>
         </ControlTemplate>
       </Setter>
       <Style Selector="^:pointerover /template/ Border#b"><Setter Property="Background" Value="{DynamicResource Card}"/></Style>
       <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
-      <!-- Keyboard focus is drawn the same as hover, so a person
-           moving through the chrome buttons with Tab can see where
-           they are (#602). -->
-      <Style Selector="^:focus-visible /template/ Border#b"><Setter Property="Background" Value="{DynamicResource Card}"/></Style>
-      <Style Selector="^:focus-visible"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
+      <!-- Keyboard focus is the dashed ring in Ink, the launcher's one focus
+           mark (#4725). Until then focus was drawn the same as hover (#602),
+           Card on Panel, which is close to 1 to 1 in every theme. -->
+      <Style Selector="^:focus-visible /template/ Rectangle#ring"><Setter Property="IsVisible" Value="True"/></Style>
     </ControlTheme>
 
     <ControlTheme x:Key="Nav" TargetType="Button">
@@ -188,6 +193,8 @@
                               Content="{TemplateBinding Content}"
                               ContentTemplate="{TemplateBinding ContentTemplate}"
                               VerticalAlignment="Center" Margin="22,0,14,0"/>
+            <Rectangle Name="ring" RadiusX="2" RadiusY="2" Margin="6,3" IsVisible="False" IsHitTestVisible="False"
+                       Stroke="{DynamicResource Ink}" StrokeThickness="1.5" StrokeDashArray="2,2"/>
           </Grid>
         </ControlTemplate>
       </Setter>
@@ -200,10 +207,10 @@
         <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
       </Style>
-      <!-- Tabbing to a nav item lights its accent bar, so keyboard
-           focus is as plain to see as the page it is on (#602). -->
-      <Style Selector="^:focus-visible /template/ Rectangle#bar"><Setter Property="Fill" Value="{DynamicResource Accent}"/></Style>
-      <Style Selector="^:focus-visible"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
+      <!-- Keyboard focus is the dashed ring in Ink (#4725). It lit the
+           accent bar until then (#602), which is exactly how the page that
+           is open looks, so focus on that page's own item showed nothing. -->
+      <Style Selector="^:focus-visible /template/ Rectangle#ring"><Setter Property="IsVisible" Value="True"/></Style>
     </ControlTheme>
 
     <ControlTheme x:Key="NavGroup" TargetType="TextBlock">
@@ -223,23 +230,28 @@
       <Setter Property="HorizontalContentAlignment" Value="Center"/>
       <Setter Property="Template">
         <ControlTemplate>
-          <Border Name="b" Background="{TemplateBinding Background}"
-                  BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="2">
-            <ContentPresenter Name="PART_ContentPresenter"
-                              Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                              VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
-          </Border>
+          <Grid>
+            <Border Name="b" Background="{TemplateBinding Background}"
+                    BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="2">
+              <ContentPresenter Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+            </Border>
+            <Rectangle Name="ring" RadiusX="2" RadiusY="2" Margin="3" IsVisible="False" IsHitTestVisible="False"
+                       Stroke="{DynamicResource Ink}" StrokeThickness="1.5" StrokeDashArray="2,2"/>
+          </Grid>
         </ControlTemplate>
       </Setter>
       <Style Selector="^:pointerover /template/ Border#b">
         <Setter Property="Background" Value="{DynamicResource CardHover}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
       </Style>
-      <!-- Keyboard focus lights the accent border, the same edge
-           hover gives, so a Tab lands somewhere a person can see (#602). -->
-      <Style Selector="^:focus-visible /template/ Border#b"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
+      <!-- Keyboard focus is the dashed ring in Ink (#4725), inside the
+           edge. Until then it lit the accent edge, the same edge hover
+           gives (#602), so it could not be told from hover. -->
+      <Style Selector="^:focus-visible /template/ Rectangle#ring"><Setter Property="IsVisible" Value="True"/></Style>
       <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.4"/></Style>
     </ControlTheme>
 
@@ -249,17 +261,23 @@
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template">
         <ControlTemplate>
-          <Border Background="Transparent" Padding="0,2">
-            <ContentPresenter Name="PART_ContentPresenter"
-                              Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
-          </Border>
+          <Grid>
+            <Border Background="Transparent" Padding="0,2">
+              <ContentPresenter Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"/>
+            </Border>
+            <!-- Just outside the words, so it takes no room of its own. -->
+            <Rectangle Name="ring" RadiusX="2" RadiusY="2" Margin="-3,-1" IsVisible="False" IsHitTestVisible="False"
+                       Stroke="{DynamicResource Ink}" StrokeThickness="1.5" StrokeDashArray="2,2"/>
+          </Grid>
         </ControlTemplate>
       </Setter>
       <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Style>
-      <!-- A link in focus reads in the accent, so Tab shows it the
-           same way the pointer does (#602). -->
-      <Style Selector="^:focus-visible"><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Style>
+      <!-- Keyboard focus is the dashed ring in Ink (#4725). Until then a
+           link in focus turned the accent, as hover does (#602), which is
+           1.01 to 1 from Muted in Forge. -->
+      <Style Selector="^:focus-visible /template/ Rectangle#ring"><Setter Property="IsVisible" Value="True"/></Style>
     </ControlTheme>
 
     <ControlTheme x:Key="Primary" TargetType="Button">
@@ -437,17 +455,22 @@
       <Setter Property="FontSize" Value="12.5"/>
       <Setter Property="Template">
         <ControlTemplate>
-          <StackPanel Orientation="Horizontal" Background="Transparent">
-            <Border Name="box" Width="17" Height="17" Margin="0,0,11,0" VerticalAlignment="Center" CornerRadius="2"
-                    Background="{DynamicResource Deep}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
-              <Path Name="tick" Data="M 3.4,8 L 6.6,11.3 L 12.8,4.2" Stroke="{DynamicResource AccentInk}"
-                    StrokeThickness="1.9" IsVisible="False"/>
-            </Border>
-            <ContentPresenter Name="PART_ContentPresenter"
-                              Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              VerticalAlignment="Center"/>
-          </StackPanel>
+          <Grid>
+            <StackPanel Orientation="Horizontal" Background="Transparent">
+              <Border Name="box" Width="17" Height="17" Margin="0,0,11,0" VerticalAlignment="Center" CornerRadius="2"
+                      Background="{DynamicResource Deep}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+                <Path Name="tick" Data="M 3.4,8 L 6.6,11.3 L 12.8,4.2" Stroke="{DynamicResource AccentInk}"
+                      StrokeThickness="1.9" IsVisible="False"/>
+              </Border>
+              <ContentPresenter Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                VerticalAlignment="Center"/>
+            </StackPanel>
+            <!-- Round the box and its words, just outside them. -->
+            <Rectangle Name="ring" RadiusX="2" RadiusY="2" Margin="-4,-3" IsVisible="False" IsHitTestVisible="False"
+                       Stroke="{DynamicResource Ink}" StrokeThickness="1.5" StrokeDashArray="2,2"/>
+          </Grid>
         </ControlTemplate>
       </Setter>
       <Style Selector="^:checked /template/ Border#box">
@@ -456,10 +479,10 @@
       </Style>
       <Style Selector="^:checked /template/ Path#tick"><Setter Property="IsVisible" Value="True"/></Style>
       <Style Selector="^:pointerover /template/ Border#box"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
-      <!-- Keyboard focus lights the box edge, the same as hover, so a
-           person tabbing through the settings can see the tick they
-           are about to toggle (#602). -->
-      <Style Selector="^:focus-visible /template/ Border#box"><Setter Property="BorderBrush" Value="{DynamicResource Accent}"/></Style>
+      <!-- Keyboard focus is the dashed ring in Ink (#4725). Until then it lit
+           the box edge in the accent (#602), the edge a ticked box already
+           has, so focus on a ticked box showed nothing. -->
+      <Style Selector="^:focus-visible /template/ Rectangle#ring"><Setter Property="IsVisible" Value="True"/></Style>
     </ControlTheme>
 
     <ControlTheme x:Key="Slab" TargetType="Border">
