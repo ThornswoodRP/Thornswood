@@ -335,6 +335,21 @@ jobs:
           node scripts/dev/Check-AppPermissions.js
           exit $LASTEXITCODE
 
+      # #7269: the engine fork's workflows, held to their tags by the step
+      # below as this repository's are. The fork's default branch, its
+      # .github\workflows only, into a folder no earlier step reads; the
+      # fork is public, so nothing is sent with it.
+      - name: Check out the engine fork's workflows
+        if: ${{ !cancelled() }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ThornswoodRP/skymp
+          path: engine-fork
+          persist-credentials: false
+          sparse-checkout: |
+            .github/workflows
+          sparse-checkout-cone-mode: false
+
       - name: Each action pin is the commit its tag names
         if: ${{ !cancelled() }}
         shell: pwsh
@@ -348,7 +363,12 @@ jobs:
           # followed to its commit; a pin whose tag names another commit, or
           # a tag that is not there, is named with every line that carries
           # it. tests\test-4165-pin-tags.ps1 runs it against a stand-in GitHub.
+          # Then the engine fork's (#7269), both run whatever the first said.
           .\scripts\dev\Check-ActionPins.ps1 -Run
+          $ours = $LASTEXITCODE
+          .\scripts\dev\Check-ActionPins.ps1 -Run -WorkflowDir engine-fork\.github\workflows
+          $fork = $LASTEXITCODE
+          exit ([int]($ours -ne 0 -or $fork -ne 0))
 
   shares:
     # How many harness shares the night runs, said once (#4298). The

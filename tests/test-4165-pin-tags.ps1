@@ -20,7 +20,12 @@
     5. a tag the repository does not have (404) is named;
     6. any other failure stops the run, so a pin that was not read is never
        a pass;
-    7. nightly.yml runs it with -Run and the run's token, every night.
+    7. nightly.yml runs it with -Run and the run's token, every night, on
+       this repository's workflows and then on the engine fork's (#7269),
+       checked out by the step before it;
+    8. a pin whose comment is a major or minor tag (v7, v7.0) is named, the
+       way the fork's sign-manifest pin said v7 on v7.0.1's commit, without
+       asking GitHub (#7269).
 
   Nothing reaches GitHub. Writes only under its own temp folder.
 #>
@@ -108,6 +113,21 @@ if ($have) {
         Yes ('5. a tag the repository does not have is named (' + ($bad -join '; ') + ')') (
             $bad.Count -eq 1 -and $bad[0] -eq "actions/checkout@$co says v7.0.1, and actions/checkout has no tag v7.0.1 (a.yml:4, b.yml:4)")
 
+        # 8. A tag that moves (#7269).
+        [IO.File]::WriteAllText((Join-Path $wf 'c.yml'), ((
+            'jobs:', '  one:', '    steps:',
+            "      - uses: actions/upload-artifact@$nw # v7",
+            "      - uses: actions/download-artifact@$nw # v7.0") -join "`n"))
+        $short = @(Get-ActionPins | Where-Object { $_.Where[0] -like 'c.yml:*' })
+        $script:Asked.Clear()
+        $bad = @(Find-PinMismatch $short)
+        Yes ('8. a pin that says v7 or v7.0 is read and named (' + ($bad -join '; ') + ')') (
+            $short.Count -eq 2 -and $bad.Count -eq 2 -and
+            $bad -contains "actions/upload-artifact@$nw says v7, a tag that moves with each release, not the release its commit is (c.yml:4)" -and
+            $bad -contains "actions/download-artifact@$nw says v7.0, a tag that moves with each release, not the release its commit is (c.yml:5)")
+        Yes '   without asking GitHub' ($script:Asked.Count -eq 0)
+        Remove-Item -LiteralPath (Join-Path $wf 'c.yml')
+
         $script:Boom = $true
         $threw = $false
         try { $null = Find-PinMismatch $pins } catch { $threw = $_.Exception.Message -match '500' }
@@ -125,6 +145,16 @@ Yes '   in the nightly job, which runs on main only' ($step.Success -and $y.Inde
 Yes '   it runs every night whatever failed before it, with the run''s token, and nothing else' (
     $step.Groups[1].Value -match 'if: \$\{\{ !cancelled\(\) \}\}' -and $step.Groups[1].Value -match 'GH_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}' -and
     $step.Groups[1].Value -match '(?m)^\s+\.\\scripts\\dev\\Check-ActionPins\.ps1 -Run\s*$' -and $step.Groups[1].Value -notmatch 'secrets\.(?!GITHUB_TOKEN)')
+$s = $step.Groups[1].Value
+$forkStep = [regex]::Match($y, '(?s)\n      - name: Check out the engine fork''s workflows\n(.*?)(?=\n      - name: |\n  [a-z]+:\n|\z)')
+Yes '   and on the engine fork''s workflows, its exit counted with this repository''s' (
+    $s -match '(?m)^\s+\.\\scripts\\dev\\Check-ActionPins\.ps1 -Run -WorkflowDir engine-fork\\\.github\\workflows\s*$' -and
+    $s -match '\$ours = \$LASTEXITCODE' -and $s -match '\$fork = \$LASTEXITCODE' -and $s -match 'exit \(\[int\]\(\$ours -ne 0 -or \$fork -ne 0\)\)')
+Yes '   checked out by the step just before, the fork''s .github/workflows into engine-fork, whatever failed before it' (
+    $forkStep.Success -and $y.IndexOf($forkStep.Value) -lt $y.IndexOf($step.Value) -and
+    $forkStep.Groups[1].Value -match 'if: \$\{\{ !cancelled\(\) \}\}' -and
+    $forkStep.Groups[1].Value -match 'repository: ThornswoodRP/skymp' -and $forkStep.Groups[1].Value -match 'path: engine-fork' -and
+    $forkStep.Groups[1].Value -match 'sparse-checkout: \|\s+\.github/workflows' -and $forkStep.Groups[1].Value -match 'persist-credentials: false')
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)
