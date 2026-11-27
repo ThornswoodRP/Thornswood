@@ -195,8 +195,10 @@ Fix and the update are awaited paths (`PlayAsync`, `RunScanAsync`,
 with `Waiting.cs:105 Begin()`. Until #4582 the wait was `Waiting`, a nested
 dispatcher frame that Avalonia refuses during layout, after which the window
 thread waited plainly and froze.
-`Waiting.cs:124 Pump` takes the answer of something Avalonia only offers as a
-task, such as Windows' own folder picker, and `Waiting.cs:144 OnceOnScreen()`
+`Waiting.cs:124 Pump` runs the message loop until the install window at the
+first start has answered, before the launcher's own loop exists; nothing in the
+window's own life uses it, since a task is awaited there, Windows' own folder
+picker among them (#4582). `Waiting.cs:144 OnceOnScreen()`
 runs work once the window is first on screen and laid out. Voice runs on
 threads of its own (VoiceSession.cs, VoiceAudio.cs) and never on the window's.
 The HTTP requests of the launcher's own go through one shared client
@@ -667,7 +669,10 @@ the exe and there is no browser data folder. Voice.cs is the launcher's side,
 as it always was. It talks to the game through small files in both
 `Game\Data\Platform` and Profile (`voice-status.txt`, and `voice-muted.txt`
 written by the game, passed on to the session by `Voice.cs:720 PassMuted()`),
-and hears push to talk from the game plugin on a loopback port.
+and hears push to talk from the game plugin on a loopback port. The fifth
+word of `voice-status.txt` says the microphone is silent: held for five
+seconds with nothing over -100 dBFS in it (`MicSilence` in VoiceMeter.cs,
+#6470), and the game's indicator then reads MIC SILENT.
 `Voice.cs:525 Reconfigure()` tells it which character is being played. A join
 token opens one connection and is good for two minutes (#1322), so nothing
 keeps one: the session asks for a token before every try (`PageToken()`), and

@@ -20,7 +20,11 @@ It holds:
   - main() exits 1 on a bad body and 0 on a good one, and says when it could
     not read the issues;
   - with a token it reads the body from GitHub, by number or through the one
-    open pull request a branch heads, and passes a branch with none.
+    open pull request a branch heads, and passes a branch with none;
+  - a "Known issue for #N" block is read with done-on-merge.yml's pattern,
+    held to the bot's rules for known issue posts and to an open finding,
+    and every open finding the body names with no test task needs one, or
+    "unchanged" (#7080); the engine pin's pull request is not asked.
 
 The real bot module is imported. Never connects to anything.
 """
@@ -33,6 +37,8 @@ sys.path.insert(0, HERE)
 import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #2276)
 import contextlib
 import io
+import json
+import tempfile
 
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 os.environ.pop('GITHUB_TOKEN', None)
@@ -229,6 +235,61 @@ def fake_get(token, path):
     return None
 
 
+# ---- known issues in the pull request (#7080)
+yes('done-on-merge.yml reads "Known issue for #N" blocks with the pattern pr_tasks.py holds',
+    r"'^\s*Known issue for #(\d+)\s*:\s*(.+?)\s*$'" in wf
+    and pr_tasks.KNOWN_START.pattern == r'^\s*Known issue for #(\d+)\s*:\s*(.+?)\s*$')
+KNOWN = ('Known issue for #201: Stall lists do not open\n'
+         'Server: Main\n'
+         'What happens: the item list does not open.\n'
+         'Where: any market stall.\n'
+         'How to avoid it: nothing yet.\n'
+         'What is being done: the fix goes out with the next engine update.\n')
+kb = pr_tasks.known_blocks(MAIN + KNOWN + '\n## After\nmore\n')
+yes('a known issue block is read, and ends at a heading',
+    len(kb) == 1 and kb[0]['issue'] == 201 and kb[0]['title'] == 'Stall lists do not open'
+    and kb[0]['text'].startswith('Server: Main\nWhat happens') and 'more' not in kb[0]['text'])
+yes('  and a test task block ends where a known issue block starts',
+    'Stall' not in pr_tasks.blocks(MAIN + KNOWN)[0]['steps'])
+yes('  the comment the merge writes is "Known issue: <title>" and the lines under it',
+    pr_tasks.known_comment_of(kb[0]).startswith('Known issue: Stall lists do not open\nServer: Main\n'))
+yes('"Known issue for #N: unchanged" with nothing under it copies nothing',
+    pr_tasks.known_blocks('Known issue for #201: unchanged\n')[0]['unchanged'])
+yes('Refs, Closes and lists of issues are all read as named, but not inside a comment',
+    pr_tasks.named('Refs #1, #2 and #3\nFixes #4\n<!-- Closes #9 -->') == {1, 2, 3, 4})
+
+
+def finding(n, state='open', labels=('Main Findings',)):
+    return {'number': n, 'state': state, 'labels': [{'name': l} for l in labels]}
+
+
+ISSUES = {201: finding(201), 202: finding(202), 203: finding(203, labels=('bug',)),
+          204: finding(204, state='closed')}
+
+
+def kp(body, head=''):
+    got, _s = pr_tasks.known_problems(body, lambda n: ISSUES.get(n), bot=bot, head_ref=head)
+    return got
+
+
+yes('a good known issue for an open finding passes', all(not r for _w, r in kp('Refs #201\n' + KNOWN)))
+bad = kp(KNOWN.replace('nothing yet.', 'see https://example.com'))
+yes('  one with a link breaks the bot\'s rule for posts', any(has(r, 'Format') for _w, r in bad))
+long_title = kp('Known issue for #201: ' + 'x' * 50 + '\nWhat happens: it.\n')
+yes('  and so does a title over 45 characters', any(has(r, 'Format') for _w, r in long_title))
+yes('  one for an issue that is no finding is refused, since the bot posts only findings',
+    any(has(r, 'Issue') for _w, r in kp(KNOWN.replace('#201', '#203'))))
+yes('  and so is one for a closed issue', any(has(r, 'Issue') for _w, r in kp(KNOWN.replace('#201', '#204'))))
+miss = kp('Refs #202\n')
+yes('an open finding named with no test task and no known issue is refused',
+    len(miss) == 1 and has(miss[0][1], 'Known issues'))
+yes('  "unchanged" answers it', all(not r for _w, r in kp('Refs #202\nKnown issue for #202: unchanged\n')))
+yes('  and so does a test task for it', all(not r for _w, r in kp('Refs #202\n' + MAIN.replace('#101', '#202'))))
+yes('  a named issue that is no finding, or closed, needs none', kp('Refs #203, #204\n') == [])
+yes('  and the engine pin\'s pull request is not asked', kp('Refs #202\n', head='engine-pin/next') == [])
+yes('  nor is anything asked with no issue reader',
+    pr_tasks.known_problems('Refs #202\n', None, bot=bot)[0] == [])
+
 real_get = pr_tasks._get
 pr_tasks._get = fake_get
 try:
@@ -254,6 +315,98 @@ finally:
     pr_tasks._get = real_get
     for k in ('GITHUB_TOKEN', 'GITHUB_REPOSITORY', 'PR_NUMBER', 'HEAD_REF', 'PR_BODY'):
         os.environ.pop(k, None)
+
+# Queue refs identify the request, not its actual source branch. Exemption
+# context must come from that same PR, never a caller's claimed HEAD_REF.
+context_env = ('GITHUB_TOKEN', 'GITHUB_REPOSITORY', 'PR_NUMBER', 'HEAD_REF',
+               'PR_BODY', 'GITHUB_EVENT_NAME', 'GITHUB_RUN_ATTEMPT',
+               'PR_EVENT_BODY', 'GITHUB_EVENT_PATH')
+saved_context_env = {k: os.environ.get(k) for k in context_env}
+context_calls = []
+context_pr = {'number': 8, 'body': 'Refs #202\n',
+              'base': {'repo': {'full_name': 'o/r'}},
+              'head': {'ref': 'engine-pin/next', 'repo': {'full_name': 'o/r'}}}
+
+
+def context_get(token, path):
+    context_calls.append(path)
+    if path == 'repos/o/r/pulls/8':
+        return context_pr
+    if path.startswith('repos/o/r/issues/'):
+        return ISSUES.get(int(path.rsplit('/', 1)[1]))
+    raise AssertionError('unexpected context read: ' + path)
+
+
+pr_tasks._get = context_get
+try:
+    os.environ.update({'GITHUB_TOKEN': 'fixture-token', 'GITHUB_REPOSITORY': 'o/r',
+                       'PR_NUMBER': '8', 'HEAD_REF': 'gh-readonly-queue/main/pr-8-' + 'a' * 40,
+                       'GITHUB_EVENT_NAME': 'merge_group', 'GITHUB_RUN_ATTEMPT': '1'})
+    os.environ.pop('PR_EVENT_BODY', None)
+    code, out = run_env()
+    yes('merge queue uses the requested PR actual verified engine-pin head',
+        code == 0 and 'Known issues:' not in out and context_calls.count('repos/o/r/pulls/8') == 1)
+
+    context_pr['body'] = 'Refs #202\nKnown issue for #202: ' + 'x' * 50 + '\n'
+    code, out = run_env()
+    yes('verified engine pins still validate explicitly supplied known-issue blocks',
+        code == 1 and 'Format' in out)
+    context_pr['body'] = 'Refs #202\n'
+    context_pr['head']['ref'] = 'ordinary/change'
+    os.environ['HEAD_REF'] = 'engine-pin/claimed-by-caller'
+    code, out = run_env()
+    yes('a caller-supplied engine-pin prefix cannot exempt an ordinary PR',
+        code == 1 and 'Known issues:' in out)
+    context_pr['head']['ref'] = 'engine-pin/next'
+    context_pr['head']['repo']['full_name'] = 'someone/fork'
+    code, out = run_env()
+    yes('a foreign fork engine-pin branch cannot claim the repository automation exemption',
+        code == 1 and 'Known issues:' in out)
+    context_pr['head']['repo']['full_name'] = 'o/r'
+    context_pr['base']['repo']['full_name'] = 'other/repo'
+    code, out = run_env()
+    yes('a mismatched base repository cannot supply engine-pin exemption context',
+        code == 1 and 'Known issues:' in out)
+    context_pr['base']['repo']['full_name'] = 'o/r'
+    context_pr['number'] = 9
+    code, out = run_env()
+    yes('metadata for a different PR cannot exempt the requested number', code == 1)
+    context_pr['number'] = 8
+
+    with tempfile.TemporaryDirectory(prefix='tw-pr-head-context-') as owned:
+        event_path = os.path.join(owned, 'event.json')
+        os.environ.update({'GITHUB_EVENT_NAME': 'pull_request', 'PR_EVENT_BODY': context_pr['body'],
+                           'GITHUB_EVENT_PATH': event_path, 'HEAD_REF': '8/merge'})
+        with open(event_path, 'w', encoding='utf-8') as f:
+            json.dump({'number': 8, 'pull_request': context_pr}, f)
+        context_calls.clear()
+        code, out = run_env()
+        yes('first event uses matching event PR metadata without re-reading its body from GitHub',
+            code == 0 and 'reading the body the pull_request event carries' in out
+            and 'repos/o/r/pulls/8' not in context_calls)
+        os.environ['PR_EVENT_BODY'] = 'Refs #201\n'
+        code, out = run_env()
+        yes('an event payload for another body cannot exempt caller body text',
+            code == 1 and 'Known issues:' in out)
+        os.environ['PR_EVENT_BODY'] = context_pr['body']
+        os.environ['GITHUB_EVENT_PATH'] = os.path.join(owned, 'absent.json')
+        os.environ['HEAD_REF'] = 'engine-pin/claimed-by-caller'
+        code, out = run_env()
+        yes('missing event provenance cannot turn a caller prefix into an exemption',
+            code == 1 and 'Known issues:' in out)
+        os.environ['GITHUB_EVENT_PATH'] = event_path
+        os.environ['GITHUB_RUN_ATTEMPT'] = '2'
+        context_pr['head']['ref'] = 'ordinary/change'
+        code, out = run_env()
+        yes('reruns use current API PR metadata instead of an old event engine-pin head',
+            code == 1 and 'Known issues:' in out and 'repos/o/r/pulls/8' in context_calls)
+finally:
+    pr_tasks._get = real_get
+    for key, value in saved_context_env.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
 
 print()
 if FAIL:

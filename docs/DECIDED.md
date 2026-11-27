@@ -33,6 +33,10 @@ link, and the old line goes.
   A bounty or wanted poster that people write and post themselves is
   allowed; only Skyrim's own bounty system is off. 21 Oct 2026,
   [#3174](https://github.com/EvilPatrick06/Thornswood/issues/3174#issuecomment-6333339753).
+- **Pickpocketing is between people only.** A sneaking person can
+  pickpocket another person with Skyrim's own steal window; nobody can
+  pickpocket an NPC. 26 Nov 2026,
+  [#6622](https://github.com/ThornswoodRP/Thornswood/issues/6622).
 - **Hold laws and smuggling are roleplay only.** A Jarl posts the hold's law
   on the notice board and guards enforce it; nothing in the game checks goods
   or runs smuggling. 21 Oct 2026,
@@ -80,6 +84,10 @@ link, and the old line goes.
 - **A parcel costs the 20 board fee plus a courier pay the sender names, at
   least 15.** (dec_T2p8Emt1pF5ZarJ4vv2j0Q) 12 Nov 2026,
   [#4560](https://github.com/ThornswoodRP/Thornswood/issues/4560#issuecomment-6842435718).
+- **Post for somebody away waits at the board drop box of a hold where they
+  have a home or shop, and with none, of the hold they were in when they
+  last left the world.** (dec_94rdlsH6mWY7QmNcCkmFdA) 26 Nov 2026,
+  [#7130](https://github.com/ThornswoodRP/Thornswood/issues/7130#issuecomment-7208270038).
 - **House and shop upkeep is due weekly**, in goods or labour. 22 Oct 2026,
   [#3170](https://github.com/EvilPatrick06/Thornswood/issues/3170#issuecomment-6335271623).
 - **Missed upkeep never takes the claim away;** it brings a penalty, the way
@@ -959,6 +967,10 @@ issue where the card did.
   not CONTRIBUTING.md, nightly.yml's comments included; #5901 merges at
   e63a886.** (dec_zklJw_Lq1NsQrYCacyF7aA) 12 Nov 2026,
   [#4171](https://github.com/ThornswoodRP/Thornswood/issues/4171#issuecomment-6830659116).
+- **GitHub Code Quality is turned off in Thornswood-Ops, and in no other
+  repository, since it fails every commit there on billing.**
+  (dec_bZtp0Axfnkb82mxxmL4hhA) 26 Nov 2026,
+  [#7121](https://github.com/ThornswoodRP/Thornswood/issues/7121#issuecomment-7208019464).
 
 ### Runners
 

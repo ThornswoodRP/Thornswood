@@ -49,6 +49,8 @@ const BASES = {
   well: '18030:Thornswood-Content.esp', river: '18031:Thornswood-Content.esp',
   study: '18032:Thornswood-Content.esp',
 };
+const MASTERS = ['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm'];
+const bySrv = (n) => sites[n].standBy === 'server';
 
 let pass = 0, fail = 0;
 function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++; console.log('FAIL  ' + w); } }
@@ -77,9 +79,16 @@ yes('T3 every site names its kind, where, anchor, point, angle, cell and space',
     s.pos.every(Number.isFinite) && Number.isFinite(s.angle) && s.angle >= 0 && s.angle < 360 &&
     typeof s.interior === 'boolean';
 }));
-const refs = names.map((n) => sites[n].ref);
+const refs = names.filter((n) => !bySrv(n)).map((n) => sites[n].ref);
 yes('T4 each placement has a form id of its own in ' + CONTENT, refs.every((r) => /^[0-9a-f]+:Thornswood-Content\.esp$/.test(r)) &&
     new Set(refs).size === refs.length);
+// #6893: a station the server stands has no placement in the plugin, and is
+// only in a cell of a plugin that is not one of the content plugin's masters,
+// next to that room's own furniture.
+const srv = names.filter(bySrv);
+yes('T4a each station the server stands (' + srv.length + ') has no placement in the plugin, stands in a cell the plugin cannot place into, and names the furniture of that room it is moved next to',
+    srv.every((n) => sites[n].ref === null && sites[n].interior && desc.test(sites[n].beside) &&
+      MASTERS.indexOf(sites[n].cell.split(':')[1].toLowerCase()) < 0));
 yes('T5 and what was measured there: the ground within the kind\'s flat, the station on its lowest point, 30 units or more to the nearest solid thing',
     names.every((n) => {
       const s = sites[n];
@@ -92,6 +101,9 @@ yes('T6 and why the copy of its cell, and of an exterior\'s worldspace, changes 
     names.every((n) => {
       const s = sites[n];
       const ok = (w) => typeof w === 'string' && /^(carried after the content plugin by|won by )/.test(w);
+      if (bySrv(n)) {
+        return /^stood by the server at start: a record of .+, which is not a master of the content plugin$/.test(s.cellCopy);
+      }
       return ok(s.cellCopy) && (s.interior || ok(s.worldCopy));
     }));
 
@@ -181,22 +193,16 @@ function placements(b) {
   })(24 + b.readUInt32LE(4), b.length);
   return n;
 }
-// Thornswood-Last.esp places nothing new: its only placed references are the
-// three town gates it overrides where they stand, without their lock (#2484),
-// and the floor items it switches off (#3077, each one initially disabled:
-// tests/test-3077-floor-items.js P1). Neither is a station, so the table need
-// not read them. No repository holds the plugin since #2791 step 3, so this
-// reads it made from its recipe out of the game's plugins
-// (tests/last-plugin-made.js), and prints SKIP without the game.
-const lastMade = require('../../tests/last-plugin-made.js').made();
-const lastCounts = JSON.parse(fs.readFileSync(LAST, 'utf8')).counts || {};
-const lastGates = lastCounts.gatesUnlocked;
+// The builder separately checks each allowed reference by identity.
+const { made, doorReferenceOverrides } = require('../../tests/last-plugin-made.js');
+const lastMade = made();
+const last = JSON.parse(fs.readFileSync(LAST, 'utf8'));
 if (lastMade.buf) {
-  // And the hold-only plants and ores it switches off outside their hold (#3150).
-  const holdOff = ((JSON.parse(fs.readFileSync(LAST, 'utf8')).holdOnly || {}).off || []).length;
-  yes('B3 Thornswood-Last.esp places only the town gates it unlocks (' + lastGates + '), the floor items it switches off (' +
-      lastCounts.floorItemsOff + ') and the hold-only plants and ores it switches off (' + holdOff + '), so the table need not read it',
-      lastGates === 3 && placements(lastMade.buf) === lastGates + (lastCounts.floorItemsOff || 0) + holdOff);
+  const doorEdits = doorReferenceOverrides(last);
+  const floorOff = last.counts.floorItemsOff || 0;
+  const holdOff = (last.holdOnly?.off || []).length;
+  yes('B3 Last changes only recorded door access, floor items and hold-only resources',
+      last.counts.gatesUnlocked === 3 && placements(lastMade.buf) === doorEdits.size + floorOff + holdOff);
 } else {
   console.log('SKIP  B3: ' + lastMade.why);
 }

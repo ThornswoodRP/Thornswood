@@ -38,7 +38,9 @@
       "params": {
         "Lines": "^[0-9]{1,6}$",
         "All": "switch",
-        "Dev": "switch"
+        "Dev": "switch",
+        "Days": "^[0-9]{1,3}$",
+        "Match": "^[A-Za-z0-9][A-Za-z0-9 .,:_()#=-]{0,159}$"
       }
     },
     "Deploy-DevGamemode": {
@@ -63,6 +65,7 @@
         "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
@@ -629,6 +632,7 @@
         "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
@@ -713,6 +717,7 @@
         "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
@@ -795,6 +800,7 @@
         "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
@@ -960,6 +966,7 @@
         "scripts/deploy/Artifact.ps1",
         "scripts/deploy/CollectionPlugins.ps1",
         "scripts/deploy/CollectionStore.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/dev/Build-CastTable.py",
         "scripts/dev/Build-DoorTable.py",
         "scripts/dev/Build-NpcPopulation.py",
@@ -1012,7 +1019,45 @@
       "out": "-Out",
       "params": {
         "Server": "^(dev|main)$",
-        "Stations": "switch"
+        "Stations": "switch",
+        "Queued": "^[0-9a-f]{40}$",
+        "Limited": "switch"
+      }
+    },
+    "List-GameData": {
+      "script": "scripts/mods/List-GameDataOnBox.ps1",
+      "reads": [
+        "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
+        "scripts/dev/Build-DoorTable.py",
+        "scripts/dev/List-KillMoveIdles.py",
+        "scripts/dev/List-ToolRecords.py",
+        "scripts/dev/bsa.py",
+        "scripts/dev/claimable_doors.py",
+        "scripts/dev/gamemode_tables.py",
+        "scripts/dev/own_plugins.py",
+        "scripts/dev/riftweald.py",
+        "scripts/mods/Add-ContentRecords.py",
+        "scripts/mods/Build-LastPlugin.py",
+        "scripts/mods/Check-PluginClean.py",
+        "scripts/mods/ContentPaths.ps1",
+        "scripts/mods/OnBox.ps1",
+        "scripts/mods/Run-OnBox.ps1",
+        "scripts/mods/last_recipe.py",
+        "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/MergeRelease.ps1",
+        "scripts/release/Read-JsonFile.ps1",
+        "scripts/release/RecordShape.ps1",
+        "scripts/release/Where.ps1",
+        "scripts/vps/Lock-Folder.ps1",
+        "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Vps.ps1"
+      ],
+      "timeoutMinutes": 20,
+      "fixed": [],
+      "params": {
+        "Lister": "^(KillMoveIdles|ToolRecords)$",
+        "Server": "^(dev|main)$"
       }
     },
     "Ship-Dev": {

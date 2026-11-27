@@ -50,7 +50,7 @@ Skyrim the way it was.
    marked adult, so first turn on adult content in your Nexus Mods settings,
    or Nexus shows the collection as hidden. On a free account Vortex opens
    each file's page on Nexus and you press **Slow download** there, once for
-   each file: 121 files, from 112 mods.
+   each file: 120 files, from 111 mods.
 4. Press **Connect Discord** at the bottom of the launcher's left sidebar,
    above Settings. Your browser opens, you say yes, and it closes itself. You
    never do this again.
@@ -166,7 +166,8 @@ is handed over at the moment its pick is made.
 
 These are the keys a fresh install has. Every one is changed in the game, on
 **Settings** at the foot of the help panel and of the K, P and J panels: press
-Change beside it, then the key you want. It takes effect at once.
+Change beside it, then the key you want. It takes effect at once. Its Screen
+and chat page has the text size too, which draws every panel bigger.
 
 - **Enter** opens the chat, and **/** opens it with the slash already typed.
 - **K** your character panel, **P** your friends and party, **J** your journals.
@@ -216,7 +217,8 @@ they accept.
 
 If you are a Tailor, carry a bottle of water and what the dye needs, press
 **E** on the cooking spot, and stay by the fire until the dye is done. Walk
-away before then and nothing is made or used. The dye goes into your pack,
+away before then and nothing is made or used. Logging out does not lose it:
+come back by the fire once it is done and the dye is made. The dye goes into your pack,
 under its own name. Anyone who is not a Haberdasher or Liverywright and
 tries it is turned away and keeps everything they carry. They are told:
 "Steeping hair dye is work for a Haberdasher or Liverywright. Nothing was

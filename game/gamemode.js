@@ -3557,28 +3557,32 @@ function blockIsOff(refrId) {
 
 function chopWood(actorId, refrId, fromSwing) {
   /*
-    #842: Skyrim starts the chopping FURN on the client the moment E is
-    pressed. mp.onActivate returning false only stops the server's
-    ProcessActivateNormal; the axe loop is already running locally. A
-    refused press (wrong half, no axe, off-limits block, or no firewood
-    form) must kick that loop the same way a mining spell ends:
-    IdleChairExitStart then IdleForceDefaultState via swingEnd.
+    A REFUSED PRESS STARTS NOTHING (#4598). Skyrim used to start the chopping
+    FURN on the presser's machine the moment E was pressed, so a refusal had
+    to undo the axe loop afterwards with swingEnd (#842). The client now
+    leaves every chopping block to the server before it acts (the
+    serverFirstBases packet, scripted-activators.ts), so a refused press sat
+    nobody down and there is nothing to undo.
+
+    A swing is different. fromSwing is a fall of the axe in a session the
+    server allowed, and the loop is running: a refusal there (the axe broke,
+    the block went off) ends that session with swingEnd, as before.
   */
   // Before the class and the axe, because this block is not work for anybody
   // and telling a woodworker they lack a tool at one would be a lie.
   const off = blockIsOff(refrId);
   if (off) {
-    swingEnd(actorId);
-    return fromSwing ? '' : 'Nobody works this block. There are others in ' + off + '.';
+    if (fromSwing) { swingEnd(actorId); return ''; }
+    return 'Nobody works this block. There are others in ' + off + '.';
   }
 
   const half = halfGate(actorId, 'woodwright', 'novice',
     'A chopping block is a woodworker\'s. Only a woodworker who took Woodwright can ' +
     'work one, and a charburner gets the novice yield. Ask one.');
-  if (half) { swingEnd(actorId); return half; }
+  if (half) { if (fromSwing) { swingEnd(actorId); } return half; }
 
   const tool = toolGate(actorId, 'woodworker');
-  if (tool) { swingEnd(actorId); return tool; }
+  if (tool) { if (fromSwing) { swingEnd(actorId); } return tool; }
 
   /*
     NO WAIT BETWEEN SWINGS, because a swing is the unit now.
@@ -3615,9 +3619,9 @@ function chopWood(actorId, refrId, fromSwing) {
   */
   const yielded = 2;
   if (!addItem(actorId, ITEMS.firewood, yielded)) {
-    swingEnd(actorId);
+    if (fromSwing) { swingEnd(actorId); }
     return 'The block gives up firewood and there is nothing in this load order to ' +
-           'put in your hands. Say so in #bugs.';
+           'put in your hands. Post it in #test-findings in the Discord.';
   }
   /*
     The press is what starts a session, and the block is a FURN so Skyrim's own
@@ -5324,6 +5328,14 @@ function chargenTick() {
         delete state.faceOpenAt;
         delete state.faceSeenAt;
         delete state.faceHeld;
+        // So did its close (#6724). A session ended with the race menu up
+        // (refused at the door, Change character, the idle check) closes it
+        // on the way to the main menu, and the plugin says /face done. Kept,
+        // that close was this session's too: raceMenuIsUp said no menu while
+        // the new one was open, the race menu was asked for again over it
+        // every NUDGE_MS, and "closed but no appearance is stored" was logged
+        // every tick until the face came (24 Nov 2026, main, about 40 s).
+        delete state.faceDone;
         // Long enough for the arrival to settle before a baseline is taken,
         // the same grace a fresh arrival gets.
         state.askAt = now + 4000;
@@ -7329,10 +7341,73 @@ function poleTooWeak(actorId, waterRank) {
   return null;
 }
 
+/*
+  FISH TRAPS (#4655). docs/systems/classes/fisher.md, "Between casts": set
+  in water you are allowed to fish, up to FISH_TRAP_MAX at once, the wait is
+  that water's rank, collecting it is a catch of that water, and setting it
+  and collecting it are each one piece of work.
+
+  Until this, a woodwright made the trap and nothing let anybody set one:
+  placeFishTrap and collectFishTrap had no caller, and collecting gave work
+  and no catch.
+
+  A trap is kept on the fisher (TRAP_PROPERTY): which water (its reference
+  and its base), when it went in and the wait it went in with. The wait is
+  the trap's own, not the water's shared stock, so a trap in a water does
+  not fish it out for somebody casting a pole there, and a pole cast there
+  does not empty the trap. The trap itself comes back with the catch.
+
+  THE BUTTON is the lock key's line at the water (thornswoodWaterLine),
+  written for whoever just pressed E on it and again after each set or
+  collect, the way a door's line is written for the door just opened. The
+  front draws it while that water stays under the crosshair, and the lock
+  key sends /trap and the water's id (teleport.ts routes it here). The
+  server checks everything again: the water, the reach, the class, the rank
+  and the trap in the pack.
+
+  Not in a pearl bed or the longfin water: what comes out of those is a
+  quest's count.
+*/
+const WATER_LINE_PROPERTY = 'thornswoodWaterLine';
+const LONGFIN_WATER = '154a5:Thornswood-Content.esp';
+let waterLineStamp = 0;
+
+try {
+  // The server's own record: nobody's client reads it.
+  mp.makeProperty(TRAP_PROPERTY, {
+    isVisibleByOwner: false, isVisibleByNeighbors: false,
+    updateOwner: '', updateNeighbor: ''
+  });
+} catch (e) { log('fish traps: the trap record was made by an earlier load:', String(e)); }
+try {
+  mp.makeProperty(WATER_LINE_PROPERTY, {
+    isVisibleByOwner: true, isVisibleByNeighbors: false,
+    updateOwner: [
+      '(function(){',
+      '  try {',
+      '    var v = ctx.value;',
+      '    if (!v || typeof v !== "object") { return; }',
+      '    var was = globalThis.thornswoodWaterLine;',
+      '    if (was && was.stamp === v.at) { return; }',
+      '    globalThis.thornswoodWaterLine = { stamp: v.at, seen: Date.now(),',
+      '      hex: String(v.hex || ""), x: String(v.x || ""), w: String(v.w || ""),',
+      '      t: String(v.t || "") };',
+      '  } catch (e) { /* the client keeps the last line; the next press writes it again */ }',
+      '})();'
+    ].join('\n'),
+    updateNeighbor: ''
+  });
+} catch (e) {
+  // Made by an earlier load; a changed script needs a restart, which a deploy is.
+  log('fish traps: the water line was made by an earlier load:', String(e));
+}
+
 function fishTrapsOf(actorId) {
   let v = null;
   try { v = mp.get(actorId, TRAP_PROPERTY); } catch (e) { v = null; }
-  return Array.isArray(v) ? v.filter(function (t) { return t && typeof t === 'object'; }) : [];
+  return Array.isArray(v) ? v.filter(function (t) {
+    return t && typeof t === 'object' && typeof t.hex === 'string' && typeof t.base === 'string';
+  }) : [];
 }
 
 function holdsDesc(actorId, desc) {
@@ -7348,20 +7423,56 @@ function holdsDesc(actorId, desc) {
   return false;
 }
 
-function placeFishTrap(actorId, waterRank) {
+function waterHex(refrId) { return (Number(refrId) >>> 0).toString(16); }
+
+/** The fish row a trap may go in at this water, or null for one it may not. */
+function trapWater(refrId, baseDesc) {
+  if (!isFish(baseDesc) || baseDesc === LONGFIN_WATER) { return null; }
+  const quest = globalThis.__thornswoodQuestFishingRefs;
+  if (quest && quest[refrId]) { return null; }
+  return FISH_BY_BASE[baseDesc];
+}
+
+/* The water's wait, as fish() reads it: a rank nobody knows waits longest. */
+function trapWaitMs(rank) {
+  return Object.prototype.hasOwnProperty.call(FISH_TUNING.cooldownMs, rank)
+    ? FISH_TUNING.cooldownMs[rank] : FISH_TUNING.cooldownMs.master;
+}
+
+/* The fisher and their rank against this water, as fish() asks them. */
+function trapRefusal(actorId, caught) {
   const refusal = classGate(actorId, 'fish');
+  if (refusal) { return refusal; }
+  const named = RANK_LADDER.indexOf(caught.rank);
+  const want = named < 0 ? RANK_LADDER.length - 1 : named;
+  if (want > 0 && rankStep(actorId, 'fisher') < want) {
+    return 'This ' + caught.from + ' takes ' + rankWord(RANK_LADDER[want]) +
+           ' Fisher. Fish what you can until you are one.';
+  }
+  return null;
+}
+
+function placeFishTrap(actorId, refrId, baseDesc) {
+  const caught = trapWater(refrId, baseDesc);
+  if (!caught) { return { ok: false, line: 'A fish trap does not go in this water.' }; }
+  const refusal = trapRefusal(actorId, caught);
   if (refusal) { return { ok: false, line: refusal }; }
   if (!holdsDesc(actorId, FISH_TRAP_DESC)) {
     return { ok: false, line: 'You need a fish trap in your pack. A woodwright makes them. A trap is not a pole.' };
   }
+  const hex = waterHex(refrId);
   const set = fishTrapsOf(actorId);
+  if (set.some(function (t) { return t.hex === hex; })) {
+    return { ok: false, line: 'Your fish trap is already in this water.' };
+  }
   if (set.length >= FISH_TRAP_MAX) {
     return { ok: false, line: 'You already have ' + FISH_TRAP_MAX + ' fish traps set. Collect one before you set another.' };
   }
   if (!takeItem(actorId, FISH_TRAP_DESC, 1)) {
     return { ok: false, line: 'The trap did not leave your pack, so it was not set.' };
   }
-  set.push({ at: Date.now(), rank: String(waterRank || '') });
+  const waitMs = trapWaitMs(caught.rank);
+  set.push({ at: Date.now(), hex: hex, base: baseDesc, waitMs: waitMs });
   try { mp.set(actorId, TRAP_PROPERTY, set); }
   catch (e) {
     addItem(actorId, ITEMS.fishTrap, 1);
@@ -7372,30 +7483,105 @@ function placeFishTrap(actorId, waterRank) {
   return {
     ok: true,
     count: set.length,
-    line: 'You set a fish trap. ' + set.length + ' of ' + FISH_TRAP_MAX + ' are out.' +
-          (raised ? ' ' + raised : '')
+    line: 'You set a fish trap in the ' + caught.from + '. It is ready in ' + waitWord(waitMs / 1000) +
+          '. ' + set.length + ' of ' + FISH_TRAP_MAX + ' are out.' + (raised ? ' ' + raised : '')
   };
 }
 
-function setFishTrap(actorId, waterRank) {
-  return placeFishTrap(actorId, waterRank);
-}
-
-function collectFishTrap(actorId) {
+function collectFishTrap(actorId, refrId) {
+  const hex = waterHex(refrId);
   const set = fishTrapsOf(actorId);
-  if (!set.length) { return { ok: false, line: 'You have no fish trap set.' }; }
-  const trap = set.shift();
+  let i = -1;
+  for (let k = 0; k < set.length; k++) { if (set[k].hex === hex) { i = k; break; } }
+  if (i < 0) { return { ok: false, line: 'You have no fish trap in this water.' }; }
+  const trap = set[i];
+  const left = (Number(trap.at) || 0) + (Number(trap.waitMs) || 0) - Date.now();
+  if (left > 0) { return { ok: false, line: 'Your fish trap here is ready in ' + waitWord(left / 1000) + '.' }; }
+  const caught = isFish(trap.base) ? FISH_BY_BASE[trap.base] : null;
+  const refusal = classGate(actorId, 'fish');
+  if (refusal) { return { ok: false, line: refusal }; }
+
+  // The catch is the fisher's rank's pair for this water, with the season's
+  // share (#3144), as a cast at it is.
+  const step = rankStep(actorId, 'fisher');
+  const pair = FISH_TUNING.yieldByStep[step] || FISH_TUNING.yieldByStep[0];
+  let got = caught ? randInt(pair[0], pair[1]) : 0;
+  const season = globalThis.__thornswoodSeason;
+  if (got > 0 && season && season.seasonYield) { got = season.seasonYield(got); }
+  const goods = [{ item: FISH_TRAP_DESC, count: 1 }];
+  if (got > 0) { goods.push({ item: caught.produce, count: got }); }
+
+  // Written down before anything is handed over, so a failure leaves the
+  // trap set rather than handing out a catch twice.
+  set.splice(i, 1);
   try { mp.set(actorId, TRAP_PROPERTY, set); }
   catch (e) { return { ok: false, line: 'The trap is still set. It could not be collected.' }; }
+  let given = false;
+  try { given = addItemsAtomic(actorId, goods); } catch (e3) { given = false; }
+  if (!given) {
+    set.splice(i, 0, trap);
+    try { mp.set(actorId, TRAP_PROPERTY, set); }
+    catch (e4) { log('fish traps: a trap could not be put back for', actorId.toString(16) + ':', String(e4)); }
+    return { ok: false, line: 'Nothing from the trap would go in your pack, so it is still set. Say so in the dev channel.' };
+  }
+  if (got > 0) { economyGathered(actorId, caught.produce, got); }
   let raised = null;
   try { raised = creditWork(actorId, 'fish'); } catch (e2) { raised = null; }
+  const word = season && season.yieldWord ? season.yieldWord() : '';
   return {
     ok: true,
     count: set.length,
-    rank: trap && trap.rank,
-    line: 'You collect a fish trap.' + (raised ? ' ' + raised : '')
+    line: (got > 0 ? 'You take up your fish trap with ' + got + ' ' + caught.name + ' in it.'
+                   : 'You take up your fish trap. Nothing is in it this time.') +
+          (word ? ' ' + word : '') + (raised ? ' ' + raised : '')
   };
 }
+
+/*
+  The lock key's line at this water for this person: take up their trap when
+  it is ready, how long is left while it is not, or set one when they may.
+  Written every time, an empty line included, so a line for another water or
+  an old answer never stays up.
+*/
+function waterLine(actorId, refrId, baseDesc) {
+  const hex = waterHex(refrId);
+  waterLineStamp = Math.max(waterLineStamp + 1, Date.now());
+  const line = { at: waterLineStamp, hex: hex, x: '', w: '', t: '' };
+  const caught = trapWater(refrId, baseDesc);
+  if (caught && !classGate(actorId, 'fish')) {
+    const set = fishTrapsOf(actorId);
+    let mine = null;
+    for (let k = 0; k < set.length; k++) { if (set[k].hex === hex) { mine = set[k]; break; } }
+    if (mine) {
+      const left = (Number(mine.at) || 0) + (Number(mine.waitMs) || 0) - Date.now();
+      if (left > 0) { line.t = 'Your fish trap here is ready in ' + waitWord(left / 1000) + '.'; }
+      else { line.x = 'trap'; line.w = 'Take up your fish trap'; }
+    } else if (set.length < FISH_TRAP_MAX && holdsDesc(actorId, FISH_TRAP_DESC) &&
+               !trapRefusal(actorId, caught)) {
+      line.x = 'trap';
+      line.w = 'Set a fish trap here (' + set.length + ' of ' + FISH_TRAP_MAX + ' out)';
+    }
+  }
+  try { mp.set(actorId, WATER_LINE_PROPERTY, line); }
+  catch (e) { log('fish traps: the water line could not be written for', actorId.toString(16) + ':', String(e)); }
+}
+
+/* /trap and a water's id: what the lock key sends at the line above. */
+function trapCommand(parts, actorId) {
+  const hex = String((parts && parts[1]) || '').toLowerCase();
+  if (!/^[0-9a-f]{1,8}$/.test(hex)) { return 'That is not a water you can set a trap in.'; }
+  const refrId = parseInt(hex, 16);
+  let baseDesc = '';
+  try { baseDesc = mp.get(refrId, 'baseDesc'); } catch (e) { baseDesc = ''; }
+  if (!isFish(baseDesc)) { return 'That is not a water you can set a trap in.'; }
+  if (!withinResourceReach(actorId, refrId)) { return 'Come closer to this water.'; }
+  const hasOne = fishTrapsOf(actorId).some(function (t) { return t.hex === hex; });
+  const said = hasOne ? collectFishTrap(actorId, refrId) : placeFishTrap(actorId, refrId, baseDesc);
+  waterLine(actorId, refrId, baseDesc);
+  return said.line;
+}
+
+globalThis.__thornswoodTraps = { command: trapCommand, waterLine: waterLine };
 
 function fish(actorId, refrId, baseDesc) {
   if (!isFish(baseDesc)) return null;
@@ -8639,7 +8825,11 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
   // salmon as a flower for a gatherer. plantAt() refuses a fish base on its own
   // account as well, so neither half of that depends on this line staying where
   // it is. Same arrangement as the crops two lines up, same reason.
-  else if (isFish(baseDesc)) message = fish(casterRefrId, refrId, baseDesc);
+  else if (isFish(baseDesc)) {
+    message = fish(casterRefrId, refrId, baseDesc);
+    // The lock key's line for a fish trap here (#4655), after the cast.
+    waterLine(casterRefrId, refrId, baseDesc);
+  }
   // Hanging game before the plants, for the same reason. All seven bases were
   // rows in the plant table until the food rule of 21 September took them out,
   // so on a gamemode built before that ran a plants-first order would answer a
@@ -8778,6 +8968,83 @@ function showsPick(refrId) {
     if (before && packGrew(before, packCounts(casterRefrId))) { showPicked(casterRefrId, refrId); }
     return result;
   };
+})();
+
+/*
+  THE BASES WHOSE PRESS WAITS FOR THE SERVER (#4598).
+
+  The client blocks a press by record type: containers, items, actors, doors,
+  plants, trees and benches wait for the server's answer. A chopping block is
+  furniture that is no bench, and an ore vein is an activator, so neither
+  waited. The presser's own Skyrim sat them at the block, or ran the vein's
+  MineOreScript, before the server had said whether they may, and chopWood
+  could only end the swing after it had started.
+
+  Since skymp#166 the client takes the bases the server names, as the custom
+  packet { customPacketType: 'serverFirstBases', bases: [runtime form ids] },
+  and blocks every reference of them the way it blocks a bench. A refused
+  press then changes nothing on that machine, and an allowed one comes back
+  as the server's own activation. The client forgets the list with each
+  connection (resetServerFirstActivation in networkingService.ts), so it is
+  sent once to every connection: a character's connection is its GUID, the
+  same identity join-pass.ts reads, and a new one is told again.
+
+  CHOPPING_BLOCKS and ORES_BY_BASE are the whole of it. Benches, doors,
+  plants and trees already wait by their type.
+*/
+(function serverFirstBases() {
+  const ids = [];
+  const seen = {};
+  function add(desc) {
+    const id = idOf(desc);
+    // 0 is a plugin that is not loaded: nothing of it can be pressed.
+    if (id && !seen[id]) { seen[id] = true; ids.push(id); }
+  }
+  for (let i = 0; i < CHOPPING_BLOCKS.length; i++) { add(CHOPPING_BLOCKS[i]); }
+  for (const veinBase in ORES_BY_BASE) {
+    if (Object.prototype.hasOwnProperty.call(ORES_BY_BASE, veinBase)) { add(veinBase); }
+  }
+  const packet = JSON.stringify({ customPacketType: 'serverFirstBases', bases: ids });
+  // actorId to the connection it was last sent on.
+  const told = {};
+
+  function connection(userId) {
+    if (typeof mp.getUserGuid !== 'function') { return 'user ' + userId; }
+    let guid = '';
+    try { guid = String(mp.getUserGuid(userId) || ''); } catch (e) { guid = ''; }
+    return guid ? 'guid ' + guid : '';
+  }
+
+  function tell() {
+    let online = [];
+    try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { online = []; }
+    const here = {};
+    for (let i = 0; i < online.length; i++) {
+      const actorId = online[i];
+      let userId = -1;
+      try { userId = mp.getUserByActor(actorId); } catch (e) { userId = -1; }
+      if (userId === undefined || userId === null || userId < 0) { continue; }
+      const conn = connection(userId);
+      if (!conn) { continue; }
+      here[actorId] = true;
+      if (told[actorId] === conn) { continue; }
+      told[actorId] = conn;
+      try {
+        mp.sendCustomPacket(userId, packet);
+      } catch (e) {
+        log('could not tell', Number(actorId).toString(16), 'which bases wait for the server:', e);
+      }
+    }
+    for (const k in told) {
+      if (Object.prototype.hasOwnProperty.call(told, k) && !here[k]) { delete told[k]; }
+    }
+  }
+
+  const g = globalThis;
+  if (g.__thornswoodServerFirstTimer) { clearInterval(g.__thornswoodServerFirstTimer); }
+  g.__thornswoodServerFirstTimer = setInterval(guard('serverFirstBases', tell), 1000);
+  g.__thornswoodServerFirst = { bases: ids, tell: tell };
+  log(ids.length, 'bases wait for the server before the client acts on them');
 })();
 
 /*
@@ -9098,24 +9365,27 @@ const WAY_OUT = table('WAY_OUT');
   Whiterun gate and saying /claim then fell through to farming, which answered
   "Only a farmer can bring a crop in."
 
-  These four leaves are the town gates (Thornswood-Last.esp loads the outer ones
+  These leaves are the town gates (Thornswood-Last.esp loads the outer ones
   unlocked since #2484). The inside
   Whiterun leaf is a way out so a lock never shuts people inside the city.
-  Riften's two listed leaves are both the locked outer ones from the same
-  measurement that put them in GATES in scripts/mods/Build-LastPlugin.py.
+  Riften's two outer leaves are from the measurement that put them in GATES
+  in scripts/mods/Build-LastPlugin.py. Their reciprocal inside leaves belong
+  to that same property and remain ways out, like Whiterun's (#7071).
 */
 (function addTownGateProperties() {
   var doors = {
     '1b1f1:Skyrim.esm': 'gate:whiterun-main',
     '1b1f3:Skyrim.esm': 'gate:whiterun-main',
+    '42283:Skyrim.esm': 'gate:riften-main',
     '42284:Skyrim.esm': 'gate:riften-main',
+    '42285:Skyrim.esm': 'gate:riften-main',
     '42286:Skyrim.esm': 'gate:riften-main'
   };
   var names = {
     'gate:whiterun-main': 'Whiterun Main Gate',
     'gate:riften-main': 'Riften Main Gate'
   };
-  var outs = { '1b1f3:Skyrim.esm': 1 };
+  var outs = { '1b1f3:Skyrim.esm': 1, '42283:Skyrim.esm': 1, '42285:Skyrim.esm': 1 };
   for (var d in doors) {
     if (Object.prototype.hasOwnProperty.call(doors, d)) { BUILDING_BY_DOOR[d] = doors[d]; }
   }
@@ -9410,58 +9680,22 @@ function benchGate(actorId, baseDesc) {
 }
 
 /*
-  The handle, and which recipes want one. Argued for at the call in mp.onCraft.
+  THE CHARCOAL AND THE HANDLE ARE IN THE RECIPES (#1398, #6726).
 
-  Keyed off the family the recipe table already puts on every owned row, so this
-  list is checked against real data rather than against a memory of what Skyrim
-  contains: game\tests\test-1398-fuel.js counts the rows in each of these families and fails if
-  a family here matches nothing, because a family name that has been renamed
-  under it would turn this rule off without a word.
+  docs/systems/professions/smith.md: every forge, skyforge and smelter
+  recipe burns one charcoal of the grade its metal asks for, and a war axe,
+  a battleaxe, a warhammer and a mace take a Tool Handle as well. Until
+  #6726 the server took both after the craft, so the game's own list never
+  named them and a tester only learned of them from a line in chat.
+  Patrick's B on #6726: they are inputs on the records, so the list shows
+  them and the engine takes them like any other input, from the pack or the
+  bench's stock. scripts/dev/Build-FuelTable.js says which recipe takes
+  which (FUEL_BY_RECIPE), scripts/mods/Build-LastPlugin.py writes them into
+  every recipe it copies, and a recipe of a plugin it never copies takes
+  them in each person's game (RECIPES_SET_IN_GAME, below). The
+  Charcoal grade is Skyrim's own Charcoal, which the Charburner's kiln
+  makes.
 */
-const HANDLE_DESC = '15490:Thornswood-Content.esp';
-/*
-  CHARCOAL FOR THE FIRE, BY GRADE (#1398).
-
-  docs/systems/professions/smith.md: "Every forge and every skyforge burns one
-  charcoal. No charcoal of the grade the metal asks for, the piece is not
-  made." Then the grade table, the smelter at the same grade as its metal, and
-  the skyforge one grade poorer. Which grade each recipe asks for is
-  FUEL_BY_RECIPE below, worked out of game\data\recipes.json by
-  scripts\dev\Build-FuelTable.js, because the rows the server carries name
-  neither their bench nor their metal. The rule before this read a bench off
-  the row, no installed row carries one, and so no forge took any charcoal.
-
-  The same shape as the handle: not an ingredient on the record, which would
-  couple this to every smithing plugin, but taken here once the craft is
-  allowed.
-
-  THE GRADE THE TABLE NAMES, AND ONLY THAT GRADE. It used to burn the cheapest
-  piece in the pack, Poor Charcoal first, whatever the metal. A hotter grade
-  is not burned in place of the one asked for: the page says no charcoal of
-  that grade, no piece. Skyrim's own Charcoal is the Charcoal grade, by its
-  name, as it was always taken here.
-*/
-const CHARCOAL_GRADES = [
-  null,
-  { name: 'Poor Charcoal', descs: [ITEMS.charcoalT1] },
-  { name: 'Charcoal', descs: [ITEMS.charcoalT2, ITEMS.charcoal] },
-  { name: 'Charcoal Briquette', descs: [ITEMS.charcoalT3] },
-  { name: 'Coke', descs: [ITEMS.charcoalT4] }
-];
-
-/* Written by scripts\dev\Build-FuelTable.js out of game\data\recipes.json into its table file:
-   every recipe at a forge, a skyforge or a smelter, which prints the counts.
-   Recipe desc -> [grade 1 to 4, the metal that asks for it or nothing, the bench]. */
-const FUEL_BY_RECIPE = table('FUEL_BY_RECIPE');
-
-/** The fuel a recipe burns, { grade, metal, bench }, or null when it burns none. */
-function fuelFor(recipeDesc) {
-  if (!Object.prototype.hasOwnProperty.call(FUEL_BY_RECIPE, recipeDesc)) { return null; }
-  const f = FUEL_BY_RECIPE[recipeDesc];
-  const grade = Number(f && f[0]);
-  if (!CHARCOAL_GRADES[grade]) { return null; }
-  return { grade: grade, metal: String(f[1] || ''), bench: String(f[2] || 'forge') };
-}
 
 /** How many of one item a pack holds, every stack of it counted. */
 function packCount(actorId, itemDesc) {
@@ -9475,57 +9709,6 @@ function packCount(actorId, itemDesc) {
     if (entries[i] && entries[i].baseId === baseId) { n += Number(entries[i].count) || 0; }
   }
   return n;
-}
-
-/** The charcoal of exactly that grade in this pack, or '' when there is none. */
-function charcoalHeld(actorId, grade) {
-  const g = CHARCOAL_GRADES[grade];
-  if (!g) { return ''; }
-  for (let i = 0; i < g.descs.length; i++) {
-    if (g.descs[i] && packCount(actorId, g.descs[i]) > 0) { return g.descs[i]; }
-  }
-  return '';
-}
-
-/** What is said when the grade a piece asks for is not in the pack. */
-function fuelRefusal(fuel) {
-  const grade = CHARCOAL_GRADES[fuel.grade].name;
-  const metal = fuel.metal.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
-  let first;
-  if (fuel.bench === 'smelter') {
-    first = metal ? 'Smelting ' + metal + ' burns ' + grade : 'A smelter burns ' + grade;
-  } else {
-    const at = fuel.bench === 'skyforge' ? 'the skyforge' : 'a forge';
-    first = metal ? metal + ' at ' + at + ' burns ' + grade
-                  : (fuel.bench === 'skyforge' ? 'The skyforge' : 'A forge') + ' burns ' + grade;
-  }
-  return first + ', and you have none. A Charburner makes it from firewood at a kiln.';
-}
-
-/*
-  The four hafted families on the smith page: a war axe, a battleaxe, a
-  warhammer and a mace are a metal head on a wooden haft. Other weapons was
-  on this list too, and in the table that family is the woodcutter's axe and
-  the drum, the flute and the lute, so the instruments were asked for a
-  handle (#1398). An instrument is not a haft.
-*/
-const HAFTED_FAMILIES = ['War axes', 'Battleaxes', 'Warhammers', 'Maces'];
-
-/** True when this recipe makes something fitted to a wooden handle. */
-function wantsAHandle(row) {
-  if (!row || typeof row !== 'object') { return false; }
-  // The three tools ask for a handle in the records, so the rule must not ask
-  // for a second one. Their outputs are the ones TOOLS names.
-  const out = String(row.out || '');
-  for (const key in TOOLS) {
-    if (!Object.prototype.hasOwnProperty.call(TOOLS, key)) { continue; }
-    if (TOOLS[key].give === out) { return false; }
-  }
-  const family = String(row.family || '');
-  for (let i = 0; i < HAFTED_FAMILIES.length; i++) {
-    if (HAFTED_FAMILIES[i] === family) { return true; }
-  }
-  return false;
 }
 
 /*
@@ -10469,7 +10652,7 @@ function handRecipesHidden(actorId) {
   a craft at the new counts matches no record and arrives with no recipe id.
   recipeSetInGame names the recipe from its output, its bench and exactly the
   new counts, and onCraft treats it as that recipe from there: the same gate,
-  charcoal, handle and credit as any other. A craft at the mod's own counts,
+  tool and credit as any other. A craft at the mod's own counts,
   from a game that has not set the new ones yet, matches the record and is
   refused, so nobody pays the coins or the old counts.
 
@@ -10477,8 +10660,27 @@ function handRecipesHidden(actorId) {
 */
 // Written by scripts\dev\Build-Recost.py from game\data\recost.json into its table file.
 // The re-costed recipes of a plugin Thornswood-Last.esp never copies from (#613, #2454),
-// set in each person's game instead: each input as [item, count it had, count it asks].
+// and its forge, skyforge and smelter ones given their charcoal and handle (#6726),
+// set in each person's game instead: each input as [item, count it had, count it asks],
+// an input the record does not name after the ones it does, with 0 for what it had.
 var RECIPES_SET_IN_GAME = table('RECIPES_SET_IN_GAME');
+
+/*
+  THE CHARCOAL AND THE HANDLE IN EACH GAME TOO (#6726).
+
+  Thornswood-Last.esp writes the charcoal and the handle into every forge,
+  skyforge and smelter recipe it copies (the block at the top of this file).
+  Immersive Armors' are never copied (#2454), so Build-Recost.py puts each
+  of those in RECIPES_SET_IN_GAME as well, with the charcoal and the handle
+  as inputs on top of its counts. One its record does not name has 0 for
+  the count it had, and each person's game adds it to its own copy of the
+  record with the fork's TESModPlatform.SetCraftingInput, which SKSE's
+  ConstructibleObject has no call for. Its craft then matches no server
+  record, as a re-costed one does, and recipeSetInGame names it from its
+  output, its bench and the counts with the charcoal and handle in them. A
+  craft at the record's own counts, from a game that has not added them, is
+  refused, so nobody makes one without them.
+*/
 
 var RECIPE_COUNTS_PROPERTY = 'thornswoodRecipeCounts';
 // One stamp per load, so a deploy that changes the table hands it again.
@@ -10504,9 +10706,18 @@ function recipeCountsScript() {
     // A plugin this game does not have lists nothing, so there is nothing to set.
     '      if (!cobj) { continue; }',
     '      var inputs = v.rows[key];',
-    '      if (cobj.getNumIngredients() !== inputs.length) { continue; }',
+    // The inputs the record names come first; the ones it does not (had 0)
+    // are added after them, so a game that added them already has them all.
+    '      var named = 0;',
+    '      while (named < inputs.length && inputs[named][1] > 0) { named++; }',
+    '      var num = cobj.getNumIngredients();',
+    '      if (num !== named && num !== inputs.length) { continue; }',
+    // A client from before the fork's SetCraftingInput cannot add one, so
+    // it leaves the recipe as its record has it, and the server refuses a
+    // craft at those counts (recipeMetadataRefusal).
+    '      if (named < inputs.length && !(sp.TESModPlatform && typeof sp.TESModPlatform.setCraftingInput === "function")) { continue; }',
     '      var same = true;',
-    '      for (var i = 0; i < inputs.length && same; i++) {',
+    '      for (var i = 0; i < num && same; i++) {',
     '        var item = formOf(inputs[i][0]);',
     '        var has = cobj.getNthIngredient(i);',
     '        var count = cobj.getNthIngredientQuantity(i);',
@@ -10514,8 +10725,13 @@ function recipeCountsScript() {
     '               (count === inputs[i][1] || count === inputs[i][2]);',
     '      }',
     '      if (!same) { continue; }',
-    '      for (var n = 0; n < inputs.length; n++) {',
+    '      for (var n = 0; n < named; n++) {',
     '        if (cobj.getNthIngredientQuantity(n) !== inputs[n][2]) { cobj.setNthIngredientQuantity(inputs[n][2], n); }',
+    '      }',
+    // SetCraftingInput sets the count, so asking again changes nothing.
+    '      for (var m = named; m < inputs.length; m++) {',
+    '        var more = formOf(inputs[m][0]);',
+    '        if (more) { sp.TESModPlatform.setCraftingInput(formOf(key), more, inputs[m][2]); }',
     '      }',
     '    }',
     '  } catch (e) { }',
@@ -10652,9 +10868,10 @@ function recipeMovedInGame(craftedItemBaseId, workbenchId, inputs) {
     if (!own.call(RECIPES_MOVED_IN_GAME, desc)) { continue; }
     var row = RECIPES_MOVED_IN_GAME[desc];
     if (row.out !== outDesc || row.to !== benchKey) { continue; }
-    // A recipe whose counts are set in each game too is named by
-    // recipeSetInGame at its new counts, at this bench; its record's own
-    // counts are the ones that game refuses.
+    // A recipe whose counts are set in each game too (re-costed, or given
+    // its charcoal and handle) is named by recipeSetInGame at its new
+    // counts, at this bench; its record's own counts are the ones that game
+    // refuses.
     if (typeof RECIPES_SET_IN_GAME === 'object' && RECIPES_SET_IN_GAME && own.call(RECIPES_SET_IN_GAME, desc)) { continue; }
     var want = {};
     for (var n = 0; n < row.inputs.length; n++) {
@@ -11400,9 +11617,10 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     engine's eighth argument is what it is about to take from them. Asked
     again here, because the building may have changed hands since: a craft
     that draws on chests that are no longer theirs is refused, and nothing
-    leaves the pack or the chests. The charcoal and the handle below come
-    out of the same chests when the pack has none. An engine before fork
-    #116, or a person at a bench with no chests, gets the pack alone.
+    leaves the pack or the chests. The charcoal and the handle are inputs
+    on the record (#6726), so they come out of the same chests as any other
+    input when the pack has none. An engine before fork #116, or a person at
+    a bench with no chests, gets the pack alone.
   */
   const propForStock = globalThis.__thornswoodProperty;
   const stock = (propForStock && typeof propForStock.benchStock === 'function')
@@ -11511,41 +11729,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
   }
 
   /*
-    THE FUEL AND THE HANDLE ARE ASKED FOR BEFORE ANYTHING IS TAKEN (#1398), so
-    a refusal for one never costs the other, and a key is never named for a
-    craft that did not happen. They are taken below, once nothing can refuse.
-  */
-  const fuel = fuelFor(desc);
-  let coal = fuel ? charcoalHeld(actorId, fuel.grade) : '';
-  let coalFrom = actorId;
-  for (let i = 0; fuel && !coal && i < stock.from.length; i++) {
-    coal = charcoalHeld(stock.from[i], fuel.grade);
-    if (coal) { coalFrom = stock.from[i]; }
-  }
-  if (fuel && !coal) {
-    const no = fuelRefusal(fuel);
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', CHARCOAL_GRADES[fuel.grade].name);
-    return false;
-  }
-  const hafted = wantsAHandle(row);
-  let handleFrom = actorId;
-  for (let i = 0; hafted && packCount(handleFrom, HANDLE_DESC) < 1 && i < stock.from.length; i++) {
-    handleFrom = stock.from[i];
-  }
-  if (hafted && packCount(handleFrom, HANDLE_DESC) < 1) {
-    const no = 'A ' + String(row.name || 'that') + ' is fitted to a wooden handle and you ' +
-               'have none. A woodworker cuts them from firewood at a kiln.';
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no handle');
-    return false;
-  }
-  /*
-    THE TRADE'S TOOL (#3162), asked with the fuel and the handle, before
-    anything is taken, and worn below once the craft has gone through. The
-    tool is never an input: an input is taken, and a tool is held and wears.
+    THE TRADE'S TOOL (#3162), asked before anything is taken, and worn
+    below once the craft has gone through. The tool is never an input: an
+    input is taken, and a tool is held and wears.
   */
   const toolKey = benchToolKey(row);
   const noTool = toolKey ? toolGate(actorId, toolKey) : null;
@@ -11574,52 +11760,6 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     say(actorId, no);
     return false;
   }
-  /*
-    THE HANDLE, AND EVERY OTHER HAFTED THING.
-
-    Patrick, 21 September: the woodworker makes handles "that the smith needs
-    for Pickaxes, Shovels, Axes and other items that have wooden handles like
-    that". The pickaxe, the axe and the shovel ask for one in the records, which
-    is where a requirement belongs. The "other items" are the problem: there are
-    Counted rather than guessed, 21 September: 277 of the 3,439 owned rows in
-    tools
-ecipes.json are hafted, and 126 of those are rows the server is
-    actually asked about. They come out of Bethesda's five plugins and half a
-    dozen mods.
-
-    SO IT IS A RULE HERE RATHER THAN 277 OVERRIDES. Overriding another mod's
-    COBJ records couples this plugin to their versions: Immersive Weapons owns a
-    good number of these, and an override is a copy that goes stale silently the
-    day they change one. A rule keyed off the family already on every row covers
-    the same recipes, covers anything added later with no plugin edit at all,
-    and cannot go stale against a mod it has never heard of.
-
-    WHAT IT COSTS TO DO IT THIS WAY, said out loud because it is a real gap:
-    Build-RecipeTable ranks a row by what its INPUTS cost, and it reads inputs
-    out of the records. A handle required here is not in the records, so the
-    table does not know about it and the 269 rows are ranked as though the
-    handle were free. It is worth five gold and a novice woodworker's minute, so
-    the error is small, but it is an error and not a rounding.
-
-    THE FOUR FAMILIES. A haft is a shaft you hold in two hands or one, with the
-    weight at the end: war axes, battleaxes, warhammers and maces, the four the
-    smith page names. Other weapons was a fifth, and in the table it is the
-    woodcutter's axe, which names its handle in its own record, and the drum,
-    the flute and the lute, which are not hafted (#1398). Swords, greatswords
-    and daggers are a tang and a grip rather than a haft. Bows and staves are
-    wooden through and through, which is a different thing from having a
-    handle fitted to them, and a bow that wanted a handle would read as a
-    mistake to anybody holding one.
-  */
-  if (coal && !takeItem(coalFrom, coal, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the charcoal could not be taken');
-    return false;
-  }
-  if (hafted && !takeItem(handleFrom, HANDLE_DESC, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the handle could not be taken');
-    return false;
-  }
-
   // The skill that made the piece is the rank before this craft counts (#3151).
   const margin = qualityMargin(actorId, row);
   if (answer.credit) {
@@ -18742,13 +18882,16 @@ log('gamemode loaded:',
       '    var id = Number(v.id) || 0;',
       '    var st = ctx.state;',
       '    if (!st) { return; }',
-      '    if (st.thornswoodSkyId === id) { return; }',
-      // An id is applied only when its native operation completes. A form
-      // unavailable during loading must not suppress later owner updates.
+      // The owner state survives a native load in the same client. A freshly
+      // decoded property must apply again even when its sky hasn't changed.
+      '    if (st.thornswoodSkyId === id && st.thornswoodSkyPayload === v) { return; }',
+      // Cache the payload only after the native operation completes. Loading
+      // can temporarily make the native weather form unavailable.
       '    if (!id) {',
       '      if (!ctx.sp.Weather.releaseOverride) { return; }',
       '      ctx.sp.Weather.releaseOverride();',
       '      st.thornswoodSkyId = id;',
+      '      st.thornswoodSkyPayload = v;',
       '      return;',
       '    }',
       '    var form = ctx.sp.Game.getFormEx(id);',
@@ -18757,6 +18900,7 @@ log('gamemode loaded:',
       '    if (weather && weather.forceActive) {',
       '      weather.forceActive(true);',
       '      st.thornswoodSkyId = id;',
+      '      st.thornswoodSkyPayload = v;',
       '    }',
       '  } catch (e) { }',
       '})();'
@@ -22622,6 +22766,11 @@ module.exports = {
         row.master = { for: Number(c.master.for), no: Number(c.master.no) };
       }
       if (Number.isSafeInteger(c.deed) && c.deed > 0) { row.deed = c.deed; }
+      // A steward's grant (#6894): who granted it and when, or it is the holder's own claim.
+      if (c.granted && typeof c.granted === 'object' && Number(c.granted.by) > 0) {
+        row.granted = { by: Number(c.granted.by), name: String(c.granted.name || 'somebody'),
+                        at: Number(c.granted.at) || at };
+      }
 
       out[k] = row;
       kept++;
@@ -24017,6 +24166,14 @@ module.exports = {
                            '. Take it up with them, or with the court.');
       return true;
     }
+    // One property of their own (#6894): a steward grants any more.
+    var own = ownClaimOf(profileId);
+    if (own) {
+      toProfile(profileId, 'You hold ' + nameOf(own) + ' already, and a character claims one property of their ' +
+                           'own. The Steward of ' + (HOLD_TOWN[holdOfBuilding(building)] || 'the hold') +
+                           ' can grant you ' + nameOf(building) + ' instead.');
+      return true;
+    }
     var who = 'somebody';
     try {
       var a = mp.get(actorId, 'appearance');
@@ -24066,6 +24223,113 @@ module.exports = {
                       : 'The deed could not be handed over, so say so in the dev channel. ') +
               (master ? masterHandedLine(building) + ' ' : '') +
               'Go in at least once every ' + lapseDays() + ' days or it goes back.');
+    return true;
+  }
+
+  /*
+    ONE PROPERTY OF THEIR OWN (#6894, Patrick, 26 Nov). One character
+    claimed two Whiterun farm plots and a tavern. A character claims one
+    property at its door; a steward grants any more (grant, below). So a
+    claim is refused while the character holds a building it did not get by
+    a steward's grant. A farm is no property claim: plots are farming's, and
+    a field on a held property answers to the house (claimCovering), so
+    its holder works every plot on it. A jail is held by its Jarl's office,
+    not as their own property, and does not count. A deed carried through
+    the door is no claim either: whoever presents it holds the place, and a
+    grant does not go with the deed, so the place counts for its new holder.
+    Claims made before the rule stay until they lapse or are evicted.
+  */
+  function ownClaimOf(profileId) {
+    for (var b in claims) {
+      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
+      var c = claims[b];
+      if (c.by !== profileId || c.granted || jailOfBuilding(b) || !holderOf(b)) { continue; }
+      return b;
+    }
+    return null;
+  }
+
+  /*
+    A STEWARD GRANTS A BUILDING (#6894). At the door of a building nobody
+    holds in their own hold, the Office page of K lists who is in the world
+    with Grant beside each, which sends /office grant <profile>. The
+    building is claimed for that person as their own claim would claim it:
+    a new deed number, the deed and the master key in their pack, the ground
+    outside the door, the same lapse. It is marked granted, so it is not the
+    one property they claim themselves. Staff grant at any door, as they
+    evict, and it goes in the staff log.
+  */
+  function grant(parts, actorId, profileId, toProfile, cmd) {
+    var building = here(actorId);
+    if (!building) {
+      toProfile(profileId, OFFICE_AT_DOOR);
+      return true;
+    }
+    var how = settleAs(profileId, building, cmd);
+    if (!how.as) {
+      toProfile(profileId, how.why);
+      return true;
+    }
+    var pid = Number((parts && parts[2]) || 0) || 0;
+    var them = (pid > 0 && Math.floor(pid) === pid && pid !== profileId) ? onlineActorOf(pid) : 0;
+    if (!them) {
+      toProfile(profileId, 'Pick somebody in the world on the Office page of K.');
+      return true;
+    }
+    var accordGrant = globalThis.__thornswoodEmbassy;
+    if (accordGrant && accordGrant.holds(building)) {
+      toProfile(profileId, accordGrant.CLAIM_REFUSED);
+      return true;
+    }
+    var whoName = personName(them);
+    if (!mayHold(them, pid, building)) {
+      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
+      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' + jailTown + ' holds it.');
+      return true;
+    }
+    var held = holderOf(building);
+    if (held) {
+      toProfile(profileId, nameOf(building) + ' is held by ' + held.name + '. End that claim first to grant it.');
+      return true;
+    }
+    var deed = deedCut + 1;
+    if (!Number.isSafeInteger(deed)) {
+      plog('could not number a new deed for', nameOf(building));
+      toProfile(profileId, 'The register could not number the deed. Ask staff to check it.');
+      return true;
+    }
+    var now = Date.now();
+    var by = personName(actorId);
+    claims[building] = { by: pid, name: whoName, at: now, touched: now, locked: false,
+                         ground: groundHere(actorId), deed: deed,
+                         granted: { by: profileId, name: by, at: now } };
+    deedCut = deed;
+    if (!save()) {
+      delete claims[building];
+      deedCut--;
+      toProfile(profileId, 'The register could not save the grant. Ask staff to check it.');
+      return true;
+    }
+    pushAll();
+    var handed = giveDeed(them, building);
+    var master = handed ? issueMaster(them, building, claims[building]) : 0;
+    if (how.as === 'staff') {
+      staffRecord('grant', actorId, profileId, building, claims[building], settleWhere(building));
+    }
+    plog(by, how.as === 'staff' ? 'as staff' : 'as steward', 'granted', nameOf(building), 'to', whoName,
+         '(profile ' + pid + ')', handed ? 'with the deed' : 'and no deed could be handed over',
+         master ? 'and master key no. ' + master : '');
+    toProfile(profileId, 'You grant ' + nameOf(building) + ' to ' + whoName + '.' +
+              (handed ? ' The deed is in their pack.' : ' The deed could not be handed over, so say so in the dev channel.') +
+              (how.as === 'staff' ? ' It is in the staff log.' : ''));
+    toProfile(pid, by + ' grants you ' + nameOf(building) + '. ' +
+              (handed ? 'The deed is in your pack. Whoever carries it holds the place, ' +
+                        'so keep it somewhere a thief will not look. '
+                      : 'The deed could not be handed over, so say so in the dev channel. ') +
+              (master ? masterHandedLine(building) + ' ' : '') +
+              'Go in at least once every ' + lapseDays() + ' days or it goes back.');
+    redrawPanel(actorId);
+    redrawPanel(them);
     return true;
   }
 
@@ -24180,10 +24444,15 @@ module.exports = {
       // and expensive. Failing that way round is the right one: a door that
       // is not locked is a house anybody can walk into.
       '    var sp = ctx.sp;',
+      // Only undo locks this script put on an unlocked ordinary claim door.
+      // The jail list and a lock already present in the game are not ours.
+      '    var claimShut = Array.isArray(v.claimShut) ? new Set(v.claimShut) : null;',
+      '    var applied = st && claimShut ? (st.thornswoodClaimLocks || (st.thornswoodClaimLocks = {})) : null;',
       // Remember which form ids property wants shut (#615), published for
       // anything on the client that asks whether a door is property's to hold.
       '    var shutMap = {};',
       '    for (var i = 0; i < v.shut.length; i++) {',
+      '      shutMap[v.shut[i]] = true;',
       '      try {',
       '        var r = sp.ObjectReference.from(sp.Game.getFormEx(v.shut[i]));',
       // A door in a cell nobody has loaded does not resolve, and there is
@@ -24196,23 +24465,49 @@ module.exports = {
       // is a stutter on each heartbeat. If isLocked cannot be read the door
       // is locked anyway, so this fails shut.
       '        if (r) { var was = null; try { was = r.isLocked(); } catch (e2) { }',
-      '          if (was !== true) { r.lock(true, false); } }',
-      '        shutMap[v.shut[i]] = true;',
+      '          if (was !== true) {',
+      '            r.lock(true, false);',
+      '            if (was === false && applied && claimShut.has(v.shut[i])) { applied[v.shut[i]] = true; }',
+      '          } }',
       '      } catch (e) { }',
       '    }',
-      '    for (var j = 0; j < (v.open || []).length; j++) {',
+      // A claim removed from the register no longer contributes an open
+      // entry. Restore the lock we applied once its reference is available.
+      '    var open = (v.open || []).slice();',
+      '    var explicitOpen = applied ? new Set(open) : null;',
+      '    if (applied) {',
+      '      Object.keys(applied).forEach(function (key) {',
+      '        var id = Number(key);',
+      '        if (shutMap[id]) {',
+      '          if (!claimShut.has(id)) { delete applied[id]; }',
+      '        } else if (!explicitOpen.has(id)) { open.push(id); }',
+      '      });',
+      '    }',
+      '    for (var j = 0; j < open.length; j++) {',
       '      try {',
-      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(v.open[j]));',
+      '        var door = open[j];',
+      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(door));',
       // OFF THE PUBLISHED LIST BEFORE IT OPENS (#2680). The front plugin
       // reads a door on __thornswoodPropertyShut that opens as a pick, so
       // a door this script opens is taken off the list first.
-      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[v.open[j]]; } } catch (e3) { }',
-      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) { }',
-      '          if (shut !== false) { o.lock(false, false); } }',
-      '        delete shutMap[v.open[j]];',
+      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[door]; } } catch (e3) { }',
+      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) {',
+      '            if (explicitOpen && !explicitOpen.has(door)) { continue; }',
+      '          }',
+      '          if (shut !== false) { o.lock(false, false); }',
+      '          if (applied) { delete applied[door]; } }',
+      '        delete shutMap[door];',
       '      } catch (e) { }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
+      // The buildings this character holds (#6883): the front plugin makes
+      // them and what is in them theirs, and gives back any no longer held.
+      '    try {',
+      '      globalThis.__thornswoodPropertyOwn = v.own || [];',
+      '      if (typeof globalThis.__thornswoodOwnCells === "function") { globalThis.__thornswoodOwnCells(v.own || []); }',
+      // The plugin's hook is guard()ed and logs its own failure; this only
+      // keeps the doors above locked if the hand over itself throws.
+      '    } catch (e) { /* the doors above are already done */ }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
@@ -24528,8 +24823,23 @@ module.exports = {
         (pass || wayOut(doors[i]) ? open : shut).push(id);
       }
     }
+    var claimShut = shut.slice();
     cellLists(profileId, shut, open);
-    return { shut: shut, open: open };
+    /*
+      AND THE BUILDINGS THIS CHARACTER HOLDS, as their interior cells (#6883),
+      for the client to make the building and what is in it theirs, so its
+      storage is not theft. After the loop, because mayPass asked holderOf of
+      every claim and a lapsed one is gone from claims by now.
+    */
+    var own = [];
+    for (var h in claims) {
+      if (!Object.prototype.hasOwnProperty.call(claims, h)) { continue; }
+      if (profileId && claims[h] && claims[h].by === profileId) {
+        var cid = idOf(h);
+        if (cid) { own.push(cid); }
+      }
+    }
+    return { shut: shut, open: open, own: own, claimShut: claimShut };
   }
 
   /*
@@ -25622,6 +25932,12 @@ module.exports = {
   var LETTER_FEE = 20;
   var LETTER_PAY = 15;
   var LETTER_CHARS = 300;
+  /*
+    A PARCEL, #4560 (Patrick, 12 Nov): the board's LETTER_FEE and a courier
+    pay the sender names, never less than PARCEL_PAY_MIN, held on the ledger
+    like a haul's pay. See postParcel.
+  */
+  var PARCEL_PAY_MIN = 15;
   var LETTER_REACH = 700;
 
   function loadPart(key, fallback) {
@@ -27648,7 +27964,10 @@ module.exports = {
         taken: n.taken ? (n.takenName || 'somebody') : '',
         mine: Number(n.by) === Number(profileId),
         held: !!(n.job && Number(n.taken) === Number(profileId)),
-        haul: !!n.haul
+        haul: !!n.haul,
+        parcel: !!n.parcel,
+        // A wanted poster (#4565): a job whose reward a guard of the hold pays out.
+        wanted: !!(n.wanted && n.job && plain)
       });
     }
     return { rows: rows, older: up - rows.length };
@@ -27673,7 +27992,7 @@ module.exports = {
         if (!Array.isArray(list)) continue;
         for (var i = list.length - 1, first = Math.max(0, list.length - 32); i >= first; i--) {
           var n = list[i], meta = n && n.boardSubmission;
-          var kind = n && n.letter && !n.haul ? 'letter' : n && n.haul && !n.letter ? 'haul' : '';
+          var kind = n && n.haul && !n.letter ? 'haul' : n && n.letter && !n.haul ? (n.parcel ? 'parcel' : 'letter') : '';
           if (!meta || meta.version !== 1 || typeof meta.id !== 'string' || !/^[0-9a-f]{32}$/.test(meta.id) ||
               meta.kind !== kind || !kind ||
               meta.actorDesc !== desc || n.by !== profileId || typeof n.at !== 'number' || !Number.isFinite(n.at)) continue;
@@ -27681,7 +28000,7 @@ module.exports = {
         }
       }
       found.sort(function (a, b) { return b.at - a.at || b.index - a.index || a.hold.localeCompare(b.hold); });
-      var counts = { letter: 0, haul: 0 };
+      var counts = { letter: 0, haul: 0, parcel: 0 };
       var results = found.filter(function (r) { return counts[r.kind]++ < 16; }).map(function (r) {
         return { id: r.id, kind: r.kind, hold: r.hold, status: r.status };
       });
@@ -27721,6 +28040,9 @@ module.exports = {
     // A guard of this board's hold takes down any post on it (#502), and so
     // does its Jarl (#2551, Patrick, 15 Oct: that hold's Guard or Jarl).
     var guard = here && (isGuard(profileId, hold) || isJarlOf(profileId, hold));
+    // A guard of this board's hold, and only a guard, confirms a wanted
+    // poster's bounty was earned (#4565, decided 22 Oct).
+    var bountyGuard = here && isGuard(profileId, hold);
     var dests = [];
     var arrivals = [];
     if (here) {
@@ -27745,7 +28067,20 @@ module.exports = {
       }
     }
     var submit = [];
+    var pack = [];
     if (here) {
+      // What Send a parcel offers (#4560): the pack's stacks, not gold and not
+      // worn, the way the drop box's Leave it offers them. postParcel checks
+      // the slot and its base again when the parcel arrives.
+      var inv = null;
+      try { inv = mp.get(actorId, 'inventory'); }
+      catch (e3) { plog('could not read the pack for the board panel of', Number(actorId).toString(16) + ':', e3); }
+      var entries = (inv && inv.entries) || [];
+      for (var p = 0; p < entries.length; p++) {
+        var e = entries[p];
+        if (!e || Number(e.baseId) === GOLD_ID || e.worn || e.wornLeft) { continue; }
+        pack.push({ slot: p, baseId: Number(e.baseId) >>> 0, what: itemName(e), count: Number(e.count) || 0 });
+      }
       try {
         var books = g.__thornswoodBooks;
         var view = books && books.view ? books.view(profileId, {}) : null;
@@ -27767,8 +28102,11 @@ module.exports = {
       submit: submit,
       steward: steward,
       guard: guard,
+      bountyGuard: bountyGuard,
       dests: dests,
-      arrivals: arrivals
+      arrivals: arrivals,
+      pack: pack,
+      parcelPayMin: PARCEL_PAY_MIN
     };
   }
 
@@ -28121,6 +28459,22 @@ module.exports = {
   // table files. game\data\woodworking-benches.json says what was measured at each spot.
   var WOODWORKING_BENCH_BASE = table('WOODWORKING_BENCH_BASE');
   var WOODWORKING_BENCHES = table('WOODWORKING_BENCHES');
+  /*
+    THE STATIONS THE SERVER STANDS (#6893). game\data\station-sites.json
+    measures where each station stands (scripts\dev\Build-StationSites.py),
+    and Thornswood-Content.esp places them, except in a cell of a plugin that
+    is not one of its masters, where it cannot: North Keep's inn has no
+    cooking station, and North Keep.esp's room is such a cell. Those rows say
+    standBy server, and the server stands them here, the way it stands the
+    benches: once, at start, with no timer, next to the room's own furniture
+    the row names (beside), which the server loads, since MoveTo takes a
+    reference into a cell only next to one already there. Skyrim's own
+    cooking pot is the base, the pot every inn's cook uses, so the bench
+    table (BENCH_BY_BASE) already knows it as a cookpot. The ids are kept
+    beside the benches' in benches.json. Build-WoodworkingBenches.py writes
+    the table and holds each row's furniture to the load order.
+  */
+  var STATIONS_THE_SERVER_STANDS = table('STATIONS_THE_SERVER_STANDS');
 
   function benchBookPath() {
     var path = require('path');
@@ -28131,10 +28485,13 @@ module.exports = {
     var out = {};
     var raw = benchRead.doc;
     if (!raw || typeof raw !== 'object') { return out; }
-    for (var site in WOODWORKING_BENCHES) {
-      if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
-      var id = Number(raw[site]) >>> 0;
-      if (id) { out[site] = id; }
+    var tables = [WOODWORKING_BENCHES, STATIONS_THE_SERVER_STANDS];
+    for (var t = 0; t < tables.length; t++) {
+      for (var site in tables[t]) {
+        if (!Object.prototype.hasOwnProperty.call(tables[t], site)) { continue; }
+        var id = Number(raw[site]) >>> 0;
+        if (id) { out[site] = id; }
+      }
     }
     return out;
   }
@@ -28184,11 +28541,49 @@ module.exports = {
     return true;
   }
 
-  /* Every woodworking bench stood where it should be, once, when the server starts. */
+  /* Stand this station where STATIONS_THE_SERVER_STANDS says. Answers whether it stands. */
+  function standStation(site) {
+    var s = STATIONS_THE_SERVER_STANDS[site];
+    if (!s) { return false; }
+    var nextTo = 0;
+    try { nextTo = mp.getIdFromDesc(s.beside) >>> 0; } catch (e) { nextTo = 0; }
+    var at = '';
+    try { at = nextTo ? String(mp.get(nextTo, 'worldOrCellDesc') || '') : ''; } catch (e2) { at = ''; }
+    if (!nextTo || at !== s.cell) {
+      plog('stations: nothing to stand', site + '\'s', s.kind, 'next to:', 'the furniture', s.beside,
+           'is not in', s.cell, '(the server has it in', (at || 'no cell') + ')');
+      return false;
+    }
+    var id = benchRefs[site] || 0;
+    if (refAt(id, s.base, s.cell, s.pos, s.angle)) { return true; }
+    try {
+      if (!refStands(id, s.base, '')) {
+        var base = placedBase(s.base);
+        if (!base) { plog('stations: the', s.kind, 'record', s.base, 'is not in the load order'); return false; }
+        id = mp.place(base);
+      }
+      refCall('SetAngle', id, [0, 0, s.angle]);
+      moveOnto(id, nextTo, s.pos);
+    } catch (e3) {
+      plog('stations: could not stand', site + '\'s', s.kind + ':', e3);
+      return false;
+    }
+    benchRefs[site] = id;
+    saveBenchRefs();
+    plog('stations: stood', site + '\'s', s.kind, Number(id).toString(16), 'in', s.cell, 'at',
+         s.pos.join(','), 'turned', s.angle, 'beside', s.beside);
+    return true;
+  }
+
+  /* Every woodworking bench, and every station the server stands, where it should be, once, at start. */
   function standBenches() {
     for (var site in WOODWORKING_BENCHES) {
       if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
       standBench(site);
+    }
+    for (var station in STATIONS_THE_SERVER_STANDS) {
+      if (!Object.prototype.hasOwnProperty.call(STATIONS_THE_SERVER_STANDS, station)) { continue; }
+      standStation(station);
     }
   }
 
@@ -28500,6 +28895,8 @@ module.exports = {
     'post': landPost,
     'letter': landLetter,
     'haul': landHaul,
+    'parcel': landParcel,
+    'parcel-hand': landParcelHand,
     'owed': landOwed
   }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, newId, admitPackDebit);
 
@@ -28651,7 +29048,7 @@ module.exports = {
 
   /* What anybody but the person it is for reads of a letter: who it is for. */
   function sealed(n) {
-    return 'A sealed letter for ' + (n.to || 'somebody');
+    return 'A sealed ' + (n.parcel ? 'parcel' : 'letter') + ' for ' + (n.to || 'somebody');
   }
 
   /*
@@ -28704,15 +29101,16 @@ module.exports = {
   }
 
   function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
-    if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
+    if ((kind !== 'notice' && kind !== 'job' && kind !== 'wanted') || !Number.isSafeInteger(reward) || reward < 0 ||
         (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
       toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
       return true;
     }
     // Same authoritative location, size, fee, reward and pack-first landing.
-    // Only the legacy command boundary unescapes or normalizes text.
-    return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
-                kind === 'job', {title:title,body:body,hold:expectedHold});
+    // Only the legacy command boundary unescapes or normalizes text. A wanted
+    // poster (#4565) is a job: the same fee and a reward held the same way.
+    return post([kind === 'notice' ? '/notice' : '/job', String(reward)], actorId, profileId, toProfile,
+                kind !== 'notice', {title:title,body:body,hold:expectedHold,wanted:kind === 'wanted'});
   }
 
   function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
@@ -28744,13 +29142,15 @@ module.exports = {
       var first = String((parts && parts[1]) || '').trim();
       reward = /^\d+$/.test(first) ? Number(first) : 0;
       if (!(reward > 0) || !Number.isSafeInteger(reward)) {
-        toProfile(profileId, 'A job\'s reward is a whole number of gold, above nothing. Nothing was taken.');
+        toProfile(profileId, (exactWords && exactWords.wanted ? 'A bounty' : 'A job\'s reward') +
+                  ' is a whole number of gold, above nothing. Nothing was taken.');
         return true;
       }
       from = 2;
     }
     var words = exactWords || postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
-    var what = isJob ? 'the job' : 'the notice';
+    var wanted = !!(isJob && exactWords && exactWords.wanted);
+    var what = wanted ? 'the wanted poster' : (isJob ? 'the job' : 'the notice');
     if (!words.title.trim()) {
       toProfile(profileId, 'Give ' + what + ' a title. Nothing was taken.');
       return true;
@@ -28761,8 +29161,9 @@ module.exports = {
       return true;
     }
     if (!words.body.trim()) {
-      toProfile(profileId, isJob ? 'Say what the job is. Nothing was taken.'
-                                 : 'Say what the notice says. Nothing was taken.');
+      toProfile(profileId, wanted ? 'Say who is wanted, and for what. Nothing was taken.'
+                                  : (isJob ? 'Say what the job is. Nothing was taken.'
+                                           : 'Say what the notice says. Nothing was taken.'));
       return true;
     }
     if (words.body.length > POST_BODY_CHARS) {
@@ -28790,11 +29191,20 @@ module.exports = {
     // The reward is held on the ledger in pay, the way a letter's 15 and a
     // haul's pay are (noticeHolds), until the poster says it is done.
     if (isJob) { made.pay = reward; }
+    /*
+      A WANTED POSTER (#4565). Decided 22 Oct: written by a person, nothing
+      in the game detects a crime and Skyrim's own bounty stays out of it.
+      Its reward is put up front and held like any job's, and paid out only
+      when a guard of this hold confirms it was earned (jobDone). Only the
+      hold's guards and its Jarl take one down (unpin).
+    */
+    if (wanted) { made.wanted = true; }
     // On the board only once the pack's take is saved (#4901): landPost.
     var r = packs.begin(actorId, goldCut(cost, short),
       'post', { hold: hold, made: made, cost: cost, fee: fee, reward: reward });
     toProfile(profileId, r.why || r.line ||
-      ('Your ' + (isJob ? 'job' : 'notice') + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+      ('Your ' + (wanted ? 'wanted poster' : (isJob ? 'job' : 'notice')) + ' goes on the board in ' + hold +
+       ' once your pack is saved, in a moment.'));
     if (r.line) { refreshPanel(actorId); }
     return true;
   }
@@ -28803,15 +29213,21 @@ module.exports = {
   function landPost(row, landed) {
     var hold = row.data.hold, made = row.data.made, cost = row.data.cost, fee = row.data.fee, reward = row.data.reward;
     var isJob = !!made.job;
+    var kind = made.wanted ? 'wanted poster' : (isJob ? 'job' : 'notice');
     if (!landed) {
       return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the ' +
-             (isJob ? 'job' : 'notice') + ' is not on the board.';
+             kind + ' is not on the board.';
     }
     made.at = Date.now();
     if (!notices[hold]) { notices[hold] = []; }
     notices[hold].push(made);
     funds[hold] = (Number(funds[hold]) || 0) + cost;
-    plog(made.name, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', made.title);
+    plog(made.name, 'posted a ' + kind + ' in', hold, 'for', cost, 'gold:', made.title);
+    if (made.wanted) {
+      return 'Your wanted poster is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
+        ' for the board, and the ' + reward + ' reward, held until a guard of ' + hold +
+        ' confirms it was earned. Then it goes to whoever took it.';
+    }
     return isJob
       ? 'Your job is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
         ' for the board, and the ' + reward + ' reward, held until you say the job is done. ' +
@@ -29051,7 +29467,29 @@ module.exports = {
       toProfile(profileId, 'That is not a job with a reward.');
       return true;
     }
-    if (Number(n.by) !== Number(profileId)) {
+    /*
+      A WANTED POSTER'S BOUNTY (#4565). Decided 22 Oct: the reward is held
+      "until a guard confirms". So a guard of this hold confirms it, at this
+      board, and nobody else does, the poster included. A guard who took the
+      poster themselves cannot confirm their own bounty. The pay out is the
+      same as a job's: handHaul, out of the ledger it was held on, owed to
+      the taker and paid into their pack once it is saved.
+    */
+    var wanted = !!n.wanted;
+    if (wanted && !isGuard(profileId, hold)) {
+      toProfile(profileId, 'Only a guard of ' + hold + ' confirms a wanted poster\'s bounty was earned.');
+      return true;
+    }
+    if (wanted && n.taken && Number(n.taken) === Number(profileId)) {
+      toProfile(profileId, 'You took that bounty yourself. Another guard of ' + hold + ' confirms it.');
+      return true;
+    }
+    // Its poster never confirms it (decided 22 Oct), a guard who put it up included.
+    if (wanted && Number(n.by) === Number(profileId)) {
+      toProfile(profileId, 'You put that poster up yourself. Another guard of ' + hold + ' confirms it.');
+      return true;
+    }
+    if (!wanted && Number(n.by) !== Number(profileId)) {
       toProfile(profileId, 'Only the person who posted a job says it is done.');
       return true;
     }
@@ -29062,7 +29500,8 @@ module.exports = {
     var reward = Math.floor(Number(n.pay)) || 0;
     var taker = n.takenName || 'Whoever took it';
     var r = handHaul(hold, n, Number(n.taken), reward,
-                     'job ' + (at + 1) + ' done, the reward to ' + taker, 'reward');
+                     (wanted ? 'wanted poster ' + (at + 1) + ' confirmed by a guard, the bounty to '
+                             : 'job ' + (at + 1) + ' done, the reward to ') + taker, wanted ? 'bounty' : 'reward');
     if (r.why) {
       plog('the reward of job', at + 1, 'in', hold, 'could not be paid:', r.why);
       toProfile(profileId, 'That did not work: ' + r.why + ' Nothing was paid.');
@@ -29072,6 +29511,25 @@ module.exports = {
     n.done = Date.now();
     n.doneBy = profileId;
     takedown(hold, at, profileId);
+    if (wanted) {
+      plog('law: a guard of', hold, '(' + personName(actorId) + ', profile ' + profileId + ') confirmed',
+           (n.name || 'somebody') + '\'s wanted poster', at + 1, 'earned by', taker + ':', n.title,
+           r.owed ? '(owed while away)' : '(paid)');
+      toProfile(profileId, 'Confirmed: ' + n.title + '. ' + taker +
+                (r.owed ? ' is away, so the ' + reward + ' gold bounty is held for them until they are next in the world.'
+                        : ' is paid the ' + reward + ' gold bounty.'));
+      if (!r.owed) {
+        toProfile(n.taken, 'A guard of ' + hold + ' confirms you earned the bounty: ' + n.title + '. The ' + reward +
+                  ' gold is in your pack.');
+      }
+      if (onlineActorOf(Number(n.by))) {
+        toProfile(n.by, 'A guard of ' + hold + ' confirmed your wanted poster was earned: ' + n.title + '. ' +
+                  taker + ' has the ' + reward + ' gold.');
+      }
+      refreshPanel(actorId);
+      if (r.to) { refreshPanel(r.to); }
+      return true;
+    }
     if (r.owed) {
       plog(taker, 'is owed', reward, 'for job', at + 1, 'in', hold + ':', n.title);
       toProfile(profileId, 'Done: ' + n.title + '. ' + taker + ' is away, so the ' + reward +
@@ -29109,7 +29567,7 @@ module.exports = {
                      title: plain ? String(n.title || '') : '',
                      reward: plain ? (Math.floor(Number(n.pay)) || 0) : 0,
                      text: n.letter ? sealed(n) : (n.haul ? haulText(n) : (n.text || '')),
-                     letter: !!n.letter, haul: !!n.haul });
+                     letter: !!n.letter, haul: !!n.haul, parcel: !!n.parcel, wanted: !!(n.wanted && plain) });
         }
       }
     }
@@ -29132,6 +29590,10 @@ module.exports = {
     var n = list[at];
     if (!n.job || n.taken !== profileId || n.down) {
       toProfile(profileId, 'That is not one of yours.');
+      return true;
+    }
+    if (n.parcel && parcelBusy(hold, at, n)) {
+      toProfile(profileId, 'That parcel is on its way into somebody\'s pack. Wait a moment.');
       return true;
     }
     /*
@@ -29217,6 +29679,23 @@ module.exports = {
       toProfile(profileId, 'That one is already down.');
       return true;
     }
+    if (n.parcel && parcelBusy(hold, at, n)) {
+      toProfile(profileId, 'That parcel is on its way into somebody\'s pack. Wait a moment.');
+      return true;
+    }
+    /*
+      A WANTED POSTER COMES DOWN BY THE LAW (#4565). Decided 22 Oct: the
+      hold's Jarl and guards take one down, and nobody else, the person who
+      put it up included. Its held reward goes back to whoever put it up,
+      held for them while they are away (guardTakedown). The fee stays.
+    */
+    if (n.wanted) {
+      if (isGuard(profileId, hold) || isJarlOf(profileId, hold)) {
+        return guardTakedown(hold, at, n, actorId, profileId, toProfile);
+      }
+      toProfile(profileId, 'Only a guard of ' + hold + ' or its Jarl takes a wanted poster down.');
+      return true;
+    }
     /*
       A STEWARD CANCELS A HAUL, #1393, open or taken, at the board it was
       posted on. The pay goes back to the poster and the fee stays, the same
@@ -29254,11 +29733,15 @@ module.exports = {
       toProfile(profileId, 'That did not work. The ' + (n.letter ? 'letter' : 'job') + ' is still up.');
       return true;
     }
+    // A parcel's stack goes into this hold's drop box for its sender, in takedown's save (#4560).
+    var boxed = n.parcel ? parcelToBox(hold, n) : 0;
     takedown(hold, at, profileId);
     if (n.letter) {
-      plog(n.name, 'took down a letter for', n.to, 'in', hold, 'and had', back, 'back');
-      toProfile(profileId, 'You take the letter down. The ' + back + ' gold for the courier comes back ' +
-                'to you. The fee stays with ' + hold + '.');
+      var what = n.parcel ? 'parcel' : 'letter';
+      plog(n.name, 'took down a', what, 'for', n.to, 'in', hold, 'and had', back, 'back');
+      toProfile(profileId, 'You take the ' + what + ' down. The ' + back + ' gold for the courier comes back ' +
+                'to you. ' + (boxed ? 'What was in it is in this hold\'s drop box for you. ' : '') +
+                'The fee stays with ' + hold + '.');
       refreshPanel(actorId);
       return true;
     }
@@ -29294,21 +29777,23 @@ module.exports = {
       var pay = Math.floor(Number(n.pay)) || 0;
       if (pay > 0) {
         var r = handHaul(hold, n, Number(n.by), pay,
-                         (n.letter ? 'a letter for ' + (n.to || 'somebody') : 'job ' + (at + 1)) +
+                         (n.letter ? 'a letter for ' + (n.to || 'somebody')
+                                   : (n.wanted ? 'wanted poster ' : 'job ') + (at + 1)) +
                          ' taken down by ' + byWhom + ', the pay back to ' + (n.name || 'its poster'),
-                         n.letter ? 'letter' : 'job');
+                         n.letter ? (n.parcel ? 'parcel' : 'letter') : (n.wanted ? 'wanted' : 'job'));
         if (r.why) {
-          toProfile(profileId, 'That did not work: ' + r.why + ' The ' + (n.letter ? 'letter' : 'job') +
-                    ' is still up.');
+          toProfile(profileId, 'That did not work: ' + r.why + ' The ' +
+                    (n.letter ? 'letter' : (n.wanted ? 'wanted poster' : 'job')) + ' is still up.');
           return true;
         }
         back = pay;
         owed = r.owed;
       }
     }
+    var boxed = n.parcel ? parcelToBox(hold, n) : 0;
     takedown(hold, at, profileId);
-    var kind = n.letter ? 'letter' : (n.job ? 'job' : 'notice');
-    var fee = 'The fee stays with ' + hold + '.';
+    var kind = n.parcel ? 'parcel' : n.letter ? 'letter' : (n.wanted ? 'wanted poster' : (n.job ? 'job' : 'notice'));
+    var fee = (boxed ? 'What was in it is in this hold\'s drop box for its sender. ' : '') + 'The fee stays with ' + hold + '.';
     var held = n.letter ? 'gold for the courier' : 'gold reward';
     // A letter's words are sealed, and the log does not record them either.
     plog('law:', how === 'guard' ? 'a guard of' : 'the Jarl of', hold, '(' + personName(actorId) + ', profile ' + profileId + ') took down',
@@ -29400,12 +29885,12 @@ module.exports = {
   // it is not authorization or an exactly-once/retry key. Legacy routes stay.
   function submitBoard(payload, actorId, profileId, toProfile) {
     var kind = payload && payload[0];
-    if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul') ||
-        payload.length !== (kind === 'letter' ? 6 : 7) ||
+    if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul' && kind !== 'parcel') ||
+        payload.length !== (kind === 'letter' ? 6 : kind === 'parcel' ? 10 : 7) ||
         typeof payload[1] !== 'string' || !/^[0-9a-f]{32}$/.test(payload[1]) ||
         typeof payload[2] !== 'string' || LEDGER_HOLDS.indexOf(payload[2]) < 0 ||
         payload.slice(4).some(function (field) { return typeof field !== 'string'; }) ||
-        (kind === 'letter' && !validLetterText(payload[4], payload[5]))) {
+        ((kind === 'letter' || kind === 'parcel') && !validLetterText(payload[4], payload[5]))) {
       toProfile(profileId, 'That board submission is invalid. Nothing was posted or taken.'); return true;
     }
     if (!boardOwnerMatches(actorId, profileId, payload[3])) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
@@ -29421,6 +29906,9 @@ module.exports = {
     var expectedOwner = payload[3].slice();
     if (kind === 'letter') return postLetter([], actorId, profileId, toProfile,
       { to: payload[4], words: payload[5], hold: payload[2], submission: meta, expectedOwner: expectedOwner });
+    if (kind === 'parcel') return postParcel(actorId, profileId, toProfile,
+      { to: payload[4], words: payload[5], pay: payload[6], slot: payload[7], baseId: payload[8], count: payload[9],
+        hold: payload[2], submission: meta, expectedOwner: expectedOwner });
     // Match the old /haul word boundary, including its whitespace joining.
     var parts = ['/haul', payload[4], payload[5]].concat(payload[6].trim().split(/\s+/));
     return postHaul(parts, actorId, profileId, toProfile, { hold: payload[2], submission: meta, expectedOwner: expectedOwner });
@@ -29500,6 +29988,213 @@ module.exports = {
   }
 
   /*
+    ------------------------------------------------------------- a parcel
+
+    #4560. A parcel is a letter with one real stack in it. Patrick, 12 Nov:
+    it costs the board's LETTER_FEE and a courier pay the sender names, at
+    least PARCEL_PAY_MIN, held like a haul's pay. The board panel's Send a
+    parcel sends it through the private submission (submitBoard), with the
+    stack the sender picked from their pack: its slot, its base and how many.
+
+    ONE STACK, IN EXACTLY ONE PLACE. The gold and the stack leave the pack in
+    one write with a receipt (packFirst, #4901), and the parcel goes on the
+    board only once that pack is saved (landParcel), the stack held on its
+    notice on the hold's ledger the way its pay is. The courier takes it like
+    a letter and hands it over face to face, with the same key: the stack goes
+    into the recipient's pack through the same kind of write, and the parcel
+    comes off the board only once that pack is saved (landParcelHand). A
+    server that stops between the pack's write and the register's comes back
+    with the stack in the pack or on the board, never both and never neither.
+
+    Taken down before it is carried, by its sender or by a guard or the Jarl,
+    the pay goes back as a letter's does and the stack goes into this hold's
+    drop box under the sender's own name (parcelToBox), so they take it back
+    there as anything they put in.
+  */
+  function postParcel(actorId, profileId, toProfile, written) {
+    if (!boardOwnerMatches(actorId, profileId, written.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
+    var hold = boardHere(actorId);
+    if (!boardOwnerMatches(actorId, profileId, written.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
+    if (!hold) {
+      toProfile(profileId, 'Stand at a hold\'s notice board to send a parcel from there.');
+      return true;
+    }
+    if (written.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.'); return true;
+    }
+    var pay = /^\d+$/.test(written.pay) ? Number(written.pay) : 0;
+    if (!Number.isSafeInteger(pay) || pay < PARCEL_PAY_MIN) {
+      toProfile(profileId, 'A parcel\'s courier pay is a whole number of gold, ' + PARCEL_PAY_MIN +
+                ' or more. Nothing was taken.');
+      return true;
+    }
+    var slot = /^\d+$/.test(written.slot) ? Number(written.slot) : -1;
+    var base = /^\d+$/.test(written.baseId) ? Number(written.baseId) : 0;
+    var count = /^\d+$/.test(written.count) ? Number(written.count) : 0;
+    if (!Number.isSafeInteger(slot) || slot < 0 || !Number.isSafeInteger(base) || !(base > 0) || base === GOLD_ID ||
+        !Number.isSafeInteger(count) || count < 1) {
+      toProfile(profileId, 'Pick what goes in the parcel from your pack. Nothing was taken.');
+      return true;
+    }
+    var cost = LETTER_FEE + pay;
+    var short = 'A parcel costs ' + cost + ' gold, ' + LETTER_FEE + ' for the board and the ' + pay +
+                ' courier pay, and you do not have it. Nothing was taken.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
+      return true;
+    }
+    var made = { by: profileId, name: characterName(actorId), text: written.words, at: Date.now(),
+                 job: true, letter: true, parcel: true, to: written.to, pay: pay, taken: 0 };
+    if (written.submission) made.boardSubmission = written.submission;
+    var payFor = goldCut(cost, short);
+    // On the board only once the pack's take is saved (#4901): landParcel.
+    var r = packs.begin(actorId, boardSubmissionCut(actorId, profileId, written, function (entries) {
+      var it = entries[slot];
+      if (!it || (Number(it.baseId) >>> 0) !== base || it.worn || it.wornLeft || count > (Number(it.count) || 0)) {
+        return 'Your pack changed. Nothing was taken.';
+      }
+      var kept = JSON.parse(JSON.stringify(it));
+      delete kept.worn; delete kept.wornLeft;
+      kept.count = count;
+      it.count = (Number(it.count) || 0) - count;
+      if (it.count <= 0) { entries.splice(slot, 1); }
+      var paid = payFor(entries);
+      if (typeof paid === 'string') { return paid; }
+      return { entries: paid.entries, taken: [paid.taken[0], kept] };
+    }), 'parcel', { hold: hold, made: made, cost: cost, pay: pay });
+    toProfile(profileId, r.why || r.line ||
+      ('Your parcel for ' + written.to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
+    return true;
+  }
+
+  /* A parcel onto its board, once its gold and its stack are saved out of the pack (#4560). */
+  function landParcel(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost, pay = row.data.pay;
+    var kept = JSON.parse(JSON.stringify(row.taken[1] || {}));
+    var count = Number(kept.count) || 0;
+    delete kept.count;
+    var what = itemName(kept);
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold and ' + what + ' out of it, so they are still ' +
+             'yours and the parcel for ' + made.to + ' is not on the board.';
+    }
+    made.at = Date.now();
+    made.parcel = { entry: kept, count: count, what: what };
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(made.name, 'posted a parcel for', made.to, 'in', hold, 'for', cost, 'gold, holding', count, what);
+    return 'Your parcel for ' + made.to + ' is on the board in ' + hold + ', with ' +
+           (count > 1 ? count + ' ' : '') + what + ' in it. That cost ' + cost + ' gold: ' + LETTER_FEE +
+           ' for the board, and ' + pay + ' held for whoever carries it.';
+  }
+
+  /* Whether this parcel is on its way into somebody's pack right now: a hand over waiting on that pack's save. */
+  function parcelBusy(hold, at, n) {
+    for (var i = 0; i < debits.length; i++) {
+      var d = debits[i];
+      if (d && d.kind === 'parcel-hand' && d.data && d.data.hold === hold && d.data.at === at &&
+          Number(d.data.stamp) === Number(n && n.at)) { return true; }
+    }
+    return false;
+  }
+
+  /*
+    A parcel taken down before it is carried: its stack into this hold's drop
+    box, under its sender's own name, as if they had left it there (#4560).
+    The caller's save writes it with the take down.
+  */
+  function parcelToBox(hold, n) {
+    var p = n && n.parcel;
+    if (!p || typeof p !== 'object' || !p.entry || p.boxed) { return 0; }
+    var d = dropboxOf(hold);
+    var by = Number(n.by) || 0;
+    var name = n.name || 'somebody';
+    var item = { n: d.next++, by: by, name: name, kind: 'left', baseId: Number(p.entry.baseId),
+                 count: Number(p.count) || 0, what: p.what || itemName(p.entry),
+                 entry: JSON.parse(JSON.stringify(p.entry)), forName: name, at: Date.now() };
+    d.items.push(item);
+    boxLog(hold, { act: 'in', n: item.n, who: by, whoName: name, by: by, byName: name,
+                   what: item.what, count: item.count, forName: name, note: 'a parcel taken down off the board' });
+    p.boxed = item.n;
+    return item.n;
+  }
+
+  /*
+    THE HAND OVER (#4560). deliver has checked the courier, the reach and the
+    name. The first parcel they carry for this person that is not already on
+    its way goes into that person's pack through packFirst, with nothing taken
+    out: the stack is the one its notice holds, which landParcel took off the
+    sender's pack. Answers the courier's line.
+  */
+  function handParcel(parcels, actorId, profileId, toProfile, them, theirName, theirPid, courier) {
+    var c = null;
+    for (var i = 0; i < parcels.length && !c; i++) {
+      if (!parcelBusy(parcels[i].hold, parcels[i].at, parcels[i].n)) { c = parcels[i]; }
+    }
+    if (!c) { return 'The parcel is already on its way into ' + theirName + '\'s pack.'; }
+    var p = c.n.parcel;
+    if (!p || typeof p !== 'object' || !p.entry || !(Number(p.count) > 0)) {
+      plog('a parcel in', c.hold, (c.at + 1), 'holds nothing to hand over');
+      return 'That parcel holds nothing the server can hand over. Say so in the dev channel.';
+    }
+    var give = JSON.parse(JSON.stringify(p.entry));
+    give.count = Number(p.count);
+    var r = packs.begin(them, function (entries) {
+      entries.push(give);
+      return { entries: entries, taken: [] };
+    }, 'parcel-hand', { hold: c.hold, at: c.at, stamp: c.n.at, courier: profileId, courierName: courier,
+                       toPid: theirPid, toName: theirName });
+    if (r.why) {
+      plog('a parcel from', c.n.name, 'could not go into', theirName + '\'s pack:', r.why);
+      return 'The parcel could not go into ' + theirName + '\'s pack just now. You still have it.';
+    }
+    if (r.line) { toProfile(theirPid, r.line); }
+    return 'You hand ' + theirName + ' the parcel from ' + c.n.name + '. Your ' + (Math.floor(Number(c.n.pay)) || 0) +
+           ' gold comes once it is in their pack' + (r.line ? '.' : ', in a moment.') +
+           (parcels.length > 1 ? ' You carry more for them: hand over again.' : '');
+  }
+
+  /*
+    A parcel into its recipient's pack, once that pack is saved with it
+    (#4560). Landed, the parcel comes off the board as delivered in the same
+    register write, and its pay is owed to the courier, who haulTick pays out
+    of the ledger it was held on. Not landed, nothing changed: the stack is
+    still on the board, and the courier still has the parcel. Answers the line
+    for the recipient.
+  */
+  function landParcelHand(row, landed) {
+    var d = row.data;
+    var n = (notices[d.hold] || [])[d.at];
+    var right = !!n && !!n.parcel && typeof n.parcel === 'object' && Number(n.at) === Number(d.stamp);
+    if (!landed) {
+      return 'The parcel ' + (right ? 'from ' + n.name + ' ' : '') + 'did not go into your pack. ' +
+             d.courierName + ' still has it.';
+    }
+    if (!right || n.delivered) {
+      plog('a parcel went into', d.toName + '\'s pack and its notice is not on', d.hold + '\'s board as it was:', d.at + 1);
+      return 'A parcel is in your pack.';
+    }
+    var pay = Math.floor(Number(n.pay)) || 0;
+    var count = Number(n.parcel.count) || 0;
+    var what = n.parcel.what || itemName(n.parcel.entry);
+    n.delivered = Date.now();
+    n.deliveredTo = d.toPid;
+    n.down = n.delivered;
+    n.downBy = d.courier;
+    n.pay = 0;
+    if (pay > 0) {
+      n.owed = pay;
+      n.owedTo = d.courier;
+      n.owedFor = 'carried';
+    }
+    plog(d.courierName, 'handed', d.toName, 'a parcel from', n.name, 'off the board in', d.hold + ':', count, what);
+    return 'A parcel from ' + n.name + ', handed to you by ' + d.courierName + '. ' +
+           (count > 1 ? count + ' ' : '') + what + ' is in your pack.' + (n.text ? ' With it:\n' + n.text : '');
+  }
+
+  /*
         /deliver ff000103    the form id the crosshair gives, as /trade takes
 
     NOBODY TYPES THIS (#1595). The look prompt shows Hand over the letter
@@ -29573,8 +30268,11 @@ module.exports = {
     var courier = soc.nameOfPerson(actorId);
     var paid = 0;
     var handed = 0;
+    var parcels = [];
     for (var m = 0; m < mine.length; m++) {
       var c = mine[m];
+      // A parcel goes into their pack, saved before it comes down (#4560): handParcel.
+      if (c.n.parcel) { parcels.push(c); continue; }
       var got = payHeld(c.hold, c.n, actorId);
       if (got < 0) {
         toProfile(profileId, 'That did not work. You still have the letter for ' + c.n.to + '.');
@@ -29592,6 +30290,11 @@ module.exports = {
     if (handed) {
       toProfile(profileId, 'You hand ' + theirName + (handed === 1 ? ' the letter. ' : ' ' + handed +
                 ' letters. ') + paid + ' gold is yours.');
+    }
+    if (parcels.length) {
+      toProfile(profileId, handParcel(parcels, actorId, profileId, toProfile, them, theirName, theirPid, courier));
+    }
+    if (handed || parcels.length) {
       refreshPanel(actorId);
       refreshPanel(them);
     }
@@ -29979,7 +30682,14 @@ module.exports = {
           }
           continue;
         }
-        var line = n.owedFor === 'letter'
+        var line = n.owedFor === 'carried'
+          ? 'You handed over the parcel for ' + (n.to || 'somebody') + ' from ' + hold + '. The ' + owed +
+            ' gold for carrying it is in your pack.'
+          : n.owedFor === 'parcel'
+          ? 'While you were away, a guard took your parcel for ' + (n.to || 'somebody') + ' in ' + hold +
+            ' down. The ' + owed + ' gold for the courier is back in your pack, and what was in it is in ' + hold +
+            '\'s drop box for you. The fee stays with ' + hold + '.'
+          : n.owedFor === 'letter'
           ? 'While you were away, a guard took your letter for ' + (n.to || 'somebody') + ' in ' + hold +
             ' down. The ' + owed + ' gold for the courier is back in your pack. The fee stays with ' + hold + '.'
           : n.owedFor === 'job'
@@ -29988,6 +30698,13 @@ module.exports = {
           : n.owedFor === 'reward'
           ? 'While you were away, ' + (n.name || 'the person who posted it') + ' said the job you took in ' + hold +
             ' is done: ' + (n.title || '') + '. The ' + owed + ' gold reward is in your pack.'
+          // A wanted poster (#4565): its bounty confirmed, or the poster taken down.
+          : n.owedFor === 'bounty'
+          ? 'While you were away, a guard of ' + hold + ' confirmed you earned the bounty: ' + (n.title || '') +
+            '. The ' + owed + ' gold is in your pack.'
+          : n.owedFor === 'wanted'
+          ? 'While you were away, your wanted poster in ' + hold + ' was taken down: ' + (n.title || '') + '. The ' +
+            owed + ' gold reward is back in your pack. The fee stays with ' + hold + '.'
           : n.owedFor === 'hauled'
           ? 'While you were away, your haul to ' + n.dest + ' was confirmed. ' + owed + ' gold is in your pack.' +
             ((Number(n.kept) || 0) ? ' The company kept ' + n.kept + '.' : '')
@@ -30534,7 +31251,7 @@ module.exports = {
       return claimAway(parts, actorId, profileId, toProfile);
     }
     // A Jarl gives or takes an office of their hold (#2551): the Office page sends it.
-    if (word === '/office') { return officeCmd(parts, actorId, profileId, toProfile); }
+    if (word === '/office') { return officeCmd(parts, actorId, profileId, toProfile, cmd); }
     if (word === '/evict') { return evict(actorId, profileId, toProfile, cmd); }
     // The world's card on the Office page, for staff (#513): the world stage block answers it.
     if (word === '/world') {
@@ -30684,9 +31401,11 @@ module.exports = {
     return true;
   }
 
-  function officeCmd(parts, actorId, profileId, toProfile) {
+  function officeCmd(parts, actorId, profileId, toProfile, cmd) {
     var office = String((parts && parts[1]) || '').toLowerCase();
     if (office === 'hold') { return officeHoldHere(parts, actorId, profileId, toProfile); }
+    // A steward grants the free building at the door (#6894). See grant.
+    if (office === 'grant') { return grant(parts, actorId, profileId, toProfile, cmd); }
     var hold = String((parts && parts[2]) || '').toLowerCase();
     var arg = String((parts && parts[3]) || '').trim();
     if (!Object.prototype.hasOwnProperty.call(OFFICE_GIVEN, office) ||
@@ -31026,6 +31745,12 @@ module.exports = {
                     // Who owes rent here, the holder and anybody before them (#3893),
                     // each with Rent paid beside them (#3895).
                     owing: rentOwing(building) };
+      // Who in the world a free building may be granted to (#6894), not the
+      // steward themselves: a steward's own property is their own claim.
+      if (!held && (ours || staff)) {
+        view.door.grant = order.filter(function (op) { return op !== pid; })
+          .map(function (op) { return { pid: op, name: names[op] }; }).sort(byName).slice(0, OFFICE_PEOPLE_MAX);
+      }
     }
     // The boards are a steward's own hold's; staff are no steward.
     if (!view.steward) { return view; }
@@ -31100,7 +31825,9 @@ module.exports = {
                   name and words taken off; a job, letter or haul of somebody
                   else's that they had taken goes back on the board untaken,
                   as a job handed back does; gold owed to them stops being
-                  held for them
+                  held for them; what a parcel of theirs held goes into the
+                  drop box with no name on it (#4560), unless it is going
+                  into somebody's pack, which then lands as it would
       drop box    what they put in stays in the box with their name off it, so
                   the hold's officers may take it; the box's record keeps every
                   line with their name off it
@@ -31163,11 +31890,16 @@ module.exports = {
         if (!n || typeof n !== 'object') { continue; }
         var touched = false;
         if (mine(n.by)) {
-          if (!n.down) { n.down = at; n.downBy = 0; c.posts++; }
+          // A parcel of theirs still going into somebody's pack stays up until that lands (#4560).
+          var going = !!n.parcel && !n.down && parcelBusy(h, i, n);
+          if (!n.down && !going) { n.down = at; n.downBy = 0; c.posts++; }
           n.by = 0;
           n.name = 'somebody';
           delete n.title; delete n.text; delete n.to;
           delete n.boardSubmission;
+          // What a parcel of theirs held goes into the box with no name on it, for the
+          // hold's officers, as what they put in the box does (#4560).
+          if (!going && !n.delivered && parcelToBox(h, n)) { c.box++; }
           touched = true;
         }
         if (mine(n.taken)) {
@@ -31288,6 +32020,8 @@ module.exports = {
     standBench: standBench, standBenches: standBenches,
     benchRefs: function () { return Object.assign({}, benchRefs); },
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
+    STATIONS_THE_SERVER_STANDS: STATIONS_THE_SERVER_STANDS,
+    standStation: standStation,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
     itemName: itemName, baseItemName: baseItemName
@@ -33400,6 +34134,15 @@ module.exports = {
     on that life until somebody searches it or the actor stands back up.
     A camp enemy carries a little. Anything good on any other body is rare.
     A person is not searched. A hunter carcass stays on the hunter path.
+
+    NO BODY IS EVER EMPTY (#6715). Patrick, 26 Nov 2026, after a tester
+    searched two bandits in Embershard Mine and was told both times that
+    there was nothing on the body: "nothing should ever drop nothing atleast
+    something small or common or whatever". The wild odds left about seven
+    bodies in ten with nothing at all, so a roll that comes up with no coin
+    and no item takes one common supply (the tier 1 list: a lockpick, salt,
+    bone meal, a strip of leather, bread and the like). The odds of anything
+    better are as they were.
   */
   var BODY_CAMP = { gold: 0.80, goldN: 6, minor: 0.65, decent: 0.08, good: 0.015, rare: 0.002 };
   var BODY_WILD = { gold: 0.20, goldN: 4, minor: 0.12, decent: 0.02, good: 0.005, rare: 0.0005 };
@@ -33511,6 +34254,7 @@ module.exports = {
     if (rng() < odds.decent) pushPick(items, pickWeighted(supplyExact(2), rng));
     if (rng() < odds.good) pushPick(items, pickWeighted(gearOrNovice(), rng));
     if (rng() < odds.rare) pushPick(items, pickWeighted(rarePile(), rng));
+    if (!gold && !items.length) pushPick(items, pickWeighted(supplyExact(1), rng));
     return { gold: gold, items: mergeItems(items), camp: !!camp };
   }
 
@@ -45419,6 +46163,9 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // /stall open, and the panel's buttons send the rest. Never
                // typed, so not in PLAYER_WORDS.
                '/stall',
+               // The lock key at a water whose line offers a fish trap
+               // (#4655). Never typed, so not in PLAYER_WORDS.
+               '/trap',
                // The trade carts' panel, at a cart stop's crate, from Raid
                // cart on P, or on the Office page for staff (#3158). Never typed.
                '/cart',
@@ -46553,7 +47300,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!needCharacter()) return;
       var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
       var propertyPosts = g.__thornswoodProperty;
-      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job' && postPayload[0] !== 'wanted') ||
           !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
           (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
           typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
@@ -46775,6 +47522,17 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
       var stallSaid = stallsApi.command(parts, actorId, profileId, cmd);
       if (stallSaid) { toProfile(profileId, stallSaid); }
+      return true;
+    }
+
+    // The lock key at a water whose line offers a fish trap (#4655): set one
+    // or take it up. Never typed. The scripted activators block answers it.
+    if (word === '/trap') {
+      var trapsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTraps;
+      if (!trapsApi || !trapsApi.command) { toProfile(profileId, 'Fish traps are not running on this server.'); return true; }
+      if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
+      var trapSaid = trapsApi.command(parts, actorId);
+      if (trapSaid) { toProfile(profileId, trapSaid); }
       return true;
     }
 
@@ -49658,8 +50416,10 @@ mp.onDropItem = guard('onDropItem', function (actorId, baseId, count) {
   on unless it is false (Patrick, 28 September: existing characters are reset
   to the default body shape, height and weight stay adjustable). Each
   character is looked at once when it comes online and its stored appearance
-  is put through the same check. The person's own machine clears any body
-  slider it still holds on its own (thornswood-front.js, "body shape").
+  is put through the same check. On the person's own machine the creation
+  menu offers no body slider but Height (the launcher's edit of RaceMenu's
+  menu, #7087), and nothing of RaceMenu's is kept from one time playing to the
+  next, so there is nothing there to clear.
 */
 const BODY_APPEARANCE_FIELDS = ['isFemale', 'raceId', 'weight', 'skinColor', 'hairColor',
   'headpartIds', 'headTextureSetId', 'options', 'presets', 'tints', 'name'];
@@ -53338,9 +54098,12 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
                  takes twenty to notice is not a fire.
 
       IT CANNOT RUN AWAY WITH ITSELF. Somebody who catches it becomes a source
-      in their own right, which is what "spread" means, but the burn is on a
-      clock and the radius is small, so a crowd standing shoulder to shoulder
-      in a bonfire is the worst it gets and that is a decision they made.
+      in their own right, which is what "spread" means, but a fire is never
+      caught back by anybody it already came through (burnFrom, #6722). The
+      clock alone did not stop it: each catch started a new one, so two
+      people at a fire handed it back and forth until both were dead. Now a
+      fire goes out once it has been through everybody standing there, and
+      only somebody still in the coals keeps setting their neighbours alight.
     */
     burn: { spread: 220, catches: 5000, every: 2000 },
 
@@ -54198,6 +54961,24 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     if (!n) { n = fresh(); write(actorId, n); return n; }
 
     var projected = projectNeeds(n, now, arriving, projectionEnvironment(actorId));
+    /*
+      WHAT THE TIME AWAY DID, SAID ONCE AN ARRIVAL (#6590). A tester came back
+      on main with Rest still at 24 and nothing on the server could say why:
+      how long they were away, what they logged out on, and the meters before
+      and after were never written down. The logging out table (exhaustion.md)
+      gives 24 back as 24 for anybody who logged out on their feet or a seat,
+      and Rest 100 for a night in a bed that gives one. This line tells the two
+      apart.
+    */
+    if (arriving) {
+      var after = projected.needs;
+      nlog(actorId.toString(16), 'back after', Math.round(Math.max(0, now - n.at) / 60000) + 'm,',
+           'logged out on', (n.resting || 'their feet') + ':',
+           'rest', Math.round(n.rest), '->', Math.round(after.rest) + ',',
+           'hunger', Math.round(n.food), '->', Math.round(after.food) + ',',
+           'thirst', Math.round(n.drink), '->', Math.round(after.drink),
+           projected.slept ? '(a night slept)' : '(no night given)');
+    }
     if (!projected.changed) { return projected.needs; }
     write(actorId, projected.needs);
     projectionEffects(actorId, projected);
@@ -56856,6 +57637,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   var burning = {};        // actorId -> when they last said they were alight
   var burnIdentities = {}; // actorId -> profile, current runtime and life
   var burnStarts = {};     // actual start, independent of whether needs saved
+  /*
+    WHO A FIRE HAS ALREADY BEEN THROUGH (#6722). Each person alight carries
+    the list of people their fire came through: empty for a fire of their own
+    (the coals), the giver's list and the giver for one caught from somebody.
+    A fire is never caught by anybody on its own list. Before this a fire
+    caught from a neighbour was caught back by them once their own had gone
+    out, and back again, so two or three people standing together at a fire
+    kept setting each other alight, 7 health a second, until they died. The
+    list only grows along a chain, so every chain ends, and walking into the
+    coals again is a new fire with an empty list.
+  */
+  var burnFrom = {};       // actorId -> the ids this person's fire came through
+  var burnCaught = {};     // actorId -> { from: list, at } of a catch not yet reported
 
   function burnIdentity(actorId, savedOnly) {
     try {
@@ -56892,6 +57686,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       delete burning[actorId];
       delete burnIdentities[actorId];
       delete burnStarts[actorId];
+      delete burnFrom[actorId];
       publishBurnVisual(actorId, false);
     }
     if (bankHeat) { pushEffects(actorId); }
@@ -56905,7 +57700,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       // A new fire cannot warm the time before the report. A heartbeat also
       // banks the old interval before extending its deadline.
       settle(actorId);
-      if (!wasBurning) { burnStarts[actorId] = Date.now(); }
+      if (!wasBurning) {
+        burnStarts[actorId] = Date.now();
+        // Caught from somebody, the report after the catch: that fire's
+        // list. Anything else is a fire of their own.
+        var got = burnCaught[actorId];
+        burnFrom[actorId] = (got && Date.now() - got.at <= NEEDS.burn.every * 3) ? got.from : [];
+      }
+      delete burnCaught[actorId];
       burning[actorId] = Date.now();
       burnIdentities[actorId] = identity;
       publishBurnVisual(actorId, true);
@@ -56914,7 +57716,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /** Tell one person's client to catch fire for a while. */
-  function catchFire(actorId, ms, why) {
+  function catchFire(actorId, ms, why, from) {
+    if (from) { burnCaught[actorId] = { from: from, at: Date.now() }; }
     try {
       mp.set(actorId, BURN_PROPERTY, {
         ms: Number(ms) || NEEDS.burn.catches,
@@ -56951,11 +57754,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         hereCell = String(mp.get(who, 'worldOrCellDesc') || '');
       } catch (e) { continue; }
       if (!herePos) { continue; }
+      var came = burnFrom[who] || [];
       for (var j = 0; j < online.length; j++) {
         var them = online[j];
         if (them === who) { continue; }
         // Already alight, so there is nothing to catch.
         if (burning[them]) { continue; }
+        // This fire already came through them (#6722).
+        if (came.indexOf(them) !== -1) { continue; }
         try {
           if (String(mp.get(them, 'worldOrCellDesc') || '') !== hereCell) { continue; }
           var p = mp.get(them, 'pos');
@@ -56963,7 +57769,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           var dx = p[0] - herePos[0], dy = p[1] - herePos[1], dz = p[2] - herePos[2];
           if ((dx * dx + dy * dy + dz * dz) > reach) { continue; }
         } catch (e) { continue; }
-        catchFire(them, NEEDS.burn.catches, 'caught');
+        catchFire(them, NEEDS.burn.catches, 'caught', came.concat([who]));
         nlog('fire spread from', who.toString(16), 'to', them.toString(16));
       }
     }
@@ -57153,7 +57959,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   steepSeconds by the fire the inputs are taken and the dye is in the pack,
   one entry on the list's item with the dye's name, the way a deed is named.
   Walking away from the fire before then loses the steep and takes nothing:
-  the boil's rule. One steep at a time. A relog loses a steep the same way.
+  the boil's rule. One steep at a time. A relog keeps a steep, as it keeps
+  a boil (#5047): it is the character's, by actor id, and nothing here
+  hears a leave, so back by the fire once its time is up it is done, and
+  back away from the fire it is lost. It is kept in this block's memory
+  only, so a server restart loses it, and nothing was taken yet.
 
   THE BOTTLE OF WATER A DYE TAKES IS SPENT FROM THE WATER LEDGER. The game
   cannot mark where a bottle's water came from, so the needs block counts
@@ -57197,7 +58007,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   // ==== HAIR_DYES ====
   /* Built by scripts\dev\Build-HairDyeGamemode.js out of game\data\hair-dyes.json and
      game\hair-dye.js. Do not hand edit: change those two and run it again. */
-  var HAIR_DYES = {"about":"Hair dye (#2675). The staff's list: what a dye is carried as, where and how long it steeps, how close you stand to dye somebody else's hair, who may steep, and each dye's colour and what it takes. game/hair-dye.js reads it and names none of it. docs/systems/hair-dye.md says what each field does.","item":"98626:Skyrim.esm","steepSeconds":60,"steepAt":"a5cb3:Skyrim.esm","reach":300,"who":{"anyone":false,"halves":{"haberdasher":"novice","liverywright":"novice"}},"dyes":[{"id":"black","name":"Black Hair Dye","colour":"#1b1918","strength":0.75,"wander":10,"inputs":[{"item":"15482:Thornswood-Content.esp","count":1},{"item":"16e26:Dragonborn.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"brown","name":"Brown Hair Dye","colour":"#4a3020","strength":0.6,"wander":14,"inputs":[{"item":"5076e:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"red","name":"Red Hair Dye","colour":"#7a2418","strength":0.55,"wander":16,"inputs":[{"item":"1b3bd:Skyrim.esm","count":2},{"item":"77e1d:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"deep-red","name":"Deep Red Hair Dye","colour":"#5a1014","strength":0.6,"wander":12,"inputs":[{"item":"4da20:Skyrim.esm","count":1},{"item":"b701a:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"gold","name":"Gold Hair Dye","colour":"#b8945a","strength":0.5,"wander":14,"inputs":[{"item":"4b0ba:Skyrim.esm","count":2},{"item":"2a78:Dawnguard.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"copper","name":"Copper Hair Dye","colour":"#a4512a","strength":0.55,"wander":16,"inputs":[{"item":"889a2:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"blue","name":"Blue Hair Dye","colour":"#2b3f6e","strength":0.5,"wander":18,"inputs":[{"item":"77e1c:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"purple","name":"Purple Hair Dye","colour":"#4e2c5e","strength":0.5,"wander":18,"inputs":[{"item":"77e1e:Skyrim.esm","count":2},{"item":"45c28:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"nightshade","name":"Nightshade Hair Dye","colour":"#2a1a30","strength":0.65,"wander":10,"inputs":[{"item":"516c8:Skyrim.esm","count":1},{"item":"2f44c:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"green","name":"Green Hair Dye","colour":"#3d5a2c","strength":0.5,"wander":18,"inputs":[{"item":"57f91:Skyrim.esm","count":2},{"item":"134aa:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"hair-wash","name":"Hair Wash","wash":true,"strength":0.6,"wander":6,"inputs":[{"item":"34cdd:Skyrim.esm","count":1},{"item":"34cdf:Skyrim.esm","count":1},{"item":"3f7f8:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]}]};
+  var HAIR_DYES = {"about":"Hair dye (#2675). The staff's list: what a dye is carried as, where and how long it steeps, how close you stand to dye somebody else's hair, who may steep, and each dye's colour and what it takes. game/hair-dye.js reads it and names none of it. docs/systems/hair-dye.md says what each field does.","item":"98626:Skyrim.esm","steepSeconds":60,"steepAt":"a5cb3:Skyrim.esm","reach":300,"who":{"anyone":false,"halves":{"haberdasher":"novice","liverywright":"novice"}},"dyes":[{"id":"black","name":"Black Hair Dye","colour":"#1b1918","strength":0.75,"wander":10,"inputs":[{"item":"33760:Skyrim.esm","count":1},{"item":"16e26:Dragonborn.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"brown","name":"Brown Hair Dye","colour":"#4a3020","strength":0.6,"wander":14,"inputs":[{"item":"5076e:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"red","name":"Red Hair Dye","colour":"#7a2418","strength":0.55,"wander":16,"inputs":[{"item":"1b3bd:Skyrim.esm","count":2},{"item":"77e1d:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"deep-red","name":"Deep Red Hair Dye","colour":"#5a1014","strength":0.6,"wander":12,"inputs":[{"item":"4da20:Skyrim.esm","count":1},{"item":"b701a:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"gold","name":"Gold Hair Dye","colour":"#b8945a","strength":0.5,"wander":14,"inputs":[{"item":"4b0ba:Skyrim.esm","count":2},{"item":"2a78:Dawnguard.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"copper","name":"Copper Hair Dye","colour":"#a4512a","strength":0.55,"wander":16,"inputs":[{"item":"889a2:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"blue","name":"Blue Hair Dye","colour":"#2b3f6e","strength":0.5,"wander":18,"inputs":[{"item":"77e1c:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"purple","name":"Purple Hair Dye","colour":"#4e2c5e","strength":0.5,"wander":18,"inputs":[{"item":"77e1e:Skyrim.esm","count":2},{"item":"45c28:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"nightshade","name":"Nightshade Hair Dye","colour":"#2a1a30","strength":0.65,"wander":10,"inputs":[{"item":"516c8:Skyrim.esm","count":1},{"item":"2f44c:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"green","name":"Green Hair Dye","colour":"#3d5a2c","strength":0.5,"wander":18,"inputs":[{"item":"57f91:Skyrim.esm","count":2},{"item":"134aa:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"hair-wash","name":"Hair Wash","wash":true,"strength":0.6,"wander":6,"inputs":[{"item":"34cdd:Skyrim.esm","count":1},{"item":"34cdf:Skyrim.esm","count":1},{"item":"3f7f8:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]}]};
   var HAIR_DYE = (function () {
   var module = { exports: {} };
 'use strict';
@@ -68780,6 +69590,30 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
     }
   }
+  // How far above the navmesh each walking NPC is held (#6474). An NPC keeps
+  // the height its placement had over its navmesh triangle (lift) wherever
+  // it walks, and each game moves it there with translateTo, which neither
+  // falls nor collides, so a positive lift is how far it floats above the
+  // navmesh. Said when it changes, with the largest, to measure the reports
+  // of NPCs floating.
+  let heightsLine='';
+  function heightsReport() {
+    let walking=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
+    for(const a of actors.values()) {
+      if(!a.state || a.state.swims) continue;
+      walking++;
+      if(a.lift>16) above16++;
+      if(a.lift>32) above32++;
+      if(a.lift>64) above64++;
+      if(a.lift<-16) below16++;
+      largest.push(a);
+    }
+    largest.sort((x,y)=>Math.abs(y.lift)-Math.abs(x.lift));
+    const line='NPC heights over their navmesh: '+walking+' walking; above 16 units '+above16+', above 32 '+above32+
+      ', above 64 '+above64+', below -16 '+below16+'; largest '+
+      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.lift)+' in '+a.cell.toString(16)).join(', ');
+    if(line!==heightsLine) {report(line);heightsLine=line;}
+  }
   function backgroundTick() {
     const begin=now();let taken=0,moves=0;
     while(due.length && taken<256 && moves<64) {
@@ -68803,6 +69637,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(merchantStatus) report('NPC merchant purses: '+merchantStatus.verified+'/'+merchantStatus.catalogue+
         ' verified; '+merchantStatus.initialized+' first-time purses; '+((globalThis.__thornswoodMerchantTrade&&globalThis.__thornswoodMerchantTrade.nativeReady())?'native transfer present':'native transfer absent'));
       moved=0;background=0;attacks=0;lastReport=now();
+      heightsReport();
     }
     schedule(backgroundTick,20);
   }
@@ -69701,6 +70536,12 @@ const INVENTORY=typeof MERCHANT_SETTLEMENT!=='undefined'?MERCHANT_SETTLEMENT:req
 const copy=value=>JSON.parse(JSON.stringify(value));
 const hash=value=>require('node:crypto').createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Published jobs remain routable while their accepted promises exist.
+// A published job whose goods nothing makes any more is retired by taking it
+// off this list, and given a new id when it comes back with other goods: the
+// four woodworker parcels that asked for Thornswood's Charcoal went when the
+// kiln began making Skyrim's own (#6726), and came back as the four
+// *-charcoal-parcel ids. A retired job is not finished for anybody who had
+// accepted it.
 const publication=Object.freeze({
  'q-whiterun-smith-straps':'8f03bdc903aaf1e37727f54a3e49bfdea5a2b817bc7534ba0111c88d25502734',
  'q-rift-woodworker-hunt-arrows':'84b31663cd265c9b26068ff7343622f04b332ddce394e58b52a55b0b6cbb3a89',
@@ -69783,7 +70624,7 @@ const publication=Object.freeze({
  'q-markarth-smith-expert-parcel':'9f8a055c39abe1c6da78e026d06439129cb9209423504f58d10aab4011fd5a2d',
  'q-markarth-smith-master-parcel':'f9b1854ae2954c03148c0953b29b7f03077aee9842b9a0405a4340d8ff388bec',
  'q-markarth-woodworker-novice-parcel':'8a14d28f769296a7779f86bfe78517a8388e58d86feded698a791cbcefe9538e',
- 'q-markarth-woodworker-advanced-parcel':'83dc5ab0d102b917460dc3ad68b39b8ea25dffaf511f6f0b520356b6b3dd931b',
+ 'q-markarth-woodworker-advanced-charcoal-parcel':'962355eff1861bf51f5bc4f9efa9cacf392b60d0ebadc7a26d3f231f2c09a3cc',
  'q-markarth-woodworker-expert-parcel':'2bdfa338694777b2af3bf7dad169013e990a12f7b92c1c3bc3fb417b0eff8c69',
  'q-markarth-woodworker-master-parcel':'8378ba65a73153a84b4a6dbde433ed97caf1cbd4d3e4167ce52bc5fe8da8c538',
  'q-markarth-tailor-novice-parcel':'41d6dcf835ba00f47aad39321873750c027453c2f72770f22ac49665b6d7c42b',
@@ -69831,7 +70672,7 @@ const publication=Object.freeze({
  'q-morthal-smith-expert-parcel':'419ddedc579950eee90774f768d1b51574f440c2453a2b703f03da5d114355e9',
  'q-morthal-smith-master-parcel':'00d8e6292fbb97467975120876fed4b80579849c1d8ac6c4b2748340c48ae6fd',
  'q-morthal-woodworker-novice-parcel':'1826e4d2d9f8f54abfc7d117dee2a025d9ed97bea817310f72df3509a6e79c41',
- 'q-morthal-woodworker-advanced-parcel':'51ce93d15b6ba610a43424b4a32dc4ea099354575112aa27f0893d87327bdc69',
+ 'q-morthal-woodworker-advanced-charcoal-parcel':'21ee6794881ea168206bf0d18863483b2f7dc71051e331ffd2de7ac89ff1e38a',
  'q-morthal-woodworker-expert-parcel':'0dc1b3f60331ccec3ef609a166dbaf47ff8196d31ebc49b3d780759272cd0f40',
  'q-morthal-woodworker-master-parcel':'189e472f274ba7a5fc2b9c537c23d1fb1a699c6963d4afdd9c0f28b4465ffa2d',
  'q-morthal-tailor-novice-parcel':'020ac422c90a12d91d074c53ab7f1a0e325ff4a85eb8c77bf9031d8a274c40a5',
@@ -69878,9 +70719,9 @@ const publication=Object.freeze({
  'q-winterhold-smith-expert-parcel':'75c5bceb51d5f24af727c4ee968774097754b7cc0f64f10cb415d58330cd7e60',
  'q-winterhold-smith-master-parcel':'59f73bf6d038034fa2c9ac65b1b85a6582c9502c77e512349ef309125969f02d',
  'q-winterhold-woodworker-novice-parcel':'c77c432bc1a72f7da71368a839140359f67880dcc6d2dd928ceee18091aa6339',
- 'q-winterhold-woodworker-advanced-parcel':'7362c2e1c85870d505ba5fad8413d5673fb99cb993b33f4bc09d6a82239f4840',
+ 'q-winterhold-woodworker-advanced-charcoal-parcel':'c39d9aeb843999b7beb1b35e4b1b2849c6bcb9452fee11d1716c677a2f75a0f6',
  'q-winterhold-woodworker-expert-parcel':'2b15efd43ad1a57ffa9519a592e41ee56062e220441bf7cdfd340bd1c359335b',
- 'q-winterhold-woodworker-master-parcel':'22941c4af6bd41eb6aa96c9f29085ea2605fdd89157f091d562305d1e9e5c184',
+ 'q-winterhold-woodworker-master-charcoal-parcel':'871497fa81b6059a848fff092cbea12b2ac78915e7aa0d1ffbd03b83558af572',
  'q-winterhold-tailor-novice-parcel':'4ddea61b68bc9451d942295376ebd20082dc472aa12f5e046cc9960548bf58c8',
  'q-winterhold-tailor-advanced-parcel':'1e25774626e32469e0dae4cf4e949f279d1d6e9f1839ac48a4753a7d7f5fb5e7',
  'q-winterhold-tailor-expert-parcel':'8322953574b8161b13669df1e8f973f9009418f806681e9ecf4ea8b3b8aa0518',

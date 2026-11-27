@@ -36,16 +36,26 @@ try {
     yes('the actual registration is owner-only and contains its client script', !!def && def.isVisibleByOwner && !def.isVisibleByNeighbors && !!def.updateOwner);
     yes('actual queued reports publish the same nonzero shared sky to both people', value(a).id > 0 && value(a).id === value(b).id);
     const sky = value(a).id, run = new Function('ctx', def.updateOwner);
-    function owner() {
+    // The stand-in sends a JSON copy on each read. The real client's owner
+    // model retains the decoded property until a new network value arrives.
+    const deliveries = new Map();
+    function ownerPayload(actor) {
+      const read = value(actor);
+      const current = deliveries.get(actor);
+      if (current && current.id === read.id && current.at === read.at) { return current; }
+      deliveries.set(actor, read);
+      return read;
+    }
+    function owner(actor = a) {
       const o = { form: true, weather: true, forceThrows: false, releaseThrows: false, calls: [], state: {} };
       const weather = { forceActive(override) { o.calls.push(['force', override]); if (o.forceThrows) throw Error('native force refused'); } };
-      o.ctx = { value: value(a), state: o.state, sp: {
+      o.ctx = { value: ownerPayload(actor), state: o.state, sp: {
         Game: { getFormEx(id) { o.calls.push(['form', id]); return o.form ? { id } : null; } },
         Weather: { from() { return o.weather ? weather : null; }, releaseOverride() {
           o.calls.push(['release']); if (o.releaseThrows) throw Error('native release refused');
         } }
       } };
-      o.run = (v = value(a)) => { o.ctx.value = v; run(o.ctx); };
+      o.run = (v = ownerPayload(actor)) => { o.ctx.value = v; run(o.ctx); };
       o.forces = () => o.calls.filter(c => c[0] === 'force').length;
       o.releases = () => o.calls.filter(c => c[0] === 'release').length;
       return o;
@@ -67,11 +77,12 @@ try {
     refused.forceThrows = false; refused.run();
     yes('a later normal owner update can apply the still-requested sky', refused.forces() === 2 && refused.state.thornswoodSkyId === sky && refused.calls.every(c => c[0] !== 'force' || c[1] === true));
 
-    const release = owner(); release.run(); release.releaseThrows = true; release.run({ id: 0 });
+    const releasedSky = { id: 0 };
+    const release = owner(); release.run(); release.releaseThrows = true; release.run(releasedSky);
     yes('a refused native release keeps the previously applied cache entry', release.state.thornswoodSkyId === sky);
-    release.releaseThrows = false; release.run({ id: 0 });
+    release.releaseThrows = false; release.run(releasedSky);
     yes('the still-requested release commits its cache only after native success', release.releases() === 2 && release.state.thornswoodSkyId === 0);
-    const releasedCalls = release.calls.length; release.run({ id: 0 });
+    const releasedCalls = release.calls.length; release.run(releasedSky);
     yes('an unchanged successful release makes no further native calls', release.calls.length === releasedCalls);
     const unavailableRelease = owner(); unavailableRelease.run();
     const releaseNative = unavailableRelease.ctx.sp.Weather.releaseOverride;
@@ -80,7 +91,7 @@ try {
     unavailableRelease.ctx.sp.Weather.releaseOverride = releaseNative; unavailableRelease.run({ id: 0 });
     yes('an available release method completes the unchanged indoor request', unavailableRelease.releases() === 1 && unavailableRelease.state.thornswoodSkyId === 0);
 
-    const first = owner(), second = owner(); first.run(value(a)); second.run(value(b));
+    const first = owner(), second = owner(b); first.run(); second.run();
     yes('independent arrival contexts each apply the shared roll once', first.forces() === 1 && second.forces() === 1);
     const shared = S.ensureRoll(S.climateOf(a, { place: 'outdoors', high: 0 }), w.now());
     const deadline = shared.until, originalSky = shared.id;
@@ -93,6 +104,26 @@ try {
     w.leave(a); w.arrive(a); w.run(30000); report(a);
     const arrival = owner(); arrival.run();
     yes('a fresh arrival context applies the persisted unexpired shared value', value(a).id === originalSky && arrival.forces() === 1 && S.ensureRoll(S.climateOf(a, { place: 'outdoors', high: 0 }), w.now()).until === deadline);
+
+    // Native owner state survives another createActor in the same client.
+    // Each received custom property is decoded into a new object.
+    const reconnect = owner();
+    const firstPayload = JSON.parse(JSON.stringify(value(a)));
+    reconnect.run(firstPayload);
+    const nextPayload = JSON.parse(JSON.stringify(firstPayload));
+    reconnect.run(nextPayload);
+    const afterReconnect = reconnect.calls.length;
+    reconnect.run(nextPayload);
+    yes('a fresh owner payload for the same sky is applied and then cached for its own frames',
+      reconnect.forces() === 2 && reconnect.calls.length === afterReconnect);
+
+    reconnect.run({ id: 0, at: 10 });
+    const indoorPayload = { id: 0, at: 10 };
+    reconnect.run(indoorPayload);
+    const afterTheRelease = reconnect.calls.length;
+    reconnect.run(indoorPayload);
+    yes('a new indoor owner payload releases again without repeating the release on every frame',
+      reconnect.releases() === 2 && reconnect.calls.length === afterTheRelease);
 
     // A native publication can also fail before the owner sees the value.
     const indoor = { place: 'indoors' }, outdoor = { place: 'outdoors' };

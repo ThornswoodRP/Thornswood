@@ -20,8 +20,8 @@
                             that differ, so a hand edit inside one is caught
     Get-EnginePinStep       what engine-pin.yml does next, from GitHub's answers
     Get-EnginePinNotes      the fork pull requests a pin brings in, the
-                            Thornswood issues they name, their Test tasks
-                            and their Release note lines
+                            Thornswood issues they name, their Test tasks,
+                            authored known issues and Release note lines
 
   THE MARKED BLOCKS. A block is the lines between
       <!-- engine-pin:<name> -->   and   <!-- /engine-pin:<name> -->
@@ -75,12 +75,20 @@ function Get-EnginePinFacts([string]$Repo) {
     $files = @($f.files.PSObject.Properties)
     $bytes = [long]0
     foreach ($p in $files) { $bytes += [long]$p.Value.bytes }
+    # build.js changes whenever the fork's skymp5-front does (#6200: fork pull
+    # request 192 changed main.scss and the pin stopped on the old hash typed
+    # beside the block), so its size and hash are written from the record too.
+    $js = $f.files.'build.js'
+    if (-not $js) { throw 'records\front-build.json holds no build.js' }
+    $jsSha = ([string]$js.sha256).ToLowerInvariant()
+    if ($jsSha -notmatch '^[0-9a-f]{64}$') { throw 'records\front-build.json gives no SHA256 of build.js' }
     return [pscustomobject]@{
         Commit = $commit; Short = $commit.Substring(0, 8)
         Base = $base; BaseShort = $base.Substring(0, 8)
         ServerSha256 = $sha; ServerBuilt = [string]$built
         Fork = $repoUrl; Branch = [string]$s.source.branch
         FrontFiles = $files.Count; FrontBytes = $bytes
+        FrontJsBytes = [long]$js.bytes; FrontJsSha256 = $jsSha
     }
 }
 
@@ -114,7 +122,10 @@ function Get-EnginePinBlocks($Facts, [string]$Main) {
             "$compare.")
         front = @(
             ('{0} files, {1} bytes, from commit' -f $Facts.FrontFiles, $Facts.FrontBytes.ToString('N0', [Globalization.CultureInfo]::InvariantCulture)),
-            "``$S``, the commit the client record names.")
+            "``$S``, the commit the client record names.",
+            ('Its build.js is {0}' -f $Facts.FrontJsBytes.ToString('N0', [Globalization.CultureInfo]::InvariantCulture)),
+            'bytes, sha256',
+            "``$($Facts.FrontJsSha256)``, and every")
         servers = @(
             '- The game server''s native module, `scam_native.node`, recorded in',
             '  `records\server-build.json`, is AGPL-3.0. That record and the client record',
@@ -330,8 +341,9 @@ function Get-EnginePinStep([string]$Pin, [scriptblock]$Get) {
 
 # The fork pull requests between the commit main pins ($Old) and the new pin
 # ($New), the Thornswood issues they name ("Thornswood #N"), and the Test
-# task blocks in their bodies ("Test task for Thornswood #N: <title>" and the
-# steps under it, ending where done-on-merge.yml ends one), turned into the
+# task and known-issue blocks in their bodies ("Test task for Thornswood #N:"
+# and "Known issue for Thornswood #N:", ending at the next block of either
+# kind or where done-on-merge.yml ends one), turned into the
 # shape done-on-merge.yml reads in a pull request here. And the release note
 # the pin carries (plan part 8): each fork pull request has its own
 # "Release note:" line, held to the rules by the fork's own check, and
@@ -356,6 +368,7 @@ function Get-EnginePinNotes([string]$Old, [string]$New, [scriptblock]$Get) {
     }
     $issues = New-Object System.Collections.Generic.SortedSet[int]
     $tasks = New-Object System.Collections.Generic.List[string]
+    $known = New-Object System.Collections.Generic.List[string]
     $lines = New-Object System.Collections.Generic.List[string]
     $noted = New-Object System.Collections.Generic.List[string]
     $noNote = New-Object System.Collections.Generic.List[int]
@@ -367,20 +380,24 @@ function Get-EnginePinNotes([string]$Old, [string]$New, [scriptblock]$Get) {
         foreach ($i in $named) { [void]$issues.Add($i) }
         $lines.Add(('- fork #{0}: {1}' -f $p.number, ([string]$p.title).Trim()))
         $cur = $null
+        $destination = $null
         foreach ($l in @(([string]$p.body -replace "`r`n", "`n") -split "`n")) {
             $t = [regex]::Match($l, '^\s*Test task for Thornswood #(\d+)\s*:\s*(.+?)\s*$')
-            if ($t.Success) {
-                if ($cur) { $tasks.Add(($cur -join "`n").TrimEnd()) }
+            $k = [regex]::Match($l, '^\s*Known issue for Thornswood #(\d+)\s*:\s*(.+?)\s*$')
+            if ($t.Success -or $k.Success) {
+                if ($cur) { $destination.Add(($cur -join "`n").TrimEnd()) }
                 $cur = New-Object System.Collections.Generic.List[string]
-                $cur.Add(('Test task for #{0}: {1}' -f $t.Groups[1].Value, $t.Groups[2].Value))
-                [void]$issues.Add([int]$t.Groups[1].Value)
+                if ($k.Success) { $destination = $known; $kind = 'Known issue'; $header = $k }
+                else { $destination = $tasks; $kind = 'Test task'; $header = $t }
+                $cur.Add(('{0} for #{1}: {2}' -f $kind, $header.Groups[1].Value, $header.Groups[2].Value))
+                [void]$issues.Add([int]$header.Groups[1].Value)
                 continue
             }
-            if ($cur -and ($l -match '^\s*#{1,6}\s' -or $l -match '^\s*---\s*$' -or $l -match '^\s*[\uD800-\uDBFF]')) { $tasks.Add(($cur -join "`n").TrimEnd()); $cur = $null; continue }
+            if ($cur -and ($l -match '^\s*#{1,6}\s' -or $l -match '^\s*---\s*$' -or $l -match '^\s*[\uD800-\uDBFF]')) { $destination.Add(($cur -join "`n").TrimEnd()); $cur = $null; continue }
             if ($cur) { $cur.Add($l) }
         }
-        if ($cur) { $tasks.Add(($cur -join "`n").TrimEnd()) }
+        if ($cur) { $destination.Add(($cur -join "`n").TrimEnd()) }
     }
-    return [pscustomobject]@{ PullRequests = $lines.ToArray(); Issues = @($issues); TestTasks = $tasks.ToArray(); Count = $prs.Count
+    return [pscustomobject]@{ PullRequests = $lines.ToArray(); Issues = @($issues); TestTasks = $tasks.ToArray(); KnownIssues = $known.ToArray(); Count = $prs.Count
                               ReleaseNote = [Thornswood.ReleaseNotes.PrNote]::Join($noted.ToArray()); NoNote = $noNote.ToArray() }
 }

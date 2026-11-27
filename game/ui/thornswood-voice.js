@@ -161,7 +161,7 @@
     launcher answers every request with its own state, and a slow poll keeps
     the capsule honest when nobody is pressing anything.
   */
-  var relay = { mic: false, peers: 0, talking: false };
+  var relay = { mic: false, silent: false, peers: 0, talking: false };
   var relayTimer = null;
 
   function relayAsk(path) {
@@ -172,6 +172,7 @@
         .then(function (s) {
           if (!s) return;
           relay.mic = !!s.mic;
+          relay.silent = !!s.silent;
           relay.peers = Number(s.peers) || 0;
           relay.talking = !!s.talking;
           draw();
@@ -220,6 +221,23 @@
   function selfHushed() {
     var me = lastWho[cfg.profileId];
     return !!(hushed[cfg.profileId] || (me && me.hush));
+  }
+  /*
+    Whether my voice is going out (#4773): the one test the microphone and
+    its indicator both read. The indicator used to work it out on its own
+    rules, so while staff had you silenced, holding push to talk still
+    pulsed it as if you were heard, and with push to talk off it sat at
+    resting while the microphone was open.
+
+    In relay mode the launcher's word is that it is sending, which already
+    leaves out a silence (VoiceSession.MicLive). The key held here counts as
+    well, so the indicator lights the moment the key goes down instead of a
+    status line later, and the silence is checked on that half too.
+  */
+  function voiceOut() {
+    if (selfHushed()) return false;
+    if (inRelay()) return !!(relay.mic && (relay.talking || talking));
+    return !!mic && (cfg.pushToTalk ? talking : true);
   }
   var conns = new Map();
   var waiting = null;
@@ -338,21 +356,35 @@
     var b = micOverlay();
     if (!b) return;
 
-    var live, usable;
+    var live = voiceOut(), usable, silent = false;
     if (inRelay()) {
       // The microphone is the launcher's. Asking this page whether it has one
       // is asking the wrong process, and the answer was always no.
       usable = !!relay.mic;
-      live = !!(relay.mic && (relay.talking || talking));
+      /*
+        MIC SILENT (#6470). The launcher has held the microphone open with
+        push to talk down for five seconds and got nothing but digital
+        silence, so what goes out is silence. On 19 Nov the lit capsule was
+        the only thing either side had to go on, and it was lit.
+      */
+      silent = usable && !!relay.silent;
     } else {
-      live = !!(mic && talking);
       usable = !!mic && !micError;
     }
+    // Silenced is its own state (#4773): the microphone itself tells a
+    // silenced person their voice is not going out. Nothing is sent, so
+    // whether the microphone hears anything does not matter then.
+    var silenced = usable && selfHushed();
+    if (silenced) { silent = false; }
 
-    var colour = live ? modeOf(myMode).colour   // going out, at this distance
+    var colour = silenced ? '#c0504d'           // staff have silenced you
+               : silent ? '#d0703c'             // open, but nothing in it
+               : live ? modeOf(myMode).colour   // going out, at this distance
                : usable ? '#cdc6b8'        // ready, nothing being sent
                : '#8d857a';                // cannot speak at all
-    var word = usable ? modeOf(myMode).label.toUpperCase() : 'LISTENING ONLY';
+    var word = silenced ? 'SILENCED'
+             : silent ? 'MIC SILENT'
+             : usable ? modeOf(myMode).label.toUpperCase() : 'LISTENING ONLY';
 
     /*
       ONLY WHAT CHANGED IS WRITTEN (#963). draw() comes here every 300 ms while
@@ -403,10 +435,15 @@
   }
 
   // ------------------------------------------------------------- the mic ----
+  /*
+    Draws in relay mode too: a staff silence or its end arrives here, and the
+    indicator has to show it whoever holds the microphone.
+  */
   function applyMic() {
-    if (!mic || inRelay()) return;
-    var live = (cfg.pushToTalk ? talking : true) && !selfHushed();
-    mic.getAudioTracks().forEach(function (t) { t.enabled = live; });
+    if (mic && !inRelay()) {
+      var live = voiceOut();
+      mic.getAudioTracks().forEach(function (t) { t.enabled = live; });
+    }
     draw();
   }
 
@@ -1334,8 +1371,9 @@
      * Arriving at all also says the launcher has the microphone, so this
      * switches the page into relay mode even when setLauncherPort never landed.
      */
-    setLauncherStatus: function (micOk, peers, sending, mode) {
+    setLauncherStatus: function (micOk, peers, sending, mode, silent) {
       relay.mic = !!micOk;
+      relay.silent = !!silent;
       relay.peers = Number(peers) || 0;
       relay.talking = !!sending;
       var m = String(mode || '').toLowerCase();

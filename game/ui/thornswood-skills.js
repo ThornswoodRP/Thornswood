@@ -227,7 +227,8 @@
       Hold it here sends /office hold <office> <hold>.
       Its buttons send the server's own lines through the chat line, the way
       the property page's Stop does: /office <court|steward|guard> <hold>
-      <pid> (Name) and -<pid> (Remove), /evict, /rent <gold>, /rent - and
+      <pid> (Name) and -<pid> (Remove), /evict, /rent <gold>, /rent -,
+      /office grant <pid> (Grant, at a free building, #6894) and
       /board move <hold>. The answers come back in the chat,
       and the page is written again.
 */
@@ -926,7 +927,11 @@
   */
   function fit() {
     try {
-      var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      // The one rule every panel scales by, with the text size (#4474), when
+      // the page has it (thornswood-scale.js); this panel's own otherwise.
+      var s = window.thornswoodScale
+        ? window.thornswoodScale.scaleFor(window.innerWidth, window.innerHeight, 1120, 700)
+        : Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
       if (!isFinite(s) || s < 1) s = 1;
       elPanel.style.transformOrigin = 'center center';
       elPanel.style.transform = 'scale(' + Math.min(s, 2.4).toFixed(3) + ')';
@@ -2907,7 +2912,19 @@
     }
     // Rent handed over in person (#3895): Rent paid beside each who owes, the clock untouched.
     owing.forEach(function (o) { officeRow(card, String(o.name || 'somebody'), rentOwedText(o), rentPaidButtons(o)); });
-    if (!d.by) return card;
+    if (!d.by) {
+      // A free building, granted to somebody in the world (#6894): it is theirs
+      // beside the one property they claim themselves.
+      var grant = Array.isArray(d.grant) ? d.grant : [];
+      if (grant.length) {
+        card.appendChild(el('div', 'desc', 'Grant it to somebody in the world. It is theirs beside the one property they claim themselves.'));
+        grant.forEach(function (p) {
+          officeRow(card, String(p.name || 'somebody'), '', [officeButton('Grant', '/office grant ' + (Number(p.pid) || 0),
+            'Press again to grant ' + String(d.name || 'it') + ' to ' + String(p.name || 'them'))]);
+        });
+      }
+      return card;
+    }
     officeRow(card, '', '', [officeButton('Evict', '/evict', 'Press again to end ' + d.by + '\'s claim')]);
     var input = document.createElement('input');
     input.setAttribute('aria-label', 'Weekly rent in gold');
@@ -4623,6 +4640,7 @@
     }
   };
 
+  api.fit = fit;
   window.thornswoodSkills = api;
   draw();
   tell('ready');

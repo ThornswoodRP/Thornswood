@@ -293,7 +293,7 @@ Category mode: open.
 
 | Channel | Kind | Mode | Sees | Talks | Notes |
 |---|---|---|---|---|---|
-| #choose-your-hold | text | testersread | everybody on staff, Playtester | the council | posts: the council; was #choose-your-hold in The Holds; topic: Pick your hold with the buttons below. It opens that hold's channels. |
+| #choose-your-hold | text | testersread | everybody on staff, Playtester | the council | posts: the council; was #choose-your-hold in The Holds; topic: Press a hold below to open its channels, and again to close them. Pick as many as you like. |
 | #character-introductions | forum | open | everybody on staff, Playtester | everybody on staff, Playtester | topic: Who are you playing? One post each. |
 | #tales | forum | open | everybody on staff, Playtester | everybody on staff, Playtester | topic: What happened out there. One post per story. |
 | #rp-appreciation | text | open | everybody on staff, Playtester | everybody on staff, Playtester | topic: Somebody played a blinder. Say so. |

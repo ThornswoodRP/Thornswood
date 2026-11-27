@@ -106,7 +106,7 @@ WHAT HOLDS A SPOT CLEAR, the same measure as the woodworking benches:
 WHAT IT READS. The collection's plugins in game\\data\\last-plugin.json's load
 order, from --data, and from the repository's Thornswood-Content.esp only the
 four station records: their bounds are the stations' outlines. It does not
-read Thornswood-Last.esp, and it checks that it places nothing new: only the town gates it unlocks,
+read Thornswood-Last.esp into its measurements. It confirms the plugin changes only in-place door access,
 the floor items it switches off and the hold-only plants and ores it switches off outside their
 hold (#3150), where they stand. It reads the benches' spots out of
 game\\data\\woodworking-benches.json and the boards' out of game\\gamemode.js.
@@ -218,6 +218,15 @@ KINDS = {
     # inside the game's reach of it, to press it.
     'study': {'base': 0x18032, 'edid': 'ThornswoodActivatorStudyDesk', 'name': 'study desk',
               'user': (-35.0, -110.0, 35.0, -50.0), 'flat': 8.0, 'reach': 900, 'step': 16},
+    # The inn's cooking pot (#6893) is Skyrim's own CraftingCookingPotSm, the
+    # pot every inn's cook already uses (the bench table maps it to
+    # CraftingCookpot), not a record of the content plugin. Its mesh,
+    # Furniture\SmallCookingPot.nif in Skyrim - Meshes0.bsa, has one furniture
+    # marker at its origin facing +y, entered from behind, read on 26 Nov 2026
+    # the way the smelter's and the lab's were: the cook stands where the lab's
+    # user does.
+    'cook': {'base': 0x1010B3, 'plugin': 'Skyrim.esm', 'edid': 'CraftingCookingPotSm', 'name': 'cooking pot',
+             'user': (-35.0, -55.0, 35.0, 8.0), 'flat': 8.0, 'reach': 600, 'step': 16},
 }
 
 RULES = {
@@ -251,6 +260,13 @@ RULES = {
               'Countenance, the Hall of Attainment and the Arcanaeum, beside the tables, or in the Hall of the '
               'Elements the benches, that the site names in that hall: a semester at the College is taken at a '
               'study desk in the College halls, not a command (Patrick, 22 October 2026, A on #1387; magic.md).'),
+    'cook': ('One in each inn that has no cooking station of its own (#6893): a room the game counts as an inn '
+             '(its location carries LocTypeInn) with no pot, spit or oven anybody can cook at. It stands beside '
+             'the room\'s own cooking scenery, or its fireplace where it has none, so a keeper can hire a cook '
+             'to work there (cook.md). Measured 26 Nov 2026 over the 33 inn rooms: only the New Gnisis '
+             'Cornerclub in Windhelm and North Keep\'s inn have none. A room in a cell of a plugin that is not '
+             'a master of the content plugin cannot take a placement there, so the server stands that pot at '
+             'start, the way it stands the woodworking benches (#516).'),
     'lab': ('One in the apothecary of each of the nine hold capitals, the shop Skyrim marks as a store that holds '
             'Skyrim\'s own alchemy lab, beside that lab; Winterhold has no apothecary in town, so the College\'s '
             'Hall of Countenance. The poultice and the remedy are made only at Thornswood\'s lab (physicker.md, '
@@ -390,6 +406,13 @@ SITES = {
     'well-28': {'kind': 'well', 'where': 'ImpWell01 in TrevasWatchExterior01', 'anchors': ['69f82:Skyrim.esm'], 'ref': 0x1811B},
     'well-29': {'kind': 'well', 'where': 'FarmBWell01 in WindhelmMarketplaceExterior', 'anchors': ['9283:JKs Skyrim.esp'], 'ref': 0x1811C},
     'well-30': {'kind': 'well', 'where': 'RTPlazaWell01 in bcd0:Skyrim.esm', 'anchors': ['10060d:Skyrim.esm'], 'ref': 0x1811D},
+    # Cooking pots (#6893): beside the room's own cooking scenery, or its
+    # fireplace. room: the inn's cell. stand: 'server' where the content
+    # plugin cannot place into that cell, which the builder checks.
+    'cook-newgnisis': {'kind': 'cook', 'where': 'the New Gnisis Cornerclub, Windhelm', 'room': '1677f:Skyrim.esm',
+                       'anchors': ['10e3a7:Skyrim.esm'], 'ref': 0x18160},
+    'cook-northkeep': {'kind': 'cook', 'where': 'the inn at North Keep', 'room': '3a988:North Keep.esp',
+                       'anchors': ['72c69:North Keep.esp'], 'ref': None, 'stand': 'server'},
 }
 
 # What a study desk's anchor is: the halls' own reading tables and benches
@@ -862,19 +885,13 @@ def main():
     if stop:
         print(stop)
         return 2
-    # Thornswood's two plugins after the content plugin place nothing new, so
-    # they are not read: measured here, not assumed. Thornswood-Last.esp's
-    # placed references are of two kinds, and neither is a station or moves:
-    # the town gates Bethesda ships locked (#2484), each a master's own
-    # reference left where it stands without its lock or script, which
-    # last-plugin.json names; and since #3077 the floor items it switches off,
-    # each a master's or a mod's own reference left where it stands, initially
-    # disabled, as many as last-plugin.json's floorItems.off, and since #3150
-    # the hold-only plants and ores it switches off outside their hold the
-    # same way, the ones its holdOnly.off lists. A switched-off item still
-    # counts here as something in the way, as it did before, so no spot
-    # changes. Anything else it placed would stop this.
-    gates = set(lo_doc.get('gatesUnlocked') or [])
+    # Last's verified door edits retain the placement and may disable an old
+    # bar. Measure the world as if the original obstacles were still present.
+    # Floor items and hold-only resources switched off by Last are counted
+    # separately. Any unaccounted placement stops the measurement.
+    door_fields = ('gatesUnlocked', 'riftwealdUnlocked', 'claimableDoorsUnlocked',
+                   'authoredDoorsUnlocked', 'authoredDoorsDirectActivation')
+    door_edits = {ref for key in door_fields for ref in (lo_doc.get(key) or [])}
     floor_off = int((lo_doc.get('floorItems') or {}).get('off') or 0) + len((lo_doc.get('holdOnly') or {}).get('off') or [])
     for n in OURS_AFTER:
         # Made in the Data folder from its recipe since #2791 (own_plugins.py).
@@ -882,19 +899,24 @@ def main():
         placed = []
         pl.walk(lambda tag, p, size, flags, fid, w, c: placed.append((fid, flags)) if tag == b'REFR' else None,
                 tops={b'WRLD', b'CELL'})
-        named, off = [], 0
+        named, off, seen_doors = [], 0, set()
         for fid, flags in placed:
             i = fid >> 24
             desc = '%x:%s' % (fid & 0xFFFFFF, pl.masters[i]) if i < len(pl.masters) else None
-            if n == 'Thornswood-Last.esp' and desc in gates:
+            if n == 'Thornswood-Last.esp' and desc in door_edits and not flags & DELETED:
+                seen_doors.add(desc)
                 continue
             if n == 'Thornswood-Last.esp' and desc and flags & DISABLED and not flags & DELETED:
                 off += 1
                 continue
             named.append(desc or '%08X (its own)' % fid)
         if named:
-            print('STOP. %s places %d reference(s) that are neither the town gates it unlocks nor floor items it '
-                  'switches off (%s); this table would have to read it.' % (n, len(named), ', '.join(named[:6])))
+            print('STOP. %s has %d unaccounted placed reference(s) (%s); this table would have to read it.'
+                  % (n, len(named), ', '.join(named[:6])))
+            return 1
+        if n == 'Thornswood-Last.esp' and seen_doors != door_edits:
+            print('STOP. %s is missing door edits recorded in last-plugin.json (%s); rebuild it first.'
+                  % (n, ', '.join(sorted(door_edits - seen_doors)[:6])))
             return 1
         if n == 'Thornswood-Last.esp' and off != floor_off:
             print('STOP. %s switches off %d floor item(s) or hold-only plant(s) and ore(s), and last-plugin.json '
@@ -907,12 +929,13 @@ def main():
 
     bases = {}
     for kind, k in KINDS.items():
-        b = world.bases.get((OWN, k['base']))
-        if not b or b[1] != k['edid'] or b[4] != CONTENT or not b[2]:
-            print('STOP. %x:%s is not %s in %s' % (k['base'], CONTENT, k['edid'], CONTENT))
+        src = k.get('plugin', CONTENT)
+        b = world.bases.get((src.lower(), k['base']))
+        if not b or b[1] != k['edid'] or b[4] != src or not b[2]:
+            print('STOP. %x:%s is not %s in %s' % (k['base'], src, k['edid'], src))
             return 1
         bases[kind] = b
-    station_bases = {(OWN, k['base']) for k in KINDS.values()}
+    station_bases = {(k.get('plugin', CONTENT).lower(), k['base']) for k in KINDS.values()}
 
     harvests = json.load(io.open(os.path.join(ROOT, 'game', 'data', 'harvests.json'), encoding='utf-8'))
     CROPS.update(key_of(c) for c in harvests['crops'])
@@ -1020,8 +1043,8 @@ def main():
         row = {
             'kind': s['kind'],
             'where': s['where'],
-            'ref': '%x:%s' % (s['ref'], CONTENT),
-            'base': '%x:%s' % (KINDS[s['kind']]['base'], CONTENT),
+            'ref': '%x:%s' % (s['ref'], CONTENT) if s.get('ref') is not None else None,
+            'base': '%x:%s' % (KINDS[s['kind']]['base'], KINDS[s['kind']].get('plugin', CONTENT)),
             'anchor': world.desc(k),
             'anchorEdid': b[1] if b else '',
             'anchorRecordFrom': r['by'],
@@ -1049,6 +1072,19 @@ def main():
                 row[f] = s[f]
         if space[0] == 'world':
             row['worldCopy'] = gate.judge(b'WRLD', space[1])[1]
+        if s.get('stand') == 'server':
+            # The server moves a new reference into a cell only next to one it
+            # already has there (property.ts, standStation): the furniture of
+            # the room nearest the spot, a reference the server loads.
+            near_furn = sorted((math.hypot(v['pos'][0] - x, v['pos'][1] - y), world.desc(fk))
+                               for fk, v in scan.refs.items()
+                               if v['space'] == space and usable(v) and fk[0] != OWN and
+                               (world.bases.get(v['base']) or ('',))[0] == 'FURN')
+            if not near_furn:
+                fails.append('%s: no furniture in %s for the server to stand it beside' % (site, world.desc(ck)))
+                continue
+            row['standBy'] = 'server'
+            row['beside'] = near_furn[0][1]
         rows[site] = row
         print(say + '%-26s %-16s at %s turned %s, %d from its anchor, ground %.0f to %.0f, nearest %s %d%s'
               % ((b[1] if b else '?')[:26], row['cellEdid'][:16] or row['cell'], row['pos'], row['angle'],
@@ -1073,7 +1109,7 @@ def main():
                     'content plugin places them.'),
         'readFrom': ('game/data/last-plugin.json loadOrder, the collection\'s bytes; from %s only its four station '
                      'records; %s place nothing' % (CONTENT, ' and '.join(OURS_AFTER))),
-        'kinds': {kind: {'base': '%x:%s' % (k['base'], CONTENT), 'edid': k['edid'], 'name': k['name'],
+        'kinds': {kind: {'base': '%x:%s' % (k['base'], k.get('plugin', CONTENT)), 'edid': k['edid'], 'name': k['name'],
                          'bounds': list(bases[kind][2]), 'user': list(k['user']), 'flat': k['flat'],
                          'reach': k['reach'], 'rule': RULES[kind], 'count': counts.get(kind, 0),
                          'amongPlants': bool(k.get('plants')), 'setIntoRock': bool(k.get('embedded'))}
@@ -1190,6 +1226,16 @@ def anchors_for(site, s, world, first, benches):
                 return '%s is not one of Skyrim\'s alchemy labs' % a
             if r['space'][0] != 'cell':
                 return 'the lab %s is not indoors' % a
+            out.append((key_of(a), r))
+        return out
+    if kind == 'cook':
+        out = []
+        for a in s['anchors']:
+            r = first.refs.get(key_of(a))
+            if not r or not usable(r):
+                return 'the anchor %s is not placed, or is switched off or has an enable parent' % a
+            if r['space'] != ('cell', key_of(s['room'])):
+                return 'the anchor %s is not in the inn %s' % (a, s['room'])
             out.append((key_of(a), r))
         return out
     if kind == 'study':
@@ -1355,6 +1401,13 @@ def search(s, kind, r, world, scan, gate, benches, boards, taken, ob, skip):
             continue
         ck = cell_at(world, space[1], x, y) if space[0] == 'world' else space[1]
         ok, words = gate.judge(b'CELL', ck)
+        if s.get('stand') == 'server':
+            # The server stands it (#6893), and only because the plugin cannot:
+            # measured here, so a cell the plugin could take gets the plugin's.
+            if ok or not words.endswith('which is not a master of the content plugin'):
+                return ('the server stands it only where the content plugin cannot place, and %s: %s'
+                        % (world.desc(ck), words))
+            ok, words = True, 'stood by the server at start: %s' % words
         if not ok:
             say_no('its cell %s: %s' % (world.desc(ck), words))
             continue

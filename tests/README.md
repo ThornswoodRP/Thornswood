@@ -1,5 +1,10 @@
 # The test harnesses
 
+Run `node game/tests/test-7071-riften-gate-claim.js` for claiming Riften's
+existing gates from either side, the normal deed and holder flow, safe inside
+egress, active guard cell controls and unrelated door mappings. It executes the actual
+door-map and property sources against an isolated engine and storage fixture.
+
 Run `python tests/claimable-door-unlocks-cases.py` for the four individually
 reviewed authored-lock records. These controls use synthetic plugin fixtures,
 the actual door-table builder, record reader/writer and recipe reconstruction.
@@ -351,4 +356,6 @@ to Chrome's own: the driver's `--hrtf` tool renders a signal through it, and
 `tests\chrome-audio.js` renders the same signal through a PannerNode in a
 headless Chrome over the DevTools protocol, with node's own WebSocket and no
 packages. `chrome-audio.js` finds Chrome on its own (CHROME names one); with
-none on the machine those checks say SKIP.
+none on the machine those checks say SKIP. Its cost check reads the bench
+thread's own CPU clock, not a wall clock, so other harnesses busy on the same
+cores don't count against the mix (#5654).

@@ -1,5 +1,5 @@
 {
-  "about": "Test tasks one character can check by itself on the dev server (#5197). The steps up to the world are dev-release.json's; after them each step carries its test task's issue, and a failing step fails only its own task. Run it with Run-RealClient.ps1 -Steps tests\\real-client\\test-tasks.json.",
+  "about": "Test tasks one character can check by itself on the dev server (#5197). The steps up to the world are dev-release.json's; after them each step carries its test task's issue, and a failing step fails only its own task. The mining task (#4549) goes to the Iron-Breaker Mine and leaves the character there. The tidy steps at the end throw away the scratch journals the journal tasks made. Run it with Run-RealClient.ps1 -Steps tests\\real-client\\test-tasks.json.",
   "steps": [
     {
       "do": "page",
@@ -130,6 +130,55 @@
     },
     {
       "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 6408,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 6408
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 6408,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "key",
       "code": 16,
       "task": 6408,
       "why": "Q, the favourites"
@@ -171,6 +220,55 @@
     {
       "do": "key",
       "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 5122,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 5122
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 5122,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "key",
+      "code": 1,
       "task": 5122,
       "why": "Escape"
     },
@@ -208,6 +306,55 @@
       "open": false,
       "timeout": 10000,
       "task": 5122
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 6428,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 6428
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 6428,
+      "why": "and our journal shut, if a step before left it open"
     },
     {
       "do": "key",
@@ -278,6 +425,55 @@
       "task": 6428
     },
     {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 6476,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 6476
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 6476,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
       "do": "page",
       "js": "(function(){if(window.__tsDice){return 'sent';}var n=window.thornswoodNet;if(!n||!n.typed||!n.state().joined){return '';}['/roll 1d20','/roll 3d6','/roll 6x3','/roll 101d6','/roll 1d1001','/roll 1d20x3'].forEach(function(l){n.typed(l);});window.__tsDice=1;return 'sent';})()",
       "timeout": 30000,
@@ -295,6 +491,684 @@
       "do": "shot",
       "name": "dice",
       "task": 6476
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 2135,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 2135
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 2135,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal,v=window.thornswoodSocialView;if(!J||!v||!Array.isArray(v.journals)){return '';}var H=window.__tsJH={mine:function(){var w=window.thornswoodSocialView;return (w&&w.journals)||[];},book:function(id){return H.mine().filter(function(b){return b.id===id;})[0]||null;},page:function(id,pid){var b=H.book(id);return b?(b.pages.filter(function(p){return p.id===pid;})[0]||null):null;},made:function(){var b=window.__tsJB||[];return H.mine().filter(function(x){return b.indexOf(x.id)<0;});},q:function(sel){return document.querySelector('#ts-journal '+sel);},pick:function(id){var e=H.q('#ts-journal-side button[data-book=\"'+id+'\"]');if(e){e.click();}return !!e;},act:function(verb){return H.q('button[data-do=\"'+verb+'\"]');}};if(!window.__tsJB){window.__tsJB=v.journals.map(function(b){return b.id;});}if(window.__tsJB.length>9){return '!the character has '+window.__tsJB.length+' journals and a character holds 12, so three scratch ones do not fit';}if(J.isOpen()){J.close();}return J.isOpen()?'':'journals before: '+window.__tsJB.length;})()",
+      "timeout": 20000,
+      "task": 2135,
+      "why": "the journal's helpers, the journals the character had before the run, and the journal shut, so the run can tell its own journals from the character's"
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "task": 2135,
+      "why": "J"
+    },
+    {
+      "do": "page",
+      "js": "window.thornswoodJournal.isOpen()?'open':''",
+      "timeout": 10000,
+      "task": 2135
+    },
+    {
+      "do": "page",
+      "js": "(function(){if(!window.__ts2135a){var n=window.__tsJH.q('button[data-new]');if(!n){return '';}window.__ts2135a=Date.now();n.click();}return 'pressed';})()",
+      "timeout": 10000,
+      "task": 2135,
+      "why": "New journal pressed once"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 4000,
+      "task": 2135,
+      "why": "longer than the panel's 3 s wait for an answer"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var m=window.__tsJH.made();return m.length===1?'one new journal':'!'+m.length+' new journals';})()",
+      "timeout": 3000,
+      "task": 2135,
+      "why": "exactly one journal more"
+    },
+    {
+      "do": "shot",
+      "name": "journal-new-once",
+      "task": 2135
+    },
+    {
+      "do": "page",
+      "js": "(function(){if(!window.__ts2135b){var H=window.__tsJH,n=H.q('button[data-new]');if(!n){return '';}window.__ts2135b=Date.now();n.click();setTimeout(function(){var n2=H.q('button[data-new]');if(n2){n2.click();}window.__ts2135c=Date.now();},300);}return 'pressed';})()",
+      "timeout": 10000,
+      "task": 2135,
+      "why": "New journal pressed twice, 300 ms apart, as a quick double press"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 6000,
+      "task": 2135,
+      "why": "both answers, and the panel's wait run out twice over"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var m=window.__tsJH.made(),gap=(window.__ts2135c||0)-(window.__ts2135b||0);return m.length===3?'three new journals, the presses '+gap+' ms apart':'!'+m.length+' new journals after the presses '+gap+' ms apart, not 3';})()",
+      "timeout": 3000,
+      "task": 2135,
+      "why": "two more, one for each press"
+    },
+    {
+      "do": "shot",
+      "name": "journal-new-twice",
+      "task": 2135
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 5429,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 5429
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 5429,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal,v=window.thornswoodSocialView;if(!J||!v||!Array.isArray(v.journals)){return '';}var H=window.__tsJH={mine:function(){var w=window.thornswoodSocialView;return (w&&w.journals)||[];},book:function(id){return H.mine().filter(function(b){return b.id===id;})[0]||null;},page:function(id,pid){var b=H.book(id);return b?(b.pages.filter(function(p){return p.id===pid;})[0]||null):null;},made:function(){var b=window.__tsJB||[];return H.mine().filter(function(x){return b.indexOf(x.id)<0;});},q:function(sel){return document.querySelector('#ts-journal '+sel);},pick:function(id){var e=H.q('#ts-journal-side button[data-book=\"'+id+'\"]');if(e){e.click();}return !!e;},act:function(verb){return H.q('button[data-do=\"'+verb+'\"]');}};if(!window.__tsJB){window.__tsJB=v.journals.map(function(b){return b.id;});}if(window.__tsJB.length>9){return '!the character has '+window.__tsJB.length+' journals and a character holds 12, so three scratch ones do not fit';}if(J.isOpen()){J.close();}return J.isOpen()?'':'journals before: '+window.__tsJB.length;})()",
+      "timeout": 20000,
+      "task": 5429,
+      "why": "the journal's helpers, the journals the character had before the run, and the journal shut, then a scratch page"
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "task": 5429,
+      "why": "J"
+    },
+    {
+      "do": "page",
+      "js": "window.thornswoodJournal.isOpen()?'open':''",
+      "timeout": 10000,
+      "task": 5429
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,m=H.made();if(!m.length){if(!window.__ts5429n){var n=H.q('button[data-new]');if(n){window.__ts5429n=1;n.click();}}return '';}var b=m[0]||m[0];if(!window.__ts5429){window.__ts5429={book:b.id,pages:b.pages.map(function(p){return p.id;})};}var s=window.__ts5429;H.pick(s.book);var d=H.q('#ts-journal-discard');if(d&&!d.closest('[hidden]')){d.click();return '';}return H.act('newpage')?'journal '+s.book:'';})()",
+      "timeout": 15000,
+      "task": 5429,
+      "why": "a scratch journal the run made"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,s=window.__ts5429;if(!s.np){s.np=1;H.act('newpage').click();}var b=H.book(s.book);var p=b&&b.pages.filter(function(x){return s.pages.indexOf(x.id)<0;})[0];if(!p){return '';}s.page=p.id;var e=H.q('button[data-page=\"'+p.id+'\"]');if(!e){return '';}e.click();return H.q('#ts-journal-text')?'page '+p.id:'';})()",
+      "timeout": 15000,
+      "task": 5429,
+      "why": "New page, and that page opened"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,s=window.__ts5429;if(!s.saved){s.T='Two  spaces';var t=H.q('#ts-journal-text'),pt=H.q('#ts-journal-ptitle');if(!t||!pt){return '';}pt.value=\"Spaces 5429\";pt.dispatchEvent(new Event('input'));t.value=s.T;t.dispatchEvent(new Event('input'));H.act('save').click();s.saved=1;}var a=window.thornswoodSocialView.journalSave,p=H.page(s.book,s.page);if(!a||a.pageId!==s.page){return '';}if(a.status!=='saved'){return '!the save came back '+a.status;}return p&&p.text===s.T?'saved as '+JSON.stringify(p.text):'!saved as '+JSON.stringify(p&&p.text).slice(0,200);})()",
+      "timeout": 15000,
+      "task": 5429,
+      "why": "the page written into the box and saved with Save"
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "task": 5429,
+      "why": "J again shuts it"
+    },
+    {
+      "do": "page",
+      "js": "window.thornswoodJournal.isOpen()?'':'shut'",
+      "timeout": 10000,
+      "task": 5429
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "task": 5429,
+      "why": "and J opens it again"
+    },
+    {
+      "do": "page",
+      "js": "window.thornswoodJournal.isOpen()?'open':''",
+      "timeout": 10000,
+      "task": 5429
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,s=window.__ts5429;H.pick(s.book);var e=H.q('button[data-page=\"'+s.page+'\"]');if(!e){return '';}e.click();var t=H.q('#ts-journal-text');if(!t){return '';}return t.value===s.T?'reads '+JSON.stringify(t.value):'!the page reads '+JSON.stringify(t.value).slice(0,200);})()",
+      "timeout": 10000,
+      "task": 5429,
+      "why": "the page opened again reads as it was written"
+    },
+    {
+      "do": "shot",
+      "name": "journal-two-spaces",
+      "task": 5429
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,s=window.__ts5429,p=H.page(s.book,s.page);if(!p){return '';}if(!s.again){s.at=p.at;s.again=1;H.act('save').click();}if(p.at===s.at){return '';}return p.text===s.T?'saved again as '+JSON.stringify(p.text):'!saved again as '+JSON.stringify(p.text);})()",
+      "timeout": 15000,
+      "task": 5429,
+      "why": "Save once more, and the page still starts with its first word"
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 2563,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 2563
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 2563,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal,v=window.thornswoodSocialView;if(!J||!v||!Array.isArray(v.journals)){return '';}var H=window.__tsJH={mine:function(){var w=window.thornswoodSocialView;return (w&&w.journals)||[];},book:function(id){return H.mine().filter(function(b){return b.id===id;})[0]||null;},page:function(id,pid){var b=H.book(id);return b?(b.pages.filter(function(p){return p.id===pid;})[0]||null):null;},made:function(){var b=window.__tsJB||[];return H.mine().filter(function(x){return b.indexOf(x.id)<0;});},q:function(sel){return document.querySelector('#ts-journal '+sel);},pick:function(id){var e=H.q('#ts-journal-side button[data-book=\"'+id+'\"]');if(e){e.click();}return !!e;},act:function(verb){return H.q('button[data-do=\"'+verb+'\"]');}};if(!window.__tsJB){window.__tsJB=v.journals.map(function(b){return b.id;});}if(window.__tsJB.length>9){return '!the character has '+window.__tsJB.length+' journals and a character holds 12, so three scratch ones do not fit';}if(J.isOpen()){J.close();}return J.isOpen()?'':'journals before: '+window.__tsJB.length;})()",
+      "timeout": 20000,
+      "task": 2563,
+      "why": "the journal's helpers, the journals the character had before the run, and the journal shut, then a scratch page"
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "task": 2563,
+      "why": "J"
+    },
+    {
+      "do": "page",
+      "js": "window.thornswoodJournal.isOpen()?'open':''",
+      "timeout": 10000,
+      "task": 2563
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,m=H.made();if(!m.length){if(!window.__ts2563n){var n=H.q('button[data-new]');if(n){window.__ts2563n=1;n.click();}}return '';}var b=m[2]||m[0];if(!window.__ts2563){window.__ts2563={book:b.id,pages:b.pages.map(function(p){return p.id;})};}var s=window.__ts2563;H.pick(s.book);var d=H.q('#ts-journal-discard');if(d&&!d.closest('[hidden]')){d.click();return '';}return H.act('newpage')?'journal '+s.book:'';})()",
+      "timeout": 15000,
+      "task": 2563,
+      "why": "a scratch journal the run made"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,s=window.__ts2563;if(!s.np){s.np=1;H.act('newpage').click();}var b=H.book(s.book);var p=b&&b.pages.filter(function(x){return s.pages.indexOf(x.id)<0;})[0];if(!p){return '';}s.page=p.id;var e=H.q('button[data-page=\"'+p.id+'\"]');if(!e){return '';}e.click();return H.q('#ts-journal-text')?'page '+p.id:'';})()",
+      "timeout": 15000,
+      "task": 2563,
+      "why": "New page, and that page opened"
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,s=window.__ts2563;if(!s.saved){s.T=(function(){var w='First paragraph.',i=0;while(w.length<2990){w+=(i%40===39?'\\n\\n':' ')+'word'+i;i++;}return w+' Last word.';})();var t=H.q('#ts-journal-text'),pt=H.q('#ts-journal-ptitle');if(!t||!pt){return '';}pt.value=\"Long 2563\";pt.dispatchEvent(new Event('input'));t.value=s.T;t.dispatchEvent(new Event('input'));H.act('save').click();s.saved=1;}var a=window.thornswoodSocialView.journalSave,p=H.page(s.book,s.page);if(!a||a.pageId!==s.page){return '';}if(a.status!=='saved'){return '!the save came back '+a.status;}return p&&p.text===s.T?'saved, '+p.text.length+' characters':'!saved as '+JSON.stringify(p&&p.text).slice(0,200);})()",
+      "timeout": 15000,
+      "task": 2563,
+      "why": "the page written into the box and saved with Save"
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "task": 2563,
+      "why": "J again shuts it"
+    },
+    {
+      "do": "page",
+      "js": "window.thornswoodJournal.isOpen()?'':'shut'",
+      "timeout": 10000,
+      "task": 2563
+    },
+    {
+      "do": "key",
+      "code": 36,
+      "task": 2563,
+      "why": "and J opens it again"
+    },
+    {
+      "do": "page",
+      "js": "window.thornswoodJournal.isOpen()?'open':''",
+      "timeout": 10000,
+      "task": 2563
+    },
+    {
+      "do": "page",
+      "js": "(function(){var H=window.__tsJH,s=window.__ts2563;H.pick(s.book);var e=H.q('button[data-page=\"'+s.page+'\"]');if(!e){return '';}e.click();var t=H.q('#ts-journal-text');if(!t){return '';}return t.value===s.T?'reads whole, '+t.value.length+' characters, to '+JSON.stringify(t.value.slice(-10)):'!the page reads '+JSON.stringify(t.value).slice(0,200);})()",
+      "timeout": 10000,
+      "task": 2563,
+      "why": "the page opened again reads as it was written"
+    },
+    {
+      "do": "shot",
+      "name": "journal-long-page",
+      "task": 2563
+    },
+    {
+      "do": "page",
+      "js": "(function(){var t=window.__tsJH.q('#ts-journal-text');if(!t){return '';}if(t.maxLength!==4000){return '!the box holds '+t.maxLength;}t.focus();t.select();var long=new Array(4101).join('x');if(!document.execCommand('insertText',false,long)){return '!the paste was refused';}return t.value.length===4000?'a 4,100 character paste stops at '+t.value.length:'!a 4,100 character paste left '+t.value.length;})()",
+      "timeout": 5000,
+      "task": 2563,
+      "why": "a paste of 4,100 characters stops at 4,000, the way typing does"
+    },
+    {
+      "do": "shot",
+      "name": "journal-page-full",
+      "task": 2563,
+      "why": "the full box and the foot"
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 4549,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 4549
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 4549,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "page",
+      "task": 4549,
+      "timeout": 30000,
+      "why": "a Miner at Novice (the seam asks for the class), then to the Iron-Breaker Mine in Dawnstar, a working town mine with no one hostile; each line said once",
+      "js": "(function(){if(window.__tsMineTp){return 'sent';}var n=window.thornswoodNet;if(!n||!n.say){return '';}n.say('/setclass miner',{quiet:true});n.say('/tp Iron-Breaker Mine',{quiet:true});window.__tsMineTp=1;return 'sent';})()"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 30000,
+      "task": 4549,
+      "why": "the trip"
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "task": 4549
+    },
+    {
+      "do": "wait",
+      "for": "cell",
+      "name": "Iron-Breaker",
+      "in": false,
+      "timeout": 3000,
+      "skip": 4,
+      "task": 4549,
+      "why": "/tp prefers a building's street door; if it put the character inside, the door's four steps are skipped"
+    },
+    {
+      "do": "face",
+      "what": "door",
+      "task": 4549,
+      "why": "the mine's door, the nearest one to where /tp put the character"
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E, through the door"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 30000,
+      "task": 4549
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "task": 4549
+    },
+    {
+      "do": "wait",
+      "for": "cell",
+      "name": "Iron-Breaker",
+      "timeout": 30000,
+      "task": 4549,
+      "why": "inside the mine"
+    },
+    {
+      "do": "equip",
+      "form": "0E3C16",
+      "give": "/give pickaxe",
+      "draw": true,
+      "timeout": 30000,
+      "task": 4549,
+      "why": "the pickaxe from the pack, given once if there is none, equipped and drawn: the 23 Nov failure began with it drawn"
+    },
+    {
+      "do": "face",
+      "what": "vein",
+      "task": 4549,
+      "why": "the nearest ore seam, the crosshair on it"
+    },
+    {
+      "do": "shot",
+      "name": "mine-seam-drawn",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E on the seam with the pickaxe drawn: the spell starts"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 6000,
+      "task": 4549,
+      "why": "a few swings"
+    },
+    {
+      "do": "shot",
+      "name": "mining-drawn",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E again puts the pick down, as the gamemode has it"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 2000,
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 57,
+      "task": 4549,
+      "why": "Space, a jump"
+    },
+    {
+      "do": "watch",
+      "what": "jump",
+      "ms": 1500,
+      "label": "after mining from drawn",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 56,
+      "task": 4549,
+      "hold": 2000,
+      "why": "Alt held with W for two seconds, a sprint",
+      "with": [
+        17
+      ]
+    },
+    {
+      "do": "watch",
+      "what": "sprint",
+      "ms": 300,
+      "label": "after mining from drawn",
+      "task": 4549
+    },
+    {
+      "do": "shot",
+      "name": "after-mining-drawn",
+      "task": 4549
+    },
+    {
+      "do": "sheathe",
+      "timeout": 10000,
+      "task": 4549,
+      "why": "the pickaxe put away, for the comparison"
+    },
+    {
+      "do": "face",
+      "what": "vein",
+      "task": 4549,
+      "why": "the seam again"
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E on the seam with the pickaxe sheathed"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 6000,
+      "task": 4549
+    },
+    {
+      "do": "shot",
+      "name": "mining-sheathed",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E puts the pick down"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 2000,
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 57,
+      "task": 4549
+    },
+    {
+      "do": "watch",
+      "what": "jump",
+      "ms": 1500,
+      "label": "after mining from sheathed",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 56,
+      "task": 4549,
+      "hold": 2000,
+      "with": [
+        17
+      ]
+    },
+    {
+      "do": "watch",
+      "what": "sprint",
+      "ms": 300,
+      "label": "after mining from sheathed",
+      "task": 4549
+    },
+    {
+      "do": "shot",
+      "name": "after-mining-sheathed",
+      "task": 4549
+    },
+    {
+      "do": "page",
+      "tidy": true,
+      "js": "(function(){var H=window.__tsJH;if(!H){return 'nothing made';}var J=window.thornswoodJournal;if(!J.isOpen()){J.open();}var m=H.made();if(!m.length){return 'the scratch journals are thrown away';}var gone=window.__tsJGone=window.__tsJGone||{};var d=H.q('#ts-journal-discard');if(d&&!d.closest('[hidden]')){d.click();return '';}var b=m.filter(function(x){return !gone[x.id];})[0];if(!b){return '';}H.pick(b.id);var e=H.q('#ts-journal-side button[data-book=\"'+b.id+'\"]');if(!e||e.className.indexOf('sel')<0){return '';}var t=H.act('dropbook');if(!t){return '';}t.click();t.click();var d2=H.q('#ts-journal-discard');if(d2&&!d2.closest('[hidden]')){d2.click();}gone[b.id]=1;return '';})()",
+      "timeout": 20000,
+      "why": "the run's scratch journals thrown away"
+    },
+    {
+      "do": "page",
+      "tidy": true,
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "why": "the journal shut"
     },
     {
       "do": "end"

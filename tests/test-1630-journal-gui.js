@@ -411,6 +411,9 @@ function parse(html) {
       buttons('remove').length === 1 && buttons('setrole').length === 0 && buttons('perm').length === 0 &&
       buttons('rolenew').length === 0);
   root.querySelector('#ts-journal-gwho').value = 'M5';
+  const beforeMemberRemoval = sent.length;
+  press(buttons('remove')[0]);
+  yes('E15a: Remove first names its target and sends nothing', sent.length === beforeMemberRemoval && /again/.test(buttons('remove')[0].textContent));
   yes('E15: and Remove names who', press(buttons('remove')[0]) === '/book member g1 remove | M5');
   yes('E16: a member can leave on the tab', press(buttons('leave')[0]) === '/book leave g1');
 

@@ -33,6 +33,12 @@
 //      the build jobs' runners and the environment, never its triggers,
 //      concurrency, tested jobs, conditions or the steps after the gate; a
 //      traced tree with no shape runs the whole gate as before.
+//   8. over a content build of other inputs (stale), a harness the map
+//      cannot clear is held back when its text names a file the build
+//      writes, or a folder the build writes into that git holds nothing in
+//      (#6893: test-5191-gamemode-tables.js lists game/gamemode-tables and
+//      ran over the old build when a pull request added a table); a folder
+//      git holds files in, such as game/data, is not enough.
 'use strict';
 const path = require('path');
 const REPO = path.join(__dirname, '..');
@@ -300,6 +306,23 @@ try {
     fs.writeFileSync(lf, noCount.join('\n') + '\n');
     yes('  a run from before the passing lines were counted keeps it on Windows', A.platforms(wf, lf, '').harnesses['test-a.js'].linux === false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
+// 8. the content checks over a build of other inputs (#6893)
+{
+  const tables = 'game/tests/test-5191-gamemode-tables.js';
+  const other = 'tests/test-1374-letters.js'; // names game/data, and no file the build below writes
+  const cmap = { format: 1, commit: BASE, harnesses: {} };
+  cmap.harnesses[tables] = { always: 'asks git about the tree' };
+  cmap.harnesses[other] = { always: 'asks git about the tree' };
+  const tree = (o) => new Map(Object.entries(Object.assign({ 'game/gamemode.js': '100644 1', 'game/data/food.json': '100644 2', 'scripts/dev/Build-X.py': '100644 3' }, o || {})));
+  const base = tree(), head = tree({ 'scripts/dev/Build-X.py': '100644 4' });
+  const r = A.staleChecks(cmap, [tables, other], base, head, ['game/gamemode-tables/NEW_TABLE.json', 'game/data/food.json'], ['scripts/dev']);
+  yes('a harness that names a folder all of build is held back over a build of other inputs (' + (r.why[tables] || 'not held') + ')',
+      r.run.indexOf(tables) >= 0 && /names game\/gamemode-tables, which the build writes/.test(r.why[tables]));
+  yes('  one that names only a folder git holds files in is not (' + (r.why[other] || 'not held') + ')', r.run.indexOf(other) < 0);
+  const same = A.staleChecks(cmap, [tables], base, base, ['game/gamemode-tables/NEW_TABLE.json'], ['scripts/dev']);
+  yes('  and with no input changed nothing is held', same.run.length === 0 && same.changed === 0);
 }
 
 console.log(pass + ' passed, ' + fail + ' failed');

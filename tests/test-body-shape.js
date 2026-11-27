@@ -31,14 +31,11 @@
   slider is one of those three, and none of the four files is in a folder
   refreshed under Rules 9. Anywhere else that part says SKIP.
 
-  THE PERSON'S OWN GAME. The "body shape" block is lifted out of
-  thornswood-front.js and run against a pretend Skyrim Platform with a
-  pretend NiOverride. While the race menu is up it takes every change off the
-  breast, seat and genital bones RaceMenu's own sliders move, clears body
-  morphs, and leaves the height on the root bone and the head alone; out of
-  the menu it looks every ten seconds, which is what takes a changed body off
-  a character made before; with no NiOverride it does nothing and says so
-  once.
+  THE MENU'S OWN SLIDERS. RaceMenu's own breast and glute sliders, and
+  XPMSE's bone scales, cannot be left out by file, so the launcher's edit of
+  RaceMenu's menu puts only Height on of the sliders Papyrus adds (#7087).
+  The builder and the recipe carry that edit, and the front plugin no longer
+  has the loop that took those changes back off.
 
   Read only, apart from asking PowerShell what Ship-Rules.ps1 answers.
 */
@@ -322,142 +319,30 @@ if (!names.length) {
   }
 }
 
-// ======================================================= the person's game ==
+// ==================================================== the menu's own sliders ==
 
-const frFrom = front.indexOf('  const BODY_NODES = [');
-const frEndMark = "\n  }));\n";
-const frHandler = frFrom < 0 ? -1 : front.indexOf("sp.on('update', guard('body shape', () => {", frFrom);
-const frEnd = frHandler < 0 ? -1 : front.indexOf(frEndMark, frHandler);
-const frBlock = frFrom < 0 || frEnd < 0 ? null : front.slice(frFrom, frEnd + frEndMark.length);
-yes('the "body shape" block is in the front plugin', frBlock !== null);
-yes('and its note names what the launcher leaves out and why the rest is undone here',
-    /OwnGame\.BodyShapeFiles/.test(front) && /beside Height, which stays/.test(front));
-
-// RaceMenu's own body sliders, read out of RaceMenuPlugin.psc in RaceMenu.bsa
-// (RaceMenu Anniversary Edition 0.4.20) on 28 September: the nodes its
-// breast, breast curve and glute sliders scale, and the two it must not lose.
-const RACEMENU_BODY = ['NPC L Breast', 'NPC R Breast', 'NPC L Breast01', 'NPC R Breast01', 'NPC L Butt', 'NPC R Butt'];
-const RACEMENU_KEEP = ['NPC', 'NPC Head [Head]'];
-
-function game(opts) {
-  const calls = [];
-  const logs = [];
-  const handlers = [];
-  let now = 1000;
-  const state = { menu: false, morphs: opts.morphs || [], keys: opts.keys || {} };
-  const pc = { getActorBase: function () { return { getSex: function () { return opts.female ? 1 : 0; } }; } };
-  const sp = {
-    Game: { getPlayer: function () { return pc; } },
-    on: function (ev, fn) { handlers.push({ ev: ev, fn: fn }); },
-    callNative: function (cls, fn, self) {
-      const a = Array.prototype.slice.call(arguments, 3);
-      calls.push({ cls: cls, fn: fn, self: self, args: a });
-      if (opts.noSkee) { throw new Error('Unable to find NiOverride.' + fn); }
-      if (cls !== 'NiOverride') { throw new Error('not faked: ' + cls); }
-      const k = function () { return (a[1] ? '1' : '3') + '|' + a[3]; };
-      switch (fn) {
-        case 'GetMorphNames': return state.morphs.slice();
-        case 'ClearMorphs': state.morphs = []; return undefined;
-        case 'UpdateModelWeight': return undefined;
-        case 'GetNodeTransformKeys': return (state.keys[k()] || []).slice();
-        case 'RemoveNodeTransformScale': {
-          const list = state.keys[k()] || [];
-          state.keys[k()] = list.filter(function (x) { return x !== a[4]; });
-          return true;
-        }
-        case 'RemoveNodeTransformPosition': case 'RemoveNodeTransformRotation': case 'UpdateNodeTransform':
-          return true;
-      }
-      throw new Error('not faked: ' + fn);
-    },
-  };
-  const ctx = {
-    sp: sp,
-    log: function () { logs.push(Array.prototype.join.call(arguments, ' ')); },
-    guard: function (name, fn) { return fn; },
-    raceMenuOpen: function () { return state.menu; },
-    Date: { now: function () { return now; } },
-    Array: Array,
-  };
-  vm.createContext(ctx);
-  vm.runInContext(frBlock + '\n;this.__reset = bodyShapeReset; this.__nodes = BODY_NODES;', ctx);
-  const upd = handlers.filter(function (h) { return h.ev === 'update'; });
-  return {
-    calls: calls, logs: logs, state: state, nodes: ctx.__nodes, reset: ctx.__reset,
-    frame: function () { upd.forEach(function (h) { h.fn(); }); },
-    at: function (t) { now = t; },
-    updates: upd.length,
-  };
-}
-
-if (frBlock !== null) {
-  const g0 = game({});
-  yes('it registers one update handler', g0.updates === 1);
-  yes('its bones cover every body slider RaceMenu itself shows (breast, breast curve, glute)',
-      RACEMENU_BODY.every(function (n) { return g0.nodes.indexOf(n) >= 0; }));
-  yes('and the skeleton\'s genital bones and the women\'s body\'s own',
-      ['NPC GenitalsBase [GenBase]', 'NPC Genitals01 [Gen01]', 'NPC GenitalsScrotum [GenScrot]', 'VaginaB1', 'Clitoral1']
-        .every(function (n) { return g0.nodes.indexOf(n) >= 0; }));
-  yes('and never the root bone that is height, or the head',
-      RACEMENU_KEEP.every(function (n) { return g0.nodes.indexOf(n) < 0; }));
-
-  const keys = {
-    '3|NPC L Breast': ['RSMPlugin'], '1|NPC L Breast': ['RSMPlugin'], '3|NPC R Butt': ['RSMPlugin', 'Other'],
-    '3|NPC Genitals01 [Gen01]': ['XPMSE'],
-    '3|NPC': ['RSMPlugin'], '3|NPC Head [Head]': ['RSMPlugin'],
-  };
-  const g = game({ female: true, morphs: ['Breasts', 'NippleLength', 'Butt', 'VaginaSize'], keys: keys });
-  g.state.menu = true;
-  g.at(5000);
-  g.frame();
-  yes('with the race menu up, the breast, seat and genital changes are all taken off',
-      !(g.state.keys['3|NPC L Breast'] || []).length && !(g.state.keys['1|NPC L Breast'] || []).length &&
-      !(g.state.keys['3|NPC R Butt'] || []).length && !(g.state.keys['3|NPC Genitals01 [Gen01]'] || []).length);
-  yes('and the body morphs are cleared and the body redrawn',
-      g.state.morphs.length === 0 && g.calls.some(function (c) { return c.fn === 'ClearMorphs'; }) &&
-      g.calls.some(function (c) { return c.fn === 'UpdateModelWeight'; }));
-  yes('the height on the root bone and the head size are left as made',
-      (g.state.keys['3|NPC'] || []).join() === 'RSMPlugin' && (g.state.keys['3|NPC Head [Head]'] || []).join() === 'RSMPlugin');
-  yes('it asks with the character\'s own sex, as RaceMenu stored them',
-      g.calls.filter(function (c) { return c.fn === 'GetNodeTransformKeys'; }).every(function (c) { return c.args[2] === true; }));
-  yes('every call is a NiOverride global, on the person\'s own character',
-      g.calls.every(function (c) { return c.cls === 'NiOverride' && c.self === undefined; }));
-  yes('nothing is logged while the menu is up', g.logs.length === 0);
-
-  // A slider dragged again: undone at the next half second, not before.
-  g.state.keys['3|NPC L Breast'] = ['RSMPlugin'];
-  const before = g.calls.length;
-  g.at(5300); g.frame();
-  yes('inside half a second nothing is asked', g.calls.length === before);
-  g.at(5550); g.frame();
-  yes('at half a second it is taken off again', !(g.state.keys['3|NPC L Breast'] || []).length);
-
-  g.state.menu = false;
-  g.at(5600); g.frame();
-  yes('when the menu closes it looks once more and says how much it took off, once',
-      g.logs.length === 1 && /body shape: took \d+ body change\(s\) back off the character/.test(g.logs[0]));
-
-  // Out of the menu: every ten seconds.
-  const c1 = g.calls.length;
-  g.at(12000); g.frame();
-  yes('out of the menu it does not look again inside ten seconds', g.calls.length === c1);
-  g.state.morphs = ['Breasts'];
-  g.at(15700); g.frame();
-  yes('and at ten seconds it clears a body morph a character made before this still had', g.state.morphs.length === 0);
-
-  const male = game({ female: false, keys: { '3|NPC GenitalsBase [GenBase]': ['XPMSE'] } });
-  male.at(100000); male.frame();
-  yes('a man\'s genital bone changes are taken off the same way',
-      !(male.state.keys['3|NPC GenitalsBase [GenBase]'] || []).length &&
-      male.calls.filter(function (c) { return c.fn === 'GetNodeTransformKeys'; }).every(function (c) { return c.args[2] === false; }));
-
-  const bare = game({ noSkee: true });
-  bare.at(100000); bare.frame();
-  const n1 = bare.calls.length;
-  bare.at(200000); bare.frame();
-  yes('with no NiOverride it stops after one try and says so once',
-      n1 === 1 && bare.calls.length === 1 && bare.logs.length === 1 && /NiOverride is not there/.test(bare.logs[0]));
-}
+/*
+  RaceMenu's own breast, breast curve and glute sliders sit in its archive
+  beside Height, and XPMSE's bone scales (a breast scale among them) beside
+  them, so no file can be left out for them. Since #7087 they are not put on
+  the menu: the launcher's edit of RaceMenu's menu (Build-ModMenus.py,
+  edit_racemenu, written into FromGameModMenus.cs) puts only ChangeHeight on
+  of the sliders Papyrus adds, and none of the Papyrus categories. So the
+  front plugin no longer takes changes back off those bones while the menu is
+  up: nothing can make them.
+*/
+const builder = read(path.join(ROOT, 'scripts', 'mods', 'Build-ModMenus.py'));
+const modMenus = read(path.join(ROOT, 'launcher', 'app', 'FromGameModMenus.cs'));
+yes('the front plugin has no "body shape" loop any more',
+    front.indexOf('BODY_NODES') < 0 && front.indexOf("guard('body shape'") < 0 && !/RemoveNodeTransform/.test(front));
+yes('the RaceMenu menu edit is one of the mod menus the builder makes',
+    /\('RaceMenuMenu', 'RaceMenu', 'RaceMenu\.bsa', 'interface\\\\racesex_menu\.swf', 'Data\\\\Interface\\\\racesex_menu\.swf', edit_racemenu, 'movie'\)/.test(builder));
+yes('and it keeps ChangeHeight alone of the Papyrus sliders, and adds no Papyrus category',
+    /push_text\('ChangeHeight'\)/.test(builder) && /ADD_CATEGORIES_AFTER = ADD_CATEGORIES_BEFORE\[:5\] \+ jump\(/.test(builder));
+const rmRecipe = member(modMenus, 'public static readonly MenuRecipe RaceMenuMenu = new MenuRecipe');
+const heightHex = Buffer.from('ChangeHeight', 'latin1').toString('hex');
+yes('the launcher\'s recipe carries that edit (an insert naming ChangeHeight) and makes it with the others',
+    !!rmRecipe && rmRecipe.indexOf(heightHex) >= 0 && /Mods = \{[^}]*\bRaceMenuMenu\b/.test(modMenus));
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

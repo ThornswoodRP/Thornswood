@@ -479,7 +479,7 @@ CONTENTS = (
     (r'ACTI ThornswoodDropBox$', 'own', 'drop boxes'),
     (r'(MISC ThornswoodCharcoalTier|COBJ ThornswoodRecipeCharcoalTier)\d$', 'own', 'charcoal'),
     (r'(MISC ThornswoodMiscTool(Handle|Shears|Alembic|RuneKnife)|'
-     r'COBJ ThornswoodRecipe(Tool(Handle|Shovel|Hammer|Shears|Alembic|RuneKnife|Ladle)|WeaponPickaxe|WeaponAxe))$',
+     r'COBJ ThornswoodRecipe(Tool(Handle|Shovel|Hammer|Shears|Alembic|RuneKnife|Ladle)|WeaponPickaxe|WeaponAxe|Lockpick))$',
      'own', 'tools and handles'),
     (r'COBJ ThornswoodRecipeInstrument(Flute|Lute|Drum)$', 'own', 'instruments'),
     (r'BOOK ThornswoodBookDeed$', 'own', 'deeds'),
@@ -1168,6 +1168,11 @@ RIVER_BUCKET = 0x5018031
 # block of gamemode.js). Where each one stands is game\data\station-sites.json,
 # kind study, measured by scripts\dev\Build-StationSites.py.
 STUDY_DESK = 0x5018032
+# THE INN'S COOKING POT (#6893): Skyrim's own CraftingCookingPotSm, the pot
+# every inn's cook already uses, placed in an inn that has no cooking station
+# where game\data\station-sites.json, kind cook, measures. It is a master's
+# record, so its form id here is Skyrim.esm's (master 0).
+INN_COOKPOT = 0x001010B3
 STUDY_DESK_MODEL = 'Furniture\\Noble\\NobleDesk01.nif'
 STUDY_DESK_BOUNDS = (-44, -49, 0, 44, 12, 63)
 
@@ -1309,12 +1314,18 @@ MOLD_BOUNDS = (-12, -12, 0, 12, 12, 24)
 # the kiln's ladder, what each grade takes and makes, and that the grades are
 # how hot a forge burns (smith.md). An item has no gold price here, so each
 # grade is worth and weighs what Skyrim's own charcoal does.
+# The Charcoal grade's recipe makes Skyrim's own Charcoal (Patrick's B on
+# #6726): the forge's recipes name it, so the charcoal found in the world is
+# the same thing the Charburner makes. Its record of this plugin stays, so a
+# stack made before then is still a thing in a pack, and nothing makes more.
+SKYRIM_CHARCOAL = 0x00033760
 CHARCOAL_GRADES = (
-    # item, recipe, item editor id, recipe editor id, name, firewood in
-    (0x5015481, 0x5015480, 'ThornswoodCharcoalTier1', 'ThornswoodRecipeCharcoalTier1', 'Poor Charcoal', 2),
-    (0x5015482, 0x5015486, 'ThornswoodCharcoalTier2', 'ThornswoodRecipeCharcoalTier2', 'Charcoal', 4),
-    (0x5015484, 0x5015487, 'ThornswoodCharcoalTier3', 'ThornswoodRecipeCharcoalTier3', 'Charcoal Briquette', 7),
-    (0x5015485, 0x5015488, 'ThornswoodCharcoalTier4', 'ThornswoodRecipeCharcoalTier4', 'Coke', 12),
+    # item, recipe, item editor id, recipe editor id, name, firewood in, what the recipe makes
+    (0x5015481, 0x5015480, 'ThornswoodCharcoalTier1', 'ThornswoodRecipeCharcoalTier1', 'Poor Charcoal', 2, 0x5015481),
+    (0x5015482, 0x5015486, 'ThornswoodCharcoalTier2', 'ThornswoodRecipeCharcoalTier2', 'Charcoal', 4, SKYRIM_CHARCOAL),
+    (0x5015484, 0x5015487, 'ThornswoodCharcoalTier3', 'ThornswoodRecipeCharcoalTier3', 'Charcoal Briquette', 7,
+     0x5015484),
+    (0x5015485, 0x5015488, 'ThornswoodCharcoalTier4', 'ThornswoodRecipeCharcoalTier4', 'Coke', 12, 0x5015485),
 )
 
 # The two tools a smith makes (smith/edgewright.md): an iron ingot and a
@@ -1379,6 +1390,19 @@ DRUM = 0x000DABA9         # Skyrim's Drum (MISC)
 RECIPE_FLUTE = 0x501B008
 RECIPE_LUTE = 0x501B009
 RECIPE_DRUM = 0x501B00A
+
+# THE LOCKPICK (#4646). Lockpicks came only from dungeon and body loot, the
+# most common thing it hands out, and no recipe made one
+# (docs/systems/who-makes-it.md). A smith forges a handful from one iron
+# ingot at the forge, with the forge's other small iron goods (the shears,
+# the key mold), as an Edgewright's work (records/recipe-owners.json). The
+# pick is Skyrim's own Lockpick record, as the instruments are Skyrim's own,
+# so a forged one is the same pick the loot hands out. One ingot makes
+# LOCKPICKS_MADE: a key mold takes the whole ingot for one, and a pick is a
+# bent sliver of it. Form id after the drum's.
+LOCKPICK = 0x0000000A     # Skyrim's Lockpick (MISC)
+RECIPE_LOCKPICK = 0x501B00B
+LOCKPICKS_MADE = 5
 
 # THE STATIONS.
 #
@@ -1922,11 +1946,11 @@ def thornswood_records(clam, scrap):
               (FURNITURE_FORCE_3RD, FURNITURE_SPECIAL, RACE_TO_SCALE, IS_BLACKSMITH_WORKBENCH,
                WOODWORKING_KEYWORD), flags=WOODWORKING_FLAGS),
     ]
-    for item, recipe, item_id, recipe_id, name, logs in CHARCOAL_GRADES:
+    for item, recipe, item_id, recipe_id, name, logs, makes in CHARCOAL_GRADES:
         out.append(misc(item, item_id, name, CHARCOAL_MODEL, CHARCOAL_BOUNDS,
                         CHARCOAL_VALUE, CHARCOAL_WEIGHT))
-    for item, recipe, item_id, recipe_id, name, logs in CHARCOAL_GRADES:
-        out.append(cobj(recipe, recipe_id, [(FIREWOOD, logs)], item, KILN_KEYWORD))
+    for item, recipe, item_id, recipe_id, name, logs, makes in CHARCOAL_GRADES:
+        out.append(cobj(recipe, recipe_id, [(FIREWOOD, logs)], makes, KILN_KEYWORD))
 
     def stick(fid, edid, name, value, weight):
         return misc(fid, edid, name, CHARCOAL_MODEL, CHARCOAL_BOUNDS, value, weight)
@@ -1982,6 +2006,9 @@ def thornswood_records(clam, scrap):
              LUTE, WOODWORKING_KEYWORD),
         cobj(RECIPE_DRUM, 'ThornswoodRecipeInstrumentDrum', [(FIREWOOD, 2), (LEATHER, 1), (LEATHER_STRIPS, 1)],
              DRUM, WOODWORKING_KEYWORD),
+        # Skyrim's own lockpick (#4646), THE LOCKPICK above.
+        cobj(RECIPE_LOCKPICK, 'ThornswoodRecipeLockpick', [(IRON_INGOT, 1)], LOCKPICK, FORGE_KEYWORD,
+             makes=LOCKPICKS_MADE),
     ]
 
     def catch(fid, edid, name, produce):
@@ -2185,7 +2212,7 @@ STATION_SITES = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__
                                               'game', 'data', 'station-sites.json'))
 STATION_NAMES = {KILN: 'charcoal kilns', SALT_QUARRY: 'salt quarries', BEEHIVE: 'beehives',
                  ALCHEMY_LAB: 'alchemy labs', WELL_BUCKET: 'well buckets', RIVER_BUCKET: 'water buckets',
-                 STUDY_DESK: 'study desks'}
+                 STUDY_DESK: 'study desks', INN_COOKPOT: 'inn cooking pots'}
 STATION_BASES = set(STATION_NAMES)
 QUEST_CONTENT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
                                              'game', 'data', 'quest-content.json'))
@@ -2913,7 +2940,9 @@ def main():
     want, want_cell, want_world = {}, {}, {}
     quest_doc = quest_content()
     quest_sites = quest_doc['sites']
-    authored_sites = dict(sites['sites'])
+    # A site the server stands (#6893, standBy server) is in a cell this plugin
+    # cannot place into: the gamemode stands it, so it is not written here.
+    authored_sites = {n: r for n, r in sites['sites'].items() if r.get('standBy') != 'server'}
     if set(authored_sites) & set(quest_sites):
         raise ValueError('A quest and a station share a site name')
     authored_sites.update(quest_sites)

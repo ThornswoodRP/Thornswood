@@ -16,8 +16,9 @@
   the masters each header names), and runs the real check as a child process
   on two lists:
     A. the order the servers load, game\data\last-plugin.json's loadOrder,
-       with what the record installs that they do not load yet on the end and
-       Thornswood-Last.esp last, as the live order ends;
+       with what the record installs that they do not load yet on the end,
+       what its dropped list takes out left out, and Thornswood-Last.esp
+       last, as the live order ends;
     B. the collection's own list: the plugins the record switches on, in its
        order, as a clean install has them before the launcher switches on the
        rest.
@@ -92,7 +93,12 @@ try {
     # A. The order the servers load, with what the record installs that they
     # do not load yet on the end, as Deploy-Gamemode.ps1 -Vortex leaves it
     # before the check runs (docs\COLLECTION-REBUILD-7ESSXF.md, steps 2 and 3).
-    $servers = @(@($last.loadOrder) | ForEach-Object { [string]$_ })
+    # What the record's dropped list takes out goes with the next upload, so
+    # no rule names it: Deploy-DevGamemode.ps1 and Deploy-Server.ps1 let the
+    # same plugins leave the servers' order (#7055 dropped McmRecorder.esp
+    # while the servers still loaded the revision before).
+    $dropped = @(@($record.dropped) | Where-Object { $_ } | ForEach-Object { ([string]$_.name).ToLowerInvariant() })
+    $servers = @(@($last.loadOrder) | ForEach-Object { [string]$_ } | Where-Object { $dropped -notcontains $_.ToLowerInvariant() })
     $pending = @(@($record.plugins) | Where-Object { $_.enabled -ne $false -and $servers -notcontains [string]$_.name } | ForEach-Object { [string]$_.name })
     $servers = $servers + $pending + @('Thornswood-Last.esp')
     PluginList (Join-Path $root 'servers.txt') $servers

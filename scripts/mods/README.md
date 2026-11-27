@@ -29,6 +29,7 @@ Scripts that build, verify and manage Thornswood's plugins, recipes and mod asse
 | [Find-MissingMasters.ps1](Find-MissingMasters.ps1) | Reads the TES4 header of every plugin in Data and reports any master that is no longer present. |
 | [Generated.ps1](Generated.ps1) | Shared helpers for building and checking Thornswood's animation and body files. |
 | [last_recipe.py](last_recipe.py) | Recipe generator for Thornswood-Last.esp from installed plugins (#2791). |
+| [List-GameDataOnBox.ps1](List-GameDataOnBox.ps1) | The deploy gate's List-GameData verb: runs a read-only lister of the game's records against a server's plugins on the box (#5736). |
 | [List-SalvagedRecords.py](List-SalvagedRecords.py) | Writes content-salvaged.json tracking records remade from the salvaged plugin (#2553). |
 | [LoadOrder.ps1](LoadOrder.ps1) | The load order as the game counts it, and how to put a plugin list into the server's order. |
 | [Make-LastPlugin.py](Make-LastPlugin.py) | Makes Thornswood-Last.esp from its recipe on the box or client (#2791). |
@@ -36,6 +37,7 @@ Scripts that build, verify and manage Thornswood's plugins, recipes and mod asse
 | [New-ScriptPack.py](New-ScriptPack.py) | Packs Papyrus scripts from game and archives into papyrus-scripts.zip for the box (#3105). |
 | [OnBox.ps1](OnBox.ps1) | Helper scripts sent to the box by Run-OnBox.ps1 (#2899). |
 | [PluginRuleLoops.ps1](PluginRuleLoops.ps1) | The plugin rules of a collection that LOOT can never keep because of game load order constraints. |
+| [Read-PexCalls.js](Read-PexCalls.js) | Lists the native functions each compiled script of a collection layout calls, for Install-NexusRevision -Scripts (#7000). |
 | [Rebuild-ContentTables.ps1](Rebuild-ContentTables.ps1) | Rebuilds tables read out of load order plugins after content changes. |
 | [Run-OnBox.ps1](Run-OnBox.ps1) | Runs content tools on the VPS box and brings back generated files. |
 | [Send-GameArchives.ps1](Send-GameArchives.ps1) | Puts Skyrim game archives and string tables into the VPS store. |

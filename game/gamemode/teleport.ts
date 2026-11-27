@@ -1091,7 +1091,7 @@
       if (!needCharacter()) return;
       var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
       var propertyPosts = g.__thornswoodProperty;
-      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job' && postPayload[0] !== 'wanted') ||
           !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
           (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
           typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||
@@ -1313,6 +1313,17 @@
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
       var stallSaid = stallsApi.command(parts, actorId, profileId, cmd);
       if (stallSaid) { toProfile(profileId, stallSaid); }
+      return true;
+    }
+
+    // The lock key at a water whose line offers a fish trap (#4655): set one
+    // or take it up. Never typed. The scripted activators block answers it.
+    if (word === '/trap') {
+      var trapsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTraps;
+      if (!trapsApi || !trapsApi.command) { toProfile(profileId, 'Fish traps are not running on this server.'); return true; }
+      if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
+      var trapSaid = trapsApi.command(parts, actorId);
+      if (trapSaid) { toProfile(profileId, trapSaid); }
       return true;
     }
 

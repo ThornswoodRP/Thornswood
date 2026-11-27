@@ -17,7 +17,9 @@ namespace Thornswood
     /// view, chat fade and needs bars Settings in the game writes into
     /// Thornswood.ini, the emote wheel's slots, whether the scroll shows before
     /// the character choice, what was saved in each mod's own menu (MCM
-    /// Helper's Data\MCM\Settings), and the launcher's own choices in
+    /// Helper's Data\MCM\Settings, QuickLoot's own file and SkyUI's
+    /// favourite groups, #4511), and
+    /// the launcher's own choices in
     /// config.json. An uninstall, a new game folder or another PC started all
     /// of them over.
     ///
@@ -46,6 +48,13 @@ namespace Thornswood
             all["game/Thornswood.ini"] = ThornIni.File_;
             all["game/thornswood-emote-slots.json"] = Path.Combine(Paths.Game, "Data\\Platform\\thornswood-emote-slots.json");
             all["game/thornswood-intro.txt"] = Path.Combine(Paths.Game, "Data\\Platform\\thornswood-intro.txt");
+            // QuickLoot's menu, which QuickLoot reads back at each session's
+            // start and the front plugin writes when the journal closes (#4511).
+            all["game/quickloot.json"] = Path.Combine(Paths.Game, "Data\\SKSE\\Plugins\\QuickLootIE\\DefaultConfig.json");
+            // SkyUI's favourite groups, each character's, which the front
+            // plugin writes when the Favorites menu closes and puts back at
+            // the next start (#4511).
+            all["game/favourite-groups.json"] = Path.Combine(Paths.Game, "Data\\Platform\\thornswood-favourite-groups.json");
             if (withMenus)
             {
                 string menus = MenusDir;

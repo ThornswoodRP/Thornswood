@@ -423,7 +423,7 @@ for (const at of Object.keys(WRITERS)) {
     /e\.count = Number\(e\.count\) - 1;/.test(cutOne) && !/\+=|\+ 1/.test(cutOne) &&
     /Number\(it\.baseId\) === GOLD_ID[^\n]*\n\s*return 'Your pack changed\. Nothing was put in the box\.'/.test(code));
   /*
-    And two cuts give. The first (#4258): giveCut, which payOwed hands packFirst, adds
+    And three cuts give. The first (#4258): giveCut, which payOwed hands packFirst, adds
     to a pack exactly the rows the register owes that profile, and nothing
     else. A row is owed only by owe, and owe's callers are checked in the
     ledger section: each takes the same count off a record in the same
@@ -431,6 +431,10 @@ for (const at of Object.keys(WRITERS)) {
     The second is furniture's putOne (#7016): one item for a piece picked up,
     which pick hands packFirst only after the piece is off the register in
     the same write as the debit, and never gold.
+    The third is a parcel handed over (#4560). It pushes the one stack its
+    notice holds, which landParcel took off the sender's pack, and takes
+    nothing; the notice comes down in the same landing, so the stack is
+    handed over once.
   */
   const giveCut = lift('  function giveCut(rows) {', '\n  }\n') || '';
   const payOwed = lift('  function payOwed() {', '\n  }\n') || '';
@@ -446,6 +450,16 @@ for (const at of Object.keys(WRITERS)) {
     /count: 1 \}\);/.test(putOne) && /taken: \[\]/.test(putOne) &&
     pickFn.indexOf('delete pieces[k];') > 0 && pickFn.indexOf('delete pieces[k];') < pickFn.indexOf("packs.begin(actorId, function (entries) { return api.putOne(entries, row.itemDesc)") &&
     (code.match(/api\.putOne\(/g) || []).length === 1);
+  const hand = lift('  function handParcel(', '\n  }\n') || '';
+  const handLand = lift('  function landParcelHand(row, landed) {', '\n  }\n') || '';
+  const parcelLand = lift('  function landParcel(row, landed) {', '\n  }\n') || '';
+  yes('a parcel\'s hand over puts in only the stack its notice holds, which a saved pack gave up, and the notice comes down with it',
+    /var give = JSON\.parse\(JSON\.stringify\(p\.entry\)\);\s*\n\s*give\.count = Number\(p\.count\);/.test(hand) &&
+    /entries\.push\(give\);\s*\n\s*return \{ entries: entries, taken: \[\] \};/.test(hand) &&
+    (hand.match(/entries\.push\(/g) || []).length === 1 &&
+    /var kept = JSON\.parse\(JSON\.stringify\(row\.taken\[1\] \|\| \{\}\)\);/.test(parcelLand) &&
+    /made\.parcel = \{ entry: kept, count: count, what: what \};/.test(parcelLand) &&
+    /if \(!right \|\| n\.delivered\)/.test(handLand) && /n\.down = n\.delivered;/.test(handLand));
   yes('merchant credit comes from durable finite stock or its debited purse, checked by the settlement and trading regressions',
     /nextPurse = npcBuys \? state\.purse - gold : state\.purse \+ gold/.test(code) &&
     /credit = gold > 0 \? \[\{baseId:GOLD_BASE,count:gold\}\] : \[\]/.test(code) &&
@@ -489,8 +503,10 @@ for (const at of Object.keys(WRITERS)) {
     callers.push(where(match.index));
   }
   callers.sort();
-  yes('atomic item bundles are only paid by the checked dungeon reward and three harvests',
-      callers.join(',') === 'dungeon loot/give,outer/fish,outer/game,outer/loot');
+  // A fish trap taken up hands back the trap and its water's catch, a
+  // FISH_BY_BASE row, in one write (#4655).
+  yes('atomic item bundles are only paid by the checked dungeon reward, three harvests and a fish trap',
+      callers.join(',') === 'dungeon loot/give,outer/collectFishTrap,outer/fish,outer/game,outer/loot');
   const reward=bodyOf('dungeon loot/give') || '';
   yes('the dungeon reward bundles its fixed gold and rolled goods into one inventory write',
       /if\(rolled\.gold>0\) goods\.push\(\{item:GOLD_DESC,count:rolled\.gold\}\)/.test(reward) &&
@@ -558,13 +574,16 @@ for (const at of Object.keys(WRITERS)) {
     cuts.push(mc[1].trim());
   }
   yes('takeGold\'s one caller passes a ride\'s fare', callers.join(',') === 'price');
-  yes('goldCut\'s four callers pass a post\'s cost, NOTICE_FEE, or JOB_FEE and the reward, a letter\'s cost, LETTER_FEE and ' +
-      'LETTER_PAY, a haul\'s cost, the company\'s haul fee and the pay, and gold put in the drop box',
-      cuts.slice().sort().join(',') === 'cost,cost,cost,n' &&
+  // A parcel's cost (#4560): LETTER_FEE and the pay the sender names, never under PARCEL_PAY_MIN.
+  yes('goldCut\'s five callers pass a post\'s cost, NOTICE_FEE, or JOB_FEE and the reward, a letter\'s cost, LETTER_FEE and ' +
+      'LETTER_PAY, a parcel\'s cost, LETTER_FEE and its pay, a haul\'s cost, the company\'s haul fee and the pay, and gold put in the drop box',
+      cuts.slice().sort().join(',') === 'cost,cost,cost,cost,n' &&
       /var n = Math\.floor\(Number\(amount\)\);\s*\n\s*if \(!\(n > 0\)/.test(code) &&
       /\bvar fee = isJob \? JOB_FEE : NOTICE_FEE;\s*\n\s*var cost = fee \+ reward;/.test(code) &&
       /reward = \/\^\\d\+\$\/\.test\(first\) \? Number\(first\) : 0;\s*\n\s*if \(!\(reward > 0\)/.test(code) &&
       /\bvar cost = LETTER_FEE \+ LETTER_PAY;/.test(code) &&
+      /if \(!Number\.isSafeInteger\(pay\) \|\| pay < PARCEL_PAY_MIN\) \{/.test(code) && /\bvar PARCEL_PAY_MIN = 15;/.test(code) &&
+      /\bvar cost = LETTER_FEE \+ pay;/.test(code) &&
       /\bvar fee = co\.haulFee\(\);\s*\n\s*var cost = fee \+ pay;/.test(code));
   const fares = ['FARE_FERRY', 'FARE_CARRIAGE_IN_HOLD', 'FARE_CARRIAGE', 'FARE_CROSSING'].map(function (n) {
     const m = new RegExp('\\bvar ' + n + ' = (\\d+);').exec(code);

@@ -64,7 +64,7 @@ const PORT_FILE = 'voice-port.txt';
   strong suit rather than the page's. Reading voice-port.txt out of this exact
   folder is the one part of this that has never failed.
 
-  voice-status.txt   written by the launcher   "<mic> <peers> <talking> <mode>"
+  voice-status.txt   written by the launcher   "<mic> <peers> <talking> <mode> <silent>"
   voice-ptt.txt      written by us             "<on> <mode>"
   voice-muted.txt    written by us             "<profileId> <profileId> ..."
 */
@@ -661,10 +661,14 @@ sp.on('update', guard('status', () => {
   const peers   = Number(bits[1]) || 0;
   const talking = bits[2] === '1';
   const mode    = bits[3] || 'local';
+  // Held, and nothing but digital silence coming in (#6470). A launcher
+  // older than that writes four words, which reads as not silent.
+  const silent  = bits[4] === '1';
 
   js('try{window.thornswoodVoice&&window.thornswoodVoice.setLauncherStatus(' +
      (mic ? 'true' : 'false') + ',' + peers + ',' +
-     (talking ? 'true' : 'false') + ',"' + mode + '");}' +
+     (talking ? 'true' : 'false') + ',"' + mode + '",' +
+     (silent ? 'true' : 'false') + ');}' +
      'catch(e){window.skyrimPlatform.sendMessage("thornswood-voice",' +
      '"launcher status threw | "+e);}');
 
@@ -732,6 +736,22 @@ sp.on('buttonEvent', guard('keys', (e) => {
       once('typing-' + e.code, 'key ' + e.code + ' ignored, the chat box has the keyboard');
     }
     return;
+  }
+
+  // A game menu that takes keys is open (#4799): the name box in the race
+  // menu, the console, the inventory, the map. The game is sent its key downs
+  // there, so they reach this handler too, and an O in a name locked the
+  // microphone open and a B stepped the voice mode. The lock and the mode are
+  // for the world, so they stand down in a menu. Push to talk does not: V
+  // held over the map is somebody talking. The front names the menu
+  // (Thornswood.keyboardMenu), so it is the same list its own keys go by.
+  if ((e.code === LOCK_KEY || e.code === MODE_KEY) && e.isDown && !e.isUp) {
+    let menu = '';
+    try { menu = (T && typeof T.keyboardMenu === 'function') ? String(T.keyboardMenu() || '') : ''; } catch (err) { menu = ''; }
+    if (menu) {
+      once('menu-' + e.code, 'key ' + e.code + ' ignored while ' + menu + ' is open');
+      return;
+    }
   }
 
   // Whisper, local, yell. On the way down only: a key that cycled on press and

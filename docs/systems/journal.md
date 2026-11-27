@@ -69,6 +69,11 @@ copy from the board's panel. The list stays in the book.
 The owner's Disband also names the group and needs a second fresh press
 within five seconds. A changed book or ownership cancels that confirmation.
 
+Remove also names the person and group before acting. Press it again within
+five seconds to confirm. Editing the name, a changed book, closing the panel
+or pressing Escape cancels it. Someone with Invite can still remove a member
+without Read; the server keeps its usual name matching and permission checks.
+
 ## Boards
 
 J also has Boards: the ten towns, and the notice board of the one you

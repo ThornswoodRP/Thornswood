@@ -123,6 +123,18 @@
   and the modlist's sha256 is printed. This is how the launcher installs
   without Vortex: each Release carries the modlist and its hash.
 
+  -Scripts, with -Record, also writes scripts.json beside the record (#7000):
+  every compiled Papyrus script the layout places, loose in Data\Scripts or
+  inside an archive, with its path, sha256, Nexus file id, whether it is the
+  copy the game reads, and each call it makes to a native function, with
+  the function that calls it and the instruction it is at. A call the
+  collection cannot settle (no script of that type in it, such as the game's
+  own in Skyrim - Misc.bsa) is listed apart with why. Each mod's scripts are
+  read while it is unpacked (scripts\mods\Read-PexCalls.js, so node has to be
+  there), and no byte of a script is kept: names, instruction numbers, paths
+  and hashes only. This is what #5792 compares with the engine's own
+  functions to say which the server is missing (#5035).
+
   Needs PowerShell 7 (NexusLayout.cs reads JSON with System.Text.Json), 7-Zip
   (off Windows, 7-Zip's own build, which Get-SevenZip.ps1 fetches, because
   Ubuntu's cannot unpack the collection's RAR archives),
@@ -150,6 +162,10 @@
 .PARAMETER Modlist
   With -Record: writes thornswood.wabbajack beside the record, the revision
   as a Wabbajack modlist that installs a portable Mod Organizer 2 (#6244).
+
+.PARAMETER Scripts
+  With -Record: writes scripts.json beside the record, the native functions
+  every placed compiled script calls (#7000). Metadata only.
 
 .PARAMETER Mo2Record
   The record that pins Mod Organizer 2 for -Modlist. records\mo2.json unless
@@ -180,6 +196,7 @@ param(
   [string]$Record,
   [switch]$KeepPlugins,
   [switch]$Modlist,
+  [switch]$Scripts,
   [string]$Mo2Record,
   [string]$Slug = '7essxf',
   [string]$GameDomain = 'skyrimspecialedition',
@@ -289,11 +306,13 @@ if ($WhatIf) { Say '  -WhatIf: downloads and works it all out, and changes nothi
 if ($Game -and $Record) { Die 'Give -Game to lay the revision out, or -Record to write only its record, not both.' }
 if ($KeepPlugins -and -not $Record) { Die '-KeepPlugins keeps the plugins beside a record, so it goes with -Record. With -Game every file is laid out already.' }
 if ($Modlist -and -not $Record) { Die '-Modlist writes the modlist beside a record, so it goes with -Record.' }
+if ($Scripts -and -not $Record) { Die '-Scripts writes scripts.json beside a record, so it goes with -Record.' }
+if ($Scripts -and -not (Get-Command node -ErrorAction SilentlyContinue)) { Die '-Scripts reads the compiled scripts with node (scripts\mods\Read-PexCalls.js). node is not on this machine.' }
 if ($KeepPlugins -and -not (Get-Command node -ErrorAction SilentlyContinue)) { Die '-KeepPlugins keeps the archives SkyUI''s menu check reads, and node says which those are (scripts\mods\Check-SkyUIMenus.js). node is not on this machine.' }
 if ($Record) {
   $Record = [IO.Path]::GetFullPath($Record).TrimEnd([IO.Path]::DirectorySeparatorChar)
   if ($WhatIf) { Die '-Record already changes nothing but its own folder; leave -WhatIf off.' }
-  if ((Test-Path -LiteralPath $Record) -and @(Get-ChildItem -LiteralPath $Record -Force | Where-Object { @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'slidersets.json', 'plugins', 'menus', 'thornswood.wabbajack') -notcontains $_.Name }).Count) { Die ('-Record ' + $Record + ' holds more than a layout''s record. Give it a folder of its own.') }
+  if ((Test-Path -LiteralPath $Record) -and @(Get-ChildItem -LiteralPath $Record -Force | Where-Object { @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'slidersets.json', 'scripts.json', 'plugins', 'menus', 'thornswood.wabbajack') -notcontains $_.Name }).Count) { Die ('-Record ' + $Record + ' holds more than a layout''s record. Give it a folder of its own.') }
   if (Test-Path -LiteralPath (Join-Path $Record 'plugins')) {
     if (-not (Test-Path -LiteralPath (Join-Path $Record 'plugins') -PathType Container) -or @(Get-ChildItem -LiteralPath (Join-Path $Record 'plugins') -Force | Where-Object { $_.PSIsContainer -or $_.Name -notmatch '\.(esp|esm|esl)$' }).Count) { Die ('-Record ' + $Record + ' has a plugins entry that holds more than plugins. Give it a folder of its own.') }
   }
@@ -532,6 +551,11 @@ $script:WjFiles = @{}
 # metadata only for slidersets.json (#5888). No .osp is kept.
 $script:SliderSetsRead = @{}
 $script:MenuCheck = Join-Path $PSScriptRoot '..\mods\Check-SkyUIMenus.js'
+# And with -Scripts what each compiled script calls, a line each, read while
+# its mod is unpacked (#7000). Metadata only.
+$script:PexCalls = Join-Path $PSScriptRoot '..\mods\Read-PexCalls.js'
+$script:ScriptReads = ''
+function Test-ScriptRel([string]$Rel) { return ($Rel -match '^(?i)Scripts\\[^\\]+\.pex$' -or $Rel -match '^(?i)[^\\]+\.bsa$') }
 function Test-MenuInputRel([string]$Rel) {
   return ($Rel -match '^(?i)Scripts\\ski_main\.pex$' -or $Rel -match '^(?i)Interface\\.+\.swf$' -or $Rel -match '^(?i)[^\\]+\.bsa$')
 }
@@ -607,6 +631,19 @@ foreach ($e in $col.Entries) {
         $wj.Add($one)
       }
       $script:WjFiles[$e.Index] = $wj
+    }
+    if ($Scripts) {
+      if (-not $script:ScriptReads) { $script:ScriptReads = Join-Path $script:Work 'script-reads.jsonl' }
+      # A dinput mod's paths are from the game folder, so its Data files are
+      # under Data\ (as the deployment places them).
+      $pexIn = @($plan.Files.Values | Where-Object { $dr = if ($e.Type -eq 'dinput') { if ($_.Rel -match '^(?i)Data\\(.+)$') { $Matches[1] } else { '' } } else { $_.Rel }; $dr -and (Test-ScriptRel $dr) } | ForEach-Object { $_.Full })
+      # A few at a time, so no command line gets too long for Windows.
+      for ($i = 0; $i -lt $pexIn.Count; $i += 40) {
+        $some = @($pexIn[$i..([Math]::Min($i + 39, $pexIn.Count - 1))])
+        $global:LASTEXITCODE = 0
+        $said = @(& node $script:PexCalls --read $script:ScriptReads @some)
+        if ($LASTEXITCODE -ne 0) { Die ($e.Say() + ': Read-PexCalls.js --read ended ' + $LASTEXITCODE + ' (' + ($said -join ' ') + '), so what its scripts call is not known.') }
+      }
     }
     if ($KeepPlugins -and $e.Type -ne 'dinput') {
       foreach ($s in $plan.Files.Values) {
@@ -854,6 +891,28 @@ if ($Record) {
       $menuCount++
     }
   }
+  if ($Scripts) {
+    # The scripts the deployment places, the copy it keeps of each file, and
+    # the plugin order the game loads archives by.
+    Head 'The scripts'
+    $sp = [ordered]@{
+      collection = [ordered]@{ slug = $Slug; revision = $Revision }
+      plugins    = @($order | Where-Object { $_.Enabled } | ForEach-Object { $_.Name })
+      files      = @($placed | Where-Object { $_.Rel -match '^Data\\(.+)$' -and (Test-ScriptRel $Matches[1]) } | ForEach-Object {
+          $ce = $col.Entries[$_.Entry]
+          [ordered]@{ rel = $_.Rel; full = $_.Full; fileId = $ce.FileId; mod = $ce.Name }
+        })
+    }
+    $spPath = Join-Path $script:Work 'placed-scripts.json'
+    [IO.File]::WriteAllText($spPath, ($sp | ConvertTo-Json -Depth 5), $utf8)
+    if (-not $script:ScriptReads) { $script:ScriptReads = Join-Path $script:Work 'script-reads.jsonl'; [IO.File]::WriteAllText($script:ScriptReads, '') }
+    $scriptsPath = Join-Path $Record 'scripts.json'
+    $global:LASTEXITCODE = 0
+    $said = @(& node $script:PexCalls --record $script:ScriptReads --placed $spPath --out $scriptsPath)
+    if ($LASTEXITCODE -ne 0) { Die ('Read-PexCalls.js --record ended ' + $LASTEXITCODE + ': ' + ($said -join ' ')) }
+    Say ('  ' + ($said -join ' ')) 'Green'
+    Say ('  ' + $scriptsPath + ', ' + (Get-Item -LiteralPath $scriptsPath).Length + ' bytes')
+  }
   if ($Modlist) {
     Head 'The modlist'
     $wjPath = Join-Path $Record 'thornswood.wabbajack'
@@ -962,6 +1021,7 @@ if ($Record) {
     Say ('  and ' + $keptCount + ' plugins, the copies the layout places, in ' + (Join-Path $Record 'plugins'))
     Say ('  and ' + $menuCount + ' files SkyUI''s menu check reads, in ' + (Join-Path $Record 'menus'))
   }
+  if ($Scripts) { Say ('  and ' + (Join-Path $Record 'scripts.json') + ', the native functions the placed scripts call') }
   Say '  Next: for a draft, compare the layout with the collection record before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
   Write-Host ''
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }

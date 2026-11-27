@@ -22,9 +22,12 @@
   WHAT THIS HOLDS THE LAUNCHER TO.
     1. It finds that folder by itself: any folder directly under a Steam
        library's steamapps\common with SkyrimSE.exe and Vortex's record,
-       Data\vortex.deployment.json. A Steam copy of Skyrim Special Edition
-       comes first; otherwise the newest record wins; VortexGame wins over
-       the search.
+       Data\vortex.deployment.json, whose record names Thornswood's
+       collection (#6229). A Steam copy of Skyrim Special Edition comes
+       first; otherwise the newest record wins; a Steam copy whose record is
+       another collection's does not; VortexGame wins over the search.
+       launcher\tests\test-6229-deploy-folder.ps1 holds the choice
+       itself on every machine.
     2. Scan names it, first, and Fix saves it as VortexGame; the launcher then
        makes the own folder the way Make it does.
     3. NO BLEED. Made from another folder, Thornswood\Game holds the Steam
@@ -96,7 +99,7 @@ if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
 # Config, OwnGame and Verify read their JSON through LooseString.cs, and
 # Verify fetches a release's plugin through Http.cs, which nothing here
 # reaches (#4823).
-$real = @('Steam.cs', 'OwnGame.cs', 'Verify.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Http.cs') |
+$real = @('Steam.cs', 'OwnGame.cs', 'Verify.cs', 'Paths.cs', 'Config.cs', 'Secrets.cs', 'LoadOrder.cs', 'LastPlugin.cs', 'FromGameArchive.cs', 'LooseString.cs', 'Http.cs', 'WholeFile.cs') |
     ForEach-Object { Join-Path $AppPath $_ }
 # Config.Save reports a failed write through Swallow.Note since pull request
 # 311, and Swallow needs nothing but Paths. Taken only where it exists, so the
@@ -738,10 +741,17 @@ namespace Thornswood
             Scene s = NewScene("prefer", true);
             SteamCopy(s, s.Steam, "STEAM");
             string ssc = SteamCopy(s, s.Lib2, "LIB2");
-            Record(Path.Combine(ssc, "Data\\vortex.deployment.json"), s.Staging, Path.Combine(ssc, "Data"), new string[][] { new string[] { "TsOne.esp", "ModA" } }, DateTime.UtcNow.AddHours(-3));
+            Record(Path.Combine(ssc, "Data\\vortex.deployment.json"), s.Staging, Path.Combine(ssc, "Data"),
+                   new string[][] { new string[] { "TsOne.esp", "ModA" }, new string[] { "TsTwo.esm", "ModA" } }, DateTime.UtcNow.AddHours(-3));
             string k = OtherServer(s, s.Steam, "Other Server Online", DateTime.UtcNow);
-            Yes("a Steam copy of Skyrim Special Edition with a record comes before a newer record elsewhere",
+            Yes("a Steam copy of Skyrim Special Edition with a record of the collection comes before a newer record elsewhere",
                 string.Equals(DeploysInto(s.Cfg), ssc, StringComparison.OrdinalIgnoreCase));
+            // #6229: a record there of another server's collection is not
+            // Thornswood's, however it compares.
+            Record(Path.Combine(ssc, "Data\\vortex.deployment.json"), s.Staging, Path.Combine(ssc, "Data"),
+                   new string[][] { new string[] { "TheirOnly.esp", "ModB" } }, DateTime.UtcNow.AddHours(1));
+            Yes("a Steam copy whose record is another collection's does not come before the folder that holds Thornswood's",
+                string.Equals(DeploysInto(s.Cfg), k, StringComparison.OrdinalIgnoreCase));
 
             Scene t = NewScene("newest", true);
             SteamCopy(t, t.Steam, "STEAM");

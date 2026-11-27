@@ -1,5 +1,5 @@
 {
-  "about": "The run after each dev release (#5197): Play from the launcher, the choice page, creation when the character is new, the world, the journal, the inventory and the game's menu, with a screenshot of each. tests/real-client/README.md says how a step is written.",
+  "about": "The run after each dev release (#5197): Play from the launcher, the choice page, creation when the character is new, the world, the journal, an inn bed, the inventory and the game's menu, with a screenshot of each. Each part after the world is a task of its own, so one failing does not stop the rest. tests/real-client/README.md says how a step is written.",
   "steps": [
     {
       "do": "page",
@@ -131,7 +131,8 @@
     {
       "do": "key",
       "code": 36,
-      "why": "J, our journal"
+      "why": "J, our journal",
+      "task": 1016
     },
     {
       "do": "wait",
@@ -140,16 +141,26 @@
         "thornswood-front",
         "journal:opened"
       ],
-      "timeout": 15000
+      "timeout": 15000,
+      "task": 1016
     },
     {
       "do": "shot",
-      "name": "journal-open"
+      "name": "journal-open",
+      "task": 1016
     },
     {
       "do": "key",
       "code": 36,
-      "why": "J again closes it"
+      "why": "J again closes it",
+      "task": 1016
+    },
+    {
+      "do": "page",
+      "js": "window.thornswoodJournal&&!window.thornswoodJournal.isOpen()?'shut':''",
+      "timeout": 10000,
+      "why": "our journal shut",
+      "task": 1016
     },
     {
       "do": "wait",
@@ -157,58 +168,137 @@
       "menu": "Journal Menu",
       "open": false,
       "timeout": 10000,
-      "why": "the game's own journal stays shut"
+      "why": "the game's own journal stays shut",
+      "task": 1016
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 6712,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 6712
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 6712,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "wait",
+      "for": "cell",
+      "name": "Bannered Mare",
+      "in": false,
+      "timeout": 3000,
+      "skip": 3,
+      "why": "a Whiterun character arrives in the Bannered Mare, and a run leaves it there; there /tp would move it with no loading screen, so the trip's three steps are skipped",
+      "task": 6712
     },
     {
       "do": "page",
       "js": "(function(){if(window.__tsBedTp){return 'sent';}var n=window.thornswoodNet;if(!n||!n.say){return '';}n.say('/tp bannered',{quiet:true});window.__tsBedTp=1;return 'sent';})()",
       "timeout": 30000,
-      "why": "to an inn with beds, once: /tp bannered, which the run's account may run as a dev (#6712)"
+      "why": "to an inn with beds, once: /tp bannered, which the run's account may run as a dev (#6712)",
+      "task": 6712
     },
     {
       "do": "wait",
       "for": "menu",
       "menu": "Loading Menu",
       "open": true,
-      "timeout": 60000
+      "timeout": 30000,
+      "skip": 1,
+      "why": "the loading screen of the trip; none in 30 s means the trip was refused, and the cell check after says where the character is",
+      "task": 6712
     },
     {
       "do": "wait",
       "for": "world",
       "timeout": 120000,
-      "why": "in the Bannered Mare"
+      "why": "in the Bannered Mare",
+      "task": 6712
+    },
+    {
+      "do": "wait",
+      "for": "cell",
+      "name": "Bannered Mare",
+      "timeout": 30000,
+      "why": "in the Bannered Mare",
+      "task": 6712
     },
     {
       "do": "face",
       "what": "bed",
-      "why": "stand before the nearest bed, turned to it"
+      "why": "stand before the nearest bed, turned to it",
+      "task": 6712
     },
     {
       "do": "wait",
       "for": "crosshair",
       "what": "bed",
-      "timeout": 10000
+      "timeout": 10000,
+      "task": 6712
     },
     {
       "do": "shot",
       "name": "bed-prompt",
-      "why": "what the bed's prompt says"
+      "why": "what the bed's prompt says",
+      "task": 6712
     },
     {
       "do": "key",
       "code": 18,
-      "why": "E, use the bed"
+      "why": "E, use the bed",
+      "task": 6712
     },
     {
       "do": "wait",
       "for": "time",
       "ms": 1500,
-      "why": "long enough for the game's answer to show, short of its fading"
+      "why": "long enough for the game's answer to show, short of its fading",
+      "task": 6712
     },
     {
       "do": "shot",
       "name": "bed-used",
-      "why": "lying down, or the message the game gave"
+      "why": "lying down, or the message the game gave",
+      "task": 6712
     },
     {
       "do": "wait",
@@ -217,44 +307,52 @@
       "open": true,
       "timeout": 8000,
       "skip": 3,
-      "why": "a bed that takes the character opens Sleep/Wait; results.jsonl says whether they lay down"
+      "why": "a bed that takes the character opens Sleep/Wait; results.jsonl says whether they lay down",
+      "task": 6712
     },
     {
       "do": "shot",
-      "name": "bed-sleep-menu"
+      "name": "bed-sleep-menu",
+      "task": 6712
     },
     {
       "do": "key",
       "code": 1,
-      "why": "Escape leaves the menu"
+      "why": "Escape leaves the menu",
+      "task": 6712
     },
     {
       "do": "wait",
       "for": "menu",
       "menu": "Sleep/Wait Menu",
       "open": false,
-      "timeout": 10000
+      "timeout": 10000,
+      "task": 6712
     },
     {
       "do": "wait",
       "for": "time",
       "ms": 4000,
-      "why": "getting up out of the bed"
+      "why": "getting up out of the bed",
+      "task": 6712
     },
     {
       "do": "key",
       "code": 20,
-      "why": "T, Wait, in the same room"
+      "why": "T, Wait, in the same room",
+      "task": 6712
     },
     {
       "do": "wait",
       "for": "time",
-      "ms": 1500
+      "ms": 1500,
+      "task": 6712
     },
     {
       "do": "shot",
       "name": "wait-key",
-      "why": "the Wait menu, or the message the game gave"
+      "why": "the Wait menu, or the message the game gave",
+      "task": 6712
     },
     {
       "do": "wait",
@@ -262,83 +360,337 @@
       "menu": "Sleep/Wait Menu",
       "open": true,
       "timeout": 5000,
-      "skip": 3
+      "skip": 3,
+      "task": 6712
     },
     {
       "do": "shot",
-      "name": "wait-menu"
+      "name": "wait-menu",
+      "task": 6712
     },
     {
       "do": "key",
-      "code": 1
+      "code": 1,
+      "task": 6712
     },
     {
       "do": "wait",
       "for": "menu",
       "menu": "Sleep/Wait Menu",
       "open": false,
-      "timeout": 10000
+      "timeout": 10000,
+      "task": 6712
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 7008,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 7008
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 7008,
+      "why": "and our journal shut, if a step before left it open"
     },
     {
       "do": "key",
       "code": 23,
       "inventoryTrace": true,
-      "why": "I, the inventory"
+      "why": "I, the inventory",
+      "task": 7008
     },
     {
       "do": "wait",
       "for": "menu",
       "menu": "InventoryMenu",
       "open": true,
-      "timeout": 15000
+      "timeout": 15000,
+      "task": 7008
     },
     {
       "do": "shot",
-      "name": "inventory"
+      "name": "inventory",
+      "task": 7008
     },
     {
       "do": "key",
       "code": 23,
-      "why": "a second I closes the inventory, as Patrick wants; on 26 Nov it did not yet (Tab and Escape did), and a fix for that is in hand, so this step fails until it lands",
-      "inventoryTrace": true
+      "why": "a second I closes the inventory, as Patrick wants; on 26 Nov it did not yet (Tab and Escape did), and the fix (the engine pin of 26 Nov and the pack's own binding check) reaches dev with the first release after build-1.3.134",
+      "inventoryTrace": true,
+      "task": 7008
     },
     {
       "do": "wait",
       "for": "menu",
       "menu": "InventoryMenu",
       "open": false,
-      "timeout": 15000
+      "timeout": 15000,
+      "task": 7008
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 5197,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 5197
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 5197,
+      "why": "and our journal shut, if a step before left it open"
     },
     {
       "do": "key",
       "code": 15,
-      "why": "Tab, the game's menu"
+      "why": "Tab, the game's menu",
+      "task": 5197
     },
     {
       "do": "wait",
       "for": "menu",
       "menu": "TweenMenu",
       "open": true,
-      "timeout": 15000
+      "timeout": 15000,
+      "task": 5197
     },
     {
       "do": "shot",
-      "name": "tween-menu"
+      "name": "tween-menu",
+      "task": 5197
     },
     {
       "do": "key",
-      "code": 15
+      "code": 15,
+      "task": 5197
     },
     {
       "do": "wait",
       "for": "menu",
       "menu": "TweenMenu",
       "open": false,
-      "timeout": 15000
+      "timeout": 15000,
+      "task": 5197
     },
     {
       "do": "shot",
-      "name": "back-in-world"
+      "name": "back-in-world",
+      "task": 5197
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 4581,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 4581
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 4581,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "page",
+      "task": 4581,
+      "timeout": 30000,
+      "js": "(function(){if(window.__tsRideTp){return 'sent';}var n=window.thornswoodNet;if(!n||!n.say){return '';}n.say('/tp whiterun',{quiet:true});window.__tsRideTp=1;return 'sent';})()",
+      "why": "to Whiterun's start spot outside the gate, once, about 1,700 units from the stables' carriage driver, Bjorlam (#4581)"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 60000,
+      "task": 4581
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "task": 4581,
+      "why": "outside Whiterun"
+    },
+    {
+      "do": "face",
+      "what": "driver",
+      "ref": "bbf6d:CFTO.esp",
+      "task": 4581,
+      "why": "stand before Bjorlam, the Whiterun carriage driver, by his placed reference (carriages.ts carriage:whiterun)"
+    },
+    {
+      "do": "wait",
+      "for": "crosshair",
+      "what": "driver",
+      "timeout": 10000,
+      "task": 4581
+    },
+    {
+      "do": "shot",
+      "name": "driver-prompt",
+      "task": 4581,
+      "why": "what the game's prompt says over him"
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4581,
+      "why": "E on the driver"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:wants"
+      ],
+      "timeout": 10000,
+      "task": 4581,
+      "why": "the server answered /ride e with his stops and fares, and the page asks for the panel"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:opened"
+      ],
+      "timeout": 15000,
+      "task": 4581,
+      "why": "the panel is up, once no menu of the game's is"
+    },
+    {
+      "do": "shot",
+      "name": "ride-panel",
+      "task": 4581,
+      "why": "his stops and their fares"
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "task": 4581,
+      "why": "Escape closes the panel; no ride is taken and no fare paid"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:closed"
+      ],
+      "timeout": 10000,
+      "task": 4581
     },
     {
       "do": "end"

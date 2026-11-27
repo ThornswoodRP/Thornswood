@@ -108,16 +108,18 @@ if (-not $newerConst.Success -or -not $appIdConst.Success) { Done }
 $downStub = "using System;`r`nusing System.IO;`r`nnamespace Thornswood`r`n{`r`n    static class Downgrade`r`n    {`r`n" +
             $appIdConst.Value + "`r`n" + $newerConst.Value + "`r`n" + $lifted.ToString() + "`r`n    }`r`n}`r`n"
 
-# Config.Load and Save need Secrets and Swallow, which come along, and its
-# serializer LooseString; Paths is a stand-in with the one field Swallow
+# Config.Load and Save need Secrets, Swallow and WholeFile, which come along,
+# and its serializer LooseString; Paths is a stand-in with the one field Swallow
 # reads, left null so nothing is written.
 $looseSrc = Read-Text (Join-Path $app 'LooseString.cs')
 $secretsSrc = Read-Text (Join-Path $app 'Secrets.cs')
 $swallowSrc = Read-Text (Join-Path $app 'Swallow.cs')
+# Save writes through WholeFile (#4702).
+$wholeSrc = Read-Text (Join-Path $app 'WholeFile.cs')
 $pathsStub = "namespace Thornswood`r`n{`r`n    static class Paths { public static string LogFile; }`r`n}`r`n"
 
 $asm = $null
-try { $asm = Add-LauncherType -Source $configSrc, $looseSrc, $secretsSrc, $swallowSrc, $pathsStub, $downStub }
+try { $asm = Add-LauncherType -Source $configSrc, $looseSrc, $secretsSrc, $swallowSrc, $wholeSrc, $pathsStub, $downStub }
 catch { Write-Host ('      ' + $_.Exception.Message) }
 Yes 'Config.cs and the pin methods compile with the compiler the build runs' ($null -ne $asm)
 if ($null -eq $asm) { Done }
