@@ -286,7 +286,7 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
       /node scripts\/dev\/Tested-Tree\.js --tree \$tree --commit \$env:GITHUB_SHA --repo \$env:GITHUB_REPOSITORY\n/.test(tj) && /git rev-parse 'HEAD\^\{tree\}'/.test(tj));
   yes('the build waits for the answer and builds only when it found nothing',
       /\n  launcher:\n    name: Launcher builds\n    needs: \[tested, pick\]\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}\n/.test(build) &&
-      /\n  checks:\n    name: Tree checks\n    needs: tested\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}\n/.test(build));
+      /\n  checks:\n    name: Tree checks\n    needs: \[tested, pick\]\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' && needs\.pick\.result == 'success' \}\}\n/.test(build));
   // The checks are the launcher job's steps and, since #5292, the Tree
   // checks job's, each without the comments that stand before the next one.
   // The launcher job is the last job; Tree checks is the one before it.

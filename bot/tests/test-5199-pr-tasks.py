@@ -20,7 +20,11 @@ It holds:
   - main() exits 1 on a bad body and 0 on a good one, and says when it could
     not read the issues;
   - with a token it reads the body from GitHub, by number or through the one
-    open pull request a branch heads, and passes a branch with none.
+    open pull request a branch heads, and passes a branch with none;
+  - a "Known issue for #N" block is read with done-on-merge.yml's pattern,
+    held to the bot's rules for known issue posts and to an open finding,
+    and every open finding the body names with no test task needs one, or
+    "unchanged" (#7080); the engine pin's pull request is not asked.
 
 The real bot module is imported. Never connects to anything.
 """
@@ -228,6 +232,61 @@ def fake_get(token, path):
         return {'number': int(path.rsplit('/', 1)[1]), 'state': 'open'}
     return None
 
+
+# ---- known issues in the pull request (#7080)
+yes('done-on-merge.yml reads "Known issue for #N" blocks with the pattern pr_tasks.py holds',
+    r"'^\s*Known issue for #(\d+)\s*:\s*(.+?)\s*$'" in wf
+    and pr_tasks.KNOWN_START.pattern == r'^\s*Known issue for #(\d+)\s*:\s*(.+?)\s*$')
+KNOWN = ('Known issue for #201: Stall lists do not open\n'
+         'Server: Main\n'
+         'What happens: the item list does not open.\n'
+         'Where: any market stall.\n'
+         'How to avoid it: nothing yet.\n'
+         'What is being done: the fix goes out with the next engine update.\n')
+kb = pr_tasks.known_blocks(MAIN + KNOWN + '\n## After\nmore\n')
+yes('a known issue block is read, and ends at a heading',
+    len(kb) == 1 and kb[0]['issue'] == 201 and kb[0]['title'] == 'Stall lists do not open'
+    and kb[0]['text'].startswith('Server: Main\nWhat happens') and 'more' not in kb[0]['text'])
+yes('  and a test task block ends where a known issue block starts',
+    'Stall' not in pr_tasks.blocks(MAIN + KNOWN)[0]['steps'])
+yes('  the comment the merge writes is "Known issue: <title>" and the lines under it',
+    pr_tasks.known_comment_of(kb[0]).startswith('Known issue: Stall lists do not open\nServer: Main\n'))
+yes('"Known issue for #N: unchanged" with nothing under it copies nothing',
+    pr_tasks.known_blocks('Known issue for #201: unchanged\n')[0]['unchanged'])
+yes('Refs, Closes and lists of issues are all read as named, but not inside a comment',
+    pr_tasks.named('Refs #1, #2 and #3\nFixes #4\n<!-- Closes #9 -->') == {1, 2, 3, 4})
+
+
+def finding(n, state='open', labels=('Main Findings',)):
+    return {'number': n, 'state': state, 'labels': [{'name': l} for l in labels]}
+
+
+ISSUES = {201: finding(201), 202: finding(202), 203: finding(203, labels=('bug',)),
+          204: finding(204, state='closed')}
+
+
+def kp(body, head=''):
+    got, _s = pr_tasks.known_problems(body, lambda n: ISSUES.get(n), bot=bot, head_ref=head)
+    return got
+
+
+yes('a good known issue for an open finding passes', all(not r for _w, r in kp('Refs #201\n' + KNOWN)))
+bad = kp(KNOWN.replace('nothing yet.', 'see https://example.com'))
+yes('  one with a link breaks the bot\'s rule for posts', any(has(r, 'Format') for _w, r in bad))
+long_title = kp('Known issue for #201: ' + 'x' * 50 + '\nWhat happens: it.\n')
+yes('  and so does a title over 45 characters', any(has(r, 'Format') for _w, r in long_title))
+yes('  one for an issue that is no finding is refused, since the bot posts only findings',
+    any(has(r, 'Issue') for _w, r in kp(KNOWN.replace('#201', '#203'))))
+yes('  and so is one for a closed issue', any(has(r, 'Issue') for _w, r in kp(KNOWN.replace('#201', '#204'))))
+miss = kp('Refs #202\n')
+yes('an open finding named with no test task and no known issue is refused',
+    len(miss) == 1 and has(miss[0][1], 'Known issues'))
+yes('  "unchanged" answers it', all(not r for _w, r in kp('Refs #202\nKnown issue for #202: unchanged\n')))
+yes('  and so does a test task for it', all(not r for _w, r in kp('Refs #202\n' + MAIN.replace('#101', '#202'))))
+yes('  a named issue that is no finding, or closed, needs none', kp('Refs #203, #204\n') == [])
+yes('  and the engine pin\'s pull request is not asked', kp('Refs #202\n', head='engine-pin/next') == [])
+yes('  nor is anything asked with no issue reader',
+    pr_tasks.known_problems('Refs #202\n', None, bot=bot)[0] == [])
 
 real_get = pr_tasks._get
 pr_tasks._get = fake_get

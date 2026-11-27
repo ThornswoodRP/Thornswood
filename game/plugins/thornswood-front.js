@@ -3321,8 +3321,11 @@
   // loaded: a cell that has just finished loading, whose things are all there
   // now, so a held one is gone through again for any that were not yet.
   function settleOwnCells(loaded) {
+    // The character's own record, the one a bought house is set to. Skyrim
+    // Platform has no getActorBase: Papyrus writes it as a script function
+    // over GetBaseObject, and only natives reach plugins (#7089).
     const pc = sp.Game.getPlayer();
-    const me = pc ? pc.getActorBase() : null;
+    const me = pc ? sp.ActorBase.from(pc.getBaseObject()) : null;
     if (!me) { return; }
     for (const key in ownKept) {
       if (Object.prototype.hasOwnProperty.call(ownKept, key) && ownWanted.indexOf(Number(key)) < 0) {
@@ -4052,8 +4055,10 @@
     let pc = null;
     try { pc = sp.Game.getPlayer(); } catch (e) { return 0; }
     if (!pc) { return 0; }
-    let female = false;
-    try { const b = pc.getActorBase(); female = !!b && b.getSex() === 1; } catch (e) { female = false; }
+    // Not caught: a quiet catch here hid that the read was wrong and asked as
+    // a man for everybody (#7089). The guard says a failure.
+    const base = sp.ActorBase.from(pc.getBaseObject());
+    const female = !!base && base.getSex() === 1;
     let undone = 0;
     try {
       const names = niOverride('GetMorphNames', pc);
@@ -5821,6 +5826,84 @@
     bits.push('activation blocked ' + blocked);
     return ': ' + bits.join(', ');
   }
+
+  /*
+    WHERE A LOAD PUTS THE CHARACTER, AND WHICH CAMERA IT IS IN (#6593, #6594).
+
+    Dev Test #1 on 18 Nov: one tester spawned up in the air, another spawned
+    in first person with the mouse wheel doing nothing for a while. Their logs
+    could not say either. The first feet height came from a place line 35 to
+    50 s after the load, and the camera only from a "looking at" line, which
+    needs somebody in front of you.
+
+    So after each arrival (the first world, a new cell indoors, a new
+    worldspace, or a jump of more than 2000 units, which is a teleport), this
+    writes where the feet are, whether the game has the character in the air
+    and which camera it is in. It writes at 0.25, 1, 3 and 6 s after the
+    arrival, so a fall shows as the height dropping and a camera change shows
+    when it came. It reads only and changes nothing.
+  */
+  function landingSaid(pc) {
+    const bits = [];
+    let z = NaN;
+    try { z = Number(pc.getPositionZ()); } catch (e) { z = NaN; }
+    bits.push('feet at ' + (isFinite(z) ? Math.round(z) : 'unknown'));
+    let air = 'unknown';
+    try { air = pc.getAnimationVariableBool('bInJumpState') ? 'yes' : 'no'; } catch (e) { air = 'unknown'; }
+    bits.push('in the air ' + air);
+    let cam = -1;
+    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
+    bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
+    let menu = 'unknown';
+    try { menu = sp.Utility.isInMenuMode() ? 'yes' : 'no'; } catch (e) { menu = 'unknown'; }
+    bits.push('menu ' + menu);
+    return bits.join(', ');
+  }
+
+  // Where the character is, as a key that changes only on an arrival: the
+  // cell indoors, the worldspace outdoors, so walking across exterior cells is
+  // not one.
+  function landingKey(pc) {
+    let cell = null;
+    try { cell = pc.getParentCell(); } catch (e) { cell = null; }
+    let inside = false;
+    try { inside = !!(cell && cell.isInterior()); } catch (e) { inside = false; }
+    if (inside) {
+      try { return 'cell ' + cell.getFormID().toString(16); } catch (e) { return 'cell ?'; }
+    }
+    let world = null;
+    try { world = pc.getWorldSpace(); } catch (e) { world = null; }
+    try { return 'world ' + (world ? world.getFormID().toString(16) : '?'); } catch (e) { return 'world ?'; }
+  }
+
+  const LAND_AFTER = [250, 1000, 3000, 6000];
+  const LAND_JUMP = 2000;
+  let landWas = null;     // { key, x, y, z } at the last look
+  let landAt = 0;         // when the last arrival was seen
+  let landNext = LAND_AFTER.length;
+  let landLookAt = 0;
+  sp.on('update', guard('landing', () => {
+    const now = Date.now();
+    if (now < landLookAt) { return; }
+    landLookAt = now + 100;
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { landWas = null; return; }
+    let x = 0, y = 0, z = 0;
+    try { x = pc.getPositionX(); y = pc.getPositionY(); z = pc.getPositionZ(); } catch (e) { return; }
+    const key = landingKey(pc);
+    let arrived = !landWas || landWas.key !== key;
+    if (!arrived) {
+      const dx = x - landWas.x, dy = y - landWas.y, dz = z - landWas.z;
+      arrived = dx * dx + dy * dy + dz * dz > LAND_JUMP * LAND_JUMP;
+    }
+    landWas = { key: key, x: x, y: y, z: z };
+    if (arrived) { landAt = now; landNext = 0; return; }
+    if (landNext < LAND_AFTER.length && now - landAt >= LAND_AFTER[landNext]) {
+      log('landing: ' + LAND_AFTER[landNext] + 'ms after arriving in ' + key + ', ' + landingSaid(pc));
+      landNext++;
+    }
+  }));
 
   // A claim is a variable read, so it is asked every frame and a panel takes
   // the prompt down in the frame it opens, not on the next poll.
@@ -9640,7 +9723,12 @@
       }
     }
     if (leaving && now - leaving > 5000) {
-      leaving = now + 3600000;   // never twice
+      /* Once per outage (#4774). This used to push leaving an hour ahead,
+         which brought the countdown and the quit back an hour later, at the
+         menu or in whatever world the person was in by then. The outage ends
+         here: checkServer stands down until they are in a world again. */
+      leaving = 0;
+      quitFor = true;
       // No longer in the world, and said so before the quit rather than after,
       // because after it there is no tick to say it in.
       try { globalThis.__thornswoodInWorld = false; } catch (e) { }
@@ -9801,9 +9889,29 @@
   let leavingSaid = 0;
   /* When the server last said a countdown was running. See PROBE_STRIKES. */
   let toldRestarting = 0;
+  /* The quit for an outage has run, and nothing is watched until the person
+     is in a world again: there is no game connection left to lose (#4774).
+     The world flag is set by the first arrival in the tick above; coming
+     back after leaving the world does not set it again yet, which is #4615,
+     so until that lands the check stays off for the rest of the session. */
+  let quitFor = false;
 
   function checkServer(now) {
     if (!probe || leaving) return;
+    if (quitFor) {
+      let here = false;
+      try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+      if (!here) return;
+      // A new world, so a new watch: none of the last outage carries over.
+      quitFor = false;
+      strikes = 0;
+      probing = false;
+      lastProbe = 0;
+      leftClosed = false;
+      leavingSaid = 0;
+      toldRestarting = 0;
+      log('in a world again, watching the server again');
+    }
     if (probing && now - probeStartedAt > PROBE_DEADLINE_MS) {
       probing = false;
       log('the server has not answered in', PROBE_DEADLINE_MS / 1000, 'seconds');
@@ -9902,6 +10010,16 @@
 
     closingGame goes up first, so the race menu closing as the game comes
     apart is told as /racedown, not as a finished face.
+
+    The connection to the game server is closed before the exit (#6724).
+    exitProcess ends the process without closing it, so the server never
+    heard this game leave and held it for its own 60 s timeout, and the same
+    account picking again inside that minute was turned away as a second
+    game (24 Nov, main: three refusals 1 to 3 s after a close). destroyClient
+    puts the client down, and the client's own shutdown says goodbye to the
+    server and returns once the server has it (fork #204, at most 500 ms).
+    It is done only when exitProcess is there to follow it, so a game that
+    cannot close stays connected.
   */
   function closeGame(from) {
     closingGame = true;
@@ -9920,6 +10038,8 @@
     let asked = false;
     try {
       if (sp.win32 && typeof sp.win32.exitProcess === 'function') {
+        try { sp.mpClientPlugin.destroyClient(); log('menu: closed the connection to the game server'); }
+        catch (e) { log('menu: could not close the connection to the game server:', e); }
         sp.win32.exitProcess();
         asked = true;
       }

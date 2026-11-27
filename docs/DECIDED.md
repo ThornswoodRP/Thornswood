@@ -963,6 +963,10 @@ issue where the card did.
   not CONTRIBUTING.md, nightly.yml's comments included; #5901 merges at
   e63a886.** (dec_zklJw_Lq1NsQrYCacyF7aA) 12 Nov 2026,
   [#4171](https://github.com/ThornswoodRP/Thornswood/issues/4171#issuecomment-6830659116).
+- **GitHub Code Quality is turned off in Thornswood-Ops, and in no other
+  repository, since it fails every commit there on billing.**
+  (dec_bZtp0Axfnkb82mxxmL4hhA) 26 Nov 2026,
+  [#7121](https://github.com/ThornswoodRP/Thornswood/issues/7121#issuecomment-7208019464).
 
 ### Runners
 

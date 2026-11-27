@@ -3,9 +3,7 @@
 // #1398. The forge burns the grade of charcoal the smith page's table names,
 // the smelter the grade of its metal, and the skyforge one grade poorer. A
 // drum, a flute and a lute are not asked for a tool handle; a war axe, a
-// battleaxe, a warhammer and a mace still are. Since #6726 (Patrick's B)
-// both are inputs on the recipes, written by Thornswood-Last.esp from
-// FUEL_BY_RECIPE, so the server takes neither itself any more. Grand Chef's batch comes out
+// battleaxe, a warhammer and a mace still are. Grand Chef's batch comes out
 // twice (named before the engine gives it, #2906), a Master Weaver's garment ignores 4 degrees of exposure, and a
 // Master Carver's fire is 48 at your feet. Temper rows stay unscored and
 // Mastercraft is not a temper bonus.
@@ -48,15 +46,14 @@ function cut(head) { return slice(gm, head, '\n}\n'); }
 function lineOf(re) { const m = re.exec(gm); return m ? m[0] : null; }
 
 // ------------------------------------------------- 1. the table and the page
-const FUEL = require('../../scripts/dev/Build-FuelTable.js').read().recipes;
-yes('FUEL_BY_RECIPE is built', Object.keys(FUEL).length > 200);
-yes('the gamemode no longer reads it: the charcoal and the handle are on the records (#6726)',
-    !/table\('FUEL_BY_RECIPE'\)/.test(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode', 'the-benches.ts'), 'utf8')));
+const fuelLine = /^const FUEL_BY_RECIPE = (\{.*\});$/m.exec(gm);
+const FUEL = fuelLine ? JSON.parse(fuelLine[1]) : {};
+yes('FUEL_BY_RECIPE is installed in the gamemode', !!fuelLine && Object.keys(FUEL).length > 200);
 {
-  // The table is game/data/fuel-by-recipe.json, which Thornswood-Last.esp is built from (#6726).
+  // The gamemode reads the table from game/gamemode-tables/FUEL_BY_RECIPE.json (#5191).
   const built = JSON.parse(Fuel.tableJson(Fuel.fuelTable(RECIPES_JSON)));
   yes('the installed table is what Build-FuelTable.js builds out of recipes.json today',
-    JSON.stringify(require('../../scripts/dev/Build-FuelTable.js').read().recipes) === JSON.stringify(built));
+    JSON.stringify(require('../../tests/gamemode-tables.js').table('FUEL_BY_RECIPE')) === JSON.stringify(built));
 }
 {
   // The page's table, row by row, is the script's METALS.
@@ -96,15 +93,15 @@ if (RECIPES && KEPT) {
       ['Nordic Bow', 'Glass Bow'].every(function (n) { return !!byName(n) && grade(n) === 0; }));
   yes('a stalhrim sword burns Coke', grade('Stalhrim Sword') === 4);
   yes('ancient nord at the skyforge takes Poor Charcoal, which does not get poorer',
-      FUEL[byName('Ancient Nord Armor')] && FUEL[byName('Ancient Nord Armor')].join() === '1,ancient nord,skyforge,0');
+      FUEL[byName('Ancient Nord Armor')] && FUEL[byName('Ancient Nord Armor')].join() === '1,ancient nord,skyforge');
   yes('stalhrim at the skyforge takes briquette (the rule, on a row the table has no skyforge copy of)',
-      Fuel.fuelOf({ name: 'Stalhrim Sword', benchName: 'CraftingSmithingSkyforge', inputItems: [] }).join() === '3,stalhrim,skyforge,0');
+      Fuel.fuelOf({ name: 'Stalhrim Sword', benchName: 'CraftingSmithingSkyforge', inputItems: [] }).join() === '3,stalhrim,skyforge');
   yes('ebony at the skyforge takes Charcoal',
       Fuel.fuelOf({ name: 'Ebony Sword', benchName: 'CraftingSmithingSkyforge', inputItems: [] })[0] === 2);
   yes('smelting an ebony ingot burns Charcoal Briquette, the grade of its metal',
-      FUEL['a30d3:Skyrim.esm'] && FUEL['a30d3:Skyrim.esm'].join() === '3,ebony,smelter,0');
+      FUEL['a30d3:Skyrim.esm'] && FUEL['a30d3:Skyrim.esm'].join() === '3,ebony,smelter');
   yes('smelting iron burns Poor Charcoal', FUEL['a30c3:Skyrim.esm'] && FUEL['a30c3:Skyrim.esm'][0] === 1);
-  yes('the dwarven smelt KEPT_SMELT keeps burns Charcoal', FUEL['10dd28:Skyrim.esm'] && FUEL['10dd28:Skyrim.esm'].join() === '2,dwarven,smelter,0');
+  yes('the dwarven smelt KEPT_SMELT keeps burns Charcoal', FUEL['10dd28:Skyrim.esm'] && FUEL['10dd28:Skyrim.esm'].join() === '2,dwarven,smelter');
   yes('a hotter metal on the list wins: glass ingots in a Tribunal robe burn briquette',
       grade('Tribunal Light Robe Black') === 3);
   yes('a forge piece with no metal on the table still burns one charcoal, the lowest',
@@ -154,13 +151,17 @@ yes('the character block\'s weaveOf and the maneuvers block\'s armour mark are i
 
 const ITEMS = JSON.parse(/^const ITEMS = (\{.*\});$/m.exec(gm)[1]);
 const pieces = {
+  grades: slice(gm, 'const CHARCOAL_GRADES = [', '\n];'),
+  hafted: lineOf(/^const HAFTED_FAMILIES = .*$/m),
+  handle: lineOf(/^const HANDLE_DESC = .*$/m),
   tools: slice(gm, 'const TOOLS = {', '\n};'),
   key: lineOf(/^const KEY_RECIPE = .*$/m),
   // #3151: the quality a weapon or an armour piece comes out at.
   quality: [slice(gm, 'const CRAFT_QUALITY = {', '\n};'), lineOf(/^const QUALITY_WEAPON_FAMILIES = .*$/m),
             lineOf(/^const QUALITY_RANKS = .*$/m)].join('\n'),
   fns: ['function idOf(descriptor)', 'function mintedEntry(entry)', 'function takeItem(actorId, itemDesc, count)', 'function addItem(actorId, itemDesc, count)',
-        'function recipeMetadataRefusal(desc)', 'function craftRow(recipeDesc)', 'function packCount(actorId, itemDesc)',
+        'function recipeMetadataRefusal(desc)', 'function craftRow(recipeDesc)', 'function fuelFor(recipeDesc)', 'function packCount(actorId, itemDesc)',
+        'function charcoalHeld(actorId, grade)', 'function fuelRefusal(fuel)', 'function wantsAHandle(row)',
         'function holdsPerk(actorId, key)', 'function wovenMark(actorId)',
         'function wovenOutput(actorId, row)', 'function cookedOutput(actorId, row)',
         'function qualityTier(margin, roll)', 'function qualityRolled(row, baseId)',
@@ -179,7 +180,7 @@ const pieces = {
 };
 const TOOLS_TABLE = pieces.tools ? new Function(pieces.tools.replace(/^const TOOLS = /, 'return '))() : {};
 yes('the craft pieces are all in the gamemode',
-    !!pieces.tools && !!pieces.key &&
+    !!pieces.grades && !!pieces.hafted && !!pieces.handle && !!pieces.tools && !!pieces.key &&
     pieces.fns.every(function (f) { return !!f; }) && !!pieces.onCraft);
 
 /*
@@ -221,7 +222,7 @@ function craftRig(state) {
     __thornswoodNeeds: { NEEDS: { wear: { woven: { degrees: 4, mark: 'Master-Woven ' } } } },
     __thornswoodManeuvers: { WOVEN: WOVEN }
   };
-  const body = [pieces.tools, pieces.toolNumbers, pieces.key, pieces.quality]
+  const body = [pieces.grades, fuelLine[0], pieces.hafted, pieces.handle, pieces.tools, pieces.toolNumbers, pieces.key, pieces.quality]
     .concat(pieces.fns).join('\n') + '\n' + pieces.onCraft + '\nreturn mp.onCraft;';
   const onCraft = new Function('mp', 'globalThis', 'ITEMS', 'RECIPES_BY_ID', 'KEPT_SMELT', 'guard', 'notify', 'say', 'log',
     'setTimeout', 'recipelessCraft', 'craftAnswer', 'creditWork', body)(
@@ -231,8 +232,8 @@ function craftRig(state) {
     function () { return { refusal: null, note: null, credit: 'the half' }; },
     function (a, half) { credited.push(half); return ''; });
   const A = 0xff000001;
-  // Every bench trade's tool in the pack (#3162), so these crafts are not
-  // refused for a missing hammer.
+  // Every bench trade's tool in the pack (#3162), so these crafts are asked
+  // about the fuel and the handle and not refused for a missing hammer.
   ['smith', 'tailor', 'cook', 'woodworker'].forEach(function (k) {
     (packs[A] = packs[A] || []).push({ baseId: id(TOOLS_TABLE[k].give), count: 1 });
   });
@@ -275,58 +276,80 @@ if (RECIPES && KEPT && pieces.onCraft && P) {
   const smith = person('smith', 'edgewright', 'master');
   const plate = person('smith', 'platewright', 'master');
   const ebony = byName('Ebony Sword'), iron = byName('Iron Sword'), dwarven = byName('Dwarven Sword');
-  const T1 = ITEMS.charcoalT1, T3 = ITEMS.charcoalT3, VAN = ITEMS.charcoal;
-  const HANDLE = Fuel.HANDLE;
+  const T1 = ITEMS.charcoalT1, T2 = ITEMS.charcoalT2, T3 = ITEMS.charcoalT3, T4 = ITEMS.charcoalT4, VAN = ITEMS.charcoal;
+  const HANDLE = /'([^']+)'/.exec(pieces.handle)[1];
 
-  attempt('the server takes neither', function () {
+  attempt('the grade the table names', function () {
     const r = craftRig(smith);
-    yes('with no charcoal and no handle in the pack, the server lets an ebony sword and an iron war axe through: ' +
-        'the engine takes them as the record\'s inputs', r.craft(ebony) !== false && r.craft(byName('Iron War Axe')) !== false);
-    yes('and says nothing about charcoal or a handle', !/[Cc]harcoal|handle/.test(r.said.join(' ')));
+    r.give(T1, 3); r.give(T3, 2);
+    yes('with Poor Charcoal and briquettes in the pack, an ebony sword burns a briquette',
+        r.craft(ebony) !== false && r.count(T3) === 1 && r.count(T1) === 3);
+    yes('and an iron sword out of the same pack burns Poor Charcoal',
+        r.craft(iron) !== false && r.count(T1) === 2 && r.count(T3) === 1);
+    yes('the work is credited once for each', r.credited.length === 2);
+  });
+  attempt('no charcoal of that grade', function () {
+    const r = craftRig(smith);
+    r.give(T1, 5);
+    const before = JSON.stringify(r.packs[r.A]);
+    yes('Poor Charcoal alone does not make an ebony sword', r.craft(ebony) === false);
+    yes('and nothing is taken', JSON.stringify(r.packs[r.A]) === before);
+    yes('and it says which grade, and for what', /Ebony at a forge burns Charcoal Briquette, and you have none\./.test(r.said.join(' ')));
+    yes('nothing is credited for a piece that was not made', r.credited.length === 0);
     const c = craftRig(smith);
-    c.give(T1, 2); c.give(T3, 2); c.give(VAN, 2); c.give(HANDLE, 2);
-    c.craft(ebony); c.craft(iron); c.craft(byName('Iron Mace'));
-    yes('and with charcoal and handles in the pack it takes none of them on top of the record',
-        c.count(T1) === 2 && c.count(T3) === 2 && c.count(VAN) === 2 && c.count(HANDLE) === 2);
+    c.give(T4, 1);
+    yes('coke is not burned in place of Poor Charcoal for iron', c.craft(iron) === false && c.count(T4) === 1);
+  });
+  attempt('Skyrim\'s own charcoal', function () {
+    const r = craftRig(smith);
+    r.give(VAN, 1);
+    yes('Skyrim\'s own Charcoal is the Charcoal grade: a dwarven sword takes it', r.craft(dwarven) !== false && r.count(VAN) === 0);
+    const c = craftRig(smith);
+    c.give(VAN, 1);
+    yes('and it is not Poor Charcoal', c.craft(iron) === false && c.count(VAN) === 1);
+  });
+  attempt('the smelter', function () {
+    const r = craftRig(plate);
+    r.give(T1, 1);
+    yes('smelting an ebony ingot with only Poor Charcoal is refused', r.craft('a30d3:Skyrim.esm') === false && r.count(T1) === 1);
+    yes('and it says so', /Smelting Ebony burns Charcoal Briquette/.test(r.said.join(' ')));
+    r.give(T2, 1);
+    yes('the kept dwarven smelt burns Charcoal', r.craft('10dd28:Skyrim.esm') !== false && r.count(T2) === 0 && r.count(T1) === 1);
+  });
+  attempt('the skyforge', function () {
+    const r = craftRig(plate);
+    r.give(T1, 1);
+    yes('ancient nord at the skyforge burns Poor Charcoal', r.craft(byName('Ancient Nord Armor')) !== false && r.count(T1) === 0);
   });
 
+  const wood = person('woodworker', 'woodwright', 'novice');
   attempt('the instruments and the hafts', function () {
     ['Lute', 'Drum', 'Flute'].forEach(function (name) {
-      yes('a ' + name.toLowerCase() + ' is made at the woodworking bench, so it takes no charcoal and no tool handle',
-          !!byName(name) && !FUEL[byName(name)]);
+      const r = craftRig(wood);
+      r.give(T1, 1);
+      yes('a ' + name.toLowerCase() + ' is made at the woodworking bench without a tool handle, and burns no charcoal',
+          r.craft(byName(name)) !== false && r.count(T1) === 1);
     });
     ['Iron War Axe', 'Iron Battleaxe', 'Iron Warhammer', 'Iron Mace'].forEach(function (name) {
-      const f = FUEL[byName(name)];
-      yes('an ' + name.toLowerCase() + ' takes one Poor Charcoal and one handle', !!f && f[0] === 1 && f[3] === 1);
+      const r = craftRig(smith);
+      r.give(T1, 1);
+      yes('an ' + name.toLowerCase() + ' with no handle is refused, and the charcoal stays',
+          r.craft(byName(name)) === false && r.count(T1) === 1 && /fitted to a wooden handle/.test(r.said.join(' ')));
+      r.give(HANDLE, 1);
+      yes('with a handle it is made, and takes one handle and one Poor Charcoal',
+          r.craft(byName(name)) !== false && r.count(T1) === 0 && r.count(HANDLE) === 0);
     });
-    const pick = FUEL[byName('Pickaxe')];
-    yes('a pickaxe names its handle in its own record and is not given a second', !!pick && pick[3] === 0);
-    yes('no row takes a handle unless it is in one of the four hafted families',
-        Object.keys(FUEL).every(function (k) { return !FUEL[k][3] || Fuel.HAFTED_FAMILIES.indexOf(RECIPES_JSON.recipes[k].family) !== -1; }));
-    const counts = Fuel.HAFTED_FAMILIES.map(function (f) {
+    const p = craftRig(smith);
+    p.give(T1, 1); p.give(HANDLE, 1);
+    yes('a pickaxe names its handle in its own record and is not asked for a second',
+        p.craft(byName('Pickaxe')) !== false && p.count(HANDLE) === 1);
+    // game\tests\test-1398-fuel.js is what the comment over HANDLE_DESC says counts these.
+    const families = ['War axes', 'Battleaxes', 'Warhammers', 'Maces'];
+    const counts = families.map(function (f) {
       return Object.keys(RECIPES).filter(function (k) { return RECIPES[k].family === f && !RECIPES[k].nobody; }).length;
     });
     yes('the four hafted families are the page\'s four, and each still matches rows in the table (' + counts.join(', ') + ')',
-        JSON.stringify(Fuel.HAFTED_FAMILIES) === JSON.stringify(['War axes', 'Battleaxes', 'Warhammers', 'Maces']) &&
-        counts.every(function (n) { return n > 0; }));
-  });
-
-  attempt('the item each grade is', function () {
-    yes('the four grades are the kiln\'s, and the Charcoal grade is Skyrim\'s own Charcoal (Patrick\'s B on #6726)',
-        JSON.stringify(Fuel.GRADE_ITEMS) === JSON.stringify([null, ITEMS.charcoalT1, ITEMS.charcoal, ITEMS.charcoalT3, ITEMS.charcoalT4]));
-    // The builders that read the file take the items from it, not from
-    // copies of their own (Build-LastPlugin.py, Build-Recost.py).
-    const file = Fuel.read();
-    yes('the file names the item each grade is and the handle, and no builder keeps a copy',
-        JSON.stringify(file.grades) === JSON.stringify(Fuel.GRADE_ITEMS) && file.handle === Fuel.HANDLE &&
-        ['scripts/mods/Build-LastPlugin.py', 'scripts/dev/Build-Recost.py'].every(function (f) {
-          const t = fs.readFileSync(path.join(REPO_DIR, f), 'utf8');
-          return t.indexOf("'15481:Thornswood-Content.esp'") < 0 && t.indexOf("'15490:Thornswood-Content.esp'") < 0;
-        }));
-    const records = fs.readFileSync(path.join(REPO_DIR, 'scripts', 'mods', 'Add-ContentRecords.py'), 'utf8');
-    yes('the kiln\'s Charcoal recipe makes Skyrim\'s Charcoal',
-        /^SKYRIM_CHARCOAL = 0x00033760$/m.test(records) &&
-        /\(0x5015482, 0x5015486, 'ThornswoodCharcoalTier2', 'ThornswoodRecipeCharcoalTier2', 'Charcoal', 4, SKYRIM_CHARCOAL\)/.test(records));
+        pieces.hafted.indexOf("['War axes', 'Battleaxes', 'Warhammers', 'Maces']") !== -1 && counts.every(function (n) { return n > 0; }));
   });
 
   attempt('Grand Chef', function () {

@@ -69,6 +69,10 @@ const ITEMS = JSON.parse(/^const ITEMS = (\{.*\});$/m.exec(gm)[1]);
 const BENCH_ACCESS = JSON.parse(/^const BENCH_ACCESS = (\{.*\});$/m.exec(gm)[1]);
 const BENCH_BY_BASE = JSON.parse(/^const BENCH_BY_BASE = (\{.*\});$/m.exec(gm)[1]);
 const pieces = {
+  grades: slice(gm, 'const CHARCOAL_GRADES = [', '\n];'),
+  fuel: lineOf(/^const FUEL_BY_RECIPE = .*$/m),
+  hafted: lineOf(/^const HAFTED_FAMILIES = .*$/m),
+  handle: lineOf(/^const HANDLE_DESC = .*$/m),
   key: lineOf(/^const KEY_RECIPE = .*$/m),
   noProf: lineOf(/^const NO_PROFESSION_AT_A_BENCH = .*$/m),
   // #3151: the quality a weapon or an armour piece comes out at, which onCraft asks.
@@ -77,8 +81,9 @@ const pieces = {
   toolNumbers: [lineOf(/^const TOOL_USES = .*$/m), lineOf(/^const TOOL_WARN_AT = .*$/m),
                 lineOf(/^const POLE_USES = .*$/m), lineOf(/^const TOOL_PROPERTY = .*$/m)].join('\n'),
   fns: ['function idOf(descriptor)', 'function mintedEntry(entry)', 'function takeItem(actorId, itemDesc, count)',
-        'function addItem(actorId, itemDesc, count)', 'function craftRow(recipeDesc)',
-        'function packCount(actorId, itemDesc)', 'function holdsPerk(actorId, key)', 'function wovenMark(actorId)',
+        'function addItem(actorId, itemDesc, count)', 'function craftRow(recipeDesc)', 'function fuelFor(recipeDesc)',
+        'function packCount(actorId, itemDesc)', 'function charcoalHeld(actorId, grade)', 'function fuelRefusal(fuel)',
+        'function wantsAHandle(row)', 'function holdsPerk(actorId, key)', 'function wovenMark(actorId)',
         'function wovenOutput(actorId, row)', 'function cookedOutput(actorId, row)',
         'function qualityTier(margin, roll)', 'function qualityRolled(row, baseId)',
         'function qualityMargin(actorId, row)', 'function qualityOutput(actorId, row, margin)',
@@ -94,7 +99,7 @@ const pieces = {
   onCraft: slice(gm, "mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n')
 };
 yes('TOOLS, the recipe table, the bench tables and every craft piece are in the gamemode',
-    !!TOOLS && !!RECIPES && !!KEPT &&
+    !!TOOLS && !!RECIPES && !!KEPT && !!pieces.grades && !!pieces.fuel && !!pieces.hafted && !!pieces.handle &&
     !!pieces.key && !!pieces.noProf && pieces.fns.every(function (f) { return !!f; }) && !!pieces.onCraft);
 if (!TOOLS || !RECIPES || !pieces.onCraft || !pieces.fns.every(function (f) { return !!f; })) { done(); } else {
 
@@ -188,7 +193,7 @@ function rig(state, missing) {
     __thornswoodNeeds: { NEEDS: { wear: { woven: { degrees: 4, mark: 'Master-Woven ' } } } },
     __thornswoodManeuvers: { WOVEN: { mark: 'Master-Lined ', less: 0.1 } }
   };
-  const body = [toolsSrc, pieces.toolNumbers, pieces.key, pieces.noProf, pieces.quality]
+  const body = [pieces.grades, pieces.fuel, pieces.hafted, pieces.handle, toolsSrc, pieces.toolNumbers, pieces.key, pieces.noProf, pieces.quality]
     .concat(pieces.fns).join('\n') + '\n' + pieces.onCraft +
     '\nreturn { onCraft: mp.onCraft, benchGate: benchGate, giveTool: giveTool, benchToolKey: benchToolKey, toolGate: toolGate };';
   const api = new Function('mp', 'globalThis', 'ITEMS', 'RECIPES_BY_ID', 'KEPT_SMELT', 'BENCH_ACCESS', 'BENCH_BY_BASE',
@@ -251,8 +256,8 @@ attempt('a craft with the tool, worn to nothing', function () {
   const r = rig(person('smith', 'edgewright', 'master'));
   r.give(T1, 60);
   r.give(TOOLS.smith.give, 1);
-  yes('C2 with a hammer the same craft goes through, and the server takes no charcoal of its own (#6726)',
-      r.craft(iron) !== false && r.count(T1) === 60 && r.credited.length === 1);
+  yes('C2 with a hammer the same craft goes through and burns its charcoal',
+      r.craft(iron) !== false && r.count(T1) === 59 && r.credited.length === 1);
   yes('C2 one use comes off the hammer', r.props[r.A][lineOf(/^const TOOL_PROPERTY = '([^']+)'/m).split("'")[1]]['wear:smith'] === 1);
   let warned = -1;
   for (let i = 2; i <= 49; i++) {
@@ -300,7 +305,7 @@ attempt('a plugin not in the load order', function () {
   yes('C7 with Thornswood-Content.esp missing the shears do not resolve, and the craft is not refused for them',
       t.craft(tailorRow) !== false);
 });
-function FUEL_ROW(k) { return Object.prototype.hasOwnProperty.call(require('../../scripts/dev/Build-FuelTable.js').read().recipes, k); }
+function FUEL_ROW(k) { return new RegExp('"' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '":').test(pieces.fuel); }
 
 // ------------------------------------------------------------ B. benchGate
 function baseFor(key) {
@@ -321,7 +326,7 @@ attempt('the bench doors', function () {
       r.api.benchGate(r.A, forge) === null);
   r.give(ITEMS.charcoalT1, 1);
   r.give(ITEMS.ironIngot || '5ace4:Skyrim.esm', 1);
-  r.give('15490:Thornswood-Content.esp', 1);
+  r.give(lineOf(/^const HANDLE_DESC = '([^']+)'/m).split("'")[1], 1);
   yes('B1 and forges a hammer there with none in the pack', r.craft(hammerRow) !== false && r.count(TOOLS.smith.give) === 1);
   // A tailor's rows are at the loom since #3120 moved them off the forge.
   const loom = baseFor('6ce000:Update.esm');

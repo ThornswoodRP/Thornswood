@@ -161,7 +161,7 @@
     launcher answers every request with its own state, and a slow poll keeps
     the capsule honest when nobody is pressing anything.
   */
-  var relay = { mic: false, peers: 0, talking: false };
+  var relay = { mic: false, silent: false, peers: 0, talking: false };
   var relayTimer = null;
 
   function relayAsk(path) {
@@ -172,6 +172,7 @@
         .then(function (s) {
           if (!s) return;
           relay.mic = !!s.mic;
+          relay.silent = !!s.silent;
           relay.peers = Number(s.peers) || 0;
           relay.talking = !!s.talking;
           draw();
@@ -338,21 +339,30 @@
     var b = micOverlay();
     if (!b) return;
 
-    var live, usable;
+    var live, usable, silent = false;
     if (inRelay()) {
       // The microphone is the launcher's. Asking this page whether it has one
       // is asking the wrong process, and the answer was always no.
       usable = !!relay.mic;
       live = !!(relay.mic && (relay.talking || talking));
+      /*
+        MIC SILENT (#6470). The launcher has held the microphone open with
+        push to talk down for five seconds and got nothing but digital
+        silence, so what goes out is silence. On 19 Nov the lit capsule was
+        the only thing either side had to go on, and it was lit.
+      */
+      silent = usable && !!relay.silent;
     } else {
       live = !!(mic && talking);
       usable = !!mic && !micError;
     }
 
-    var colour = live ? modeOf(myMode).colour   // going out, at this distance
+    var colour = silent ? '#d0703c'             // open, but nothing in it
+               : live ? modeOf(myMode).colour   // going out, at this distance
                : usable ? '#cdc6b8'        // ready, nothing being sent
                : '#8d857a';                // cannot speak at all
-    var word = usable ? modeOf(myMode).label.toUpperCase() : 'LISTENING ONLY';
+    var word = silent ? 'MIC SILENT'
+             : usable ? modeOf(myMode).label.toUpperCase() : 'LISTENING ONLY';
 
     /*
       ONLY WHAT CHANGED IS WRITTEN (#963). draw() comes here every 300 ms while
@@ -1334,8 +1344,9 @@
      * Arriving at all also says the launcher has the microphone, so this
      * switches the page into relay mode even when setLauncherPort never landed.
      */
-    setLauncherStatus: function (micOk, peers, sending, mode) {
+    setLauncherStatus: function (micOk, peers, sending, mode, silent) {
       relay.mic = !!micOk;
+      relay.silent = !!silent;
       relay.peers = Number(peers) || 0;
       relay.talking = !!sending;
       var m = String(mode || '').toLowerCase();
