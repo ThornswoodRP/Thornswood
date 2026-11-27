@@ -18,6 +18,15 @@
   pin is the commit its tag names", with GH_TOKEN set; every action
   repository it reads is public.
 
+  #7269: the engine fork's pins are held the same way. The nightly checks
+  out the fork's .github\workflows and runs this again with -WorkflowDir on
+  it, since nothing in the fork reads its own pins against their tags. A pin
+  whose comment is a major or minor tag (v7, v7.0) is named too, without
+  asking GitHub: that tag moves with each release, so it is not the release
+  the commit is. This repository's pins already fail test-action-pins.ps1
+  for that; the fork's had nothing, and its sign-manifest pin said v7 on
+  v7.0.1's commit.
+
   Read only. tests\test-4165-pin-tags.ps1 runs it against a stand-in GitHub.
 #>
 [CmdletBinding()]
@@ -41,7 +50,7 @@ function Get-ActionPins {
     foreach ($f in @(Get-ChildItem -LiteralPath $Dir -File | Where-Object { $_.Extension -in '.yml', '.yaml' } | Sort-Object Name)) {
         $lines = [IO.File]::ReadAllText($f.FullName) -split "`r?`n"
         for ($i = 0; $i -lt $lines.Count; $i++) {
-            $m = [regex]::Match($lines[$i], '^\s*(?:-\s+)?uses:\s*(?<action>[^\s#@]+)@(?<sha>[0-9a-f]{40})\s*#\s*(?<tag>v\d+\.\d+\.\d+)(\s|$)')
+            $m = [regex]::Match($lines[$i], '^\s*(?:-\s+)?uses:\s*(?<action>[^\s#@]+)@(?<sha>[0-9a-f]{40})\s*#\s*(?<tag>v\d+(?:\.\d+){0,2})(\s|$)')
             if (-not $m.Success) { continue }
             $action = $m.Groups['action'].Value
             $parts = $action.Split('/')
@@ -94,8 +103,12 @@ function Find-PinMismatch {
     param($Pins)
     $bad = New-Object System.Collections.ArrayList
     foreach ($p in @($Pins)) {
-        $at = Get-TagCommit $p.Repo $p.Tag
         $where = $p.Where -join ', '
+        if ($p.Tag -notmatch '^v\d+\.\d+\.\d+$') {
+            [void]$bad.Add(('{0}@{1} says {2}, a tag that moves with each release, not the release its commit is ({3})' -f $p.Action, $p.Sha, $p.Tag, $where))
+            continue
+        }
+        $at = Get-TagCommit $p.Repo $p.Tag
         if (-not $at) { [void]$bad.Add(('{0}@{1} says {2}, and {3} has no tag {2} ({4})' -f $p.Action, $p.Sha, $p.Tag, $p.Repo, $where)) }
         elseif ($at -ne $p.Sha) { [void]$bad.Add(('{0}@{1} says {2}, and {2} is {3} ({4})' -f $p.Action, $p.Sha, $p.Tag, $at, $where)) }
     }
@@ -104,7 +117,8 @@ function Find-PinMismatch {
 
 if ($Run) {
     $pins = @(Get-ActionPins)
-    if (-not $pins.Count) { Write-Host '::error::no pinned action was read from .github\workflows, so nothing was checked'; exit 1 }
+    if (-not $pins.Count) { Write-Host ('::error::no pinned action was read from ' + $WorkflowDir + ', so nothing was checked'); exit 1 }
+    Write-Host ('the pins in ' + $WorkflowDir + ':')
     $bad = @(Find-PinMismatch $pins)
     foreach ($b in $bad) { Write-Host ('::error::' + $b) }
     foreach ($p in $pins) { Write-Host ('{0}  {1}  {2}  ({3} place(s))' -f $p.Action, $p.Sha, $p.Tag, $p.Where.Count) }
