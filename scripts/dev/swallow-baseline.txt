@@ -378,7 +378,7 @@ game\gamemode\warrior-maneuvers.ts 3
 game\gamemode\world-stage.ts 7
 game\merchant-trading.js 6
 game\plugins\thornswood-emotes.js 6
-game\plugins\thornswood-front.js 189
+game\plugins\thornswood-front.js 185
 game\plugins\thornswood-mark.js 3
 game\plugins\thornswood-test.js 3
 game\plugins\thornswood-voice.js 6
