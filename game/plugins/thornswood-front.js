@@ -4778,6 +4778,45 @@
   // is about 128 units tall, so this is roughly waist deep.
   const WADE_DEEP = 70;
   /*
+    SNOW IS WHAT YOU STAND IN, NOT WHAT FALLS ON YOU (#4653).
+
+    The cold rules say the snow place is standing in snow on the ground
+    (docs/systems/temperature.md), and until 27 Nov 2026 this said snow only
+    while the weather was snowing: a clear day in deep snow in the Pale was
+    plain outdoors, and a snowfall on bare road was snow. Snow falling on you
+    is the weather's own line on the server (NEEDS.weather.snow, read from
+    the weather id this line carries), so the place is only the ground.
+
+    The ground is the landscape's material under your feet, which the game
+    keeps for every exterior cell and plays footsteps from. Papyrus Extender
+    (in the collection) reads it: PO3_SKSEFunctions.GetLandMaterialType
+    gives the material's name, "Snow" for the snow textures and "SnowStairs"
+    for snowy steps. Indoors and in the water it is not asked.
+  */
+  const SNOW_GROUND = ['Snow', 'SnowStairs'];
+  // What the last ground read threw, said in the heartbeat until one works.
+  let groundWhy = '';
+  function groundUnder(px, py, pz) {
+    try {
+      const material = sp.callNative('PO3_SKSEFunctions', 'GetLandMaterialType', undefined, px, py, pz);
+      groundWhy = '';
+      return typeof material === 'string' ? material : '';
+    } catch (e) {
+      groundWhy = 'GetLandMaterialType threw: ' + (e && e.message ? e.message : e);
+      return '';
+    }
+  }
+  // One word, in order of what wins: water, then a roof, then snow under
+  // your feet, then rain falling on you, and outdoors last.
+  function placeKind(p) {
+    if (p.swimming) { return 'water'; }
+    if (p.wading) { return 'shallow'; }
+    if (p.indoors) { return 'indoors'; }
+    if (SNOW_GROUND.indexOf(p.ground) >= 0) { return 'snow'; }
+    if (p.sky === 2) { return 'rain'; }
+    return 'outdoors';
+  }
+  /*
     PLACED WATER, READ OUT OF THE RECORDS (#2302).
 
     There used to be a feet slack of 24 here (#608): wading counted with the
@@ -5374,18 +5413,14 @@
 
       Water first, because being in it beats everything else about a place.
       Then fire, which beats a roof: the point of the Bannered Mare is the fire
-      in the middle of it. Then the roof, then the weather, and outdoors last,
-      which is slightly cool rather than neutral so that walking into a
+      in the middle of it. Then the roof, then snow underfoot (#4653), then
+      rain, and outdoors last, which is slightly cool rather than neutral so that walking into a
       building is felt. Everything the server does not know a word for is
       comfortable, so a client from before this says nothing and its owner
       simply has no weather.
     */
-    let kind = 'outdoors';
-    if (swimming) { kind = 'water'; }
-    else if (wading) { kind = 'shallow'; }
-    else if (indoors) { kind = 'indoors'; }
-    else if (sky === 3) { kind = 'snow'; }
-    else if (sky === 2) { kind = 'rain'; }
+    const ground = (swimming || wading || indoors) ? '' : groundUnder(px, py, pz);
+    const kind = placeKind({ swimming: swimming, wading: wading, indoors: indoors, ground: ground, sky: sky });
 
     /*
       ONE LINE, AND IT IS SENT WHEN ANY OF IT CHANGES.
@@ -5449,7 +5484,8 @@
       say('place: ' + line + '  [fire probe: ' + fireBases + ' bases, ' + fireHits +
           ' in this cell of ' + fireWalked + ' looked at, ' + fireThrew + ' threw' +
           (fireWhy ? ' (' + fireWhy + ')' : '') + ']' +
-          (waterSaid ? '  [' + waterSaid + ']' : '') + looking);
+          (waterSaid ? '  [' + waterSaid + ']' : '') +
+          '  [ground ' + (ground || 'not read') + (groundWhy ? ', ' + groundWhy : '') + ']' + looking);
     }
 
     /*
