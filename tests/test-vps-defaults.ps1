@@ -235,6 +235,29 @@ $threw = $false
 try { $null = Get-ThornswoodVpsAddress } catch { $threw = $true }
 Yes "a machine file that does not read stops rather than falling back quietly" $threw
 
+# No address anywhere (#4255): the error names every file and variable it
+# read, never a $path left over from the caller, and says the same under strict
+# mode, where reading a variable the function never set would throw instead.
+[IO.File]::WriteAllText((Join-Path $appData 'Thornswood\vps.json'), '{ "address": "" }', (New-Object Text.UTF8Encoding($false)))
+$path = 'a path the caller set for something else'
+$said = ''
+try { $null = Get-ThornswoodVpsAddress } catch { $said = $_.Exception.Message }
+Write-Host "      $said"
+$trackedAt = Join-Path (Split-Path -Parent $VpsPs1) 'vps.json'
+Yes 'a config with no address stops' ($said -ne '')
+Yes 'and names the tracked file and what it said' ($said.Contains($trackedAt + ' (address ' + $expectedAddress + ')'))
+Yes "and names this machine's file, whose empty address won" ($said.Contains((Join-Path $appData 'Thornswood\vps.json') + ' (address empty)'))
+Yes 'and says THORNSWOOD_VPS is not set' ($said.Contains('THORNSWOOD_VPS (not set)'))
+Yes "and never prints a caller's `$path or blames vps.json alone" (-not $said.Contains($path) -and -not $said.Contains('vps.json has no address'))
+$strict = ''
+try { & { Set-StrictMode -Version Latest; $null = Get-ThornswoodVpsAddress } } catch { $strict = $_.Exception.Message }
+Yes 'under strict mode it says the same, not an unset variable' ($strict -eq $said)
+Remove-Variable path
+Set-Env 'LOCALAPPDATA' (Join-Path $tmp 'nowhere')
+$said = ''
+try { $null = Get-ThornswoodVpsAddress } catch { $said = $_.Exception.Message }
+Yes "with no machine file the tracked address is used again" ($said -eq '' -and (Get-ThornswoodVpsAddress) -eq $expectedAddress)
+
 # A script started in its own process, dot-sourcing Vps.ps1 and filling its
 # parameters the way every script does, so the environment is proved to reach
 # one and not only this harness.
