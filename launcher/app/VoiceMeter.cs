@@ -131,4 +131,59 @@ namespace Thornswood
             }
         }
     }
+
+    /// <summary>
+    /// Whether the microphone sends any sound while push to talk is held
+    /// (#6470).
+    ///
+    /// The Dev playtest of 19 Nov 2026 that reproduced one way voice: one PC's
+    /// Windows communications microphone was a headset's "Game" endpoint,
+    /// which gave the launcher digital silence. Its capture peaked at 6.7e-11
+    /// over more than 5,000 frames with push to talk held, and the launcher
+    /// encoded and sent every one of them, so the other side decoded Opus
+    /// silence (3.05e-5) and heard nothing. Nobody was told. The indicator
+    /// lights from push to talk, not from sound, so both people saw it lit.
+    /// Every working microphone in the 71 uploaded log sets since 18 Nov
+    /// peaked between 0.08 and 1.0 while held.
+    ///
+    /// So a held microphone whose every sample stays under Floor for Frames
+    /// frames in a row is silent, and the first frame over it is not. Frames
+    /// not held are not counted: a microphone is only expected to carry a
+    /// voice while somebody is talking into it.
+    /// </summary>
+    sealed class MicSilence
+    {
+        // About -100 dBFS, far under any microphone's own noise and far over
+        // the 6.7e-11 the silent endpoint gave.
+        public const float Floor = 1e-5f;
+        // Five seconds of 20 ms frames held with nothing in them.
+        public const int Frames = 250;
+
+        int quiet;
+        public bool Silent { get; private set; }
+
+        /// <summary>
+        /// One 20 ms frame taken while push to talk is held. Says +1 when
+        /// this frame makes the microphone silent, -1 when it ends a silence,
+        /// and 0 when nothing changed.
+        /// </summary>
+        public int Held(float[] pcm)
+        {
+            bool sound = false;
+            foreach (float f in pcm)
+            {
+                if (f >= Floor || f <= -Floor) { sound = true; break; }
+            }
+            if (sound)
+            {
+                quiet = 0;
+                if (!Silent) return 0;
+                Silent = false;
+                return -1;
+            }
+            if (Silent || ++quiet < Frames) return 0;
+            Silent = true;
+            return 1;
+        }
+    }
 }

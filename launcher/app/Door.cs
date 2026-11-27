@@ -57,7 +57,7 @@ namespace Thornswood
             try
             {
                 Directory.CreateDirectory(Discord.Folder);
-                File.WriteAllText(AnswerFile, (ok ? "yes" : "no") + "|" + DateTime.UtcNow.Ticks);
+                WholeFile.WriteText(AnswerFile, (ok ? "yes" : "no") + "|" + DateTime.UtcNow.Ticks);
             }
             catch (Exception ex) { Swallow.Note("Door.Remember", ex); }
         }

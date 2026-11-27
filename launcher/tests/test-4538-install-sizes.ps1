@@ -126,7 +126,7 @@ $dll = $null
 try {
     $dll = Build-LauncherCode -Exe -Source $driver -File @(
         (Join-Path $App 'InstallSteps.cs'), (Join-Path $App 'InstallAgreements.cs'), (Join-Path $App 'PathFence.cs'),
-        (Join-Path $App 'InstallPlace.cs'), (Join-Path $App 'InstallShortcut.cs'), (Join-Path $App 'Failure.cs')) `
+        (Join-Path $App 'InstallPlace.cs'), (Join-Path $App 'InstallShortcut.cs'), (Join-Path $App 'Failure.cs'), (Join-Path $App 'WholeFile.cs')) `
         -Resource @{ 'skyrim-files.json' = (Under $Repo 'records\skyrim-files.json') }
 } catch { Yes 'the install steps build with a driver' $false $_.Exception.Message; Done }
 Yes 'the install steps build with a driver' ($null -ne $dll)

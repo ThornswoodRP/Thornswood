@@ -128,6 +128,11 @@ let inWorld = false;
 let crosshairBed = '';     // the bed under the crosshair now, or ''
 let faceAsked = '';        // what a face step wants stood before
 let faceDone = null;       // { ok, note } once the update has done it
+let faceTry = null;        // the bed and the spots beside it still to try
+let cellName = '';         // the name of the cell the character is in
+let gearAsk = null;        // an equip or sheathe step's work for update
+let gearDone = null;       // { ok, note } once update has done it
+const moves = [];          // { t, z, sprint, drawn } a frame, for watch steps
 function isBed(ref) {
   const T = globalThis.Thornswood;
   return !!(T && typeof T.isBedRef === 'function' && T.isBedRef(ref));
@@ -138,34 +143,124 @@ function refName(ref) {
   try { const b = ref.getBaseObject(); name = b ? String(b.getName() || '') : ''; } catch (e) { log('could not read a reference name:', e); }
   return (id >>> 0).toString(16) + (name ? ' "' + name + '"' : '');
 }
-// Stand 90 units out from the nearest bed in the cell, on the side the
-// person is on, turned to it and looking a little down, as somebody walks
-// up to a bed to use it. 40 is kFurniture.
-function faceBed() {
+// Stand beside the nearest bed in the cell, turned to it and looking down at
+// it, as somebody walks up to a bed to use it. 40 is kFurniture.
+//
+// Where beside it is measured, not guessed: a bed stands against a wall on
+// some sides, and which of its sides are free differs bed to bed. So the
+// spots on its four sides, 45 units clear of its bounds (GetWidth along its
+// own x, GetLength along its own y), are tried in turn, nearest to the
+// character first, and the first from which the crosshair lands on that bed
+// is the one. The camera goes to first person so the crosshair is the eyes'
+// line. Each spot gets FACE_LOOK_MS before the crosshair is read, and every
+// spot that does not see the bed is said in the step's note.
+const FACE_LOOK_MS = 400;
+const EYE_HEIGHT = 115;
+// What a face step can stand before: the reference types searched, which of
+// them count, and the height on it the eyes look at. A bed's is the top of
+// the mattress and the character stands on the bed's floor; a door's and a
+// seam's is their middle, from the floor the character is on (a seam sits on
+// a wall, so its own height is no floor).
+const FACE_KINDS = {
+  bed: { types: [40], is: function (r) { return isBed(r); }, standOnRef: true, aim: function (h) { return Math.min(60, h * 0.6); } },
+  door: { types: [29], is: function () { return true; }, standOnRef: false, aim: function () { return 100; } },
+  vein: { types: [40, 24], is: function (r) { const b = r.getBaseObject(); return !!b && /vein/i.test(String(b.getName() || '')); }, standOnRef: false, aim: function (h) { return h * 0.5; } }
+};
+function faceStart(what) {
+  const kind = FACE_KINDS[what];
+  if (!kind) { return { ok: false, note: 'cannot face a ' + what }; }
   const pc = sp.Game.getPlayer();
   const cell = pc ? pc.getParentCell() : null;
   if (!cell) { return { ok: false, note: 'not in a cell' }; }
   const T = globalThis.Thornswood;
-  if (!T || typeof T.isBedRef !== 'function') { return { ok: false, note: 'thornswood-front.js shares no isBedRef, so this build cannot tell a bed' }; }
-  const px = pc.getPositionX(), py = pc.getPositionY();
-  let best = null, bestD = Infinity, beds = 0;
-  const n = cell.getNumRefs(40);
-  for (let i = 0; i < n; i++) {
-    const ref = cell.getNthRef(i, 40);
-    if (!ref || !isBed(ref)) { continue; }
-    beds++;
-    const d = Math.hypot(ref.getPositionX() - px, ref.getPositionY() - py);
-    if (d < bestD) { bestD = d; best = ref; }
-  }
-  if (!best) { return { ok: false, note: 'no bed among the ' + n + ' furniture in this cell' }; }
+  if (what === 'bed' && (!T || typeof T.isBedRef !== 'function')) { return { ok: false, note: 'thornswood-front.js shares no isBedRef, so this build cannot tell a bed' }; }
+  const px = pc.getPositionX(), py = pc.getPositionY(), pz = pc.getPositionZ();
+  let best = null, bestD = Infinity, beds = 0, n = 0;
+  kind.types.forEach(function (type) {
+    const count = cell.getNumRefs(type);
+    n += count;
+    for (let i = 0; i < count; i++) {
+      const ref = cell.getNthRef(i, type);
+      if (!ref || !kind.is(ref)) { continue; }
+      beds++;
+      const d = Math.hypot(ref.getPositionX() - px, ref.getPositionY() - py, (ref.getPositionZ() - pz) * 2);
+      if (d < bestD) { bestD = d; best = ref; }
+    }
+  });
+  if (!best) { return { ok: false, note: 'no ' + what + ' among the ' + n + (what === 'bed' ? ' furniture' : ' references looked at') + ' in this cell' }; }
   const bx = best.getPositionX(), by = best.getPositionY(), bz = best.getPositionZ();
-  const dx = px - bx, dy = py - by, len = Math.hypot(dx, dy) || 1;
-  const sx = bx + dx / len * 90, sy = by + dy / len * 90;
-  pc.setPosition(sx, sy, bz);
+  const h = best.getAngleZ() * Math.PI / 180;
+  // The bed's own axes on the ground: y is where its heading points
+  // (0 is north, clockwise), x is to its right.
+  const ax = { x: Math.cos(h), y: -Math.sin(h) }, ay = { x: Math.sin(h), y: Math.cos(h) };
+  const halfW = (Number(best.getWidth()) || 100) / 2, halfL = (Number(best.getLength()) || 200) / 2;
+  const floor = kind.standOnRef ? bz : pz;
+  const top = floor + kind.aim(Number(best.getHeight()) || 100) + (kind.standOnRef ? 0 : bz - floor);
+  const spots = [
+    { side: 'right', x: bx + ax.x * (halfW + 45), y: by + ax.y * (halfW + 45) },
+    { side: 'left', x: bx - ax.x * (halfW + 45), y: by - ax.y * (halfW + 45) },
+    { side: 'foot', x: bx - ay.x * (halfL + 45), y: by - ay.y * (halfL + 45) },
+    { side: 'head', x: bx + ay.x * (halfL + 45), y: by + ay.y * (halfL + 45) }
+  ].sort(function (p, q) { return Math.hypot(p.x - px, p.y - py) - Math.hypot(q.x - px, q.y - py); });
+  try { sp.Game.forceFirstPerson(); } catch (e) { log('could not go to first person:', e); }
+  faceTry = { what: what, bed: best, name: refName(best), beds: beds, off: Math.round(bestD), bx: bx, by: by, bz: floor, top: top, spots: spots, k: -1, at: 0, missed: [] };
+  return null;
+}
+// One look per update: put the character on the next spot, or read whether
+// the crosshair found the bed from the spot it was put on.
+function faceStep() {
+  const f = faceTry, now = Date.now();
+  if (f.k >= 0 && now - f.at < FACE_LOOK_MS) { return null; }
+  if (f.k >= 0) {
+    let on = '';
+    try { const r = sp.Game.getCurrentCrosshairRef(); on = r ? refName(r) : ''; } catch (e) { log('could not read the crosshair:', e); }
+    if (on === f.name) {
+      faceTry = null;
+      return { ok: true, note: 'before ' + f.what + ' ' + f.name + ' from its ' + f.spots[f.k].side + ', ' + f.beds + ' ' + f.what + '(s) in the cell, it was ' + f.off + ' units off' + (f.missed.length ? '; not from ' + f.missed.join(', ') : '') };
+    }
+    f.missed.push(f.spots[f.k].side + ' (' + (on || 'nothing') + ' under the crosshair)');
+  }
+  f.k++;
+  if (f.k >= f.spots.length) {
+    faceTry = null;
+    return { ok: false, note: f.what + ' ' + f.name + ' was under the crosshair from none of its sides: ' + f.missed.join(', ') };
+  }
+  const pc = sp.Game.getPlayer(), s = f.spots[f.k];
+  pc.setPosition(s.x, s.y, f.bz);
+  const dist = Math.hypot(f.bx - s.x, f.by - s.y) || 1;
   // Papyrus angles are degrees. Heading 0 is north (+y), turning clockwise;
-  // a positive x looks down.
-  pc.setAngle(20, 0, Math.atan2(bx - sx, by - sy) * 180 / Math.PI);
-  return { ok: true, note: 'before bed ' + refName(best) + ', ' + beds + ' bed(s) in the cell, it was ' + Math.round(bestD) + ' units off' };
+  // a positive x looks down, here from the eyes to the top of the bed.
+  pc.setAngle(Math.atan2(f.bz + EYE_HEIGHT - f.top, dist) * 180 / Math.PI, 0, Math.atan2(f.bx - s.x, f.by - s.y) * 180 / Math.PI);
+  f.at = now;
+  return null;
+}
+// Equip an item from the pack (and draw it), or sheathe, in update, where
+// the game takes calls. "give" is the line said in chat when the pack has
+// none, once, so a run never piles up copies (a heavy pack would stop the
+// sprint it measures).
+function gearStep(pc, g, now) {
+  if (g.do === 'sheathe') {
+    if (!g.asked) { g.asked = now; pc.sheatheWeapon(); return null; }
+    return pc.isWeaponDrawn() ? null : { ok: true, note: 'sheathed after ' + (now - g.asked) + ' ms' };
+  }
+  const form = sp.Game.getFormEx(parseInt(String(g.form), 16));
+  if (!form) { return { ok: false, note: 'no form ' + g.form + ' in this load order' }; }
+  if (!g.equippedAt) {
+    if (pc.getItemCount(form) < 1) {
+      if (g.give && !g.gave) {
+        g.gave = now;
+        try { sp.browser.executeJavaScript('try{window.thornswoodNet.say(' + JSON.stringify(String(g.give)) + ',{quiet:true});}catch(e){/* no chat on the page: the step times out naming the give */}'); }
+        catch (e) { return { ok: false, note: 'could not say ' + g.give + ': ' + e }; }
+      }
+      return null;
+    }
+    pc.equipItem(form, false, true);
+    g.equippedAt = now;
+    return null;
+  }
+  if (!g.draw) { return { ok: true, note: 'equipped ' + g.form + (g.gave ? ', given by ' + g.give : '') }; }
+  if (!g.drawAt) { if (now - g.equippedAt < 500) { return null; } g.drawAt = now; pc.drawWeapon(); return null; }
+  return pc.isWeaponDrawn() ? { ok: true, note: 'equipped ' + g.form + (g.gave ? ', given by ' + g.give : '') + ', drawn after ' + (now - g.drawAt) + ' ms' } : null;
 }
 let lastUpdateAt = 0;
 const updateTimes = [];
@@ -181,12 +276,22 @@ sp.on('update', function () {
   let cell = null;
   try { const pc = sp.Game.getPlayer(); cell = pc ? pc.getParentCell() : null; } catch (e) { cell = null; }
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
+  try { cellName = cell ? String(cell.getName() || '') : ''; } catch (e) { cellName = ''; log('could not read the cell name:', e); }
   crosshairBed = '';
   try { const r = sp.Game.getCurrentCrosshairRef(); if (r && isBed(r)) { crosshairBed = refName(r); } } catch (e) { log('could not read the crosshair:', e); }
   if (faceAsked && !faceDone) {
-    try { faceDone = faceAsked === 'bed' ? faceBed() : { ok: false, note: 'cannot face a ' + faceAsked }; }
-    catch (e) { faceDone = { ok: false, note: 'facing threw: ' + e }; }
+    try {
+      faceDone = faceTry ? faceStep() : faceStart(faceAsked);
+    } catch (e) { faceTry = null; faceDone = { ok: false, note: 'facing threw: ' + e }; }
   }
+  try {
+    const pc = sp.Game.getPlayer();
+    if (pc && cell) {
+      moves.push({ t: lastUpdateAt, z: pc.getPositionZ(), sprint: !!pc.isSprinting(), drawn: !!pc.isWeaponDrawn() });
+      if (moves.length > 2000) { moves.splice(0, moves.length - 2000); }
+      if (gearAsk && !gearDone) { gearDone = gearStep(pc, gearAsk, lastUpdateAt); }
+    }
+  } catch (e) { if (gearAsk && !gearDone) { gearDone = { ok: false, note: 'threw: ' + e }; } else { log('could not read how the character moves:', e); } }
 });
 
 // Sitting down and getting up, the character's own only, as results lines:
@@ -341,6 +446,9 @@ function failTask() {
   pageId = '';
   faceAsked = '';
   faceDone = null;
+  faceTry = null;
+  gearAsk = null;
+  gearDone = null;
 }
 function tasksNote() {
   return failedTasks.length ? 'test task(s) failed: ' + failedTasks.map(function (t) { return '#' + t; }).join(', ') : '';
@@ -387,6 +495,17 @@ sp.on('tick', function () {
         if (since !== undefined && since >= prevAt) { pass(want ? 'it opened and closed again before this tick' : 'it closed and opened again before this tick'); return; }
       } else if (s.for === 'world') {
         if (inWorld) { pass(); return; }
+      } else if (s.for === 'shut') {
+        // None of "menus" is open.
+        const up = (Array.isArray(s.menus) ? s.menus : []).filter(function (m) { return !!openMenus[String(m)]; });
+        if (!up.length) { pass(); return; }
+        if (late) { fail('waited ' + limit + ' ms for ' + up.join(', ') + ' to shut'); }
+        return;
+      } else if (s.for === 'cell') {
+        // In (or, with "in": false, not in) a cell whose name holds "name".
+        const want = s.in !== false;
+        const here = cellName.toLowerCase().indexOf(String(s.name || '').toLowerCase()) >= 0 && cellName !== '';
+        if (inWorld && here === want) { pass(cellName ? 'in ' + cellName : 'in an unnamed cell'); return; }
       } else if (s.for === 'crosshair') {
         if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
       } else if (s.for === 'running') {
@@ -410,7 +529,7 @@ sp.on('tick', function () {
         return;
       }
       if (late) {
-        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : s.for === 'crosshair' ? 'a ' + s.what + ' under the crosshair' : 'the world');
+        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : s.for === 'crosshair' ? 'a ' + s.what + ' under the crosshair' : s.for === 'cell' ? (s.in === false ? 'a cell other than ' : 'the cell ') + s.name + ', and the character is in ' + (cellName || 'no named cell') : 'the world');
         if (Number(s.skip) > 0) { skipOn(what); } else { fail(what); }
       }
       return;
@@ -437,6 +556,45 @@ sp.on('tick', function () {
       }
       return;
     }
+    case 'equip':
+    case 'sheathe': {
+      if (!gearAsk) { gearAsk = Object.assign({}, s); gearDone = null; return; }
+      if (gearDone) {
+        const done = gearDone;
+        gearAsk = null; gearDone = null;
+        if (done.ok) { pass(done.note); } else { fail(done.note); }
+        return;
+      }
+      if (late) {
+        const why = s.do === 'sheathe' ? 'the weapon was still out after ' + limit + ' ms' :
+          gearAsk.equippedAt ? 'the weapon was not drawn in ' + limit + ' ms' :
+          gearAsk.gave ? 'no ' + s.form + ' reached the pack in ' + limit + ' ms after ' + s.give : 'no ' + s.form + ' in the pack';
+        gearAsk = null; gearDone = null;
+        fail(why);
+      }
+      return;
+    }
+    case 'watch': {
+      // A measurement, not a check: what the character did from the start of
+      // the step before (the key) for ms, written as a results line and
+      // passed either way, so the steps after it still run.
+      if (now - stepAt < (Number(s.ms) || 1500)) { return; }
+      const seen = moves.filter(function (m) { return m.t >= prevAt; });
+      let value, did;
+      if (s.what === 'jump') {
+        const z0 = seen.length ? seen[0].z : 0;
+        value = Math.round(seen.reduce(function (hi, m) { return Math.max(hi, m.z - z0); }, 0));
+        did = value >= 20;
+      } else if (s.what === 'sprint') {
+        value = seen.filter(function (m) { return m.sprint; }).length;
+        did = value > 0;
+      } else { fail('no such watch: ' + s.what); return; }
+      const drawn = seen.some(function (m) { return m.drawn; });
+      write({ t: 'watch', what: String(s.what), did: did, value: value, frames: seen.length, drawn: drawn, label: String(s.label || '') });
+      pass((s.label ? s.label + ': ' : '') + (s.what === 'jump' ? (did ? 'jumped, ' : 'did not jump, ') + 'rose ' + value + ' units' :
+        (did ? 'sprinted, ' : 'did not sprint, ') + value + ' of ' + seen.length + ' frames sprinting') + (drawn ? ', weapon out' : ''));
+      return;
+    }
     case 'face': {
       if (!faceAsked) { faceAsked = String(s.what || ''); faceDone = null; return; }
       if (faceDone) {
@@ -445,18 +603,28 @@ sp.on('tick', function () {
         if (done.ok) { pass(done.note); } else { fail(done.note); }
         return;
       }
-      if (late) { faceAsked = ''; fail('no update came in ' + limit + ' ms to stand before a ' + s.what); }
+      if (late) { faceAsked = ''; faceTry = null; fail('no update came in ' + limit + ' ms to stand before a ' + s.what); }
       return;
     }
     case 'shot':
     case 'key': {
+      // A key with "ifMenu": [names] is pressed only while one of those menus
+      // is open: the first step of a task shuts what a failed task before it
+      // left open, and presses nothing when nothing is.
+      if (!waitingAsk && s.do === 'key' && Array.isArray(s.ifMenu) && !s.ifMenu.some(function (m) { return !!openMenus[String(m)]; })) {
+        pass('none of ' + s.ifMenu.join(', ') + ' is open, so not pressed');
+        return;
+      }
       if (!waitingAsk) {
         if (s.do === 'key') {
           inventoryKey = s.inventoryTrace === true
             ? { i: at, code: Number(s.code), until: now + INVENTORY_TRACE_MS, down: false, up: false }
             : null;
         }
-        waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) : Number(s.code));
+        // A held key, or keys held together, go as { code, hold, with }.
+        const held = s.do === 'key' && (Number(s.hold) > 0 || Array.isArray(s.with));
+        waitingAsk = ask(s.do, s.do === 'shot' ? String(s.name || ('step-' + at)) :
+          held ? { code: Number(s.code), hold: Number(s.hold) || 120, with: (s.with || []).map(Number) } : Number(s.code));
         return;
       }
       const reply = readAck(waitingAsk);

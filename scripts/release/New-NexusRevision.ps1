@@ -122,9 +122,11 @@
   the revision no longer carries: the entry goes, and so do the plugins its
   file hashes put at the top of Data, off the plugin list, unless another
   entry's hashes bring the same plugin, which then stays. An entry with no
-  hashes, with patches, that a mod rule or plugin rule names, or whose plugin
-  is a master of one the revision still installs is refused
-  (nexus-collection.js says why); those revisions are made in Vortex on One.
+  patches, that a mod rule or plugin rule names, or whose plugin is a master
+  of one the revision still installs is refused (nexus-collection.js says
+  why). An entry with no file hashes has its archive read for the files it
+  installs, as -Replicate reads one, and those name its plugins (#4511: MCM
+  Recorder carried none, and the run stopped asking for Vortex).
   A mod rule may name the mod by its file name on Nexus alone, so that name
   is read from the v1 file record, as a moved file's is. collection.json
   says nothing of masters, so each plugin's come from -CollectionRecord when
@@ -694,7 +696,7 @@ function Get-NexusFileExpression([string]$M, [string]$Fid) {
 }
 
 # ------------------------------------------------------- refused up front ---
-if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count -and -not $RefreshTag.Count -and -not $Replicate.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which get the list of files they install with -Replicate, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
+if (-not $Mod.Count -and -not $Add -and -not $Answers -and -not $Rule -and -not $Remove.Count -and -not $SetLight.Count -and -not $ClearLight.Count -and -not $RefreshTag.Count -and -not $Replicate.Count) { Die 'Say which mods move to a new file with -Mod, -FileId and -Archive, which are added with -Add, which kept files get new installer answers with -Answers, which get the list of files they install with -Replicate, which get fresh reference tags with -RefreshTag, which are taken out with -Remove, which plugins get a new rule with -Rule, which plugins get or lose the light flag with -SetLight and -ClearLight, or publish a draft with -Publish, or discard one with -Discard.' }
 $Mod = @($Mod | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $FileId = @($FileId | ForEach-Object { ([string]$_).Split(',') } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($Mod.Count -ne $FileId.Count -or $Mod.Count -ne $Archive.Count) { Die ('-Mod, -FileId and -Archive go together, one of each for every mod: ' + $Mod.Count + ', ' + $FileId.Count + ' and ' + $Archive.Count + ' were given.') }
@@ -968,6 +970,36 @@ foreach ($a in $answerSet) {
   $swaps.Add([ordered]@{ answers = $true; modId = $m; fileId = $fid; choices = $fa.Choices })
 }
 
+# The files Nexus file fid of entry e puts in its folder, each with the md5 of
+# the archive's own copy: the archive downloaded and held to the revision, its
+# installer run with the answers the entry carries (THE FILES A PATCHED MOD
+# INSTALLS; for a mod taken out that carries no list, TAKING A MOD OUT).
+function Get-EntryFiles($e) {
+  $type = if ($e.details -and $e.details.PSObject.Properties['type']) { [string]$e.details.type } else { '' }
+  if ($type) { Die ($e.name + ' is mod type "' + $type + '", which Install-NexusRevision.ps1 does not lay out, so its files cannot be checked.') }
+  $fid = [string]$e.source.fileId
+  $got = Step { Get-NexusFileArchive $Game $fid (Join-Path $scratch 'replicate') }
+  if ($got.Size -ne [long]$e.source.fileSize -or $got.Md5Hex -ne [string]$e.source.md5) { Die ('The download of ' + $e.name + ' is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and revision ' + $BaseRevision + ' says ' + $e.source.fileSize + ' bytes, md5 ' + $e.source.md5 + '.') }
+  $choices = if ($e.PSObject.Properties['choices'] -and $null -ne $e.choices) { $e.choices } else { $null }
+  if ($null -ne $choices) {
+    $bad = @(Get-NexusChoicesProblems $choices)
+    if ($bad.Count) { Die ('The choices ' + $e.name + ' carries are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
+  }
+  $work = Join-Path $scratch ('files-' + $fid)
+  if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $work | Out-Null
+  $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $got.Path -Work $work -Choices $choices }
+  if ($mp.Plan.Stop) { Die ($e.name + ' cannot be installed unattended as revision ' + $BaseRevision + ' gives it: ' + $mp.Plan.Stop + '.') }
+  if (@($mp.Plan.Warnings).Count) { Die ($e.name + '''s installer did not run cleanly: ' + (@($mp.Plan.Warnings) -join '; ') + '.') }
+  $hashes = @($mp.Plan.Files.Values | Sort-Object { $_.Rel.ToLowerInvariant() } | ForEach-Object { [ordered]@{ path = [string]$_.Rel; md5 = (Get-FileHash -LiteralPath $_.Full -Algorithm MD5).Hash.ToLowerInvariant() } })
+  $installer = [string]$mp.Plan.Installer
+  [Thornswood.Layout.NexusLayout]::Forget($mp.Unpacked)
+  Remove-Item -LiteralPath $work -Recurse -Force
+  [IO.File]::Delete($got.Path)
+  if (-not $hashes.Count) { Die ($e.name + '''s installer puts no files in its folder.') }
+  return [pscustomobject]@{ Hashes = [object[]]$hashes; Installer = $installer; Choices = $choices }
+}
+
 # Each mod taken out, with its file name on Nexus (TAKING A MOD OUT). An entry
 # that is not there once is left to nexus-collection.js to refuse, by name.
 if ($Remove.Count) { Head 'The mods taken out' }
@@ -977,6 +1009,16 @@ foreach ($m in $Remove) {
   if ($hits.Count -eq 1) {
     $rm.fileExpression = Get-NexusFileExpression $m ([string]$hits[0].source.fileId)
     Say ('  mod ' + $m + ' (' + $hits[0].name + '): file ' + $hits[0].source.fileId + ', "' + $rm.fileExpression + '" on Nexus')
+    # An entry with no list of the files it installs gives none of the
+    # plugins it brings, so its archive is read for them, as -Replicate
+    # reads one (#4511: MCM Recorder carried no list).
+    $e = $hits[0]
+    if (-not ($e.PSObject.Properties['hashes'] -and @($e.hashes).Count) -and -not ($e.PSObject.Properties['patches'] -and $e.patches)) {
+      $ef = Get-EntryFiles $e
+      $rm.hashes = [object[]]@($ef.Hashes)
+      $pl = @($ef.Hashes | Where-Object { [string]$_.path -match '^[^\\/]+\.es[mpl]$' } | ForEach-Object { [string]$_.path })
+      Say ('    it carries no list of its files; its ' + $ef.Installer + ' installer puts ' + @($ef.Hashes).Count + ' in its folder, plugins: ' + $(if ($pl.Count) { $pl -join ', ' } else { 'none' })) 'DarkGray'
+    }
   }
   $swaps.Add($rm)
 }
@@ -995,28 +1037,9 @@ if ($Replicate.Count) {
     $m = [string]$e.source.modId
     if ($e.PSObject.Properties['hashes'] -and @($e.hashes).Count) { Die ($e.name + ' already carries the list of files it installs.') }
     if ($e.PSObject.Properties['fileOverrides'] -and @($e.fileOverrides).Count) { Die ($e.name + ' carries fileOverrides, which a list of files would not keep.') }
-    $type = if ($e.details -and $e.details.PSObject.Properties['type']) { [string]$e.details.type } else { '' }
-    if ($type) { Die ($e.name + ' is mod type "' + $type + '", which Install-NexusRevision.ps1 does not lay out, so its files cannot be checked.') }
     $fid = [string]$e.source.fileId
-    $got = Step { Get-NexusFileArchive $Game $fid (Join-Path $scratch 'replicate') }
-    if ($got.Size -ne [long]$e.source.fileSize -or $got.Md5Hex -ne [string]$e.source.md5) { Die ('The download of ' + $e.name + ' is ' + $got.Size + ' bytes, md5 ' + $got.Md5Hex + ', and revision ' + $BaseRevision + ' says ' + $e.source.fileSize + ' bytes, md5 ' + $e.source.md5 + '.') }
-    $choices = if ($e.PSObject.Properties['choices'] -and $null -ne $e.choices) { $e.choices } else { $null }
-    if ($null -ne $choices) {
-      $bad = @(Get-NexusChoicesProblems $choices)
-      if ($bad.Count) { Die ('The choices ' + $e.name + ' carries are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
-    }
-    $work = Join-Path $scratch ('replicate-' + $rf)
-    if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path $work | Out-Null
-    $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $got.Path -Work $work -Choices $choices }
-    if ($mp.Plan.Stop) { Die ($e.name + ' cannot be installed unattended as revision ' + $BaseRevision + ' gives it: ' + $mp.Plan.Stop + '.') }
-    if (@($mp.Plan.Warnings).Count) { Die ($e.name + '''s installer did not run cleanly: ' + (@($mp.Plan.Warnings) -join '; ') + '.') }
-    $hashes = @($mp.Plan.Files.Values | Sort-Object { $_.Rel.ToLowerInvariant() } | ForEach-Object { [ordered]@{ path = [string]$_.Rel; md5 = (Get-FileHash -LiteralPath $_.Full -Algorithm MD5).Hash.ToLowerInvariant() } })
-    $installer = [string]$mp.Plan.Installer
-    [Thornswood.Layout.NexusLayout]::Forget($mp.Unpacked)
-    Remove-Item -LiteralPath $work -Recurse -Force
-    [IO.File]::Delete($got.Path)
-    if (-not $hashes.Count) { Die ($e.name + '''s installer puts no files in its folder.') }
+    $ef = Get-EntryFiles $e
+    $hashes = @($ef.Hashes); $installer = $ef.Installer; $choices = $ef.Choices
     $patchedKeys = if ($e.PSObject.Properties['patches'] -and $e.patches) { @($e.patches.PSObject.Properties | ForEach-Object { $_.Name }) } else { @() }
     foreach ($k in $patchedKeys) {
       if (-not @($hashes | Where-Object { $_.path -ieq $k.Replace('/', '\') }).Count) { Die ($e.name + ' patches ' + $k + ', and its installer puts no such file in its folder.') }

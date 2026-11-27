@@ -202,10 +202,49 @@ jobs:
     outputs:
       found: ${{ steps.find.outputs.found }}
       key: ${{ steps.find.outputs.key }}
+      # The merge every job below checks out and the release names: the
+      # run's own commit, or the one a finished box build was made from.
+      commit: ${{ steps.built.outputs.commit }}
     steps:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
+      # WHICH MERGE (#7050). A run started by a Content Deployment's success
+      # has main as it is when the status came, which is past the merge the
+      # box built once a merge landed during the build. Until 27 Nov that
+      # run looked for main's newest key, found none and asked the box
+      # again, so in a burst every finished build was thrown away and Dev
+      # waited 20 to 45 minutes. It releases the merge the box built
+      # instead (MergeRelease.ps1, Resolve-ContentBuiltCommit), and the
+      # merges after it come in the next release.
+      - name: Which merge the box built
+        id: built
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          . ./scripts/release/MergeRelease.ps1
+          $event = Get-Content -LiteralPath $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+          $after = {
+            param($Base, $Commit)
+            $status = gh api "repos/$($env:GITHUB_REPOSITORY)/compare/$Base...$Commit" --jq .status
+            if ($LASTEXITCODE -ne 0) { throw "GitHub did not compare $Base with $Commit" }
+            return ([string]$status -in @('ahead', 'identical'))
+          }
+          try {
+            $rels = if ($env:GITHUB_EVENT_NAME -eq 'deployment_status') { @(Get-MergeReleaseList) } else { @() }
+            $r = Resolve-ContentBuiltCommit -Event $event -Head $env:GITHUB_SHA -Releases $rels -After $after
+          }
+          catch { Write-Host ('::error::' + $_.Exception.Message); exit 1 }
+          Write-Host "this run releases $($r.Commit): $($r.Why)"
+          if ($r.Commit -ne $env:GITHUB_SHA) { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Main moved on during the box's content build, so this run releases **$($r.Commit)**, the merge the box built." }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("commit=" + $r.Commit)
+      - name: Check out the merge the box built
+        if: ${{ steps.built.outputs.commit != github.sha }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.built.outputs.commit }}
           persist-credentials: false
       - name: Find the build, or ask the box for it
         id: find
@@ -260,6 +299,7 @@ jobs:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.content.outputs.commit }}
           persist-credentials: false
       # Run-Gate checks generated table order before it hands out shares.
       - name: Fetch the content build taken
@@ -304,6 +344,7 @@ jobs:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.content.outputs.commit }}
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
@@ -368,6 +409,7 @@ jobs:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.content.outputs.commit }}
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
@@ -450,12 +492,19 @@ jobs:
       # this one with other workflow files (Is this a merge that can still
       # be tagged).
       actions: write
+    # The merge released: the content job's, which is the run's own commit
+    # or the one a finished box build was made from (WHICH MERGE, #7050).
+    # GITHUB_SHA is the run's own and cannot be set, so every step names
+    # this one.
+    env:
+      RELEASE_SHA: ${{ needs.content.outputs.commit }}
     steps:
       # The whole history: the launcher's number is the time its sources last
       # changed on main (LauncherVersion.ps1), which a shallow clone cannot say.
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.content.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -531,7 +580,7 @@ jobs:
           SINCE: ${{ steps.names.outputs.since }}
         run: |
           $file = Join-Path $env:RUNNER_TEMP 'notes.md'
-          $a = @{ Until = $env:GITHUB_SHA; Repo = $env:GITHUB_REPOSITORY; OutFile = $file }
+          $a = @{ Until = $env:RELEASE_SHA; Repo = $env:GITHUB_REPOSITORY; OutFile = $file }
           if ($env:SINCE) { $a['Since'] = $env:SINCE }
           & ./scripts/release/Collect-ReleaseNotes.ps1 @a
           $rc = $LASTEXITCODE
@@ -574,7 +623,7 @@ jobs:
           PREVIOUS_MANIFEST: ${{ steps.names.outputs.previous_manifest }}
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'game'
-          $a = @{ Out = $out; Root = (Join-Path $env:RUNNER_TEMP 'game-root'); Commit = $env:GITHUB_SHA }
+          $a = @{ Out = $out; Root = (Join-Path $env:RUNNER_TEMP 'game-root'); Commit = $env:RELEASE_SHA }
           if ($env:PREVIOUS_MANIFEST) {
             # The list of the Release before, held to its manifest, for what
             # this one no longer ships (Build-GameFiles.ps1, WHAT IS GONE).
@@ -609,7 +658,7 @@ jobs:
         run: |
           foreach ($ch in 'dev', 'main') {
             $out = Join-Path $env:RUNNER_TEMP "setup-$ch"
-            ./scripts/release/Build-SetupFiles.ps1 -Out $out -GameRoot (Join-Path $env:RUNNER_TEMP 'game-root') -Channel $ch -Commit $env:GITHUB_SHA
+            ./scripts/release/Build-SetupFiles.ps1 -Out $out -GameRoot (Join-Path $env:RUNNER_TEMP 'game-root') -Channel $ch -Commit $env:RELEASE_SHA
             if ($LASTEXITCODE -ne 0) { Write-Host "::error::Build-SetupFiles.ps1 -Channel $ch failed; the lines above say why"; exit 1 }
             Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_dir=" + (Join-Path $out 'files'))
             Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("${ch}_list=" + (Join-Path $out "setup-files.$ch.json"))
@@ -802,7 +851,7 @@ jobs:
           Write-Host ("steps after a deploy: " + $(if ($steps.Count) { ($steps | ForEach-Object { Split-Path -Leaf $_ }) -join ', ' } else { 'none' }))
           Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt') -Value $adds
           $probe = Join-Path $env:RUNNER_TEMP 'probe'
-          ./scripts/release/New-SignedManifest.ps1 -Out $probe -Tag $env:TAG -Commit $env:GITHUB_SHA -Part gamemode -Files $gm, $stamp, $tables -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION -NoCatalog
+          ./scripts/release/New-SignedManifest.ps1 -Out $probe -Tag $env:TAG -Commit $env:RELEASE_SHA -Part gamemode -Files $gm, $stamp, $tables -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION -NoCatalog
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $m = Get-Content -LiteralPath (Join-Path $probe 'files\manifest.json') -Raw | ConvertFrom-Json
           $prev = if ($env:PREVIOUS_MANIFEST) { Get-Content -LiteralPath $env:PREVIOUS_MANIFEST -Raw | ConvertFrom-Json } else { $null }
@@ -984,7 +1033,7 @@ jobs:
           $adds = @(Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'parts.txt'))
           $vp = Join-Path $env:RUNNER_TEMP 'velopack.txt'
           if (Test-Path -LiteralPath $vp) { $adds += @(Get-Content -LiteralPath $vp) }
-          ./scripts/release/New-SignedManifest.ps1 -Out $rel -Tag $env:TAG -Commit $env:GITHUB_SHA -Version $env:VERSION -Part gamemode -Files $env:GAMEMODE, $env:STAMP, $env:TABLES -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION
+          ./scripts/release/New-SignedManifest.ps1 -Out $rel -Tag $env:TAG -Commit $env:RELEASE_SHA -Version $env:VERSION -Part gamemode -Files $env:GAMEMODE, $env:STAMP, $env:TABLES -BotFiles $bot -ServerZip $env:SERVER_ZIP -Add $adds -LauncherVersion $env:LAUNCHER_VERSION
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("dir=" + $rel)
           # The attestation's file pattern, in forward slashes, which the
@@ -1043,10 +1092,10 @@ jobs:
         run: |
           $head = gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha
           if ($LASTEXITCODE -ne 0 -or -not $head) { Write-Host '::error::GitHub did not say what main is'; exit 1 }
-          if ([string]$head -eq $env:GITHUB_SHA) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }
+          if ([string]$head -eq $env:RELEASE_SHA) { Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }
           # The files that differ between this merge and main. GitHub lists at
           # most 300, so a list that long is taken as "workflows may differ".
-          $files = @(gh api "repos/$($env:GITHUB_REPOSITORY)/compare/$($env:GITHUB_SHA)...$head" --jq '.files[].filename')
+          $files = @(gh api "repos/$($env:GITHUB_REPOSITORY)/compare/$($env:RELEASE_SHA)...$head" --jq '.files[].filename')
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::GitHub did not say what changed between this merge and main ($head)"; exit 1 }
           $flows = @($files | Where-Object { $_ -like '.github/workflows/*' })
           if ($files.Count -lt 300 -and -not $flows.Count) {
@@ -1070,7 +1119,7 @@ jobs:
           NOTES: ${{ steps.notes.outputs.file }}
         run: |
           $assets = Get-ChildItem -LiteralPath (Join-Path $env:DIR 'assets') -File | ForEach-Object { $_.FullName }
-          gh release create $env:TAG --draft --prerelease --target $env:GITHUB_SHA --title "Release $($env:TAG)" --notes-file $env:NOTES --latest=false
+          gh release create $env:TAG --draft --prerelease --target $env:RELEASE_SHA --title "Release $($env:TAG)" --notes-file $env:NOTES --latest=false
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::the draft $($env:TAG) could not be made"; exit 1 }
           gh release upload $env:TAG @assets
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::the files could not go on the draft $($env:TAG)"; exit 1 }
@@ -1091,7 +1140,7 @@ jobs:
           HELD: ${{ steps.files.outputs.held }}
         run: |
           . ./scripts/release/MergeRelease.ps1
-          try { $done = Push-MainPackage -Folder $env:HELD -Tag $env:TAG -Commit $env:GITHUB_SHA }
+          try { $done = Push-MainPackage -Folder $env:HELD -Tag $env:TAG -Commit $env:RELEASE_SHA }
           catch { Write-Host ('::error title=Main''s package::' + $_.Exception.Message); exit 1 }
           $ref = 'ghcr.io/' + (Get-MainPackageRef $env:GITHUB_REPOSITORY $env:TAG)
           Write-Host "$done $ref"
@@ -1112,8 +1161,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.names.outputs.tag }}
         run: |
-          gh api --method POST "repos/$($env:GITHUB_REPOSITORY)/git/refs" -f "ref=refs/tags/main-$($env:TAG)" -f "sha=$($env:GITHUB_SHA)" --silent
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the tag main-$($env:TAG) could not be made on $($env:GITHUB_SHA)"; exit 1 }
+          gh api --method POST "repos/$($env:GITHUB_REPOSITORY)/git/refs" -f "ref=refs/tags/main-$($env:TAG)" -f "sha=$($env:RELEASE_SHA)" --silent
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the tag main-$($env:TAG) could not be made on $($env:RELEASE_SHA)"; exit 1 }
 
       - name: Ask the dev server for it (a Deployment to Dev)
         id: devdeploy
@@ -1127,7 +1176,7 @@ jobs:
           # required_contexts empty: this commit is on main already, past its
           # checks, and the Deployment must not wait on whatever else runs.
           $body = [ordered]@{
-            ref = $env:GITHUB_SHA
+            ref = $env:RELEASE_SHA
             task = 'deploy'
             environment = 'Dev'
             auto_merge = $false
@@ -1165,7 +1214,7 @@ jobs:
             if (-not $environment) { Write-Host "::error::$part has no environment of its own"; exit 1 }
             # The live site and the live bot: production, and never transient.
             $body = [ordered]@{
-              ref = $env:GITHUB_SHA
+              ref = $env:RELEASE_SHA
               task = 'deploy'
               environment = $environment
               auto_merge = $false

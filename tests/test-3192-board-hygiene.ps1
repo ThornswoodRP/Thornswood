@@ -23,7 +23,8 @@
        done-on-merge writes the test task of a merged pull request on its
        issue (its card follows by itself through board.yml, #5185) in a fenced
        block, and leaves alone a Refs with no test task, a closed issue and a
-       pull request number; area-label puts on the one area a title names,
+       pull request number, and writes a "Known issue for #N" block on its
+       issue as it is, once, and nothing for "unchanged" (#7080); area-label puts on the one area a title names,
        "area: triage" for none or two, and makes that label when it is missing.
 
   It never reaches GitHub. Files under its own temp folder only.
@@ -280,6 +281,18 @@ try {
         $r = Run-Flow $f @{ 'GET /commits/eee' = @{ sha = $E; commit = @{ message = "Merge pull request #3302 from magpie/dev-forge`n`nA forged number is refused" } }; 'GET /pulls/3302' = @{ number = 3302; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = $E; body = $dev }; 'GET /issues/616' = @{ number = 616; state = 'open' } } @{ BOARD_TOKEN = 'board-token'; COMMITS = '["eee"]' }
         $c = @($r.Writes | Where-Object { $_ -like 'POST /issues/616/comments *' })
         Yes '  a Dev test task''s comment says the dev release that carries it writes it, and that main closes the issue (#5199, #5530)' ($c.Count -eq 1 -and $c[0] -match 'The dev release that carries it writes it on this issue with its Build: line naming that release, once dev runs it' -and $c[0] -match 'dev-test-tasks' -and $c[0] -match 'Close-ShippedIssues\.ps1 -Dev' -and $c[0] -match 'The main release that carries it closes this issue once the live server runs it, and writes this on it if nobody has' -and $c[0] -match 'Server: Dev\\nBuild: dev release')
+
+        # A known issue in the pull request (#7080).
+        $K = '7' * 40
+        $kbody = "Refs #617, #618.`n`nKnown issue for #617: Stall lists do not open`nServer: Main`nWhat happens: the list does not open.`nWhat is being done: the fix goes out with the next engine update.`n`nKnown issue for #618: unchanged`n`nTest task for #619: Forge makes one`n1. x`n`n## Checked"
+        $ktable = @{ 'GET /commits/kkk' = @{ sha = $K; commit = @{ message = 'The stall lists open (#3303)' } }; 'GET /pulls/3303' = @{ number = 3303; merged_at = (Ago 0); base = @{ ref = 'main' }; merge_commit_sha = $K; body = $kbody }; 'GET /issues/617' = @{ number = 617; state = 'open' }; 'GET /issues/618' = @{ number = 618; state = 'open' }; 'GET /issues/619' = @{ number = 619; state = 'open' } }
+        $r = Run-Flow $f $ktable @{ BOARD_TOKEN = ''; COMMITS = '["kkk"]' }
+        $c = @($r.Writes | Where-Object { $_ -like 'POST /issues/617/comments *' })
+        Yes ("a known issue block is written on its issue as its newest Known issue: comment, as it is, with no fence or footer (exit {0}, #7080)" -f $r.Code) ($r.Code -eq 0 -and $c.Count -eq 1 -and $c[0] -match 'Known issue: Stall lists do not open\\nServer: Main\\nWhat happens: the list does not open\.\\nWhat is being done: the fix goes out with the next engine update\."' -and $c[0] -notmatch '```' -and $c[0] -notmatch 'Done on merge')
+        Yes '  "unchanged" writes nothing, and the test task after it is still read' (@($r.Writes | Where-Object { $_ -match '/issues/618/' }).Count -eq 0 -and @($r.Writes | Where-Object { $_ -like 'POST /issues/619/comments *' }).Count -eq 1)
+        $said = @{ user = @{ login = 'github-actions[bot]' }; body = "Known issue: Stall lists do not open`nServer: Main`nWhat happens: the list does not open.`nWhat is being done: the fix goes out with the next engine update." }
+        $r = Run-Flow $f ($ktable + @{ 'GET /issues/617/comments?per_page=100&page=1' = @($said) }) @{ BOARD_TOKEN = ''; COMMITS = '["kkk"]' }
+        Yes '  and run again it writes the same known issue once' (@($r.Writes | Where-Object { $_ -like 'POST /issues/617/comments *' }).Count -eq 0 -and $r.Out -match 'the known issue of #617 already says this')
 
         # A merge the push run missed (#1626, #3273), started by hand.
         $seen = @{ user = @{ login = 'github-actions[bot]' }; body = 'Pull request #3300 merged (0123456789ab), so this is in Done and stays open: ...' }

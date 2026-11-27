@@ -22,7 +22,8 @@
        held to its server, and -Keep keeps what -Take took;
     5. merge-release.yml asks for the build before it releases, takes it
        before any part is built, and starts again on a Content Deployment's
-       success, with the release's concurrency on its job;
+       success, with the release's concurrency on its job, and that run
+       releases the merge the box built, every job checking it out (#7050);
     3c. -Newest says SAME KEY or OTHER KEY against this checkout's inputs,
        with same=, key= and commit= for the gate's pick, and -BuildKey
        holds it to a key;
@@ -273,6 +274,17 @@ try {
     Check '5 it keeps what it took as the artifact content-dev, for 90 days, for the harnesses and checkouts that read the tables (-Newest)' (
         $job -match 'Get-ContentBuild\.ps1 -Server dev -Take -Keep' -and $keepAt -gt $takeAt -and
         $job.Substring($keepAt) -match '(?s)^- name: Keep what was taken.*?uses: actions/upload-artifact@[0-9a-f]{40}.*?name: content-dev\s.*?retention-days: 90')
+    $content = $wf.Substring($wf.IndexOf("`n  content:"), $wf.IndexOf("`n  checks-pick:") - $wf.IndexOf("`n  content:"))
+    $builtAt = $content.IndexOf('- name: Which merge the box built')
+    Check '5 the content job works out which merge the box built before it looks for the build, and checks that merge out (#7050)' (
+        $builtAt -gt 0 -and $builtAt -lt $content.IndexOf('- name: Find the build, or ask the box for it') -and
+        $content -match 'Resolve-ContentBuiltCommit -Event \$event -Head \$env:GITHUB_SHA' -and
+        $content -match "(?s)- name: Check out the merge the box built\s+if: \`$\{\{ steps\.built\.outputs\.commit != github\.sha \}\}\s+uses: actions/checkout@[0-9a-f]{40}.*?ref: \`$\{\{ steps\.built\.outputs\.commit \}\}" -and
+        $content -match 'commit: \$\{\{ steps\.built\.outputs\.commit \}\}')
+    $after = $wf.Substring($wf.IndexOf("`n  checks-pick:"))
+    Check '5 every job after it checks out that merge, and the release names it, never the run''s own commit' (
+        ([regex]::Matches($after, 'ref: \$\{\{ needs\.content\.outputs\.commit \}\}')).Count -eq 4 -and
+        $job -match 'RELEASE_SHA: \$\{\{ needs\.content\.outputs\.commit \}\}' -and $job -notmatch '\$env:GITHUB_SHA' -and $job -match '--target \$env:RELEASE_SHA')
     # ------------------------------------------- 6. the content checks (4d)
     $pre = $wf.Substring(0, $wf.IndexOf("`n  release:"))
     Check '6 the content job takes the build it found, held to its key, and hands it to the checks for this run only' (
@@ -302,15 +314,18 @@ try {
             $at = $b.IndexOf("`n  ${j}:"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
             Check "6 $f`: $j lays the pick's build before it runs the gate, with no token" ($body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?Run-Gate\.ps1 -Shard' -and $body -notmatch 'github\.token|GH_TOKEN')
         }
+        # The tree checks too (#7115): one list of the kept builds a check.
+        $at = $b.IndexOf("`n  checks:"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
+        Check "6 $f`: checks lays the pick's build before its first check, with no token" ($at -ge 0 -and $body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?- name: Scan the tree for secrets' -and $body -notmatch 'github\.token|GH_TOKEN|actions: read|lay-content')
     }
     # Checkout options may follow persist-credentials. They are still part of
     # checkout, not an intervening step that could read stale content tables.
     $laysNewest = '(?s)actions: read.*?persist-credentials: false\n(?:[ \t]*\n|        [^\n]*\n|      #[^\n]*\n)*      - name: Lay the newest content build\n        uses: \./\.github/actions/lay-content\s*\n'
-    foreach ($w in @(@('build.yml', 'checks'), @('build-pr.yml', 'checks'), @('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
+    foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
         $b = ([IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])")) -replace "`r`n", "`n")
         $at = $b.IndexOf("`n  $($w[1]):"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
         Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match $laysNewest)
-        if ($w[0] -eq 'build-pr.yml') {
+        if ($w[0] -eq 'nightly.yml') {
             $late = $body.Replace('      - name: Lay the newest content build', "      - name: Read stale tables`n        run: node stale.js`n      - name: Lay the newest content build")
             Check '6 a step between checkout and laying content is still refused' ($late -notmatch $laysNewest)
             Check '6 keeping checkout credentials is still refused' ($body.Replace('persist-credentials: false', 'persist-credentials: true') -notmatch $laysNewest)

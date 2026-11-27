@@ -91,6 +91,10 @@ appearance and combat. They cannot be taken alive or dead, sold as stock,
 or dropped for somebody to pick up. Returning after death does not add a
 new vanilla pile. See [Dungeon loot](dungeon-loot.md#bodies).
 
+Nobody can pickpocket an NPC, so its pockets cannot be emptied that way
+either; pickpocketing is between people only, with Skyrim's own steal
+window (Patrick, 26 Nov 2026, #6622).
+
 Deliberate assignments remain separate, even when they use the same item
 as an inherited weapon. Guild purses and purchased stock still belong to
 the merchant ledger. Custom guard equipment, Thalmor patrol assignments

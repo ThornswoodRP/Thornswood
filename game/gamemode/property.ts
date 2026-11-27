@@ -284,6 +284,11 @@
         row.master = { for: Number(c.master.for), no: Number(c.master.no) };
       }
       if (Number.isSafeInteger(c.deed) && c.deed > 0) { row.deed = c.deed; }
+      // A steward's grant (#6894): who granted it and when, or it is the holder's own claim.
+      if (c.granted && typeof c.granted === 'object' && Number(c.granted.by) > 0) {
+        row.granted = { by: Number(c.granted.by), name: String(c.granted.name || 'somebody'),
+                        at: Number(c.granted.at) || at };
+      }
 
       out[k] = row;
       kept++;
@@ -1679,6 +1684,14 @@
                            '. Take it up with them, or with the court.');
       return true;
     }
+    // One property of their own (#6894): a steward grants any more.
+    var own = ownClaimOf(profileId);
+    if (own) {
+      toProfile(profileId, 'You hold ' + nameOf(own) + ' already, and a character claims one property of their ' +
+                           'own. The Steward of ' + (HOLD_TOWN[holdOfBuilding(building)] || 'the hold') +
+                           ' can grant you ' + nameOf(building) + ' instead.');
+      return true;
+    }
     var who = 'somebody';
     try {
       var a = mp.get(actorId, 'appearance');
@@ -1728,6 +1741,113 @@
                       : 'The deed could not be handed over, so say so in the dev channel. ') +
               (master ? masterHandedLine(building) + ' ' : '') +
               'Go in at least once every ' + lapseDays() + ' days or it goes back.');
+    return true;
+  }
+
+  /*
+    ONE PROPERTY OF THEIR OWN (#6894, Patrick, 26 Nov). One character
+    claimed two Whiterun farm plots and a tavern. A character claims one
+    property at its door; a steward grants any more (grant, below). So a
+    claim is refused while the character holds a building it did not get by
+    a steward's grant. A farm is no property claim: plots are farming's, and
+    a field on a held property answers to the house (claimCovering), so
+    its holder works every plot on it. A jail is held by its Jarl's office,
+    not as their own property, and does not count. A deed carried through
+    the door is no claim either: whoever presents it holds the place, and a
+    grant does not go with the deed, so the place counts for its new holder.
+    Claims made before the rule stay until they lapse or are evicted.
+  */
+  function ownClaimOf(profileId) {
+    for (var b in claims) {
+      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
+      var c = claims[b];
+      if (c.by !== profileId || c.granted || jailOfBuilding(b) || !holderOf(b)) { continue; }
+      return b;
+    }
+    return null;
+  }
+
+  /*
+    A STEWARD GRANTS A BUILDING (#6894). At the door of a building nobody
+    holds in their own hold, the Office page of K lists who is in the world
+    with Grant beside each, which sends /office grant <profile>. The
+    building is claimed for that person as their own claim would claim it:
+    a new deed number, the deed and the master key in their pack, the ground
+    outside the door, the same lapse. It is marked granted, so it is not the
+    one property they claim themselves. Staff grant at any door, as they
+    evict, and it goes in the staff log.
+  */
+  function grant(parts, actorId, profileId, toProfile, cmd) {
+    var building = here(actorId);
+    if (!building) {
+      toProfile(profileId, OFFICE_AT_DOOR);
+      return true;
+    }
+    var how = settleAs(profileId, building, cmd);
+    if (!how.as) {
+      toProfile(profileId, how.why);
+      return true;
+    }
+    var pid = Number((parts && parts[2]) || 0) || 0;
+    var them = (pid > 0 && Math.floor(pid) === pid && pid !== profileId) ? onlineActorOf(pid) : 0;
+    if (!them) {
+      toProfile(profileId, 'Pick somebody in the world on the Office page of K.');
+      return true;
+    }
+    var accordGrant = globalThis.__thornswoodEmbassy;
+    if (accordGrant && accordGrant.holds(building)) {
+      toProfile(profileId, accordGrant.CLAIM_REFUSED);
+      return true;
+    }
+    var whoName = personName(them);
+    if (!mayHold(them, pid, building)) {
+      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
+      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' + jailTown + ' holds it.');
+      return true;
+    }
+    var held = holderOf(building);
+    if (held) {
+      toProfile(profileId, nameOf(building) + ' is held by ' + held.name + '. End that claim first to grant it.');
+      return true;
+    }
+    var deed = deedCut + 1;
+    if (!Number.isSafeInteger(deed)) {
+      plog('could not number a new deed for', nameOf(building));
+      toProfile(profileId, 'The register could not number the deed. Ask staff to check it.');
+      return true;
+    }
+    var now = Date.now();
+    var by = personName(actorId);
+    claims[building] = { by: pid, name: whoName, at: now, touched: now, locked: false,
+                         ground: groundHere(actorId), deed: deed,
+                         granted: { by: profileId, name: by, at: now } };
+    deedCut = deed;
+    if (!save()) {
+      delete claims[building];
+      deedCut--;
+      toProfile(profileId, 'The register could not save the grant. Ask staff to check it.');
+      return true;
+    }
+    pushAll();
+    var handed = giveDeed(them, building);
+    var master = handed ? issueMaster(them, building, claims[building]) : 0;
+    if (how.as === 'staff') {
+      staffRecord('grant', actorId, profileId, building, claims[building], settleWhere(building));
+    }
+    plog(by, how.as === 'staff' ? 'as staff' : 'as steward', 'granted', nameOf(building), 'to', whoName,
+         '(profile ' + pid + ')', handed ? 'with the deed' : 'and no deed could be handed over',
+         master ? 'and master key no. ' + master : '');
+    toProfile(profileId, 'You grant ' + nameOf(building) + ' to ' + whoName + '.' +
+              (handed ? ' The deed is in their pack.' : ' The deed could not be handed over, so say so in the dev channel.') +
+              (how.as === 'staff' ? ' It is in the staff log.' : ''));
+    toProfile(pid, by + ' grants you ' + nameOf(building) + '. ' +
+              (handed ? 'The deed is in your pack. Whoever carries it holds the place, ' +
+                        'so keep it somewhere a thief will not look. '
+                      : 'The deed could not be handed over, so say so in the dev channel. ') +
+              (master ? masterHandedLine(building) + ' ' : '') +
+              'Go in at least once every ' + lapseDays() + ' days or it goes back.');
+    redrawPanel(actorId);
+    redrawPanel(them);
     return true;
   }
 
@@ -1842,10 +1962,15 @@
       // and expensive. Failing that way round is the right one: a door that
       // is not locked is a house anybody can walk into.
       '    var sp = ctx.sp;',
+      // Only undo locks this script put on an unlocked ordinary claim door.
+      // The jail list and a lock already present in the game are not ours.
+      '    var claimShut = Array.isArray(v.claimShut) ? new Set(v.claimShut) : null;',
+      '    var applied = st && claimShut ? (st.thornswoodClaimLocks || (st.thornswoodClaimLocks = {})) : null;',
       // Remember which form ids property wants shut (#615), published for
       // anything on the client that asks whether a door is property's to hold.
       '    var shutMap = {};',
       '    for (var i = 0; i < v.shut.length; i++) {',
+      '      shutMap[v.shut[i]] = true;',
       '      try {',
       '        var r = sp.ObjectReference.from(sp.Game.getFormEx(v.shut[i]));',
       // A door in a cell nobody has loaded does not resolve, and there is
@@ -1858,23 +1983,49 @@
       // is a stutter on each heartbeat. If isLocked cannot be read the door
       // is locked anyway, so this fails shut.
       '        if (r) { var was = null; try { was = r.isLocked(); } catch (e2) { }',
-      '          if (was !== true) { r.lock(true, false); } }',
-      '        shutMap[v.shut[i]] = true;',
+      '          if (was !== true) {',
+      '            r.lock(true, false);',
+      '            if (was === false && applied && claimShut.has(v.shut[i])) { applied[v.shut[i]] = true; }',
+      '          } }',
       '      } catch (e) { }',
       '    }',
-      '    for (var j = 0; j < (v.open || []).length; j++) {',
+      // A claim removed from the register no longer contributes an open
+      // entry. Restore the lock we applied once its reference is available.
+      '    var open = (v.open || []).slice();',
+      '    var explicitOpen = applied ? new Set(open) : null;',
+      '    if (applied) {',
+      '      Object.keys(applied).forEach(function (key) {',
+      '        var id = Number(key);',
+      '        if (shutMap[id]) {',
+      '          if (!claimShut.has(id)) { delete applied[id]; }',
+      '        } else if (!explicitOpen.has(id)) { open.push(id); }',
+      '      });',
+      '    }',
+      '    for (var j = 0; j < open.length; j++) {',
       '      try {',
-      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(v.open[j]));',
+      '        var door = open[j];',
+      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(door));',
       // OFF THE PUBLISHED LIST BEFORE IT OPENS (#2680). The front plugin
       // reads a door on __thornswoodPropertyShut that opens as a pick, so
       // a door this script opens is taken off the list first.
-      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[v.open[j]]; } } catch (e3) { }',
-      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) { }',
-      '          if (shut !== false) { o.lock(false, false); } }',
-      '        delete shutMap[v.open[j]];',
+      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[door]; } } catch (e3) { }',
+      '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) {',
+      '            if (explicitOpen && !explicitOpen.has(door)) { continue; }',
+      '          }',
+      '          if (shut !== false) { o.lock(false, false); }',
+      '          if (applied) { delete applied[door]; } }',
+      '        delete shutMap[door];',
       '      } catch (e) { }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
+      // The buildings this character holds (#6883): the front plugin makes
+      // them and what is in them theirs, and gives back any no longer held.
+      '    try {',
+      '      globalThis.__thornswoodPropertyOwn = v.own || [];',
+      '      if (typeof globalThis.__thornswoodOwnCells === "function") { globalThis.__thornswoodOwnCells(v.own || []); }',
+      // The plugin's hook is guard()ed and logs its own failure; this only
+      // keeps the doors above locked if the hand over itself throws.
+      '    } catch (e) { /* the doors above are already done */ }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
@@ -2190,8 +2341,23 @@
         (pass || wayOut(doors[i]) ? open : shut).push(id);
       }
     }
+    var claimShut = shut.slice();
     cellLists(profileId, shut, open);
-    return { shut: shut, open: open };
+    /*
+      AND THE BUILDINGS THIS CHARACTER HOLDS, as their interior cells (#6883),
+      for the client to make the building and what is in it theirs, so its
+      storage is not theft. After the loop, because mayPass asked holderOf of
+      every claim and a lapsed one is gone from claims by now.
+    */
+    var own = [];
+    for (var h in claims) {
+      if (!Object.prototype.hasOwnProperty.call(claims, h)) { continue; }
+      if (profileId && claims[h] && claims[h].by === profileId) {
+        var cid = idOf(h);
+        if (cid) { own.push(cid); }
+      }
+    }
+    return { shut: shut, open: open, own: own, claimShut: claimShut };
   }
 
   /*
@@ -3284,6 +3450,12 @@
   var LETTER_FEE = 20;
   var LETTER_PAY = 15;
   var LETTER_CHARS = 300;
+  /*
+    A PARCEL, #4560 (Patrick, 12 Nov): the board's LETTER_FEE and a courier
+    pay the sender names, never less than PARCEL_PAY_MIN, held on the ledger
+    like a haul's pay. See postParcel.
+  */
+  var PARCEL_PAY_MIN = 15;
   var LETTER_REACH = 700;
 
   function loadPart(key, fallback) {
@@ -5310,7 +5482,10 @@
         taken: n.taken ? (n.takenName || 'somebody') : '',
         mine: Number(n.by) === Number(profileId),
         held: !!(n.job && Number(n.taken) === Number(profileId)),
-        haul: !!n.haul
+        haul: !!n.haul,
+        parcel: !!n.parcel,
+        // A wanted poster (#4565): a job whose reward a guard of the hold pays out.
+        wanted: !!(n.wanted && n.job && plain)
       });
     }
     return { rows: rows, older: up - rows.length };
@@ -5335,7 +5510,7 @@
         if (!Array.isArray(list)) continue;
         for (var i = list.length - 1, first = Math.max(0, list.length - 32); i >= first; i--) {
           var n = list[i], meta = n && n.boardSubmission;
-          var kind = n && n.letter && !n.haul ? 'letter' : n && n.haul && !n.letter ? 'haul' : '';
+          var kind = n && n.haul && !n.letter ? 'haul' : n && n.letter && !n.haul ? (n.parcel ? 'parcel' : 'letter') : '';
           if (!meta || meta.version !== 1 || typeof meta.id !== 'string' || !/^[0-9a-f]{32}$/.test(meta.id) ||
               meta.kind !== kind || !kind ||
               meta.actorDesc !== desc || n.by !== profileId || typeof n.at !== 'number' || !Number.isFinite(n.at)) continue;
@@ -5343,7 +5518,7 @@
         }
       }
       found.sort(function (a, b) { return b.at - a.at || b.index - a.index || a.hold.localeCompare(b.hold); });
-      var counts = { letter: 0, haul: 0 };
+      var counts = { letter: 0, haul: 0, parcel: 0 };
       var results = found.filter(function (r) { return counts[r.kind]++ < 16; }).map(function (r) {
         return { id: r.id, kind: r.kind, hold: r.hold, status: r.status };
       });
@@ -5383,6 +5558,9 @@
     // A guard of this board's hold takes down any post on it (#502), and so
     // does its Jarl (#2551, Patrick, 15 Oct: that hold's Guard or Jarl).
     var guard = here && (isGuard(profileId, hold) || isJarlOf(profileId, hold));
+    // A guard of this board's hold, and only a guard, confirms a wanted
+    // poster's bounty was earned (#4565, decided 22 Oct).
+    var bountyGuard = here && isGuard(profileId, hold);
     var dests = [];
     var arrivals = [];
     if (here) {
@@ -5407,7 +5585,20 @@
       }
     }
     var submit = [];
+    var pack = [];
     if (here) {
+      // What Send a parcel offers (#4560): the pack's stacks, not gold and not
+      // worn, the way the drop box's Leave it offers them. postParcel checks
+      // the slot and its base again when the parcel arrives.
+      var inv = null;
+      try { inv = mp.get(actorId, 'inventory'); }
+      catch (e3) { plog('could not read the pack for the board panel of', Number(actorId).toString(16) + ':', e3); }
+      var entries = (inv && inv.entries) || [];
+      for (var p = 0; p < entries.length; p++) {
+        var e = entries[p];
+        if (!e || Number(e.baseId) === GOLD_ID || e.worn || e.wornLeft) { continue; }
+        pack.push({ slot: p, baseId: Number(e.baseId) >>> 0, what: itemName(e), count: Number(e.count) || 0 });
+      }
       try {
         var books = g.__thornswoodBooks;
         var view = books && books.view ? books.view(profileId, {}) : null;
@@ -5429,8 +5620,11 @@
       submit: submit,
       steward: steward,
       guard: guard,
+      bountyGuard: bountyGuard,
       dests: dests,
-      arrivals: arrivals
+      arrivals: arrivals,
+      pack: pack,
+      parcelPayMin: PARCEL_PAY_MIN
     };
   }
 
@@ -6162,6 +6356,8 @@
     'post': landPost,
     'letter': landLetter,
     'haul': landHaul,
+    'parcel': landParcel,
+    'parcel-hand': landParcelHand,
     'owed': landOwed
   }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, newId, admitPackDebit);
 
@@ -6313,7 +6509,7 @@
 
   /* What anybody but the person it is for reads of a letter: who it is for. */
   function sealed(n) {
-    return 'A sealed letter for ' + (n.to || 'somebody');
+    return 'A sealed ' + (n.parcel ? 'parcel' : 'letter') + ' for ' + (n.to || 'somebody');
   }
 
   /*
@@ -6366,15 +6562,16 @@
   }
 
   function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
-    if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
+    if ((kind !== 'notice' && kind !== 'job' && kind !== 'wanted') || !Number.isSafeInteger(reward) || reward < 0 ||
         (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
       toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
       return true;
     }
     // Same authoritative location, size, fee, reward and pack-first landing.
-    // Only the legacy command boundary unescapes or normalizes text.
-    return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
-                kind === 'job', {title:title,body:body,hold:expectedHold});
+    // Only the legacy command boundary unescapes or normalizes text. A wanted
+    // poster (#4565) is a job: the same fee and a reward held the same way.
+    return post([kind === 'notice' ? '/notice' : '/job', String(reward)], actorId, profileId, toProfile,
+                kind !== 'notice', {title:title,body:body,hold:expectedHold,wanted:kind === 'wanted'});
   }
 
   function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
@@ -6406,13 +6603,15 @@
       var first = String((parts && parts[1]) || '').trim();
       reward = /^\d+$/.test(first) ? Number(first) : 0;
       if (!(reward > 0) || !Number.isSafeInteger(reward)) {
-        toProfile(profileId, 'A job\'s reward is a whole number of gold, above nothing. Nothing was taken.');
+        toProfile(profileId, (exactWords && exactWords.wanted ? 'A bounty' : 'A job\'s reward') +
+                  ' is a whole number of gold, above nothing. Nothing was taken.');
         return true;
       }
       from = 2;
     }
     var words = exactWords || postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
-    var what = isJob ? 'the job' : 'the notice';
+    var wanted = !!(isJob && exactWords && exactWords.wanted);
+    var what = wanted ? 'the wanted poster' : (isJob ? 'the job' : 'the notice');
     if (!words.title.trim()) {
       toProfile(profileId, 'Give ' + what + ' a title. Nothing was taken.');
       return true;
@@ -6423,8 +6622,9 @@
       return true;
     }
     if (!words.body.trim()) {
-      toProfile(profileId, isJob ? 'Say what the job is. Nothing was taken.'
-                                 : 'Say what the notice says. Nothing was taken.');
+      toProfile(profileId, wanted ? 'Say who is wanted, and for what. Nothing was taken.'
+                                  : (isJob ? 'Say what the job is. Nothing was taken.'
+                                           : 'Say what the notice says. Nothing was taken.'));
       return true;
     }
     if (words.body.length > POST_BODY_CHARS) {
@@ -6452,11 +6652,20 @@
     // The reward is held on the ledger in pay, the way a letter's 15 and a
     // haul's pay are (noticeHolds), until the poster says it is done.
     if (isJob) { made.pay = reward; }
+    /*
+      A WANTED POSTER (#4565). Decided 22 Oct: written by a person, nothing
+      in the game detects a crime and Skyrim's own bounty stays out of it.
+      Its reward is put up front and held like any job's, and paid out only
+      when a guard of this hold confirms it was earned (jobDone). Only the
+      hold's guards and its Jarl take one down (unpin).
+    */
+    if (wanted) { made.wanted = true; }
     // On the board only once the pack's take is saved (#4901): landPost.
     var r = packs.begin(actorId, goldCut(cost, short),
       'post', { hold: hold, made: made, cost: cost, fee: fee, reward: reward });
     toProfile(profileId, r.why || r.line ||
-      ('Your ' + (isJob ? 'job' : 'notice') + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+      ('Your ' + (wanted ? 'wanted poster' : (isJob ? 'job' : 'notice')) + ' goes on the board in ' + hold +
+       ' once your pack is saved, in a moment.'));
     if (r.line) { refreshPanel(actorId); }
     return true;
   }
@@ -6465,15 +6674,21 @@
   function landPost(row, landed) {
     var hold = row.data.hold, made = row.data.made, cost = row.data.cost, fee = row.data.fee, reward = row.data.reward;
     var isJob = !!made.job;
+    var kind = made.wanted ? 'wanted poster' : (isJob ? 'job' : 'notice');
     if (!landed) {
       return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the ' +
-             (isJob ? 'job' : 'notice') + ' is not on the board.';
+             kind + ' is not on the board.';
     }
     made.at = Date.now();
     if (!notices[hold]) { notices[hold] = []; }
     notices[hold].push(made);
     funds[hold] = (Number(funds[hold]) || 0) + cost;
-    plog(made.name, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', made.title);
+    plog(made.name, 'posted a ' + kind + ' in', hold, 'for', cost, 'gold:', made.title);
+    if (made.wanted) {
+      return 'Your wanted poster is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
+        ' for the board, and the ' + reward + ' reward, held until a guard of ' + hold +
+        ' confirms it was earned. Then it goes to whoever took it.';
+    }
     return isJob
       ? 'Your job is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
         ' for the board, and the ' + reward + ' reward, held until you say the job is done. ' +
@@ -6713,7 +6928,29 @@
       toProfile(profileId, 'That is not a job with a reward.');
       return true;
     }
-    if (Number(n.by) !== Number(profileId)) {
+    /*
+      A WANTED POSTER'S BOUNTY (#4565). Decided 22 Oct: the reward is held
+      "until a guard confirms". So a guard of this hold confirms it, at this
+      board, and nobody else does, the poster included. A guard who took the
+      poster themselves cannot confirm their own bounty. The pay out is the
+      same as a job's: handHaul, out of the ledger it was held on, owed to
+      the taker and paid into their pack once it is saved.
+    */
+    var wanted = !!n.wanted;
+    if (wanted && !isGuard(profileId, hold)) {
+      toProfile(profileId, 'Only a guard of ' + hold + ' confirms a wanted poster\'s bounty was earned.');
+      return true;
+    }
+    if (wanted && n.taken && Number(n.taken) === Number(profileId)) {
+      toProfile(profileId, 'You took that bounty yourself. Another guard of ' + hold + ' confirms it.');
+      return true;
+    }
+    // Its poster never confirms it (decided 22 Oct), a guard who put it up included.
+    if (wanted && Number(n.by) === Number(profileId)) {
+      toProfile(profileId, 'You put that poster up yourself. Another guard of ' + hold + ' confirms it.');
+      return true;
+    }
+    if (!wanted && Number(n.by) !== Number(profileId)) {
       toProfile(profileId, 'Only the person who posted a job says it is done.');
       return true;
     }
@@ -6724,7 +6961,8 @@
     var reward = Math.floor(Number(n.pay)) || 0;
     var taker = n.takenName || 'Whoever took it';
     var r = handHaul(hold, n, Number(n.taken), reward,
-                     'job ' + (at + 1) + ' done, the reward to ' + taker, 'reward');
+                     (wanted ? 'wanted poster ' + (at + 1) + ' confirmed by a guard, the bounty to '
+                             : 'job ' + (at + 1) + ' done, the reward to ') + taker, wanted ? 'bounty' : 'reward');
     if (r.why) {
       plog('the reward of job', at + 1, 'in', hold, 'could not be paid:', r.why);
       toProfile(profileId, 'That did not work: ' + r.why + ' Nothing was paid.');
@@ -6734,6 +6972,25 @@
     n.done = Date.now();
     n.doneBy = profileId;
     takedown(hold, at, profileId);
+    if (wanted) {
+      plog('law: a guard of', hold, '(' + personName(actorId) + ', profile ' + profileId + ') confirmed',
+           (n.name || 'somebody') + '\'s wanted poster', at + 1, 'earned by', taker + ':', n.title,
+           r.owed ? '(owed while away)' : '(paid)');
+      toProfile(profileId, 'Confirmed: ' + n.title + '. ' + taker +
+                (r.owed ? ' is away, so the ' + reward + ' gold bounty is held for them until they are next in the world.'
+                        : ' is paid the ' + reward + ' gold bounty.'));
+      if (!r.owed) {
+        toProfile(n.taken, 'A guard of ' + hold + ' confirms you earned the bounty: ' + n.title + '. The ' + reward +
+                  ' gold is in your pack.');
+      }
+      if (onlineActorOf(Number(n.by))) {
+        toProfile(n.by, 'A guard of ' + hold + ' confirmed your wanted poster was earned: ' + n.title + '. ' +
+                  taker + ' has the ' + reward + ' gold.');
+      }
+      refreshPanel(actorId);
+      if (r.to) { refreshPanel(r.to); }
+      return true;
+    }
     if (r.owed) {
       plog(taker, 'is owed', reward, 'for job', at + 1, 'in', hold + ':', n.title);
       toProfile(profileId, 'Done: ' + n.title + '. ' + taker + ' is away, so the ' + reward +
@@ -6771,7 +7028,7 @@
                      title: plain ? String(n.title || '') : '',
                      reward: plain ? (Math.floor(Number(n.pay)) || 0) : 0,
                      text: n.letter ? sealed(n) : (n.haul ? haulText(n) : (n.text || '')),
-                     letter: !!n.letter, haul: !!n.haul });
+                     letter: !!n.letter, haul: !!n.haul, parcel: !!n.parcel, wanted: !!(n.wanted && plain) });
         }
       }
     }
@@ -6794,6 +7051,10 @@
     var n = list[at];
     if (!n.job || n.taken !== profileId || n.down) {
       toProfile(profileId, 'That is not one of yours.');
+      return true;
+    }
+    if (n.parcel && parcelBusy(hold, at, n)) {
+      toProfile(profileId, 'That parcel is on its way into somebody\'s pack. Wait a moment.');
       return true;
     }
     /*
@@ -6879,6 +7140,23 @@
       toProfile(profileId, 'That one is already down.');
       return true;
     }
+    if (n.parcel && parcelBusy(hold, at, n)) {
+      toProfile(profileId, 'That parcel is on its way into somebody\'s pack. Wait a moment.');
+      return true;
+    }
+    /*
+      A WANTED POSTER COMES DOWN BY THE LAW (#4565). Decided 22 Oct: the
+      hold's Jarl and guards take one down, and nobody else, the person who
+      put it up included. Its held reward goes back to whoever put it up,
+      held for them while they are away (guardTakedown). The fee stays.
+    */
+    if (n.wanted) {
+      if (isGuard(profileId, hold) || isJarlOf(profileId, hold)) {
+        return guardTakedown(hold, at, n, actorId, profileId, toProfile);
+      }
+      toProfile(profileId, 'Only a guard of ' + hold + ' or its Jarl takes a wanted poster down.');
+      return true;
+    }
     /*
       A STEWARD CANCELS A HAUL, #1393, open or taken, at the board it was
       posted on. The pay goes back to the poster and the fee stays, the same
@@ -6916,11 +7194,15 @@
       toProfile(profileId, 'That did not work. The ' + (n.letter ? 'letter' : 'job') + ' is still up.');
       return true;
     }
+    // A parcel's stack goes into this hold's drop box for its sender, in takedown's save (#4560).
+    var boxed = n.parcel ? parcelToBox(hold, n) : 0;
     takedown(hold, at, profileId);
     if (n.letter) {
-      plog(n.name, 'took down a letter for', n.to, 'in', hold, 'and had', back, 'back');
-      toProfile(profileId, 'You take the letter down. The ' + back + ' gold for the courier comes back ' +
-                'to you. The fee stays with ' + hold + '.');
+      var what = n.parcel ? 'parcel' : 'letter';
+      plog(n.name, 'took down a', what, 'for', n.to, 'in', hold, 'and had', back, 'back');
+      toProfile(profileId, 'You take the ' + what + ' down. The ' + back + ' gold for the courier comes back ' +
+                'to you. ' + (boxed ? 'What was in it is in this hold\'s drop box for you. ' : '') +
+                'The fee stays with ' + hold + '.');
       refreshPanel(actorId);
       return true;
     }
@@ -6956,21 +7238,23 @@
       var pay = Math.floor(Number(n.pay)) || 0;
       if (pay > 0) {
         var r = handHaul(hold, n, Number(n.by), pay,
-                         (n.letter ? 'a letter for ' + (n.to || 'somebody') : 'job ' + (at + 1)) +
+                         (n.letter ? 'a letter for ' + (n.to || 'somebody')
+                                   : (n.wanted ? 'wanted poster ' : 'job ') + (at + 1)) +
                          ' taken down by ' + byWhom + ', the pay back to ' + (n.name || 'its poster'),
-                         n.letter ? 'letter' : 'job');
+                         n.letter ? (n.parcel ? 'parcel' : 'letter') : (n.wanted ? 'wanted' : 'job'));
         if (r.why) {
-          toProfile(profileId, 'That did not work: ' + r.why + ' The ' + (n.letter ? 'letter' : 'job') +
-                    ' is still up.');
+          toProfile(profileId, 'That did not work: ' + r.why + ' The ' +
+                    (n.letter ? 'letter' : (n.wanted ? 'wanted poster' : 'job')) + ' is still up.');
           return true;
         }
         back = pay;
         owed = r.owed;
       }
     }
+    var boxed = n.parcel ? parcelToBox(hold, n) : 0;
     takedown(hold, at, profileId);
-    var kind = n.letter ? 'letter' : (n.job ? 'job' : 'notice');
-    var fee = 'The fee stays with ' + hold + '.';
+    var kind = n.parcel ? 'parcel' : n.letter ? 'letter' : (n.wanted ? 'wanted poster' : (n.job ? 'job' : 'notice'));
+    var fee = (boxed ? 'What was in it is in this hold\'s drop box for its sender. ' : '') + 'The fee stays with ' + hold + '.';
     var held = n.letter ? 'gold for the courier' : 'gold reward';
     // A letter's words are sealed, and the log does not record them either.
     plog('law:', how === 'guard' ? 'a guard of' : 'the Jarl of', hold, '(' + personName(actorId) + ', profile ' + profileId + ') took down',
@@ -7062,12 +7346,12 @@
   // it is not authorization or an exactly-once/retry key. Legacy routes stay.
   function submitBoard(payload, actorId, profileId, toProfile) {
     var kind = payload && payload[0];
-    if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul') ||
-        payload.length !== (kind === 'letter' ? 6 : 7) ||
+    if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul' && kind !== 'parcel') ||
+        payload.length !== (kind === 'letter' ? 6 : kind === 'parcel' ? 10 : 7) ||
         typeof payload[1] !== 'string' || !/^[0-9a-f]{32}$/.test(payload[1]) ||
         typeof payload[2] !== 'string' || LEDGER_HOLDS.indexOf(payload[2]) < 0 ||
         payload.slice(4).some(function (field) { return typeof field !== 'string'; }) ||
-        (kind === 'letter' && !validLetterText(payload[4], payload[5]))) {
+        ((kind === 'letter' || kind === 'parcel') && !validLetterText(payload[4], payload[5]))) {
       toProfile(profileId, 'That board submission is invalid. Nothing was posted or taken.'); return true;
     }
     if (!boardOwnerMatches(actorId, profileId, payload[3])) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
@@ -7083,6 +7367,9 @@
     var expectedOwner = payload[3].slice();
     if (kind === 'letter') return postLetter([], actorId, profileId, toProfile,
       { to: payload[4], words: payload[5], hold: payload[2], submission: meta, expectedOwner: expectedOwner });
+    if (kind === 'parcel') return postParcel(actorId, profileId, toProfile,
+      { to: payload[4], words: payload[5], pay: payload[6], slot: payload[7], baseId: payload[8], count: payload[9],
+        hold: payload[2], submission: meta, expectedOwner: expectedOwner });
     // Match the old /haul word boundary, including its whitespace joining.
     var parts = ['/haul', payload[4], payload[5]].concat(payload[6].trim().split(/\s+/));
     return postHaul(parts, actorId, profileId, toProfile, { hold: payload[2], submission: meta, expectedOwner: expectedOwner });
@@ -7162,6 +7449,213 @@
   }
 
   /*
+    ------------------------------------------------------------- a parcel
+
+    #4560. A parcel is a letter with one real stack in it. Patrick, 12 Nov:
+    it costs the board's LETTER_FEE and a courier pay the sender names, at
+    least PARCEL_PAY_MIN, held like a haul's pay. The board panel's Send a
+    parcel sends it through the private submission (submitBoard), with the
+    stack the sender picked from their pack: its slot, its base and how many.
+
+    ONE STACK, IN EXACTLY ONE PLACE. The gold and the stack leave the pack in
+    one write with a receipt (packFirst, #4901), and the parcel goes on the
+    board only once that pack is saved (landParcel), the stack held on its
+    notice on the hold's ledger the way its pay is. The courier takes it like
+    a letter and hands it over face to face, with the same key: the stack goes
+    into the recipient's pack through the same kind of write, and the parcel
+    comes off the board only once that pack is saved (landParcelHand). A
+    server that stops between the pack's write and the register's comes back
+    with the stack in the pack or on the board, never both and never neither.
+
+    Taken down before it is carried, by its sender or by a guard or the Jarl,
+    the pay goes back as a letter's does and the stack goes into this hold's
+    drop box under the sender's own name (parcelToBox), so they take it back
+    there as anything they put in.
+  */
+  function postParcel(actorId, profileId, toProfile, written) {
+    if (!boardOwnerMatches(actorId, profileId, written.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
+    var hold = boardHere(actorId);
+    if (!boardOwnerMatches(actorId, profileId, written.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
+    if (!hold) {
+      toProfile(profileId, 'Stand at a hold\'s notice board to send a parcel from there.');
+      return true;
+    }
+    if (written.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.'); return true;
+    }
+    var pay = /^\d+$/.test(written.pay) ? Number(written.pay) : 0;
+    if (!Number.isSafeInteger(pay) || pay < PARCEL_PAY_MIN) {
+      toProfile(profileId, 'A parcel\'s courier pay is a whole number of gold, ' + PARCEL_PAY_MIN +
+                ' or more. Nothing was taken.');
+      return true;
+    }
+    var slot = /^\d+$/.test(written.slot) ? Number(written.slot) : -1;
+    var base = /^\d+$/.test(written.baseId) ? Number(written.baseId) : 0;
+    var count = /^\d+$/.test(written.count) ? Number(written.count) : 0;
+    if (!Number.isSafeInteger(slot) || slot < 0 || !Number.isSafeInteger(base) || !(base > 0) || base === GOLD_ID ||
+        !Number.isSafeInteger(count) || count < 1) {
+      toProfile(profileId, 'Pick what goes in the parcel from your pack. Nothing was taken.');
+      return true;
+    }
+    var cost = LETTER_FEE + pay;
+    var short = 'A parcel costs ' + cost + ' gold, ' + LETTER_FEE + ' for the board and the ' + pay +
+                ' courier pay, and you do not have it. Nothing was taken.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
+      return true;
+    }
+    var made = { by: profileId, name: characterName(actorId), text: written.words, at: Date.now(),
+                 job: true, letter: true, parcel: true, to: written.to, pay: pay, taken: 0 };
+    if (written.submission) made.boardSubmission = written.submission;
+    var payFor = goldCut(cost, short);
+    // On the board only once the pack's take is saved (#4901): landParcel.
+    var r = packs.begin(actorId, boardSubmissionCut(actorId, profileId, written, function (entries) {
+      var it = entries[slot];
+      if (!it || (Number(it.baseId) >>> 0) !== base || it.worn || it.wornLeft || count > (Number(it.count) || 0)) {
+        return 'Your pack changed. Nothing was taken.';
+      }
+      var kept = JSON.parse(JSON.stringify(it));
+      delete kept.worn; delete kept.wornLeft;
+      kept.count = count;
+      it.count = (Number(it.count) || 0) - count;
+      if (it.count <= 0) { entries.splice(slot, 1); }
+      var paid = payFor(entries);
+      if (typeof paid === 'string') { return paid; }
+      return { entries: paid.entries, taken: [paid.taken[0], kept] };
+    }), 'parcel', { hold: hold, made: made, cost: cost, pay: pay });
+    toProfile(profileId, r.why || r.line ||
+      ('Your parcel for ' + written.to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
+    return true;
+  }
+
+  /* A parcel onto its board, once its gold and its stack are saved out of the pack (#4560). */
+  function landParcel(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost, pay = row.data.pay;
+    var kept = JSON.parse(JSON.stringify(row.taken[1] || {}));
+    var count = Number(kept.count) || 0;
+    delete kept.count;
+    var what = itemName(kept);
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold and ' + what + ' out of it, so they are still ' +
+             'yours and the parcel for ' + made.to + ' is not on the board.';
+    }
+    made.at = Date.now();
+    made.parcel = { entry: kept, count: count, what: what };
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(made.name, 'posted a parcel for', made.to, 'in', hold, 'for', cost, 'gold, holding', count, what);
+    return 'Your parcel for ' + made.to + ' is on the board in ' + hold + ', with ' +
+           (count > 1 ? count + ' ' : '') + what + ' in it. That cost ' + cost + ' gold: ' + LETTER_FEE +
+           ' for the board, and ' + pay + ' held for whoever carries it.';
+  }
+
+  /* Whether this parcel is on its way into somebody's pack right now: a hand over waiting on that pack's save. */
+  function parcelBusy(hold, at, n) {
+    for (var i = 0; i < debits.length; i++) {
+      var d = debits[i];
+      if (d && d.kind === 'parcel-hand' && d.data && d.data.hold === hold && d.data.at === at &&
+          Number(d.data.stamp) === Number(n && n.at)) { return true; }
+    }
+    return false;
+  }
+
+  /*
+    A parcel taken down before it is carried: its stack into this hold's drop
+    box, under its sender's own name, as if they had left it there (#4560).
+    The caller's save writes it with the take down.
+  */
+  function parcelToBox(hold, n) {
+    var p = n && n.parcel;
+    if (!p || typeof p !== 'object' || !p.entry || p.boxed) { return 0; }
+    var d = dropboxOf(hold);
+    var by = Number(n.by) || 0;
+    var name = n.name || 'somebody';
+    var item = { n: d.next++, by: by, name: name, kind: 'left', baseId: Number(p.entry.baseId),
+                 count: Number(p.count) || 0, what: p.what || itemName(p.entry),
+                 entry: JSON.parse(JSON.stringify(p.entry)), forName: name, at: Date.now() };
+    d.items.push(item);
+    boxLog(hold, { act: 'in', n: item.n, who: by, whoName: name, by: by, byName: name,
+                   what: item.what, count: item.count, forName: name, note: 'a parcel taken down off the board' });
+    p.boxed = item.n;
+    return item.n;
+  }
+
+  /*
+    THE HAND OVER (#4560). deliver has checked the courier, the reach and the
+    name. The first parcel they carry for this person that is not already on
+    its way goes into that person's pack through packFirst, with nothing taken
+    out: the stack is the one its notice holds, which landParcel took off the
+    sender's pack. Answers the courier's line.
+  */
+  function handParcel(parcels, actorId, profileId, toProfile, them, theirName, theirPid, courier) {
+    var c = null;
+    for (var i = 0; i < parcels.length && !c; i++) {
+      if (!parcelBusy(parcels[i].hold, parcels[i].at, parcels[i].n)) { c = parcels[i]; }
+    }
+    if (!c) { return 'The parcel is already on its way into ' + theirName + '\'s pack.'; }
+    var p = c.n.parcel;
+    if (!p || typeof p !== 'object' || !p.entry || !(Number(p.count) > 0)) {
+      plog('a parcel in', c.hold, (c.at + 1), 'holds nothing to hand over');
+      return 'That parcel holds nothing the server can hand over. Say so in the dev channel.';
+    }
+    var give = JSON.parse(JSON.stringify(p.entry));
+    give.count = Number(p.count);
+    var r = packs.begin(them, function (entries) {
+      entries.push(give);
+      return { entries: entries, taken: [] };
+    }, 'parcel-hand', { hold: c.hold, at: c.at, stamp: c.n.at, courier: profileId, courierName: courier,
+                       toPid: theirPid, toName: theirName });
+    if (r.why) {
+      plog('a parcel from', c.n.name, 'could not go into', theirName + '\'s pack:', r.why);
+      return 'The parcel could not go into ' + theirName + '\'s pack just now. You still have it.';
+    }
+    if (r.line) { toProfile(theirPid, r.line); }
+    return 'You hand ' + theirName + ' the parcel from ' + c.n.name + '. Your ' + (Math.floor(Number(c.n.pay)) || 0) +
+           ' gold comes once it is in their pack' + (r.line ? '.' : ', in a moment.') +
+           (parcels.length > 1 ? ' You carry more for them: hand over again.' : '');
+  }
+
+  /*
+    A parcel into its recipient's pack, once that pack is saved with it
+    (#4560). Landed, the parcel comes off the board as delivered in the same
+    register write, and its pay is owed to the courier, who haulTick pays out
+    of the ledger it was held on. Not landed, nothing changed: the stack is
+    still on the board, and the courier still has the parcel. Answers the line
+    for the recipient.
+  */
+  function landParcelHand(row, landed) {
+    var d = row.data;
+    var n = (notices[d.hold] || [])[d.at];
+    var right = !!n && !!n.parcel && typeof n.parcel === 'object' && Number(n.at) === Number(d.stamp);
+    if (!landed) {
+      return 'The parcel ' + (right ? 'from ' + n.name + ' ' : '') + 'did not go into your pack. ' +
+             d.courierName + ' still has it.';
+    }
+    if (!right || n.delivered) {
+      plog('a parcel went into', d.toName + '\'s pack and its notice is not on', d.hold + '\'s board as it was:', d.at + 1);
+      return 'A parcel is in your pack.';
+    }
+    var pay = Math.floor(Number(n.pay)) || 0;
+    var count = Number(n.parcel.count) || 0;
+    var what = n.parcel.what || itemName(n.parcel.entry);
+    n.delivered = Date.now();
+    n.deliveredTo = d.toPid;
+    n.down = n.delivered;
+    n.downBy = d.courier;
+    n.pay = 0;
+    if (pay > 0) {
+      n.owed = pay;
+      n.owedTo = d.courier;
+      n.owedFor = 'carried';
+    }
+    plog(d.courierName, 'handed', d.toName, 'a parcel from', n.name, 'off the board in', d.hold + ':', count, what);
+    return 'A parcel from ' + n.name + ', handed to you by ' + d.courierName + '. ' +
+           (count > 1 ? count + ' ' : '') + what + ' is in your pack.' + (n.text ? ' With it:\n' + n.text : '');
+  }
+
+  /*
         /deliver ff000103    the form id the crosshair gives, as /trade takes
 
     NOBODY TYPES THIS (#1595). The look prompt shows Hand over the letter
@@ -7235,8 +7729,11 @@
     var courier = soc.nameOfPerson(actorId);
     var paid = 0;
     var handed = 0;
+    var parcels = [];
     for (var m = 0; m < mine.length; m++) {
       var c = mine[m];
+      // A parcel goes into their pack, saved before it comes down (#4560): handParcel.
+      if (c.n.parcel) { parcels.push(c); continue; }
       var got = payHeld(c.hold, c.n, actorId);
       if (got < 0) {
         toProfile(profileId, 'That did not work. You still have the letter for ' + c.n.to + '.');
@@ -7254,6 +7751,11 @@
     if (handed) {
       toProfile(profileId, 'You hand ' + theirName + (handed === 1 ? ' the letter. ' : ' ' + handed +
                 ' letters. ') + paid + ' gold is yours.');
+    }
+    if (parcels.length) {
+      toProfile(profileId, handParcel(parcels, actorId, profileId, toProfile, them, theirName, theirPid, courier));
+    }
+    if (handed || parcels.length) {
       refreshPanel(actorId);
       refreshPanel(them);
     }
@@ -7641,7 +8143,14 @@
           }
           continue;
         }
-        var line = n.owedFor === 'letter'
+        var line = n.owedFor === 'carried'
+          ? 'You handed over the parcel for ' + (n.to || 'somebody') + ' from ' + hold + '. The ' + owed +
+            ' gold for carrying it is in your pack.'
+          : n.owedFor === 'parcel'
+          ? 'While you were away, a guard took your parcel for ' + (n.to || 'somebody') + ' in ' + hold +
+            ' down. The ' + owed + ' gold for the courier is back in your pack, and what was in it is in ' + hold +
+            '\'s drop box for you. The fee stays with ' + hold + '.'
+          : n.owedFor === 'letter'
           ? 'While you were away, a guard took your letter for ' + (n.to || 'somebody') + ' in ' + hold +
             ' down. The ' + owed + ' gold for the courier is back in your pack. The fee stays with ' + hold + '.'
           : n.owedFor === 'job'
@@ -7650,6 +8159,13 @@
           : n.owedFor === 'reward'
           ? 'While you were away, ' + (n.name || 'the person who posted it') + ' said the job you took in ' + hold +
             ' is done: ' + (n.title || '') + '. The ' + owed + ' gold reward is in your pack.'
+          // A wanted poster (#4565): its bounty confirmed, or the poster taken down.
+          : n.owedFor === 'bounty'
+          ? 'While you were away, a guard of ' + hold + ' confirmed you earned the bounty: ' + (n.title || '') +
+            '. The ' + owed + ' gold is in your pack.'
+          : n.owedFor === 'wanted'
+          ? 'While you were away, your wanted poster in ' + hold + ' was taken down: ' + (n.title || '') + '. The ' +
+            owed + ' gold reward is back in your pack. The fee stays with ' + hold + '.'
           : n.owedFor === 'hauled'
           ? 'While you were away, your haul to ' + n.dest + ' was confirmed. ' + owed + ' gold is in your pack.' +
             ((Number(n.kept) || 0) ? ' The company kept ' + n.kept + '.' : '')
@@ -8196,7 +8712,7 @@
       return claimAway(parts, actorId, profileId, toProfile);
     }
     // A Jarl gives or takes an office of their hold (#2551): the Office page sends it.
-    if (word === '/office') { return officeCmd(parts, actorId, profileId, toProfile); }
+    if (word === '/office') { return officeCmd(parts, actorId, profileId, toProfile, cmd); }
     if (word === '/evict') { return evict(actorId, profileId, toProfile, cmd); }
     // The world's card on the Office page, for staff (#513): the world stage block answers it.
     if (word === '/world') {
@@ -8346,9 +8862,11 @@
     return true;
   }
 
-  function officeCmd(parts, actorId, profileId, toProfile) {
+  function officeCmd(parts, actorId, profileId, toProfile, cmd) {
     var office = String((parts && parts[1]) || '').toLowerCase();
     if (office === 'hold') { return officeHoldHere(parts, actorId, profileId, toProfile); }
+    // A steward grants the free building at the door (#6894). See grant.
+    if (office === 'grant') { return grant(parts, actorId, profileId, toProfile, cmd); }
     var hold = String((parts && parts[2]) || '').toLowerCase();
     var arg = String((parts && parts[3]) || '').trim();
     if (!Object.prototype.hasOwnProperty.call(OFFICE_GIVEN, office) ||
@@ -8688,6 +9206,12 @@
                     // Who owes rent here, the holder and anybody before them (#3893),
                     // each with Rent paid beside them (#3895).
                     owing: rentOwing(building) };
+      // Who in the world a free building may be granted to (#6894), not the
+      // steward themselves: a steward's own property is their own claim.
+      if (!held && (ours || staff)) {
+        view.door.grant = order.filter(function (op) { return op !== pid; })
+          .map(function (op) { return { pid: op, name: names[op] }; }).sort(byName).slice(0, OFFICE_PEOPLE_MAX);
+      }
     }
     // The boards are a steward's own hold's; staff are no steward.
     if (!view.steward) { return view; }
@@ -8762,7 +9286,9 @@
                   name and words taken off; a job, letter or haul of somebody
                   else's that they had taken goes back on the board untaken,
                   as a job handed back does; gold owed to them stops being
-                  held for them
+                  held for them; what a parcel of theirs held goes into the
+                  drop box with no name on it (#4560), unless it is going
+                  into somebody's pack, which then lands as it would
       drop box    what they put in stays in the box with their name off it, so
                   the hold's officers may take it; the box's record keeps every
                   line with their name off it
@@ -8825,11 +9351,16 @@
         if (!n || typeof n !== 'object') { continue; }
         var touched = false;
         if (mine(n.by)) {
-          if (!n.down) { n.down = at; n.downBy = 0; c.posts++; }
+          // A parcel of theirs still going into somebody's pack stays up until that lands (#4560).
+          var going = !!n.parcel && !n.down && parcelBusy(h, i, n);
+          if (!n.down && !going) { n.down = at; n.downBy = 0; c.posts++; }
           n.by = 0;
           n.name = 'somebody';
           delete n.title; delete n.text; delete n.to;
           delete n.boardSubmission;
+          // What a parcel of theirs held goes into the box with no name on it, for the
+          // hold's officers, as what they put in the box does (#4560).
+          if (!going && !n.delivered && parcelToBox(h, n)) { c.box++; }
           touched = true;
         }
         if (mine(n.taken)) {

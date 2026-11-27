@@ -170,8 +170,13 @@
 // another entry's hashes name too stays on the plugin list, because that
 // entry still installs it (Immersive Armors and its Script Free and
 // Skypatched file both bring the Hothtrooper44 plugins). Each other one
-// comes off the list. It refuses an entry with no hashes (nothing in the
-// revision says which plugins it brings), one with patches (their folder is
+// comes off the list. An entry with no hashes says nothing of which plugins
+// it brings, so the remove gives the files its archive installs, read by
+// New-NexusRevision.ps1 as for "replicate" (#4511, MCM Recorder):
+//   { "remove": true, "modId": "61719", "fileExpression": "...",
+//     "hashes": [ { "path": "McmRecorder.esp", "md5": "<32 hex>" }, ... ] }
+// It refuses an entry with no hashes given neither, a list given for an
+// entry with hashes of its own, one with patches (their folder is
 // in the archive), one a mod rule names by md5, logical file name, tag or
 // file name, one whose plugin a plugin rule names, and one whose plugin is a
 // master of a plugin the revision still installs, because each of those
@@ -857,10 +862,19 @@ function applyRemove(collection, rm, lines) {
   if (!rm.fileExpression || typeof rm.fileExpression !== 'string') stop('The mod to take out gives no fileExpression for ' + e.name + ', its file name on Nexus, so a mod rule naming it by that alone would not be found.');
   const rules = (collection.modRules || []).filter(r => named(r, e, rm.fileExpression));
   if (rules.length) stop(rules.length + ' of the collection\'s mod rules name ' + e.name + '. Take it out in Vortex on One.');
-  if (!Array.isArray(e.hashes) || !e.hashes.length) stop(e.name + ' has no file hashes, so nothing in the revision says which plugins it brings. Take it out in Vortex on One.');
+  // An entry with no hashes is given the files its archive installs, as
+  // New-NexusRevision.ps1 reads them (#4511); one with hashes keeps its own.
+  const own = Array.isArray(e.hashes) && e.hashes.length;
+  if (own && rm.hashes !== undefined) stop(e.name + ' carries file hashes, and the mod to take out gives another list of its files.');
+  if (!own) {
+    if (rm.hashes === undefined) stop(e.name + ' has no file hashes and the mod to take out gives none read from its archive, so nothing says which plugins it brings.');
+    const bad = hashesProblem(e, rm.hashes);
+    if (bad) stop('The files read from ' + e.name + '\'s archive have ' + bad + '.');
+  }
+  const filesOf = (m) => (m === e && !own) ? rm.hashes : (Array.isArray(m.hashes) ? m.hashes : []);
   const pluginsOf = (m) => {
     const out = [];
-    for (const h of (Array.isArray(m.hashes) ? m.hashes : [])) {
+    for (const h of filesOf(m)) {
       const p = String(h.path || '');
       if (/^[^\\/]+\.es[mpl]$/i.test(p) && out.indexOf(p.toLowerCase()) < 0) out.push(p.toLowerCase());
     }

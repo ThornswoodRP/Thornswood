@@ -15,6 +15,11 @@ measured there, not remembered:
 
     pwsh scripts/mods/Run-OnBox.ps1 scripts/dev/List-KillMoveIdles.py --data '{data}'
 
+or, from any session gh is signed in on, a cloud thread included, through
+the deploy gate's List-GameData verb (#5736):
+
+    pwsh scripts/vps/Box-Run.ps1 -Line 'List-GameData -Lister KillMoveIdles'
+
 A record is listed when its editor id or animation event, or a parent's
 editor id, says killmove. Each condition is printed as the game stores it
 (CTDA): the function's index, the comparison and its value, the two

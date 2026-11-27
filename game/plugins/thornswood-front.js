@@ -3038,6 +3038,7 @@
     if (cleared) { say('cleared the owner of ' + cleared + ' bed(s) already here'); }
   }));
 
+
   sp.on('activate', guard('activate', (e) => {
     // Declared here, once, for the whole handler. It used to be declared
     // further down, after the door block, and a const is not usable
@@ -3232,6 +3233,131 @@
       reActivating = false;
       say('  re-activating ' + (name || 'it') + ' threw: ' + err);
     }
+  }));
+
+  /*
+    A BUILDING YOU HOLD IS YOURS TO USE (#6883).
+
+    Main, 26 Nov: after claiming a Whiterun tavern its storage could not be
+    used without the game's red Steal, even after signing out and back in,
+    and a Riften building did the same. The claim is the server's register,
+    and nothing told the game: what Skyrim calls theft is its own ownership,
+    on the cell (the tavern belongs to its keeper) and on references in it
+    (a chest, a plate, a sack), read in this game from the plugin records.
+    So every container and loose thing in a claimed building still belonged
+    to the people it had in vanilla.
+
+    The server now puts the interior cells this character holds on the lock
+    list (own), and the lock script hands the list here. A held building
+    that is loaded is made the character's own, the way the game makes a
+    bought house the player's: the cell's owner, and every container and
+    item in it that had an owner of its own. What each had before is kept,
+    and a building that is no longer held (a lapse, an eviction, a deed
+    handed on, another character) is given back its owners, so somebody
+    else's building and everything in it is still theirs. A thing whose cell
+    is not loaded when it is given back is given back when that cell loads.
+    Beds are left to the bed code above, which clears them for everybody.
+
+    Only the holder: the bench reads "chests you own" the same way (#3159),
+    and a key or a guest's night lets somebody in, not take what is there.
+  */
+  // CONT, ARMO, BOOK, INGR, LIGH, MISC, WEAP, AMMO, KEYM, ALCH, SLGM, SCRL.
+  const OWN_REF_TYPES = [28, 26, 27, 30, 31, 32, 41, 42, 45, 46, 52, 23];
+  let ownWanted = [];
+  const ownKept = {};   // cell id -> { taken, cell: [actor, faction] | null, refs: { ref id: [actor, faction] } }
+
+  function ownerIds(x) {
+    const a = x.getActorOwner(), f = x.getFactionOwner();
+    return [a ? a.getFormID() : 0, f ? f.getFormID() : 0];
+  }
+  function putOwner(x, was) {
+    if (was[0]) { x.setActorOwner(sp.ActorBase.from(sp.Game.getFormEx(was[0]))); }
+    else if (was[1]) { x.setFactionOwner(sp.Faction.from(sp.Game.getFormEx(was[1]))); }
+    else { x.setActorOwner(null); }
+  }
+
+  function takeCell(id, me) {
+    const cell = sp.Cell.from(sp.Game.getFormEx(id));
+    if (!cell || !cell.isAttached()) { return 0; }
+    const rec = ownKept[id] || (ownKept[id] = { taken: false, cell: null, refs: {} });
+    if (!rec.cell) { rec.cell = ownerIds(cell); }
+    cell.setActorOwner(me);
+    const mine = me.getFormID();
+    let n = 0;
+    for (let t = 0; t < OWN_REF_TYPES.length; t++) {
+      const count = cell.getNumRefs(OWN_REF_TYPES[t]);
+      for (let i = 0; i < count; i++) {
+        const ref = cell.getNthRef(i, OWN_REF_TYPES[t]);
+        if (!ref) { continue; }
+        const rid = ref.getFormID();
+        if (Object.prototype.hasOwnProperty.call(rec.refs, rid)) { continue; }
+        const was = ownerIds(ref);
+        if ((!was[0] && !was[1]) || was[0] === mine) { continue; }
+        rec.refs[rid] = was;
+        ref.setActorOwner(me);
+        n++;
+      }
+    }
+    rec.taken = true;
+    return n;
+  }
+
+  function giveCellBack(id) {
+    const rec = ownKept[id];
+    if (rec.taken) {
+      const cell = sp.Cell.from(sp.Game.getFormEx(Number(id)));
+      if (cell && rec.cell) { putOwner(cell, rec.cell); rec.cell = null; rec.taken = false; }
+    }
+    for (const rid in rec.refs) {
+      if (!Object.prototype.hasOwnProperty.call(rec.refs, rid)) { continue; }
+      const ref = sp.ObjectReference.from(sp.Game.getFormEx(Number(rid)));
+      if (!ref) { continue; }   // not loaded: given back when its cell loads
+      putOwner(ref, rec.refs[rid]);
+      delete rec.refs[rid];
+    }
+    if (!rec.taken && !Object.keys(rec.refs).length) { delete ownKept[id]; }
+  }
+
+  // loaded: a cell that has just finished loading, whose things are all there
+  // now, so a held one is gone through again for any that were not yet.
+  function settleOwnCells(loaded) {
+    // The character's own record, the one a bought house is set to. Skyrim
+    // Platform has no getActorBase: Papyrus writes it as a script function
+    // over GetBaseObject, and only natives reach plugins (#7089).
+    const pc = sp.Game.getPlayer();
+    const me = pc ? sp.ActorBase.from(pc.getBaseObject()) : null;
+    if (!me) { return; }
+    for (const key in ownKept) {
+      if (Object.prototype.hasOwnProperty.call(ownKept, key) && ownWanted.indexOf(Number(key)) < 0) {
+        giveCellBack(key);
+      }
+    }
+    for (let i = 0; i < ownWanted.length; i++) {
+      const rec = ownKept[ownWanted[i]];
+      if (rec && rec.taken && ownWanted[i] !== loaded) { continue; }
+      const first = !(rec && rec.taken);
+      const n = takeCell(ownWanted[i], me);
+      if (first && ownKept[ownWanted[i]] && ownKept[ownWanted[i]].taken) {
+        say('a building this character holds is theirs to use: ' + ownWanted[i].toString(16) +
+            ', ' + n + ' thing(s) in it that had an owner');
+      }
+    }
+  }
+
+  function wantOwnCells(ids) {
+    ownWanted = (Array.isArray(ids) ? ids : []).map(Number).filter((x) => x > 0);
+    settleOwnCells();
+  }
+
+  // The lock script calls this on every change and heartbeat (property.ts).
+  globalThis.__thornswoodOwnCells = guard('own cells', wantOwnCells);
+  sp.on('cellFullyLoaded', guard('own cells loaded', (e) => {
+    settleOwnCells(e && e.cell ? e.cell.getFormID() : 0);
+  }));
+  sp.once('update', guard('own cells at start', () => {
+    let ids = [];
+    try { ids = globalThis.__thornswoodPropertyOwn || []; } catch (e) { ids = []; }
+    wantOwnCells(ids);
   }));
 
   /*
@@ -3631,6 +3757,20 @@
   let afterEnded = 0;            // when the last mining spell ended, 0 for none
   let afterWaitEquip = false;    // a line is still owed for the next equip
   let afterEvents = {};          // event names written since the last end, once each
+  /*
+    THE START OF A SPELL TOO (#4549). The session logs of 23 Nov 2026 have
+    a spell that ended with the character sitting nowhere (sit 0) and the
+    weapon out, where every other spell ended in the mining state (sit 3):
+    IdlePickaxeEnter was asked for and not taken, and that spell is the one
+    a Main tester reported, with the pickaxe drawn, the pickaxe gone, the ore
+    with no swing, and no normal movement until the pickaxe came off. So the
+    same line is written as the idle is asked for and half a second into it,
+    which says whether it was taken and what the character was in when it
+    was asked for, and the events of the three seconds before it are written
+    in one line, which shows the sheathe the gamemode asks for first.
+  */
+  const AFTER_BEFORE_MS = 3000;
+  let afterRecent = [];          // [name, when] of the last events, newest last
 
   /*
     ONLY THE CHARACTER'S OWN EQUIP COUNTS. The game sends equip and unequip
@@ -3674,7 +3814,17 @@
           const name = String(ctx.animEventName || '');
           if (!name) { return; }
           const now = Date.now();
-          if (MINE_START.test(name)) { afterPick = true; return; }
+          if (MINE_START.test(name)) {
+            afterPick = true;
+            const before = afterRecent.filter((r) => now - r[1] <= AFTER_BEFORE_MS)
+              .map((r) => r[0] + ' ' + (r[1] - now) + 'ms').join(', ');
+            say('after mining: before ' + name + ': ' + (before || 'no events in the last ' + AFTER_BEFORE_MS + 'ms'));
+            afterRecent = [];
+            afterAsked.push(['as ' + name + ' was asked for', now], ['0.5 s into ' + name, now + 500]);
+            return;
+          }
+          afterRecent.push([name, now]);
+          if (afterRecent.length > 12) { afterRecent.shift(); }
           if (/^idlechairexitstart$/i.test(name) && afterPick) {
             afterPick = false;
             afterEnded = now;
@@ -3905,8 +4055,10 @@
     let pc = null;
     try { pc = sp.Game.getPlayer(); } catch (e) { return 0; }
     if (!pc) { return 0; }
-    let female = false;
-    try { const b = pc.getActorBase(); female = !!b && b.getSex() === 1; } catch (e) { female = false; }
+    // Not caught: a quiet catch here hid that the read was wrong and asked as
+    // a man for everybody (#7089). The guard says a failure.
+    const base = sp.ActorBase.from(pc.getBaseObject());
+    const female = !!base && base.getSex() === 1;
     let undone = 0;
     try {
       const names = niOverride('GetMorphNames', pc);
@@ -5122,21 +5274,37 @@
       and it never set anybody on fire. getFurnitureReference is the engine's
       own answer for which station you are at.
     */
+    /*
+      AND NOBODY THE GAME HAS SEATED IS STANDING IN THE COALS (#6722). A
+      cooking spit or pot stands over its own campfire: in Skyrim.esm 87 of
+      the 203 cooking stations near a lit fire are within FIRE_INSIDE of it,
+      12 to 90 units from the fire's centre, so starting to cook moved the
+      cook into the catch and set them alight, 7 health a second for as long
+      as they cooked. A person at a station, on a bench or on a chair is
+      where the furniture put them, not where they walked; they are warmed
+      as before and never caught. Standing up and walking into the fire
+      still catches.
+    */
     fireFlame = -1;
+    let seated = false;
+    let warmest = -1;
     try {
       const furn = pc.getFurnitureReference ? pc.getFurnitureReference() : null;
       if (furn) {
+        seated = true;
         const b = furn.getBaseObject();
         const id = b ? b.getFormID() : 0;
         if (id) {
           const ids = fireIdList();
           for (let f = 0; f < ids.length; f++) {
-            if (ids[f] === id) { return fireNearest(px, py, pz, fireSpotsHere(pc), 0); }
+            if (ids[f] === id) { warmest = 0; break; }
           }
         }
       }
     } catch (e) { }
-    return fireNearest(px, py, pz, fireSpotsHere(pc), -1);
+    const best = fireNearest(px, py, pz, fireSpotsHere(pc), warmest);
+    if (seated) { fireFlame = -1; }
+    return best;
   }
 
   sp.on('update', guard('race read', raceReadTick));
@@ -5658,6 +5826,84 @@
     bits.push('activation blocked ' + blocked);
     return ': ' + bits.join(', ');
   }
+
+  /*
+    WHERE A LOAD PUTS THE CHARACTER, AND WHICH CAMERA IT IS IN (#6593, #6594).
+
+    Dev Test #1 on 18 Nov: one tester spawned up in the air, another spawned
+    in first person with the mouse wheel doing nothing for a while. Their logs
+    could not say either. The first feet height came from a place line 35 to
+    50 s after the load, and the camera only from a "looking at" line, which
+    needs somebody in front of you.
+
+    So after each arrival (the first world, a new cell indoors, a new
+    worldspace, or a jump of more than 2000 units, which is a teleport), this
+    writes where the feet are, whether the game has the character in the air
+    and which camera it is in. It writes at 0.25, 1, 3 and 6 s after the
+    arrival, so a fall shows as the height dropping and a camera change shows
+    when it came. It reads only and changes nothing.
+  */
+  function landingSaid(pc) {
+    const bits = [];
+    let z = NaN;
+    try { z = Number(pc.getPositionZ()); } catch (e) { z = NaN; }
+    bits.push('feet at ' + (isFinite(z) ? Math.round(z) : 'unknown'));
+    let air = 'unknown';
+    try { air = pc.getAnimationVariableBool('bInJumpState') ? 'yes' : 'no'; } catch (e) { air = 'unknown'; }
+    bits.push('in the air ' + air);
+    let cam = -1;
+    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
+    bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
+    let menu = 'unknown';
+    try { menu = sp.Utility.isInMenuMode() ? 'yes' : 'no'; } catch (e) { menu = 'unknown'; }
+    bits.push('menu ' + menu);
+    return bits.join(', ');
+  }
+
+  // Where the character is, as a key that changes only on an arrival: the
+  // cell indoors, the worldspace outdoors, so walking across exterior cells is
+  // not one.
+  function landingKey(pc) {
+    let cell = null;
+    try { cell = pc.getParentCell(); } catch (e) { cell = null; }
+    let inside = false;
+    try { inside = !!(cell && cell.isInterior()); } catch (e) { inside = false; }
+    if (inside) {
+      try { return 'cell ' + cell.getFormID().toString(16); } catch (e) { return 'cell ?'; }
+    }
+    let world = null;
+    try { world = pc.getWorldSpace(); } catch (e) { world = null; }
+    try { return 'world ' + (world ? world.getFormID().toString(16) : '?'); } catch (e) { return 'world ?'; }
+  }
+
+  const LAND_AFTER = [250, 1000, 3000, 6000];
+  const LAND_JUMP = 2000;
+  let landWas = null;     // { key, x, y, z } at the last look
+  let landAt = 0;         // when the last arrival was seen
+  let landNext = LAND_AFTER.length;
+  let landLookAt = 0;
+  sp.on('update', guard('landing', () => {
+    const now = Date.now();
+    if (now < landLookAt) { return; }
+    landLookAt = now + 100;
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { landWas = null; return; }
+    let x = 0, y = 0, z = 0;
+    try { x = pc.getPositionX(); y = pc.getPositionY(); z = pc.getPositionZ(); } catch (e) { return; }
+    const key = landingKey(pc);
+    let arrived = !landWas || landWas.key !== key;
+    if (!arrived) {
+      const dx = x - landWas.x, dy = y - landWas.y, dz = z - landWas.z;
+      arrived = dx * dx + dy * dy + dz * dz > LAND_JUMP * LAND_JUMP;
+    }
+    landWas = { key: key, x: x, y: y, z: z };
+    if (arrived) { landAt = now; landNext = 0; return; }
+    if (landNext < LAND_AFTER.length && now - landAt >= LAND_AFTER[landNext]) {
+      log('landing: ' + LAND_AFTER[landNext] + 'ms after arriving in ' + key + ', ' + landingSaid(pc));
+      landNext++;
+    }
+  }));
 
   // A claim is a variable read, so it is asked every frame and a panel takes
   // the prompt down in the frame it opens, not on the next poll.
@@ -9739,6 +9985,16 @@
 
     closingGame goes up first, so the race menu closing as the game comes
     apart is told as /racedown, not as a finished face.
+
+    The connection to the game server is closed before the exit (#6724).
+    exitProcess ends the process without closing it, so the server never
+    heard this game leave and held it for its own 60 s timeout, and the same
+    account picking again inside that minute was turned away as a second
+    game (24 Nov, main: three refusals 1 to 3 s after a close). destroyClient
+    puts the client down, and the client's own shutdown says goodbye to the
+    server and returns once the server has it (fork #204, at most 500 ms).
+    It is done only when exitProcess is there to follow it, so a game that
+    cannot close stays connected.
   */
   function closeGame(from) {
     closingGame = true;
@@ -9757,6 +10013,8 @@
     let asked = false;
     try {
       if (sp.win32 && typeof sp.win32.exitProcess === 'function') {
+        try { sp.mpClientPlugin.destroyClient(); log('menu: closed the connection to the game server'); }
+        catch (e) { log('menu: could not close the connection to the game server:', e); }
         sp.win32.exitProcess();
         asked = true;
       }

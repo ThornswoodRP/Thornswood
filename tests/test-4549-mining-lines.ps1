@@ -57,6 +57,7 @@ Yes 'the swing writes "mining: " lines' ($front.Contains("say('mining: swing sta
     $front.Contains("say('mining: swing ended on ' + name + ', '") -and $front.Contains("say('mining: ' + name + ' arrived '"))
 Yes 'the state after a spell is "after mining, <when>: "' ($front.Contains("say('after mining, ' + label + ': ' + parts.join(', '));"))
 Yes 'the events after it are "after mining: <event> sent"' ($front.Contains("say('after mining: ' + name + ' sent '"))
+Yes 'the events before the idle are "after mining: before <idle>: "' ($front.Contains("say('after mining: before ' + name + ': '"))
 Yes 'the hands line is "hands at <event>: "' ($front.Contains("say('hands at ' + eventName + ': ' + ["))
 Yes 'the reader names where its words come from' ($readerText.Contains('thornswood-front.js''s words (watchTheSwing, afterLine'))
 
