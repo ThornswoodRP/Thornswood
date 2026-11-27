@@ -82,7 +82,13 @@ const isMember = (req) =>
 const ADMIN_DAYS = 30;
 function identity(req) {
   const raw = cookies(req)[ADMIN] || '';
-  const [id, name, at, sig] = decodeURIComponent(raw).split('|');
+  // The site writes this cookie with encodeURIComponent, so a value that will
+  // not decode is one the site never wrote: signed out, like any other bad
+  // copy (#4927). Thrown, it reached the handler's catch as a malformed
+  // request, and every page answered 400 until the visitor cleared cookies.
+  let text;
+  try { text = decodeURIComponent(raw); } catch (e) { return null; }
+  const [id, name, at, sig] = text.split('|');
   if (!id || !at || !sig) return null;
   if (!sameSecret(sig, sign(id + '|' + (name || '') + '|' + at))) return null;
   // A minute of slack the other way, for a clock that stepped back.
