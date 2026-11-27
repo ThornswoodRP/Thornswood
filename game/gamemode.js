@@ -46650,7 +46650,33 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       }
     }
     out.hall = { desc: HALL.desc, pos: HALL.pos, rot: HALL.rot, town: 'the creation hall' };
+    /*
+      EVERY CARRIAGE AND FERRY STOP, BY ITS NAME (#7172). "/tp Mixwater Mill"
+      found nothing: a village is no building, so BUILDING_NAME has no row for
+      it (its two houses are "Worker's House" and "Gilfre's House"), and it is
+      none of the towns above. The carriages block already holds every stop
+      with its name, its world and the spot a ride lands on, so /tp lands
+      where the carriage would. A town keeps its own spot: a stop never takes
+      a name already here, and of two stops with one name the first is kept.
+    */
+    var stops = rideStops();
+    for (var i = 0; i < stops.length; i++) {
+      var st = stops[i];
+      var name = String((st && st.name) || '');
+      var key = name.toLowerCase();
+      if (!key || Object.prototype.hasOwnProperty.call(out, key)) { continue; }
+      if (!st.world || !st.pos || st.pos.length !== 3) { continue; }
+      out[key] = { desc: st.world, pos: [st.pos[0], st.pos[1], st.pos[2]], rot: [0, 0, Number(st.rot) || 0],
+                   town: name, stop: true };
+    }
     return out;
+  }
+
+  /** The carriages block's stops, or none while it is not loaded. */
+  function rideStops() {
+    var g = (typeof globalThis !== 'undefined') ? globalThis : null;
+    var c = g && g.__thornswoodCarriages;
+    return (c && Object.prototype.toString.call(c.STOPS) === '[object Array]') ? c.STOPS : [];
   }
 
   /*
@@ -47039,23 +47065,29 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
                    : { why: named[want].name + ' is in the load order but the server ' +
                             'cannot find a door into it, so there is nowhere to stand.' };
     }
+    // Part of a stop's name (#7172) counts as part of a building's does.
     var hits = [];
+    for (var sk in table) {
+      if (!Object.prototype.hasOwnProperty.call(table, sk) || !table[sk].stop) { continue; }
+      if (sk.indexOf(want) !== -1) { hits.push({ stop: sk, name: table[sk].town }); }
+    }
     for (var key in named) {
       if (!Object.prototype.hasOwnProperty.call(named, key)) { continue; }
-      if (key.indexOf(want) !== -1) { hits.push(key); }
+      if (key.indexOf(want) !== -1) { hits.push({ key: key, name: named[key].name }); }
       if (hits.length > 12) { break; }
     }
     if (!hits.length) {
-      return { why: 'No place called that. Try a town, or part of a building\'s name: ' +
+      return { why: 'No place called that. Try a town, a carriage stop, or part of a building\'s name: ' +
                     'bannered, jorrvaskr, understone.' };
     }
     if (hits.length === 1) {
-      var one = namedPlace(hits[0]);
+      if (hits[0].stop) { return { where: table[hits[0].stop] }; }
+      var one = namedPlace(hits[0].key);
       return one ? { where: one }
-                 : { why: named[hits[0]].name + ' has no door the server can find.' };
+                 : { why: hits[0].name + ' has no door the server can find.' };
     }
     var names = [];
-    for (var h = 0; h < hits.length && h < 10; h++) { names.push(named[hits[h]].name); }
+    for (var h = 0; h < hits.length && h < 10; h++) { names.push(hits[h].name); }
     return { why: 'Which one: ' + names.join(', ') +
                   (hits.length > 10 ? ', and more' : '') + '.' };
   }
@@ -48198,7 +48230,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       var table = places();
       if (!wanted) {
         toProfile(profileId, 'Where to: ' + Object.keys(table).sort().join(', ') +
-                  ', or the name of any inn, keep, shop or house in the world. ' +
+                  ', or the name of any carriage stop, inn, keep, shop or house in the world. ' +
                   'Part of the name is enough.');
         return;
       }
