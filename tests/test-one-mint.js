@@ -503,8 +503,10 @@ for (const at of Object.keys(WRITERS)) {
     callers.push(where(match.index));
   }
   callers.sort();
-  yes('atomic item bundles are only paid by the checked dungeon reward and three harvests',
-      callers.join(',') === 'dungeon loot/give,outer/fish,outer/game,outer/loot');
+  // A fish trap taken up hands back the trap and its water's catch, a
+  // FISH_BY_BASE row, in one write (#4655).
+  yes('atomic item bundles are only paid by the checked dungeon reward, three harvests and a fish trap',
+      callers.join(',') === 'dungeon loot/give,outer/collectFishTrap,outer/fish,outer/game,outer/loot');
   const reward=bodyOf('dungeon loot/give') || '';
   yes('the dungeon reward bundles its fixed gold and rolled goods into one inventory write',
       /if\(rolled\.gold>0\) goods\.push\(\{item:GOLD_DESC,count:rolled\.gold\}\)/.test(reward) &&

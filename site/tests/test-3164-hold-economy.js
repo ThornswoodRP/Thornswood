@@ -275,10 +275,11 @@ fs.rmSync(dir, { recursive: true, force: true });
 
 // ---- what calls it, by reading the files ------------------------------------
 const gathered = (GM.match(/economyGathered\(actorId, /g) || []).length;
-// The fifteen: salt and its rarer salt, an ore and its extra, the chopping
-// block, a plant, the water, a hung and a hunted body, butter, eggs, honey,
-// milk, and the two ways a crop comes in. Sixteen with the function itself.
-yes('every gathering yield counts itself beside its creditWork (' + (gathered - 1) + ' places)', gathered === 16);
+// The sixteen: salt and its rarer salt, an ore and its extra, the chopping
+// block, a plant, the water, a fish trap taken up (#4655), a hung and a
+// hunted body, butter, eggs, honey, milk, and the two ways a crop comes in.
+// Seventeen with the function itself.
+yes('every gathering yield counts itself beside its creditWork (' + (gathered - 1) + ' places)', gathered === 17);
 yes('a quest\'s own draw is left to the quest: the pearl beds and longfin waters are not counted here',
     /if \(!selected\) \{ economyGathered\(actorId, caught\.produce, got\); \}/.test(GM));
 yes('a crop is counted only when the pack took it, and never a quest crop',

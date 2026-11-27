@@ -6397,6 +6397,15 @@
     (game/ui/thornswood-stall.js).
   */
   let stallWorlds = null;  // null not resolved yet, else { stall id: runtime world or cell id }
+  /*
+    A FISH TRAP AT A WATER (#4655). Which water a trap may go in, and whether
+    this person has one there, is the server's, so the line is the one it
+    writes for the water somebody just pressed E on (thornswoodWaterLine,
+    waterLine in the scripted activators), the way a door's line is written
+    for the door just opened. It is drawn while that water stays under the
+    crosshair, and the lock key sends /trap with its id.
+  */
+  const WATER_LINE_MS = 60000;   // a water's line older than this is not drawn
   const PLOT_ASK_MS = 10000;     // asked again this often while one crop is looked at
   const PLOT_LINE_MS = 30000;    // an answer older than this is not drawn
   let lockAt = 0;
@@ -6481,6 +6490,16 @@
     return keyMoldId;
   }
 
+  /** The server's line for the water just pressed, while it is new enough and that water is under the crosshair. */
+  function waterLineNow(hex) {
+    let v = null;
+    try { v = globalThis.thornswoodWaterLine; } catch (e) { v = null; }
+    if (!v || typeof v !== 'object' || v.hex !== hex) { return null; }
+    if (Date.now() - (Number(v.seen) || 0) > WATER_LINE_MS) { return null; }
+    if (!v.w && !v.t) { return null; }
+    return v;
+  }
+
   /** The line the server wrote for the door just opened, while it still counts. */
   function doorLineNow() {
     let v = null;
@@ -6546,7 +6565,7 @@
     return lockKeyRef() || stallNow();
   }
 
-  /** What the lock key would do at what is under the crosshair: a door, a crop or a forge. */
+  /** What the lock key would do at what is under the crosshair: a door, a crop, a water or a forge. */
   function lockKeyRef() {
     let ref = null;
     try { ref = sp.Game.getCurrentCrosshairRef(); } catch (e) { ref = null; }
@@ -6570,6 +6589,11 @@
       const p = plotLineNow(hex);
       return { hex: hex, plot: true, verb: p && p.x ? 'claim' : '', words: p ? p.x : '',
                info: p ? p.t : '', e: p ? p.e : '' };
+    }
+    const water = waterLineNow(hex);
+    if (water) {
+      if (busyMenuOpenNow()) { return null; }
+      return { hex: hex, verb: water.x === 'trap' ? 'trap' : '', words: water.w, info: water.t };
     }
     if (!baseId || !forgeIdSet()[baseId]) { return null; }
     const mold = keyMoldNow();
