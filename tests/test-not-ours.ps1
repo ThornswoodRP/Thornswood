@@ -101,8 +101,13 @@ $theirs = @(
 foreach ($rel in $theirs) {
     Yes "$rel is not ours and never ships" (Test-ShipNotOurs $rel)
 }
+# RaceMenu's racesex_menu.swf is also one the launcher makes on each machine
+# from its own RaceMenu.bsa (#7087), as SkyUI's journal is, so a scrub of one
+# machine's files takes it out by that rule; the others are left alone.
 Yes 'the rule is not asked through Test-ShipMachine, so a scrub of one machine''s files leaves these alone' (
-    @($theirs | Where-Object { $_ -like 'Data\Interface\*' -or $_ -like 'Data\meshes\*' } | Where-Object { Test-ShipMachine $_ }).Count -eq 0)
+    @($theirs | Where-Object { $_ -like 'Data\Interface\*' -or $_ -like 'Data\meshes\*' } | Where-Object { -not (Test-ShipMadeFromMods $_) } | Where-Object { Test-ShipMachine $_ }).Count -eq 0)
+Yes '  and the one menu of theirs the launcher makes on each machine is a machine''s own file' (
+    (Test-ShipMadeFromMods 'Data\Interface\racesex_menu.swf') -and (Test-ShipMachine 'Data\Interface\racesex_menu.swf'))
 Yes 'any case' (Test-ShipNotOurs 'DATA\INTERFACE\RACESEX_MENU.SWF')
 
 # Ours. Each of these ships.
@@ -253,7 +258,9 @@ try {
             [IO.File]::WriteAllText($p, 'x')
         }
     }
-    $p = Join-Path $dirty 'game\Data\Interface\racesex_menu.swf'
+    # RaceMenu's bottom bar, which nothing makes on the machine, so only the
+    # not-ours rule refuses it (its creation menu is made on each PC, #7087).
+    $p = Join-Path $dirty 'game\Data\Interface\racemenu\bottombar.swf'
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null
     [IO.File]::WriteAllText($p, 'x')
     $rc = Invoke-Secrets $clean
