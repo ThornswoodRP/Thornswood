@@ -810,10 +810,24 @@ foreach ($scan in @(1,23,36)) {
   // A locked PC stops the run before the launcher starts, with its reason.
   {
     const lock = RUNNER.indexOf("Get-Process -Name LogonUI");
-    const start = RUNNER.indexOf('$launcher = Start-Process -FilePath $launcherExe');
+    const start = RUNNER.indexOf('$launcher = Start-LauncherApart');
     const tryAt = RUNNER.indexOf('\ntry {', RUNNER.indexOf('$launcherLogStart'));
     yes('a PC on the lock screen stops the run inside its try, before the launcher starts',
         lock > tryAt && tryAt > 0 && start > lock && /\$_\.SessionId -eq \$mySession/.test(RUNNER) && /throw 'This PC is on the lock screen/.test(RUNNER));
+  }
+  // The launcher is made by WMI, outside the container of the app that
+  // started the run, so its moves under %LOCALAPPDATA% reach the real
+  // folders (27 Nov: from the Claude app's container they went to its store).
+  {
+    const fnAt = RUNNER.indexOf('function Start-LauncherApart');
+    const body = fnAt >= 0 ? RUNNER.slice(fnAt, RUNNER.indexOf('\n}\n', fnAt)) : '';
+    yes('the launcher is started by Win32_Process.Create with its own folder, never as a child of the run',
+        /Invoke-CimMethod -ClassName Win32_Process -MethodName Create/.test(body) &&
+        /CurrentDirectory = \(Split-Path \$launcherExe\)/.test(body) &&
+        !/Start-Process[^\n]*\$launcherExe/.test(RUNNER) &&
+        (RUNNER.match(/\$launcher = Start-LauncherApart/g) || []).length === 1);
+    yes('a refused start and a launcher gone before it is followed stop the run with what Windows said',
+        /if \(\$made\.ReturnValue -ne 0\)\s*\{\s*throw /.test(body) && /Get-Process -Id \$made\.ProcessId/.test(body));
   }
   // And the launcher says why. "Could not redirect" alone, with Junction's
   // reason dropped, is all One's log had to go on.

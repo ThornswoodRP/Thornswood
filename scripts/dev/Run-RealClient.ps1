@@ -496,6 +496,35 @@ function Get-StillRedirected {
     }
 }
 
+# The launcher is made by Windows' WMI service (Win32_Process.Create), not
+# started as a child of this script (#5197). On One a run is started from
+# the Claude app's Remote Control, and that app is an MSIX package: every
+# process under it, this script and whatever it starts, runs in the app's
+# container, though none of them reads as having a package. A folder made or
+# renamed under %LOCALAPPDATA% from in there goes to the app's own store
+# (Packages\Claude_...\LocalCache\Local) and is seen only from in there. So
+# Play moved Windows' Skyrim folder aside into that store, the real folder
+# was still in its place, and the link onto it was refused: "Could not
+# redirect ... found a folder there, moved aside, and a folder is there
+# again" (27 Nov, 10:16 UTC; the same Play failed on 26 Nov at 17:59 UTC).
+# Measured on One on 27 Nov: a folder a child of the shell made and renamed
+# landed in the store; the store's .st-backup and the one in %LOCALAPPDATA%
+# have one file id. A process WMI makes has the service host for its parent,
+# outside any app's container, and the launcher Velopack restarts after an
+# update is that one's child, so it is outside too.
+function Start-LauncherApart {
+    $made = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+        CommandLine      = '"' + $launcherExe + '"'
+        CurrentDirectory = (Split-Path $launcherExe)
+    }
+    if ($made.ReturnValue -ne 0) {
+        throw "Windows did not start the launcher: Win32_Process.Create answered $($made.ReturnValue) for $launcherExe."
+    }
+    $p = Get-Process -Id $made.ProcessId -ErrorAction SilentlyContinue
+    if (-not $p) { throw "The launcher Windows started, process $($made.ProcessId), had closed before the run could follow it." }
+    $p
+}
+
 $launcher = $null
 $switched = $false
 $result = 'unfinished'
@@ -517,7 +546,7 @@ try {
     if (@(Get-Process -Name LogonUI -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySession }).Count) {
         throw 'This PC is on the lock screen, and Windows gives the keyboard to no window behind it, so the run did not start the game.'
     }
-    $launcher = Start-Process -FilePath $launcherExe -WorkingDirectory (Split-Path $launcherExe) -PassThru
+    $launcher = Start-LauncherApart
     Say "Started the launcher, process $($launcher.Id)"
 
     # Play, through UI Automation, once the launcher lets it be pressed and
