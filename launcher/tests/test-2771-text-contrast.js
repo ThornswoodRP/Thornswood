@@ -8,9 +8,12 @@
 // 1.4.3 asks for. So:
 //
 //   1. every built-in theme in launcher\app\Themes.cs, and the DIY starter
-//      palette, has every text colour (Ink, Muted, Faint, Ok, Warn, Bad) at
-//      4.5 to 1 or more on every surface (Bg, Panel, Card, CardHover, Deep),
-//      and AccentInk on Accent;
+//      palette, has every text colour (Ink, Muted, Faint, Accent, Ok, Warn,
+//      Bad) at 4.5 to 1 or more on every surface (Bg, Panel, Card,
+//      CardHover, Deep), and AccentInk on Accent. Accent is text as well
+//      (#4709): link rows on hover and focus, the keys, the news dates and
+//      the install window's links are drawn in it, and until then it was
+//      measured nowhere, so five of the ten palettes had it under the line;
 //   2. Muted stays brighter than Faint against every surface, so raising
 //      Faint did not make the two one colour;
 //   3. the placeholders at the top of launcher\app\MainWindow.axaml are
@@ -43,7 +46,7 @@ function yes(what, cond) {
 }
 
 const MIN = 4.5;
-const TEXT = ['Ink', 'Muted', 'Faint', 'Ok', 'Warn', 'Bad'];
+const TEXT = ['Ink', 'Muted', 'Faint', 'Accent', 'Ok', 'Warn', 'Bad'];
 const SURFACES = ['Bg', 'Panel', 'Card', 'CardHover', 'Deep'];
 const NAMES = ['Bg', 'Panel', 'Card', 'CardHover', 'Deep', 'Line', 'Edge', 'Ink',
   'Muted', 'Faint', 'Accent', 'AccentSoft', 'AccentInk', 'Ok', 'Warn', 'Bad'];
@@ -153,7 +156,12 @@ yes('the measure finds the old Forge Faint and Bad under 4.5 to 1 (' + oldLow.le
 yes('and passes plain black on white', low(Object.assign({}, old, {
   Bg: '#FFFFFF', Panel: '#FFFFFF', Card: '#FFFFFF', CardHover: '#FFFFFF', Deep: '#FFFFFF',
   Ink: '#000000', Muted: '#000000', Faint: '#000000', Ok: '#000000', Warn: '#000000', Bad: '#000000',
-  Accent: '#FFFFFF', AccentInk: '#000000' })).length === 0);
+  Accent: '#000000', AccentInk: '#FFFFFF' })).length === 0);
+// Ember's accent before #4709, 3.76 to 1 on CardHover, is text the measure reads.
+const ember = palettes.find((p) => p.name === 'Ember');
+const oldEmber = ember ? low(Object.assign({}, ember.colors, { Accent: '#E04528', AccentSoft: '#3CE04528' })) : [];
+yes('the measure finds the old Ember Accent under 4.5 to 1 as text (' + oldEmber.join(', ') + ')',
+  oldEmber.some((s) => s.startsWith('Accent on CardHover')));
 
 // ---- 6. the install window draws in Forge from Themes.cs -----------------
 // The setup program kept its own copy of the old Forge in its markup and in

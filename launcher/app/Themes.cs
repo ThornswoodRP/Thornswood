@@ -92,7 +92,7 @@ namespace Thornswood
                 "Bg","#0E1216", "Panel","#141A20", "Card","#182028",
                 "CardHover","#1E2830", "Deep","#090C0F", "Line","#232E36",
                 "Edge","#2F3D47", "Ink","#E4EAEE", "Muted","#97A3AB",
-                "Faint","#82919C", "Accent","#6A8FA8", "AccentSoft","#3C6A8FA8",
+                "Faint","#82919C", "Accent","#7093AB", "AccentSoft","#3C7093AB",
                 "AccentInk","#061018", "Ok","#5C9C66", "Warn","#B9903F",
                 "Bad","#CF766C" }),
 
@@ -108,7 +108,7 @@ namespace Thornswood
                 "Bg","#12100F", "Panel","#1A1614", "Card","#201B18",
                 "CardHover","#29221E", "Deep","#0C0A09", "Line","#2E2724",
                 "Edge","#3D342F", "Ink","#EDE7E3", "Muted","#A89B95",
-                "Faint","#998980", "Accent","#E04528", "AccentSoft","#3CE04528",
+                "Faint","#998980", "Accent","#E56249", "AccentSoft","#3CE56249",
                 "AccentInk","#1A0702", "Ok","#6F9658", "Warn","#C99A46",
                 "Bad","#E0765E" }),
 
@@ -132,7 +132,7 @@ namespace Thornswood
                 "Bg","#100D15", "Panel","#16121E", "Card","#1C1726",
                 "CardHover","#241D30", "Deep","#0A0810", "Line","#2A2237",
                 "Edge","#372D48", "Ink","#E8E2F0", "Muted","#A096B3",
-                "Faint","#8F83A7", "Accent","#9A6FD0", "AccentSoft","#3C9A6FD0",
+                "Faint","#8F83A7", "Accent","#9F76D2", "AccentSoft","#3C9F76D2",
                 "AccentInk","#100522", "Ok","#5C9C66", "Warn","#B9903F",
                 "Bad","#CB6C7E" }),
 
@@ -148,7 +148,7 @@ namespace Thornswood
                 "Bg","#EEF1F4", "Panel","#F8FAFC", "Card","#FFFFFF",
                 "CardHover","#EFF3F7", "Deep","#E2E7EC", "Line","#D3DAE1",
                 "Edge","#FFFFFF", "Ink","#1A1F24", "Muted","#4E5862",
-                "Faint","#5B6773", "Accent","#2F6FA8", "AccentSoft","#282F6FA8",
+                "Faint","#5B6773", "Accent","#2D699F", "AccentSoft","#282D699F",
                 "AccentInk","#F2F8FC", "Ok","#377247", "Warn","#7F621E",
                 "Bad","#A33A2E" }, "#FFFFFF"),
 
@@ -187,7 +187,7 @@ namespace Thornswood
                 "Bg","#120E14", "Panel","#1A141E", "Card","#211925",
                 "CardHover","#2A2030", "Deep","#0B080E", "Line","#32283A",
                 "Edge","#413348", "Ink","#F0E6F4", "Muted","#A999AD",
-                "Faint","#9C849E", "Accent","#C56B9A", "AccentSoft","#3CC56B9A",
+                "Faint","#9C849E", "Accent","#C7709E", "AccentSoft","#3CC7709E",
                 "AccentInk","#1A0612", "Ok","#6E9A66", "Warn","#C79A3E",
                 "Bad","#CF735F"
             };
@@ -333,8 +333,10 @@ namespace Thornswood
         public const double MinContrast = 4.5;
 
         // The colours text is drawn in, and the surfaces it is drawn on.
+        // Accent is text too: link rows on hover and focus, the keys, the
+        // news dates and the install window's links are drawn in it (#4709).
         // AccentInk is measured on its own, against the accent it sits on.
-        static readonly string[] TextNames = new string[] { "Ink", "Muted", "Faint", "Ok", "Warn", "Bad" };
+        static readonly string[] TextNames = new string[] { "Ink", "Muted", "Faint", "Accent", "Ok", "Warn", "Bad" };
         static readonly string[] SurfaceNames = new string[] { "Bg", "Panel", "Card", "CardHover", "Deep" };
 
         // One line for each text colour under MinContrast in this theme,
