@@ -75,10 +75,10 @@ using one is anybody's.
 | `steepAt` | The bench keyword a dye steeps at. |
 | `reach` | How close, in game units, you stand to dye somebody else's hair (above 0, at most 2000). Ships as 300. |
 | `who` | Who may steep: `anyone` true, or `halves`, each half at the lowest rank that may (novice, advanced, expert or master), the same shape as the benches. Ships as the Tailor's two halves, `haberdasher` and `liverywright`, each from novice. |
-| `dyes` | Each dye: `id`, `name` (what the entry is called), `colour` (#rrggbb, lower case) or `wash: true`, `strength` (above 0, at most 1), `wander` (0 to 64), and `inputs` (each a record and a count). |
+| `dyes` | Each dye: `id`, `name` (what the entry is called), `colour` (`#rrggbb`, lower case) or `wash: true`, `strength` (above 0, at most 1), `wander` (0 to 64), and `inputs` (each a record and a count). |
 
 A list with any problem is refused whole, never half used: a key nobody
-reads, a colour that is not #rrggbb, two dyes with one id or name, an input
+reads, a colour that is not `#rrggbb`, two dyes with one id or name, an input
 named twice, or a dye that can never be made because an earlier dye takes
 less of the same things.
 
