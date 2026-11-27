@@ -39,7 +39,7 @@ try {
     if (-not ($plan.Success -and $write.Success -and $plan.Index -lt $publish -and $publish -lt $write.Index -and $write.Index -lt $signal)) {
         throw 'The publisher must plan before publishing and write the order before signaling a complete handoff'
     }
-    $Repo = $root; $draft = 12; $Out = Join-Path $root 'artifact'; $utf8 = [Text.UTF8Encoding]::new($false)
+    $Repo = $root; $draft = 12; $draftRec = 12; $Out = Join-Path $root 'artifact'; $utf8 = [Text.UTF8Encoding]::new($false)
     $null = New-Item -ItemType Directory -Path $Out
     . ([scriptblock]::Create($plan.Value))
     . ([scriptblock]::Create($write.Value))

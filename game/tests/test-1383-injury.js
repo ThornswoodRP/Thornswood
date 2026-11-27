@@ -662,9 +662,15 @@ if (NEEDS_SRC && HURT_SRC && P) {
     const deathBody = death >= 0 ? src.slice(death, src.indexOf("mp.onRespawn = guard('onRespawn'", death)) : '';
     yes('mp.onDeath tells the injury block of a person\'s death, after the people only test',
       deathBody.indexOf('hurt.died(actorId)') > deathBody.indexOf('if (!(pid > 0)) { return; }'));
-    const hitAt = src.indexOf("mp['onPapyrusEvent:OnHit'] = guard(");
-    yes('the one OnHit handler hands a hit to the injury block', hitAt >= 0 &&
-      /hurt\.hit\(targetId, aggressor, source\)/.test(src.slice(hitAt, hitAt + 1500)));
+    const hitBody = slice("mp['onPapyrusEvent:OnHit'] = guard(", '\n});');
+    const hitCalls = [];
+    if (hitBody) {
+      const hitApi = {};
+      const hitGlobals = { __thornswoodHurt: { hit: (...args) => hitCalls.push(args) } };
+      new Function('mp', 'guard', 'globalThis', 'log', hitBody)(hitApi, (_name, handler) => handler, hitGlobals, () => {});
+      hitApi['onPapyrusEvent:OnHit'](11, 22, 33);
+    }
+    yes('the one OnHit handler hands a hit to the injury block', JSON.stringify(hitCalls) === '[[11,22,33]]');
     yes('there is one OnSpellCast handler in the file', (src.match(/mp\['onPapyrusEvent:OnSpellCast'\] =/g) || []).length === 1);
     yes('one OnHit handler, still', (src.match(/mp\['onPapyrusEvent:OnHit'\] =/g) || []).length === 1);
     const bless = slice('function bless(actorId, baseDesc) {', '\n}\n');

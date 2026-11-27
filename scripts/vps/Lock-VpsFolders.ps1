@@ -48,10 +48,19 @@
   The service folders are locked as they are made, by the same rules, through
   Lock-Folder.ps1: Watch-Services.ps1 and Watch-Load.ps1 for Watch,
   Setup-Domain.ps1 for Caddy, Artifact.ps1 and Swap.ps1 for Deploys. Nothing in
-  the repository makes Dumps, so it is this script's alone. C:\Thornswood-Maint
-  is not one of them any more: it held update.ps1, which the hand made task
-  Maint Update ran as SYSTEM, and Remove-HandMadeTasks.ps1 takes both off the
-  box (#3288).
+  the repository makes Dumps, so it is this script's alone.
+  And what the hand made tasks left (#3288, #4344): C:\Thornswood-Maint held
+  update.ps1, which the task Maint Update ran as SYSTEM, and
+  C:\Thornswood-Diagnostics holds a copy of the dev server-settings.json.
+  Remove-HandMadeTasks.ps1 takes both tasks and both folders off the box, but
+  leaves a folder on purpose when its task has changed, when it is or holds a
+  link, holds a crash dump or is in use, or when removing it failed. A folder
+  it leaves still has the Users rule from C:\, so any service account could
+  write the script a SYSTEM task runs. Such a folder loses Users the same
+  way, keeping every rule by name (a task somebody changed may run as an
+  account that has one), and is said as left over, with
+  Remove-HandMadeTasks.ps1 to read and run again. A link is refused, as
+  below.
 
   WHAT IT REFUSES.
     - anywhere that is not the box: a Windows workstation, which a gaming PC
@@ -66,7 +75,8 @@
   -WhatIf says what it would change and changes nothing. Every folder is read
   back afterwards: its rules, one line each, and whether Users still reaches it.
 
-  scripts\tests\test-server-acl.ps1 and scripts\tests\test-vps-service-folders.ps1 run it against scratch folders.
+  scripts\tests\test-server-acl.ps1, scripts\tests\test-vps-service-folders.ps1 and
+  scripts\tests\test-4344-leftover-folders.ps1 run it against scratch folders.
 #>
 param(
     [switch]$WhatIf,
@@ -110,7 +120,7 @@ if (-not $AllowGamingPc) {
 $broad = @('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545', 'S-1-3-0')
 $tree = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
 $keepers = @('S-1-5-18', 'S-1-5-32-544', [Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
-$nameRule = '^(Thornswood-(Server|Server-Dev|Voice|Voice-Dev)(\.(prev|undone|failed)-\d{8}-\d{6})?|Thornswood-Backup|Thornswood-(Watch|Deploys|Caddy|Dumps))$'
+$nameRule = '^(Thornswood-(Server|Server-Dev|Voice|Voice-Dev)(\.(prev|undone|failed)-\d{8}-\d{6})?|Thornswood-Backup|Thornswood-(Watch|Deploys|Caddy|Dumps)|Thornswood-(Maint|Diagnostics))$'
 # The service folders (#1183, #1691). Each keeps its rules by name, and Users goes:
 #   Watch    watch.ps1 and load.ps1 run as SYSTEM; the bot reads alerts and
 #            writes alerts-sent-bot.txt by the rules Install-Bot.ps1 gives it
@@ -125,6 +135,9 @@ $nameRule = '^(Thornswood-(Server|Server-Dev|Voice|Voice-Dev)(\.(prev|undone|fai
 #            account: SYSTEM's and Administrators' like the backups, plus write
 #            (no read) for LOCAL SERVICE and the thornswood-runner* accounts.
 $svcRule = '^Thornswood-(Watch|Deploys|Caddy|Dumps)$'
+# What the hand made tasks left (#3288, #4344): Users goes, every rule by name
+# stays, and the folder is said as one Remove-HandMadeTasks.ps1 should take.
+$leftRule = '^Thornswood-(Maint|Diagnostics)$'
 
 # The site's account, from its task, when it is one of its own.
 if (-not $SiteSid) {
@@ -189,7 +202,7 @@ function Lock([string]$path, [bool]$only, [string[]]$writers = @()) {
 
 $folders = @(Get-ChildItem -LiteralPath $Parent -Directory -Force -ErrorAction SilentlyContinue |
              Where-Object { $_.Name -match $nameRule } | Sort-Object Name)
-if (-not $folders.Count) { Say ('nothing to lock: no Thornswood server, voice or service folder in ' + $Parent) }
+if (-not $folders.Count) { Say ('nothing to lock: no Thornswood server, voice, service or left over folder in ' + $Parent) }
 $refused = 0; $done = 0
 foreach ($f in $folders) {
     $path = $f.FullName
@@ -199,6 +212,8 @@ foreach ($f in $folders) {
     $isVoice = $f.Name -match '^Thornswood-Voice'
     $isBackup = $f.Name -eq 'Thornswood-Backup'
     $isSvc = $f.Name -match $svcRule
+    $isLeft = $f.Name -match $leftRule
+    if ($isLeft) { Say ($path + ' was left by .\scripts\vps\Remove-HandMadeTasks.ps1 (#3288), which says why when it runs: read that, then run it again to take the folder off the box.') }
     if ($isSvc) {
         $need = $null
         if ($f.Name -eq 'Thornswood-Deploys' -and $SiteSid -ne 'none') { $need = @{ P = (Join-Path $path 'current'); S = $SiteSid; Who = 'the site''s'; Run = '.\scripts\deploy\Deploy-Docs.ps1' } }
@@ -212,7 +227,7 @@ foreach ($f in $folders) {
         }
     }
     $siteNeeds = if ($isVoice) { Join-Path $path 'chat' } else { $path }
-    if ($SiteSid -ne 'none' -and -not $isBackup -and -not $isSvc -and $f.Name -notmatch '\.(prev|undone|failed)-' -and (Test-Path -LiteralPath $siteNeeds)) {
+    if ($SiteSid -ne 'none' -and -not $isBackup -and -not $isSvc -and -not $isLeft -and $f.Name -notmatch '\.(prev|undone|failed)-' -and (Test-Path -LiteralPath $siteNeeds)) {
         $has = @(Explicit $siteNeeds | Where-Object { $_.IdentityReference.Value -eq $SiteSid -and $_.AccessControlType -eq 'Allow' })
         if (-not $has.Count) {
             Say ('REFUSED ' + $path + ': the site''s account has no rule on ' + $siteNeeds + ' by name, so taking Users off would stop the site reading it. Run .\scripts\deploy\Deploy-Docs.ps1 first, then this again. Left as it is.')
@@ -221,7 +236,7 @@ foreach ($f in $folders) {
     }
     $isDumps = $f.Name -eq 'Thornswood-Dumps'
     $parts = @(@{ P = $path; Only = ($isBackup -or $isDumps); W = $(if ($isDumps) { $dumpWriters } else { @() }) })
-    if (-not $isVoice -and -not $isBackup -and -not $isSvc) {
+    if (-not $isVoice -and -not $isBackup -and -not $isSvc -and -not $isLeft) {
         foreach ($sub in 'data', 'private', 'for-bot') {
             $p = Join-Path $path $sub
             if (Test-Path -LiteralPath $p) { $parts += @{ P = $p; Only = ($sub -eq 'private'); W = @() } }
@@ -239,7 +254,7 @@ foreach ($f in $folders) {
         try { Lock $x.P $x.Only @($x.W); Say ('locked ' + $x.P) }
         catch { Say ('COULD NOT LOCK ' + $x.P + ': ' + $_.Exception.Message); $refused++ }
     }
-    if (-not $isVoice -and -not $isBackup -and -not $isSvc) {
+    if (-not $isVoice -and -not $isBackup -and -not $isSvc -and -not $isLeft) {
         # The gamemode's staff log, which the bot reads by its rule on for-bot (#2321).
         $fb = Join-Path $path 'for-bot'
         if ($BotSid -ne 'none' -and $f.Name -notmatch '\.(prev|undone|failed)-') {

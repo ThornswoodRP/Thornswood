@@ -174,6 +174,14 @@
 .PARAMETER Slug
   The collection. 7essxf unless said otherwise.
 
+.PARAMETER RecordSlug
+  The collection the layout's records name, when the revision laid out is
+  the Dev collection's copy of a revision of it (#7193): records name every
+  revision as main's collection numbers it. Goes with -RecordRevision.
+
+.PARAMETER RecordRevision
+  The revision the layout's records name, with -RecordSlug.
+
 .PARAMETER GameDomain
   The game's domain on Nexus. skyrimspecialedition unless said otherwise.
 
@@ -199,6 +207,8 @@ param(
   [switch]$Scripts,
   [string]$Mo2Record,
   [string]$Slug = '7essxf',
+  [string]$RecordSlug,
+  [int]$RecordRevision = 0,
   [string]$GameDomain = 'skyrimspecialedition',
   [string]$Cache,
   [switch]$WhatIf,
@@ -330,6 +340,8 @@ else {
   if ($env:APPDATA -and (Test-Under $Game (Join-Path $env:APPDATA 'Vortex'))) { Die ('-Game ' + $Game + ' is inside Vortex''s own folder.') }
 }
 if ($Slug -notmatch '^[a-z0-9]+$') { Die ('-Slug ' + $Slug + ' is not a collection slug.') }
+if ([bool]$RecordSlug -ne [bool]$RecordRevision) { Die '-RecordSlug and -RecordRevision go together: the collection and revision the layout''s records name.' }
+if ($RecordSlug -and $RecordSlug -notmatch '^[a-z0-9]+$') { Die ('-RecordSlug ' + $RecordSlug + ' is not a collection slug.') }
 if ($GameDomain -notmatch '^[a-z0-9]+$') { Die ('-GameDomain ' + $GameDomain + ' is not a game domain.') }
 if (-not $CollectionArchive -and $Revision -le 0) { Die 'Say which revision with -Revision, or give its archive with -CollectionArchive.' }
 if (-not $Cache) {
@@ -809,13 +821,19 @@ function Write-Crlf([string]$path, $list) { [IO.File]::WriteAllText($path, ((@($
 $sorted = New-Object 'System.Collections.Generic.List[object]'
 foreach ($x in $placed) { $sorted.Add($x) }
 $sorted.Sort([Comparison[object]] { param($a, $b) [StringComparer]::OrdinalIgnoreCase.Compare($a.Rel, $b.Rel) })
+# The collection and revision the records name: this one, or with
+# -RecordSlug and -RecordRevision the one it is the copy of. The Dev
+# collection's revisions are named in records as main's collection will
+# number them once a promotion copies them there (#7193).
+$nameSlug = if ($RecordSlug) { $RecordSlug } else { $Slug }
+$nameRev = if ($RecordRevision) { $RecordRevision } else { $Revision }
 $lines = New-Object System.Collections.Generic.List[string]
-$lines.Add('# Install-NexusRevision.ps1: collection ' + $Slug + ' revision ' + $Revision + '. sha256, size, Nexus file id, path in the game folder.')
+$lines.Add('# Install-NexusRevision.ps1: collection ' + $nameSlug + ' revision ' + $nameRev + '. sha256, size, Nexus file id, path in the game folder.')
 foreach ($x in $sorted) { $lines.Add($x.Sha256 + "`t" + $x.Size + "`t" + $col.Entries[$x.Entry].FileId + "`t" + $x.Rel) }
 $pl = New-Object System.Collections.Generic.List[string]
 $lo = New-Object System.Collections.Generic.List[string]
-$pl.Add('# Install-NexusRevision.ps1: collection ' + $Slug + ' revision ' + $Revision)
-$lo.Add('# Install-NexusRevision.ps1: collection ' + $Slug + ' revision ' + $Revision)
+$pl.Add('# Install-NexusRevision.ps1: collection ' + $nameSlug + ' revision ' + $nameRev)
+$lo.Add('# Install-NexusRevision.ps1: collection ' + $nameSlug + ' revision ' + $nameRev)
 foreach ($p in $order) { $pl.Add($(if ($p.Enabled) { '*' } else { '' }) + $p.Name); $lo.Add($p.Name) }
 $counts = @{}
 foreach ($x in $placed) { $counts[$x.Entry] = 1 + [int]$counts[$x.Entry] }
@@ -823,7 +841,7 @@ $layoutRecord = [ordered]@{
   schema     = 1
   made       = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
   tool       = 'scripts\release\Install-NexusRevision.ps1'
-  collection = [ordered]@{ slug = $Slug; domain = $GameDomain; name = $col.Name; revision = $Revision; revisionId = $revInfo.revisionId; status = $revInfo.status; archive = $revInfo.archive; archiveMd5 = $revInfo.archiveMd5; archiveSize = $revInfo.archiveSize }
+  collection = [ordered]@{ slug = $nameSlug; domain = $GameDomain; name = $col.Name; revision = $nameRev; revisionId = $revInfo.revisionId; status = $revInfo.status; archive = $revInfo.archive; archiveMd5 = $revInfo.archiveMd5; archiveSize = $revInfo.archiveSize }
   gameVersion = $world.GameVersion
   files      = $placed.Count
   bytes      = $bytesAll
@@ -839,7 +857,7 @@ $layoutRecord = [ordered]@{
 }
 # slidersets.json: each placed BodySlide slider set file, with files.txt's
 # sha256, and the sets it holds, metadata only (#5888, SliderSets.ps1).
-$sliderSetRecord = Step { New-SliderSetRecord $Slug $Revision $placed $script:SliderSetsRead $col.Entries }
+$sliderSetRecord = Step { New-SliderSetRecord $nameSlug $nameRev $placed $script:SliderSetsRead $col.Entries }
 function Write-LayoutRecord([string]$dir, [bool]$withFiles) {
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   if ($withFiles) { Write-Crlf (Join-Path $dir 'files.txt') $lines }
@@ -918,8 +936,8 @@ if ($Record) {
     $wjPath = Join-Path $Record 'thornswood.wabbajack'
     $ml = New-Object Thornswood.Layout.Modlist
     $ml.Name = 'Thornswood'; $ml.Author = 'Thornswood'; $ml.Website = 'https://thornswood.net'
-    $ml.Description = 'The mods the Thornswood servers run: collection ' + $Slug + ', revision ' + $Revision + ', in a portable Mod Organizer 2.'
-    $ml.Version = [string]$Revision + '.0.0.0'
+    $ml.Description = 'The mods the Thornswood servers run: collection ' + $nameSlug + ', revision ' + $nameRev + ', in a portable Mod Organizer 2.'
+    $ml.Version = [string]$nameRev + '.0.0.0'
     # Mod Organizer 2 itself, from its own release on GitHub, held to the pin.
     $mo2Dir = Join-Path $Cache 'mo2'
     New-Item -ItemType Directory -Force -Path $mo2Dir | Out-Null
@@ -1088,7 +1106,7 @@ foreach ($d in @($old.Values | ForEach-Object { Split-Path -Parent $_.Rel } | Wh
 # leaves a record a run again can take out.
 New-Item -ItemType Directory -Force -Path $recDir | Out-Null
 $whole = $lines[0]
-$lines[0] = '# Install-NexusRevision.ps1: collection ' + $Slug + ' revision ' + $Revision + '. Being placed; layout.json is written when it is whole.'
+$lines[0] = '# Install-NexusRevision.ps1: collection ' + $nameSlug + ' revision ' + $nameRev + '. Being placed; layout.json is written when it is whole.'
 Write-Crlf $oldFiles $lines
 $script:Changed = 'In ' + $Game + ': the earlier layout is out and this one is part way in. Thornswood Layout\files.txt lists every file this run meant to place; run the same command again to put the rest in.'
 $linked = 0; $copied = 0

@@ -478,7 +478,7 @@ namespace Thornswood
             if (args[0] == "install")
             {
                 var choice = new InstallChoice { Root = args[1], Package = args[2], SteamRoot = args[3], SteamGame = args[4], MakeOwnGame = args[5] == "1", VortexGame = "" };
-                var steps = new InstallSteps(choice, Console.WriteLine, f => { });
+                var steps = new InstallSteps(choice, Console.WriteLine, f => { }, q => true);
                 try { steps.Run(); Console.WriteLine("install: done, " + steps.Bad + " failed"); }
                 catch (InstallStop e) { Console.WriteLine("install: stopped, " + e.Message); }
                 return 0;

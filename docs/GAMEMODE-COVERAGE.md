@@ -2,28 +2,32 @@
 
 Which test in tests/ drives each event handler in game/gamemode.js, each
 plugin in game/plugins/, and the chat words. Made 10 October 2026 by
-grepping tests/*.js for each name, then reading the closest test.
+grepping tests/*.js for each name, then reading the closest test. The
+handler table names the part of game/gamemode that sets each handler
+(27 November, #4451), not a line, as the built file's lines move with every
+change. tests/test-4451-gamemode-coverage.js fails when a handler is set
+that has no row here, or a row names a part that does not set it.
 
 ## Event handlers
 
-| Handler | Line (at ba910a3) | Tests that drive it |
+| Handler | Set in (game/gamemode) | Tests that drive it |
 |---|---|---|
-| mp.onDying | 5780 | test-audit-handlers, stand-in-server |
-| mp.onDeath | 5793 | test-audit-handlers, test-1383-injury, test-1385-perks, test-1386-warrior, test-1831-dead-waits, test-join-pass-trust, and 3 more |
-| mp.onRespawn | 5984 | test-npc-death-policy (drives it), test-audit-handlers, test-1383-injury |
-| mp.onActivate | 8299 | 15 files: test-audit-handlers, test-1603-beds, test-1733-injury-gate, test-1909-own-worlds, test-626-tundra-cotton, and more |
-| mp.onCraftWork | 11285 | test-audit-handlers |
-| mp.onCraft | 27679 | 12 files: test-1389-lists, test-1390-embassy, test-1398-fuel, test-1400-smith-tan, test-1676-rest-gate, and more. Left alone in this sweep: #1648 lands here |
-| mp.onThornswoodLogin | 15006 | test-join-pass-game, stand-in-server |
-| mp.onSpellCast | 39424 | test-audit-handlers |
-| mp.onUpdateEquipmentAttempt | 46859 | test-1387-college (drives it), test-audit-handlers |
-| mp.onEquipItemAttempt | 47315 | test-audit-handlers |
-| mp.onReadBook | 47249 | test-spell-tomes, test-1127-unplaceable-tomes, test-1149-pick-spell-tome, test-enchanter-staff-spells, test-audit-handlers, test-join-pass-trust |
-| mp.onPutItem | 51231 | test-2298-box-retired (drives it: no container has a rule since #2298, only the join pass refuses), test-coffers, test-join-pass-trust |
-| mp.onTakeItem | 51522 | test-take-limit (drives it), test-audit-handlers, test-join-pass-trust |
-| mp.onDropItem | 51536 | test-audit-handlers, test-1384-condition, test-join-pass-trust |
-| mp.onUpdateAppearanceAttempt | 51634 | test-body-shape, test-unpublished-until-appearance, test-audit-handlers, test-join-pass-trust |
-| mp.onEatItem | 56553 | test-1383-injury (drives swallowed()), test-audit-handlers |
+| mp.onDying | event-handlers.ts | test-audit-handlers, stand-in-server |
+| mp.onDeath | event-handlers.ts | test-audit-handlers, test-1383-injury, test-1385-perks, test-1386-warrior, test-1831-dead-waits, test-join-pass-trust, and 3 more |
+| mp.onRespawn | event-handlers.ts | test-npc-death-policy (drives it), test-audit-handlers, test-1383-injury |
+| mp.onActivate | scripted-activators.ts (twice: the handler, and the flora pick wrapper) | 15 files: test-audit-handlers, test-1603-beds, test-1733-injury-gate, test-1909-own-worlds, test-626-tundra-cotton, and more |
+| mp.onCraftWork | the-benches.ts | test-audit-handlers |
+| mp.onCraft | the-benches.ts (twice: the handler, and the craft count wrapper) | 12 files: test-1389-lists, test-1390-embassy, test-1398-fuel, test-1400-smith-tan, test-1676-rest-gate, and more. Left alone in this sweep: #1648 lands here |
+| mp.onThornswoodLogin | join-pass.ts | test-join-pass-game, stand-in-server |
+| mp.onSpellCast | skill-perks.ts | test-audit-handlers |
+| mp.onUpdateEquipmentAttempt | college.ts | test-1387-college (drives it), test-audit-handlers |
+| mp.onEquipItemAttempt | cuffs.ts, strength-weapons.ts | test-audit-handlers |
+| mp.onReadBook | staff-spells.ts | test-spell-tomes, test-1127-unplaceable-tomes, test-1149-pick-spell-tome, test-enchanter-staff-spells, test-audit-handlers, test-join-pass-trust |
+| mp.onPutItem | cuffs.ts | test-2298-box-retired (drives it: no container has a rule since #2298, only the join pass refuses), test-coffers, test-join-pass-trust |
+| mp.onTakeItem | cuffs.ts | test-take-limit (drives it), test-audit-handlers, test-join-pass-trust |
+| mp.onDropItem | cuffs.ts | test-audit-handlers, test-1384-condition, test-join-pass-trust |
+| mp.onUpdateAppearanceAttempt | cuffs.ts | test-body-shape, test-unpublished-until-appearance, test-audit-handlers, test-join-pass-trust |
+| mp.onEatItem | injury-and-disease.ts | test-1383-injury (drives swallowed()), test-audit-handlers |
 
 Every handler has at least one test that runs it, not just a test that
 checks its source text.

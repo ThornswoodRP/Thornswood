@@ -128,7 +128,7 @@ function Get-SignOnGitHubRefusal([string]$RepoDir) {
         return ('A release from the feed signs on GitHub, in the engine fork, and this machine has no gh to ask it with. ' +
                 'Install the GitHub CLI and sign in (gh auth login). Nothing was published.')
     }
-    $probe = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-signprobe-' + [Guid]::NewGuid().ToString('N') + '.json')
+    $probe = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('thornswood-signprobe-' + [Guid]::NewGuid().ToString('N') + '.json')
     try {
         [IO.File]::WriteAllText($probe, '{}')
         [void](Get-SignOnGitHubInputs $RepoDir $probe 'probe' 'probe')
@@ -190,7 +190,7 @@ function Invoke-ReleaseCatalogSignOnGitHub {
         return ("the fork's signing run ended " + [string]$run.conclusion + ', so nothing was signed (its launcher job says whether the launcher this release names failed the launcher''s own check): ' + [string]$run.url)
     }
 
-    $got = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-signed-' + [Guid]::NewGuid().ToString('N'))
+    $got = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('thornswood-signed-' + [Guid]::NewGuid().ToString('N'))
     try {
         $fetch = @('run', 'download', [string]$run.databaseId, '-R', $SignOnGitHubRepo, '-n', ('release-cat-' + $Request), '-D', $got)
         try { [void](& $Gh @fetch) }

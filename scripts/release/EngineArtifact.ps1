@@ -200,7 +200,7 @@ function Get-EnginePackageBuildIn([string]$Package, [string]$Commit, [string]$Re
     $base = $Registry.TrimEnd('/')
     $hostName = ([uri]$base).Host
     $ref = "$hostName/$($EngineArtifactPackage):$Commit"
-    $tmp = Join-Path ([IO.Path]::GetTempPath()) ('engine-package-' + [Guid]::NewGuid().ToString('N'))
+    $tmp = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('engine-package-' + [Guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Force -Path $tmp
     try {
         $tf = Join-Path $tmp 'token.json'

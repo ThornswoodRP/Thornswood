@@ -29,7 +29,8 @@
     - the site's retention sweep, lifted out of site\server.js, deletes the
       data, uploads and config.json a restore (vps-restore-services.ps1) set
       aside beside them 30 days on, and nothing else in the site's folder
-      (the bot's joins.json copies: tests\test-2353-join-keeping.py)
+      (the bot's joins.json copies: tests\test-2353-join-keeping.py), and
+      leaves a link named like one as it is, and says so (#4591)
     - the privacy page and the scripts that set copies aside say how long
   Nothing leaves this machine.
 */
@@ -181,6 +182,37 @@ try {
       siteSaid.filter((l) => /^restore-copy .*"event":"deleted"/.test(l)).length === 4 && !siteSaid.some((l) => /not-a-real-one/.test(l)));
   yes('  and the hourly retention sweep, which also runs as the site starts, runs it',
       /restoreCopies: sweepRestoreCopies\(now\)/.test(SITE.slice(to, to + 2000)));
+
+  // Links named like copies set aside long ago (#4591): left, said, and
+  // what each points at stays, as Server-Log's sweep does above. One to a
+  // folder, named like the data copy, and one to a file, named like the
+  // config.json copy, whose kind matches what that copy would be.
+  const siteFar = path.join(scratch, 'site-elsewhere');
+  put(path.join(siteFar, 'signins.json'), { keep: 1 });
+  const farConfig = path.join(scratch, 'config-elsewhere.json');
+  put(farConfig, { keep: 1 });
+  const links = [
+    [path.join(SR, 'data-before-restore-' + stamp(NOW - 40 * DAY)), siteFar, process.platform === 'win32' ? 'junction' : 'dir', path.join(siteFar, 'signins.json')],
+    [path.join(SR, 'config.json-before-restore-' + stamp(NOW - 40 * DAY)), farConfig, 'file', farConfig]
+  ];
+  let siteLinked = true;
+  for (const [link, target, kind] of links) {
+    try { fs.symlinkSync(target, link, kind); }
+    catch (e) { siteLinked = false; console.log('SKIP  could not make a link here: ' + (e.code || e.message)); break; }
+  }
+  if (siteLinked) {
+    siteSaid.length = 0;
+    const got2 = sweep.sweepRestoreCopies(NOW, SR);
+    for (const [link, , , keep] of links) {
+      let still = false;
+      try { still = fs.lstatSync(link).isSymbolicLink(); } catch (e) { still = false; }
+      yes('the site leaves the link ' + path.basename(link).replace(/-\d{8}-\d{6}$/, '-<stamp>') + ' as it is, and what it points at stays',
+          still && there(keep));
+      yes('  and says it left it',
+          siteSaid.some((l) => /^restore-copy .*"event":"left-link"/.test(l) && l.indexOf(path.basename(link)) >= 0));
+    }
+    yes('  and counts neither as deleted (' + got2.deleted + ')', got2.deleted === 0);
+  }
 
   // What people and staff read says the same.
   const page = read('site/data/site/privacy.md').split(/\s+/).join(' ');

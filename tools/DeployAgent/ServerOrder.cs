@@ -217,6 +217,30 @@ public static class ServerOrder
             log($"load order: {n} from the box's store of {record.Slug} revision {record.Revision}, {row.Size:N0} bytes, sha256 {row.Sha256[..12]}");
         }
         settings["loadOrder"] = new JsonArray(newEntries.Select(x => (JsonNode)JsonValue.Create(x)!).ToArray());
+        // A plugin the record lets go is one whose forms can go, and the
+        // engine is told so by forgetPlugins: a save that still names one of
+        // its forms (an item, a head part) then loads without it, where it
+        // otherwise stops the server, "X is 827:McmRecorder.esp, but
+        // McmRecorder.esp is not in the server's load order" (main, build-
+        // 1.3.136, 27 Nov 2026). The names stay there once written, since a
+        // save not loaded yet may still name them, and a plugin the order
+        // loads again leaves it: the engine refuses one it loads.
+        var forget = settings["forgetPlugins"] is JsonArray fa
+            ? fa.Select(x => x?.GetValue<string>() ?? "").Where(x => x != "").ToList()
+            : new List<string>();
+        foreach (var x in dropped.Except(refused, StringComparer.OrdinalIgnoreCase))
+            if (!forget.Contains(x, StringComparer.OrdinalIgnoreCase))
+            {
+                forget.Add(x);
+                log($"load order: {x} goes in forgetPlugins, so a save that names one of its forms loads without it");
+            }
+        foreach (var x in forget.Where(x => want.Contains(x, StringComparer.OrdinalIgnoreCase)).ToList())
+        {
+            forget.Remove(x);
+            log($"load order: {x} leaves forgetPlugins, since the order loads it again");
+        }
+        if (forget.Count > 0) settings["forgetPlugins"] = new JsonArray(forget.Select(x => (JsonNode)JsonValue.Create(x)!).ToArray());
+        else settings.Remove("forgetPlugins");
         var staged = Path.Combine(stage, Settings);
         Directory.CreateDirectory(stage);
         Files.WriteWhole(staged, JsonSerializer.SerializeToUtf8Bytes(settings, new JsonSerializerOptions { WriteIndented = true }));
