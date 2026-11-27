@@ -420,9 +420,13 @@ const server = http.createServer((req, res) => {
       if (c.addCollection) { others.push({ id: c.addCollection.id, slug: c.addCollection.slug, name: c.addCollection.name, latest: 0, draft: null, revisions: {} }); delete c.addCollection; }
       if (c.addRevision) {
         const col = bySlug(c.addRevision.slug || '7essxf');
-        col.revisions[c.addRevision.n] = { id: String(c.addRevision.id), status: c.addRevision.status || 'published', upload: null, archive: c.addRevision.archive };
-        if (c.addRevision.status === 'draft') col.draft = c.addRevision.n;
-        else if (c.addRevision.slug && Number(c.addRevision.n) > col.latest) col.latest = Number(c.addRevision.n);
+        // A revision number, never a name the request picks: a key such as
+        // __proto__ would write onto the object itself.
+        const n = Number(c.addRevision.n);
+        if (!col || !Number.isInteger(n) || n < 1) return problem(res, 400, 'addRevision needs a known slug and a whole revision number');
+        col.revisions[String(n)] = { id: String(c.addRevision.id), status: c.addRevision.status || 'published', upload: null, archive: c.addRevision.archive };
+        if (c.addRevision.status === 'draft') col.draft = n;
+        else if (c.addRevision.slug && n > col.latest) col.latest = n;
         delete c.addRevision;
       }
       // Which published revision is the newest, as publishing one on the website would leave it.

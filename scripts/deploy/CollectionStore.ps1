@@ -227,7 +227,7 @@ function Get-ThornswoodCollectionStore {
 # before that, so the revision is laid out from Dev and named as the record
 # names it (-RecordSlug -RecordRevision), which the store holds it to.
 function Get-ThornswoodCollectionFetchLine($Head, [string]$Repo) {
-    . (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'CollectionRevision.ps1')
+    . (Join-Path $PSScriptRoot '..\release\CollectionRevision.ps1')
     $dev = Get-DevCollection $Repo
     if ($dev -and $Head.Revision -gt $dev.Offset) {
         return ('Install-NexusRevision -Revision ' + ($Head.Revision - $dev.Offset) + ' -Slug ' + $dev.Slug + ' -RecordSlug ' + $Head.Slug + ' -RecordRevision ' + $Head.Revision + ' -KeepPlugins')
