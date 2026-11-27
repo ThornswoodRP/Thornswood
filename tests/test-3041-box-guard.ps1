@@ -157,11 +157,12 @@ try {
 }
 
 # ---- 3. it asks first ---------------------------------------------------------
-# Above the question a script may only set variables and define functions
-# (and, in the three with a layer, dot-source the harness's stand-ins). In
-# vps-harden, vps-time-wait and vps-ssh-scope the question is the first thing
-# their Invoke- function does, and the top level does nothing else before it
-# calls that.
+# Above the question a script may only set variables and define functions,
+# and, in a script with a test layer, dot-source the harness's stand-ins with
+# its one line, if ($Layer) { . $Layer }. A script whose question is in an
+# Invoke- function asks it first thing there, and its top level does nothing
+# else before it calls that function. Every carrier above is held to this the
+# same way, so the comment names none of them (#4372).
 Write-Host ''
 Write-Host 'each box script asks before it does anything'
 $orderOk = $true

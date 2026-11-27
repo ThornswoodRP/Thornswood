@@ -14,7 +14,7 @@ An item in this file is not found in the world and not made at a public bench. T
 | embassy | Not found in Skyrim. The embassy roll may craft it. |
 | thalmor | Not found. Someone on the Thalmor remnant roll may craft it. |
 
-Counts in this file: cut 3417, embassy 19, thalmor 10. Rows this pass left in the open book, or on a lock that is not a cut: 595.
+Counts in this file: cut 3421, embassy 19, thalmor 10. Rows this pass left in the open book, or on a lock that is not a cut: 591.
 
 The rules below sorted the recipe table once, before anything was cut. The recipe build (`scripts/dev/Build-RecipeTable.ps1`) reads [cut-items.json](../../game/data/cut-items.json), so the table it writes is already cut, and `scripts/dev/Write-CutItems.js` run on that table writes this page from the list it has instead of sorting the table again.
 
@@ -121,7 +121,7 @@ Not found. A person on the remnant roll may make them. Wearing them is still the
 
 Not found and not made. Held here so the reference can come back.
 
-3417 references.
+3421 references.
 
 | Item | Id | Half | Why |
 | --- | --- | --- | --- |
@@ -3539,6 +3539,10 @@ Not found and not made. Held here so the reference can come back.
 | Yokudan Shotel | `815:YokuWeapons.esp` | Edgewright | Temper on the grindstone or the armour table. Repair is a kit. Not found and not made. The reference stays here so it can come back for an event. |
 | Zahkriisos | `250e6:Dragonborn.esm` | Platewright | Temper on the grindstone or the armour table. Repair is a kit. Not found and not made. The reference stays here so it can come back for an event. |
 | Zephyr | `f37e:Dawnguard.esm` | Woodwright | Temper on the grindstone or the armour table. Repair is a kit. Not found and not made. The reference stays here so it can come back for an event. |
+| Ancient Nord Armor | `f46cc:Skyrim.esm` | Platewright | The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, issue #4676). Not made. The reference stays here so it can come back for an event. |
+| Ancient Nord Boots | `f46cd:Skyrim.esm` | Platewright | The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, issue #4676). Not made. The reference stays here so it can come back for an event. |
+| Ancient Nord Gauntlets | `f46cf:Skyrim.esm` | Platewright | The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, issue #4676). Not made. The reference stays here so it can come back for an event. |
+| Ancient Nord Helmet | `f46d0:Skyrim.esm` | Platewright | The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, issue #4676). Not made. The reference stays here so it can come back for an event. |
 | Fishing Pole - Crude | `1f24f:FishingInSkyrim.esp` | Woodwright | The fishing mod's pole. The fisher page plans Thornswood-Content.esp's three poles and says the fishing mod's rows are not the plan; only ours fish (TOOLS in the gamemode). Not found and not made (issue #1766). |
 | Fishing Pole - Fine | `2180d:FishingInSkyrim.esp` | Woodwright | The fishing mod's pole. The fisher page plans Thornswood-Content.esp's three poles and says the fishing mod's rows are not the plan; only ours fish (TOOLS in the gamemode). Not found and not made (issue #1766). |
 | Fishing Pole - Master | `1f252:FishingInSkyrim.esp` | Woodwright | The fishing mod's pole. The fisher page plans Thornswood-Content.esp's three poles and says the fishing mod's rows are not the plan; only ours fish (TOOLS in the gamemode). Not found and not made (issue #1766). It also asked for dragon bone, which is cut. |

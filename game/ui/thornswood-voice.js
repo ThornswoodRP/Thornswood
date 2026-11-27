@@ -315,7 +315,7 @@
       css.textContent = [
         '#thornswood-mic{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);',
         'z-index:2147483646;pointer-events:none;display:flex;flex-direction:column;',
-        'align-items:center;gap:3px;font:600 11px/1 "Segoe UI",system-ui,sans-serif;',
+        'align-items:center;gap:3px;font:600 12px/1 "Segoe UI",system-ui,sans-serif;',
         'letter-spacing:.14em;text-transform:uppercase;transition:opacity .18s ease}',
         '#thornswood-mic .tw-word{text-shadow:0 1px 3px rgba(0,0,0,.95)}',
         '#thornswood-mic svg{display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.95))}',

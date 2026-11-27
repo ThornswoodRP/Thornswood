@@ -28,7 +28,7 @@ function Run-Case([string]$kind, [string]$alias) {
     $names = [ordered]@{stray='stand-in stray';byPath='stand-in byPath';own=$TaskName;other='stand-in other'}
     $node = 'stand-in node'; $me = 'stand-in principal'
     $tasks = [ordered]@{}; $calls = [Collections.Generic.List[string]]::new()
-    $state = @{injected=$false;pass=0;fail=0;failure=''}
+    $state = @{injected=$false;pass=0;fail=0;failure='';enumerations=0;queryErrorAction='';foreignActionReads=0}
     function Yes([string]$what, [bool]$condition) {
         if ($condition) { $state.pass++ } else { $state.fail++; $state.failure=$what }
     }
@@ -48,6 +48,25 @@ function Run-Case([string]$kind, [string]$alias) {
     function Get-ScheduledTask {
         [CmdletBinding()]param($TaskName)
         if ($TaskName) { return $tasks[$TaskName] }
+        $state.enumerations++
+        $state.queryErrorAction = [string]$PSBoundParameters.ErrorAction
+        if ($kind -eq 'enumeration-error') { Write-Error 'private enumeration failure' -ErrorId 'FixtureEnumerationUnavailable'; return }
+        if ($kind -eq 'path-spelling') {
+            $from = [string][IO.Path]::DirectorySeparatorChar
+            $to = if ($from -eq '\') { '/' } else { '\' }
+            foreach ($task in $tasks.Values) {
+                $task.Actions[0].Arguments = $task.Actions[0].Arguments.Replace($from, $to)
+                $task.Actions[0].WorkingDirectory = $task.Actions[0].WorkingDirectory.Replace($from, $to)
+            }
+        }
+        # The real removal reads this action once; the diagnostic must not
+        # inspect or publish metadata for an unrelated task.
+        $foreign = [pscustomobject]@{TaskName='private unrelated task';TaskPath='private unrelated folder'}
+        $foreign | Add-Member -MemberType ScriptProperty -Name Actions -Value {
+            $state.foreignActionReads++
+            @([pscustomobject]@{Execute='private executable';Arguments='private arguments';WorkingDirectory='private working folder'})
+        }
+        $foreign
         @($tasks.Values)
     }
     function Stop-ScheduledTask { [CmdletBinding()]param($TaskName,$TaskPath) $calls.Add('stop:' + $TaskName) }
@@ -66,7 +85,9 @@ function Run-Case([string]$kind, [string]$alias) {
         & ([scriptblock]::Create($runtime[0].Extent.Text))
     } 6>&1)
     $events = @($captured | Where-Object { $_ -is [Management.Automation.InformationRecord] -and $_.ToString().StartsWith('VOICE_TASK_FAILURE ') } | ForEach-Object { $_.ToString().Substring(19) | ConvertFrom-Json })
-    [pscustomobject]@{pass=$state.pass;fail=$state.fail;failure=$state.failure;events=$events;calls=@($calls);injected=$state.injected}
+    $enumerations = @($captured | Where-Object { $_ -is [Management.Automation.InformationRecord] -and $_.ToString().StartsWith('VOICE_TASK_ENUMERATION ') } | ForEach-Object { $_.ToString().Substring(23) | ConvertFrom-Json })
+    [pscustomobject]@{pass=$state.pass;fail=$state.fail;failure=$state.failure;events=$events;calls=@($calls);injected=$state.injected;
+        enumerations=$enumerations;queryCount=$state.enumerations;queryErrorAction=$state.queryErrorAction;foreignActionReads=$state.foreignActionReads}
 }
 $pass=0; $fail=0
 function Check([string]$what,[bool]$condition) {
@@ -87,5 +108,21 @@ foreach ($case in @(@('register','stray'),@('register','byPath'),@('remove','str
         Check 'diagnostic record omits principal and complete task definitions' (($event | ConvertTo-Json -Compress) -notmatch 'stand-in principal|WorkingDirectory|Actions')
     }
 }
+# #7321: no real Scheduler calls. Observe the actual single enumeration,
+# without turning a silent query failure or a path mismatch into success.
+Check 'one original query retains its explicit silent error action' ($ok.queryCount -eq 1 -and $ok.queryErrorAction -eq 'SilentlyContinue')
+Check 'the actual enumeration emits one structured fixture observation' ($ok.enumerations.Count -eq 1)
+if ($ok.enumerations.Count -eq 1) {
+    $sample=$ok.enumerations[0]
+    Check 'the observation contains exactly the four fixture aliases' (($sample.tasks.alias -join ',') -eq 'stray,byPath,own,other' -and @($sample.tasks | Where-Object {$_.count -eq 1}).Count -eq 4)
+    Check 'owned action metadata and expected root can distinguish path spelling' ($sample.tasks[0].actions[0].workingDirectory -eq $sample.root -and $sample.tasks[1].actions[0].arguments.Contains($sample.root) -and $sample.errorIds.Count -eq 0)
+    Check 'unrelated identity action metadata and principal are never published' (($sample | ConvertTo-Json -Depth 8 -Compress) -notmatch 'private unrelated|private executable|private arguments|private working folder|stand-in principal')
+}
+Check 'the diagnostic adds no unrelated action read to the original removal' ($ok.foreignActionReads -eq 1)
+$unavailable=Run-Case 'enumeration-error' ''
+Check 'a suppressed query error keeps all original refusal assertions failed' ($unavailable.pass -eq 2 -and $unavailable.fail -eq 3 -and $unavailable.events.Count -eq 0)
+Check 'the same suppressed query error identifies absent owned rows without its private message' ($unavailable.enumerations.Count -eq 1 -and $unavailable.enumerations[0].errorIds.Count -eq 1 -and $unavailable.enumerations[0].errorIds[0] -match '^FixtureEnumerationUnavailable' -and @($unavailable.enumerations[0].tasks | Where-Object {$_.count -eq 0}).Count -eq 4 -and ($unavailable.enumerations[0] | ConvertTo-Json -Depth 8 -Compress) -notmatch 'private enumeration failure')
+$spelling=Run-Case 'path-spelling' ''
+Check 'changed returned paths keep the original three failures and all owned rows' ($spelling.pass -eq 2 -and $spelling.fail -eq 3 -and $spelling.enumerations.Count -eq 1 -and @($spelling.enumerations[0].tasks | Where-Object {$_.count -eq 1}).Count -eq 4 -and $spelling.enumerations[0].errorIds.Count -eq 0)
 Write-Host ("{0} passed, {1} failed" -f $pass,$fail)
 if ($fail) { exit 1 }

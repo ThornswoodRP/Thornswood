@@ -46,6 +46,7 @@ function read(p) {
 }
 const PLUGIN = read(process.env.PLUGIN || path.join('game', 'plugins', 'thornswood-test.js'));
 const RUNNER = read(path.join('scripts', 'dev', 'Run-RealClient.ps1'));
+const WATCH_TEXT = read(path.join('scripts', 'dev', 'Watch-RealClient.ps1')) || '';
 const SKILLS = read(path.join('game', 'ui', 'thornswood-skills.js')) || '';
 const OUR_ADDRESS = JSON.parse(read(path.join('scripts', 'vps', 'vps.json'))).address;
 
@@ -815,6 +816,52 @@ foreach ($scan in @(1,23,36)) {
     yes('a PC on the lock screen stops the run inside its try, before the launcher starts',
         lock > tryAt && tryAt > 0 && start > lock && /\$_\.SessionId -eq \$mySession/.test(RUNNER) && /throw 'This PC is on the lock screen/.test(RUNNER));
   }
+  // Not from inside an app's container (27 Nov: started from the Claude
+  // app's Remote Control, the launcher's folder moves went to that app's
+  // store). Patrick's pick B: runs on One go only through the task.
+  {
+    const guard = RUNNER.indexOf('$container = Get-AppContainerStore');
+    const launch = RUNNER.indexOf('$launcher = Start-Process -FilePath $launcherExe');
+    const channel = RUNNER.indexOf('Set-RunChannel ([ordered]');
+    yes('the run looks for an app container before it changes or starts anything, and stops with where runs go instead',
+        guard > 0 && guard < channel && guard < launch &&
+        /\. \(Join-Path \$PSScriptRoot 'Get-AppContainerStore\.ps1'\)/.test(RUNNER) &&
+        /if \(\$container\) \{\s*throw \("This run is inside the app container of \$container/.test(RUNNER) &&
+        /Watch-RealClient\.ps1 -Now \[-Steps <file>\] asks it/.test(RUNNER));
+    const fnAt = WATCH_TEXT.indexOf('if ($Now) {\n    . (Join-Path $PSScriptRoot');
+    const hand = fnAt >= 0 ? WATCH_TEXT.slice(fnAt, WATCH_TEXT.indexOf('\n}\n', fnAt)) : '';
+    yes('-Now inside a container writes the request and starts the task, making no run itself',
+        /\$container = Get-AppContainerStore/.test(hand) && /WriteAllText\(\$nowFile/.test(hand) &&
+        /Start-ScheduledTask -TaskName \$taskName/.test(hand) && /return\s*\}/.test(hand) &&
+        hand.indexOf('WriteAllText($nowFile') < hand.indexOf('Start-ScheduledTask'));
+    yes('a task that is missing or turned off is said so, with the line that fixes it, and no request is left',
+        /if \(-not \$task\) \{ throw [^\n]*-Install makes it/.test(hand) &&
+        /if \(\$task\.State -eq 'Disabled'\) \{ throw [^\n]*Enable-ScheduledTask -TaskName/.test(hand) &&
+        hand.indexOf("State -eq 'Disabled'") < hand.indexOf('WriteAllText($nowFile'));
+    const lockAt = WATCH_TEXT.indexOf('[IO.File]::WriteAllText($lockFile, [string]$PID)');
+    const takeAt = WATCH_TEXT.indexOf('Remove-Item -LiteralPath $nowFile -Force');
+    yes('the task takes the request off only once its run starts, so one that finds the game open waits',
+        lockAt > 0 && takeAt > lockAt && /\} elseif \(Test-Path -LiteralPath \$nowFile\) \{/.test(WATCH_TEXT) &&
+        /\$verdict = Get-WatchVerdict [^\n]* \(\[bool\]\$asked\)/.test(WATCH_TEXT));
+    yes('the steps asked for are the Deployment worktree\'s own file',
+        /if \(\$Steps\) \{ \$runArgs \+= @\('-Steps', \(Join-Path \$tree \$Steps\)\) \}/.test(WATCH_TEXT) && /\[string\]\$Steps = ''/.test(WATCH_TEXT));
+    const helper = read(path.join('scripts', 'dev', 'Get-AppContainerStore.ps1')) || '';
+    yes('the container is told by where a new folder lands, which it takes away again',
+        /New-Item -ItemType Directory -Path \$made/.test(helper) && /LocalCache\\Local\\' \+ \$name/.test(helper) &&
+        /finally \{\s*Remove-Item -LiteralPath \$made -Force\s*\}/.test(helper));
+    const pv = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+    if (pv.status === 0) {
+      const home = fs.mkdtempSync(path.join(os.tmpdir(), 'test-5197-container-'));
+      const local = path.join(home, '.local', 'share');
+      fs.mkdirSync(path.join(local, 'Packages', 'Some.App_x', 'LocalCache', 'Local'), { recursive: true });
+      const f = path.join(REPO_DIR, 'scripts', 'dev', 'Get-AppContainerStore.ps1').replace(/'/g, "''");
+      const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', ". '" + f + "'; 'STORE [' + (Get-AppContainerStore) + ']'"],
+        { encoding: 'utf8', timeout: 120000, env: Object.assign({}, process.env, { HOME: home, XDG_DATA_HOME: local }) });
+      const left = fs.readdirSync(local).filter(function (n) { return n.indexOf('thornswood-container-look-') === 0; });
+      yes('outside a container it says none and leaves nothing behind', /STORE \[\]/.test(r.stdout || '') && left.length === 0);
+      fs.rmSync(home, { recursive: true, force: true });
+    } else { console.log('SKIP  outside a container it says none (no pwsh)'); }
+  }
   // And the launcher says why. "Could not redirect" alone, with Junction's
   // reason dropped, is all One's log had to go on.
   const swap = read(path.join('launcher', 'app', 'Swap.cs'));
@@ -1307,7 +1354,12 @@ foreach ($scan in @(1,23,36)) {
       "'G ' + (V $d @() $false $false 30 $true)\n" +
       "'H ' + (V ([pscustomobject]@{ id = '8'; state = 'in_progress'; lines = @() }) @() $false $false 30 $false)\n" +
       "'I ' + (V $null @() $false $false 30 $false)\n" +
-      "'J ' + (V ([pscustomobject]@{ id = '9'; state = $null; lines = @() }) @() $false $false 30 $false)\n";
+      "'J ' + (V ([pscustomobject]@{ id = '9'; state = $null; lines = @() }) @() $false $false 30 $false)\n" +
+      "function W($dep, $started, $open, $locked, $idle, $going) { Get-WatchVerdict $dep $started $open $locked $idle 0 $going $true }\n" +
+      "'K ' + (W ([pscustomobject]@{ id = '7'; state = 'success'; lines = @('Real game run: failed. 22 of 38 steps passed.', 'Deployed') }) @('7') $false $false 0 $false)\n" +
+      "'L ' + (W $d @() $true $false 0 $false)\n" +
+      "'M ' + (W $d @() $false $true 0 $false)\n" +
+      "'N ' + (W $d @() $false $false 0 $true)\n";
     const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
     const out = (r.stdout || '') + (r.stderr || '');
     const said = function (k) { const m = new RegExp('^' + k + ' (.*)$', 'm').exec(out); return m ? m[1].trim() : ''; };
@@ -1321,6 +1373,9 @@ foreach ($scan in @(1,23,36)) {
     yes('not before the Deployment has succeeded', /in_progress, not success/.test(said('H')));
     yes('and not with no Deployment', said('I') === 'no Dev Deployment');
     yes('a Deployment with no status yet is said so, not with a blank', said('J') === 'the newest Dev Deployment has no status yet');
+    yes('a run somebody asked for is made on a Deployment that has had its run or was started for', said('K') === 'run');
+    yes('an asked-for run still waits for an open game, a locked PC and its own run going',
+        /launcher or the game is open/.test(said('L')) && /lock screen/.test(said('M')) && /still going/.test(said('N')));
     if (said('A') !== 'run') { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
   }
 }

@@ -827,6 +827,13 @@ foreach ($f in $files) {
   '{0,-22} {1:N0} bytes' -f $f, (Get-Item $p).Length | Write-Host
 }
 
+# This run's own scratch (#4264), in the repository's temp folder under a
+# name no other run shares, so a deploy from another checkout cannot write
+# over a file of this one's before it is sent. It goes when the run ends,
+# however it ends: an exit inside the try still runs the finally.
+$runScratch = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('deploy-server-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+$null = New-Item -ItemType Directory -Force -Path $runScratch
+try {
 if ($noBuild) {
   # ------------------------------------------ which build the live server runs
   #
@@ -1084,7 +1091,7 @@ if (Test-Path -LiteralPath $rp) {
   $pluginNames = @($settings.loadOrder | ForEach-Object { @(([string]$_) -split '[\\/]')[-1] })
   $remotePlugins = ($Root -replace '\\', '/') + '/plugins'
   $settings.loadOrder = @($pluginNames | ForEach-Object { "$remotePlugins/$_" })
-  $settingsForVps = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-server-settings-vps.json'
+  $settingsForVps = Join-Path $runScratch 'server-settings.json'
   # WriteAllText with an explicit encoding: Set-Content -Encoding UTF8 writes a
   # byte order mark under Windows PowerShell 5.1, and a BOM is not JSON to node.
   [IO.File]::WriteAllText($settingsForVps, ($settings | ConvertTo-Json -Depth 10), (New-Object Text.UTF8Encoding($false)))
@@ -1442,3 +1449,4 @@ if ($outside.Answered) {
   Write-Host ("  .\scripts\vps\Remote.ps1 `"Get-NetFirewallPortFilter -PolicyStore ActiveStore -Protocol TCP | Where-Object LocalPort -eq {0} | Get-NetFirewallRule | Format-Table DisplayName,Enabled,Action,Profile`"" -f $resPort) -ForegroundColor DarkGray
   exit 1
 }
+} finally { Remove-Item -LiteralPath $runScratch -Recurse -Force -ErrorAction SilentlyContinue }

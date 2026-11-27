@@ -32,15 +32,16 @@
        told the text mutes again.
     F  Staff silence: /silence alone says how it is used. Sam silences
        Brenna. The voice service is told, she is told how long, and her
-       /ooc reaches nobody. She cannot lift it; /unsilence from Sam does,
+       /roll reaches nobody. She cannot lift it; /unsilence from Sam does,
        and the voice service is told. Her personal switches are untouched
        by it.
     Z  No handler threw, no engine call the engine does not have was made,
        and no timer threw.
 
   A silence in a faction or business chat is the factions scenario's; how
-  long a silence lasts, and /ooc and /roll under one, are the chat
-  scenario's.
+  long a silence lasts, and /roll under one, are the chat scenario's. Her
+  /ooc under one is the voice service's, which says it and holds it back
+  (voice/tests/test-local-chat.js, #4238).
 
   Read only, apart from its temp folders, which it removes.
 
@@ -145,9 +146,9 @@ const sil = w.toVoice.slice(f0).filter(function (x) { return x.path === '/silenc
 yes('F1 the voice service is told, until 10 minutes from now (' + JSON.stringify(sil && sil.body) + ')',
     !!sil && Math.abs(sil.body.profiles[1000] - (w.now() + 600000)) < 5000);
 const aldisN = w.heard(ALDIS).length;
-const ooc = said(BRENNA, '/ooc can everybody hear me');
-yes('F2 her /ooc reaches nobody (' + ooc + ')', /^Staff have silenced you for another 10 minutes, so that did not reach anybody\.$/.test(ooc) &&
-    w.heardSince(ALDIS, aldisN).join(' ').indexOf('can everybody hear me') === -1);
+const roll = said(BRENNA, '/roll');
+yes('F2 her /roll reaches nobody (' + roll + ')', /^Staff have silenced you for another 10 minutes, so that did not reach anybody\.$/.test(roll) &&
+    w.heardSince(ALDIS, aldisN).join(' ').indexOf('Brenna rolls') === -1);
 const self = said(BRENNA, '/unsilence Brenna');
 yes('F3 she cannot lift it herself (' + self + ')', self === 'That one is not yours to run.' && told('/silenced').profiles[1000] > w.now());
 yes('F4 her own switches are untouched by it', hiddenRow(BRENNA, 1001).muted === true && hiddenRow(BRENNA, 1002).nameOff === true);
@@ -155,8 +156,9 @@ const lifted = said(SAM, '/unsilence Brenna');
 yes('F5 /unsilence from Sam lifts it (' + lifted + ')', lifted === 'Brenna can speak again.' &&
     w.heard(BRENNA).indexOf('Staff have let you speak again.') !== -1);
 yes('F5 and the voice service is told nobody is silenced (' + JSON.stringify(told('/silenced')) + ')', told('/silenced').profiles[1000] === undefined);
-const after = said(BRENNA, '/ooc sorry about that');
-yes('F6 and her /ooc is heard again', w.heard(ALDIS).join(' ').indexOf('sorry about that') !== -1 && !/silenced/.test(after));
+const aldisBack = w.heard(ALDIS).length;
+const after = said(BRENNA, '/roll');
+yes('F6 and her /roll is heard again', w.heardSince(ALDIS, aldisBack).join(' ').indexOf('Brenna rolls') !== -1 && !/silenced/.test(after));
 
 // ------------------------------------------------------------- Z. clean --
 yes('Z no handler threw and nothing the engine would refuse was done (' + w.faults.slice(0, 3).join(' | ') + ')', w.faults.length === 0);

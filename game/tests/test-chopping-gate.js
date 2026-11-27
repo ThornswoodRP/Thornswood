@@ -130,7 +130,7 @@ yes('ALLOW, NO_PROFESSION, STATIONS, ITEMS and the bench tables read',
 // Skyrim.esm 00. Positions are the placed references' own, from the same read.
 const REFS = {
   // Tamriel, a common block on the road out of Solitude, nowhere near
-  // Djinn's three points (test-chopping-blocks.js has it at the same spot).
+  // Djinn's three points.
   0x000b3949: { base: COMMON, pos: [-75967.2734, 90795.7109, -13881.7363] },
   // The three ash blocks, DLC2SolstheimWorld.
   0x0402b1a4: { base: ASH, pos: [29909.4, 37515.2, 422.5] },

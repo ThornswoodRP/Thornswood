@@ -48,6 +48,10 @@ function liftOn(first) {
 const came = lift('  function cameBack(now) {');
 const onLoad = liftOn("  sp.on('loadGame', guard('world load', () => {");
 const onPlace = liftOn("  sp.on('update', guard('place', () => {");
+// The ground under the feet and the place word the tick asks for (#4653).
+const groundAt = src.indexOf('  const SNOW_GROUND');
+const groundTo = src.indexOf('\n  }\n', src.indexOf('  function placeKind(')) + 4;
+const ground = groundAt >= 0 && groundTo > groundAt ? src.slice(groundAt, groundTo) : '';
 yes('cameBack is in the plugin', came !== null);
 yes('and the world load it waits on', onLoad !== null);
 yes('the place report samples the world', onPlace !== null);
@@ -100,6 +104,7 @@ function game() {
     on: function (name, fn) { handlers[name] = fn; },
     Game: { getPlayer: function () { return g.player; } },
     Weather: { getCurrentWeather: () => null },
+    callNative: () => '',
     mpClientPlugin: { isConnected: function () { return g.connected; } }
   };
   const gameMenuOpen = function () {
@@ -115,7 +120,7 @@ function game() {
     'let menuPhase = 0;\nlet loadedOutOfWorld = 0;\n' +
     'let placeAt = 0, placeSaid = "", placeFire = -1, placeBeat = 0, fireFlame = -1;\n' +
     'const FIRE_INSIDE = 90, PLACE_FAST = 250, PLACE_SLOW = 1000, PLACE_BEAT = 30000;\n' +
-    'const say = () => {};\n' + onLoad + '\n' + came + '\n' + onPlace +
+    'const say = () => {};\n' + ground + '\n' + onLoad + '\n' + came + '\n' + onPlace +
     '\nreturn { frame: cameBack, menuPhase: function () { return menuPhase; } };');
   g.api = fn(sp, g.world, gameMenuOpen, choiceUp, menuGone, log, guard, clockDate, 7,
     line => g.placeReports.push(line), () => g.fireDistance);

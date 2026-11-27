@@ -78,7 +78,12 @@ vm.createContext(fixtureContext);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'test-merchant-trading.js'),'utf8').split('const roleMarket=')[0],fixtureContext);
 for(const merchant of roster.merchants.filter(row=>row.bookHold==='whiterun')) {
   const f=fixture(),descs=new Map(),records=new Map();
-  function id(desc) {if(desc==='a')return 10;const value=desc==='a:Skyrim.esm'?10:f.resolve(desc);descs.set(value,desc);return value;}
+  // The trading character is a runtime form, 0xff000000 and its local hex, whose formDesc is that
+  // local hex alone (#2870, formIdOf in game/merchant-commission-state.js). It was form 10 here,
+  // which is Skyrim's Lockpick (a:Skyrim.esm): once the forge made lockpicks (#4646) a Whiterun
+  // stage stocked one, and the Lockpick could not resolve to its own id.
+  const character=0xff00000a,characterDesc='a';
+  function id(desc) {if(desc===characterDesc)return character;const value=f.resolve(desc);descs.set(value,desc);return value;}
   for(const row of roster.merchants) {
     const base=id(row.base),reference=id(row.reference),data=Buffer.alloc(4);data.writeUInt32LE(base);
     records.set(base,{id:base,type:'NPC_',flags:0,fields:[]});
@@ -86,8 +91,8 @@ for(const merchant of roster.merchants.filter(row=>row.bookHold==='whiterun')) {
   }
   for(const [desc,type] of Object.entries(stage.types)){const value=id(desc);records.set(value,{id:value,type,flags:0,fields:[]});}
   const box=fixtureContext.worldOf({on:true}),merchantId=id(merchant.reference);
-  // The trading character (10) is a runtime form whose formDesc is its local hex alone (#2870).
-  const native={getIdFromDesc:id,getDescFromId:value=>value===10?'a':descs.get(value) || value.toString(16)+':Skyrim.esm',
+  box.actors[character]=box.actors[10];delete box.actors[10];
+  const native={getIdFromDesc:id,getDescFromId:value=>value===character?characterDesc:descs.get(value) || value.toString(16)+':Skyrim.esm',
     lookupEspmRecordById:value=>({record:records.get(value),toGlobalRecordId:raw=>raw}),
     validateInventoryTransaction:()=>true,makeProperty(){},getActorRuntimeIdentity:()=> '100',
     getNpcAIState:value=>box.actor(value===merchantId?1:value),
@@ -98,14 +103,14 @@ for(const merchant of roster.merchants.filter(row=>row.bookHold==='whiterun')) {
   const allowed=tables[merchant.role].supply[0],forbidden=Object.values(tables).flatMap(row=>row.buy)
     .find(desc=>!tables[merchant.role].buy.includes(desc));
   const goods=[allowed,forbidden],names=new Map(goods.map((desc,i)=>[desc,'Test Good '+i]));
-  box.inv[10]={[id(allowed)]:10,[id(forbidden)]:10,15:100};
+  delete box.inv[10];box.inv[character]={[id(allowed)]:10,[id(forbidden)]:10,15:100};
   const purses=fixtureContext.memoryPurses([[merchantId,{version:1,reference:merchant.reference,base:merchant.base,
     purse:250,stock:[],supply:{}}]]);
   const g={__thornswoodBooks:{catalog:()=>goods.map(desc=>({name:names.get(desc)})),guildPrice:()=>({buy:2,sell:3})},
     __thornswoodResolveItem:name=>{const desc=goods.find(desc=>names.get(desc)===name);return desc?{baseId:id(desc),name}:null;}};
   const trading=bundleContext.bundle.installMerchantTrading({mp:native,g,purses,catalog:prepared.catalog,
     roleTables:prepared.roleTables,timers:{setTimeout:()=>1,clearTimeout(){}}});
-  const command=(...parts)=>trading.command({actorId:10,profileId:7,parts:['/merchant',...parts]});
+  const command=(...parts)=>trading.command({actorId:character,profileId:7,parts:['/merchant',...parts]});
   const purseBeforeOpen=purses.read(merchantId),unavailable=command(merchantId.toString(16));
   assert.equal(unavailable.view,null);
   assert.match(unavailable.text,/Merchant food aging is unavailable/);

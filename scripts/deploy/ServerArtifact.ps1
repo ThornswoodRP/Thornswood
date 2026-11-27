@@ -253,7 +253,7 @@ function Test-ThornswoodServerBuildArtifact {
     $metaSum = ''
     if ($null -ne $meta) { $metaSum = ([string](Get-ThornswoodServerRecordValue $meta 'recordSha256')).ToLowerInvariant() }
     if ($metaSum -ne $sum) { throw ("$Zip is a build of another record than $Record (its .json names record " + $(if ($metaSum) { $metaSum.Substring(0, 12) } else { 'none' }) + ', the commit''s is ' + $sum.Substring(0, 12) + '). Nothing was sent.') }
-    $scratch = Join-Path ([IO.Path]::GetTempPath()) ('ts-server-build-' + [Guid]::NewGuid().ToString('N'))
+    $scratch = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('ts-server-build-' + [Guid]::NewGuid().ToString('N'))
     $null = [IO.Directory]::CreateDirectory($scratch)
     try {
         $got = Expand-ThornswoodStoredServerBuild -Store (Split-Path -Parent $Zip) -Record $rec -RecordSum $sum -Into $scratch
