@@ -678,10 +678,10 @@
     // head
     '#ts-skills .head{grid-column:1/3;min-width:0;display:flex;align-items:flex-end;justify-content:space-between;gap:32px;',
     'padding:22px 32px 16px;border-bottom:1px solid rgba(198,170,109,.22)}',
-    '#ts-skills .eyebrow{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:rgba(198,170,109,.75);margin-bottom:6px}',
+    '#ts-skills .eyebrow{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:rgba(198,170,109,.85);margin-bottom:6px}',
     '#ts-skills .title{font-size:26px;color:#f6e9c8;line-height:1.1;white-space:nowrap}',
     '#ts-skills .who{flex:0 1 560px;min-width:0;text-align:right;font-size:13.5px;color:#d9cfb4;line-height:1.5}',
-    '#ts-skills .who .dim{color:rgba(217,207,180,.6);font-style:italic}',
+    '#ts-skills .who .dim{color:rgba(217,207,180,.7);font-style:italic}',
     '#ts-skills .who .pts{color:#e9d19b}',
     // nav: the first row's text sits 22px under the head line, level with the body's lead,
     // and 32px in from the panel's edge, level with the head and the body
@@ -690,19 +690,23 @@
     '#ts-skills .navrow.on{border-left-color:#e9d19b;background:rgba(120,94,44,.24)}',
     '#ts-skills .navrow .k{font-size:16px;color:#d9cfb4;letter-spacing:.02em}',
     '#ts-skills .navrow.on .k{color:#f6e9c8}',
-    '#ts-skills .navrow .v{font-size:12.5px;color:rgba(217,207,180,.58);font-style:italic;margin-top:3px}',
+    '#ts-skills .navrow .v{font-size:12.5px;color:rgba(217,207,180,.7);font-style:italic;margin-top:3px}',
     '#ts-skills .navrow .v.set{color:#9fcf92;font-style:normal}',
     '#ts-skills .navrow .v.need{color:#e9d19b}',
     '#ts-skills .navrow .v.chosen{color:#e9d19b;font-style:normal}',   // a soft choice while creating, gold like .tag.gold
     // body
     '#ts-skills .body{grid-column:2;min-width:0;padding:22px 32px 18px;overflow:auto}',
-    '#ts-skills .lead{font-size:13.5px;line-height:1.55;color:rgba(217,207,180,.66);font-style:italic;margin:0 0 16px;max-width:680px}',
+    '#ts-skills .lead{font-size:13.5px;line-height:1.55;color:rgba(217,207,180,.7);font-style:italic;margin:0 0 16px;max-width:680px}',
     '#ts-skills .cards{display:grid;grid-template-columns:1fr;gap:9px}',
     '#ts-skills .cards.three{grid-template-columns:repeat(3,1fr)}',
     '#ts-skills .card{border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);padding:13px 18px 12px;position:relative;cursor:pointer}',
     '#ts-skills .card.at{border-color:rgba(198,170,109,.55);box-shadow:inset 3px 0 0 0 #c6aa6d}',
     '#ts-skills .card.mine{border-color:rgba(160,205,150,.85);background:rgba(120,170,115,.13)}',
-    '#ts-skills .card.off{opacity:.42}',
+    // A card you cannot take now is quieter, but still reads at 4.5 to 1 (#4474):
+    // its frame fades, and its words take the faint parchment rather than the
+    // whole card going to 42 percent, which left them at 2.2 to 1.
+    '#ts-skills .card.off{border-color:rgba(198,170,109,.14);background:rgba(0,0,0,.10)}',
+    '#ts-skills .card.off .name,#ts-skills .card.off .desc,#ts-skills .card.off .inn{color:rgba(217,207,180,.7)}',
     '#ts-skills .card.chosen{border-color:#e9d19b;background:rgba(201,162,75,.16)}',
     '#ts-skills .spell.on{background:rgba(201,162,75,.16)}',
     '#ts-skills .spell.mine{background:rgba(120,170,115,.11)}',
@@ -713,21 +717,21 @@
     '#ts-skills .card.later{border-style:dashed}',
     '#ts-skills .card .name{font-size:16.5px;color:#f6e9c8;display:flex;align-items:baseline;gap:12px}',
     '#ts-skills .card .desc{font-size:13px;line-height:1.5;color:rgba(217,207,180,.78);margin-top:4px}',
-    '#ts-skills .card .inn{font-size:12.5px;color:rgba(217,207,180,.6);font-style:italic;margin-top:3px}',
+    '#ts-skills .card .inn{font-size:12.5px;color:rgba(217,207,180,.7);font-style:italic;margin-top:3px}',
     '#ts-skills .card .guest{display:flex;align-items:center;gap:12px;font-size:13px;color:#d9cfb4;margin-top:5px}',
-    '#ts-skills .card .guest .stop{border:1px solid rgba(198,170,109,.55);color:#e9d19b;padding:1px 9px;font-size:11.5px;cursor:pointer}',
+    '#ts-skills .card .guest .stop{border:1px solid rgba(198,170,109,.55);color:#e9d19b;padding:1px 9px;font-size:12px;cursor:pointer}',
     // Take on and End on Masters and apprentices (#1634); End asks twice, in Close Skyrim's colours.
     '#ts-skills .card .act{flex:0 0 auto;margin-left:auto;border:1px solid rgba(198,170,109,.55);color:#e9d19b;padding:1px 9px;',
-    'font-size:11.5px;white-space:nowrap;cursor:pointer}',
+    'font-size:12px;white-space:nowrap;cursor:pointer}',
     '#ts-skills .card .act.armed{border-color:#e9a27a;color:#f6c9b0;background:rgba(120,40,30,.45)}',
     // The Office page (#1638): its rows are guest rows, and these wrap.
     '#ts-skills .card .guest.wrap{flex-wrap:wrap;gap:8px}',
     '#ts-skills .card .guest .who{flex:1;min-width:160px}',
-    '#ts-skills .card .guest .dim{color:rgba(217,207,180,.5)}',
+    '#ts-skills .card .guest .dim{color:rgba(217,207,180,.7)}',
     '#ts-skills .card .guest input{width:80px;font-family:inherit;font-size:13px;color:#d9cfb4;background:rgba(0,0,0,.25);border:1px solid rgba(198,170,109,.42);padding:1px 6px}',
-    '#ts-skills .tag{margin-left:auto;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:#9fcf92;white-space:nowrap}',
+    '#ts-skills .tag{margin-left:auto;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#9fcf92;white-space:nowrap}',
     '#ts-skills .tag.gold{color:#e9d19b}',
-    '#ts-skills .tag.dim{color:rgba(217,207,180,.5)}',
+    '#ts-skills .tag.dim{color:rgba(217,207,180,.7)}',
     // halves and schools inside an open profession card
     '#ts-skills .halves{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px}',
     '#ts-skills .halves.five{grid-template-columns:repeat(5,1fr)}',
@@ -739,18 +743,18 @@
     '#ts-skills .half.on{border-color:#e9d19b;background:rgba(201,162,75,.20)}',
     '#ts-skills .half.mine{border-color:rgba(160,205,150,.85);background:rgba(120,170,115,.13)}',
     '#ts-skills .half .hn{font-size:14.5px;color:#f6e9c8}',
-    '#ts-skills .half .hd{font-size:12px;color:rgba(217,207,180,.66);margin-top:2px}',
-    '#ts-skills .half .hr{font-size:11px;color:#9fcf92;letter-spacing:.12em;text-transform:uppercase;margin-top:4px}',
+    '#ts-skills .half .hd{font-size:12px;color:rgba(217,207,180,.7);margin-top:2px}',
+    '#ts-skills .half .hr{font-size:12px;color:#9fcf92;letter-spacing:.12em;text-transform:uppercase;margin-top:4px}',
     '#ts-skills .perk{font-size:12.5px;line-height:1.5;color:rgba(198,170,109,.85);margin-top:10px;padding-top:8px;border-top:1px solid rgba(198,170,109,.18)}',
     // the tree
     '#ts-skills .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}',
-    '#ts-skills .colhead{font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;color:rgba(198,170,109,.85);',
+    '#ts-skills .colhead{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:rgba(198,170,109,.85);',
     'padding-bottom:8px;border-bottom:1px solid rgba(198,170,109,.22);margin-bottom:6px}',
     '#ts-skills .skill{display:grid;grid-template-columns:1fr auto auto;grid-template-rows:auto auto;column-gap:10px;align-items:center;',
     'padding:9px 6px 8px;border:1px solid transparent}',
     '#ts-skills .skill.at{border-color:transparent;box-shadow:inset 3px 0 0 0 rgba(198,170,109,.75)}',
     '#ts-skills .skill .sn{font-size:15px;color:#f6e9c8}',
-    '#ts-skills .skill .sd{grid-column:1/4;font-size:12px;color:rgba(217,207,180,.6);line-height:1.45;margin-top:3px}',
+    '#ts-skills .skill .sd{grid-column:1/4;font-size:12px;color:rgba(217,207,180,.7);line-height:1.45;margin-top:3px}',
     '#ts-skills .skill .sd.lit{color:#9fcf92}',
     '#ts-skills .pips{display:flex;gap:4px}',
     '#ts-skills .pip{width:10px;height:10px;border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.2)}',
@@ -766,7 +770,7 @@
     // so neither is drawn without the other.
     '#ts-skills .progress{max-width:680px;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid rgba(198,170,109,.18)}',
     '#ts-skills .prow{display:flex;align-items:baseline;gap:18px;padding:4px 0}',
-    '#ts-skills .prow .pk{flex:0 0 150px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;color:rgba(198,170,109,.85)}',
+    '#ts-skills .prow .pk{flex:0 0 150px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:rgba(198,170,109,.85)}',
     '#ts-skills .prow .pv{flex:0 0 auto;min-width:0;font-size:14px;color:#d9cfb4}',
     '#ts-skills .prow .pbar{flex:1 1 auto;min-width:60px;max-width:260px;height:8px;align-self:center;',
     'border:1px solid rgba(198,170,109,.45);background:rgba(0,0,0,.35)}',
@@ -777,7 +781,7 @@
     '#ts-skills .plus.off{opacity:.25;pointer-events:none}',
     // A filled perk a person starts (Font of Magic): under the perk's words.
     '#ts-skills .skill .use{grid-column:1/4;justify-self:start;margin-top:6px;padding:3px 14px;border:1px solid rgba(198,170,109,.55);',
-    'color:#e9d19b;background:rgba(0,0,0,.25);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer}',
+    'color:#e9d19b;background:rgba(0,0,0,.25);font-size:12px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer}',
     '#ts-skills .skill .use.off{opacity:.35;pointer-events:none}',
     // foot: the hint on the left takes what is left and wraps; the buttons never shrink
     '#ts-skills .foot{grid-column:1/3;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:24px;',
@@ -807,27 +811,27 @@
     // review, while creating: one row per choice, the key on the left
     '#ts-skills .review{max-width:680px;margin:2px 0 18px}',
     '#ts-skills .rrow{display:flex;align-items:baseline;gap:24px;padding:11px 0;border-bottom:1px solid rgba(198,170,109,.18)}',
-    '#ts-skills .rrow .rk{flex:0 0 150px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;color:rgba(198,170,109,.85)}',
+    '#ts-skills .rrow .rk{flex:0 0 150px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:rgba(198,170,109,.85)}',
     '#ts-skills .rrow .rv{flex:1 1 auto;min-width:0;font-size:16px;color:#f6e9c8}',
     '#ts-skills .rrow .rv.chosen{color:#e9d19b}',
     '#ts-skills .rrow .rv.set{color:#9fcf92}',
-    '#ts-skills .rrow .rv.dim{color:rgba(217,207,180,.58);font-style:italic}',
+    '#ts-skills .rrow .rv.dim{color:rgba(217,207,180,.7);font-style:italic}',
     '#ts-skills .rrow .rv.need{color:#e9d19b;font-style:italic}',
     // the spell book
     '#ts-skills .spellbar{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin:0 0 12px}',
     '#ts-skills .spellpts{font-size:14px;color:#e9d19b}',
-    '#ts-skills .spellnote{font-size:12px;font-style:italic;color:rgba(217,207,180,.55)}',
+    '#ts-skills .spellnote{font-size:12px;font-style:italic;color:rgba(217,207,180,.7)}',
     '#ts-skills .spellcols{grid-template-columns:repeat(2,minmax(0,1fr))}',
     // the school's name on the left, the server's rank in it on the right
     '#ts-skills .spellcols .colhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px}',
-    '#ts-skills .rankhead{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(217,207,180,.5);margin:10px 0 4px}',
+    '#ts-skills .rankhead{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:rgba(217,207,180,.7);margin:10px 0 4px}',
     '#ts-skills .spell{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px;',
     'border:1px solid transparent;cursor:pointer}',
     '#ts-skills .spell.at{border-color:transparent;box-shadow:inset 3px 0 0 0 rgba(198,170,109,.75)}',
     '#ts-skills .spell.on .spellname{color:#f6e9c8}',
     '#ts-skills .spell.mine .spellname{color:#9fcf92}',
     '#ts-skills .spellname{font-size:14px}',
-    '#ts-skills .spell.shut .spellname{color:rgba(217,207,180,.38)}',
+    '#ts-skills .spell.shut .spellname{color:rgba(217,207,180,.7)}',
     '#ts-skills .spell.shut{cursor:default}',
     // the recipe book, written against the spell book's rules above so the two
     // sections read as one panel: the same two columns, the same column head
@@ -839,11 +843,11 @@
     // there can ever be and three across fits them without a second row.
     '#ts-skills .bookcols.wide{grid-template-columns:repeat(3,minmax(0,1fr))}',
     '#ts-skills .bookcols .colhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px}',
-    '#ts-skills .bookhow{font-size:12px;font-style:italic;color:rgba(217,207,180,.58);line-height:1.45;margin:8px 0 2px}',
+    '#ts-skills .bookhow{font-size:12px;font-style:italic;color:rgba(217,207,180,.7);line-height:1.45;margin:8px 0 2px}',
     '#ts-skills .bookopen{font-size:13px;color:#e9d19b;margin:0 0 6px}',
     '#ts-skills .bookrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px}',
     '#ts-skills .bookrow .bn{font-size:14px;color:#f6e9c8}',
-    '#ts-skills .bookrow .bv{font-size:12.5px;color:rgba(217,207,180,.66);white-space:nowrap}',
+    '#ts-skills .bookrow .bv{font-size:12.5px;color:rgba(217,207,180,.7);white-space:nowrap}',
     '#ts-skills .bookwhy{font-size:12.5px;line-height:1.5;color:rgba(217,207,180,.7);margin:8px 0 0}',
     /*
       Scrollbars, here and everywhere else in this window.
@@ -866,7 +870,7 @@
     // the K, drawn as a key cap beside Close
     '#ts-skills .key{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;',
     'border:1px solid rgba(233,209,155,.55);border-bottom-width:2px;border-radius:3px;background:rgba(0,0,0,.35);',
-    'font-size:11px;letter-spacing:0;line-height:1;color:#e9d19b}'
+    'font-size:12px;letter-spacing:0;line-height:1;color:#e9d19b}'
   ].join('');
 
   var style = document.createElement('style');
@@ -3714,6 +3718,7 @@
         plus.title = (full && allPlaced) ? s.name + ' came with what you chose.'
                    : 'Put a point in ' + s.name +
                      (given ? '. ' + given + ' of these came with what you chose and do not move.' : '');
+        if (/ off$/.test(plus.className)) plus.setAttribute('aria-disabled', 'true');
         plus.onclick = function (ev) { ev.stopPropagation(); spend(s.key); };
         row.appendChild(plus);
         var clock = full ? perkClock(PERK_OF[s.key]) : '';
@@ -3721,6 +3726,7 @@
         if (full && PERK_OF[s.key] === 'fontofmagic') {
           var use = el('div', 'use' + (perkReady('fontofmagic') && !perkWaiting() ? '' : ' off'), 'Use');
           use.title = 'Start Font of Magic';
+          if (/ off$/.test(use.className)) use.setAttribute('aria-disabled', 'true');
           use.onclick = function (ev) { ev.stopPropagation(); usePerk('fontofmagic'); };
           row.appendChild(use);
         }
@@ -3765,6 +3771,8 @@
     elStatus.className = 'status' + (statusKind ? ' ' + statusKind : '');
     elStatus.textContent = line;
     elConfirm.className = 'tsbtn primary' + (can ? '' : ' off');
+    // What is shown faded and takes no press says so, as a disabled button does (#4474).
+    if (can) elConfirm.removeAttribute('aria-disabled'); else elConfirm.setAttribute('aria-disabled', 'true');
     elConfirm.textContent = label;
     elConfirm.style.display = showConfirm ? '' : 'none';
     elClose.style.display = '';

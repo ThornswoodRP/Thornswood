@@ -97,7 +97,7 @@
     '#ts-select .head{padding:32px 44px 20px;border-bottom:1px solid rgba(198,170,109,.3);display:flex;align-items:flex-end;justify-content:space-between}',
     '#ts-select .eyebrow{font-size:13px;letter-spacing:.42em;text-transform:uppercase;color:#c6aa6d;margin-bottom:10px}',
     '#ts-select .title{font-size:42px;color:#f6e9c8;line-height:1.05}',
-    '#ts-select .count{font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:rgba(198,170,109,.7);padding-bottom:8px}',
+    '#ts-select .count{font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:rgba(198,170,109,.85);padding-bottom:8px}',
     '#ts-select .list{padding:22px 44px 8px;overflow:auto;display:grid;gap:14px}',
     /*
       Scrollbars, for this page and for the window it sits in. The browser's
@@ -120,7 +120,7 @@
     '#ts-select .slot.at::before{background:#e9d19b}',
     '#ts-select .slot.empty{border-style:dashed;background:rgba(0,0,0,.18)}',
     '#ts-select .slot.empty.at{background:rgba(120,94,44,.22)}',
-    '#ts-select .slotno{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:rgba(198,170,109,.7);margin-bottom:8px;display:flex;gap:14px}',
+    '#ts-select .slotno{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:rgba(198,170,109,.85);margin-bottom:8px;display:flex;gap:14px}',
     '#ts-select .slotno .tag{color:#e9d19b}',
     '#ts-select .slotno .tag.gone{color:#f6c9b0}',
     '#ts-select .slot.gone{border-style:dashed}',
@@ -129,18 +129,18 @@
     '#ts-select .name{font-size:32px;color:#f6e9c8;line-height:1.1;padding-right:56px}',
     '#ts-select .name.faint{color:rgba(246,233,200,.62);font-style:italic}',
     '#ts-select .stats{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:18px;margin-top:14px}',
-    '#ts-select .stat .k{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:rgba(198,170,109,.65);margin-bottom:4px}',
+    '#ts-select .stat .k{font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:rgba(198,170,109,.85);margin-bottom:4px}',
     '#ts-select .stat .v{font-size:17px;color:#e4d9bf}',
-    '#ts-select .stat .v.dim{color:rgba(228,217,191,.5)}',
+    '#ts-select .stat .v.dim{color:rgba(228,217,191,.7)}',
     '#ts-select .make{font-size:26px;color:#e9d19b;margin-top:2px}',
-    '#ts-select .sub{font-size:15px;line-height:1.5;color:rgba(228,217,191,.6);margin-top:8px;max-width:720px}',
+    '#ts-select .sub{font-size:15px;line-height:1.5;color:rgba(228,217,191,.7);margin-top:8px;max-width:720px}',
     // the delete icon and the confirm strip
     '#ts-select .bin{position:absolute;right:16px;top:16px;width:48px;height:48px;display:grid;place-items:center;border:1px solid rgba(198,170,109,.25);',
-    'color:rgba(228,217,191,.55)}',
+    'color:rgba(228,217,191,.7)}',
     '#ts-select .bin svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}',
     '#ts-select .confirm{position:absolute;inset:0;background:rgba(40,12,10,.96);display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 30px}',
     '#ts-select .confirm .q{font-size:18px;color:#f6e9c8;line-height:1.4}',
-    '#ts-select .confirm .q small{display:block;font-size:13.5px;color:rgba(228,217,191,.6);margin-top:4px}',
+    '#ts-select .confirm .q small{display:block;font-size:13.5px;color:rgba(228,217,191,.7);margin-top:4px}',
     '#ts-select .confirm .b{display:flex;gap:10px}',
     '#ts-select .btn2{border:1px solid rgba(198,170,109,.6);padding:10px 22px;font-size:13px;letter-spacing:.2em;text-transform:uppercase;',
     'color:#e9d19b;background:rgba(0,0,0,.3);white-space:nowrap}',
@@ -148,7 +148,7 @@
     // the foot
     '#ts-select .foot{padding:16px 44px 30px}',
     '#ts-select .status{font-size:15px;color:rgba(228,217,191,.7);min-height:1.5em;margin-bottom:12px;text-align:center}',
-    '#ts-select .hint{font-size:13px;color:rgba(228,217,191,.45);margin-top:4px;text-align:center;letter-spacing:.06em}',
+    '#ts-select .hint{font-size:13px;color:rgba(228,217,191,.7);margin-top:4px;text-align:center;letter-spacing:.06em}',
     // The line at the menu while the world is full (#481): the place, big, in
     // place of the slots, which cannot be played until it is their turn.
     '#ts-select .line{display:none;text-align:center;padding:34px 44px 10px}',
@@ -171,8 +171,8 @@
     '#ts-select .quit{opacity:.72}',
     // Show the sealed scroll next time: an inked tick box, quieter than Close the game.
     '#ts-select .backrow{display:flex;justify-content:center;margin-top:16px;margin-bottom:4px}',
-    '#ts-select .backbox{display:inline-flex;align-items:center;gap:9px;padding:5px 13px 5px 10px;background:rgba(0,0,0,.62);',
-    'border:1px solid rgba(150,82,64,.32);font-style:italic;font-size:14px;letter-spacing:.02em;color:#a2584a;',
+    '#ts-select .backbox{display:inline-flex;align-items:center;gap:9px;padding:5px 13px 5px 10px;background:rgba(0,0,0,.88);',
+    'border:1px solid rgba(150,82,64,.32);font-style:italic;font-size:14px;letter-spacing:.02em;color:#cc7864;',
     'text-shadow:0 1px 0 rgba(0,0,0,.8)}',
     '#ts-select .backbox input{-webkit-appearance:none;appearance:none;flex:none;width:15px;height:15px;margin:0;',
     'border:1.5px solid rgba(162,88,74,.7);border-radius:1px 3px 1px 3px;background:rgba(0,0,0,.45)}',
