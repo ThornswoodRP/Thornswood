@@ -1,9 +1,10 @@
 <#
   Reset-Character.ps1
 
-  Throws away one character on a game server, so the next time that person
-  joins, creation runs from the top. Works against a server on the VPS, dev or
-  main, or against a server on this machine.
+  Throws away one character, named by its form id, on the server named
+  (-Server dev or main, or -UseLocal), so the next time that person joins,
+  creation runs from the top. It asks for RESET first, and stops with nothing
+  touched while anybody is in the world (#4173).
 
       .\Reset-Character.ps1 -Server dev -Character ff000a01
       .\Reset-Character.ps1 -Server main -Character ff000a01
@@ -133,7 +134,7 @@ if ($Look -and $Running -ne 'no') {
     $settings = Join-Path $Root 'server-settings.json'
     $dataDir = 'data'
     try {
-        $cfg = [IO.File]::ReadAllText($settings) -replace '^﻿', '' | ConvertFrom-Json -ErrorAction Stop
+        $cfg = [IO.File]::ReadAllText($settings) -replace ('^' + [char]0xFEFF), '' | ConvertFrom-Json -ErrorAction Stop
         if ($cfg -and $cfg.dataDir) { $dataDir = [string]$cfg.dataDir }
     }
     catch { Write-Host ('STOP. ' + $settings + ' will not read (' + $_.Exception.Message + '), so who is on is not known. Nothing was stopped or thrown away.'); exit 1 }
@@ -182,7 +183,7 @@ foreach ($n in $chars.notes) { Write-Host ("$n" -split '\|', 2)[1] }
 $mine = @()
 $there = @()
 foreach ($p in $chars.files) {
-    $o = [IO.File]::ReadAllText($p) -replace '^﻿', '' | ConvertFrom-Json
+    $o = [IO.File]::ReadAllText($p) -replace ('^' + [char]0xFEFF), '' | ConvertFrom-Json
     $id = ConvertFrom-ThornswoodFormDesc $o.formDesc
     $name = ''
     if ($o.appearanceDump -and $o.appearanceDump.name) { $name = [string]$o.appearanceDump.name }
