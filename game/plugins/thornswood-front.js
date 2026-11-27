@@ -9417,7 +9417,7 @@
     let pc = null;
     try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
     if (!pc) { return false; }
-    try { globalThis.__thornswoodInWorld = true; } catch (e) { }
+    try { globalThis.__thornswoodInWorld = true; } catch (e) { /* a plain property of globalThis, which nothing here locks */ }
     log('back in the world as profile', PROFILE, Math.round((now - loadedOutOfWorld) / 1000) + 's after it loaded');
     loadedOutOfWorld = 0;
     if (choiceUp()) { menuGone(); }
