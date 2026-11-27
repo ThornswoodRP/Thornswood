@@ -127,8 +127,10 @@ function Head($m) { Write-Host ''; Write-Host $m -ForegroundColor Cyan; Write-Ho
 function Done([int]$code) { Write-Host ''; if (-not $NoPause) { [void](Read-Host 'Enter to close') }; exit $code }
 function Die($m) { Write-Host ''; Write-Host "STOP. $m" -ForegroundColor Red; Done 1 }
 
+# The box's answer as lines, the empty ones left out. A warning ssh prints
+# stays in, so one that starts is seen (#1043, #4385).
 function Clean($lines) {
-    @($lines | ForEach-Object { [string]$_ } | Where-Object { $_ -and $_ -notmatch 'post-quantum|store now, decrypt later|openssh\.com/pq\.html' })
+    @($lines | ForEach-Object { [string]$_ } | Where-Object { $_ })
 }
 
 # The list as the box script takes it: base64 of UTF-8 JSON, so no name's

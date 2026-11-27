@@ -102,8 +102,10 @@ $GhVersion = '2.89.0'
 $GhSha = 'F3326F6406C98C99701B257D77E2B040EEDF83D0176C2C2E9809AA339CEB467E'
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $Here)
 
+# The box's answer as lines, the empty ones left out. A warning ssh prints
+# stays in, so one that starts is seen (#1043, #4385).
 function Clean($lines) {
-    @($lines | ForEach-Object { "$_".Trim() } | Where-Object { $_ -and $_ -notmatch 'post-quantum|store now, decrypt later|openssh\.com/pq\.html' })
+    @($lines | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
 }
 
 # gh, with a JSON body on its standard input when there is one.
