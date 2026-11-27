@@ -10,15 +10,11 @@
 // What it holds, running the real functions out of game/gamemode.js over a
 // fake mp and a fake game:
 //
-//   - RECIPES_SET_IN_GAME is recost.json's notCopied, and every recipe of a
-//     never-copied plugin that burns a charcoal or takes a handle (#6726),
-//     with those on top, and Build-Recost.py --check says the block is what
-//     the rule gives;
+//   - RECIPES_SET_IN_GAME is recost.json's notCopied, and Build-Recost.py
+//     --check says the block is what the rule gives;
 //   - handRecipeCounts hands every recipe's inputs once a load;
 //   - the owner script sets each count on a record with the measured inputs,
-//     coins to 0, adds an input the record does not name through the fork's
-//     setCraftingInput, leaves a different record alone, and acts once a
-//     stamp;
+//     coins to 0, leaves a different record alone, and acts once a stamp;
 //   - recipeSetInGame names a recipe from its output, bench and exactly the
 //     new counts, and nothing else;
 //   - onCraft goes on with that recipe, refuses the mod's own counts, and the
@@ -56,7 +52,6 @@ const recost = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'recos
 const manifest = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'last-plugin.json'), 'utf8'));
 const policy = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'last-plugin-policy.json'), 'utf8'));
 const recipes = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'recipes.json'), 'utf8')).recipes;
-const fuel = require(path.join(REPO, 'scripts', 'dev', 'Build-FuelTable.js')).read();
 
 const BLOCK = take('var RECIPES_SET_IN_GAME = ', ';\n');
 const FLOOR = take('var HELD_BY_SERVER = ', ';\n');
@@ -90,51 +85,26 @@ vm.createContext(box);
 vm.runInContext(BLOCK + '\n' + FLOOR + '\nthis.T = RECIPES_SET_IN_GAME; this.F = HELD_BY_SERVER;', box);
 const T = box.T;
 const keys = Object.keys(T).sort();
-// What the table should be: each notCopied row as recost.json measured it,
-// and on it, or on a recipe of a never-copied plugin as recipes.json has it,
-// the charcoal and the handle (#6726): one it names asks more, one it does
-// not comes last, with 0 for what it had.
-const blocked = (policy.notCopiedFrom || []).map(function (r) { return r.plugin.toLowerCase(); });
-const carried = [].concat.apply([], (policy.notCopiedFrom || []).map(function (r) { return (r.carried || []).map(function (c) { return c.toLowerCase(); }); }));
-const want = {};
-recost.notCopied.forEach(function (r) {
-  want[r.recipe] = { out: recipes[r.recipe].out, bench: recipes[r.recipe].bench,
-    inputs: r.inputs.map(function (i) { return [i.item, i.count, i.to]; }) };
-});
-let fueled = 0;
-Object.keys(fuel.recipes).forEach(function (k) {
-  if (blocked.indexOf(k.split(':')[1].toLowerCase()) < 0 || carried.indexOf(('COBJ ' + k).toLowerCase()) >= 0) { return; }
-  fueled++;
-  const w = want[k] || (want[k] = { out: recipes[k].out, bench: recipes[k].bench,
-    inputs: recipes[k].inputItems.map(function (i) { return [i.item, i.count, i.count]; }) });
-  const row = fuel.recipes[k];
-  [[fuel.grades[row[0]], 1]].concat(row[3] ? [[fuel.handle, 1]] : []).forEach(function (a) {
-    const at = w.inputs.filter(function (i) { return i[0] === a[0]; })[0];
-    if (at) { at[2] += a[1]; } else { w.inputs.push([a[0], 0, a[1]]); }
-  });
-});
-yes('T2 it is recost.json\'s notCopied and the never-copied recipes with a charcoal (' + fueled + '), each with the output, bench and inputs [item, had, asks] (' + keys.length + ')',
-    keys.length === Object.keys(want).length && keys.length > 0 && fueled > 0 &&
-    keys.every(function (k) {
-      const row = T[k];
-      return want[k] && row.out === want[k].out && row.bench === want[k].bench &&
-        JSON.stringify(row.inputs) === JSON.stringify(want[k].inputs);
+yes('T2 it is recost.json\'s notCopied, each with the output, bench and inputs [item, had, asks] (' + keys.length + ')',
+    keys.length === recost.notCopied.length && keys.length > 0 &&
+    recost.notCopied.every(function (r) {
+      const row = T[r.recipe];
+      return row && row.out === recipes[r.recipe].out && row.bench === recipes[r.recipe].bench &&
+        JSON.stringify(row.inputs) === JSON.stringify(r.inputs.map(function (i) { return [i.item, i.count, i.to]; }));
     }));
 const coinRow = keys.filter(function (k) { return T[k].inputs.some(function (i) { return i[0] === 'f:Skyrim.esm'; }); })[0];
 const peerRow = keys.filter(function (k) { return T[k].inputs.every(function (i) { return i[0] !== 'f:Skyrim.esm'; }); })[0];
 yes('T3 coins are taken to 0 in each recipe that charged them, and only coins are', !!coinRow && !!peerRow &&
     keys.every(function (k) { return T[k].inputs.every(function (i) { return (i[2] === 0) === (i[0] === 'f:Skyrim.esm'); }); }));
-yes('T4 an input a record does not name comes after the ones it does',
-    keys.every(function (k) { const h = T[k].inputs.map(function (i) { return i[1] > 0; }); return h.indexOf(false) < 0 || h.slice(h.indexOf(false)).indexOf(true) < 0; }));
 
 // ------------------------------------------------------------- the server --
 function idOf(desc) {
   const at = desc.indexOf(':');
-  const files = { 'Skyrim.esm': 0x00, 'Update.esm': 0x01, 'Hothtrooper44_ArmorCompilation.esp': 0x5a, 'Thornswood-Content.esp': 0x5b };
+  const files = { 'Skyrim.esm': 0x00, 'Update.esm': 0x01, 'Hothtrooper44_ArmorCompilation.esp': 0x5a };
   return (files[desc.slice(at + 1)] << 24) + parseInt(desc.slice(0, at), 16);
 }
 function descOf(id) {
-  const files = { 0x00: 'Skyrim.esm', 0x01: 'Update.esm', 0x5a: 'Hothtrooper44_ArmorCompilation.esp', 0x5b: 'Thornswood-Content.esp' };
+  const files = { 0x00: 'Skyrim.esm', 0x01: 'Update.esm', 0x5a: 'Hothtrooper44_ArmorCompilation.esp' };
   return (id & 0xffffff).toString(16) + ':' + files[id >>> 24];
 }
 const FORGE = 0x77;
@@ -203,9 +173,7 @@ yes('S5 handRecipeCounts hands every recipe\'s inputs once a load, and not again
 {
   const records = {};
   keys.forEach(function (k) {
-    // The record names only the inputs it had; the charcoal and handle it
-    // does not name (had 0) are added by the game.
-    records[k] = T[k].inputs.filter(function (i) { return i[1] > 0; }).map(function (i) { return { item: idOf(i[0]), count: i[1] }; });
+    records[k] = T[k].inputs.map(function (i) { return { item: idOf(i[0]), count: i[1] }; });
   });
   // A record this game has with other inputs than the ones measured.
   const odd = keys[keys.length - 1];
@@ -230,21 +198,12 @@ yes('S5 handRecipeCounts hands every recipe\'s inputs once a load, and not again
           setNthIngredientQuantity: function (v, n) { r[n].count = v; }
         };
       }
-    },
-    // The fork's call (#6726): sets the count of an input, adding it when
-    // the record does not name it.
-    TESModPlatform: {
-      setCraftingInput: function (recipe, item, count) {
-        const r = records[recipe.k];
-        const at = r.filter(function (e) { return e.item === item.getFormID(); })[0];
-        if (at) { at.count = count; } else { r.push({ item: item.getFormID(), count: count }); }
-      }
     }
   };
   const run = new Function('ctx', srv.api.recipeCountsScript());
   const state = {};
   run({ value: handed, state: state, sp: sp });
-  yes('G1 the owner\'s game sets every count the table gives, coins at 0, the charcoal and handle added',
+  yes('G1 the owner\'s game sets every count the table gives, coins at 0',
       keys.every(function (k) { return k === odd || JSON.stringify(records[k].map(function (r) { return r.count; })) === JSON.stringify(asks(k)); }));
   yes('G2 a record with other inputs than the ones measured is left as it is',
       records[odd].length === 1 && records[odd][0].count === 3);

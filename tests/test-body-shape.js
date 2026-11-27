@@ -345,9 +345,11 @@ function game(opts) {
   const handlers = [];
   let now = 1000;
   const state = { menu: false, morphs: opts.morphs || [], keys: opts.keys || {} };
-  const pc = { getActorBase: function () { return { getSex: function () { return opts.female ? 1 : 0; } }; } };
+  const base = { getSex: function () { return opts.female ? 1 : 0; } };
+  const pc = { getBaseObject: function () { return base; } };
   const sp = {
     Game: { getPlayer: function () { return pc; } },
+    ActorBase: { from: function (f) { return f; } },
     on: function (ev, fn) { handlers.push({ ev: ev, fn: fn }); },
     callNative: function (cls, fn, self) {
       const a = Array.prototype.slice.call(arguments, 3);

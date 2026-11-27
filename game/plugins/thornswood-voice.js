@@ -64,7 +64,7 @@ const PORT_FILE = 'voice-port.txt';
   strong suit rather than the page's. Reading voice-port.txt out of this exact
   folder is the one part of this that has never failed.
 
-  voice-status.txt   written by the launcher   "<mic> <peers> <talking> <mode>"
+  voice-status.txt   written by the launcher   "<mic> <peers> <talking> <mode> <silent>"
   voice-ptt.txt      written by us             "<on> <mode>"
   voice-muted.txt    written by us             "<profileId> <profileId> ..."
 */
@@ -661,10 +661,14 @@ sp.on('update', guard('status', () => {
   const peers   = Number(bits[1]) || 0;
   const talking = bits[2] === '1';
   const mode    = bits[3] || 'local';
+  // Held, and nothing but digital silence coming in (#6470). A launcher
+  // older than that writes four words, which reads as not silent.
+  const silent  = bits[4] === '1';
 
   js('try{window.thornswoodVoice&&window.thornswoodVoice.setLauncherStatus(' +
      (mic ? 'true' : 'false') + ',' + peers + ',' +
-     (talking ? 'true' : 'false') + ',"' + mode + '");}' +
+     (talking ? 'true' : 'false') + ',"' + mode + '",' +
+     (silent ? 'true' : 'false') + ');}' +
      'catch(e){window.skyrimPlatform.sendMessage("thornswood-voice",' +
      '"launcher status threw | "+e);}');
 

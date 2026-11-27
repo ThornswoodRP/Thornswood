@@ -344,8 +344,8 @@
       "sha256": "8a14d28f769296a7779f86bfe78517a8388e58d86feded698a791cbcefe9538e"
     },
     {
-      "id": "q-markarth-woodworker-advanced-charcoal-parcel",
-      "sha256": "962355eff1861bf51f5bc4f9efa9cacf392b60d0ebadc7a26d3f231f2c09a3cc"
+      "id": "q-markarth-woodworker-advanced-parcel",
+      "sha256": "83dc5ab0d102b917460dc3ad68b39b8ea25dffaf511f6f0b520356b6b3dd931b"
     },
     {
       "id": "q-markarth-woodworker-expert-parcel",
@@ -536,8 +536,8 @@
       "sha256": "1826e4d2d9f8f54abfc7d117dee2a025d9ed97bea817310f72df3509a6e79c41"
     },
     {
-      "id": "q-morthal-woodworker-advanced-charcoal-parcel",
-      "sha256": "21ee6794881ea168206bf0d18863483b2f7dc71051e331ffd2de7ac89ff1e38a"
+      "id": "q-morthal-woodworker-advanced-parcel",
+      "sha256": "51ce93d15b6ba610a43424b4a32dc4ea099354575112aa27f0893d87327bdc69"
     },
     {
       "id": "q-morthal-woodworker-expert-parcel",
@@ -724,16 +724,16 @@
       "sha256": "c77c432bc1a72f7da71368a839140359f67880dcc6d2dd928ceee18091aa6339"
     },
     {
-      "id": "q-winterhold-woodworker-advanced-charcoal-parcel",
-      "sha256": "c39d9aeb843999b7beb1b35e4b1b2849c6bcb9452fee11d1716c677a2f75a0f6"
+      "id": "q-winterhold-woodworker-advanced-parcel",
+      "sha256": "7362c2e1c85870d505ba5fad8413d5673fb99cb993b33f4bc09d6a82239f4840"
     },
     {
       "id": "q-winterhold-woodworker-expert-parcel",
       "sha256": "2b15efd43ad1a57ffa9519a592e41ee56062e220441bf7cdfd340bd1c359335b"
     },
     {
-      "id": "q-winterhold-woodworker-master-charcoal-parcel",
-      "sha256": "871497fa81b6059a848fff092cbea12b2ac78915e7aa0d1ffbd03b83558af572"
+      "id": "q-winterhold-woodworker-master-parcel",
+      "sha256": "22941c4af6bd41eb6aa96c9f29085ea2605fdd89157f091d562305d1e9e5c184"
     },
     {
       "id": "q-winterhold-tailor-novice-parcel",

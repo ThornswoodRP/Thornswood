@@ -19,8 +19,8 @@
     A  Brenna presses the forge: onActivate allows it and the bench is hers.
        She makes Leather Boots, a novice Platewright recipe: onCraftWork
        sets a work time the engine accepts, onCraft allows it after that
-       time, the recipe's Poor Charcoal (an input on it since #6726), the
-       leather and strips leave her pack and the boots are in it.
+       time, the forge burns one Poor Charcoal, the leather and strips
+       leave her pack and the boots are in it.
     B  Banded Iron Armor is an advanced recipe: onCraft refuses it, saying
        the rank it needs, and nothing leaves her pack. (Her own game hides
        a recipe above her rank; this is the server's half, which does not
@@ -65,20 +65,9 @@ const FORGE = w.ref(0xff200010, { base: FORGE_BASE, cell: CITY, pos: [1000, 0, 0
 const FORGE2 = w.ref(0xff200011, { base: FORGE_BASE, cell: CITY, pos: [5000, 0, 0] });
 const HAMMER = w.idOf('5cae1:Skyrim.esm');
 const CHARCOAL = w.idOf('15481:Thornswood-Content.esp');   // Poor Charcoal, what a forge burns
-// A recipe's inputs as Thornswood-Last.esp carries it: recipes.json's, and
-// the charcoal and the handle on top (#6726), which the engine takes like
-// any other input.
-const FUEL = require(path.join(__dirname, '..', '..', 'scripts', 'dev', 'Build-FuelTable.js')).read();
 function craftOf(desc, r) {
-  const inputs = r.inputItems.map(function (x) { return { baseId: w.idOf(x.item), count: x.count }; });
-  const f = FUEL.recipes[desc];
-  if (f) {
-    [[FUEL.grades[f[0]], 1]].concat(f[3] ? [[FUEL.handle, 1]] : []).forEach(function (a) {
-      const at = inputs.filter(function (x) { return x.baseId === w.idOf(a[0]); })[0];
-      if (at) { at.count += a[1]; } else { inputs.push({ baseId: w.idOf(a[0]), count: a[1] }); }
-    });
-  }
-  return { recipe: w.idOf(desc), output: w.idOf(r.out), count: r.makes || 1, inputs: inputs };
+  return { recipe: w.idOf(desc), output: w.idOf(r.out), count: r.makes || 1,
+           inputs: r.inputItems.map(function (x) { return { baseId: w.idOf(x.item), count: x.count }; }) };
 }
 const BOOTS = craftOf(BOOTS_R, boots), BANDED = craftOf(BANDED_R, banded);
 function stock(c, times) { return c.inputs.map(function (x) { return { baseId: x.baseId, count: x.count * times }; }); }
@@ -108,13 +97,12 @@ const MAX_WORK = 10 * 60 * 1000;   // CraftWorkEvent::kMaxWorkTime is the engine
 // ------------------------------------------------------------- A. boots --
 const a0 = w.activate(FORGE, BRENNA);
 yes('A1 the forge: onActivate allows it and the bench is hers', a0.allowed && a0.opened && w.holds(FORGE) === BRENNA);
-const before = { leather: w.count(BRENNA, BOOTS.inputs[0].baseId), strips: w.count(BRENNA, BOOTS.inputs[1].baseId), charcoal: w.count(BRENNA, CHARCOAL) };
+const before = { leather: w.count(BRENNA, BOOTS.inputs[0].baseId), strips: w.count(BRENNA, BOOTS.inputs[1].baseId) };
 const a1 = w.craft(BRENNA, FORGE, BOOTS);
 yes('A2 onCraftWork starts the work and sets a work time the engine takes (' + a1.workMs + ' ms)',
     a1.started && typeof a1.workMs === 'number' && a1.workMs >= 0 && a1.workMs <= MAX_WORK);
 yes('A2 after it onCraft allows it: the boots are in her pack (' + JSON.stringify(a1) + ')', a1.made && w.count(BRENNA, BOOTS.output) === 1);
-yes('A2 the forge burned one Poor Charcoal, the recipe\'s own', BOOTS.inputs.some(function (x) { return x.baseId === CHARCOAL && x.count === 1; }) &&
-    w.count(BRENNA, CHARCOAL) === before.charcoal - 1);
+yes('A2 the forge burned one Poor Charcoal', w.count(BRENNA, CHARCOAL) === 4);
 yes('A2 and the leather and strips the recipe asks for are gone',
     w.count(BRENNA, BOOTS.inputs[0].baseId) === before.leather - BOOTS.inputs[0].count &&
     w.count(BRENNA, BOOTS.inputs[1].baseId) === before.strips - BOOTS.inputs[1].count);
