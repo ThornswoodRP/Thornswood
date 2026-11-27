@@ -37,17 +37,33 @@
 
 function Get-ThornswoodVps {
     $j = Get-ThornswoodVpsCommitted
+    # What each place said about the address, in the order they were read, so
+    # an empty answer names every file and variable behind it (#4255).
+    $read = @('{0} ({1})' -f (Get-ThornswoodVpsCommittedPath), (Get-ThornswoodVpsAddressSaid $j))
     $local = Get-ThornswoodVpsLocalPath
     if ($local -and (Test-Path -LiteralPath $local)) {
         $mine = $null
         try { $mine = Get-Content -LiteralPath $local -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
         if (-not ($mine -is [Management.Automation.PSCustomObject])) { throw "This machine's VPS file does not read as a JSON object: $local" }
+        $read += '{0} ({1})' -f $local, (Get-ThornswoodVpsAddressSaid $mine)
         foreach ($p in $mine.PSObject.Properties) { $j | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value -Force }
+    } elseif ($local) {
+        $read += "$local (not there)"
+    } else {
+        $read += "this machine's file (none: THORNSWOOD_VPS_LOCAL and LOCALAPPDATA are not set)"
     }
     if ($env:THORNSWOOD_VPS) { $j | Add-Member -NotePropertyName address -NotePropertyValue ([string]$env:THORNSWOOD_VPS) -Force }
+    else { $read += 'THORNSWOOD_VPS (not set)' }
     if ($env:THORNSWOOD_VPS_USER) { $j | Add-Member -NotePropertyName user -NotePropertyValue ([string]$env:THORNSWOOD_VPS_USER) -Force }
-    if (-not $j.address) { throw "vps.json has no address: $path" }
+    if (-not ($j.PSObject.Properties['address'] -and [string]$j.address)) { throw ('No VPS address. Read in this order, the last one that sets it winning: ' + ($read -join '; ') + '. Set the address in one of them.') }
     return $j
+}
+
+# What one VPS file says about the address, for the error above.
+function Get-ThornswoodVpsAddressSaid($o) {
+    if (-not $o.PSObject.Properties['address']) { return 'no address' }
+    if (-not [string]$o.address) { return 'address empty' }
+    return 'address ' + [string]$o.address
 }
 
 # vps.json as the checkout holds it, with no machine's own file and no
@@ -55,13 +71,18 @@ function Get-ThornswoodVps {
 # from this alone: on a runner, a machine's own file is whatever an earlier
 # job on the same account left (#3045).
 function Get-ThornswoodVpsCommitted {
-    $here = $PSScriptRoot
-    if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
-    $path = Join-Path $here 'vps.json'
+    $path = Get-ThornswoodVpsCommittedPath
     if (-not (Test-Path -LiteralPath $path)) {
         throw "VPS defaults not found: $path"
     }
     return (Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json)
+}
+
+# Where the tracked vps.json is: beside this file.
+function Get-ThornswoodVpsCommittedPath {
+    $here = $PSScriptRoot
+    if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
+    return (Join-Path $here 'vps.json')
 }
 
 # This machine's own VPS file, which nothing in git carries. It need not exist.
