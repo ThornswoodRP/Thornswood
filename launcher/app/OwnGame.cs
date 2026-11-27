@@ -760,11 +760,19 @@ namespace Thornswood
                 if (build != null) return build;
                 // Make takes Thornswood's own files from the Steam copy by
                 // Thornswood's records, the release's file list among them
-                // (#1232). An install an older launcher synced has not kept
-                // that list until it is checked against its release again.
+                // (#1232). An install setup put in (Velopack) always knows
+                // them, from its installed package's game list (#6457), so
+                // this is only a launcher setup did not install, which an
+                // older launcher synced to a release record without keeping
+                // the list or whose list went. Since #5608 every update and
+                // every repair is a sync of the installed package, which such
+                // a launcher has none of, so no update is coming to put the
+                // list back, and saying to wait for one left it waiting for
+                // good (#5795). Setup's install is the way out.
                 if (!OursKnown())
-                    return "Thornswood is checking this install against its release first, which tells it which files in the Steam copy are Thornswood's own. " +
-                           "Let the update finish, then make the folder.";
+                    return "This launcher was not installed by Thornswood's setup, and it no longer has the list of which files in the Steam copy are Thornswood's own " +
+                           "(Profile\\release-files.txt is gone or is another release's). No update brings that list back to a launcher setup did not install, " +
+                           "so install Thornswood again with its setup from thornswood.net, then make the folder.";
             }
             // This install's own folder or any other Thornswood folder (#2210).
             string thornswood = ThornswoodSource(cfg, src);
