@@ -5245,6 +5245,7 @@
   sp.on('cellFullyLoaded', guard('fire cell loaded', fireCellLoaded));
 
   sp.on('update', guard('place', () => {
+    if (!globalThis.__thornswoodInWorld) { return; }
     const now = Date.now();
     // Fast only when a fire is close enough to be about to burn somebody.
     // Merely standing at one is 44 native calls a second for nothing.
@@ -9453,6 +9454,9 @@
     try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
     if (!pc) { return false; }
     try { globalThis.__thornswoodInWorld = true; } catch (e) { /* a plain property of globalThis, which nothing here locks */ }
+    // The old connection's last report can match the first sample in this
+    // world. The server still needs the new session's place and fire.
+    placeSaid = '';
     log('back in the world as profile', PROFILE, Math.round((now - loadedOutOfWorld) / 1000) + 's after it loaded');
     loadedOutOfWorld = 0;
     if (choiceUp()) { menuGone(); }
