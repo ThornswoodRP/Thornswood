@@ -254,7 +254,10 @@ public static class ThornswoodLimitedJob
       catch { throw ($x + ' cannot be read by the limited account (' + $_.Exception.GetBaseException().Message + '): it is installed for one user only. Install it for every user of the box.') }
     }
     $env:PATH = (Split-Path -Parent $python) + ';' + $env:PATH
-    Set-Location -LiteralPath $repo
+    # No Set-Location: PowerShell 7 lists every folder above the one it
+    # goes to, for its case, and this account may not list those (the
+    # box's C:\Windows\Temp). The task starts in the repository already,
+    # and the tool is started there below.
     'limited   as ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name + ', in a job that ends what it starts'
 __PARTB__
   } catch { 'STOP. ' + $_.Exception.GetBaseException().Message + ' (the limited run)' }
