@@ -11,7 +11,7 @@
 // file).
 module.exports = { deleteUpload, listUploads, pendingCopies, pictureSize,
   pruneRemovedUploads, receiveUpload, shotSrcset, smallCopy, smallFile,
-  srcsetWidths, uploadRemoved, withGalleryPending };
+  srcsetWidths, submissionName, uploadRemoved, withGalleryPending };
 
 const fs     = require('fs');
 const path   = require('path');
@@ -232,6 +232,18 @@ function deleteUpload(name) {
     }
   }
   return { ok: true };
+}
+
+/* Whether a name is one a submission could have been sent as (#4401): a
+   plain name straight under uploads/, and not the notes file uploads.json or
+   the small/ folder of smaller copies, in any case, since the box's Windows
+   reads UPLOADS.JSON as the same file. Accept and Delete on the gallery act
+   on no other name, whatever a list says. */
+function submissionName(name) {
+  const n = String(name || '');
+  const low = n.toLowerCase();
+  return !!n && n === path.basename(n) && !n.startsWith('.') &&
+    low !== path.basename(UPMETA).toLowerCase() && low !== path.basename(UP_SMALL).toLowerCase();
 }
 
 /* A gallery submission staff removed and whose file stayed on disk: marked

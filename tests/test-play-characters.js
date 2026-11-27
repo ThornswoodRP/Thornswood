@@ -206,6 +206,12 @@ async function ask(files, ticket, req, standing) {
     chars,
     sendJson: function (r, c, o) { sent = { code: c, obj: o }; return sent; }
   };
+  // The routes read their body with lib/http.js bodyObject (#4382): JSON, and an object.
+  if (env.body && !env.bodyObject) env.bodyObject = async function () {
+    const v = JSON.parse(await env.body.apply(null, arguments));
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+    return v;
+  };
   const names = Object.keys(env);
   await new AsyncFunction(names.join(','), route + '\nreturn null;').apply(null, names.map((n) => env[n]));
   return sent;

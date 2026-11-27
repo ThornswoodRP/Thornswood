@@ -561,7 +561,7 @@ yes('and the page gives those logs their 365 days, and says a kept session keeps
    because a body past the cap is dropped whole, every log in it. */
 const product = s => s.split('*').reduce((a, b) => a * Number(b.trim()), 1);
 const lm = /const int LogBodyMax = ([0-9 *]+);/.exec(CS);
-const bm = /body\(req, SLOG_ALL \+ ([0-9 *]+)\)/.exec(src);
+const bm = /body(?:Object)?\(req, SLOG_ALL \+ ([0-9 *]+)\)/.exec(src);
 yes('the launcher never sends a body bigger than the site reads',
     !!lm && !!bm && product(lm[1]) > 0 && product(lm[1]) <= SLOG_ALL + product(bm[1]));
 
