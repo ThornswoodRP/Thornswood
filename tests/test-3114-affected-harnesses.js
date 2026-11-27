@@ -44,7 +44,9 @@
 //      tests/gamemode-tables.js joined() is held back, since joined() opens
 //      every table the gamemode calls and stops on the missing one (#7244:
 //      merge queue run 45950343805, STATIONS_THE_SERVER_STANDS since #7191);
-//      one that reads only a table the build has is not.
+//      one that reads only a table the build has is not, and the pick does
+//      this only over a build of other inputs, where a newer build brings
+//      the table.
 'use strict';
 const path = require('path');
 const REPO = path.join(__dirname, '..');
@@ -358,8 +360,8 @@ try {
   const r9 = typeof A.tablesHold === 'function' ? A.tablesHold(real, gm, has, readReal) : null;
   yes('  the three run 45950343805 stopped on are held back over a build that lacks a table (' + real.join(', ') + ')', !!r9 && r9.run.length === 3);
   const rg = fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Run-Gate.ps1'), 'utf8');
-  yes('  and the pick takes them out of the gate over the build it laid, unless it picks the content checks',
-      /if \(-not \$Content\) \{[\s\S]*?& node \$Affected tables \$tablesGate \$tablesOut/.test(rg) && /\$list = @\(\$list \| Where-Object \{ \$held -notcontains \$_ \}\)/.test(rg));
+  yes('  and the pick takes them out of the gate over a build of other inputs, never over one of its own, where a missing table is a fault',
+      /elseif \(\[string\]\$env:CONTENT_SAME -eq 'no'\) \{[\s\S]*?& node \$Affected tables \$tablesGate \$tablesOut[\s\S]*?\$list = @\(\$list \| Where-Object \{ \$held -notcontains \$_ \}\)[\s\S]*?\n        \}\n    \} catch/.test(rg));
 }
 
 console.log(pass + ' passed, ' + fail + ' failed');

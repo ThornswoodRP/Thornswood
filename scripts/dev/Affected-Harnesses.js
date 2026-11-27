@@ -501,6 +501,44 @@ function staleChecks(map, gate, base, head, writes, inputs) {
   return out;
 }
 function readList(file) { return fs.readFileSync(file, 'utf8').split(/\r?\n/).map(s => s.trim()).filter(Boolean); }
+
+/*
+  tables (#7244): the tables the checkout's gamemode calls that the laid
+  content build lacks, and the gate harnesses that join every table into the
+  gamemode through tests/gamemode-tables.js joined(). joined() opens the file
+  of each table('NAME') the gamemode calls, so over a build that lacks one it
+  stops with ENOENT, whatever the harness checks, and names no table in its
+  own text for staleChecks to see. Since #7191 main's gamemode calls
+  STATIONS_THE_SERVER_STANDS, and merge queue run 45950343805 laid a build
+  made before it: test-1385-perks.js, test-513-world-stage.js and
+  test-1398-weaver.js stopped at tests/gamemode-tables.js. The pick holds
+  these back over that build; the merge release runs every content check
+  over the merge's own build, which holds the table, before anything carries
+  it. A harness that reads one table through table(), and not joined(),
+  is held to the files it names as before.
+
+  gamemode: the checkout's game/gamemode.js text; has(name): whether the laid
+  build holds game/gamemode-tables/<name>.json; read(name): a harness's text.
+*/
+const TABLE_CALL = /\btable\('([A-Z][A-Z0-9_]*)'\)/g;
+const TABLES_HELPER = /require\(\s*['"][^'"]*\bgamemode-tables(?:\.js)?['"]\s*\)/;
+const JOINED = /(?:\.\s*joined\s*\(|\{[^}]*\bjoined\b[^}]*\}\s*=\s*require\()/;
+function tablesHold(gate, gamemode, has, read) {
+  const called = [...new Set([...String(gamemode).matchAll(TABLE_CALL)].map(m => m[1]))].sort();
+  const missing = called.filter(n => !has(n));
+  const out = { missing: missing, run: [], why: {} };
+  if (!missing.length) { return out; }
+  const said = missing.slice(0, 3).join(', ') + (missing.length > 3 ? ' and ' + (missing.length - 3) + ' more' : '');
+  for (const n of gate) {
+    let text = '';
+    try { text = read(n); } catch (e) { text = ''; }
+    if (TABLES_HELPER.test(text) && JOINED.test(text)) {
+      out.run.push(n);
+      out.why[n] = 'joins every table the gamemode calls (tests/gamemode-tables.js joined()), and the laid build lacks ' + said;
+    }
+  }
+  return out;
+}
 function loadMap(tracesFile, commit) {
   // '-': no map, so every harness is one the map cannot clear.
   if (tracesFile === '-') { return null; }
@@ -598,6 +636,18 @@ function cli() {
       console.log(`${r.run.length} of ${gate.length} gate harnesses can be affected by this change, measured from the gate traced on ${c.slice(0, 8)}; ${r.skipped.length} cannot and do not run.`);
       for (const n of r.run) { console.log('  runs ' + n + ': ' + r.why[n]); }
     }
+  } else if (cmd === 'tables' && a && b) {
+    // tables <gate.txt> <out.txt>: over the content build laid on this
+    // checkout, the harnesses tablesHold holds back, written to <out.txt>.
+    const gate = readGate(a);
+    const T = require('./GamemodeTables.js');
+    const gm = fs.readFileSync(path.join(REPO, 'game', 'gamemode.js'), 'utf8');
+    const r = tablesHold(gate, gm, (n) => fs.existsSync(T.file(n)), (n) => fs.readFileSync(harnessFile(n), 'utf8'));
+    fs.writeFileSync(b, r.run.map(n => n + '\n').join(''));
+    if (!r.missing.length) { console.log('The laid content build holds every table the gamemode calls.'); } else {
+      console.log('The laid content build lacks ' + r.missing.length + ' table(s) the gamemode calls: ' + r.missing.join(', ') + '. ' + r.run.length + ' gate harnesses join every table into the gamemode, so they do not run over it.');
+      for (const n of r.run) { console.log('  ' + n + ': ' + r.why[n]); }
+    }
   } else if ((cmd === 'checks' || cmd === 'stale') && a && b && c && d && e && process.argv[8] && (cmd === 'checks' || process.argv[9])) {
     // checks <map> - <commit> <gate.txt> <writes.txt> <out.txt>
     // stale  <map> <built> <commit> <gate.txt> <writes.txt> <inputs.txt> <out.txt>
@@ -617,8 +667,8 @@ function cli() {
     fs.writeFileSync(cmd === 'checks' ? process.argv[8] : process.argv[9], r.run.map(n => n + '\n').join(''));
     for (const n of r.run) { console.log('  ' + n + ': ' + r.why[n]); }
   } else {
-    console.error('usage: Affected-Harnesses.js build <traces> <map.json> [commit] | select <map.json> <head> [gate.txt] | tree <rev> <tree.gz> | platforms <windows-starts.jsonl> <linux-starts.jsonl> <out.platforms.json> [commit] | pick <traces.jsonl.gz|map.json> <tree.gz> <commit> <gate.txt> <out.txt> | checks <map> - <commit> <gate.txt> <writes.txt> <out.txt> | stale <map> <built> <commit> <gate.txt> <writes.txt> <inputs.txt> <out.txt>');
+    console.error('usage: Affected-Harnesses.js build <traces> <map.json> [commit] | select <map.json> <head> [gate.txt] | tree <rev> <tree.gz> | platforms <windows-starts.jsonl> <linux-starts.jsonl> <out.platforms.json> [commit] | pick <traces.jsonl.gz|map.json> <tree.gz> <commit> <gate.txt> <out.txt> | checks <map> - <commit> <gate.txt> <writes.txt> <out.txt> | stale <map> <built> <commit> <gate.txt> <writes.txt> <inputs.txt> <out.txt> | tables <gate.txt> <out.txt>');
     return 2;
   }
 }
-module.exports = { contentChecks: contentChecks, staleChecks: staleChecks, platforms: platforms, build: build, readTraces: readTraces, select: select, parseTree: parseTree, readTreeFile: readTreeFile, changesBetween: changesBetween, pick: pick, gatePart: gatePart, gateShape: gateShape, WORKFLOWS: WORKFLOWS, FORCE: FORCE, PLATFORM: PLATFORM };
+module.exports = { contentChecks: contentChecks, staleChecks: staleChecks, tablesHold: tablesHold, platforms: platforms, build: build, readTraces: readTraces, select: select, parseTree: parseTree, readTreeFile: readTreeFile, changesBetween: changesBetween, pick: pick, gatePart: gatePart, gateShape: gateShape, WORKFLOWS: WORKFLOWS, FORCE: FORCE, PLATFORM: PLATFORM };

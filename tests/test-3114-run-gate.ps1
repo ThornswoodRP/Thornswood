@@ -73,7 +73,11 @@ try {
     $sr = Join-Path $scratch 'repo'
     $dev = Join-Path (Join-Path $sr 'scripts') 'dev'
     $null = New-Item -ItemType Directory -Force -Path $dev, (Join-Path $sr 'records')
-    foreach ($f in 'Run-Gate.ps1', 'Affected-Harnesses.js') { Copy-Item -LiteralPath (Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') $f) -Destination $dev }
+    foreach ($f in 'Run-Gate.ps1', 'Affected-Harnesses.js', 'GamemodeTables.js') { Copy-Item -LiteralPath (Join-Path (Join-Path (Join-Path $repo 'scripts') 'dev') $f) -Destination $dev }
+    # The gamemode the pick reads for the tables it calls (#7244): none here,
+    # so over a build of other inputs it holds back no harness for a table.
+    $null = New-Item -ItemType Directory -Force -Path (Join-Path $sr 'game')
+    Set-Content -LiteralPath (Join-Path (Join-Path $sr 'game') 'gamemode.js') -Value 'const B = 1;'
     Set-Content -LiteralPath (Join-Path $dev 'Gate-Harnesses.ps1') -Value "'test-a.js'`n'test-b.js'`n'test-c.js'`nexit 0"
     Set-Content -LiteralPath (Join-Path $dev 'Nightly-Harnesses.ps1') -Value @'
 param([string]$Only = '', [int]$Throttle = 0, [int]$Share = 0, [int]$BudgetSeconds = 0, [string]$StartLog = '')
