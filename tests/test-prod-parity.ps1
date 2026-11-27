@@ -117,10 +117,23 @@ try {
     T ($x.Out -match 'REVIEW  listener tcp 3001: expected loopback node, found public node') 'the site on every address is caught'
     T ($x.Out -match 'REVIEW  listener tcp 8080: expected not listed in the record') 'a public port nobody wrote down is caught'
     T ($x.Out -match 'REVIEW  task Thornswood Docs: expected as LOCAL SERVICE, found as SYSTEM') 'a task running as the wrong account is caught'
+
     T ($x.Out -match 'REVIEW  env THORNSWOOD_DOCS_EXPOSE') 'an exposing environment variable is caught by name'
     T ($x.Out -match 'REVIEW  tls thornswood.net: expected valid, 14\+ days, found 4 days left') 'a certificate close to lapsing is caught'
     T ($x.Out -match 'REVIEW  file C:\\Thornswood-Caddy\\Caddyfile') 'a live Caddyfile that differs is caught'
     T ($x.Out -match 'REVIEW  service ThornswoodBot') 'a stopped bot service is caught'
+
+    # #4246: a listener on one of the box's own addresses is as reachable as
+    # an any-address one; only loopback, in any form, stays out of the sweep.
+    $n = Facts
+    $n.listeners += @{ proto = 'tcp'; address = '203.0.113.5'; port = 8081; process = 'node' }
+    $n.listeners += @{ proto = 'udp'; address = 'fe80::1'; port = 8082; process = 'node' }
+    $n.listeners += @{ proto = 'tcp'; address = '127.0.0.2'; port = 8083; process = 'node' }
+    $n.listeners += @{ proto = 'tcp'; address = '::1'; port = 8084; process = 'node' }
+    $x = Run $n ''
+    T ($x.Out -match 'REVIEW  listener tcp 8081: expected not listed in the record, found address node') 'an unlisted listener on one of the box''s own addresses is caught'
+    T ($x.Out -match 'REVIEW  listener udp 8082: expected not listed in the record, found address node') 'an unlisted listener on an IPv6 address is caught'
+    T ($x.Out -notmatch 'listener tcp 8083' -and $x.Out -notmatch 'listener tcp 8084') 'an unlisted loopback listener, 127.0.0.2 or ::1, gives no row'
 
     # #5357: the site's modules, each held by name, and one only the box has.
     $m = Facts
