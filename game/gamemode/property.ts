@@ -5977,22 +5977,6 @@
   // table files. game\data\woodworking-benches.json says what was measured at each spot.
   var WOODWORKING_BENCH_BASE = table('WOODWORKING_BENCH_BASE');
   var WOODWORKING_BENCHES = table('WOODWORKING_BENCHES');
-  /*
-    THE STATIONS THE SERVER STANDS (#6893). game\data\station-sites.json
-    measures where each station stands (scripts\dev\Build-StationSites.py),
-    and Thornswood-Content.esp places them, except in a cell of a plugin that
-    is not one of its masters, where it cannot: North Keep's inn has no
-    cooking station, and North Keep.esp's room is such a cell. Those rows say
-    standBy server, and the server stands them here, the way it stands the
-    benches: once, at start, with no timer, next to the room's own furniture
-    the row names (beside), which the server loads, since MoveTo takes a
-    reference into a cell only next to one already there. Skyrim's own
-    cooking pot is the base, the pot every inn's cook uses, so the bench
-    table (BENCH_BY_BASE) already knows it as a cookpot. The ids are kept
-    beside the benches' in benches.json. Build-WoodworkingBenches.py writes
-    the table and holds each row's furniture to the load order.
-  */
-  var STATIONS_THE_SERVER_STANDS = table('STATIONS_THE_SERVER_STANDS');
 
   function benchBookPath() {
     var path = require('path');
@@ -6003,13 +5987,10 @@
     var out = {};
     var raw = benchRead.doc;
     if (!raw || typeof raw !== 'object') { return out; }
-    var tables = [WOODWORKING_BENCHES, STATIONS_THE_SERVER_STANDS];
-    for (var t = 0; t < tables.length; t++) {
-      for (var site in tables[t]) {
-        if (!Object.prototype.hasOwnProperty.call(tables[t], site)) { continue; }
-        var id = Number(raw[site]) >>> 0;
-        if (id) { out[site] = id; }
-      }
+    for (var site in WOODWORKING_BENCHES) {
+      if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
+      var id = Number(raw[site]) >>> 0;
+      if (id) { out[site] = id; }
     }
     return out;
   }
@@ -6059,49 +6040,11 @@
     return true;
   }
 
-  /* Stand this station where STATIONS_THE_SERVER_STANDS says. Answers whether it stands. */
-  function standStation(site) {
-    var s = STATIONS_THE_SERVER_STANDS[site];
-    if (!s) { return false; }
-    var nextTo = 0;
-    try { nextTo = mp.getIdFromDesc(s.beside) >>> 0; } catch (e) { nextTo = 0; }
-    var at = '';
-    try { at = nextTo ? String(mp.get(nextTo, 'worldOrCellDesc') || '') : ''; } catch (e2) { at = ''; }
-    if (!nextTo || at !== s.cell) {
-      plog('stations: nothing to stand', site + '\'s', s.kind, 'next to:', 'the furniture', s.beside,
-           'is not in', s.cell, '(the server has it in', (at || 'no cell') + ')');
-      return false;
-    }
-    var id = benchRefs[site] || 0;
-    if (refAt(id, s.base, s.cell, s.pos, s.angle)) { return true; }
-    try {
-      if (!refStands(id, s.base, '')) {
-        var base = placedBase(s.base);
-        if (!base) { plog('stations: the', s.kind, 'record', s.base, 'is not in the load order'); return false; }
-        id = mp.place(base);
-      }
-      refCall('SetAngle', id, [0, 0, s.angle]);
-      moveOnto(id, nextTo, s.pos);
-    } catch (e3) {
-      plog('stations: could not stand', site + '\'s', s.kind + ':', e3);
-      return false;
-    }
-    benchRefs[site] = id;
-    saveBenchRefs();
-    plog('stations: stood', site + '\'s', s.kind, Number(id).toString(16), 'in', s.cell, 'at',
-         s.pos.join(','), 'turned', s.angle, 'beside', s.beside);
-    return true;
-  }
-
-  /* Every woodworking bench, and every station the server stands, where it should be, once, at start. */
+  /* Every woodworking bench stood where it should be, once, when the server starts. */
   function standBenches() {
     for (var site in WOODWORKING_BENCHES) {
       if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
       standBench(site);
-    }
-    for (var station in STATIONS_THE_SERVER_STANDS) {
-      if (!Object.prototype.hasOwnProperty.call(STATIONS_THE_SERVER_STANDS, station)) { continue; }
-      standStation(station);
     }
   }
 
@@ -9538,8 +9481,6 @@
     standBench: standBench, standBenches: standBenches,
     benchRefs: function () { return Object.assign({}, benchRefs); },
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
-    STATIONS_THE_SERVER_STANDS: STATIONS_THE_SERVER_STANDS,
-    standStation: standStation,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
     itemName: itemName, baseItemName: baseItemName
