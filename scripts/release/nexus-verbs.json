@@ -97,6 +97,7 @@
         "scripts/mods/Audit-ModMenus.js",
         "scripts/mods/Check-SkyUIMenus.js",
         "scripts/mods/PluginRuleLoops.ps1",
+        "scripts/mods/Read-PexCalls.js",
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/Get-ScratchDir.ps1",
         "scripts/release/HashStamps.ps1",
@@ -119,7 +120,8 @@
         "Slug": "^[a-z0-9]{1,16}$",
         "GameDomain": "^[a-z0-9]{1,40}$",
         "KeepPlugins": "switch",
-        "Modlist": "switch"
+        "Modlist": "switch",
+        "Scripts": "switch"
       }
     },
     "Set-NexusDescription": {
@@ -157,6 +159,7 @@
         "scripts/mods/Check-PluginClean.py",
         "scripts/mods/ContentPaths.ps1",
         "scripts/mods/PluginRuleLoops.ps1",
+        "scripts/mods/authored_doors.py",
         "scripts/mods/last_recipe.py",
         "scripts/release/Build-Launcher.ps1",
         "scripts/release/CollectionRecord.ps1",

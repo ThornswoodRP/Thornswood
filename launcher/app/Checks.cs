@@ -410,45 +410,45 @@ namespace Thornswood
 
         /// <summary>
         /// Vortex profile folder named <paramref name="name"/> (default Thornswood),
-        /// or null. Same as Get-VortexProfileDir (#557).
+        /// or null when Vortex has no such profile. Same as Get-VortexProfileDir
+        /// (#557). Throws when Vortex's state cannot be read, which is not the
+        /// same answer: on 15 November a tester's log said "Vortex profile
+        /// Thornswood was not found" while this had swallowed "MANIFEST-000565
+        /// is being used by another process" from a Vortex that was deploying
+        /// (#6229).
         /// </summary>
         public static string VortexProfileDir(string name)
         {
-            try
+            if (string.IsNullOrEmpty(name)) name = "Thornswood";
+            string profilesRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Vortex\\skyrimse\\profiles");
+            if (!Directory.Exists(profilesRoot)) return null;
+            string stateDir = VortexStateDir();
+            if (File.Exists(Path.Combine(stateDir, "CURRENT")))
+                return VortexProfileState.Find(stateDir, profilesRoot, name);
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            if (Directory.Exists(stateDir))
             {
-                if (string.IsNullOrEmpty(name)) name = "Thornswood";
-                string profilesRoot = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Vortex\\skyrimse\\profiles");
-                if (!Directory.Exists(profilesRoot)) return null;
-                string stateDir = VortexStateDir();
-                if (File.Exists(Path.Combine(stateDir, "CURRENT")))
-                    return VortexProfileState.Find(stateDir, profilesRoot, name);
-                var ids = new HashSet<string>(StringComparer.Ordinal);
-                if (Directory.Exists(stateDir))
+                var pairRe = new Regex(
+                    "\"profileId\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"profileName\"\\s*:\\s*\"" +
+                    Regex.Escape(name) + "\"");
+                var pairRe2 = new Regex(
+                    "\"profileName\"\\s*:\\s*\"" + Regex.Escape(name) +
+                    "\"\\s*,\\s*\"profileId\"\\s*:\\s*\"([^\"]+)\"");
+                foreach (string f in Directory.GetFiles(stateDir))
                 {
-                    var pairRe = new Regex(
-                        "\"profileId\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"profileName\"\\s*:\\s*\"" +
-                        Regex.Escape(name) + "\"");
-                    var pairRe2 = new Regex(
-                        "\"profileName\"\\s*:\\s*\"" + Regex.Escape(name) +
-                        "\"\\s*,\\s*\"profileId\"\\s*:\\s*\"([^\"]+)\"");
-                    foreach (string f in Directory.GetFiles(stateDir))
-                    {
-                        string txt;
-                        try { txt = VortexStateText(f); } catch { continue; }
-                        foreach (Match m in pairRe.Matches(txt)) ids.Add(m.Groups[1].Value);
-                        foreach (Match m in pairRe2.Matches(txt)) ids.Add(m.Groups[1].Value);
-                    }
-                }
-                foreach (string id in ids)
-                {
-                    string p = Path.Combine(profilesRoot, id);
-                    if (File.Exists(Path.Combine(p, "plugins.txt"))) return p;
-                    if (Directory.Exists(p)) return p;
+                    string txt = VortexStateText(f);
+                    foreach (Match m in pairRe.Matches(txt)) ids.Add(m.Groups[1].Value);
+                    foreach (Match m in pairRe2.Matches(txt)) ids.Add(m.Groups[1].Value);
                 }
             }
-            catch (Exception ex) { Swallow.Note("Checks.VortexProfileDir", ex); }
+            foreach (string id in ids)
+            {
+                string p = Path.Combine(profilesRoot, id);
+                if (File.Exists(Path.Combine(p, "plugins.txt"))) return p;
+                if (Directory.Exists(p)) return p;
+            }
             return null;
         }
 

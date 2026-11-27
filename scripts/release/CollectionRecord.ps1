@@ -738,7 +738,9 @@ function Compare-CollectionRecord($Want, $Got) {
           and the published revision does not: { modId; fileId; plugins;
           choices }, New-NexusRevision -Answers' file (#5531)
   Remove  mod numbers, every file of each gone (New-NexusRevision -Remove)
-  Move    { modId; fileId; dropPatch } (-Mod, -FileId, -DropPatch)
+  Move    { modId; fileId; dropPatch; choices? } (-Mod, -FileId, -DropPatch);
+          choices are the record's answers for the new file of an entry that
+          lists its files, which New-NexusRevision reads from the record (#6908)
   Rule    { name; after } for a plugin already on the list whose rule changes
           (-Rule's file)
   Problems what the record asks that New-NexusRevision cannot do, one line
@@ -786,9 +788,17 @@ function Get-CollectionChangeSet($R, $Collection) {
             continue
         }
         if ($there.Count -eq 1 -and $here.Count -eq 1 -and $pAll.Count -eq 1) {
-            if ((Get-CollectionKeys $here[0].Entry) -contains 'choices') { $problems.Add("mod $mid moves to file $($here[0].FileId) with choices; New-NexusRevision moves a file and keeps no installer answers for the new one") }
+            # An entry that lists the files it installs (#6888) is moved with
+            # the new archive's list, made by its installer with the answers
+            # the record gives the new file (#6908). One with no list keeps no
+            # answers, so a move with answers is not one New-NexusRevision makes.
+            $pe = @(@($Collection.mods) | Where-Object { $_.source -and $_.source.type -eq 'nexus' -and [long]$_.source.fileId -eq $there[0].FileId }) | Select-Object -First 1
+            $listed = $pe -and $pe.PSObject.Properties['hashes'] -and @($pe.hashes).Count
+            $hasChoices = (Get-CollectionKeys $here[0].Entry) -contains 'choices'
+            if ($hasChoices -and -not $listed) { $problems.Add("mod $mid moves to file $($here[0].FileId) with choices; New-NexusRevision moves a file and keeps no installer answers for the new one") }
             $mv = [ordered]@{ modId = $mid; fileId = $here[0].FileId; dropPatch = @() }
             if ((Get-CollectionKeys $here[0].Entry) -contains 'dropPatch') { $mv.dropPatch = [string[]]@($here[0].Entry.dropPatch) }
+            if ($hasChoices -and $listed) { $mv.choices = $here[0].Entry.choices }
             $move.Add([pscustomobject]$mv)
             continue
         }
@@ -800,6 +810,9 @@ function Get-CollectionChangeSet($R, $Collection) {
     foreach ($m in @($R.mods)) {
         if ((Get-CollectionKeys $m) -notcontains 'choices' -or -not $pubKeys.ContainsKey("$([long]$m.modId)/$([long]$m.fileId)")) { continue }
         $e = @(@($Collection.mods) | Where-Object { $_.source -and $_.source.type -eq 'nexus' -and [long]$_.source.fileId -eq [long]$m.fileId }) | Select-Object -First 1
+        # An entry that lists its files carries no answers on Nexus (#6888):
+        # the record's are the ones its list was made by, kept for a move.
+        if ($e -and $e.PSObject.Properties['hashes'] -and @($e.hashes).Count) { continue }
         if ($e -and $e.PSObject.Properties['choices'] -and $e.choices -and (ConvertTo-CollectionChoicesText $m.choices) -ceq (ConvertTo-CollectionChoicesText $e.choices)) { continue }
         $answers.Add([pscustomobject][ordered]@{ modId = [long]$m.modId; fileId = [long]$m.fileId; plugins = [string[]]@($m.plugins); choices = $m.choices })
     }

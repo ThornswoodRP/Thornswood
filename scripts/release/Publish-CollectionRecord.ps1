@@ -213,6 +213,9 @@ if ($RefreshTag.Count) { $params.RefreshTag = [string[]]$RefreshTag }
 if ($Replicate.Count) { $params.Replicate = [string[]]$Replicate }
 try {
     if ($cs.Move.Count) {
+        # A moved entry that lists its files gets the new archive's list, by
+        # its installer with the answers this record gives the new file (#6908).
+        $params.CollectionRecord = $Record
         $params.Mod = [string[]]@($cs.Move | ForEach-Object { [string]$_.modId })
         $params.FileId = [string[]]@($cs.Move | ForEach-Object { [string]$_.fileId })
         $params.Archive = [string[]]@($cs.Move | ForEach-Object { $g = Get-NexusFileArchive $want.game ([string]$_.fileId) (Join-Path $Work 'archives'); Say ("  file $($_.fileId): $($g.Name), $($g.Size) bytes"); $g.Path })

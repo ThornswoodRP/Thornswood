@@ -2,12 +2,6 @@
   "note": "Items the world hands out or a recipe asks for that nobody makes or gathers yet, each with the open issue that gives it a maker. scripts/dev/Check-Makers.js fails on a gap not listed here, and on an entry here that now has a maker or that nothing hands out or asks for any more (#3132). exempt is for named uniques, quest items and what Patrick has set apart as found only (the Ancient Nord burial set), each with why.",
   "items": [
     {
-      "desc": "f:Skyrim.esm",
-      "name": "Gold",
-      "issue": "#4625",
-      "why": "a forge recipe (the Eyepatch) still asks for a gold coin, which no recipe may"
-    },
-    {
       "desc": "2e500:Skyrim.esm",
       "name": "Black Soul Gem",
       "issue": "#4673",
@@ -558,12 +552,6 @@
       "name": "Unenchanted Restoration Staff",
       "issue": "#4644",
       "why": "Woodwright work with no recipe yet"
-    },
-    {
-      "desc": "a:Skyrim.esm",
-      "name": "lockpick",
-      "issue": "#4646",
-      "why": "Smith work with no recipe yet"
     },
     {
       "desc": "34c5e:Skyrim.esm",

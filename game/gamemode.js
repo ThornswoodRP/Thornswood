@@ -7341,10 +7341,73 @@ function poleTooWeak(actorId, waterRank) {
   return null;
 }
 
+/*
+  FISH TRAPS (#4655). docs/systems/classes/fisher.md, "Between casts": set
+  in water you are allowed to fish, up to FISH_TRAP_MAX at once, the wait is
+  that water's rank, collecting it is a catch of that water, and setting it
+  and collecting it are each one piece of work.
+
+  Until this, a woodwright made the trap and nothing let anybody set one:
+  placeFishTrap and collectFishTrap had no caller, and collecting gave work
+  and no catch.
+
+  A trap is kept on the fisher (TRAP_PROPERTY): which water (its reference
+  and its base), when it went in and the wait it went in with. The wait is
+  the trap's own, not the water's shared stock, so a trap in a water does
+  not fish it out for somebody casting a pole there, and a pole cast there
+  does not empty the trap. The trap itself comes back with the catch.
+
+  THE BUTTON is the lock key's line at the water (thornswoodWaterLine),
+  written for whoever just pressed E on it and again after each set or
+  collect, the way a door's line is written for the door just opened. The
+  front draws it while that water stays under the crosshair, and the lock
+  key sends /trap and the water's id (teleport.ts routes it here). The
+  server checks everything again: the water, the reach, the class, the rank
+  and the trap in the pack.
+
+  Not in a pearl bed or the longfin water: what comes out of those is a
+  quest's count.
+*/
+const WATER_LINE_PROPERTY = 'thornswoodWaterLine';
+const LONGFIN_WATER = '154a5:Thornswood-Content.esp';
+let waterLineStamp = 0;
+
+try {
+  // The server's own record: nobody's client reads it.
+  mp.makeProperty(TRAP_PROPERTY, {
+    isVisibleByOwner: false, isVisibleByNeighbors: false,
+    updateOwner: '', updateNeighbor: ''
+  });
+} catch (e) { log('fish traps: the trap record was made by an earlier load:', String(e)); }
+try {
+  mp.makeProperty(WATER_LINE_PROPERTY, {
+    isVisibleByOwner: true, isVisibleByNeighbors: false,
+    updateOwner: [
+      '(function(){',
+      '  try {',
+      '    var v = ctx.value;',
+      '    if (!v || typeof v !== "object") { return; }',
+      '    var was = globalThis.thornswoodWaterLine;',
+      '    if (was && was.stamp === v.at) { return; }',
+      '    globalThis.thornswoodWaterLine = { stamp: v.at, seen: Date.now(),',
+      '      hex: String(v.hex || ""), x: String(v.x || ""), w: String(v.w || ""),',
+      '      t: String(v.t || "") };',
+      '  } catch (e) { /* the client keeps the last line; the next press writes it again */ }',
+      '})();'
+    ].join('\n'),
+    updateNeighbor: ''
+  });
+} catch (e) {
+  // Made by an earlier load; a changed script needs a restart, which a deploy is.
+  log('fish traps: the water line was made by an earlier load:', String(e));
+}
+
 function fishTrapsOf(actorId) {
   let v = null;
   try { v = mp.get(actorId, TRAP_PROPERTY); } catch (e) { v = null; }
-  return Array.isArray(v) ? v.filter(function (t) { return t && typeof t === 'object'; }) : [];
+  return Array.isArray(v) ? v.filter(function (t) {
+    return t && typeof t === 'object' && typeof t.hex === 'string' && typeof t.base === 'string';
+  }) : [];
 }
 
 function holdsDesc(actorId, desc) {
@@ -7360,20 +7423,56 @@ function holdsDesc(actorId, desc) {
   return false;
 }
 
-function placeFishTrap(actorId, waterRank) {
+function waterHex(refrId) { return (Number(refrId) >>> 0).toString(16); }
+
+/** The fish row a trap may go in at this water, or null for one it may not. */
+function trapWater(refrId, baseDesc) {
+  if (!isFish(baseDesc) || baseDesc === LONGFIN_WATER) { return null; }
+  const quest = globalThis.__thornswoodQuestFishingRefs;
+  if (quest && quest[refrId]) { return null; }
+  return FISH_BY_BASE[baseDesc];
+}
+
+/* The water's wait, as fish() reads it: a rank nobody knows waits longest. */
+function trapWaitMs(rank) {
+  return Object.prototype.hasOwnProperty.call(FISH_TUNING.cooldownMs, rank)
+    ? FISH_TUNING.cooldownMs[rank] : FISH_TUNING.cooldownMs.master;
+}
+
+/* The fisher and their rank against this water, as fish() asks them. */
+function trapRefusal(actorId, caught) {
   const refusal = classGate(actorId, 'fish');
+  if (refusal) { return refusal; }
+  const named = RANK_LADDER.indexOf(caught.rank);
+  const want = named < 0 ? RANK_LADDER.length - 1 : named;
+  if (want > 0 && rankStep(actorId, 'fisher') < want) {
+    return 'This ' + caught.from + ' takes ' + rankWord(RANK_LADDER[want]) +
+           ' Fisher. Fish what you can until you are one.';
+  }
+  return null;
+}
+
+function placeFishTrap(actorId, refrId, baseDesc) {
+  const caught = trapWater(refrId, baseDesc);
+  if (!caught) { return { ok: false, line: 'A fish trap does not go in this water.' }; }
+  const refusal = trapRefusal(actorId, caught);
   if (refusal) { return { ok: false, line: refusal }; }
   if (!holdsDesc(actorId, FISH_TRAP_DESC)) {
     return { ok: false, line: 'You need a fish trap in your pack. A woodwright makes them. A trap is not a pole.' };
   }
+  const hex = waterHex(refrId);
   const set = fishTrapsOf(actorId);
+  if (set.some(function (t) { return t.hex === hex; })) {
+    return { ok: false, line: 'Your fish trap is already in this water.' };
+  }
   if (set.length >= FISH_TRAP_MAX) {
     return { ok: false, line: 'You already have ' + FISH_TRAP_MAX + ' fish traps set. Collect one before you set another.' };
   }
   if (!takeItem(actorId, FISH_TRAP_DESC, 1)) {
     return { ok: false, line: 'The trap did not leave your pack, so it was not set.' };
   }
-  set.push({ at: Date.now(), rank: String(waterRank || '') });
+  const waitMs = trapWaitMs(caught.rank);
+  set.push({ at: Date.now(), hex: hex, base: baseDesc, waitMs: waitMs });
   try { mp.set(actorId, TRAP_PROPERTY, set); }
   catch (e) {
     addItem(actorId, ITEMS.fishTrap, 1);
@@ -7384,30 +7483,105 @@ function placeFishTrap(actorId, waterRank) {
   return {
     ok: true,
     count: set.length,
-    line: 'You set a fish trap. ' + set.length + ' of ' + FISH_TRAP_MAX + ' are out.' +
-          (raised ? ' ' + raised : '')
+    line: 'You set a fish trap in the ' + caught.from + '. It is ready in ' + waitWord(waitMs / 1000) +
+          '. ' + set.length + ' of ' + FISH_TRAP_MAX + ' are out.' + (raised ? ' ' + raised : '')
   };
 }
 
-function setFishTrap(actorId, waterRank) {
-  return placeFishTrap(actorId, waterRank);
-}
-
-function collectFishTrap(actorId) {
+function collectFishTrap(actorId, refrId) {
+  const hex = waterHex(refrId);
   const set = fishTrapsOf(actorId);
-  if (!set.length) { return { ok: false, line: 'You have no fish trap set.' }; }
-  const trap = set.shift();
+  let i = -1;
+  for (let k = 0; k < set.length; k++) { if (set[k].hex === hex) { i = k; break; } }
+  if (i < 0) { return { ok: false, line: 'You have no fish trap in this water.' }; }
+  const trap = set[i];
+  const left = (Number(trap.at) || 0) + (Number(trap.waitMs) || 0) - Date.now();
+  if (left > 0) { return { ok: false, line: 'Your fish trap here is ready in ' + waitWord(left / 1000) + '.' }; }
+  const caught = isFish(trap.base) ? FISH_BY_BASE[trap.base] : null;
+  const refusal = classGate(actorId, 'fish');
+  if (refusal) { return { ok: false, line: refusal }; }
+
+  // The catch is the fisher's rank's pair for this water, with the season's
+  // share (#3144), as a cast at it is.
+  const step = rankStep(actorId, 'fisher');
+  const pair = FISH_TUNING.yieldByStep[step] || FISH_TUNING.yieldByStep[0];
+  let got = caught ? randInt(pair[0], pair[1]) : 0;
+  const season = globalThis.__thornswoodSeason;
+  if (got > 0 && season && season.seasonYield) { got = season.seasonYield(got); }
+  const goods = [{ item: FISH_TRAP_DESC, count: 1 }];
+  if (got > 0) { goods.push({ item: caught.produce, count: got }); }
+
+  // Written down before anything is handed over, so a failure leaves the
+  // trap set rather than handing out a catch twice.
+  set.splice(i, 1);
   try { mp.set(actorId, TRAP_PROPERTY, set); }
   catch (e) { return { ok: false, line: 'The trap is still set. It could not be collected.' }; }
+  let given = false;
+  try { given = addItemsAtomic(actorId, goods); } catch (e3) { given = false; }
+  if (!given) {
+    set.splice(i, 0, trap);
+    try { mp.set(actorId, TRAP_PROPERTY, set); }
+    catch (e4) { log('fish traps: a trap could not be put back for', actorId.toString(16) + ':', String(e4)); }
+    return { ok: false, line: 'Nothing from the trap would go in your pack, so it is still set. Say so in the dev channel.' };
+  }
+  if (got > 0) { economyGathered(actorId, caught.produce, got); }
   let raised = null;
   try { raised = creditWork(actorId, 'fish'); } catch (e2) { raised = null; }
+  const word = season && season.yieldWord ? season.yieldWord() : '';
   return {
     ok: true,
     count: set.length,
-    rank: trap && trap.rank,
-    line: 'You collect a fish trap.' + (raised ? ' ' + raised : '')
+    line: (got > 0 ? 'You take up your fish trap with ' + got + ' ' + caught.name + ' in it.'
+                   : 'You take up your fish trap. Nothing is in it this time.') +
+          (word ? ' ' + word : '') + (raised ? ' ' + raised : '')
   };
 }
+
+/*
+  The lock key's line at this water for this person: take up their trap when
+  it is ready, how long is left while it is not, or set one when they may.
+  Written every time, an empty line included, so a line for another water or
+  an old answer never stays up.
+*/
+function waterLine(actorId, refrId, baseDesc) {
+  const hex = waterHex(refrId);
+  waterLineStamp = Math.max(waterLineStamp + 1, Date.now());
+  const line = { at: waterLineStamp, hex: hex, x: '', w: '', t: '' };
+  const caught = trapWater(refrId, baseDesc);
+  if (caught && !classGate(actorId, 'fish')) {
+    const set = fishTrapsOf(actorId);
+    let mine = null;
+    for (let k = 0; k < set.length; k++) { if (set[k].hex === hex) { mine = set[k]; break; } }
+    if (mine) {
+      const left = (Number(mine.at) || 0) + (Number(mine.waitMs) || 0) - Date.now();
+      if (left > 0) { line.t = 'Your fish trap here is ready in ' + waitWord(left / 1000) + '.'; }
+      else { line.x = 'trap'; line.w = 'Take up your fish trap'; }
+    } else if (set.length < FISH_TRAP_MAX && holdsDesc(actorId, FISH_TRAP_DESC) &&
+               !trapRefusal(actorId, caught)) {
+      line.x = 'trap';
+      line.w = 'Set a fish trap here (' + set.length + ' of ' + FISH_TRAP_MAX + ' out)';
+    }
+  }
+  try { mp.set(actorId, WATER_LINE_PROPERTY, line); }
+  catch (e) { log('fish traps: the water line could not be written for', actorId.toString(16) + ':', String(e)); }
+}
+
+/* /trap and a water's id: what the lock key sends at the line above. */
+function trapCommand(parts, actorId) {
+  const hex = String((parts && parts[1]) || '').toLowerCase();
+  if (!/^[0-9a-f]{1,8}$/.test(hex)) { return 'That is not a water you can set a trap in.'; }
+  const refrId = parseInt(hex, 16);
+  let baseDesc = '';
+  try { baseDesc = mp.get(refrId, 'baseDesc'); } catch (e) { baseDesc = ''; }
+  if (!isFish(baseDesc)) { return 'That is not a water you can set a trap in.'; }
+  if (!withinResourceReach(actorId, refrId)) { return 'Come closer to this water.'; }
+  const hasOne = fishTrapsOf(actorId).some(function (t) { return t.hex === hex; });
+  const said = hasOne ? collectFishTrap(actorId, refrId) : placeFishTrap(actorId, refrId, baseDesc);
+  waterLine(actorId, refrId, baseDesc);
+  return said.line;
+}
+
+globalThis.__thornswoodTraps = { command: trapCommand, waterLine: waterLine };
 
 function fish(actorId, refrId, baseDesc) {
   if (!isFish(baseDesc)) return null;
@@ -8651,7 +8825,11 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
   // salmon as a flower for a gatherer. plantAt() refuses a fish base on its own
   // account as well, so neither half of that depends on this line staying where
   // it is. Same arrangement as the crops two lines up, same reason.
-  else if (isFish(baseDesc)) message = fish(casterRefrId, refrId, baseDesc);
+  else if (isFish(baseDesc)) {
+    message = fish(casterRefrId, refrId, baseDesc);
+    // The lock key's line for a fish trap here (#4655), after the cast.
+    waterLine(casterRefrId, refrId, baseDesc);
+  }
   // Hanging game before the plants, for the same reason. All seven bases were
   // rows in the plant table until the food rule of 21 September took them out,
   // so on a gamemode built before that ran a plants-first order would answer a
@@ -23356,17 +23534,14 @@ module.exports = {
   }
 
   /*
-    THE REST OF THE JAIL RULES (#502). Patrick, 12 October: jails can be
-    claimed by the Jarl only, and the rest as written on the issue: no timer,
+    THE REST OF THE JAIL RULES (#502): no timer,
     release by that hold's guards, lockpicking allowed, the game's jail keys
     open nothing, /stuck does not move someone out of a locked cell, and
     dying in a cell wakes at a temple.
 
-    THE JARL ONLY. A jail building (JAIL_BUILDING, read out of the world with
-    the cells) is the Jarl of its hold's to claim, and nobody else's: claim()
-    refuses anybody else, the line under the crosshair offers nobody else the
-    claim, and a deed presented at its door by anybody else is paper. Read as
-    the Jarl of that jail's hold, because the office is of one hold.
+    A building containing cells is an ordinary claimable place (#7071).
+    Holding it grants no guard authority: its actual cell locks remain the
+    hold's guards' responsibility and are never overridden by a claim.
 
     THE GAME'S JAIL KEYS. Each cell door's lock names a key the game made
     (JAIL_KEY), and a key in somebody's pack opens that lock in their own
@@ -23393,12 +23568,6 @@ module.exports = {
   function jailOfBuilding(building) {
     var b = String(building || '');
     return Object.prototype.hasOwnProperty.call(JAIL_BUILDING, b) ? JAIL_BUILDING[b] : null;
-  }
-
-  /** May this person hold this building: anybody, but a jail is its hold's Jarl's alone. */
-  function mayHold(actorId, profileId, building) {
-    var jh = jailOfBuilding(building);
-    return !jh || isJarlOf(profileId, jh);
   }
 
   /** The hold whose cell door a key the game made opens, or null, by the key's descriptor. */
@@ -23771,11 +23940,6 @@ module.exports = {
     try { mine = Number(mp.get(actorId, 'profileId')) || 0; } catch (e) { mine = 0; }
     push(actorId, mine);
 
-    // The embassy is held by its office, not by a claim, so a deed presented
-    // at its door is paper (#1390, see the embassy and remnant block).
-    var accordHeld = globalThis.__thornswoodEmbassy;
-    if (accordHeld && accordHeld.holds(building)) { return; }
-
     var held = holderOf(building);
     try { mine = Number(mp.get(actorId, 'profileId')) || 0; } catch (e) { mine = 0; }
 
@@ -23811,14 +23975,7 @@ module.exports = {
       word deed.delayMinutes later, or when they are next in the world, and
       names nobody. See word to the holder.
     */
-    /*
-      A JAIL'S DEED IS PAPER IN ANY HAND BUT ITS JARL'S (#502): the jail is
-      claimed by the Jarl of its hold alone, and presenting its deed is a
-      claim like any other. The deed still opens the door it names, as a
-      deed does (mayPass).
-    */
-    if (mine && held && held.by !== mine && holdsDeed(actorId, building) &&
-        mayHold(actorId, mine, building)) {
+    if (mine && held && held.by !== mine && holdsDeed(actorId, building)) {
       var was = held.name;
       var now2 = Date.now();
       var who2 = 'somebody';
@@ -23976,14 +24133,8 @@ module.exports = {
       if (cid) { line.d.push((cid >>> 0).toString(16)); }
     } else if (building) {
       var held = holderOf(building);
-      // The embassy is held by its office, not by a claim, so its doors offer
-      // nothing to claim (#1390); claim() refuses the line if it comes anyway.
-      var accordLine = globalThis.__thornswoodEmbassy;
       if (!held) {
-        // A jail offers the claim to the Jarl of its hold alone (#502).
-        if (!(accordLine && accordLine.holds(building)) && mayHold(actorId, profileId, building)) {
-          line.x = 'claim';
-        }
+        line.x = 'claim';
       } else if ((profileId && held.by === profileId) || holdsDeed(actorId, building) ||
                  holdsMasterKey(actorId, building)) {
         line.x = held.locked ? 'unlock' : 'lock';
@@ -24093,19 +24244,6 @@ module.exports = {
     if (!building) {
       toProfile(profileId, 'Open the door of the building you mean first. That is how ' +
                            'the server knows which one it is.');
-      return true;
-    }
-    // embassy.md: the embassy doors start held, so a claim is refused (#1390).
-    var accordClaim = globalThis.__thornswoodEmbassy;
-    if (accordClaim && accordClaim.holds(building)) {
-      toProfile(profileId, accordClaim.CLAIM_REFUSED);
-      return true;
-    }
-    // A jail is the Jarl of its hold's alone (#502). See jailOfBuilding.
-    if (!mayHold(actorId, profileId, building)) {
-      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
-      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' +
-                           jailTown + ' claims it.');
       return true;
     }
     var held = holderOf(building);
@@ -31428,16 +31566,6 @@ module.exports = {
     }
     var held = holderOf(building);
     if (!held) {
-      /*
-        embassy.md: "A steward of Haafingar does not evict the Accord" (#1390).
-        A claim somebody made before the embassy held this door is still that
-        person's claim, and ending it below is still the steward's to do.
-      */
-      var accordEvict = globalThis.__thornswoodEmbassy;
-      if (accordEvict && accordEvict.holds(building)) {
-        toProfile(profileId, accordEvict.EVICT_REFUSED);
-        return true;
-      }
       toProfile(profileId, 'Nobody holds ' + nameOf(building) + '.');
       return true;
     }
@@ -31659,45 +31787,6 @@ module.exports = {
   }
 
   /*
-    THE JAIL RULE, APPLIED TO THE CLAIMS MADE BEFORE IT, ONCE (#502).
-
-    Patrick, 12 October evening: jail claims made before the jail rule end
-    once, and then the rule holds. Before #2497 anybody could claim a jail
-    building; since, only the Jarl of its hold may, and since #2551 the Jarl
-    is whoever holds that hold's Jarl role. So at the first server start with
-    the rule, every claim on a jail building whose holder is not that hold's
-    Jarl ends, each logged by building, holder and profile, and
-    steps.jailRule records that it ran, in the same save. With no such claim
-    nothing ends and the mark is still written. It runs here, after every
-    part of the register is read, because save() writes all of them, and it
-    never runs again: a claim after this is made under the rule.
-
-    The holder is read on record (__thornswoodOfficesOnRecord): at server
-    start nobody has sent a pass, and this is about a claim the server
-    already holds, not a press arriving now.
-  */
-  function endPreRuleJailClaims() {
-    if (steps.jailRule) { return 0; }
-    var ended = 0;
-    for (var b in claims) {
-      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
-      var hold = jailOfBuilding(b);
-      if (!hold) { continue; }
-      // The character that holds the hold's Jarl office (#2551), read on record.
-      if (officesOfProfile(claims[b].by, true).jarl.indexOf(hold) !== -1) { continue; }
-      plog('law: the jail rule ends', claims[b].name + '\'s claim (profile ' + claims[b].by + ') on',
-           nameOf(b) + ', made before only the Jarl of', hold, 'could hold it');
-      keepOwed(b, claims[b], Date.now());
-      delete claims[b];
-      ended++;
-    }
-    steps.jailRule = Date.now();
-    save();
-    plog('law: the jail rule was applied to the claims made before it once:', ended, 'claim(s) ended');
-    return ended;
-  }
-
-  /*
     WHAT A DELETED CHARACTER HELD, LET GO (#2351, Patrick's A of 16 October:
     "Delete-Person.ps1 writes a list, and the gamemode releases those entries
     at its next start"). Asked once, as this block loads and before
@@ -31854,7 +31943,6 @@ module.exports = {
 
   if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('property', release); }
   rolesRead();
-  endPreRuleJailClaims();
 
   ready();
   g.__thornswoodProperty = {
@@ -31889,12 +31977,12 @@ module.exports = {
     isJarl: isJarl, isJarlOf: isJarlOf, jarlHoldsOf: jarlHoldsOf, isCourtOf: isCourtOf,
     rolesRead: rolesRead, held: function () { return JSON.parse(JSON.stringify(law.held)); },
     isSteward: isSteward, isStewardOf: isStewardOf, stewardHoldsOf: stewardHoldsOf,
-    endPreRuleJailClaims: endPreRuleJailClaims, steps: function () { return Object.assign({}, steps); },
+    steps: function () { return Object.assign({}, steps); },
     // What a deleted character held, let go at server start (#2351).
     release: release,
     isGuard: isGuard, guardHoldsOf: guardHoldsOf, jailHoldOf: jailHoldOf, cellLocked: cellLocked,
     mayPassCell: mayPassCell, lockCell: lockCell,
-    jailOfBuilding: jailOfBuilding, mayHold: mayHold, jailKeyHold: jailKeyHold, lockedJailHere: lockedJailHere,
+    jailOfBuilding: jailOfBuilding, jailKeyHold: jailKeyHold, lockedJailHere: lockedJailHere,
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
@@ -31933,16 +32021,14 @@ module.exports = {
   docs/systems/embassy.md, thalmor.md, npcs.md and cut-items.md are the
   design. Every number here is one of theirs.
 
-  THE BUILDING. "The embassy doors start held by the Ambassador's office,
-  so the line at them offers nobody a claim. A steward of Haafingar does
-  not evict the Accord." The page calls it a warehouse in Solitude
+  THE BUILDING. The embassy roll names a warehouse in Solitude
   ("The Empire wanted the province and got a warehouse. This is that
   warehouse") and names none. EMBASSY_BUILDING is the answer suggested on
   #1390, the Abandoned Warehouse: the one warehouse in Solitude that is
   not a shop and not the East Empire Company's, which the trading company
   replaces. If Patrick names another building, that one line changes. The
-  property block asks holds() for the line at the door, before a claim and
-  an eviction, and before a deed presented at the door. It is not a hold:
+  property block uses ordinary saved ownership there (#7071); the embassy
+  identity does not manufacture a claim after a reset. It is not a hold:
   nothing here makes a box, a board, a ledger or a mint, and Solitude's box
   and board stay Haafingar's.
 
@@ -31998,10 +32084,6 @@ module.exports = {
 
   var ROLL_NAME = { embassy: 'the embassy roll', remnant: 'the Thalmor remnant roll' };
 
-  var CLAIM_REFUSED = 'The embassy is held by the Ambassador\'s office under the Accord. ' +
-                      'It cannot be claimed.';
-  var EVICT_REFUSED = 'The embassy is not a house of the hold. A steward of Haafingar ' +
-                      'does not evict the Accord.';
   var NOT_ADMIN = {
     embassy: 'Only an admin writes the embassy roll.',
     remnant: 'The remnant roll is an application. Only an admin writes it.'
@@ -32141,7 +32223,7 @@ module.exports = {
 
   // ------------------------------------------------------- what is asked --
 
-  /** True when this building is the embassy. Asked by the property block. */
+  /** Exact embassy identity; identifying a place does not manufacture title. */
   function holds(building) {
     return !!building && String(building) === EMBASSY_BUILDING;
   }
@@ -32419,7 +32501,6 @@ module.exports = {
     release: release,
     holds: holds, command: command, enter: enter, setArmed: setArmed, leave: leave,
     listing: listing, rolls: function () { return reg; },
-    CLAIM_REFUSED: CLAIM_REFUSED, EVICT_REFUSED: EVICT_REFUSED,
     EMBASSY_BUILDING: EMBASSY_BUILDING, ROLL_MOST: ROLL_MOST, ARMED_MOST: ARMED_MOST
   };
   g.__thornswoodRolls = { has: has };
@@ -46056,6 +46137,9 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // /stall open, and the panel's buttons send the rest. Never
                // typed, so not in PLAYER_WORDS.
                '/stall',
+               // The lock key at a water whose line offers a fish trap
+               // (#4655). Never typed, so not in PLAYER_WORDS.
+               '/trap',
                // The trade carts' panel, at a cart stop's crate, from Raid
                // cart on P, or on the Office page for staff (#3158). Never typed.
                '/cart',
@@ -47412,6 +47496,17 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
       var stallSaid = stallsApi.command(parts, actorId, profileId, cmd);
       if (stallSaid) { toProfile(profileId, stallSaid); }
+      return true;
+    }
+
+    // The lock key at a water whose line offers a fish trap (#4655): set one
+    // or take it up. Never typed. The scripted activators block answers it.
+    if (word === '/trap') {
+      var trapsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTraps;
+      if (!trapsApi || !trapsApi.command) { toProfile(profileId, 'Fish traps are not running on this server.'); return true; }
+      if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
+      var trapSaid = trapsApi.command(parts, actorId);
+      if (trapSaid) { toProfile(profileId, trapSaid); }
       return true;
     }
 
@@ -57838,7 +57933,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   steepSeconds by the fire the inputs are taken and the dye is in the pack,
   one entry on the list's item with the dye's name, the way a deed is named.
   Walking away from the fire before then loses the steep and takes nothing:
-  the boil's rule. One steep at a time. A relog loses a steep the same way.
+  the boil's rule. One steep at a time. A relog keeps a steep, as it keeps
+  a boil (#5047): it is the character's, by actor id, and nothing here
+  hears a leave, so back by the fire once its time is up it is done, and
+  back away from the fire it is lost. It is kept in this block's memory
+  only, so a server restart loses it, and nothing was taken yet.
 
   THE BOTTLE OF WATER A DYE TAKES IS SPENT FROM THE WATER LEDGER. The game
   cannot mark where a bottle's water came from, so the needs block counts
