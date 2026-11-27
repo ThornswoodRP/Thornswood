@@ -56,6 +56,15 @@ const GREPORTS = path.join(DATA, 'gallery-reports.json');
 // recordings. The launcher AllowExt must match this list.
 const GALLERY_ALLOW = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.webm'];
 const GALLERY_CAP = 100 * 1024 * 1024;
+/* How many pictures one account may have waiting for staff at once (#4404).
+   The hourly budget is per address, so one account sending from a few
+   addresses, through the site and the launcher, could fill the queue for 90
+   days. A sender with no Discord account (the hub's password) counts as one. */
+const GALLERY_WAITING_EACH = 20;
+/* The room the disk keeps free (#4404). The site, its stores and its logs
+   share the disk with uploads/, so no upload is taken that could leave less
+   than this, counting the file at its declared size or the door's cap. */
+const UPLOAD_FREE_FLOOR = 2 * 1024 * 1024 * 1024;
 const KIND = {
   '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif',
   '.webp':'image/webp', '.bmp':'image/bmp',
@@ -336,6 +345,26 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
     return send(res, 429, JSON.stringify({error:'This connection has reached its upload limit. Try again later.'}),
       null, {'Retry-After':String(Math.max(1, Math.ceil((budget.start + 3600000 - now) / 1000))), Connection:'close'});
   }
+  /* Room on the disk first (#4404): nothing checked it, so uploads could fill
+     the disk the site and its stores write to. The file counts at the size
+     it declares, or at the door's cap when it declares none. */
+  let room;
+  try {
+    const st = fs.statfsSync(UP);
+    room = Number(st.bavail) * Number(st.bsize);
+  } catch (e) {
+    req.resume();
+    console.error('[thornswood-docs] could not read the free space for uploads (' + (e.code || e.message) + ')');
+    return sendJson(res, 500, { error: 'The site could not tell how much room it has, so it took no file. Try again in a minute.' });
+  }
+  const declared = Number(req.headers['content-length']);
+  const need = Number.isFinite(declared) && declared > 0 ? Math.min(declared, cap) : cap;
+  if (room - need < UPLOAD_FREE_FLOOR) {
+    req.resume();
+    console.error('[thornswood-docs] upload refused: ' + JSON.stringify({ event: 'disk-low', free: room, need: need, floor: UPLOAD_FREE_FLOOR }));
+    return send(res, 507, JSON.stringify({ error: 'The site is short of disk space, so it is not taking files just now. Staff can see this in its log.' }),
+      null, { Connection: 'close' });
+  }
   if (!copy) budget.count++;
   budget.active++;
   const d = new Date();
@@ -422,8 +451,8 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
 // ==== end thornswood upload guard ====
 
 Object.assign(module.exports, { GALLERY, GALLERY_ALLOW, GALLERY_CAP,
-  GALLERY_HOLD_DAYS, GPENDING, GREPORTS, KIND, SMALL_CAP, SMALL_KINDS,
-  SMALL_WIDTHS, UP_SMALL, UPMETA });
+  GALLERY_HOLD_DAYS, GALLERY_WAITING_EACH, GPENDING, GREPORTS, KIND, SMALL_CAP, SMALL_KINDS,
+  SMALL_WIDTHS, UP_SMALL, UPLOAD_FREE_FLOOR, UPMETA });
 
 // From modules loaded after this one, taken once this one is whole, so a
 // module that needs this one back finds all of it.

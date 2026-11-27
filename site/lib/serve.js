@@ -34,7 +34,7 @@ const { galleryPage, loginBackoff, loginBackoffBump, loginKey, loginNote,
 const { ageGateBody, ageStated, downloadServed, downloadsBody, downloadsFacts,
   listFiles } = require('./downloads');
 const { deleteUpload, GALLERY, GALLERY_ALLOW, GALLERY_CAP, GALLERY_HOLD_DAYS,
-  GPENDING, GREPORTS, KIND, listUploads, pendingCopies, pictureSize,
+  GALLERY_WAITING_EACH, GPENDING, GREPORTS, KIND, listUploads, pendingCopies, pictureSize,
   receiveUpload, shotSrcset, SMALL_CAP, SMALL_KINDS, SMALL_WIDTHS, smallCopy,
   smallFile, srcsetWidths, UP_SMALL, uploadRemoved, UPMETA,
   withGalleryPending } = require('./uploads');
@@ -1622,6 +1622,17 @@ async function handle(req, res) {
     const who = await gallerySender(url, w, 'Sign in to the hub, or send a valid launcher ticket.');
     if (!who.ok) return sendJson(res, who.code, who.body);
     const from = who.from, discordId = who.discordId;
+
+    /* One account's waiting pictures (#4404), counted before anything is
+       read: the queue had no length, and the hourly budget is per address,
+       so one account could fill it from a few addresses. */
+    const waiting = jsonFile(GPENDING, []);
+    const mine = Array.isArray(waiting) ? waiting.filter((x) => x && String(x.discordId || '') === discordId).length : 0;
+    if (mine >= GALLERY_WAITING_EACH) {
+      req.resume();
+      return sendJson(res, 429, { ok: false, why: 'waiting', error: 'You have ' + mine + ' pictures waiting for staff, which is as many as ' +
+        'one account can. Send more once staff have looked at them.' });
+    }
 
     const asked = (url.searchParams.get('name') || 'shot.png').split(/[\\/]/).pop();
     const by = (url.searchParams.get('by') || '').slice(0, 40);
