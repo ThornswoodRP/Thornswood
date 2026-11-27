@@ -477,10 +477,14 @@ function needsRig() {
   let P = null;
   try { P = plays ? new Function('return ' + plays[1])() : null; } catch (e) { P = null; }
   const inst = /const INSTRUMENTS = (\{[\s\S]*?\n\});/.exec(emotes);
-  let I = null;
-  try { I = inst ? new Function('return ' + inst[1])() : null; } catch (e) { I = null; }
   const fileM = /const INSTRUMENT_FILE = '([^']+)';/.exec(emotes);
-  function descOf(k) { return I && I[k] && fileM ? I[k].id.toString(16) + ':' + fileM[1] : ''; }
+  let I = null;
+  try { I = inst && fileM ? new Function('INSTRUMENT_FILE', 'return ' + inst[1])(fileM[1]) : null; } catch (e) { I = null; }
+  // Each instrument is the records that count for it (#7167); a bard's is its one.
+  function descOf(k) {
+    const f = I && I[k] && I[k].forms;
+    return f && f.length === 1 ? f[0][0].toString(16) + ':' + f[0][1] : '';
+  }
   yes('E3 the server\'s bard is the wheel\'s Lute, Flute, Drum and Sing, by their events',
       !!P && Object.keys(P).sort().join(',') ===
         [by.Lute, by.Flute, by.Drum, by.Sing].map(function (e) { return String(e).toLowerCase(); }).sort().join(','));

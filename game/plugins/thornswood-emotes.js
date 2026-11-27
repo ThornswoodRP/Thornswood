@@ -357,15 +357,19 @@ function sayEmote(name) {
 }
 
 /*
-  The three a Woodwright can make. Skyrim's own lute, flute and drum are
-  clutter and cannot be held, so the wheel asks for these weapons. Local ids
-  in PlayFluteLuteDrum.esp.
+  The instruments the wheel asks for, each as the records that count: a
+  local id and the plugin it is in. The lute, flute and drum are
+  PlayFluteLuteDrum.esp's weapons, which #4509 is settling. The horn is
+  Skyrim's own war horn (#7167): the Horn emote blows a horn the animation
+  puts in the hand, so it needs one in the pack, Nord or Imperial. The
+  Woodwright makes the Nord one at the woodworking bench.
 */
 const INSTRUMENT_FILE = 'PlayFluteLuteDrum.esp';
 const INSTRUMENTS = {
-  lute: { id: 0x1d9b, word: 'a lute' },
-  flute: { id: 0xd62, word: 'a flute' },
-  drum: { id: 0x287f, word: 'a drum' }
+  lute: { forms: [[0x1d9b, INSTRUMENT_FILE]], word: 'a lute' },
+  flute: { forms: [[0xd62, INSTRUMENT_FILE]], word: 'a flute' },
+  drum: { forms: [[0x287f, INSTRUMENT_FILE]], word: 'a drum' },
+  horn: { forms: [[0x200b6, 'Skyrim.esm'], [0x200ba, 'Skyrim.esm']], word: 'a horn' }
 };
 
 function instrumentOf(name) {
@@ -375,11 +379,13 @@ function instrumentOf(name) {
 function carryingInstrument(need) {
   const pc = player();
   if (!pc || !need) { return false; }
-  try {
-    const form = sp.Game.getFormFromFile(need.id, INSTRUMENT_FILE);
-    if (!form) { return false; }
-    return pc.getItemCount(form) > 0;
-  } catch (e) { return false; }
+  for (const [id, file] of need.forms) {
+    try {
+      const form = sp.Game.getFormFromFile(id, file);
+      if (form && pc.getItemCount(form) > 0) { return true; }
+    } catch (e) { }
+  }
+  return false;
 }
 
 /* True when this name is an instrument the person does not have. */
