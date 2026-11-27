@@ -10,7 +10,7 @@
 // copies are those two, is not known yet, so nothing is changed until a
 // session says. This proves the probe that says it: it reads the HUD's line,
 // that mod's menu, the camera and the activation block, once per new person
-// looked at, and writes nothing to any menu.
+// or camera mode, and writes nothing to any menu.
 //
 // Read only.
 'use strict';
@@ -26,7 +26,7 @@ const CR = String.fromCharCode(13);
 const front = fs.readFileSync(path.join(__dirname, '..', '..', 'game', 'plugins', 'thornswood-front.js'), 'utf8')
   .split(CR).join('');
 
-const m = /  function gamePromptSaid\(ref\) \{[\s\S]*?\n  \}\n/.exec(front);
+const m = /  function gamePromptSaid\(ref, cam\) \{[\s\S]*?\n  \}\n/.exec(front);
 yes('the probe is in the front plugin', !!m);
 
 if (m) {
@@ -46,7 +46,7 @@ if (m) {
     }
   };
   const said = new Function('sp', m[0] + '\nreturn gamePromptSaid;')(sp);
-  const line = said({ isActivationBlocked: function () { return true; } });
+  const line = said({ isActivationBlocked: function () { return true; } }, 9);
   yes('it names the camera', /camera third person/.test(line));
   yes('it says what the HUD\'s own line holds', /the HUD line "Talk" \/ "Sera"/.test(line));
   yes('it reads the HUD\'s rollover, the line the game writes its prompt into',
@@ -62,12 +62,12 @@ if (m) {
   });
   let threw = false;
   let l2 = '';
-  try { l2 = quiet({}); } catch (e) { threw = true; }
+  try { l2 = quiet({}, -1); } catch (e) { threw = true; }
   yes('a game that answers none of it still gets its look line', !threw && /activation blocked unknown/.test(l2));
 }
 
-yes('it is written once per new person looked at, not every poll',
-    /if \(hex !== lookingAt\) \{\n      lookingAt = hex;\n      say\('looking at ' \+ row\.n \+ ' \(' \+ hex \+ '\)' \+ gamePromptSaid\(ref\)\);/.test(front));
+yes('it is written once per person and camera mode, not every poll',
+    /if \(hex !== lookingAt \|\| camera !== lookingCamera\) \{\n      lookingAt = hex;\n      lookingCamera = camera;\n      say\('looking at ' \+ row\.n \+ ' \(' \+ hex \+ '\)' \+ gamePromptSaid\(ref, camera\)\);/.test(front));
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');

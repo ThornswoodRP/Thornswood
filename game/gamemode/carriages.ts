@@ -347,15 +347,39 @@
   */
   var pressedBy = {};
 
+  /*
+    WHAT A PRESS FOUND IS SAID (#4581). Every press on a driver that people
+    made from 15 to 27 November reached this server as /ride e with the
+    driver's own id (Read-RideLines, the chat logs), and not one opened the
+    panel, while the server said nothing about any of them. So each press
+    says here which of the three ways it went, with what decided it: the
+    base the server read for that id when it is no driver's, where both
+    stood when he was out of reach, and the stop when his panel was sent.
+    One line a press, and a press is somebody's E.
+  */
+  function pressSaid(driverId, actorId, what) {
+    plog('E on ' + (Number(driverId) >>> 0).toString(16) + ' by ' + (Number(actorId) >>> 0).toString(16) + ': ' + what);
+  }
+
+  function placeSaid(p) {
+    return p ? p.cell + ' ' + p.pos.map(Math.round).join(',') : 'nowhere the server can read';
+  }
+
   function pressDriver(actorId, driverId) {
-    var base = '';
-    try { base = String(mp.get(driverId, 'baseDesc') || ''); } catch (e) { base = ''; }
+    var base = '', why = '';
+    try { base = String(mp.get(driverId, 'baseDesc') || ''); } catch (e) { base = ''; why = String(e && e.message || e); }
     var stop = stopByBase(base);
-    if (!stop) { return null; }
+    if (!stop) {
+      pressSaid(driverId, actorId, 'no driver, its base is ' + (base || 'unreadable' + (why ? ' (' + why + ')' : '')));
+      return null;
+    }
     var me = placeOf(actorId), them = placeOf(driverId);
     if (!me || !them || me.cell !== them.cell || apart(me.pos, them.pos) > RIDE_REACH) {
+      pressSaid(driverId, actorId, stop.driver + ' at ' + stop.key + ' is out of reach: the person at ' + placeSaid(me) +
+                ', the driver at ' + placeSaid(them) + (me && them && me.cell === them.cell ? ', ' + Math.round(apart(me.pos, them.pos)) + ' apart' : ''));
       return { stop: stop, far: true };
     }
+    pressSaid(driverId, actorId, stop.driver + ' at ' + stop.key + ', ' + Math.round(apart(me.pos, them.pos)) + ' apart: the panel is sent');
     pressedBy[actorId] = { stop: stop.key, driver: driverId, at: Date.now() };
     return { stop: stop, far: false };
   }

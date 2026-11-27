@@ -64,7 +64,8 @@ namespace Thornswood
                 return ModlistCard(CollectionCard("Installing the mods", (modlistLine.Length > 0 ? modlistLine + ". " : "") +
                     "Press Stop to stop after the file it is on; what it has is kept, and Install goes on from there."));
             int have = OwnGame.ModsRevision();
-            int wants = Updater.ServerCollectionRevision;
+            // The modlist's own numbering, the records' (#7193).
+            int wants = Updater.ServerRecordRevision > 0 ? Updater.ServerRecordRevision : Updater.ServerCollectionRevision;
             string where = "Mod Organizer 2 in " + OwnGame.ModsFolder;
             if (have <= 0)
                 return ModlistCard(CollectionCard("Your mods: not all installed yet",

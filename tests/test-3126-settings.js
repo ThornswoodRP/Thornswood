@@ -301,6 +301,8 @@ function writerRig(fileText, mapped) {
     'let wantedFov = 0;\n' +
     'const CHAT_FADE_CHOICES = [5, 10, 15, 20, 0];\n' +
     'let CHAT_FADE = 10, NEEDS_BARS = true;\n' +
+    'const TEXT_SIZE_CHOICES = [100, 115, 130, 150];\n' +
+    'let TEXT_SIZE = 100;\n' +
     pieces.join('\n') + '\n' +
     'let SKILLS_KEY = 37;\n' +
     'function applySettings(text) { ini = text; SKILLS_KEY = iniNumber(ini, "SkillsKey", 37); record(text); }\n' +
@@ -383,6 +385,14 @@ attempt('B', function () {
   w.set('NeedsBars', 1);
   yes('B6 shown takes the line out', !/NeedsBars/.test(w.file));
 
+  // The text size (#4474), in percent.
+  w.set('TextSize', 130);
+  yes('B6b the text size is written', /\r\nTextSize = 130\r\n/.test(w.file) && w.said[w.said.length - 1] === 'Text at 130 percent.');
+  w.set('TextSize', 120);
+  yes('B6b a size that is not a choice is refused', /not one of the choices/.test(w.said[w.said.length - 1]) && /TextSize = 130/.test(w.file));
+  w.set('TextSize', 100);
+  yes('B6b 100, the usual size, takes the line out', !/TextSize/.test(w.file));
+
   const fresh = writerRig('', MAPPED);
   fresh.set('WheelKey', 33);
   yes('B7 an empty file gets the one line', fresh.file === 'WheelKey = 33\n');
@@ -402,6 +412,7 @@ attempt('C', function () {
   const pieces = [liftFrom(front, 'function iniNumber(text, key, fallback) {', '  '),
                   liftFrom(front, 'function keyName(code) {', '  '),
                   liftFrom(front, 'function chatFadeOf(text) {', '  '),
+                  liftFrom(front, 'function textSizeOf(text) {', '  '),
                   // A one line function, so not liftFrom, which reads to the next closing brace.
                   (/function needsBarsOf\(text\) \{[^\n]*\}/.exec(front) || [''])[0]];
   const block = between(front, '  const SETTINGS_KEYS = {', '\n  const SETTINGS_LABELS') || '';
@@ -410,6 +421,7 @@ attempt('C', function () {
   const vars = [];
   rk.replace(/^\s+([A-Z_]+) = /gm, function (all, v) { if (vars.indexOf(v) < 0) { vars.push(v); } return all; });
   const run = new Function("'use strict';\nlet ini = '';\nconst CHAT_FADE_CHOICES = [5, 10, 15, 20, 0];\n" +
+    'const TEXT_SIZE_CHOICES = [100, 115, 130, 150];\n' +
     'let ' + vars.join(', ') + ';\n' + pieces.join('\n') + '\n' + block + '\n' + rk +
     '\nreturn function (text) { readKeys(text); return { ' + vars.map(function (v) { return v + ': ' + v; }).join(', ') + ' }; };')();
   const blank = run('');
@@ -424,6 +436,8 @@ attempt('C', function () {
   yes('C2 and the names the prompts show', moved.MOLD_NAME === 'F' && moved.SLEEP_NAME === 'F' && moved.LOCK_NAME === 'G' &&
       moved.TREAT_SELF_NAME === 'I' && moved.APPRENTICE_NAME === 'C' && moved.CLOSE_GAME_NAME === 'F9');
   yes('C2 and the chat and the needs bars', moved.CHAT_FADE === 0 && moved.NEEDS_BARS === false);
+  yes('C2 and the text size, 100 when nothing or something not offered is there (#4474)',
+      blank.TEXT_SIZE === 100 && run('TextSize = 130\n').TEXT_SIZE === 130 && run('TextSize = 120\n').TEXT_SIZE === 100);
   const missing = Object.keys(TEMPLATE).filter(function (k) {
     return ['VoicePort', 'MarkKey', 'PushToTalk', 'VoiceModeKey', 'VoiceLockKey', 'PageKey', 'CloseKey', 'StopKey', 'MuteKey'].indexOf(k) < 0 &&
       /Key$/.test(k) && rk.indexOf("'" + k + "'") < 0;

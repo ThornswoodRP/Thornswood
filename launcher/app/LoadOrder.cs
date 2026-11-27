@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.RegularExpressions;
 
 namespace Thornswood
@@ -43,6 +44,21 @@ namespace Thornswood
         public static readonly string[] Masters = {
             "Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"
         };
+
+        /// <summary>
+        /// True when the plugins.txt at <paramref name="file"/> is there and
+        /// switches at least one plugin on (a line that starts with *). A
+        /// shipped list that does not is never copied over the game's, which
+        /// would switch every plugin off (#6327, Verify.ShippedListProblem).
+        /// Swap keeps its own copy of this test, since it builds alone.
+        /// </summary>
+        public static bool SwitchesAnyOn(string file)
+        {
+            if (!File.Exists(file)) return false;
+            foreach (string raw in File.ReadAllLines(file))
+                if (raw.Trim().StartsWith("*")) return true;
+            return false;
+        }
 
         public static bool IsMaster(string name)
         {

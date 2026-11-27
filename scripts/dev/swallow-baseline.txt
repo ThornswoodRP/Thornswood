@@ -164,7 +164,7 @@
 # below. Each is later work on its own path; converting one lowers its line.
 AutoJoin.cs 2
 Chars.cs 7
-Checks.cs 19
+Checks.cs 18
 ClientRuntime.cs 1
 CrashDump.cs 1
 Discord.cs 13
@@ -365,7 +365,7 @@ game\gamemode\staff-spells.ts 11
 game\gamemode\staff.ts 9
 game\gamemode\strength-weapons.ts 1
 game\gamemode\stuck.ts 7
-game\gamemode\teleport.ts 17
+game\gamemode\teleport.ts 15
 game\gamemode\thalmor-patrols.ts 4
 game\gamemode\the-benches.ts 2
 game\gamemode\the-class-and-profession-gates.ts 1

@@ -37,10 +37,10 @@
 
   THE CONTRACT with thornswood-front.js:
     window.thornswoodSettings = { open(), close(), toggle(), isOpen(), setState(state) }
-    state  { fov: { value, min, max, def }, chatFade, chatChoices, needsBars,
+    state  { fov: { value, min, max, def }, chatFade, chatChoices, needsBars, textSize, textChoices,
              keys: { IniName: code }, mods: { id: code }, said }
     page -> plugin  'settings:ready' | 'settings:opened' | 'settings:closed'
-                    'settings:set <Name> <value>'  Fov, ChatFade, NeedsBars, or an IniName with a scan code
+                    'settings:set <Name> <value>'  Fov, ChatFade, NeedsBars, TextSize, or an IniName with a scan code
 */
 (function () {
   if (window.thornswoodSettings) { return; }
@@ -383,10 +383,20 @@
   function screenHtml() {
     var f = state.fov;
     var out = '<div class="group">Field of view</div>' +
-      '<div class="line"><input type="range" id="' + ID + '-fov" min="' + f.min + '" max="' + f.max +
+      '<div class="line"><input type="range" id="' + ID + '-fov" aria-label="Field of view" min="' + f.min + '" max="' + f.max +
       '" step="1" value="' + f.value + '"><span class="key" id="' + ID + '-fovnum">' + f.value + '</span>' +
       '<button id="' + ID + '-fovdef">Skyrim\'s own, ' + f.def + '</button></div>' +
       '<p class="note">How much of the world fits on screen, from ' + f.min + ' to ' + f.max + '. It changes as you let go.</p>';
+    var sizes = state.textChoices || [];
+    if (sizes.length) {
+      out += '<div class="group">Text size</div><div class="line">';
+      for (var z = 0; z < sizes.length; z++) {
+        out += '<button data-text="' + sizes[z] + '"' + (sizes[z] === state.textSize ? ' class="go"' : '') + '>' +
+          sizes[z] + '%</button>';
+      }
+      out += '</div><p class="note">How big every panel is drawn, its words with it. Panels grow with the screen ' +
+        'too, and never past its edge, so on a small screen the biggest sizes stop where the screen does.</p>';
+    }
     out += '<div class="group">Hide the chat after a new line</div><div class="line">';
     for (var c = 0; c < state.chatChoices.length; c++) {
       var s = state.chatChoices[c];
@@ -441,6 +451,7 @@
     });
     each('button[data-fade]', function () { tell('set ChatFade ' + this.getAttribute('data-fade')); });
     each('button[data-bars]', function () { tell('set NeedsBars ' + this.getAttribute('data-bars')); });
+    each('button[data-text]', function () { tell('set TextSize ' + this.getAttribute('data-text')); });
     var fov = body.querySelector('#' + ID + '-fov');
     if (fov) {
       var num = body.querySelector('#' + ID + '-fovnum');

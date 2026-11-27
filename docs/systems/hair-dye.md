@@ -21,7 +21,10 @@ using one is anybody's.
   loses the steep and takes nothing, the way a boil is lost. When it is
   done the inputs are taken and the dye is in the pack. If the pack holds
   the inputs of more than one dye, the first in the list is made. One steep
-  at a time, and a relog loses one under way.
+  at a time. A relog keeps a steep under way, as it keeps a boil: back
+  by the fire once its time is up, the dye is made, and back away from
+  the fire, the steep is lost. A server restart loses it, and nothing is
+  taken.
   The shared crafting check runs before starting and again before the inputs
   are spent. Rest under 15 or a disease gone bad refuses the steep. Injury
   follows the cooking spot's usual rule, which permits one-handed work.

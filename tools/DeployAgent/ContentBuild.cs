@@ -12,6 +12,14 @@
 // carrying the key it looked for. The agent has the gate build it, holds the
 // kept build to its build.json, puts it on the draft, and says how it went;
 // that status starts the merge release again.
+//
+// A MERGE THE QUEUE HOLDS (#6879, Patrick's A). A merge group whose content
+// inputs have no build asks too, its payload naming the queued commit
+// ("queued"). The gate builds that commit as the box's limited account
+// (Build-Content -Queued, OnBox.ps1's THE LIMITED RUN), keeps it apart from
+// main's, and the agent puts it on a draft of its own, content-queue-<server>-
+// <key>, which no release ever takes: the merge group's content checks run
+// over it, and a red one drops the pull request from the queue.
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -30,6 +38,9 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
     /// keeps 8 on the box; the drafts keep more, so a release of an older
     /// commit (a rerun) still finds its build.</summary>
     public const int Keep = 16;
+    /// <summary>How many drafts of queued merges are kept: each is read by
+    /// its merge group's checks within the hour and by nothing after.</summary>
+    public const int QueueKeep = 8;
     /// <summary>How long the gate's turn is waited for: it runs one verb at a time.</summary>
     public static readonly TimeSpan GateWait = TimeSpan.FromMinutes(30);
 
@@ -39,9 +50,19 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
     static readonly Regex From = new(@"^FROM ([0-9a-f]{40})$");
 
     public static string Tag(string server, string key) => $"content-{server}-{key}";
+    public static string QueueTag(string server, string key) => $"content-queue-{server}-{key}";
 
-    /// <summary>The key and the server a Deployment to Content asks for.</summary>
-    public static (string Key, string Server) Payload(JsonElement payload)
+    /// <summary>Whether a Deployment to Content asks for a queued merge's
+    /// build; false for any payload that does not read, which Apply refuses.</summary>
+    public static bool IsQueued(JsonElement payload)
+    {
+        try { return Payload(payload).Queued != ""; }
+        catch (Exception e) when (e is InvalidDataException or JsonException) { return false; }
+    }
+
+    /// <summary>The key and the server a Deployment to Content asks for, and
+    /// the queued merge's commit when it asks for one ("" for main's).</summary>
+    public static (string Key, string Server, string Queued) Payload(JsonElement payload)
     {
         var p = payload;
         if (p.ValueKind == JsonValueKind.String)
@@ -54,7 +75,9 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
         var server = S("server");
         if (!KeyShape.IsMatch(key)) throw new InvalidDataException("the Deployment has no payload naming a content key (64 hex)");
         if (server is not ("dev" or "main")) throw new InvalidDataException($"the Deployment's server is \"{server}\", not dev or main");
-        return (key, server);
+        var queued = S("queued");
+        if (queued != "" && !CommitShape.IsMatch(queued)) throw new InvalidDataException($"the Deployment's queued merge \"{queued}\" is not a commit (40 hex)");
+        return (key, server, queued);
     }
 
     /// <summary>Builds what the Deployment asks for and puts it on its draft.
@@ -63,21 +86,26 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
     /// the merge release of the newest commit looks for its own key.</summary>
     public async Task<Outcome> Apply(Deployment d, Action<string> logf, CancellationToken ct)
     {
-        var (asked, server) = Payload(d.Payload);
-        logf($"content build for {server}, inputs {asked[..12]}, asked by commit {Short(d.Sha)}");
-        var run = await gate.Run($"Build-Content -Server {server}", GateWait, logf, ct);
+        var (asked, server, queued) = Payload(d.Payload);
+        logf(queued == "" ? $"content build for {server}, inputs {asked[..12]}, asked by commit {Short(d.Sha)}"
+            : $"content build of the queued merge {Short(queued)} for {server}, inputs {asked[..12]}, as the box's limited account");
+        var run = await gate.Run(queued == "" ? $"Build-Content -Server {server}" : $"Build-Content -Server {server} -Queued {queued}", GateWait, logf, ct);
         if (!run.Taken) return new Outcome("error", "not built: " + run.Lines.LastOrDefault());
         if (run.Code != 0) return new Outcome("failure", $"not built: Build-Content ended with exit {run.Code}: " + run.Lines.LastOrDefault(l => l.StartsWith("STOP.", StringComparison.Ordinal)));
         var key = run.Lines.Select(l => Made.Match(l)).Where(m => m.Success).Select(m => m.Groups[2].Value).LastOrDefault() ?? "";
         var commit = run.Lines.Select(l => From.Match(l)).Where(m => m.Success).Select(m => m.Groups[1].Value).LastOrDefault() ?? "";
         if (key == "" || commit == "") return new Outcome("failure", "not built: Build-Content did not say BUILT or REUSED with its key, and FROM with its commit");
+        // A queued merge is built as it is, so what was built is what was
+        // asked for, or the merge group would wait on a draft never made.
+        if (queued != "" && (commit != queued || key != asked))
+            return new Outcome("failure", $"not put up: Build-Content built {key[..12]} from {Short(commit)}, not the queued merge {Short(queued)}'s {asked[..12]}");
 
-        var dir = Path.Combine(env.Root, server, key);
+        var dir = Path.Combine(env.Root, queued == "" ? server : "queue-" + server, key);
         var (files, why) = Read(dir, key, server);
         if (files == null) return new Outcome("failure", $"not put up: the build kept as {key[..12]} {why}");
         logf($"build {key[..12]} of {Short(commit)}: {files.Count} files, held to its build.json");
 
-        var tag = Tag(server, key);
+        var tag = queued == "" ? Tag(server, key) : QueueTag(server, key);
         var work = Path.Combine(workRoot, "content-" + d.Id);
         if (Directory.Exists(work)) Directory.Delete(work, true);
         Directory.CreateDirectory(work);
@@ -86,7 +114,7 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
             var zip = Path.Combine(work, ZipName);
             Zip(dir, files, zip);
             var record = Path.Combine(dir, "build.json");
-            var drafts = await writer.Drafts($"content-{server}-", ct);
+            var drafts = await writer.Drafts(queued == "" ? $"content-{server}-" : $"content-queue-{server}-", ct);
             var there = drafts.FirstOrDefault(r => r.TagName == tag);
             if (there != null && there.Asset(ZipName) != null && there.Asset(RecordName) != null)
                 logf($"the draft {tag} is up already");
@@ -94,15 +122,18 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
             {
                 // One cut short (an upload that failed) is made again whole.
                 if (there != null) { await writer.DeleteRelease(there.Id, ct); drafts.Remove(there); logf($"the draft {tag} was not whole and was taken down"); }
-                var rel = await writer.CreateDraft(tag, commit, $"Content build {key[..12]} ({server})",
-                    $"The content plugin and every table read out of the load order, built on the box from {commit} against the {server} server's plugins, kept by their inputs (#5191). Never published: the merge release takes it.", ct);
+                var rel = queued == ""
+                    ? await writer.CreateDraft(tag, commit, $"Content build {key[..12]} ({server})",
+                        $"The content plugin and every table read out of the load order, built on the box from {commit} against the {server} server's plugins, kept by their inputs (#5191). Never published: the merge release takes it.", ct)
+                    : await writer.CreateDraft(tag, commit, $"Queued content build {key[..12]} ({server})",
+                        $"The content build of {commit}, a merge the queue held, built on the box as its limited account against the {server} server's plugins (#6879). Never published and never released: the merge group's content checks read it.", ct);
                 await writer.Upload(rel, ZipName, zip, ct);
                 await writer.Upload(rel, RecordName, record, ct);
                 rel.CreatedAt = DateTimeOffset.UtcNow;
                 drafts.Add(rel);
                 logf($"put up as the draft {tag}");
             }
-            foreach (var old in drafts.Where(r => r.TagName != tag).OrderByDescending(r => r.CreatedAt).Skip(Keep - 1))
+            foreach (var old in drafts.Where(r => r.TagName != tag).OrderByDescending(r => r.CreatedAt).Skip((queued == "" ? Keep : QueueKeep) - 1))
             {
                 await writer.DeleteRelease(old.Id, ct);
                 logf($"took down the older draft {old.TagName}");
@@ -116,6 +147,7 @@ public sealed class ContentBuild(EnvConfig env, GitHub writer, IGate gate, strin
         // What was put up stands whatever becomes of the work folder; a
         // folder left behind is said in the log.
         finally { try { Directory.Delete(work, true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { logf($"the work folder {work} was not removed: {e.Message}"); } }
+        if (queued != "") return new Outcome("success", $"built the queued merge {Short(commit)}'s {key[..12]} as the limited account");
         var moved = key == asked ? "" : $"; main had moved on, so its inputs are not the {asked[..12]} asked for";
         return new Outcome("success", $"built {key[..12]} from {Short(commit)}" + moved);
     }

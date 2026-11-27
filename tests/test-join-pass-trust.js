@@ -218,7 +218,7 @@ section(function () {
   const st = { requiring: true, held: {}, ran: [], told: [], logged: [], taken: [], actors: { 700: 1, 800: 2 } };
   const box = {
     Object: Object, Number: Number, String: String, Date: Date, Math: Math,
-    WORDS: ['/ooc', '/help', '/give', '/trade', '/place'],
+    WORDS: ['/roll', '/help', '/give', '/trade', '/place'],
     handle: function (cmd) { st.ran.push(cmd.profileId + ' ' + cmd.text); },
     actorOf: function (pid) { return st.actors[pid] || 0; },
     toProfile: function (pid, t) { st.told.push(pid + ': ' + t); },

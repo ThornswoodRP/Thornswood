@@ -720,7 +720,14 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
     missing.forEach(id=>knownFactions.add(id));
     return s;
   }
-  function hostile(a,b) {
+  // Whether a starts a fight with b, d away. Aggression and faction
+  // reactions count within SIGHT. A person inside the larger of a's warn or
+  // attack and attack radius counts too unless a is their friend, whatever
+  // a's aggression: the game's own rule for the aggro radius, read from its
+  // code (#6493). An Aggressive skeever has no Enemy faction toward people,
+  // so without the radius it never attacked them.
+  const SIGHT=1200;
+  function hostile(a,b,d) {
     let enemy=false,friend=false;
     for(const f of a.factions) for(const g of b.factions) {
       // Friendship and common membership suppress conflicting enemy entries.
@@ -728,14 +735,18 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       friend ||= f.id===g.id || r===2 || r===3;
       enemy ||= r===1;
     }
-    if(friend || a.aggression===0) return false;
-    return a.aggression===3 || (a.aggression===2 && !friend) || (a.aggression===1 && enemy);
+    if(friend) return false;
+    const radius=b.isHuman ? Math.max(a.aggroRadius[1],a.aggroRadius[2]) : 0;
+    if(radius>0 && d<=radius) return true;
+    if(a.aggression===0 || d>SIGHT) return false;
+    return a.aggression===3 || a.aggression===2 || (a.aggression===1 && enemy);
   }
   function validState(s) {
     return s && Number.isInteger(s.cellOrWorld) && Array.isArray(s.pos) &&
       s.pos.length===3 && s.pos.every(Number.isFinite) && Array.isArray(s.rot) &&
       s.rot.length===3 && s.rot.every(Number.isFinite) && Number.isInteger(s.aggression) &&
       s.aggression>=0 && s.aggression<=3 && Number.isInteger(s.confidence) && s.confidence>=0 && s.confidence<=4 &&
+      Array.isArray(s.aggroRadius) && s.aggroRadius.length===3 && s.aggroRadius.every(r=>Number.isFinite(r) && r>=0) &&
       Number.isFinite(s.meleeReach) && s.meleeReach>=0 && Number.isFinite(s.meleeAllowance) &&
       s.meleeAllowance>=16 && s.meleeAllowance<=96;
   }
@@ -1049,10 +1060,10 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       retaliation=true;
       targetState=humans.get(target) || actors.get(target).state;
     } else {
-      let best=1200;
+      let best=Infinity;
       for(const [id,h] of humans) {
         const d=h.cellOrWorld===a.cell ? distance(h.pos,a.pos) : Infinity;
-        if(d<best && hostile(s,h)) {target=id;targetState=h;best=d;}
+        if(d<best && hostile(s,h,d)) {target=id;targetState=h;best=d;}
       }
       // NPC combat uses the same spatial index when nobody is connected.
       // Inspect a bounded local sample rather than comparing the full cast.
@@ -1064,7 +1075,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
           const other=actors.get(id);
           if(!other || other.state.isDead || other.state.isDisabled) continue;
           const d=distance(other.pos,a.pos);
-          if(d<best && hostile(s,other.state)) {target=id;targetState=other.state;best=d;}
+          if(d<best && hostile(s,other.state,d)) {target=id;targetState=other.state;best=d;}
           if(++inspected>=32) break search;
         }
       }
@@ -1076,7 +1087,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
         const live=nativeCall('getNpcAIState',target);
         if(!validState(live) || live.isDead || live.isDisabled || (live.isHuman && !live.isConnected) || live.cellOrWorld!==a.cell ||
             distance(a.pos,live.pos)>4096 || !withinHome(a,live.pos)) {target=0;targetState=null;}
-        else if(!retaliation && !hostile(s,factionData(live))) {target=0;targetState=null;}
+        else if(!retaliation && !hostile(s,factionData(live),distance(a.pos,live.pos))) {target=0;targetState=null;}
         else targetState=live;
       } catch(e) {target=0;targetState=null;}
     }
@@ -1170,6 +1181,30 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
     }
   }
+  // How far above the navmesh each walking NPC is held (#6474). An NPC keeps
+  // the height its placement had over its navmesh triangle (lift) wherever
+  // it walks, and each game moves it there with translateTo, which neither
+  // falls nor collides, so a positive lift is how far it floats above the
+  // navmesh. Said when it changes, with the largest, to measure the reports
+  // of NPCs floating.
+  let heightsLine='';
+  function heightsReport() {
+    let walking=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
+    for(const a of actors.values()) {
+      if(!a.state || a.state.swims) continue;
+      walking++;
+      if(a.lift>16) above16++;
+      if(a.lift>32) above32++;
+      if(a.lift>64) above64++;
+      if(a.lift<-16) below16++;
+      largest.push(a);
+    }
+    largest.sort((x,y)=>Math.abs(y.lift)-Math.abs(x.lift));
+    const line='NPC heights over their navmesh: '+walking+' walking; above 16 units '+above16+', above 32 '+above32+
+      ', above 64 '+above64+', below -16 '+below16+'; largest '+
+      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.lift)+' in '+a.cell.toString(16)).join(', ');
+    if(line!==heightsLine) {report(line);heightsLine=line;}
+  }
   function backgroundTick() {
     const begin=now();let taken=0,moves=0;
     while(due.length && taken<256 && moves<64) {
@@ -1193,6 +1228,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(merchantStatus) report('NPC merchant purses: '+merchantStatus.verified+'/'+merchantStatus.catalogue+
         ' verified; '+merchantStatus.initialized+' first-time purses; '+((globalThis.__thornswoodMerchantTrade&&globalThis.__thornswoodMerchantTrade.nativeReady())?'native transfer present':'native transfer absent'));
       moved=0;background=0;attacks=0;lastReport=now();
+      heightsReport();
     }
     schedule(backgroundTick,20);
   }

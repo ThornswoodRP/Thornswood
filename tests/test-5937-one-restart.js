@@ -11,8 +11,9 @@
 // and a newer launcher found by a check after that restarted it again. Paths
 // already name the new folder once the make is done (FolderWork), so:
 //   1. the make's finish runs Fix in this run, as the Fix after a make, and
-//      does not restart; it takes the note first, so the start after the
-//      restart does not run Fix a second time;
+//      does not restart; that Fix takes the note when it ends, before the
+//      restart, so the start after the restart does not run Fix a second
+//      time and a start after the launcher was shut part way runs it (#6086);
 //   2. an update already going in restarts the launcher itself once the
 //      folder is let go, so Fix is left to the note on the start after it;
 //   3. no update goes in by itself while that Fix runs (UpdateBySelf), so
@@ -64,10 +65,10 @@ yes('and does not restart there', !/RestartLauncher\(\);/.test(madeBlock));
 const take = madeBlock.indexOf('OwnGame.TakeFixAfterMake();');
 const flag = madeBlock.indexOf('restartAfterFirstFix = true;');
 const run = madeBlock.indexOf('RunFix(false, false, true);');
-yes('it takes the note before that Fix, so the start after the restart does not run it again', take > 0 && take < run);
+yes('it leaves the note to that Fix\'s end, which takes it before the one restart (#6086)', take < 0 && run > 0);
 yes('and marks the run for its one restart before Fix starts', flag > 0 && flag < run);
 const upd1 = madeBlock.indexOf('if (updating)');
-yes('an update already going in is left to restart the launcher, and Fix to the note', upd1 > 0 && upd1 < take && /if \(updating\)\s*\{[^}]*return;\s*\}/.test(madeBlock));
+yes('an update already going in is left to restart the launcher, and Fix to the note', upd1 > 0 && upd1 < run && /if \(updating\)\s*\{[^}]*return;\s*\}/.test(madeBlock));
 
 // 3. No update by itself meanwhile.
 const self = code(body(upd, 'static void UpdateBySelf()'));
@@ -85,7 +86,7 @@ yes('otherwise the launcher restarts once', (fsr.match(/RestartLauncher\(\);/g) 
 
 const runFix = code(body(sf, 'static async Task RunFixAsync(bool afterUpdate'));
 const nothing = runFix.slice(runFix.indexOf('if (AllIssues(plugins).Count == 0)'));
-yes('a Fix that finds nothing ends in the one restart', /ShowVerify\(plugins, false\);\s*FirstSetupRestart\(\);\s*return;/.test(nothing));
+yes('a Fix that finds nothing ends in the one restart, once it has taken the note', /ShowVerify\(plugins, false\);\s*MakeFixEnded\(\);\s*FirstSetupRestart\(\);\s*return;/.test(nothing));
 const rest = code(body(sf, 'static async Task FixRest('));
 const report = rest.indexOf('Report(plugins);');
 const first = rest.indexOf('FirstSetupRestart();');

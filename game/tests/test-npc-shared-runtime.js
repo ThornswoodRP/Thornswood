@@ -54,7 +54,7 @@ function actor(overrides = {}) {
   return Object.assign({ pos:[10,10,0], rot:[0,0,0], cellOrWorld:60,
     isDead:false, isDisabled:false, aggression:0, confidence:3,
     factions:[], combatTarget:0, canSwim:false, canFly:false, immobile:false,
-    meleeReach:128,meleeAllowance:32 }, overrides);
+    aggroRadius:[0,0,0],meleeReach:128,meleeAllowance:32 }, overrides);
 }
 
 function fixture(options = {}) {

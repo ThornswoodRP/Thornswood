@@ -2,7 +2,7 @@
   "version": 1,
   "builtBy": "scripts/mods/New-CollectionPluginRecord.ps1",
   "collection": "7essxf",
-  "revision": 12,
+  "revision": 13,
   "plugins": [
     { "name": "_ResourcePack.esl", "size": 78418, "sha256": "d231915a4bbfe6e89536dfb0a46c5adc8e4d2d23ce95d248dc24943776eb76fb" },
     { "name": "3BBB.esp", "size": 20257, "sha256": "ce4f554616458a10b4809f705828f9d3e3e2d1457abe73ee32fe5f8f044a8549" },
@@ -66,7 +66,6 @@
     { "name": "KS_Hairdo's_Lite_NoNPCs.esp", "size": 13800, "sha256": "3dc7ac33b2e1dbbb150e0ae080177ba4858609c0677a779fe65b9e0fe0580787" },
     { "name": "LSFX-SSE-Audiosettings.esp", "size": 761, "sha256": "615af3b58366553dbaaf352a2fc77324ce32f3cd3a4071028f08ba0d50649ab7" },
     { "name": "MCMHelper.esp", "size": 100, "sha256": "5f9dad2ca8896ad2ad0c8ade678dc684f005c62d54dd6e9bcd7efe1b0fc7f7fc" },
-    { "name": "McmRecorder.esp", "size": 1903, "sha256": "c6f0249c6dfb9e550901529786dcdde4f03b856bedea03ec8b17df0cb3089cf9" },
     { "name": "MoreCraftableEquipment_CloaksandCapes.esp", "size": 9103, "sha256": "d75366385d6be8a69877cdc19473f06091ac27178bb28dcdd288a5e56d561363" },
     { "name": "MoreCraftableEquipment.esp", "size": 199987, "sha256": "552fec4651e3b2a13c22c51e04268e5df1686fda5a539bbb949206479f087b19" },
     { "name": "North Keep.esp", "size": 618213, "sha256": "f3cf4a95e722fb04d86546fadffb7d094cc9106c56e410d4773be88747a3621d" },

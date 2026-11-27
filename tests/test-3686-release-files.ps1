@@ -117,6 +117,7 @@ function Get-SiteJson([string]$Uri) { return Get-Content -Raw -LiteralPath (Join
     $copy = Join-Path $work 'scripts/release/Publish-ReleaseFiles.ps1'
     New-Item -ItemType Directory -Path (Split-Path -Parent $copy) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo 'scripts/release/Release-Name.ps1') -Destination (Split-Path -Parent $copy)
+    Copy-Item -LiteralPath (Join-Path $repo 'scripts/release/Get-ScratchDir.ps1') -Destination (Split-Path -Parent $copy)   # both take their scratch folder from it (#4264)
     [IO.File]::WriteAllText($copy, $src.Substring(0, $a) + $stub + $src.Substring($b))
 
     # The site: a record naming two files, a launcher, notes, and the installer.

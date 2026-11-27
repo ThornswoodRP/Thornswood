@@ -348,8 +348,9 @@ name of the staff member who made it.
 ## Where this is
 
 The eight professions, the halves, the ladder with the count resetting,
-the sister half at novice, the bench table, the charcoal and the
-handle, each trade's tool, and the recipe lists are in the server. Smelting is a smith's
+the sister half at novice, the bench table, each trade's tool, and the
+recipe lists are in the server. The forge's charcoal and handle are
+ingredients on the recipes (#6726). Smelting is a smith's
 and tanning is the Platewright's, as above, and neither is one of the
 two outside trades. A master takes someone on in the sister half or
 in an outside trade from the look prompt, and either of them ends it on

@@ -4,5 +4,13 @@
              RequestedThemeVariant="Dark">
   <Application.Styles>
     <FluentTheme />
+    <!-- A greyed button's tooltip is often the only place its reason is said
+         (Play's, Shell.cs), and Avalonia shows no tooltip on a disabled
+         control unless ToolTip.ShowOnDisabled says so (#4708). The property
+         is inherited, so set on every window it reaches each control in it,
+         the install window and the dialogs too. -->
+    <Style Selector=":is(TopLevel)">
+      <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
+    </Style>
   </Application.Styles>
 </Application>

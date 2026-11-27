@@ -68,8 +68,9 @@ the current party and confirm again. Nothing is retried for you.
 
 A party member's name is green above their head. They have a marker
 on your map, and an arrow on the strip under the compass with how far
-away they are. Green on the strip means the same room. Gold means
-somewhere else. The strip is this server's, not Skyrim's compass.
+away they are. In the same room, the strip says "same room" after
+the distance and the name is green. Gold means somewhere else. The
+strip is this server's, not Skyrim's compass.
 
 Hiding their name, on [Voice](voice.md), hides the green name. The
 marker and the arrow stay.

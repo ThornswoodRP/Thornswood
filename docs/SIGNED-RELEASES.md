@@ -393,7 +393,7 @@ option 1). So:
   `workflow_dispatch` run on `refs/heads/main`: main's copy of release.yml
   and of the tag check, which only a pull request changes. The `release`
   environment's deployment rule names the branch `main` and nothing else
-  (the ops repo's run note `ops/claude-queue/3930-sign-from-main.md`), so a copy on any
+  (the ops repo's `issues/3930.md` records the change), so a copy on any
   other ref cannot reach the identity whatever it says. The federated
   credential's subject names the environment, not the ref (section 7), so
   Azure needs no change.

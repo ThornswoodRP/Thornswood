@@ -407,6 +407,20 @@
   let CHAT_FADE = chatFadeOf(ini);
   let NEEDS_BARS = needsBarsOf(ini);
   /*
+    How big every panel's words are, in percent (#4474), from the Settings
+    panel in the game (TextSize in Thornswood.ini). It goes to the page as
+    window.THORNSWOOD.textSize, where thornswood-scale.js scales every panel
+    by the screen and then by this. Anything that is not one of the choices
+    is 100, as Skyrim draws them now.
+  */
+  const TEXT_SIZE_CHOICES = [100, 115, 130, 150];
+  function textSizeOf(text) {
+    const m = text.match(/^\s*TextSize\s*=\s*(\d+)\s*$/im);
+    const v = m ? Number(m[1]) : 100;
+    return TEXT_SIZE_CHOICES.indexOf(v) >= 0 ? v : 100;
+  }
+  let TEXT_SIZE = textSizeOf(ini);
+  /*
     Where voice lives: https://thornswood.net/voice, or /voice-dev on the dev
     build. Written by the launcher at every Play, the same way VoicePort is,
     and always https since #1304, when the raw port it used to fall back to
@@ -607,6 +621,7 @@
     SKILLS_KEY = iniNumber(ini, 'SkillsKey', SETTINGS_KEYS.SkillsKey);
     CHAT_FADE = chatFadeOf(ini);
     NEEDS_BARS = needsBarsOf(ini);
+    TEXT_SIZE = textSizeOf(ini);
     PARTY_KEY = iniNumber(ini, 'PartyKey', SETTINGS_KEYS.PartyKey);
     JOURNAL_KEY = iniNumber(ini, 'JournalKey', SETTINGS_KEYS.JournalKey);
     FRIEND_KEY = iniNumber(ini, 'FriendKey', SETTINGS_KEYS.FriendKey);
@@ -918,6 +933,23 @@
     try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
     if (here) {
       log('menu: in the world as profile', menuChosenId, 'so the choice is done');
+      menuChosenId = 0;
+      menuAgain = null;
+      return;
+    }
+    /*
+      Or the world loaded after the pick (#7098). skymp5-client loads the
+      world with a save of its own only once it has taken a pick
+      (remoteServer.ts, while __thornswoodInWorld is down), so a load after
+      the pick is the client having taken it. The world flag alone said so
+      only once no menu was open, and creation is all menus: on main on
+      24 Nov the pick was said again every 2 s through creation, and at 90 s
+      the log said the client never took it, with the character already in
+      the creation hall. loadedOutOfWorld is the loadGame handler's, beside
+      the update tick.
+    */
+    if (loadedOutOfWorld && loadedOutOfWorld >= menuChosenAt) {
+      log('menu: the world loaded for profile', menuChosenId, 'so the client took the choice');
       menuChosenId = 0;
       menuAgain = null;
       return;
@@ -1525,7 +1557,7 @@
     // Idempotent, so a page the silence watch reloaded gets all of it back.
     T.js('try{if(!window.thornswoodNet){window.THORNSWOOD=' + JSON.stringify({
       host: HOST, port: VOICE_PORT, profileId: lineId, name: '', token: tok, base: VOICE_URL, socket: VOICE_SOCKET_URL,
-      chatFade: CHAT_FADE, needsBars: NEEDS_BARS
+      chatFade: CHAT_FADE, needsBars: NEEDS_BARS, textSize: TEXT_SIZE
     }) + ';}}catch(e){}');
     inject('thornswood-chat.js');
     // rejoinAs only takes the token while the connection is already this
@@ -2612,6 +2644,9 @@
 
   T.setTyping = wantTyping;
   T.isTyping = function () { return !!claims.chat; };
+  // The game menu that takes keys right now, by name, or '' (busyMenuOpen).
+  // The voice plugin's lock and mode keys stand down while one is up (#4799).
+  T.keyboardMenu = function () { return busyMenuOpen(); };
 
   // Said once, so a log with nothing in it can be told apart from a log that
   // never had anything to say. If this line is missing, the plugin is not being
@@ -3399,9 +3434,27 @@
     let id = 0;
     try { id = ref.getFormID(); } catch (err) { }
 
+    /*
+      WHAT THE DOOR WAS DOING (#7029, #6475). The same property doors come
+      back here as opened every few seconds with nobody near them, and a
+      doorway was seen standing half open. The door's open state (1 open,
+      2 opening, 3 closed, 4 closing), its lock level and whether property
+      holds it shut here say which: a lock that does not take, or a door the
+      lock script locks while it stands open.
+    */
+    let doing = '';
+    if (type === 29) {
+      let openState, level, held;
+      // A call that throws puts its error in the line in place of the value.
+      try { openState = String(ref.getOpenState()); } catch (err) { openState = '? (' + err + ')'; }
+      try { level = String(ref.getLockLevel()); } catch (err) { level = '? (' + err + ')'; }
+      try { const shut = globalThis.__thornswoodPropertyShut; held = shut ? (shut[id] ? 'yes' : 'no') : 'none'; } catch (err) { held = '? (' + err + ')'; }
+      doing = ' (open state ' + openState + ', lock level ' + level + ', held shut here ' + held + ')';
+    }
+
     try {
       ref.blockActivation(true);
-      say('lock opened on ' + id.toString(16) + ', handed it back to the server');
+      say('lock opened on ' + id.toString(16) + doing + ', handed it back to the server');
     } catch (err) {
       say('could not hand ' + id.toString(16) + ' back to the server: ' + err);
     }
@@ -3993,114 +4046,6 @@
       }
       log('the race menu closed, telling the server');
       tellServer('/face done');
-    }
-  }));
-
-  /*
-    ------------------------------------------------- body shape stays as made (#993)
-
-    Patrick, 28 September: "I don't want jiggle physics or the ability to
-    change boob/pussy/dick/ass/nipple related stuff during creation." For men
-    and women alike. Height and weight stay.
-
-    Where each of those controls comes from, and what takes it away:
-    - The body morph sliders (the women's body's, with its breast, nipple and
-      genital shapes, and the men's body's) and the genital sliders of the
-      skeleton: the launcher leaves their scripts out of the game folder
-      (OwnGame.BodyShapeFiles), so those pages of the menu never appear.
-    - RaceMenu's own Left and Right Breast, Breast Curve and Glute sliders sit
-      in RaceMenu's archive beside Height, which stays, so they cannot be left
-      out. This undoes them: twice a second while the menu is up, any scale,
-      move or turn on those bones is taken off, so the slider moves and the
-      body does not.
-    - And any body morph on the character is cleared, which is also what
-      takes a changed body off a character made before this: out of the menu
-      it looks every ten seconds.
-    Height is the scale on the root bone and weight is the game's own, and
-    neither is touched. Only the person's own character: SkyMP never sends
-    these to anybody else. The server's half is BODY SHAPE in gamemode.js.
-  */
-  const BODY_NODES = [
-    // RaceMenu's own and XPMSE's breast and seat bones.
-    'NPC L Breast', 'NPC R Breast', 'NPC L Breast01', 'NPC R Breast01',
-    'NPC L Breast P1', 'NPC R Breast P1', 'NPC L Breast P2', 'NPC R Breast P2',
-    'NPC L Breast P3', 'NPC R Breast P3', 'NPC L Breast01 P1', 'NPC R Breast01 P1',
-    'NPC L Breast01 P2', 'NPC R Breast01 P2', 'NPC L Breast01 P3', 'NPC R Breast01 P3',
-    'L Breast01', 'L Breast02', 'L Breast03', 'R Breast01', 'R Breast02', 'R Breast03',
-    'NPC L Butt', 'NPC R Butt',
-    // The skeleton's genital bones, and the women's body's.
-    'NPC GenitalsBase [GenBase]', 'NPC GenitalsScrotum [GenScrot]',
-    'NPC L GenitalsScrotum [LGenScrot]', 'NPC R GenitalsScrotum [RGenScrot]',
-    'NPC Genitals01 [Gen01]', 'NPC Genitals02 [Gen02]', 'NPC Genitals03 [Gen03]',
-    'NPC Genitals04 [Gen04]', 'NPC Genitals05 [Gen05]', 'NPC Genitals06 [Gen06]',
-    'CME GenitalsBase [GenBase]', 'CME GenitalsScrotum [GenScrot]',
-    'CME Genitals01 [Gen01]', 'CME Genitals02 [Gen02]', 'CME Genitals03 [Gen03]',
-    'CME Genitals04 [Gen04]', 'CME Genitals05 [Gen05]',
-    'NPC L Pussy02', 'NPC R Pussy02', 'VaginaB1', 'Clitoral1',
-  ];
-  const BODY_OPEN_MS = 500;
-  const BODY_SHUT_MS = 10000;
-  let bodyAt = 0;
-  let bodyWasOpen = false;
-  let bodyUndone = 0;
-  let bodyNoSkee = false;
-
-  function niOverride(fn) {
-    return sp.callNative.apply(null, ['NiOverride', fn, undefined].concat(Array.prototype.slice.call(arguments, 1)));
-  }
-
-  /** Takes body morphs and those bones' changes off the person's character. How many it took off. */
-  function bodyShapeReset() {
-    if (bodyNoSkee) { return 0; }
-    let pc = null;
-    try { pc = sp.Game.getPlayer(); } catch (e) { return 0; }
-    if (!pc) { return 0; }
-    // Not caught: a quiet catch here hid that the read was wrong and asked as
-    // a man for everybody (#7089). The guard says a failure.
-    const base = sp.ActorBase.from(pc.getBaseObject());
-    const female = !!base && base.getSex() === 1;
-    let undone = 0;
-    try {
-      const names = niOverride('GetMorphNames', pc);
-      if (names && names.length) {
-        niOverride('ClearMorphs', pc);
-        niOverride('UpdateModelWeight', pc);
-        undone += names.length;
-      }
-    } catch (e) {
-      // No RaceMenu in this game: nothing can have set any of it either.
-      bodyNoSkee = true;
-      log('body shape: NiOverride is not there, so there is nothing to undo:', e);
-      return 0;
-    }
-    for (const node of BODY_NODES) {
-      for (const firstPerson of [false, true]) {
-        let keys = null;
-        try { keys = niOverride('GetNodeTransformKeys', pc, firstPerson, female, node); } catch (e) { keys = null; }
-        if (!keys || !keys.length) { continue; }
-        for (const k of keys) {
-          niOverride('RemoveNodeTransformScale', pc, firstPerson, female, node, k);
-          niOverride('RemoveNodeTransformPosition', pc, firstPerson, female, node, k);
-          niOverride('RemoveNodeTransformRotation', pc, firstPerson, female, node, k);
-          undone++;
-        }
-        niOverride('UpdateNodeTransform', pc, firstPerson, female, node);
-      }
-    }
-    return undone;
-  }
-
-  sp.on('update', guard('body shape', () => {
-    const open = raceMenuOpen();
-    const now = Date.now();
-    if (open === bodyWasOpen && now - bodyAt < (open ? BODY_OPEN_MS : BODY_SHUT_MS)) { return; }
-    bodyWasOpen = open;
-    bodyAt = now;
-    bodyUndone += bodyShapeReset();
-    // Said once the menu is down, not twice a second while somebody drags.
-    if (bodyUndone && !open) {
-      log('body shape: took', bodyUndone, 'body change(s) back off the character; height and weight are left as made');
-      bodyUndone = 0;
     }
   }));
 
@@ -5315,6 +5260,7 @@
   sp.on('cellFullyLoaded', guard('fire cell loaded', fireCellLoaded));
 
   sp.on('update', guard('place', () => {
+    if (!globalThis.__thornswoodInWorld) { return; }
     const now = Date.now();
     // Fast only when a fire is close enough to be about to burn somebody.
     // Merely standing at one is 44 native calls a second for nothing.
@@ -5660,6 +5606,7 @@
   const NEAR_EVERY = 320;
   let nearAt = 0;
   let lookingAt = '';      // the form id hex the prompt is currently drawn for
+  let lookingCamera = -1;  // the camera mode last recorded for that person
   let lookingSig = '';     // what the prompt says, so it is not redrawn per poll
 
   function nearList() {
@@ -5807,10 +5754,8 @@
     the two copies are the HUD and that widget, before anything is changed.
     It reads; it changes nothing.
   */
-  function gamePromptSaid(ref) {
+  function gamePromptSaid(ref, cam) {
     const bits = [];
-    let cam = -1;
-    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
     // SKSE's numbers: 0 first person, 8 and 9 the two third person states.
     bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
     const read = function (target) {
@@ -5826,6 +5771,84 @@
     bits.push('activation blocked ' + blocked);
     return ': ' + bits.join(', ');
   }
+
+  /*
+    WHERE A LOAD PUTS THE CHARACTER, AND WHICH CAMERA IT IS IN (#6593, #6594).
+
+    Dev Test #1 on 18 Nov: one tester spawned up in the air, another spawned
+    in first person with the mouse wheel doing nothing for a while. Their logs
+    could not say either. The first feet height came from a place line 35 to
+    50 s after the load, and the camera only from a "looking at" line, which
+    needs somebody in front of you.
+
+    So after each arrival (the first world, a new cell indoors, a new
+    worldspace, or a jump of more than 2000 units, which is a teleport), this
+    writes where the feet are, whether the game has the character in the air
+    and which camera it is in. It writes at 0.25, 1, 3 and 6 s after the
+    arrival, so a fall shows as the height dropping and a camera change shows
+    when it came. It reads only and changes nothing.
+  */
+  function landingSaid(pc) {
+    const bits = [];
+    let z = NaN;
+    try { z = Number(pc.getPositionZ()); } catch (e) { z = NaN; }
+    bits.push('feet at ' + (isFinite(z) ? Math.round(z) : 'unknown'));
+    let air = 'unknown';
+    try { air = pc.getAnimationVariableBool('bInJumpState') ? 'yes' : 'no'; } catch (e) { air = 'unknown'; }
+    bits.push('in the air ' + air);
+    let cam = -1;
+    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
+    bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
+    let menu = 'unknown';
+    try { menu = sp.Utility.isInMenuMode() ? 'yes' : 'no'; } catch (e) { menu = 'unknown'; }
+    bits.push('menu ' + menu);
+    return bits.join(', ');
+  }
+
+  // Where the character is, as a key that changes only on an arrival: the
+  // cell indoors, the worldspace outdoors, so walking across exterior cells is
+  // not one.
+  function landingKey(pc) {
+    let cell = null;
+    try { cell = pc.getParentCell(); } catch (e) { cell = null; }
+    let inside = false;
+    try { inside = !!(cell && cell.isInterior()); } catch (e) { inside = false; }
+    if (inside) {
+      try { return 'cell ' + cell.getFormID().toString(16); } catch (e) { return 'cell ?'; }
+    }
+    let world = null;
+    try { world = pc.getWorldSpace(); } catch (e) { world = null; }
+    try { return 'world ' + (world ? world.getFormID().toString(16) : '?'); } catch (e) { return 'world ?'; }
+  }
+
+  const LAND_AFTER = [250, 1000, 3000, 6000];
+  const LAND_JUMP = 2000;
+  let landWas = null;     // { key, x, y, z } at the last look
+  let landAt = 0;         // when the last arrival was seen
+  let landNext = LAND_AFTER.length;
+  let landLookAt = 0;
+  sp.on('update', guard('landing', () => {
+    const now = Date.now();
+    if (now < landLookAt) { return; }
+    landLookAt = now + 100;
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { landWas = null; return; }
+    let x = 0, y = 0, z = 0;
+    try { x = pc.getPositionX(); y = pc.getPositionY(); z = pc.getPositionZ(); } catch (e) { return; }
+    const key = landingKey(pc);
+    let arrived = !landWas || landWas.key !== key;
+    if (!arrived) {
+      const dx = x - landWas.x, dy = y - landWas.y, dz = z - landWas.z;
+      arrived = dx * dx + dy * dy + dz * dz > LAND_JUMP * LAND_JUMP;
+    }
+    landWas = { key: key, x: x, y: y, z: z };
+    if (arrived) { landAt = now; landNext = 0; return; }
+    if (landNext < LAND_AFTER.length && now - landAt >= LAND_AFTER[landNext]) {
+      log('landing: ' + LAND_AFTER[landNext] + 'ms after arriving in ' + key + ', ' + landingSaid(pc));
+      landNext++;
+    }
+  }));
 
   // A claim is a variable read, so it is asked every frame and a panel takes
   // the prompt down in the frame it opens, not on the next poll.
@@ -5854,9 +5877,15 @@
     const row = Object.prototype.hasOwnProperty.call(near, hex) ? near[hex] : null;
     if (!row) { lookingAt = ''; drawPrompt(null); return; }
 
-    if (hex !== lookingAt) {
+    let camera = -1;
+    try { camera = Number(sp.Game.getCameraState()); } catch (e) { camera = -1; }
+    if (!Number.isFinite(camera)) { camera = -1; }
+    // Both third-person states describe the same capture in #4584.
+    if (camera === 8) { camera = 9; }
+    if (hex !== lookingAt || camera !== lookingCamera) {
       lookingAt = hex;
-      say('looking at ' + row.n + ' (' + hex + ')' + gamePromptSaid(ref));
+      lookingCamera = camera;
+      say('looking at ' + row.n + ' (' + hex + ')' + gamePromptSaid(ref, camera));
     }
     const cover = lookCoveredBy();
     if (cover !== lookCover) {
@@ -6389,6 +6418,15 @@
     (game/ui/thornswood-stall.js).
   */
   let stallWorlds = null;  // null not resolved yet, else { stall id: runtime world or cell id }
+  /*
+    A FISH TRAP AT A WATER (#4655). Which water a trap may go in, and whether
+    this person has one there, is the server's, so the line is the one it
+    writes for the water somebody just pressed E on (thornswoodWaterLine,
+    waterLine in the scripted activators), the way a door's line is written
+    for the door just opened. It is drawn while that water stays under the
+    crosshair, and the lock key sends /trap with its id.
+  */
+  const WATER_LINE_MS = 60000;   // a water's line older than this is not drawn
   const PLOT_ASK_MS = 10000;     // asked again this often while one crop is looked at
   const PLOT_LINE_MS = 30000;    // an answer older than this is not drawn
   let lockAt = 0;
@@ -6473,6 +6511,16 @@
     return keyMoldId;
   }
 
+  /** The server's line for the water just pressed, while it is new enough and that water is under the crosshair. */
+  function waterLineNow(hex) {
+    let v = null;
+    try { v = globalThis.thornswoodWaterLine; } catch (e) { v = null; }
+    if (!v || typeof v !== 'object' || v.hex !== hex) { return null; }
+    if (Date.now() - (Number(v.seen) || 0) > WATER_LINE_MS) { return null; }
+    if (!v.w && !v.t) { return null; }
+    return v;
+  }
+
   /** The line the server wrote for the door just opened, while it still counts. */
   function doorLineNow() {
     let v = null;
@@ -6538,7 +6586,7 @@
     return lockKeyRef() || stallNow();
   }
 
-  /** What the lock key would do at what is under the crosshair: a door, a crop or a forge. */
+  /** What the lock key would do at what is under the crosshair: a door, a crop, a water or a forge. */
   function lockKeyRef() {
     let ref = null;
     try { ref = sp.Game.getCurrentCrosshairRef(); } catch (e) { ref = null; }
@@ -6562,6 +6610,11 @@
       const p = plotLineNow(hex);
       return { hex: hex, plot: true, verb: p && p.x ? 'claim' : '', words: p ? p.x : '',
                info: p ? p.t : '', e: p ? p.e : '' };
+    }
+    const water = waterLineNow(hex);
+    if (water) {
+      if (busyMenuOpenNow()) { return null; }
+      return { hex: hex, verb: water.x === 'trap' ? 'trap' : '', words: water.w, info: water.t };
     }
     if (!baseId || !forgeIdSet()[baseId]) { return null; }
     const mold = keyMoldNow();
@@ -8766,6 +8819,88 @@
   }));
   // ---------------------------------------------- end mod settings menus
 
+  // ---------------------------------------------- QuickLoot's own file (#4511)
+  /*
+    QUICKLOOT'S MENU IS KEPT IN THE FILE QUICKLOOT ITSELF READS.
+
+    QuickLoot IE keeps every option of its menu in its script (QLIE_ShowInCombat,
+    the window, the columns, the keys) and nowhere else, except one file of its
+    own: Data\SKSE\Plugins\QuickLootIE\DefaultConfig.json, its ConfigPath. It
+    reads that file at the start of every session, which does run here
+    (QuickLootIE.log: OnConfigInit, then ImportSettings), and it writes it only
+    from its Export settings button. So nobody's file existed, the import found
+    nothing and loaded the defaults, and every change was gone next time.
+    Measured 26 Nov 2026 from its compiled scripts.
+
+    SO WHEN THE JOURNAL CLOSES, where its menu lives, the file is written the
+    way that button writes it: QuickLootIEMCM's five ExportSettings_ steps with
+    its own ConfigPath, one after another, then JsonUtil.Save. Not
+    ExportSettings itself, which ends in a message box. The steps are the
+    script's own Papyrus, which callNative cannot run, so runScriptFunction
+    (engine fork, Thornswood #4511) runs them and says when each returned.
+
+    NOT BEFORE ITS OWN IMPORT. OnConfigInit sets IsInitialLoad to False once it
+    has read the file; a journal closed before that would write the defaults
+    over what was kept. So nothing is written while IsInitialLoad is not False.
+
+    The launcher keeps the file with the person's settings on thornswood.net
+    (YourSettings.cs), the way it keeps the MCM Helper menus' files.
+  */
+  const QLIE_PLUGIN = 'QuickLootIE.esp';
+  const QLIE_QUEST = 0x1;          // MCMQuickLootIE, the quest the menu is on
+  const QLIE_SCRIPT = 'QuickLootIEMCM';
+  const QLIE_STEPS = ['ExportSettings_General', 'ExportSettings_Display', 'ExportSettings_Sorting',
+                      'ExportSettings_Controls', 'ExportSettings_Compatibility'];
+  let qlieQuestId = 0;
+  let qlieWriting = false;
+  let qlieAgain = false;
+
+  function qlieQuest() {
+    if (qlieQuestId) { return qlieQuestId; }
+    try {
+      const form = sp.Game.getFormFromFile(QLIE_QUEST, QLIE_PLUGIN);
+      qlieQuestId = form ? form.getFormID() : 0;
+    } catch (e) { qlieQuestId = 0; }
+    return qlieQuestId;
+  }
+
+  function qlieDone(why) {
+    qlieWriting = false;
+    log('quickloot settings: ' + (why || 'written'));
+    if (qlieAgain) { qlieAgain = false; qlieWrite(); }
+  }
+
+  function qlieWrite() {
+    if (qlieWriting) { qlieAgain = true; return; }
+    const quest = qlieQuest();
+    if (!quest) { return; }
+    if (sp.getScriptProperty(quest, QLIE_SCRIPT, 'IsInitialLoad') !== false) { return; }
+    const file = sp.getScriptProperty(quest, QLIE_SCRIPT, 'ConfigPath');
+    if (typeof file !== 'string' || !file) { log('quickloot settings: its menu has no ConfigPath'); return; }
+    qlieWriting = true;
+    let i = 0;
+    // Each step starts when the one before it has returned; any throw ends
+    // the run with what it said, so the next close can write again.
+    const next = (ran) => {
+      try {
+        if (!ran) { qlieDone(QLIE_STEPS[i - 1] + ' did not run, so nothing was saved'); return; }
+        if (i < QLIE_STEPS.length) {
+          sp.runScriptFunction(quest, QLIE_SCRIPT, QLIE_STEPS[i++], [file])
+            .then(next, (err) => qlieDone(QLIE_STEPS[i - 1] + ' failed, so nothing was saved: ' + err));
+          return;
+        }
+        const saved = !!sp.callNative('JsonUtil', 'Save', undefined, file, false);
+        qlieDone(saved ? '' : 'JsonUtil.Save did not write ' + file);
+      } catch (e) { qlieDone('stopped: ' + (e && e.message ? e.message : e)); }
+    };
+    next(true);
+  }
+
+  sp.on('menuClose', guard('quickloot settings close', (e) => {
+    if (e && e.name === JOURNAL_MENU) { qlieWrite(); }
+  }));
+  // ---------------------------------------------- end QuickLoot's own file
+
   /*
     / OPENS THE CHAT WITH A SLASH IN IT, AND ONLY THE CHAT.
 
@@ -8986,6 +9121,7 @@
     ['CFTO.esp', 0x14c6c], ['Dragonborn.esm', 0x182ae], ['Dragonborn.esm', 0x2582b]
   ];
   let rideDriverIds = null;
+  let rideDriverNoneSaid = false;
 
   /*
     THE RIDE PANEL WAITS FOR THE MOD'S CONVERSATION (#1635). The same E opens
@@ -9020,11 +9156,39 @@
   }
 
   // except: the menu that is closing right now, which is not in the way.
+  // What the panel waited on is said once a wait (#4581): no press on a
+  // driver from 15 to 27 November opened it, and the log said nothing after
+  // "asked the server where driver ... goes".
+  let rideWaitSaid = '';
   function rideOpenIfFree(except) {
     if (rideState !== 'waiting') { return; }
-    if (!rideInReach()) { rideState = ''; return; }
-    if (busyMenuOpenNow(except)) { return; }
+    if (!rideInReach()) {
+      rideState = '';
+      say('the ride panel is not opened: driver ' + (rideDriver >>> 0).toString(16) + ' is out of reach (' + rideApart() + ')');
+      return;
+    }
+    const busy = busyMenuOpenNow(except);
+    if (busy) {
+      if (rideWaitSaid !== busy) { rideWaitSaid = busy; say('the ride panel waits for the ' + busy + ' to close'); }
+      return;
+    }
+    rideWaitSaid = '';
     T.js('try{window.thornswoodRide&&window.thornswoodRide.open();}catch(e){}');
+  }
+
+  // How far the driver pressed is, for the line above: a distance, or why none.
+  function rideApart() {
+    if (!rideDriver) { return 'no driver kept'; }
+    try {
+      const pc = sp.Game.getPlayer();
+      const ref = sp.ObjectReference.from(sp.Game.getFormEx(rideDriver));
+      if (!pc) { return 'no character'; }
+      if (!ref) { return 'he is not loaded'; }
+      const dx = pc.getPositionX() - ref.getPositionX();
+      const dy = pc.getPositionY() - ref.getPositionY();
+      const dz = pc.getPositionZ() - ref.getPositionZ();
+      return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz)) + ' apart, reach ' + RIDE_REACH;
+    } catch (err) { return 'unreadable: ' + err; }
   }
 
   function rideDriverIdSet() {
@@ -9041,23 +9205,37 @@
     if (found) {
       rideDriverIds = out;
       say('carriage and ferry drivers: ' + found + ' of ' + RIDE_DRIVER_BASES.length + ' bases found');
+    } else if (!rideDriverNoneSaid) {
+      // A press on a person found none of them, so E on a driver is a
+      // press on nobody we know (#4581). Said once; asked again next press.
+      rideDriverNoneSaid = true;
+      say('carriage and ferry drivers: none of ' + RIDE_DRIVER_BASES.length + ' bases found');
     }
     return out;
   }
+
+  // Whether a reference is a carriage or ferry driver: a person whose base
+  // is one of the drivers'. 43 is kNPC.
+  function isRideDriverRef(ref) {
+    if (!ref) { return false; }
+    try {
+      const base = ref.getBaseObject();
+      if (!base || base.getType() !== 43) { return false; }
+      const baseId = base.getFormID() >>> 0;
+      return !!baseId && !!rideDriverIdSet()[baseId];
+    } catch (err) { return false; }
+  }
+  // The scripted real game run (thornswood-test.js) faces a driver and knows
+  // him by the same rule, so the driver it presses E on is one this press
+  // takes (#4581).
+  T.isRideDriverRef = isRideDriverRef;
 
   function driverPress(e) {
     if (!e || e.userEventName !== 'Activate') { return false; }
     if (claims.chat || busyMenuOpen()) { return false; }
     let ref = null;
     try { ref = sp.Game.getCurrentCrosshairRef(); } catch (err) { ref = null; }
-    if (!ref) { return false; }
-    let baseId = 0;
-    try {
-      const base = ref.getBaseObject();
-      if (!base || base.getType() !== 43) { return false; }
-      baseId = base.getFormID() >>> 0;
-    } catch (err) { return false; }
-    if (!baseId || !rideDriverIdSet()[baseId]) { return false; }
+    if (!ref || !isRideDriverRef(ref)) { return false; }
     let hex = '';
     let localId = 0;
     try {
@@ -9358,6 +9536,64 @@
   let lastToken = '';
   let tokenAt = 0;
 
+  /*
+    BACK IN THE WORLD AFTER LEAVING IT (#4615).
+
+    Every way out of the world (the idle check, the server ending the session,
+    a refused connection, Change character, the server going down) clears
+    __thornswoodInWorld and quits to the main menu. Only the first arrival
+    above set it again, so after a return the world was up and the flag still
+    said it was not: the idle check never started again, the choice went on
+    being said to the client for ninety seconds, and so did everything else
+    that asks whether the world is there.
+
+    What says a world came back is the load: skymp5-client loads the world
+    with a save of its own once it takes a pick (remoteServer.ts, while the
+    flag is down), so a load while the flag is down is an arrival like the
+    first. It is recorded on loadGame, and the flag goes up on the first
+    update after it with a character, no menu, and the game connected. Not
+    the main menu: update does not run there (the Papyrus VM's OnUpdate sends
+    it, and the main menu has none), which is why the menu code runs on tick.
+    The connection is asked because a leave's own last frames still have the
+    old world with a character and no menu, and arriving in them would tell
+    skymp5-client it is already in a game, so the pick would load no world
+    (alreadyInAGame). Every leave closes the connection before it quits, and
+    a pick opens it again (relogAs) before the world loads. The first cut of
+    this waited for the main menu in update and so never fired (#4615).
+
+    The page is not loaded again, unlike the first arrival: it outlived the
+    world on purpose, with its chat moved to whoever was picked (pickedAgain),
+    so only what the first arrival does for the world itself is done again.
+  */
+  let loadedOutOfWorld = 0;
+  sp.on('loadGame', guard('world load', () => {
+    let here = false;
+    try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+    if (!here) { loadedOutOfWorld = Date.now(); }
+  }));
+  function cameBack(now) {
+    if (!loadedOutOfWorld) { return false; }
+    let here = false;
+    try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+    // The first arrival counted it.
+    if (here) { loadedOutOfWorld = 0; return false; }
+    let up = false;
+    try { up = !!sp.mpClientPlugin.isConnected(); } catch (e) { up = false; }
+    if (!up || gameMenuOpen()) { return false; }
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { return false; }
+    try { globalThis.__thornswoodInWorld = true; } catch (e) { /* a plain property of globalThis, which nothing here locks */ }
+    // The old connection's last report can match the first sample in this
+    // world. The server still needs the new session's place and fire.
+    placeSaid = '';
+    log('back in the world as profile', PROFILE, Math.round((now - loadedOutOfWorld) / 1000) + 's after it loaded');
+    loadedOutOfWorld = 0;
+    if (choiceUp()) { menuGone(); }
+    menuPhase = 9;
+    return true;
+  }
+
   sp.on('update', guard('tick', () => {
     const now = Date.now();
 
@@ -9406,6 +9642,9 @@
       return;
     }
 
+    // Back in the world after leaving it (#4615).
+    if (cameBack(now)) { return; }
+
     /*
       The focus arbiter waits until our own overlays are in.
 
@@ -9443,7 +9682,7 @@
       T.js('window.THORNSWOOD=' + JSON.stringify({
         host: HOST, port: VOICE_PORT, profileId: PROFILE, name: sentName,
         token: '', base: VOICE_URL, socket: VOICE_SOCKET_URL,
-        chatFade: CHAT_FADE, needsBars: NEEDS_BARS
+        chatFade: CHAT_FADE, needsBars: NEEDS_BARS, textSize: TEXT_SIZE
       }) + ';');
       OVERLAYS.forEach(inject);
       // The token itself is never logged. It is what somebody would need to
@@ -9645,7 +9884,12 @@
       }
     }
     if (leaving && now - leaving > 5000) {
-      leaving = now + 3600000;   // never twice
+      /* Once per outage (#4774). This used to push leaving an hour ahead,
+         which brought the countdown and the quit back an hour later, at the
+         menu or in whatever world the person was in by then. The outage ends
+         here: checkServer stands down until they are in a world again. */
+      leaving = 0;
+      quitFor = true;
       // No longer in the world, and said so before the quit rather than after,
       // because after it there is no tick to say it in.
       try { globalThis.__thornswoodInWorld = false; } catch (e) { }
@@ -9806,9 +10050,29 @@
   let leavingSaid = 0;
   /* When the server last said a countdown was running. See PROBE_STRIKES. */
   let toldRestarting = 0;
+  /* The quit for an outage has run, and nothing is watched until the person
+     is in a world again: there is no game connection left to lose (#4774).
+     The world flag is set by the first arrival in the tick above; coming
+     back after leaving the world does not set it again yet, which is #4615,
+     so until that lands the check stays off for the rest of the session. */
+  let quitFor = false;
 
   function checkServer(now) {
     if (!probe || leaving) return;
+    if (quitFor) {
+      let here = false;
+      try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+      if (!here) return;
+      // A new world, so a new watch: none of the last outage carries over.
+      quitFor = false;
+      strikes = 0;
+      probing = false;
+      lastProbe = 0;
+      leftClosed = false;
+      leavingSaid = 0;
+      toldRestarting = 0;
+      log('in a world again, watching the server again');
+    }
     if (probing && now - probeStartedAt > PROBE_DEADLINE_MS) {
       probing = false;
       log('the server has not answered in', PROBE_DEADLINE_MS / 1000, 'seconds');
@@ -9907,6 +10171,16 @@
 
     closingGame goes up first, so the race menu closing as the game comes
     apart is told as /racedown, not as a finished face.
+
+    The connection to the game server is closed before the exit (#6724).
+    exitProcess ends the process without closing it, so the server never
+    heard this game leave and held it for its own 60 s timeout, and the same
+    account picking again inside that minute was turned away as a second
+    game (24 Nov, main: three refusals 1 to 3 s after a close). destroyClient
+    puts the client down, and the client's own shutdown says goodbye to the
+    server and returns once the server has it (fork #204, at most 500 ms).
+    It is done only when exitProcess is there to follow it, so a game that
+    cannot close stays connected.
   */
   function closeGame(from) {
     closingGame = true;
@@ -9925,6 +10199,8 @@
     let asked = false;
     try {
       if (sp.win32 && typeof sp.win32.exitProcess === 'function') {
+        try { sp.mpClientPlugin.destroyClient(); log('menu: closed the connection to the game server'); }
+        catch (e) { log('menu: could not close the connection to the game server:', e); }
         sp.win32.exitProcess();
         asked = true;
       }
@@ -10244,7 +10520,10 @@
       return;
     }
     // The ride panel (#1635): see THE RIDE PANEL WAITS above.
-    if (what === 'ride:wants') { rideState = 'waiting'; rideOpenIfFree(''); return; }
+    if (what === 'ride:wants') {
+      say('the server sent the ride panel for driver ' + (rideDriver >>> 0).toString(16));
+      rideState = 'waiting'; rideOpenIfFree(''); return;
+    }
     if (what === 'ride:opened') { rideState = 'up'; T.claimFocus('ride', true); return; }
     if (what === 'ride:closed') {
       T.claimFocus('ride', false);
@@ -11416,6 +11695,7 @@
     return {
       fov: { value: wantedFov || FOV_DEFAULT, min: FOV_MIN, max: FOV_MAX, def: FOV_DEFAULT },
       chatFade: CHAT_FADE, chatChoices: CHAT_FADE_CHOICES, needsBars: NEEDS_BARS,
+      textSize: TEXT_SIZE, textChoices: TEXT_SIZE_CHOICES,
       keys: keys, mods: modKeys(), said: said || ''
     };
   }
@@ -11429,8 +11709,10 @@
      chat page, which reads them off window.THORNSWOOD. */
   function chatSettingsToPage() {
     T.js('try{var c=window.THORNSWOOD=window.THORNSWOOD||{};c.chatFade=' + CHAT_FADE +
-         ';c.needsBars=' + NEEDS_BARS + ';window.thornswoodChat&&window.thornswoodChat.settings&&' +
-         'window.thornswoodChat.settings();}catch(e){}');
+         ';c.needsBars=' + NEEDS_BARS + ';c.textSize=' + TEXT_SIZE +
+         ';window.thornswoodChat&&window.thornswoodChat.settings&&' +
+         'window.thornswoodChat.settings();window.thornswoodScale&&window.thornswoodScale.settings&&' +
+         'window.thornswoodScale.settings();}catch(e){}');
   }
 
   /*
@@ -11494,6 +11776,11 @@
       if (CHAT_FADE_CHOICES.indexOf(v) < 0) { settingsToPage('That is not one of the choices.'); return; }
       value = v === 10 ? null : String(v);
       said = v === 0 ? 'The chat stays on screen all the time.' : 'The chat hides ' + v + ' seconds after its last line.';
+    } else if (name === 'TextSize') {
+      const v = Number(raw);
+      if (TEXT_SIZE_CHOICES.indexOf(v) < 0) { settingsToPage('That is not one of the choices.'); return; }
+      value = v === 100 ? null : String(v);
+      said = v === 100 ? 'Text at its usual size.' : 'Text at ' + v + ' percent.';
     } else if (name === 'NeedsBars') {
       const shown = String(raw) !== '0';
       value = shown ? null : '0';
@@ -11556,6 +11843,222 @@
       try { others[n](text); } catch (e) { log('settings: a plugin threw reading the new settings:', e); }
     }
   }
+
+  // ---------------------------------------------- SkyUI's favourite groups (#4511)
+  /*
+    SKYUI'S FAVOURITE GROUPS ARE KEPT, PER CHARACTER, ON THIS MACHINE.
+
+    SkyUI keeps its eight favourite groups only in SKI_FavoritesManager's
+    arrays (each group's 32 items and their item ids, in _items1 and
+    _itemIds1 for groups 1 to 4 and the "2" arrays for 5 to 8, and each
+    group's main hand, off hand and icon), and those live in the save. There
+    is no save here, so OnInit made them empty at every session's start and
+    every group was gone. Only the Favorites menu's own events fill them, and
+    no function of the script takes a whole group from outside. Measured
+    26 Nov 2026 from SKI_FavoritesManager.pex in SkyUI_SE.bsa.
+
+    SO WHEN THE FAVORITES MENU CLOSES, where groups are made, the arrays are
+    read (getScriptVariable, engine fork, Thornswood #4511) and written to
+    Data\Platform\thornswood-favourite-groups.json under this server and
+    character. At the next start, once OnInit has made the arrays and the
+    version update has made _itemInvalidFlags2, they are filled back
+    (setScriptVariable), and the menu sends them to its page when it opens,
+    as it does after a load. A character with nothing kept gets them empty,
+    which is also what a pick of another character at the choice puts back.
+
+    An item is kept as its plugin and the id inside it, so a change in the
+    load order does not point it at another record. Its item id is SKSE's,
+    the one the menu gave and EquipItemById takes, kept as it was given, as
+    a save keeps it. A form the game made this session (an 0xFF id) cannot
+    be found again and is left out with its id.
+
+    The launcher keeps the file with the person's settings on thornswood.net
+    (YourSettings.cs). The site refuses a file over 64 KB, so the characters
+    kept longest ago are left out first when the file would pass FAV_MOST.
+  */
+  const FAV_PLUGIN = 'SkyUI_SE.esp';
+  const FAV_QUEST = 0x82a;          // SKI_FavoritesManagerInstance
+  const FAV_SCRIPT = 'SKI_FavoritesManager';
+  const FAV_MENU = 'FavoritesMenu';
+  const FAV_FILE = 'Data/Platform/thornswood-favourite-groups.json';
+  const FAV_MOST = 48 * 1024;
+  const FAV_HALF = 128;
+  // Each group's own form and item id: main hand, off hand, icon.
+  const FAV_HANDS = [['main', '_groupMainHandItems', '_groupMainHandItemIds'],
+                     ['off', '_groupOffHandItems', '_groupOffHandItemIds'],
+                     ['icon', '_groupIconItems', '_groupIconItemIds']];
+  let favQuestId = 0;
+  let favFor = '';              // whose groups the script holds now
+  let favPutOk = false;         // and whether they were put back whole
+  let favWaitLogged = false;
+
+  function favQuest() {
+    if (favQuestId) { return favQuestId; }
+    try {
+      const form = sp.Game.getFormFromFile(FAV_QUEST, FAV_PLUGIN);
+      favQuestId = form ? form.getFormID() : 0;
+    } catch (e) { favQuestId = 0; }
+    return favQuestId;
+  }
+
+  function favKey() { return PROFILE ? HOST + '/' + PROFILE : ''; }
+
+  // A form as "<plugin>|<id inside it, hex>", or '' when it has none to keep.
+  function favFormKey(raw) {
+    if (!raw) { return ''; }
+    const form = sp.Form.from(raw);
+    const id = form ? form.getFormID() >>> 0 : 0;
+    if (!id) { return ''; }
+    const hi = id >>> 24;
+    if (hi === 0xff) { return ''; }
+    const file = hi === 0xfe ? sp.Game.getLightModName((id >>> 12) & 0xfff) : sp.Game.getModName(hi);
+    const local = hi === 0xfe ? (id & 0xfff) : (id & 0xffffff);
+    return file ? file + '|' + local.toString(16) : '';
+  }
+
+  function favForm(key) {
+    const bar = typeof key === 'string' ? key.lastIndexOf('|') : -1;
+    if (bar <= 0) { return null; }
+    const local = parseInt(key.slice(bar + 1), 16);
+    if (!(local > 0)) { return null; }
+    return sp.Game.getFormFromFile(local, key.slice(0, bar)) || null;
+  }
+
+  function favRead() {
+    try { return JSON.parse(require('fs').readFileSync(FAV_FILE, 'utf8')); } catch (e) { return null; }
+  }
+
+  // The arrays as they are now, or null while the script has not made them.
+  function favArrays(quest) {
+    const names = ['_items1', '_itemIds1', '_items2', '_itemIds2', '_itemInvalidFlags2'];
+    FAV_HANDS.forEach((h) => { names.push(h[1], h[2]); });
+    const out = {};
+    for (const n of names) {
+      const v = sp.getScriptVariable(quest, FAV_SCRIPT, n);
+      if (!Array.isArray(v)) { return null; }
+      out[n] = v;
+    }
+    return out;
+  }
+
+  // What is kept of one character: each filled slot, 0 to 255 over both
+  // halves, and each group's hands and icon, as [form, item id].
+  function favTake(a) {
+    const slots = {};
+    for (let i = 0; i < 2 * FAV_HALF; i++) {
+      const half = i < FAV_HALF ? '1' : '2';
+      const j = i % FAV_HALF;
+      const itemId = Number(a['_itemIds' + half][j]) | 0;
+      const form = itemId ? favFormKey(a['_items' + half][j]) : '';
+      if (itemId && form) { slots[i] = [form, itemId]; }
+    }
+    const kept = { saved: Date.now(), slots: slots };
+    FAV_HANDS.forEach((h) => {
+      const by = {};
+      for (let g = 0; g < 8; g++) {
+        const itemId = Number(a[h[2]][g]) | 0;
+        const form = itemId ? favFormKey(a[h[1]][g]) : '';
+        if (itemId && form) { by[g] = [form, itemId]; }
+      }
+      kept[h[0]] = by;
+    });
+    return kept;
+  }
+
+  function favSave() {
+    const key = favKey();
+    const quest = favQuest();
+    // Never before this character's groups were put back: the empty arrays
+    // of a fresh start would be written over what was kept.
+    if (!key || !quest || favFor !== key || !favPutOk) { return; }
+    const a = favArrays(quest);
+    if (!a) { log('favourite groups: the menu closed before SkyUI made its arrays, so nothing was kept'); return; }
+    const all = favRead() || {};
+    const chars = (all.characters && typeof all.characters === 'object') ? all.characters : {};
+    chars[key] = favTake(a);
+    // Newest first, and only as many as fit.
+    const order = Object.keys(chars).sort((x, y) => (Number(chars[y].saved) || 0) - (Number(chars[x].saved) || 0));
+    const out = { version: 1, characters: {} };
+    for (const k of order) {
+      out.characters[k] = chars[k];
+      if (JSON.stringify(out).length > FAV_MOST) { delete out.characters[k]; log('favourite groups: left out ' + k + ', kept longest ago, to stay under ' + FAV_MOST + ' bytes'); }
+    }
+    const fs = require('fs');
+    fs.writeFileSync(FAV_FILE + '.tmp', JSON.stringify(out));
+    fs.renameSync(FAV_FILE + '.tmp', FAV_FILE);
+    log('favourite groups: kept ' + Object.keys(chars[key].slots).length + ' items for ' + key);
+  }
+
+  // Puts this character's groups in the script's arrays, every value checked
+  // by setScriptVariable before any is written.
+  function favPut(quest, a, kept) {
+    const next = {};
+    ['1', '2'].forEach((half) => {
+      next['_items' + half] = a['_items' + half].map(() => null);
+      next['_itemIds' + half] = a['_itemIds' + half].map(() => 0);
+    });
+    let put = 0, lost = 0;
+    const slots = (kept && kept.slots) || {};
+    for (const s of Object.keys(slots)) {
+      const i = Number(s);
+      if (!(i >= 0 && i < 2 * FAV_HALF) || !Array.isArray(slots[s])) { continue; }
+      const form = favForm(slots[s][0]);
+      const itemId = Number(slots[s][1]) | 0;
+      if (!form || !itemId) { lost++; continue; }
+      const half = i < FAV_HALF ? '1' : '2';
+      next['_items' + half][i % FAV_HALF] = form;
+      next['_itemIds' + half][i % FAV_HALF] = itemId;
+      put++;
+    }
+    FAV_HANDS.forEach((h) => {
+      next[h[1]] = a[h[1]].map(() => null);
+      next[h[2]] = a[h[2]].map(() => 0);
+      const by = (kept && kept[h[0]]) || {};
+      for (let g = 0; g < 8; g++) {
+        if (!Array.isArray(by[g])) { continue; }
+        const form = favForm(by[g][0]);
+        const itemId = Number(by[g][1]) | 0;
+        if (form && itemId) { next[h[1]][g] = form; next[h[2]][g] = itemId; }
+      }
+    });
+    for (const n of Object.keys(next)) {
+      if (!sp.setScriptVariable(quest, FAV_SCRIPT, n, next[n])) { throw new Error('SkyUI has no ' + n); }
+    }
+    return { put: put, lost: lost };
+  }
+
+  // Once the script has made its arrays, and again after a pick of another
+  // character, its groups are this character's.
+  let favLook = 0;
+  sp.on('update', guard('favourite groups', () => {
+    const key = favKey();
+    if (!key || key === favFor || ++favLook % 30) { return; }
+    const quest = favQuest();
+    if (!quest) { return; }
+    const a = favArrays(quest);
+    if (!a) {
+      if (!favWaitLogged) { favWaitLogged = true; log('favourite groups: waiting for SkyUI to make its arrays'); }
+      return;
+    }
+    const all = favRead();
+    const kept = all && all.characters ? all.characters[key] : null;
+    // Looked at once for each character. One that could not be put back is
+    // never saved this session, so what was kept is not written over.
+    favFor = key;
+    favPutOk = false;
+    try {
+      const got = favPut(quest, a, kept);
+      favPutOk = true;
+      log('favourite groups: put back ' + got.put + ' items for ' + key + (got.lost ? ', ' + got.lost + ' whose record is not loaded left out' : ''));
+    } catch (err) {
+      log('favourite groups: could not put them back for ' + key + ', so none are kept this session: ' + (err && err.message ? err.message : err));
+    }
+  }));
+
+  sp.on('menuClose', guard('favourite groups close', (e) => {
+    if (e && e.name === FAV_MENU) { favSave(); }
+  }));
+  // ---------------------------------------------- end SkyUI's favourite groups
 
   /*
     Write the game's real load order to disk, once, on the first update.

@@ -14,10 +14,11 @@
 //   1. the make's finish leaves a note in the profile, after Paths point at
 //      the new folder and before Fix runs in it (the note is for a launcher
 //      that closes before that Fix; test-5937-one-restart.js holds the rest);
-//   2. the first start in the folder takes that note (reading it deletes it,
-//      so Fix runs once for it and never at every start) and runs Fix whole,
+//   2. the first start in the folder reads that note and runs Fix whole,
 //      after a bring-up-to-date from Vortex when one is due, whether that
-//      succeeds or not;
+//      succeeds or not; the note is taken when that Fix ends, so a launcher
+//      shut while it runs runs it again at the next start (#6086), and a
+//      Fix that ends with something still wrong is not run at every start;
 //   3. that Fix waits for a folder being prepared, as Fix after an update
 //      does, and the folder's finish runs it as the Fix after a make;
 //   4. the scan before the folder is made does not judge the files made from
@@ -66,14 +67,18 @@ yes('only when the make succeeded', /if \(make && fail == null\)\s*\{[^}]*Paths\
 yes('the note lives in the profile beside the folder\'s other records',
   /static string FixAfterMakeFile \{ get \{ return Path\.Combine\(Dir, "fix-after-make\.txt"\); \} \}/.test(og));
 const take = code(body(og, 'public static bool TakeFixAfterMake()'));
-yes('reading the note deletes it, so Fix runs once for it',
+yes('taking the note deletes it',
   /if \(!File\.Exists\(f\)\) return false;\s*File\.Delete\(f\);\s*return true;/.test(take));
-yes('and a note that cannot be deleted does not run Fix, so it never runs at every start',
+yes('and a note that cannot be deleted is said in the log',
   /catch \(Exception ex\)\s*\{\s*Swallow\.Note\([^)]*\);\s*return false;\s*\}/.test(take));
+const waiting = code(body(og, 'public static bool FixAfterMakeWaiting'));
+yes('reading whether it is there leaves it in place (#6086)',
+  /return File\.Exists\(FixAfterMakeFile\);/.test(waiting) && !/Delete/.test(waiting));
 
 // 2. the first start in the folder
 const start = code(body(own, 'static void OwnGameAtStart()'));
-yes('the first start in the folder takes the note', /if \(active\) fixAfterMake = OwnGame\.TakeFixAfterMake\(\);/.test(start));
+yes('the first start in the folder reads the note and leaves it for that Fix\'s end (#6086)',
+  /if \(active\) fixAfterMake = OwnGame\.FixAfterMakeWaiting;/.test(start) && !/TakeFixAfterMake/.test(start));
 yes('and does not stop before running Fix when nothing else is due', /if \(!refresh && !offer && !fixAfterMake\) return;/.test(start));
 yes('it runs Fix as the Fix after a make', /Action fix = fixAfterMake \? \(Action\)delegate \{ RunFix\(false, false, true\); \} : null;/.test(start));
 yes('after a bring-up-to-date that is due, whether it succeeds or not',
@@ -92,6 +97,19 @@ yes('the log says what it is doing and that Pandora and BodySlide show their own
 yes('the rest is the Fix a press runs: the folder first, then FixRest',
   /StartOwnGame\(false, true, delegate \{ Begin\(FixRest\(afterUpdate, afterVortex\)\); \}, delegate \{ Begin\(FixRest\(afterUpdate, afterVortex\)\); \}\)/.test(runFix) &&
   /await FixRest\(afterUpdate, afterVortex\);\s*\}$/.test(runFix.trim()));
+yes('the Fix after a make is marked as it starts, once nothing stops it',
+  /fixing = true;\s*makeFixRunning = afterMake;/.test(runFix));
+const ended = code(body(sf, 'static void MakeFixEnded()'));
+yes('and its end takes the note, once', /if \(!makeFixRunning\) return;\s*makeFixRunning = false;\s*OwnGame\.TakeFixAfterMake\(\);/.test(ended));
+yes('a Fix that could not scan leaves the note, so the next start runs it',
+  /fixing = false;\s*makeFixRunning = false;\s*Log\("Fix could not scan first/.test(runFix));
+yes('a Fix that found nothing takes it before the one restart',
+  /ShowVerify\(plugins, false\);\s*MakeFixEnded\(\);\s*FirstSetupRestart\(\);/.test(runFix));
+const restFix = code(body(sf, 'static async Task FixRest('));
+yes('and a Fix that put things right takes it after it has run, before its report and the one restart',
+  /fixing = false;\s*MakeFixEnded\(\);\s*Report\(plugins\);/.test(restFix) && restFix.indexOf('MakeFixEnded();') > restFix.indexOf('Upkeep.FixOnDisk(cfg, found, say);') &&
+  restFix.indexOf('MakeFixEnded();') < restFix.indexOf('FirstSetupRestart();'));
+yes('nothing else takes the note', ((own + sf).match(/OwnGame\.TakeFixAfterMake\(\)/g) || []).length === 1);
 const disk = code(body(upkeep, 'public static void FixOnDisk('));
 yes('and Fix writes the made files, builds the animation and body files and puts the plugin list in the server\'s order',
   disk.indexOf('MadeFromGame.Ensure()') > 0 && disk.indexOf('GeneratedHere.Ensure(say)') > 0 && disk.indexOf('Verify.Fix(cfg, say, Updater.ReleaseCopy(cfg))') > 0);

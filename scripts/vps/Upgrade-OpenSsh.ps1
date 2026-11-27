@@ -45,7 +45,7 @@
 
   WHEN. It cuts every ssh session for the minute or two the swap takes, so
   run it when no deploy, Ship, backup or lane run is talking to the box
-  (the ops repo's ops\claude-queue\1043-openssh-upgrade.md has the run).
+  (the ops repo's issues\1043.md records the run on the box).
 
   THE WAY BACK, BY HAND, if no machine can reach ssh after the put back's
   time has passed. The VPS provider's panel (BisectHosting, VirtFusion) has a

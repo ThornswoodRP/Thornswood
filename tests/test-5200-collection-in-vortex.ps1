@@ -146,12 +146,13 @@ Yes 'the Fix button is still a plain Fix' ($shell.Contains('btnFix.Click += dele
 if (-not $OnWindows) {
     Write-Host 'SKIP  Checks.CollectionNxmUrl and Checks.NxmStartsVortex compiled and run: the build''s compiler (the Build Tools'' csc, against .NET Framework 4.8.1) is only on Windows; their source was read above'
 } else {
-    $slug = Method $checks 'public static string CollectionSlug(Config cfg)'
+    $slug = (Method $checks 'public static string CollectionSlug(Config cfg)') + "`n" + (Method $checks 'static string SlugIn(string url)') + "`n" + (Method $checks 'public static bool IsSlug(string s)')
     $fixture = @'
 using System;
 using System.IO;
 namespace Thornswood {
- public class Config { public string CollectionUrl; }
+ public class Config { public string CollectionUrl; public const string Collection = "https://www.nexusmods.com/games/skyrimspecialedition/collections/7essxf"; }
+ public static class Updater { public static string ServerCollectionSlug = ""; }
  public static class CollectionNxmFixture {
   __METHODS__
   static string At(string url, int revision) { return CollectionNxmUrl(new Config { CollectionUrl = url }, revision); }
@@ -170,6 +171,10 @@ namespace Thornswood {
     { CollectionNxmUrl(null, 6), "" },
    };
    for (int i = 0; i < want.GetLength(0); i++) if (want[i, 0] != want[i, 1]) return "link case " + i + ": " + want[i, 0];
+   // A dev install hands Vortex the Dev collection's revision (#7193).
+   Updater.ServerCollectionSlug = "dv1abc";
+   if (At(c, 2) != "nxm://skyrimspecialedition/collections/dv1abc/revisions/2") return "dev link case: " + At(c, 2);
+   Updater.ServerCollectionSlug = "";
    object[,] vortex = {
     { "\"C:\\Program Files\\Black Tree Gaming Ltd\\Vortex\\Vortex.exe\" -d \"%1\"", true },
     { "C:\\Vortex\\Vortex.exe -d \"%1\"", true },

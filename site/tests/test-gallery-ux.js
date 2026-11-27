@@ -27,6 +27,8 @@ function pageOf(html, css, js) {
 }
 const home = pageOf(path.basename(HOME), 'home.css', 'home.js');
 const hub = pageOf(path.basename(HUB), 'hub.css', 'hub.js');
+const launcherWindow = fs.readFileSync(path.join(ROOT, 'launcher', 'app', 'MainWindow.axaml'), 'utf8');
+const launcherShell = fs.readFileSync(path.join(ROOT, 'launcher', 'app', 'Shell.cs'), 'utf8');
 
 // By its opening: #1585 gave the bar an aria-label.
 const barA = home.indexOf('<nav class="top" id="nav"');
@@ -38,6 +40,11 @@ yes('footer Community links to /gallery',
     /<h2>Community<\/h2>\s*<a href="\/gallery">Gallery<\/a>/.test(home));
 
 yes('home has gallery slideshow shell', /id="galleryShow"/.test(home));
+yes('the homepage slideshow fits the entire picture inside its frame',
+    /\.gal-show img\{[^}]*object-fit:contain/.test(home));
+yes('the launcher spotlight fits the entire picture on every slide',
+    /<Image\b[^>]*x:Name="GalleryImage"[^>]*\bStretch="Uniform"/.test(launcherWindow) &&
+    !/\bgalleryImage\.Stretch\s*=/.test(launcherShell));
 yes('home has See the gallery link', /See the gallery/.test(home));
 yes('landing build starts a rotating slideshow',
     /setInterval\(function \(\) \{ go\(\(i \+ 1\) % shots\.length\); \}, 5000\)/.test(home) &&
