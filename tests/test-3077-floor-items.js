@@ -26,8 +26,9 @@
        coin-giving flora in game/data/harvests.json, no more
     M  the manifest counts the floor items it switched off, and its counts
        agree with each other
-    P  every placed reference in the plugin but the three town gates and the
-       hold-only plants and ores (#3150) is a floor item switched off:
+    P  every placed reference in the plugin but the three town gates, the
+       doors it unlocks (#6995, #7032) and the hold-only plants and ores
+       (#3150) is a floor item switched off:
        initially disabled, keeping only its base and place, with nothing that
        could switch it on; they are the manifest's number, and their ids hash
        to the manifest's refsSha256
@@ -150,12 +151,16 @@ const gates = new Set(manifest.gatesUnlocked || []);
 // The hold-only plants and ores switched off outside their hold (#3150) are
 // game/tests/test-3150-hold-builder.js's and the builder's --verify.
 const holdOff = new Set((manifest.holdOnly && manifest.holdOnly.off) || []);
-const refs = last.recs.filter((r) => r.tag === 'REFR' && !gates.has(r.desc) && !holdOff.has(r.desc));
+// The doors it unlocks where they stand, as it does the gates: Riftweald
+// Manor's door and its three bolts (#6995) and four claimable doors (#7032),
+// held by tests/test-riftweald-unlock.js and tests/test-6617-claimable-door-locks.js.
+const doors = new Set([].concat(manifest.riftwealdUnlocked || [], manifest.claimableDoorsUnlocked || []));
+const refs = last.recs.filter((r) => r.tag === 'REFR' && !gates.has(r.desc) && !holdOff.has(r.desc) && !doors.has(r.desc));
 const bad = refs.filter((r) => {
   const tags = r.subs.map((s) => s.t).join(',');
   return !(r.flags & DISABLED) || (r.flags & DELETED) || (tags !== 'NAME,DATA' && tags !== 'EDID,NAME,DATA');
 });
-yesR('P1 every placed reference but the ' + gates.size + ' town gates and the hold-only plants and ores is ' +
+yesR('P1 every placed reference but the ' + gates.size + ' town gates, the ' + doors.size + ' doors it unlocks and the hold-only plants and ores is ' +
     'switched off: initially disabled, ' +
     'keeping only its base and place, with no enable parent, script or link' +
     (bad.length ? ' (not: ' + bad.slice(0, 5).map((r) => r.desc).join(', ') + ')' : ''),

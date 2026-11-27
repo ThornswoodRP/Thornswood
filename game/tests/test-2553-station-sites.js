@@ -183,8 +183,10 @@ function placements(b) {
 }
 // Thornswood-Last.esp places nothing new: its only placed references are the
 // three town gates it overrides where they stand, without their lock (#2484),
-// and the floor items it switches off (#3077, each one initially disabled:
-// tests/test-3077-floor-items.js P1). Neither is a station, so the table need
+// the doors it unlocks the same way (Riftweald Manor's door and its three
+// bolts, switched off, #6995; four claimable doors, #7032), and the floor
+// items it switches off (#3077, each one initially disabled:
+// tests/test-3077-floor-items.js P1). None is a station, so the table need
 // not read them. No repository holds the plugin since #2791 step 3, so this
 // reads it made from its recipe out of the game's plugins
 // (tests/last-plugin-made.js), and prints SKIP without the game.
@@ -193,10 +195,13 @@ const lastCounts = JSON.parse(fs.readFileSync(LAST, 'utf8')).counts || {};
 const lastGates = lastCounts.gatesUnlocked;
 if (lastMade.buf) {
   // And the hold-only plants and ores it switches off outside their hold (#3150).
-  const holdOff = ((JSON.parse(fs.readFileSync(LAST, 'utf8')).holdOnly || {}).off || []).length;
-  yes('B3 Thornswood-Last.esp places only the town gates it unlocks (' + lastGates + '), the floor items it switches off (' +
-      lastCounts.floorItemsOff + ') and the hold-only plants and ores it switches off (' + holdOff + '), so the table need not read it',
-      lastGates === 3 && placements(lastMade.buf) === lastGates + (lastCounts.floorItemsOff || 0) + holdOff);
+  const lastDoc = JSON.parse(fs.readFileSync(LAST, 'utf8'));
+  const holdOff = ((lastDoc.holdOnly || {}).off || []).length;
+  const doors = (lastDoc.riftwealdUnlocked || []).length + (lastDoc.claimableDoorsUnlocked || []).length;
+  yes('B3 Thornswood-Last.esp places only the town gates it unlocks (' + lastGates + '), the doors it unlocks (' + doors +
+      '), the floor items it switches off (' + lastCounts.floorItemsOff + ') and the hold-only plants and ores it switches off (' +
+      holdOff + '), so the table need not read it',
+      lastGates === 3 && placements(lastMade.buf) === lastGates + doors + (lastCounts.floorItemsOff || 0) + holdOff);
 } else {
   console.log('SKIP  B3: ' + lastMade.why);
 }

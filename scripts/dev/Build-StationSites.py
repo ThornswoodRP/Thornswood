@@ -873,8 +873,14 @@ def main():
     # the hold-only plants and ores it switches off outside their hold the
     # same way, the ones its holdOnly.off lists. A switched-off item still
     # counts here as something in the way, as it did before, so no spot
-    # changes. Anything else it placed would stop this.
-    gates = set(lo_doc.get('gatesUnlocked') or [])
+    # changes. Since #6995 and #7032 the doors it unlocks the same way as the
+    # gates are a third kind, each a master's own reference left where it
+    # stands: Riftweald Manor's door, with its three bolts switched off
+    # (riftwealdUnlocked), and four claimable doors without their lock
+    # (claimableDoorsUnlocked), both lists last-plugin.json names. Anything
+    # else it placed would stop this.
+    gates = (set(lo_doc.get('gatesUnlocked') or []) | set(lo_doc.get('riftwealdUnlocked') or [])
+             | set(lo_doc.get('claimableDoorsUnlocked') or []))
     floor_off = int((lo_doc.get('floorItems') or {}).get('off') or 0) + len((lo_doc.get('holdOnly') or {}).get('off') or [])
     for n in OURS_AFTER:
         # Made in the Data folder from its recipe since #2791 (own_plugins.py).
@@ -893,7 +899,7 @@ def main():
                 continue
             named.append(desc or '%08X (its own)' % fid)
         if named:
-            print('STOP. %s places %d reference(s) that are neither the town gates it unlocks nor floor items it '
+            print('STOP. %s places %d reference(s) that are neither the doors and gates it unlocks nor floor items it '
                   'switches off (%s); this table would have to read it.' % (n, len(named), ', '.join(named[:6])))
             return 1
         if n == 'Thornswood-Last.esp' and off != floor_off:
