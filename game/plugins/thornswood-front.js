@@ -3399,9 +3399,26 @@
     let id = 0;
     try { id = ref.getFormID(); } catch (err) { }
 
+    /*
+      WHAT THE DOOR WAS DOING (#7029, #6475). The same property doors come
+      back here as opened every few seconds with nobody near them, and a
+      doorway was seen standing half open. The door's open state (1 open,
+      2 opening, 3 closed, 4 closing), its lock level and whether property
+      holds it shut here say which: a lock that does not take, or a door the
+      lock script locks while it stands open.
+    */
+    let doing = '';
+    if (type === 29) {
+      let openState = '?', level = '?', held = '?';
+      try { openState = String(ref.getOpenState()); } catch (err) { }
+      try { level = String(ref.getLockLevel()); } catch (err) { }
+      try { const shut = globalThis.__thornswoodPropertyShut; held = shut ? (shut[id] ? 'yes' : 'no') : 'none'; } catch (err) { }
+      doing = ' (open state ' + openState + ', lock level ' + level + ', held shut here ' + held + ')';
+    }
+
     try {
       ref.blockActivation(true);
-      say('lock opened on ' + id.toString(16) + ', handed it back to the server');
+      say('lock opened on ' + id.toString(16) + doing + ', handed it back to the server');
     } catch (err) {
       say('could not hand ' + id.toString(16) + ' back to the server: ' + err);
     }
