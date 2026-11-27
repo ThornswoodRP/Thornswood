@@ -362,7 +362,7 @@ launcherHalf().then(() => {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
 }).catch(async (e) => {
-  console.log('FAIL  the harness itself: ' + (e && e.stack || e));
+  console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   for (const l of launchers) { await l.quit(); }
   process.exitCode = 1;
 });

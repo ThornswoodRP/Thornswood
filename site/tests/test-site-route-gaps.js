@@ -256,7 +256,7 @@ const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'))
     r = await request(b.port, 'GET', '/file/files.json');
     yes('with no downloads at all, files.json is 404 and not a server error', r.status === 404);
   } catch (e) {
-    fail++; console.log('FAIL  ' + (e && e.stack || e));
+    fail++; console.log('FAIL  ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   } finally {
     for (const s of [a, b]) if (s) { s.srv.removeAllListeners('close'); s.srv.kill(); }
     await new Promise((ok) => setTimeout(ok, 300));

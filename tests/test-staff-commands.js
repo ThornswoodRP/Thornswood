@@ -710,7 +710,7 @@ function python(args) {
     yes('on_ready starts the watcher', out[3] === 'True');
     if (py.status !== 0) { console.log(py.stderr); }
   }
-})().catch((e) => { fail++; console.log('FAIL  the harness threw: ' + (e && e.stack ? e.stack : e)); })
+})().catch((e) => { fail++; console.log('FAIL  the harness threw: ' + String(e && e.stack ? e.stack : e).replace(/\n/g, '\n      ')); })
   .then(() => {
     for (const s of sockets) { try { s.close(); } catch (e) { } }
     try { srv.kill(); } catch (e) { }

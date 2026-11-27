@@ -273,7 +273,7 @@ async function main() {
   process.exitCode = fail ? 1 : 0;
 }
 main().catch((e) => {
-  console.log('FAIL  the harness threw: ' + (e && e.stack));
+  console.log('FAIL  the harness threw: ' + String(e && e.stack).replace(/\n/g, '\n      '));
   process.exitCode = 1;
   // A throw closes the server too, or the open listener keeps node alive
   // until the gate kills it at 300 s.

@@ -305,7 +305,7 @@ const shownOf = (name) => (readJson('gallery.json') || []).find((x) => x.name ==
         r.status === 200 && r.cache === 'no-store' && r.raw.equals(png(1700, 850)));
   } catch (e) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (e && e.stack ? e.stack : e));
+    console.log('FAIL  the harness itself threw: ' + String(e && e.stack ? e.stack : e).replace(/\n/g, '\n      '));
   }
 
   await new Promise((ok) => { srv.on('exit', ok); try { srv.kill(); } catch (e) { ok(); } setTimeout(ok, 3000).unref(); });

@@ -1184,7 +1184,7 @@ function seatPages() {
   partSeven();
 })().catch((e) => {
   fail++;
-  console.log('FAIL  the harness itself: ' + (e && e.stack || e));
+  console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
 }).then(async () => {
   if (seatFeed) clearInterval(seatFeed);
   pages.forEach(closePage);

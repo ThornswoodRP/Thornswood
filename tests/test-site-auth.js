@@ -346,7 +346,7 @@ function runRefresh(refreshSrc, privDir, FILE, sent, notes) {
     yes('the key is still nowhere in site.log', readLog().indexOf(KEY) < 0);
   } catch (e) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (e && e.stack ? e.stack : e));
+    console.log('FAIL  the harness itself threw: ' + String(e && e.stack ? e.stack : e).replace(/\n/g, '\n      '));
   }
 
   // Gone before the folder is removed, because Windows will not delete a log

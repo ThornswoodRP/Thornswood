@@ -124,6 +124,6 @@ main().then(function () {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
 }).catch(function (e) {
-  console.log('FAIL  ' + (e && e.stack || e));
+  console.log('FAIL  ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   process.exitCode = 1;
 });

@@ -317,4 +317,4 @@ function onRoster(me, other) { return !!me.roster && me.roster.some((r) => r.pee
   yes('the game\'s overlay closes a connection to whoever leaves its roster and opens one to whoever comes on',
       /conns\.forEach\(function \(_, id\) \{ if \(!want\.has\(id\)\) drop\(id\); \}\);/.test(overlay) && /open\(id, p, myPeer < id\);/.test(overlay));
   yes('so does the launcher', /if \(!seen\.Contains\(id\)\) Drop\(id\);/.test(launcher));
-})().then(finish, (e) => { fail++; console.log('FAIL  the harness itself: ' + (e && e.stack || e)); finish(); });
+})().then(finish, (e) => { fail++; console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      ')); finish(); });

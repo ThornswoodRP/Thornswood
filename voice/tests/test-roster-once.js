@@ -325,7 +325,7 @@ function worst(list, from) {
   finish();
 })().catch((err) => {
   fail++;
-  console.log('FAIL  the harness stopped: ' + (err && err.stack || err));
+  console.log('FAIL  the harness stopped: ' + String(err && err.stack || err).replace(/\n/g, '\n      '));
   finish();
 });
 

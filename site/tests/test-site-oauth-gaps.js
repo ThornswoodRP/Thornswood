@@ -203,7 +203,7 @@ async function signIn(back, code, port) {
     yes('and is not written into linked.json', JSON.stringify(linked()) === beforeStranger);
     yes('nothing tried to leave the machine', outbound().indexOf('OUTBOUND') < 0);
   } catch (e) {
-    fail++; console.log('FAIL  ' + (e && e.stack || e));
+    fail++; console.log('FAIL  ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   } finally {
     srv.removeAllListeners('close'); srv.kill();
     await new Promise((ok) => setTimeout(ok, 300));

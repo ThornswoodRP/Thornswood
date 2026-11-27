@@ -224,4 +224,4 @@ const GOOD = {
   yes('a backup with no inventory says SKIP, not PASS', bare.some((l) => l.ok === null && /inventory: the backup holds none/.test(l.what)));
 
   done();
-})().catch((err) => { console.log('FAIL  ' + (err && err.stack || err)); fail++; done(); });
+})().catch((err) => { console.log('FAIL  ' + String(err && err.stack || err).replace(/\n/g, '\n      ')); fail++; done(); });

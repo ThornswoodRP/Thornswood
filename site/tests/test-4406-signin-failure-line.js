@@ -280,7 +280,7 @@ async function hubAt(pathname, word) {
     const other = await homeAt('/gallery', '<b>made-up</b>');
     yes('B6 a word that is not one of the three shows nothing', !other.threw && other.line === '');
   } catch (e) {
-    fail++; console.log('FAIL  the harness itself threw: ' + (e && e.stack || e) + '\n' + out);
+    fail++; console.log('FAIL  the harness itself threw: ' + String((e && e.stack || e) + '\n' + out).replace(/\n/g, '\n      '));
   } finally {
     srv.removeAllListeners('close'); srv.kill();
     await new Promise((ok) => setTimeout(ok, 300));

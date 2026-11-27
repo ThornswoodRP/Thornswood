@@ -356,4 +356,4 @@ const keys = (o) => Object.keys(o || {}).sort().join(',');
     code is set and node leaves once everything is let go.
   */
   process.exitCode = fail ? 1 : 0;
-})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exitCode = 1; });
+})().catch((e) => { console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      ')); process.exitCode = 1; });

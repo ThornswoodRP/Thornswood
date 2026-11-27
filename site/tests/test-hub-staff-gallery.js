@@ -433,7 +433,7 @@ const asJson = { 'content-type': 'application/json' };
 
   } catch (e) {
     fail++;
-    console.log('FAIL  the harness itself threw: ' + (e && e.stack ? e.stack : e));
+    console.log('FAIL  the harness itself threw: ' + String(e && e.stack ? e.stack : e).replace(/\n/g, '\n      '));
   }
 
   await new Promise((ok) => {

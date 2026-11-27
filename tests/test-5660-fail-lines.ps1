@@ -29,6 +29,10 @@
     10. with no FAIL line the last lines already hold it, said once;
     11. a header alone, as .NET 10's fail fast prints "Process terminated.",
        takes the message on the line after it, never a stack line.
+    13. a thrown error a node harness prints under its FAIL line goes in
+       indented, so the annotation keeps its reason (#6059: test-4407's site
+       copy said listen EADDRINUSE, and the annotation said nothing), and no
+       harness prints one flush left.
   B. The runner against stand-in harnesses in a scratch repository: the
      ::error line it writes for a failing harness carries its FAIL lines,
      a harness that passed gets none, and a harness whose child pwsh dies
@@ -127,6 +131,28 @@ $noDying = 'harness failed (exit 1): its FAIL lines%0AFAIL  the child gave nothi
 Yes '12. case B takes the annotation the Windows share writes, with a fail fast''s negative exit' ($onWindows -match $DIED_SAYS)
 Yes '    and the one a Linux share writes' ($onLinux -match $DIED_SAYS)
 Yes '    and not one without the dying line' ($noDying -notmatch $DIED_SAYS)
+
+# ---- 13. a thrown error goes under its FAIL line, indented (#6059) ---------------------
+# test-4407 on 13 Nov (run 43343929039, Linux share): its copy of the site
+# exited with listen EADDRINUSE, and the harness printed the thrown error
+# flush left under "FAIL  the harness itself threw", so the annotation (6)
+# carried only "Error: the scratch site never came up:" and no reason.
+$thrown = 'const err = new Error("the scratch site never came up:\n[thornswood-docs] uncaught exception, exiting: Error: listen EADDRINUSE: address already in use 127.0.0.1:37023");'
+$asNow = & node -e ($thrown + ' console.log("FAIL  the harness itself threw: " + String(err && err.stack ? err.stack : err).replace(/\n/g, "\n      "));') 2>&1 | Out-String
+$asWas = & node -e ($thrown + ' console.log("FAIL  the harness itself threw: " + (err && err.stack ? err.stack : err));') 2>&1 | Out-String
+if ($null -ne $fn) {
+    $now = Get-FailSaid $asNow
+    Yes ('13. a thrown error printed indented under its FAIL line keeps the site''s own reason (' + $now.Substring(0, [Math]::Min(200, $now.Length)) + ')') ($now -match 'never came up:%0A    \[thornswood-docs\] uncaught exception, exiting: Error: listen EADDRINUSE')
+    Yes '    and printed flush left, as before, it did not' ((Get-FailSaid $asWas) -notmatch 'EADDRINUSE')
+}
+# Every node harness (in tests or a product's tests folder) that prints a
+# thrown error after a FAIL line prints the rest of it indented, so its
+# annotation carries why.
+$flush = '''FAIL  [^'']*'' \+ \(\w+ && \w+\.stack'
+$left = @(Get-ChildItem -LiteralPath $repo -Recurse -File -Filter '*.js' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '[\\/](node_modules|\.git)[\\/]' -and $_.FullName.Substring($repo.Length) -match '[\\/]tests[\\/]' -and (Select-String -LiteralPath $_.FullName -Pattern $flush -Quiet) } |
+    ForEach-Object { $_.FullName.Substring($repo.Length + 1) })
+Yes ('    and no harness prints one flush left (' + ($left -join ', ') + ')') (-not $left.Count)
 
 # ---- B. the runner writes it -------------------------------------------------------------
 $canRun = $OnWindows -or (Test-Path -LiteralPath '/proc/stat')

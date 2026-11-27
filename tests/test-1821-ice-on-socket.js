@@ -547,7 +547,7 @@ function lift(src, name) {
   */
   process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
-  console.log('FAIL  the harness itself: ' + (e && e.stack || e));
+  console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   process.exitCode = 1;
   return Promise.all(Array.from(running, stop));
 });

@@ -224,7 +224,7 @@ async function pageChecks(joinBody) {
     const got = await siteChecks();
     await pageChecks(got.joinBody || '<h1>How to join</h1>');
   } catch (e) {
-    fail++; console.log('FAIL  the harness itself threw: ' + (e && e.stack || e));
+    fail++; console.log('FAIL  the harness itself threw: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   } finally {
     if (srv && srv.exitCode === null) {
       const gone = new Promise((r) => srv.once('exit', r));

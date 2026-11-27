@@ -380,7 +380,7 @@ async function order(n, relayFirst, base, cell) {
   yes('no microphone and no open connection in either', !one.mic && !two.mic && one.open === 0 && two.open === 0);
 })().catch((e) => {
   fail++;
-  console.log('FAIL  the harness itself: ' + (e && e.stack || e));
+  console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
 }).then(() => {
   for (const h of timers) { clearTimeout(h); clearInterval(h); }
   for (const s of sockets) { try { s.onclose = null; s.close(); } catch (e) { } }

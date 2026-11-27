@@ -598,4 +598,4 @@ function siteWith(opts) {
         /return town \+ ' Court';/.test(gm) && /return 'Steward of ' \+ town;/.test(gm) && /return 'Guard of ' \+ town;/.test(gm));
   }
   done();
-})().catch(function (e) { console.log('FAIL  the harness threw: ' + (e && e.stack || e)); fail++; done(); });
+})().catch(function (e) { console.log('FAIL  the harness threw: ' + String(e && e.stack || e).replace(/\n/g, '\n      ')); fail++; done(); });

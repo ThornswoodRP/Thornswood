@@ -185,4 +185,4 @@ const relayOf = (r) => (r.list || []).find((s) => [].concat(s.urls)[0] === 'turn
   }
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
-})().catch((e) => { console.log('FAIL  the harness itself: ' + (e && e.stack || e)); process.exitCode = 1; });
+})().catch((e) => { console.log('FAIL  the harness itself: ' + String(e && e.stack || e).replace(/\n/g, '\n      ')); process.exitCode = 1; });

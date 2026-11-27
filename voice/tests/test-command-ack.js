@@ -439,7 +439,7 @@ function done() {
   } else {
     yes('the poll block lifts out of gamemode.js for the end to end run', false);
   }
-})().catch((e) => { fail++; console.log('FAIL  the harness threw: ' + (e && e.stack ? e.stack : e)); })
+})().catch((e) => { fail++; console.log('FAIL  the harness threw: ' + String(e && e.stack ? e.stack : e).replace(/\n/g, '\n      ')); })
   .then(() => {
     console.log('');
     console.log(pass + ' passed, ' + fail + ' failed');

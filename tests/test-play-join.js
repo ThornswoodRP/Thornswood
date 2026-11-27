@@ -793,7 +793,7 @@ const PID = 1893288986;
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
 })().catch(function (e) {
-  console.log('FAIL  the route threw: ' + (e && e.stack || e));
+  console.log('FAIL  the route threw: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   console.log('');
   console.log(pass + ' passed, ' + (fail + 1) + ' failed');
   process.exitCode = 1;

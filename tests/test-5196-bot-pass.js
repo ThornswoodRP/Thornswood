@@ -775,4 +775,4 @@ function failedAt(r, step) {
     character.characters(w, { databaseName: 'saves' }).some((c) => c.profileId === 77));
 
   done();
-})().catch((err) => { console.log('FAIL  ' + (err && err.stack || err)); fail++; done(); });
+})().catch((err) => { console.log('FAIL  ' + String(err && err.stack || err).replace(/\n/g, '\n      ')); fail++; done(); });

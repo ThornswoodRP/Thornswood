@@ -315,6 +315,6 @@ const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
 })().catch((e) => {
-  console.log('FAIL  the harness itself stopped: ' + (e && e.stack || e));
+  console.log('FAIL  the harness itself stopped: ' + String(e && e.stack || e).replace(/\n/g, '\n      '));
   process.exitCode = 1;
 });

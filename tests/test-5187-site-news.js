@@ -180,4 +180,4 @@ async function main() {
 main().then(() => {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
-}, (e) => { console.log('FAIL  ' + (e && e.stack)); process.exitCode = 1; });
+}, (e) => { console.log('FAIL  ' + String(e && e.stack).replace(/\n/g, '\n      ')); process.exitCode = 1; });
