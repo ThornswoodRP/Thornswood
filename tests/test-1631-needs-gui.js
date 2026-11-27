@@ -220,6 +220,11 @@ function needsRig() {
   const api = fn(g, fake, FakeDate, { log: function () { } },
                  function (f, ms) { timers.push({ f: f, ms: ms }); return timers.length; }, function () { },
                  function (n, f) { return f; }, function () { }, function () { }, idOf);
+  // Who is together is the social block's (#5046, tests/test-5046-together-nearby.js
+  // runs the real one). Here everybody is indoors, where together is the same cell.
+  g.__thornswoodSocial = {
+    together: function (a, b) { return !!refs[a] && !!refs[b] && refs[a].worldOrCellDesc === refs[b].worldOrCellDesc; }
+  };
   // The meters' own tick, by its 20 seconds; the burning has a timer too.
   const meters = timers.filter(function (t) { return t.ms === 20000; });
   api.tick = meters.length === 1 ? meters[0].f : null;
