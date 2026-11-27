@@ -536,7 +536,9 @@ one drops it from the queue.
   the box as its limited account, never as its administrator: a one-shot
   task as `NT AUTHORITY\LOCAL SERVICE`, limited, with a SID of its own
   (`NT TASK\Thornswood Limited Build`), in a job that ends whatever it
-  starts. It may read the game data and change only its run's folder. The
+  starts. One limited run at a time holds that task, on a box-wide lock;
+  another waits for it to end. It may read the game data and change only
+  its run's folder. The
   services' fail-safe runs first and stops the run when this account could
   read a place no service may read, the gate's folder among them
   (`scripts/mods/OnBox.ps1`, THE LIMITED RUN).

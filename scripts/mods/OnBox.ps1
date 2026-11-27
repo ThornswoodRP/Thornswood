@@ -284,6 +284,27 @@ if (Test-Path -LiteralPath $store) {
   }
 }
 $limitedPs = (Get-Process -Id $PID).Path
+# ONE LIMITED RUN AT A TIME. The task's name, and so its SID, which the rules
+# above name, is the box's one limited account, so every limited run makes
+# the same task. Nothing made two runs take turns: on 27 Nov 2026 a run from
+# another Administrator session went on through both of Bramble's limited
+# runs (Ops box runs 45980860458 and 45982471857), each took away the task
+# of a run that was still going, each one's last step removed the other's,
+# and the wait read a task that had just been removed (run.ps1 line 213,
+# "The argument is null or empty"). A run holds this lock from before it
+# looks for a task a run left until it has removed its own. So a task found
+# below was left by a run that has ended, and no run removes another's.
+# Windows hands the lock on when its holder ends however it ends (an
+# abandoned mutex, which the next run takes). A run waits for the one
+# before it, which ends within its own limit, and says so.
+$limitedLock = New-Object Threading.Mutex($false, 'Global\Thornswood Limited Build')
+$limitedHeld = $false
+try { $limitedHeld = $limitedLock.WaitOne(0) } catch [Threading.AbandonedMutexException] { $limitedHeld = $true }
+if (-not $limitedHeld) {
+  'limited   another limited run is going on the box; this one waits for it to end, __MINUTES__ minutes at most'
+  try { $limitedHeld = $limitedLock.WaitOne([TimeSpan]::FromMinutes(__MINUTES__ + 3)) } catch [Threading.AbandonedMutexException] { $limitedHeld = $true }
+  if (-not $limitedHeld) { 'STOP. another limited run on the box had not ended after __MINUTES__ minutes, so this one did not start.'; exit 2 }
+}
 $old = @(Get-ScheduledTask -TaskName $limitedTask -ErrorAction SilentlyContinue)
 foreach ($o in $old) { try { Stop-ScheduledTask -InputObject $o } catch { <# one not running cannot be stopped; it is taken away next #> }; Unregister-ScheduledTask -InputObject $o -Confirm:$false; 'limited   took away the task a run before this one left' }
 $limitedEnded = $false
@@ -314,6 +335,7 @@ try {
 } finally {
   try { Stop-ScheduledTask -TaskName $limitedTask -ErrorAction SilentlyContinue } catch { <# it has ended already #> }
   try { Unregister-ScheduledTask -TaskName $limitedTask -Confirm:$false -ErrorAction SilentlyContinue } catch { <# never registered: the run stopped before it #> }
+  $limitedLock.ReleaseMutex()
 }
 if ($limitedWhy) { 'STOP. ' + $limitedWhy; exit 2 }
 if (-not $limitedEnded) { 'STOP. the limited run had not ended after __MINUTES__ minutes and was stopped, so nothing came back.'; exit 2 }

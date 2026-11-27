@@ -58,7 +58,9 @@
      limited, with only SeChangeNotifyPrivilege, a SID of its own and a time
      limit; the tool and Make-LastPlugin.py run only in the wrapper, which
      puts itself in a job that ends what it starts; what it said and its zip
-     are read only as files of their own.
+     are read only as files of their own; one limited run at a time holds
+     the box's limited task, from before it takes away a left task until
+     it has removed its own (27 Nov 2026, two runs removed each other's).
   3c. On an elevated Windows runner, as the box's administrator is, the
      limited run runs a tool as LOCAL SERVICE: it reads the store's
      archives and cannot write one, cannot write outside the run's folder,
@@ -287,6 +289,12 @@ Yes '2b the tool and Make-LastPlugin.py run in the wrapper only, never in the ad
 Yes '2b the wrapper puts itself in a job that ends what it starts, and says what it could not read' (
     $wrapText.Contains('info.Basic.LimitFlags = 0x2000;') -and $wrapText.Contains('[ThornswoodLimitedJob]::Hold()') -and
     $wrapText.IndexOf('[ThornswoodLimitedJob]::Hold()') -lt $wrapText.IndexOf('Start-Process') -and $wrapText.Contains('cannot be read by the limited account'))
+Yes '2b one limited run at a time holds the task: the lock is taken before a left task is taken away and let go only after its own is removed' (
+    $farLim.Contains("New-Object Threading.Mutex(`$false, 'Global\Thornswood Limited Build')") -and
+    $farLim.IndexOf('$limitedLock.WaitOne(0)') -lt $farLim.IndexOf('$old = @(Get-ScheduledTask') -and
+    $farLim.Contains('catch [Threading.AbandonedMutexException] { $limitedHeld = $true }') -and
+    $farLim.IndexOf('$limitedLock.ReleaseMutex()') -gt $farLim.IndexOf('try { Unregister-ScheduledTask -TaskName $limitedTask') -and
+    $farLim.IndexOf('$limitedLock.ReleaseMutex()') -lt $farLim.IndexOf("if (`$limitedWhy)"))
 Yes '2b what the wrapper said and its zip are read only as files of their own, and a run with no EXIT stops' (
     $farLim.Contains("foreach (`$n in 'said.txt', 'back.zip')") -and $farLim.Contains('$it.LinkType') -and $farLim.Contains('without saying how the tool ended'))
 Yes '2b the archives get a read rule for the task''s SID on the store''s own files' ($farLim.Contains('Get-ChildItem -LiteralPath $store -File -Recurse') -and $farLim.Contains('($fsr::ReadAndExecute -bor $fsr::Synchronize)'))
@@ -644,6 +652,8 @@ if (-not $OnWindows) {
     $boxPs = Get-BoxPowerShell
     $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-2899l-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     $runKeeper = $null
+    $limitedLock = $null
+    $farP = $null
     try {
         $server = Join-Path $work 'server'
         $plugins = Join-Path $server 'plugins'
@@ -686,7 +696,26 @@ sys.exit(4)
         $text = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $server -Tool 'scripts/mods/t.py' -Arguments @('--data', '{data}', $outside) -ArchiveStore $store -Limited
         $file = Join-Path $work 'far.ps1'
         [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding($true)))
-        $lines = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_".Trim() })
+        # One limited run at a time: while another holds the box's limited
+        # task (this harness, holding its lock), the run waits and makes no
+        # task; it goes on once the lock is let go.
+        $limitedLock = New-Object Threading.Mutex($false, 'Global\Thornswood Limited Build')
+        try { $null = $limitedLock.WaitOne(0) } catch [Threading.AbandonedMutexException] { }
+        $farOut = Join-Path $work 'far.out'
+        $farErr = Join-Path $work 'far.err'
+        $farP = Start-Process -FilePath $boxPs -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $file + '"')) -RedirectStandardOutput $farOut -RedirectStandardError $farErr -PassThru -NoNewWindow
+        # It says it waits once it reaches the lock, after laying its folder out.
+        $until = (Get-Date).AddSeconds(90)
+        while (-not $farP.HasExited -and (Get-Date) -lt $until -and -not @(Get-Content -LiteralPath $farOut -ErrorAction SilentlyContinue | Where-Object { $_ -match 'another limited run is going on the box' }).Count) { Start-Sleep -Milliseconds 500 }
+        Start-Sleep -Seconds 3
+        $waited = (-not $farP.HasExited) -and -not @(Get-ScheduledTask -TaskName $ThornswoodLimitedTask -ErrorAction SilentlyContinue).Count
+        $limitedLock.ReleaseMutex()
+        $limitedLock.Dispose()
+        $limitedLock = $null
+        $farP.WaitForExit()
+        $lines = @(@(Get-Content -LiteralPath $farOut, $farErr -ErrorAction SilentlyContinue) | ForEach-Object { "$_".Trim() })
+        Yes '3c while another limited run holds the task, the run waits, makes no task and says so, and goes on once it is let go' (
+            $waited -and @($lines | Where-Object { $_ -match '^limited\s+another limited run is going on the box' }).Count -eq 1)
         Write-Host '  the limited run said:'
         foreach ($l in $lines) { Write-Host ('    ' + $l) }
         if (@($lines | Where-Object { $_ -match 'cannot be read by the limited account' }).Count) {
@@ -704,6 +733,8 @@ sys.exit(4)
         $runKeeper = $null
         Yes '3c the keeper removes the run''s folder, what the limited account made in it too' (($gone -contains ('GONE ' + $run)) -and -not (Test-Path -LiteralPath $run))
     } finally {
+        if ($limitedLock) { try { $limitedLock.ReleaseMutex() } catch { }; $limitedLock.Dispose() }
+        if ($farP -and -not $farP.HasExited) { $farP.Kill() }
         if ($runKeeper -and -not $runKeeper.P.HasExited) { $runKeeper.P.Kill() }
         try { Unregister-ScheduledTask -TaskName $ThornswoodLimitedTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
