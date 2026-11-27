@@ -13,7 +13,8 @@
        Remove-GateTrace, and nothing in the scripts, the workflows or the
        records names them; gate-map.yml runs the whole gate under the trace;
     2. scripts\dev\Trace-Gate-Box.ps1 parses, its C# compiles against only
-       the assemblies it names, it keeps the trace in a folder only
+       the assemblies it names, it takes only a segment shaped like a short
+       (8.3) name for one (#5959), it keeps the trace in a folder only
        administrators and the system can open, refuses a trace that lost
        events, and deletes the trace once read;
     3. its modes are the five gate-map.yml asks for, and Trace-Gate-Here.ps1
@@ -58,10 +59,25 @@ $cs = $m.Groups[2].Value
 # reader's included, so a missing one fails here and not on the box (#5356).
 $compiled = ''
 if ($cs) {
-    $src = $cs.Replace('public static class ThornswoodTrace', 'public static class ThornswoodTraceTest' + [Guid]::NewGuid().ToString('N'))
+    $testClass = 'ThornswoodTraceTest' + [Guid]::NewGuid().ToString('N')
+    $src = $cs.Replace('public static class ThornswoodTrace', 'public static class ' + $testClass)
     try { Add-Type -ReferencedAssemblies $refs -TypeDefinition $src -ErrorAction Stop } catch { $compiled = $_.Exception.Message + ' ' + (@($_.Exception.Errors | Select-Object -First 3 | ForEach-Object { "$_" }) -join ' ') }
 } else { $compiled = 'no C# found' }
 Yes ('  its C# compiles with only the assemblies it names (' + ($refs -join ', ') + ')' + $(if ($compiled) { ': ' + $compiled.Substring(0, [Math]::Min(400, $compiled.Length)) } else { '' })) (-not $compiled)
+# #5959: only a segment shaped like a short (8.3) name counts as one. Any ~
+# did until then, and the launcher build's Avalonia temp files end in ~, so
+# every harness that builds the launcher was marked to always run.
+$hasShort = $null
+if (-not $compiled) { $hasShort = ([type]$testClass).GetMethod('HasShortName') }
+Yes '  it has one test for a short name' ($null -ne $hasShort)
+if ($hasShort) {
+    $short = { param($p) [bool]$hasShort.Invoke($null, @([string]$p)) }
+    $are = @('c:\users\runner~1\appdata\local\temp\x.ps1', 'launcher/obj/AVALON~1/UD3F2A~1.XBQ', 'progra~2', 'scripts/dev/SETUP-~12.PS1', 'a/b~1/c')
+    $not = @('launcher/obj/Release/net10.0-windows/win-x64/Avalonia/udkesqkl.xbq~', 'notes~.md', 'a/~1', 'docs/what~ever.md', 'a/b~x/c', 'a/b~1.long/c', '')
+    $wrong = @($are | Where-Object { -not (& $short $_) }) + @($not | Where-Object { & $short $_ })
+    Yes ('  a short name is a segment shaped like one, and a long name with a ~ is not (' + ($wrong -join ', ') + ')') (-not $wrong.Count)
+    Yes '  and both places that look for one ask the same test' (([regex]::Matches($cs, 'HasShortName\((low|rel)\)')).Count -eq 2 -and $cs -notmatch "IndexOf\('~'\)")
+}
 Yes '  the trace folder is closed to all but administrators and the system' ($x -match [regex]::Escape("icacls.exe `$traceRoot /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F'"))
 Yes '  a trace that lost events is refused' ($x -match "(?s)'stop' \{\s*Stop-TraceSession \`$sessionName\s*if \(\`$script:lost\) \{ 'REFUSED: '.*?exit 1 \}")
 Yes '  the trace is deleted once read, and only paths in the checkout leave' ($x -match "(?s)'END'\s*Remove-Item -LiteralPath \(Join-Path \`$traceRoot 'gate\.etl'\), \(Join-Path \`$traceRoot 'gate\.etl\.procs'\) -Force" -and $x -match 'if \(!inside\) \{ if \(objO != null\) objects\.Remove\(Address\(objO\)\); continue; \}')

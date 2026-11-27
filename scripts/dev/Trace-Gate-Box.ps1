@@ -56,7 +56,9 @@
   Defender's or the indexer's, which read files without acting on them)
   opening something in the checkout while a harness runs: whatever it read
   may have been on that harness's behalf, so every harness running then is
-  marked. And a short (8.3) name in the checkout that no longer resolves.
+  marked. And a short (8.3) name in the checkout that no longer resolves:
+  a segment shaped like one (RUNNER~1, UD3F2A~1.XBQ), not any name with a ~
+  in it, which a build's own temp files can have (#5959).
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -85,6 +87,16 @@ public static class ThornswoodTrace {
     static extern uint QueryDosDeviceW(string device, StringBuilder target, int max);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     static extern uint GetLongPathNameW(string shortPath, StringBuilder longPath, int max);
+
+    // A path with a segment shaped like a Windows short (8.3) name: a few
+    // characters, a ~ and a number, and at most a three-letter extension
+    // (RUNNER~1, PROGRA~2, UD3F2A~1.XBQ). Any ~ was taken for one until #5959:
+    // the launcher build writes Avalonia temp files whose long names end in ~
+    // (obj/Release/net10.0-windows/win-x64/Avalonia/udkesqkl.xbq~) and deletes
+    // them, so each one was "a short name that no longer resolves" and every
+    // harness that builds the launcher was marked to always run.
+    static readonly Regex ShortSegment = new Regex(@"(^|[\\/])[^\\/~]{1,6}~[0-9]+(\.[^\\/.]{1,3})?([\\/]|$)", RegexOptions.CultureInvariant);
+    public static bool HasShortName(string path) { return path != null && ShortSegment.IsMatch(path); }
 
     const int PropsSize = 120 + 2048 + 2048;
 
@@ -394,7 +406,7 @@ public static class ThornswoodTrace {
                     if (p == null) { if (objO != null) objects.Remove(Address(objO)); continue; }
                     string low = p.ToLowerInvariant();
                     bool inside = low == wsLow.TrimEnd('\\') || low.StartsWith(wsLow);
-                    if (!inside && low.IndexOf('~') >= 0) {
+                    if (!inside && HasShortName(low)) {
                         sb.Length = 0;
                         if (GetLongPathNameW(p, sb, 1024) > 0) { string lp = sb.ToString(); string ll = lp.ToLowerInvariant(); if (ll.StartsWith(wsLow)) { p = lp; low = ll; inside = true; } }
                     }
@@ -413,7 +425,7 @@ public static class ThornswoodTrace {
                     }
                     if (who != null && who.Harness != null) {
                         Harness h = byName[who.Harness];
-                        if (rel.IndexOf('~') >= 0) {
+                        if (HasShortName(rel)) {
                             sb.Length = 0;
                             if (GetLongPathNameW(p, sb, 1024) > 0 && sb.ToString().ToLowerInvariant().StartsWith(wsLow)) rel = sb.ToString().Substring(wsLow.Length).Replace('\\', '/');
                             else if (h.Always == null) h.Always = "opened a short name in the checkout that no longer resolves (" + rel + ")";
