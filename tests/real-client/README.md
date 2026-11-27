@@ -117,7 +117,9 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
 | `{"do":"key","code":36}` | Windows accepted a scan-code down, a 120 ms hold and a separate up, with game-window focus checks before and after (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
-| `{"do":"face","what":"bed"}` | the character stands 90 units out from the nearest bed in its cell, on the side it was on, turned to the bed and looking a little down, as somebody walks up to use one. A bed is what `thornswood-front.js` clears the owner of (its `isBedRef`). No bed in the cell fails the step. |
+| `{"do":"face","what":"bed"}` | the character stands beside the nearest bed in its cell, turned to it and looking down at it, in first person, as somebody walks up to use one. The spots on the bed's four sides, 45 units clear of its bounds, are tried nearest first, and the first from which the crosshair lands on the bed is kept; the note names the side and every side that did not see it. A bed is what `thornswood-front.js` clears the owner of (its `isBedRef`). No bed in the cell, or none of its sides seeing it, fails the step. |
+| `{"do":"wait","for":"cell","name":"Bannered Mare"}` | the character is in a cell whose name holds that; with `"in": false`, in one whose name does not. With `"skip"` it passes over the trip to a place the character is in already. |
+| `{"do":"wait","for":"shut","menus":["InventoryMenu"]}` | none of those menus is open. |
 | `{"do":"wait","for":"crosshair","what":"bed"}` | a bed is under the crosshair, so the game shows its prompt. |
 | `{"do":"wait","for":"running","ms":10000}` | the game kept sending updates for that long with no gap of a second, so the world was not paused (a menu that should leave the world running, #6408). |
 | `{"do":"wait","for":"time","ms":1500}` | that long has gone by. Only before a shot of something the game shows for a moment and gives no event for, like its message when a bed refuses. |
@@ -128,6 +130,14 @@ step of a task takes its `fail-<step>` screenshot and ends that task only:
 the run goes on at the next task's first step. Each task gets one results
 line, `{"t":"task","task":"6408","ok":true}`, or with `ok` false the step
 and why, and the run ends failed naming every failed task.
+A key step with `"ifMenu": [names]` is pressed only while one of those
+menus is open, and passes without a press otherwise. Every task but the
+first starts with Escape that way, a `shut` wait for the same menus and a
+page step that shuts our journal, so a task that failed with a menu up
+leaves the next one where it should start. The dev release run's steps
+after the world are tasks too (the journal, #1016; the inn bed, #6712; the
+inventory, #7008; the game's menu, #5197), so one part failing no longer
+stops the rest from running.
 `tests\real-client\test-tasks.json` is the list of test tasks one character
 checks alone; run it with `-Steps tests\real-client\test-tasks.json`.
 A step with `"tidy": true` and no task puts back what the tasks made (the
