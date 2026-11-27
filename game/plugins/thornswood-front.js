@@ -2629,6 +2629,9 @@
 
   T.setTyping = wantTyping;
   T.isTyping = function () { return !!claims.chat; };
+  // The game menu that takes keys right now, by name, or '' (busyMenuOpen).
+  // The voice plugin's lock and mode keys stand down while one is up (#4799).
+  T.keyboardMenu = function () { return busyMenuOpen(); };
 
   // Said once, so a log with nothing in it can be told apart from a log that
   // never had anything to say. If this line is missing, the plugin is not being
