@@ -4769,6 +4769,7 @@
     standing in a fire taking nothing.
   */
   const PLACE_SLOW = 4000;
+  let groundSaid = '';   // the land's material last written down (#4653)
   const PLACE_FAST = 1000;
   // How often the tick writes a line even when its answer has not moved. See
   // the heartbeat below: without it, a dead tick and a steady one read the
@@ -5380,6 +5381,34 @@
       comfortable, so a client from before this says nothing and its owner
       simply has no weather.
     */
+    /*
+      THE GROUND UNDER THE FEET, MEASURED BEFORE IT IS USED (#4653). The
+      snow place is meant to be snow on the ground, and the word below is
+      snow only while snow falls, so a clear day in deep snow is plain
+      outdoors and bare rock in a snowfall is snow. Patrick, 26 Oct (report
+      page): measure the ground in the client. Papyrus Extender, which the
+      collection carries, reads the land's material at a point
+      (PO3_SKSEFunctions.GetLandMaterialType). Whether that answers through
+      callNative here, and which words it gives on snow, on rock, on grass
+      and in a snowfall, is not known yet, so it is only written down: once
+      when it changes, and on the half minute line. The word below changes
+      once the log has shown what snow reads as.
+    */
+    let ground = '';
+    if (!indoors && !swimming) {
+      try {
+        const m = sp.callNative('PO3_SKSEFunctions', 'GetLandMaterialType', undefined, px, py, pz);
+        ground = (m === null || m === undefined) ? 'no answer' : String(m) || 'empty';
+      } catch (e) { ground = 'threw: ' + ((e && e.message) || e); }
+    }
+    if (ground !== groundSaid) {
+      groundSaid = ground;
+      if (ground) {
+        say('ground under the feet: ' + ground + ', the sky ' + sky +
+            ', at ' + Math.round(px) + ' ' + Math.round(py) + ' ' + Math.round(pz));
+      }
+    }
+
     let kind = 'outdoors';
     if (swimming) { kind = 'water'; }
     else if (wading) { kind = 'shallow'; }
@@ -5449,7 +5478,8 @@
       say('place: ' + line + '  [fire probe: ' + fireBases + ' bases, ' + fireHits +
           ' in this cell of ' + fireWalked + ' looked at, ' + fireThrew + ' threw' +
           (fireWhy ? ' (' + fireWhy + ')' : '') + ']' +
-          (waterSaid ? '  [' + waterSaid + ']' : '') + looking);
+          (waterSaid ? '  [' + waterSaid + ']' : '') +
+          (ground ? '  [ground: ' + ground + ']' : '') + looking);
     }
 
     /*
