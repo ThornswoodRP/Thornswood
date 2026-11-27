@@ -373,6 +373,27 @@ function inRaceMenu(t0, opened, lastSeen) {
   const out = tickAs(back, t0 + 310000, 2);
   yes('S12 a reconnect clears the last session\'s race menu report',
       out.chose === null && !out.state.faceOpenAt && !out.state.faceSeenAt && !out.state.faceHeld);
+
+  // #6724: the last session ended with its race menu closed on the way out,
+  // so it had said /face done with no face stored. The new session opens its
+  // own menu; that close is not this session's, so the menu is believed and
+  // is never asked for over itself.
+  const ended = inRaceMenu(t0, t0 + 5000, t0 + 250000);
+  ended.faceDone = t0 + 252000;
+  const came = tickAs(ended, t0 + 310000, 2);
+  yes('S12 a reconnect clears the last session\'s race menu close (#6724)', !came.state.faceDone);
+  const own = Object.assign({}, came.state, { faceOpenAt: t0 + 315000, faceSeenAt: t0 + 315000 });
+  let asks = 0;
+  const said = [];
+  let st = own;
+  for (let t = t0 + 320000; t <= t0 + 320000 + 3 * NUDGE_MS; t += 3000) {
+    const o = tickAs(st, t, 2);
+    asks += o.asks;
+    o.log.forEach(function (l) { said.push(l); });
+    st = o.state;
+  }
+  yes('S12 and the new session\'s own race menu is never asked for over itself (' + asks + ' asks)', asks === 0);
+  yes('S12 nor logged as closed with no face', !said.some(function (l) { return /closed but no appearance/.test(l); }));
 }
 
 /** tick(), but with the actor seen online at `cameOn` rather than seenAt. */
