@@ -1875,6 +1875,14 @@
       '      } catch (e) { }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
+      // The buildings this character holds (#6883): the front plugin makes
+      // them and what is in them theirs, and gives back any no longer held.
+      '    try {',
+      '      globalThis.__thornswoodPropertyOwn = v.own || [];',
+      '      if (typeof globalThis.__thornswoodOwnCells === "function") { globalThis.__thornswoodOwnCells(v.own || []); }',
+      // The plugin's hook is guard()ed and logs its own failure; this only
+      // keeps the doors above locked if the hand over itself throws.
+      '    } catch (e) { /* the doors above are already done */ }',
       '  } catch (e) { }',
       '})();'
     ].join('\n');
@@ -2191,7 +2199,21 @@
       }
     }
     cellLists(profileId, shut, open);
-    return { shut: shut, open: open };
+    /*
+      AND THE BUILDINGS THIS CHARACTER HOLDS, as their interior cells (#6883),
+      for the client to make the building and what is in it theirs, so its
+      storage is not theft. After the loop, because mayPass asked holderOf of
+      every claim and a lapsed one is gone from claims by now.
+    */
+    var own = [];
+    for (var h in claims) {
+      if (!Object.prototype.hasOwnProperty.call(claims, h)) { continue; }
+      if (profileId && claims[h] && claims[h].by === profileId) {
+        var cid = idOf(h);
+        if (cid) { own.push(cid); }
+      }
+    }
+    return { shut: shut, open: open, own: own };
   }
 
   /*

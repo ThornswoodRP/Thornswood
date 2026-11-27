@@ -130,6 +130,12 @@ line, `{"t":"task","task":"6408","ok":true}`, or with `ok` false the step
 and why, and the run ends failed naming every failed task.
 `tests\real-client\test-tasks.json` is the list of test tasks one character
 checks alone; run it with `-Steps tests\real-client\test-tasks.json`.
+A step with `"tidy": true` and no task puts back what the tasks made (the
+journal tasks' scratch journals are thrown away), whether they passed or
+not; it comes after every task, and if it fails the run ends there.
+Its journal steps press the panel's buttons from a page step, as the click
+would, and leave the run's own journals apart from the character's by the
+ids it had before the first one.
 
 Sitting down and getting up are results lines of their own,
 `{"t":"furniture","enter":true,"bed":true,"ref":"..."}`, the character's
