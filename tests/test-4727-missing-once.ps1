@@ -19,6 +19,9 @@
     4. All three at once: three issues, three blocking, the count Play
        gives, and the Mods row's FileMissing count is the two not in Data.
 
+  Every plugin name here is made up, none the build writes, so the gate
+  runs this whatever content build it has.
+
   Reads the repository; writes only its own folder under the scratch folder.
   Needs the compiler the build runs.
 #>
@@ -57,7 +60,7 @@ namespace Thornswood
     {
         static void Yes(string what, bool ok) { Console.WriteLine((ok ? "PASS  " : "FAIL  ") + what); }
 
-        const string Shipped = "# shipped\n*Thornswood-Content.esp\n*Gone.esp\n*Listed.esp\n*Off.esp\n";
+        const string Shipped = "# shipped\n*Base.esp\n*Gone.esp\n*Listed.esp\n*Off.esp\n";
 
         // live: the game's list. inData: the plugins whose file is in Data.
         static List<Issue> Scan(string root, string live, params string[] inData)
@@ -78,9 +81,9 @@ namespace Thornswood
             string data = Path.Combine(Paths.Game, "Data");
             Directory.CreateDirectory(data);
             File.WriteAllText(Path.Combine(Paths.Golden, "plugins.txt"), Shipped);
-            File.WriteAllText(Path.Combine(Paths.Golden, "loadorder.txt"), "Skyrim.esm\nThornswood-Content.esp\nGone.esp\nListed.esp\nOff.esp\n");
+            File.WriteAllText(Path.Combine(Paths.Golden, "loadorder.txt"), "Skyrim.esm\nBase.esp\nGone.esp\nListed.esp\nOff.esp\n");
             File.WriteAllText(Path.Combine(Paths.LocalAD, "plugins.txt"), live);
-            File.WriteAllText(Path.Combine(data, "Thornswood-Content.esp"), "TES4");
+            File.WriteAllText(Path.Combine(data, "Base.esp"), "TES4");
             foreach (string p in inData) File.WriteAllText(Path.Combine(data, p), "TES4");
             Verify.LastIssues = null;
             Verify.LastUsedServer = false;
@@ -114,16 +117,16 @@ namespace Thornswood
         static int Main(string[] args)
         {
             string work = args[0];
-            const string all = "*Thornswood-Content.esp\n*Gone.esp\n*Listed.esp\n*Off.esp\n";
+            const string all = "*Base.esp\n*Gone.esp\n*Listed.esp\n*Off.esp\n";
 
             // 1. Not in the list, not in Data.
-            List<Issue> issues = Scan(Path.Combine(work, "gone"), "*Thornswood-Content.esp\n*Listed.esp\n*Off.esp\n", "Listed.esp", "Off.esp");
+            List<Issue> issues = Scan(Path.Combine(work, "gone"), "*Base.esp\n*Listed.esp\n*Off.esp\n", "Listed.esp", "Off.esp");
             List<Issue> gone = About(issues, "Gone.esp");
             Yes("a plugin neither in the list nor in Data is said once (" + Said(gone) + ")", gone.Count == 1);
             Yes("  as not installed", gone.Count == 1 && gone[0].Problem == "Gone.esp is not installed.");
             Yes("  and nothing says it is in the list", !Said(gone).Contains("in the list"));
             Yes("  it is Absent, and FileMissing so the Mods row names it", gone.Count == 1 && gone[0].Absent && gone[0].FileMissing);
-            Yes("  and it is the one problem Play counts", Blocking(issues) == 1);
+            Yes("  and it is the one problem Play counts (" + Blocking(issues) + ")", Blocking(issues) == 1);
 
             // 2. In the list, not in Data.
             issues = Scan(Path.Combine(work, "listed"), all, "Gone.esp", "Off.esp");
@@ -131,21 +134,21 @@ namespace Thornswood
             Yes("a plugin in the list and not in Data is said once (" + Said(listed) + ")", listed.Count == 1);
             Yes("  as in the list but not in Data", listed.Count == 1 && listed[0].Problem == "Listed.esp is in the list but the file is not in Data.");
             Yes("  FileMissing and not Absent", listed.Count == 1 && listed[0].FileMissing && !listed[0].Absent);
-            Yes("  and it is the one problem Play counts", Blocking(issues) == 1);
+            Yes("  and it is the one problem Play counts (" + Blocking(issues) + ")", Blocking(issues) == 1);
 
             // 3. Not in the list, in Data.
-            issues = Scan(Path.Combine(work, "off"), "*Thornswood-Content.esp\n*Gone.esp\n*Listed.esp\n", "Gone.esp", "Listed.esp", "Off.esp");
+            issues = Scan(Path.Combine(work, "off"), "*Base.esp\n*Gone.esp\n*Listed.esp\n", "Gone.esp", "Listed.esp", "Off.esp");
             List<Issue> off = About(issues, "Off.esp");
             Yes("a plugin switched off and in Data is said once (" + Said(off) + ")", off.Count == 1);
             Yes("  as turned off, neither Absent nor FileMissing", off.Count == 1 && off[0].Problem == "Off.esp is turned off." && !off[0].Absent && !off[0].FileMissing);
 
             // 4. All three at once.
-            issues = Scan(Path.Combine(work, "three"), "*Thornswood-Content.esp\n*Listed.esp\n", "Off.esp");
+            issues = Scan(Path.Combine(work, "three"), "*Base.esp\n*Listed.esp\n", "Off.esp");
             int missing = 0;
             foreach (Issue i in issues) if (i.FileMissing) missing++;
             Yes("three plugins wrong three ways: three issues (" + Said(issues) + ")", issues.Count == 3);
-            Yes("  Play counts three problems", Blocking(issues) == 3);
-            Yes("  and the Mods row counts the two not in Data", missing == 2);
+            Yes("  Play counts three problems (" + Blocking(issues) + ")", Blocking(issues) == 3);
+            Yes("  and the Mods row counts the two not in Data (" + missing + ")", missing == 2);
             return 0;
         }
     }
