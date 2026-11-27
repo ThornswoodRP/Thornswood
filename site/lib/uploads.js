@@ -18,8 +18,10 @@ const path   = require('path');
 const crypto = require('crypto');
 const { DATA, UP } = require('./base');
 const { jsonFile, putJson } = require('./store');
-const { reportFrom } = require('./limits');
-const { exifTags, mediaSignature, stripMedia, uploadBudgets } = require('./media');
+const { senderKeys } = require('./limits');
+const { exifTags, mediaSignature, stripMedia } = require('./media');
+const { uploadBudget, UPLOAD_BYTES } = require('./budgets');
+const takeUploadBudget = uploadBudget();
 
 // --------------------------------------------------------------- uploads --
 /* Somewhere to put a screenshot or a papyrus log without a share link and
@@ -324,20 +326,16 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
       return sendJson(res, 415, { error: 'that kind of file is not allowed here', allowed: allow });
     }
   }
-  const now = Date.now(), key = reportFrom(req);
-  for (const [k, row] of uploadBudgets) if (!row.active && now - row.start >= 3600000) uploadBudgets.delete(k);
-  let budget = uploadBudgets.get(key);
+  const now = Date.now();
+  // Counted by budgets.js at the narrowest width of the sender's address with
+  // room (#4316), so a full table no longer turns every new sender away.
+  const { row: budget, wait, full } = takeUploadBudget(senderKeys(req), now, copy);
+  if (full) return sendJson(res, 503, {error:'Uploads are busy. Try again shortly.'});
   if (!budget) {
-    if (uploadBudgets.size >= 4096) return sendJson(res, 503, {error:'Uploads are busy. Try again shortly.'});
-    budget = {start:now, count:0, bytes:0, active:0}; uploadBudgets.set(key, budget);
-  }
-  if (budget.active >= 2 || budget.count >= 40 || budget.bytes >= 500 * 1048576) {
     req.resume();
     return send(res, 429, JSON.stringify({error:'This connection has reached its upload limit. Try again later.'}),
-      null, {'Retry-After':String(Math.max(1, Math.ceil((budget.start + 3600000 - now) / 1000))), Connection:'close'});
+      null, {'Retry-After':String(wait), Connection:'close'});
   }
-  if (!copy) budget.count++;
-  budget.active++;
   const d = new Date();
   const two = (n) => String(n).padStart(2, '0');
   const stamp = d.getFullYear() + two(d.getMonth() + 1) + two(d.getDate()) + '-' +
@@ -367,9 +365,9 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
   req.on('data', (c) => {
     got += c.length;
     budget.bytes += c.length;
-    if (budget.bytes > 500 * 1048576) quotaExceeded = true;
+    if (budget.bytes > UPLOAD_BYTES) quotaExceeded = true;
     if (prefix.length < 12) prefix = Buffer.concat([prefix, c.subarray(0, 12 - prefix.length)]);
-    if ((got > cap || budget.bytes > 500 * 1048576) && !over) { over = true; req.unpipe(out); out.destroy(); }
+    if ((got > cap || budget.bytes > UPLOAD_BYTES) && !over) { over = true; req.unpipe(out); out.destroy(); }
   });
   const drop = () => { if (!req.complete && !over && !cut) { cut = true; req.unpipe(out); out.destroy(); } };
   req.on('error', drop);

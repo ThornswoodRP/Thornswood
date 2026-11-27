@@ -10,7 +10,7 @@
 // file).
 module.exports = { galleryPage, loginBackoffBump, loginKey, loginNote,
   loginWait, publicApiWait, publicJson, reportFrom, reportRefusal,
-  reportTaken, requestAddr, trimInbox, turnstileOn, turnstilePasses };
+  reportTaken, requestAddr, senderKeys, trimInbox, turnstileOn, turnstilePasses };
 
 const net    = require('net');
 const fs     = require('fs');
@@ -41,18 +41,12 @@ function galleryPage(offset, limit) {
 
 // In-memory, salted connection keys expire after a minute and are never logged.
 // This is a single-process service; multiple replicas would need a shared cap.
-const publicApiReads = new Map();
-const PUBLIC_API_WINDOW = 60000, PUBLIC_API_CAP = 120;
+// The counts are kept by budgets.js, which a full table cannot lock everybody
+// out of (#4316): a sender is counted at the narrowest width of its address
+// that has room (senderKeys, below).
+const publicReadWait = require('./budgets').readBudget();
 function publicApiWait(req, now) {
-  for (const [key, row] of publicApiReads) if (now - row.start >= PUBLIC_API_WINDOW) publicApiReads.delete(key);
-  const key = reportFrom(req);
-  let row = publicApiReads.get(key);
-  if (!row) {
-    if (publicApiReads.size >= 4096) return 1;
-    row = {start:now, count:0}; publicApiReads.set(key, row);
-  }
-  if (row.count >= PUBLIC_API_CAP) return Math.max(1, Math.ceil((row.start + PUBLIC_API_WINDOW - now) / 1000));
-  row.count++; return 0;
+  return publicReadWait(senderKeys(req), now);
 }
 
 // ==== thornswood report limits ====
@@ -151,6 +145,26 @@ function clientAddr(req) {
 
 function reportFrom(req) {
   return crypto.createHmac('sha256', reportSalt).update(clientAddr(req)).digest('hex').slice(0, 32);
+}
+
+/* The sender named at three widths, for the counts budgets.js keeps (#4316):
+   its own address (reportFrom's key: an IPv6 /64, an IPv4 address), then its
+   network (/48, or /24), then the widest (/32, or /16). Salted the same way,
+   so none of them is an address anybody can read back. A sender that is not
+   an IP address at all has only the one. */
+function senderKeys(req) {
+  const key = (s) => crypto.createHmac('sha256', reportSalt).update(s).digest('hex').slice(0, 32);
+  const own = clientAddr(req);
+  const addr = requestAddr(req);
+  if (net.isIPv6(addr)) {
+    const groups = own.replace('::/64', '').split(':');
+    return [key(own), key(groups.slice(0, 3).join(':') + '::/48'), key(groups.slice(0, 2).join(':') + '::/32')];
+  }
+  if (net.isIPv4(addr)) {
+    const parts = addr.split('.');
+    return [key(own), key(parts.slice(0, 3).join('.') + '.0/24'), key(parts.slice(0, 2).join('.') + '.0.0/16')];
+  }
+  return [key(own)];
 }
 
 /* CLOUDFLARE TURNSTILE ON THE REPORT FORM (#3216). The report form is the one
