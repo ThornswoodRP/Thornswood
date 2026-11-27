@@ -133,6 +133,8 @@ yes('the register\'s counts are its rows', sorted(counts) === sorted(reg.counts)
 // ------------------------------------- 6 recipes the rulebook states ------
 // Every field of these is a fact a rulebook page's table states, so they come
 // out the bytes the plugin held. Each is rebuilt here from its page's row.
+// The Charcoal grade is Skyrim's own Charcoal (charburner.md), not Thornswood's
+// older one, which is no longer made (#7236).
 const ITEMS = {
   'firewood': 0x0006F993, 'iron ingot': 0x0005ACE4, 'tool handle': 0x05015490,
   'poor charcoal': 0x05015481, 'charcoal': 0x00033760, 'charcoal briquette': 0x05015484, 'coke': 0x05015485,
