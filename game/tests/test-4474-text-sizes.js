@@ -40,7 +40,11 @@ const read = (p) => fs.readFileSync(p, 'utf8').split(CR).join('');
 const C = require(path.join(ROOT, 'tests', 'chrome-audio.js'));
 
 let pass = 0, fail = 0, skip = 0;
+// One line a check: a reason from the page (an error's stack, say) is put on
+// the check's own line, so PASS and FAIL lines stay one each.
+const oneLine = (s) => String(s).replace(/[\r\n]+/g, ' ');
 function yes(what, cond, why) {
+  what = oneLine(what); why = why ? oneLine(why) : why;
   if (cond) { pass++; console.log('PASS  ' + what); }
   else { fail++; console.log('FAIL  ' + what + (why ? '  (' + why + ')' : '')); }
 }
