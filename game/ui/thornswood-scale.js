@@ -74,13 +74,11 @@
   }
 
   function fit(panel) {
-    try {
-      var bw = panel.offsetWidth, bh = panel.offsetHeight;
-      if (!bw || !bh) { return; }
-      var s = scaleFor(window.innerWidth, window.innerHeight, bw, bh);
-      panel.style.transformOrigin = 'center center';
-      panel.style.transform = s === 1 ? '' : 'scale(' + s.toFixed(3) + ')';
-    } catch (e) { }
+    var bw = panel.offsetWidth, bh = panel.offsetHeight;
+    if (!bw || !bh) { return; }
+    var s = scaleFor(window.innerWidth, window.innerHeight, bw, bh);
+    panel.style.transformOrigin = 'center center';
+    panel.style.transform = s === 1 ? '' : 'scale(' + s.toFixed(3) + ')';
   }
 
   function ours(el) {
@@ -107,8 +105,9 @@
     var kids = document.body.children;
     for (var i = 0; i < kids.length; i++) { fitRoot(kids[i]); }
     // The two panels that fit themselves ask scaleFor, so they hear it too.
-    try { window.thornswoodSkills && window.thornswoodSkills.fit && window.thornswoodSkills.fit(); } catch (e) { }
-    try { window.thornswoodJournal && window.thornswoodJournal.fit && window.thornswoodJournal.fit(); } catch (e2) { }
+    // Each fit() keeps its own throws.
+    if (window.thornswoodSkills && window.thornswoodSkills.fit) { window.thornswoodSkills.fit(); }
+    if (window.thornswoodJournal && window.thornswoodJournal.fit) { window.thornswoodJournal.fit(); }
   }
 
   function watch() {
