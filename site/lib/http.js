@@ -9,14 +9,31 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { body, crossSite, cspFor, passBodyFailure, rangeReply,
-  send };
+module.exports = { body, bodyObject, crossSite, cspFor, isFile, noneMatch, passBodyFailure,
+  rangeReply, send, streamFile };
 
 const fs     = require('fs');
+const { pipeline } = require('stream');
 const { versionAssets } = require('./public');
 const { ADMIN, COOKIE, cookies } = require('./auth');
 
 // ----------------------------------------------------------------- plumb --
+/*
+  noneMatch(header, tag): whether an If-None-Match header names this tag, so
+  the answer is a 304. RFC 9110 13.1.2: the header is a list, "*" matches any
+  answer, and the tags are compared weakly, with a W/ on either side not
+  counted. A proxy that compresses (Cloudflare) marks a strong tag weak, so a
+  browser asks with W/"..." or with a list, and an exact string match sent
+  the whole file again (#4923).
+*/
+function noneMatch(header, tag) {
+  const h = String(header || '').trim();
+  if (!h || !tag) return false;
+  if (h === '*') return true;
+  const want = String(tag).replace(/^W\//, '');
+  return (h.match(/(?:W\/)?"[^"]*"/g) || []).some((t) => t.slice(t.indexOf('"')) === want);
+}
+
 /* One CSP for every answer (#1474). home.html and the hub load CSS/JS as
    same-origin files, so style-src needs only 'self'. Keep this string in one
    place so send(), Range replies, and the request-level setHeader cannot
@@ -126,7 +143,7 @@ function rangeReply(req, res, file, size, headers, head) {
   end = Math.min(end, size - 1);
   // send() puts the security headers on every other answer; a range must not
   // be the one reply that quietly goes out without them.
-  res.writeHead(206, Object.assign({}, headers, {
+  const ranged = Object.assign({}, headers, {
     'content-range': 'bytes ' + start + '-' + end + '/' + size,
     'content-length': (end - start) + 1,
     'accept-ranges': 'bytes',
@@ -134,10 +151,51 @@ function rangeReply(req, res, file, size, headers, head) {
     'x-content-type-options': 'nosniff',
     'content-security-policy': cspFor(res),
     'referrer-policy': 'strict-origin-when-cross-origin'
-  }));
-  if (head) { res.end(); return true; }
-  fs.createReadStream(file, { start: start, end: end }).pipe(res);
+  });
+  if (head) { res.writeHead(206, ranged); res.end(); return true; }
+  streamFile(res, file, 206, ranged, { start: start, end: end });
   return true;
+}
+
+/*
+  Whether a regular file is there to send (#4402). existsSync is true for a
+  folder too, and a folder handed to a read stream is EISDIR: /up/small,
+  the smaller copies' folder, stopped the site that way. A name that is not
+  there is false; anything else stat cannot answer is thrown, inside the
+  request, where handle() answers it.
+*/
+function isFile(file) {
+  const st = fs.statSync(file, { throwIfNoEntry: false });
+  return !!st && st.isFile();
+}
+
+/*
+  A file's bytes as the answer (#4402). The file is opened before anything is
+  written, so one that cannot be opened (removed or locked since the stat
+  that said it was there, or not readable) is answered 404 or 500, not a 200
+  or 206 with nothing after it; and the read runs through pipeline, so one
+  that fails once it has started ends this one answer. Every file the site
+  streams goes through here, because a read stream with no 'error' listener
+  throws outside handle(), the uncaught exception handler stops the site,
+  and one GET was enough to do it. The stream holds the file it was opened
+  on and closes it, also when the visitor goes away part way through, which
+  is not an error worth a line.
+*/
+function streamFile(res, file, code, headers, range) {
+  let fd;
+  try { fd = fs.openSync(file, 'r'); }
+  catch (e) {
+    console.log('[thornswood-docs] could not open ' + file + ' to send it: ' + e.message);
+    if (e.code === 'ENOENT') send(res, 404, 'no such file', 'text/plain; charset=utf-8');
+    else send(res, 500, 'that file could not be read just now', 'text/plain; charset=utf-8');
+    return;
+  }
+  res.writeHead(code, headers);
+  pipeline(fs.createReadStream(file, Object.assign({ fd: fd }, range || {})), res, (e) => {
+    if (e && e.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+      console.log('[thornswood-docs] stopped sending ' + file + ' part way: ' + e.message);
+    }
+  });
 }
 
 /*
@@ -161,6 +219,22 @@ class BodyFailed extends Error {
   constructor(status, why, words) { super(why); this.status = status; this.why = why; this.words = words; }
 }
 function passBodyFailure(e) { if (e instanceof BodyFailed) throw e; }
+/*
+  A request body read as the JSON object every route then takes fields from
+  (#4382). JSON.parse also takes null, a number, a string or a list, and a
+  route that read o.title or o.key from null answered 500 and logged a
+  TypeError, before any sign in or key was asked for. So anything that is not
+  an object is refused here with the same SyntaxError a body that is not JSON
+  at all gets, and each route answers it the way it already answers that.
+  A BodyFailed (too big, too slow, gone) still goes through as it was.
+*/
+async function bodyObject(req, cap, waitMs) {
+  const v = JSON.parse(await body(req, cap, waitMs));
+  if (!v || typeof v !== 'object' || Array.isArray(v)) {
+    throw new SyntaxError('the body is JSON, but not an object');
+  }
+  return v;
+}
 function body(req, cap, waitMs) {
   const max = cap || 4000000;
   const wait = waitMs > 0 ? waitMs : 10000 + Math.ceil(max / 65536) * 1000;
@@ -213,7 +287,10 @@ const TYPES = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
   '.gif': 'image/gif', '.avif': 'image/avif',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.m4v': 'video/mp4',
-  '.woff2': 'font/woff2', '.woff': 'font/woff'
+  '.woff2': 'font/woff2', '.woff': 'font/woff',
+  // The licence texts are UTF-8 with a (c) sign and curly quotes, and nosniff
+  // is on, so with no charset a browser read them as Windows-1252 (#4925).
+  '.txt': 'text/plain; charset=utf-8', '.json': 'application/json; charset=utf-8'
 };
 
 const origin = (req) => {

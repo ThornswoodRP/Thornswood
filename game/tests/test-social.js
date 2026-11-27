@@ -87,7 +87,7 @@ function world() {
     return new Function(
       'require', 'globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
       'guard', 'say', 'notify', 'Math', 'Number', 'String', 'Object', 'Array',
-      'JSON', 'isFinite', 'parseInt',
+      'JSON', 'isFinite', 'parseInt', 'WORLDSPACES',
       require('../../tests/fixtures/ordinary-quest-items') + block)(
       require, g, mp, { now: function () { return clock.now; } },
       { log: function () { } },
@@ -96,7 +96,7 @@ function world() {
       function (n, f) { return f; },
       function (id, line) { said.push({ to: id, line: line }); },
       function (id, line) { said.push({ to: id, line: line }); },
-      Math, Number, String, Object, Array, JSON, isFinite, parseInt);
+      Math, Number, String, Object, Array, JSON, isFinite, parseInt, new Set(['3c:Skyrim.esm']));
   }
 
   run(social);
@@ -726,7 +726,7 @@ if (social && trade) {
   const run = new Function('sp', 'guard', 'globalThis', 'nearList', 'drawPrompt', 'say',
     // Nothing open: no panel claim and no menu (#1739 hides the prompt under
     // them; test-1739-look-covered.js has those cases).
-    'let nearAt=0, lookingAt="", lookingSig="", lookCover=""; const NEAR_EVERY=1; ' +
+    'let nearAt=0, lookingAt="", lookingCamera=-1, lookingSig="", lookCover=""; const NEAR_EVERY=1; ' +
     // The game's own prompt, written down per new look (#2473), is
     // game\tests\test-2473-look-prompt.js's.
     'function anyClaim() { return false; } function lookCoveredBy() { return ""; } ' +

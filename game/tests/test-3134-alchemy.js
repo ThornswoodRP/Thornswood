@@ -340,7 +340,7 @@ function fakeGame() {
 {
   const code = gm.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
   yes('W1 mp.onCraft hands the inputs on to the brew gate',
-      /return recipelessCraft\(actorId, craftedItemBaseId, workbenchId, effects, inputs\);/.test(code));
+      /const made = recipelessCraft\(actorId, craftedItemBaseId, workbenchId, effects, inputs\);[\s\S]{0,120}return made;/.test(code));
   const gate = cut('function recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects) {') || '';
   const tasteAt = gate.indexOf('alchemy.brewRefusal(actorId, arguments[4])');
   yes('W2 the gate asks what was eaten for a lab, after the profession and before the lists, and refuses with false',

@@ -57,11 +57,26 @@
   one. -AsSystem on each installer registers the task as it was, SYSTEM and
   Highest, and is the way back.
 
-  Install-ThornswoodServer.ps1 runs on the box and carries a copy of these
-  functions (every file Publish-Server.ps1 sends is a recorded remote call);
-  the test fails when the copy differs. Install-Voice.ps1 and
-  Setup-Domain.ps1 run on this machine, so they send the functions as text
-  inside the script they run on the box (Get-ThornswoodServiceAccountScript).
+  WHO ELSE CARRIES THEM. Two scripts run on the box alone and carry a copy
+  of these functions between the lines "# ---- ServiceAccount.ps1 (copy)"
+  and "# ---- end ServiceAccount.ps1"; the test fails when a copy differs:
+      scripts\deploy\Install-ThornswoodServer.ps1
+      scripts\vps\vps-dev-instance.ps1
+  (every file Publish-Server.ps1 sends is a recorded remote call). Nine run
+  on this machine and send the functions as text inside the script they run
+  on the box (Get-ThornswoodServiceAccountScript):
+      scripts\deploy\Deploy-Docs.ps1
+      scripts\deploy\Install-AdminService.ps1
+      scripts\deploy\Install-Backup.ps1
+      scripts\deploy\Install-Bridge.ps1
+      scripts\deploy\Install-DeployAgent.ps1
+      scripts\deploy\Install-Mongo.ps1
+      scripts\deploy\Install-Tunnel.ps1
+      scripts\deploy\Install-Voice.ps1
+      scripts\deploy\Setup-Domain.ps1
+  So a change to a function here is made in both copies too; the senders
+  take it as it is. The test also fails when a script copies or sends the
+  functions and is not named here, or is named here and no longer does.
   scripts\tests\test-2578-service-principals.ps1 runs it on scratch folders, and
   tests\test-4077-service-owner.ps1 builds the launcher and runs it.
 #>

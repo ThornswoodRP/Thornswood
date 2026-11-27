@@ -51,9 +51,10 @@
   }
 
   /** A line in the chat, to one person. */
-  // How far out of character talk carries. About the length of a longhouse,
-  // which is roughly the group a scene has in it.
-  var OOC_RANGE = 4000;
+  // How far a /roll carries: 4000 units, about the length of a longhouse,
+  // which is roughly the group a scene has in it. The same reach as /ooc,
+  // which the voice service says (SPEECH in voice/headlines.js, #4238).
+  var ROLL_RANGE = 4000;
 
   /*
     The dice, and their limits.
@@ -385,7 +386,33 @@
       }
     }
     out.hall = { desc: HALL.desc, pos: HALL.pos, rot: HALL.rot, town: 'the creation hall' };
+    /*
+      EVERY CARRIAGE AND FERRY STOP, BY ITS NAME (#7172). "/tp Mixwater Mill"
+      found nothing: a village is no building, so BUILDING_NAME has no row for
+      it (its two houses are "Worker's House" and "Gilfre's House"), and it is
+      none of the towns above. The carriages block already holds every stop
+      with its name, its world and the spot a ride lands on, so /tp lands
+      where the carriage would. A town keeps its own spot: a stop never takes
+      a name already here, and of two stops with one name the first is kept.
+    */
+    var stops = rideStops();
+    for (var i = 0; i < stops.length; i++) {
+      var st = stops[i];
+      var name = String((st && st.name) || '');
+      var key = name.toLowerCase();
+      if (!key || Object.prototype.hasOwnProperty.call(out, key)) { continue; }
+      if (!st.world || !st.pos || st.pos.length !== 3) { continue; }
+      out[key] = { desc: st.world, pos: [st.pos[0], st.pos[1], st.pos[2]], rot: [0, 0, Number(st.rot) || 0],
+                   town: name, stop: true };
+    }
     return out;
+  }
+
+  /** The carriages block's stops, or none while it is not loaded. */
+  function rideStops() {
+    var g = (typeof globalThis !== 'undefined') ? globalThis : null;
+    var c = g && g.__thornswoodCarriages;
+    return (c && Object.prototype.toString.call(c.STOPS) === '[object Array]') ? c.STOPS : [];
   }
 
   /*
@@ -774,23 +801,29 @@
                    : { why: named[want].name + ' is in the load order but the server ' +
                             'cannot find a door into it, so there is nowhere to stand.' };
     }
+    // Part of a stop's name (#7172) counts as part of a building's does.
     var hits = [];
+    for (var sk in table) {
+      if (!Object.prototype.hasOwnProperty.call(table, sk) || !table[sk].stop) { continue; }
+      if (sk.indexOf(want) !== -1) { hits.push({ stop: sk, name: table[sk].town }); }
+    }
     for (var key in named) {
       if (!Object.prototype.hasOwnProperty.call(named, key)) { continue; }
-      if (key.indexOf(want) !== -1) { hits.push(key); }
+      if (key.indexOf(want) !== -1) { hits.push({ key: key, name: named[key].name }); }
       if (hits.length > 12) { break; }
     }
     if (!hits.length) {
-      return { why: 'No place called that. Try a town, or part of a building\'s name: ' +
+      return { why: 'No place called that. Try a town, a carriage stop, or part of a building\'s name: ' +
                     'bannered, jorrvaskr, understone.' };
     }
     if (hits.length === 1) {
-      var one = namedPlace(hits[0]);
+      if (hits[0].stop) { return { where: table[hits[0].stop] }; }
+      var one = namedPlace(hits[0].key);
       return one ? { where: one }
-                 : { why: named[hits[0]].name + ' has no door the server can find.' };
+                 : { why: hits[0].name + ' has no door the server can find.' };
     }
     var names = [];
-    for (var h = 0; h < hits.length && h < 10; h++) { names.push(named[hits[h]].name); }
+    for (var h = 0; h < hits.length && h < 10; h++) { names.push(hits[h].name); }
     return { why: 'Which one: ' + names.join(', ') +
                   (hits.length > 10 ? ', and more' : '') + '.' };
   }
@@ -1856,8 +1889,9 @@
       person (#412). The staff block at the end of this file does the work
       and says whether it took the line; it reuses /give's, /spawn's and
       /tp's lookups, handed over here. A /give, /spawn, /tp or /goto that
-      names no person goes on to the branches below, and /ooc or /roll from
-      somebody staff silenced stops here.
+      names no person goes on to the branches below, and /roll from somebody
+      staff silenced stops here. Their /ooc never arrives: the voice service
+      says it, and holds it back from them itself (#4238).
     */
     var commandTools = g.__thornswoodCommandTools;
     if (commandTools && commandTools.command(cmd, word, parts, profileId, actorId)) { return; }
@@ -1933,7 +1967,7 @@
       var table = places();
       if (!wanted) {
         toProfile(profileId, 'Where to: ' + Object.keys(table).sort().join(', ') +
-                  ', or the name of any inn, keep, shop or house in the world. ' +
+                  ', or the name of any carriage stop, inn, keep, shop or house in the world. ' +
                   'Part of the name is enough.');
         return;
       }
@@ -2124,76 +2158,6 @@
       return;
     }
 
-    // ------------------------------------------------------------- ooc ---
-    //
-    // Brackets worked, but only if everybody remembered them, and a line of
-    // out of character talk typed without them lands in the middle of a scene
-    // as though somebody's character said it.
-    //
-    // This is deliberately LOCAL. Out of character talk belongs to the scene
-    // it interrupts, not to everybody in Skyrim, and a server wide one would
-    // be a second general chat inside the game.
-    // The chat box handles both aliases in voice/headlines.js (#4238).
-    // Direct game-server calls still use this handler.
-    if (word === '/ooc' || word === '/o') {
-      var said = parts.slice(1).join(' ').trim();
-      if (!said) {
-        toProfile(profileId, 'Say /ooc and then whatever you meant to say.');
-        return;
-      }
-      // Needs a character: who hears it is worked out from where that
-      // character is standing.
-      if (!needCharacter()) { return; }
-      if (said.length > 300) { said = said.slice(0, 300); }
-
-      var myPos = [0, 0, 0], myCell = '';
-      try {
-        myPos = mp.get(actorId, 'pos') || [0, 0, 0];
-        myCell = String(mp.get(actorId, 'worldOrCellDesc') || '');
-      } catch (e) { }
-
-      var who = '';
-      try {
-        var ap = mp.get(actorId, 'appearance');
-        who = String((ap && ap.name) || '');
-      } catch (e) { }
-      if (!who) { who = 'Somebody'; }
-
-      var line = '(( ' + who + ': ' + said + ' ))';
-
-      var near = [];
-      try { near = mp.get(0, 'onlinePlayers') || []; } catch (e) { near = []; }
-
-      var heard = 0;
-      for (var oi = 0; oi < near.length; oi++) {
-        var oid = near[oi], opid = 0;
-        try { opid = Number(mp.get(oid, 'profileId')) || 0; } catch (e) { continue; }
-        if (!opid) { continue; }
-
-        if (oid !== actorId) {
-          var oCell = '', oPos = [0, 0, 0];
-          try {
-            oCell = String(mp.get(oid, 'worldOrCellDesc') || '');
-            oPos = mp.get(oid, 'pos') || [0, 0, 0];
-          } catch (e) { continue; }
-          // Same room first. Two people at the same coordinates in different
-          // cells are not in earshot of each other.
-          if (oCell !== myCell) { continue; }
-          var dx = oPos[0] - myPos[0], dy = oPos[1] - myPos[1], dz = oPos[2] - myPos[2];
-          if ((dx * dx + dy * dy + dz * dz) > (OOC_RANGE * OOC_RANGE)) { continue; }
-        }
-
-        toProfile(opid, line);
-        heard++;
-      }
-
-      if (heard <= 1) {
-        toProfile(profileId, 'Nobody near enough to hear that.');
-      }
-      log('command: /ooc', actorId.toString(16), 'heard by', heard);
-      return;
-    }
-
     /*
       ------------------------------------------------------------- the dice
 
@@ -2217,7 +2181,10 @@
       such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
-      part of a conversation and belongs in the room it happened in.
+      part of a conversation and belongs in the room it happened in. /ooc is
+      said by the voice service and never reaches this server (#4238), so the
+      same cell and ROLL_RANGE here are its reach written twice: a change to
+      one is a change to voice/headlines.js too.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
@@ -2281,7 +2248,7 @@
           } catch (e) { continue; }
           if (rc !== rCell) { continue; }
           var rdx = rp[0] - rPos[0], rdy = rp[1] - rPos[1], rdz = rp[2] - rPos[2];
-          if ((rdx * rdx + rdy * rdy + rdz * rdz) > (OOC_RANGE * OOC_RANGE)) { continue; }
+          if ((rdx * rdx + rdy * rdy + rdz * rdz) > (ROLL_RANGE * ROLL_RANGE)) { continue; }
         }
         toProfile(rpid, rline);
         rHeard++;

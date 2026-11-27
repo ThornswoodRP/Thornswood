@@ -27,9 +27,11 @@
   scripts with no repository round them), falls back to
   [IO.Path]::GetTempPath() so they still run.
 
-  Read only for the path itself: creates nothing and prints nothing but the
-  one path. Callers that write use -LiteralPath, so a folder with [ or & in
-  its name still works.
+  It makes the temps folder itself when it is not there yet (a fresh clone
+  has none), so a caller can put a file straight into it as it could into
+  the system's temp folder (#4264). It never makes the task's own folder, and
+  prints nothing but the one path. Callers that write use -LiteralPath, so a
+  folder with [ or & in its name still works.
 
 .PARAMETER Task
   Folder name under the scratch root, for example
@@ -67,4 +69,5 @@ if (-not $base) {
     if ($main) { $base = Join-Path $main 'temp' } else { $base = [IO.Path]::GetTempPath() }
 }
 
+[void][IO.Directory]::CreateDirectory($base)
 Join-Path $base $Task

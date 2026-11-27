@@ -55,14 +55,19 @@ function run(live, out) {
     const out = path.join(tmp, 'out');
     const r = await run(live, out);
     good.close();
-    yes('it exports (exit ' + r.code + ')', r.code === 0 && /10 pages written/.test(r.out));
+    yes('it exports (exit ' + r.code + ')', r.code === 0 && /9 pages written/.test(r.out));
     if (r.code !== 0) console.log('  it said: ' + r.out.trim().slice(-600));
     yes('it asked the live site for its wording and invite', asked.some((u) => u.startsWith('/api/public')));
     const html = (n) => { try { return fs.readFileSync(path.join(out, n), 'utf8'); } catch (e) { return ''; } };
     const src = siteFiles.source();
     const md = (/const MD_PAGES = \[([^\]]*)\]/.exec(src)[1].match(/'\/[a-z-]+'/g) || []).map((s) => s.slice(2, -1)).filter((p) => p !== 'known');
-    yes('the front page and every written page but Known Issues are there as <page>.html',
-        html('index.html').length > 0 && md.every((p) => html(p + '.html').includes('<title>')) && !fs.existsSync(path.join(out, 'known.html')));
+    // The pages behind the age gate, which the site sends by the browser's
+    // cookie and a plain file cannot (#5624).
+    const gated = (/const AGE_PAGES = \[([^\]]*)\]/.exec(src)[1].match(/'\/[a-z-]+'/g) || []).map((s) => s.slice(2, -1));
+    yes('the age gate covers How to join', gated.indexOf('join') >= 0);
+    yes('the front page and every written page but Known Issues and the gated ones are there as <page>.html',
+        html('index.html').length > 0 && md.filter((p) => gated.indexOf(p) < 0).every((p) => html(p + '.html').includes('<title>')) &&
+        !fs.existsSync(path.join(out, 'known.html')) && gated.every((p) => !fs.existsSync(path.join(out, p + '.html'))));
     yes('each is the site\'s own page, its words in it', /<title>Rules · Thornswood<\/title>/.test(html('rules.html')) &&
         html('rules.html').includes('</h1>'));
     // Each link of the page, held whole to the invite: a link is the invite
@@ -72,7 +77,7 @@ function run(live, out) {
     yes('the site\'s files are beside them, and the hub\'s and the template are not', fs.existsSync(path.join(out, 'home.css')) &&
         fs.existsSync(path.join(out, 'home.js')) && !fs.existsSync(path.join(out, 'hub.js')) && !fs.existsSync(path.join(out, 'home.html')));
     const redirects = html('_redirects');
-    for (const p of ['/news', '/gallery', '/roadmap', '/downloads', '/report', '/known', '/hub', '/api/*', '/feed/*', '/auth/*']) {
+    for (const p of ['/news', '/gallery', '/roadmap', '/downloads', '/join', '/report', '/known', '/hub', '/api/*', '/feed/*', '/auth/*']) {
       yes('_redirects sends ' + p + ' to the site', redirects.split('\n').some((l) => l.startsWith(p + ' ' + live + '/') && l.endsWith(' 302')));
     }
     const headers = html('_headers');

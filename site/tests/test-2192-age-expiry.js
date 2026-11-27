@@ -24,7 +24,7 @@ function yes(what, c) {
   if (c) { pass++; console.log('PASS  ' + what); } else { fail++; console.log('FAIL  ' + what); }
 }
 const start = SRC.indexOf("var AGE_KEY = 'tw-age-18'");
-const end = SRC.indexOf('function showAgeGate()');
+const end = SRC.indexOf('function bindAgeGate()');
 yes('the gate helpers are in home.js', start > 0 && end > start);
 const DAY = 86400000;
 const T0 = Date.UTC(2026, 9, 11, 12);

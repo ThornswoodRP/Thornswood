@@ -80,7 +80,7 @@ $null = Stop-Launcher -Root $Root
 $7z = Find-SevenZip
 if (-not $7z) { Die '7-Zip is not installed.' }
 
-$work = Join-Path $env:TEMP 'Bodies-install'
+$work = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') 'Bodies-install'
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 $null = New-Item -ItemType Directory -Force -Path $work
 

@@ -12,7 +12,8 @@
   (WER's node.exe crash dumps), every other rule by name gone, a runner's deny
   too. Watch is refused while the bot has no rule on it, and
   Deploys while the site has none on current, and each is then left as it was.
-  scripts\tests\test-server-acl.ps1 covers the server, voice and backup folders.
+  scripts\tests\test-server-acl.ps1 covers the server, voice and backup folders,
+  and scripts\tests\test-4344-leftover-folders.ps1 what the hand made tasks left.
 #>
 [CmdletBinding()]
 param()
@@ -65,8 +66,6 @@ function Make([string]$c) {
     Put (Join-Path $c 'Thornswood-Deploys\gamemode\a.zip') 'artifact'
     Put (Join-Path $c 'Thornswood-Caddy\caddy.exe') 'program'
     Put (Join-Path $c 'Thornswood-Caddy\Caddyfile') 'config'
-    # Off the box since #3288: never touched now, like Docs.
-    Put (Join-Path $c 'Thornswood-Maint\update.ps1') 'made by hand'
     Put (Join-Path $c 'Thornswood-Dumps\crash.dmp') 'unknown'
     Put (Join-Path $c 'Thornswood-Docs\x.txt') 'not ours here'
 }
@@ -122,7 +121,6 @@ try {
     }
     Yes 'each is read back' ($o -match ([regex]::Escape((Join-Path $c 'Thornswood-Caddy')) + ': takes nothing from above, no Users rule'))
     Yes 'a folder that is not ours is never touched' ((Broad (Join-Path $c 'Thornswood-Docs\x.txt')) -gt 0)
-    Yes '  and neither is Maint, which #3288 took off the list' ((Broad (Join-Path $c 'Thornswood-Maint\update.ps1')) -gt 0 -and $o -notmatch [regex]::Escape((Join-Path $c 'Thornswood-Maint')))
     $s1 = @{}; foreach ($n in $names) { $s1[$n] = (Get-Acl -LiteralPath (Join-Path $c $n)).Sddl }
     $o = Box $c $bot @()
     Yes 'run again, nothing changes' ($script:code -eq 0 -and @($names | Where-Object { (Get-Acl -LiteralPath (Join-Path $c $_)).Sddl -ne $s1[$_] }).Count -eq 0)

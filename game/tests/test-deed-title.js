@@ -33,9 +33,7 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-// Since #502 the act also asks mayHold: a jail is its hold's Jarl's alone.
-const START = '    if (mine && held && held.by !== mine && holdsDeed(actorId, building) &&\n' +
-              '        mayHold(actorId, mine, building)) {';
+const START = '    if (mine && held && held.by !== mine && holdsDeed(actorId, building)) {';
 const END = '\n    }\n';
 const a = src.indexOf(START);
 const b = a < 0 ? -1 : src.indexOf(END, a);
@@ -61,7 +59,7 @@ function press(opts) {
 
   const fn = new Function(
     'mine', 'actorId', 'building', 'held', 'claims', 'holdsDeed', 'holderOf',
-    'nameOf', 'save', 'pushAll', 'plog', 'notify', 'say', 'mp', 'mayHold',
+    'nameOf', 'save', 'pushAll', 'plog', 'notify', 'say', 'mp',
     'issueMaster', 'masterHandedLine', 'recordWord', 'WORD_SAID',
     block + '\nreturn { moved: false, claims: claims };');
 
@@ -75,7 +73,6 @@ function press(opts) {
     function (id, m) { said.push(m); },
     function (id, m) { said.push(m); },
     { get: function () { return { name: opts.who || 'Somebody' }; } },
-    function () { return opts.mayHold !== false; },
     // The master key (#2254): the new holder is handed their own. 0 is a
     // server whose plugin has no master key record yet.
     function (to, b, held) {
@@ -112,13 +109,12 @@ if (block !== null) {
         r.words[0].holder === ALICE && r.words[0].by === BOB);
   }
 
-  // S1j: A JAIL'S DEED IS PAPER (#502). Patrick, 12 Oct: a jail is claimed
-  //      by the Jarl of its hold alone, so its deed in anybody else's hand
-  //      claims nothing at its door.
+  // S1j: Ordinary title is independent of an office (#7071); actual guard
+  //      cell permissions remain in the separate jail-cell controls.
   {
-    const r = press({ mine: BOB, who: 'Bob', hasDeed: true, held: alicesHouse, mayHold: false });
-    yes('S1j a jail\'s deed presented by somebody who may not hold it takes nothing',
-        r.claim && r.claim.by === ALICE && r.said.length === 0);
+    const r = press({ mine: BOB, who: 'Bob', hasDeed: true, held: alicesHouse });
+    yes('S1j a valid ordinary deed is honored without a Jarl office',
+        r.claim && r.claim.by === BOB && r.said.length > 0);
   }
 
   // S1b (#2254): the new holder is handed a master key of their own, and the

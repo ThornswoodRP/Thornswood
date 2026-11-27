@@ -428,8 +428,9 @@ mp.onDeath = guard('onDeath', function (actorId, killerId) {
   if (!(pid > 0)) { return; }
 
   /*
-    THE WOUNDS COME WITH YOU (#1383, death.md): the record stays as it was,
-    and only the bleed stops, in the injury and disease block's died().
+    THE TEMPLE CLEANS THE CUTS (#6616, death.md): the injury and disease
+    block's died() clears the cuts, bites and burns and keeps the breaks,
+    the crooked heals and every disease.
   */
   try {
     const hurt = globalThis.__thornswoodHurt;

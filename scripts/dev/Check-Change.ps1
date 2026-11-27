@@ -77,7 +77,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or -not $gate.Count) { Stop-Here 'the gate list could not be read (Gate-Harnesses.ps1).' }
 
     # ---- the map
-    $scratch = Join-Path ([IO.Path]::GetTempPath()) ('check-change-' + [Guid]::NewGuid().ToString('N'))
+    $scratch = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('check-change-' + [Guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $scratch
     $run = $null
     $token = [string]$env:GITHUB_TOKEN
@@ -156,7 +156,7 @@ try {
             if (-not $py) { Say 'SKIP  the test tasks: there is no Python here' }
             else {
                 $env:DISCORD_TOKEN = 'not-a-real-token'
-                $data = Join-Path ([IO.Path]::GetTempPath()) ('check-change-bot-' + [Guid]::NewGuid().ToString('N'))
+                $data = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('check-change-bot-' + [Guid]::NewGuid().ToString('N'))
                 $null = New-Item -ItemType Directory -Path $data
                 $env:THORNSWOOD_BOT_DATA = $data
                 foreach ($n in 'PR_NUMBER', 'HEAD_REF') { Remove-Item -LiteralPath ('Env:' + $n) -ErrorAction SilentlyContinue }
