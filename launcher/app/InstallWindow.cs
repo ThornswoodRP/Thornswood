@@ -849,7 +849,7 @@ namespace Thornswood
                 Line("Noting what you accepted");
                 InstallAgreements.Record(profile, acceptedAt, Line);
 
-                var steps = new InstallSteps(choice, Line, Progress);
+                var steps = new InstallSteps(choice, Line, Progress, q => Dispatcher.UIThread.Invoke(() => Ask.YesNo(q, Title_, Ask.Icon.Warning)));
                 steps.Run();
                 if (steps.Bad > 0)
                     why = steps.Bad + " check" + (steps.Bad == 1 ? "" : "s") + " failed. Send staff a screenshot of this window in the Discord.";
