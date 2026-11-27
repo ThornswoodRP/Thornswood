@@ -50,11 +50,13 @@ exit [int]`$env:THORNSWOOD_TEST_EXIT
         return [pscustomobject]@{ Code = $code; Out = $out; Got = $got }
     }
 
-    foreach ($name in 'KillMoveIdles', 'ToolRecords') {
+    foreach ($name in 'ArmourMaterials', 'KillMoveIdles', 'ToolRecords') {
         $r = Run @('-Lister', $name)
         $tool = "scripts/dev/List-$name.py"
-        Yes "L1 $name runs $tool with --data '{data}'" ($r.Got -and $r.Got.script -ceq $tool -and
-            (@($r.Got.arguments) -join ' ') -ceq '--data {data}')
+        # ArmourMaterials reads the whole load order, so it takes the plugin list too (#4650).
+        $want = if ($name -ceq 'ArmourMaterials') { '--data {data} --plugins {plugins}' } else { '--data {data}' }
+        Yes "L1 $name runs $tool with $want" ($r.Got -and $r.Got.script -ceq $tool -and
+            (@($r.Got.arguments) -join ' ') -ceq $want)
         Yes "L1 $tool is in the repository" (Test-Path -LiteralPath (Join-Path $repo $tool))
         Yes "L2 $name reads the live server's plugins when no server is asked" ($r.Got -and $r.Got.server -ceq 'main')
         Yes "L3 $name prints what the lister printed and exits 0 with it" ($r.Code -eq 0 -and ($r.Out -contains 'a line the lister printed'))

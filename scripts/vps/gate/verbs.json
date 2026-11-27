@@ -1049,6 +1049,7 @@
         "scripts/deploy/Artifact.ps1",
         "scripts/deploy/ServiceAccount.ps1",
         "scripts/dev/Build-DoorTable.py",
+        "scripts/dev/List-ArmourMaterials.py",
         "scripts/dev/List-KillMoveIdles.py",
         "scripts/dev/List-ToolRecords.py",
         "scripts/dev/bsa.py",
@@ -1076,7 +1077,7 @@
       "timeoutMinutes": 20,
       "fixed": [],
       "params": {
-        "Lister": "^(KillMoveIdles|ToolRecords)$",
+        "Lister": "^(ArmourMaterials|KillMoveIdles|ToolRecords)$",
         "Server": "^(dev|main)$"
       }
     },

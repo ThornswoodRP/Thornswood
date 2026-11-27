@@ -11,7 +11,7 @@
       pwsh scripts/vps/Box-Run.ps1 -Line 'List-GameData -Lister ToolRecords -Server dev'
 
   WHY. The listers in scripts\dev (List-KillMoveIdles.py for #4507,
-  List-ToolRecords.py) measure the game's records, which are in the game
+  List-ToolRecords.py, List-ArmourMaterials.py for #4650) measure the game's records, which are in the game
   servers' plugins folders on the box and nowhere a cloud session can read.
   They ran through Run-OnBox.ps1 from a machine with ssh to the box, and no
   verb of the gate ran one, so a cloud thread or a Bot could not start one
@@ -35,7 +35,7 @@
 param(
     # Which lister, by the end of its name: scripts/dev/List-<Lister>.py.
     [Parameter(Mandatory = $true)]
-    [ValidateSet('KillMoveIdles', 'ToolRecords')]
+    [ValidateSet('ArmourMaterials', 'KillMoveIdles', 'ToolRecords')]
     [string]$Lister,
 
     # Whose plugins: the live server's or the dev server's.
@@ -55,6 +55,7 @@ if (-not $Runner) { $Runner = Join-Path $Here 'Run-OnBox.ps1' }
 # The lister and what it is run with. Each reads the data folder it is given
 # and writes nothing (its own header says so).
 $Listers = @{
+    'ArmourMaterials' = @('scripts/dev/List-ArmourMaterials.py', '--data', '{data}', '--plugins', '{plugins}')
     'KillMoveIdles' = @('scripts/dev/List-KillMoveIdles.py', '--data', '{data}')
     'ToolRecords'   = @('scripts/dev/List-ToolRecords.py', '--data', '{data}')
 }
