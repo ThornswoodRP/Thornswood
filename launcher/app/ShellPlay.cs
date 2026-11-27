@@ -255,6 +255,29 @@ namespace Thornswood
                 }
                 if (blockers > 0)
                 {
+                    // The server already runs a newer Release's plugin of ours
+                    // (#7045): the box puts a Release's content plugin on its
+                    // server minutes after the Release is out, so the update
+                    // that carries it is asked for now and taken, rather than
+                    // sending anybody to a Fix that cannot have it.
+                    string ahead = null;
+                    await OffThread(delegate { ahead = Verify.ServerAheadOfRelease(found, Updater.ReleaseCopy(cfg)); });
+                    if (ahead != null)
+                    {
+                        await AskForServersRelease(ahead);
+                        if (pendingLauncher != null)
+                        {
+                            Log("Not launching yet. The server already runs launcher " + pendingLauncher.Version + "'s " + ahead +
+                                ", which this launcher, " + Updater.Version + ", does not have. Play works once that update is in.");
+                            if (cfg.AutoUpdate) UpdateBySelf();
+                            else Ask.Tell(
+                                "The server is already on launcher " + pendingLauncher.Version + ", and its " + ahead + " is not the one this launcher has, so the game would not match the server.\n\n" +
+                                "Press Install now on the card above Play, then Play.",
+                                "Thornswood", Ask.Icon.Warning);
+                            return;
+                        }
+                    }
+
                     Log("Not launching. " + blockers + " problem" + (blockers == 1 ? "" : "s") + " with your mod list would desync everyone.");
                     await RunScanAsync(false);
                     DrawStatus();
