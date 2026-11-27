@@ -430,10 +430,10 @@ file carries outside code and the file does not carry that project's notice.
 <!-- engine-pin:fork -->
 The six files recorded in `records\client-build.json` correspond to
 https://github.com/ThornswoodRP/skymp, branch `thornswood/engine-changes`,
-commit `11988fae` (in full, `11988faede1bd7e3bc038d26c1bd34c473c79969`). That
+commit `a261e9c9` (in full, `a261e9c98e170f3d14a6f3c247732cf0001984bf`). That
 is upstream skyrim-multiplayer/skymp at `2849e676` with Thornswood's changes on
 top, and every one of those changes is in
-https://github.com/ThornswoodRP/skymp/compare/2849e676...11988fae.
+https://github.com/ThornswoodRP/skymp/compare/2849e676...a261e9c9.
 <!-- /engine-pin:fork -->
 Check-Secrets.ps1 stops a release whose copy of any of the six is not the
 recorded sha256 (client-not-recorded-build), and Sync-Client.ps1 puts in the
@@ -513,10 +513,8 @@ the record.
 <!-- engine-pin:ports -->
 | Library | Version | Licence, as its port declares it | In |
 |---|---|---|---|
-| antigo | 0.0.1 | LGPL-3.0 | `MpClientPlugin.dll` |
 | asio | 1.32.0 | BSL-1.0 | `SkyrimPlatformImpl.dll` |
 | bshoshany-thread-pool | 5.1.0 | MIT | `SkyrimPlatformImpl.dll` |
-| bzip2 | 1.0.8 | bzip2-1.0.6 | `MpClientPlugin.dll` |
 | cef-prebuilt | 108.4.13 | not declared; its text is in `cef-prebuilt.txt` | `SkyrimPlatformCEF.exe.hidden`, `SkyrimPlatformImpl.dll` |
 | commonlibsse-ng-flatrim | 3.7.0-unstable-2024-09-03-b93280e8 | MIT | `SkyrimPlatform.dll`, `SkyrimPlatformImpl.dll` |
 | cpp-httplib | 0.40.0 | MIT | `SkyrimPlatformImpl.dll` |
@@ -524,15 +522,8 @@ the record.
 | directxtk | 2026-03-31 | MIT | `SkyrimPlatformImpl.dll` |
 | fmt | 11.2.0 | MIT | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
 | frida-gum | 16.0.19 | BSD-3-Clause AND LGPL-2.0-or-later AND LGPL-2.0-or-later WITH WxWindows-exception-3.1 AND LGPL-2.1-or-later AND MIT AND NCSA | `SkyrimPlatformImpl.dll` |
-| libbson | 2.2.3 | not declared; its text is in `libbson.txt` | `MpClientPlugin.dll` |
-| libsodium | 1.0.21 | ISC | `MpClientPlugin.dll` |
-| libzip | 1.11.4 | BSD-3-Clause | `MpClientPlugin.dll` |
-| libzippp | 7.1-1.10.1 | BSD-3-Clause | `MpClientPlugin.dll` |
-| lz4 | 1.10.0 | BSD-2-Clause | `MpClientPlugin.dll` |
-| makeid | 1.0.3 | not declared; its text is in `makeid.txt` | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
+| makeid | 1.0.3 | not declared; its text is in `makeid.txt` | `SkyrimPlatformImpl.dll` |
 | mhook | 2.5.1 | not declared; its text is in `mhook.txt` | `SkyrimPlatformImpl.dll` |
-| mongo-c-driver | 2.2.3 | Apache-2.0 | `MpClientPlugin.dll` |
-| mongo-cxx-driver | 4.1.4 | Apache-2.0 | `MpClientPlugin.dll` |
 | nirnlab-ui-platform-headers | 3.1 | MIT | `SkyrimPlatformImpl.dll` |
 | nlohmann-json | 3.12.0 | MIT | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
 | node-addon-api | 8.7.0 | MIT | `SkyrimPlatformImpl.dll` |
@@ -540,15 +531,11 @@ the record.
 | openssl | 3.6.1 | Apache-2.0 | `SkyrimPlatformImpl.dll` |
 | prometheus-cpp-lite | 2.0 | MIT | `MpClientPlugin.dll` |
 | robin-hood-hashing | 3.11.5 | MIT | `SkyrimPlatformImpl.dll` |
-| rsm-binary-io | 2.0.6 | MIT | `MpClientPlugin.dll` |
-| rsm-bsa | 4.1.0 | MIT | `MpClientPlugin.dll` |
-| rsm-mmio | 2.0.0 | MIT | `MpClientPlugin.dll` |
 | simdjson | 4.6.0 | (Apache-2.0 OR MIT) | `MpClientPlugin.dll` |
 | simpleini | 4.25 | MIT | `SkyrimPlatformImpl.dll` |
 | slikenet | 2021-06-07 | not declared; its text is in `slikenet.txt` | `MpClientPlugin.dll` |
 | spdlog | 1.17.0 | MIT | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
-| utf8proc | 2.11.3 | MIT | `MpClientPlugin.dll` |
-| zlib | 1.3.1 | Zlib | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
+| zlib | 1.3.1 | Zlib | `SkyrimPlatformImpl.dll` |
 <!-- /engine-pin:ports -->
 
 A port that declares no licence still has its text, and the text is what
@@ -628,9 +615,8 @@ licence files, byte for byte.
 <!-- engine-pin:libraries -->
 | Library | Version | Licence, as its folder or package gives it | In |
 |---|---|---|---|
-| libespm | the fork's | MIT | `MpClientPlugin.dll` |
 | npm-eventemitter3-5.0.1 | 5.0.1 | MIT | `skymp5-client.js` |
-| papyrus-vm | the fork's | MIT | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
+| papyrus-vm | the fork's | MIT | `SkyrimPlatformImpl.dll` |
 | tilted | the fork's | not declared; its text is in `tilted.txt` | `SkyrimPlatformCEF.exe.hidden`, `SkyrimPlatformImpl.dll` |
 | viet | the fork's | MIT | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
 <!-- /engine-pin:libraries -->
@@ -712,7 +698,7 @@ at the engine pin, with webpack, and holds what it built to
 `records\front-build.json`:
 <!-- engine-pin:front -->
 67 files, 8,676,550 bytes, from commit
-`11988fae`, the commit the client record names.
+`a261e9c9`, the commit the client record names.
 Its build.js is 2,445,110
 bytes, sha256
 `781bfbb02a2ccedd982092bbf770ffe1442df78098722344b04a8ca9357af7e4`, and every
@@ -1517,15 +1503,15 @@ rewrite takes it out (#3684).
 <!-- engine-pin:servers -->
 - The game server's native module, `scam_native.node`, recorded in
   `records\server-build.json`, is AGPL-3.0. That record and the client record
-  name `11988faede1bd7e3bc038d26c1bd34c473c79969` on the public fork. The
+  name `a261e9c98e170f3d14a6f3c247732cf0001984bf` on the public fork. The
   server module and the six client files were built from that commit, which
   is upstream at `2849e676` with every change in
-  https://github.com/ThornswoodRP/skymp/compare/2849e676...11988fae. Each change
+  https://github.com/ThornswoodRP/skymp/compare/2849e676...a261e9c9. Each change
   is a merged pull request of the fork, and the pull request here that moved
   the pin lists the ones it brought in.
   The server module's SHA256
-  is `a2c7e120eba1c58acf2ca925a4b0ba2724787e90b0eed31b8fb5e95a9b6555c2`, built
-  2026-11-27T12:56:56Z. This is the recorded next release, not a deployment
+  is `6807636c6cf11f30e8adc8e2e291397f827a73a9dc9b4de9f7ded383afc5b867`, built
+  2026-11-27T18:39:48Z. This is the recorded next release, not a deployment
   claim. Main remains on `0714e444047a994b1013dfe4cac187aef29ad65a` until this goes
   out.
   <!-- /engine-pin:servers -->
@@ -1562,7 +1548,7 @@ Corresponding Source is the fork at the commit each record names. The six
 client files and the game server module, at the one commit both records name:
 
 <!-- engine-pin:source -->
-https://github.com/ThornswoodRP/skymp/tree/11988faede1bd7e3bc038d26c1bd34c473c79969
+https://github.com/ThornswoodRP/skymp/tree/a261e9c98e170f3d14a6f3c247732cf0001984bf
 
 For the engine Main runs until then:
 
