@@ -1308,6 +1308,22 @@ function Remove-ThornswoodOpenTrace($Trace) {
   Stop-ThornswoodOpenTrace $Trace
   Remove-Item -LiteralPath $Trace.Etl -Force -EA SilentlyContinue
 }
+
+# ---- the old copies a swap keeps (#4373) -----------------------------------
+#
+# A swap moves what it replaces into <root>\.prev-<stamp>, which is what a
+# put-back takes back. The newest $Keep of those, by their stamp, stay; the
+# rest are removed, as Swap.ps1 and Install-ThornswoodServer.ps1 keep theirs.
+# A copy that will not go stays, and the line says which and what Windows
+# answered (#3183), for the caller to show with the rest of its report.
+function Remove-ThornswoodOldCopies([string]$Root, [string]$Like, [int]$Keep) {
+  $past = @(Get-ChildItem -LiteralPath $Root -Directory -Force |
+    Where-Object { $_.Name -like $Like } | Sort-Object Name -Descending | Select-Object -Skip $Keep)
+  foreach ($d in $past) {
+    try { Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction Stop }
+    catch { 'PRUNE FAILED: could not remove ' + $d.FullName + ', one of the old copies past the newest ' + $Keep + ': ' + $_.Exception.Message }
+  }
+}
 # ---- end StopAndMove.ps1 ----
 
 # The server folders' turn, which the nightly backup takes too (#3247). A copy
