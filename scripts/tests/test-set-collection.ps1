@@ -66,6 +66,9 @@ function Receive-FeedStore([string]`$Channel, [string]`$Dir) {
 }
 function Send-FeedStore([string]`$Channel, [string]`$Dir, [string[]]`$Files) {
     Add-Content -LiteralPath `$script:StubLog -Value ("send|`$Channel|`$Dir|" + (`$Files -join ','))
+    # The receipt the real Send-FeedStore gives (Feed-Store.ps1): the setter
+    # says the site serves it only when Sent names it (#4242).
+    return @{ Sent = @(`$Files); Same = @() }
 }
 "@
     W (Join-Path $Fake 'scripts\release\Feed-Store.ps1') $stub
@@ -100,11 +103,13 @@ function Send-FeedStore([string]`$Channel, [string]`$Dir, [string[]]`$Files) {
     Yes '  with the quotes around a pasted address taken off, and the old address replaced' ((J (Join-Path $Store 'version.json')).collectionUrl -eq $Url)
     Yes '  and the folder given to -ReleaseDir untouched' ($null -eq (J (Join-Path $Rel 'version.json')).PSObject.Properties['collectionUrl'])
 
-    # 4. Receiving fails: only this machine changed, and it says so.
+    # 4. Receiving fails: nothing changed on either side, and it says so (#4242:
+    #    until then this machine's config.json was written first).
     Reset
+    $cfgBefore = [IO.File]::ReadAllText((Join-Path $Root 'config.json'))
     W (Join-Path $T 'receive-fails') 'x'
     $r = Run @('-Url', $Url)
-    Yes 'a failed receive stops it (exit 1)' ($r.Code -eq 1 -and $r.Out -match 'only this machine was changed')
+    Yes 'a failed receive stops it (exit 1), with this machine untouched too' ($r.Code -eq 1 -and $r.Out -match 'Nothing has been changed' -and [IO.File]::ReadAllText((Join-Path $Root 'config.json')) -eq $cfgBefore)
     Yes '  the store''s version.json is untouched and nothing is sent' ((J (Join-Path $Store 'version.json')).collectionUrl -eq 'https://old' -and @(Logged | Where-Object { $_ -like 'send|*' }).Count -eq 0)
 
     # 5. -Clear empties both.

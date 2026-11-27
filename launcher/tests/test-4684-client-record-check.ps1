@@ -41,7 +41,7 @@ try {
     # The parts of the repository Build-Launcher reads before it publishes.
     $rel = P @($scratch, 'scripts', 'release')
     New-Item -ItemType Directory -Path $rel -Force | Out-Null
-    foreach ($f in 'Build-Launcher.ps1', 'RecordShape.ps1', 'Read-JsonFile.ps1', 'Where.ps1', 'LauncherVersion.ps1') {
+    foreach ($f in 'Build-Launcher.ps1', 'RecordShape.ps1', 'Read-JsonFile.ps1', 'Where.ps1', 'LauncherVersion.ps1', 'Get-ScratchDir.ps1') {
         Copy-Item -LiteralPath (P @($Root, 'scripts', 'release', $f)) -Destination (Join-Path $rel $f)
     }
     $app = P @($scratch, 'launcher', 'app')

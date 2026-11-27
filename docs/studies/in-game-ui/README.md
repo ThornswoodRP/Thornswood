@@ -470,7 +470,8 @@ For the team:
 
 ### U6. Emotes as lesser powers on the Q menu (#2026)
 
-Already decided (option C on #2026: build the Wave prototype first). It puts
+Already decided (Patrick, 22 Oct, option C on #2026, now #4577: if the one-emote
+prototype, Wave, works, each person picks which emotes become powers). It puts
 emotes in Skyrim's favourites, with a controller, beside whatever the wheel
 becomes. It is not a replacement for the panels.
 

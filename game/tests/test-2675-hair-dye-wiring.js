@@ -34,7 +34,8 @@
 // R: THE WORDS AND THE ROUTER. /hairdye is in WORDS and not PLAYER_WORDS, and
 //    /yes has the 'dye' branch.
 // U: THE PANELS. K's Hair dye page, P's Dye hair, the look prompt's row and
-//    key, and the front's redraw of the hair.
+//    key. The redraw of your own hair is the engine fork's (#2867): the front
+//    has none, and the page and the gamemode's comment say so (#4320).
 //
 // Read only.
 'use strict';
@@ -530,6 +531,9 @@ const BOWL = idFor(DATA.item);
   const doc = read('docs/systems/hair-dye.md');
   yes('U8 no long dash and no word the house style keeps out', ![blockSrc, doc].some((s) => s.indexOf('\u2014') >= 0) &&
       !/\bplayers?\b/i.test(doc));
+  yes('U9 the page and the gamemode\'s comment put the redraw in the engine fork, not the front, and the page no longer lists it as not in (#4320)',
+      /engine fork's client calls the game's\s+`UpdateHairColor`/.test(doc) && !/Not in yet:[^\n]*\n[^\n]*redraw/.test(doc) &&
+      /redraws the hair at once in the engine fork's client/.test(blockSrc) && !/redraws the hair in the front plugin/.test(blockSrc));
 }
 
 // --------------------------------------------------------------- workflow

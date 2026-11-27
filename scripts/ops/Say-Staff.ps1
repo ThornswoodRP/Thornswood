@@ -216,8 +216,8 @@ if ($route -eq 'github') {
     $work = ''
     try {
         if ($route -eq 'bridge') {
-            $base = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
-            $work = Join-Path $base ('thornswood-notice-' + [Guid]::NewGuid().ToString('N'))
+            $name = 'thornswood-notice-' + [Guid]::NewGuid().ToString('N')
+            $work = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP $name } else { & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') $name }
             # ssh reads a -o file option up to the first space as one file.
             if ($work -match '\s') { Die "the temp folder ($work) has a space in it, which ssh would read as two files. Nothing was posted." }
             New-Item -ItemType Directory -Path $work -Force | Out-Null

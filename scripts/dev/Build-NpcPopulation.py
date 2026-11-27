@@ -644,14 +644,38 @@ def write_catalogues(payload):
         'and six of each other animal species per tile. Cave and dungeon caps are shared across their rooms.', '',
         '| Tier | Cave/dungeon cap | Return minutes |', '|---|---:|---:|']
     lines += [f'| {tier} | {rule["cap"]} | {rule["returnMinutes"]} |' for tier, rule in TIERS.items()]
-    lines += ['', '## Locations', '', '| Location | Hold | Habitat | Tier | NPC count | Return minutes |', '|---|---|---|---:|---:|---|']
-    for row in payload['locations']:
-        name = str(row['name']).replace('|', '/')
-        lines.append(f"| {name} | {row['hold']} | {row['habitat']} | {row['tier'] or ''} | {row['count']} | " +
-                     ', '.join(map(str, row['returnMinutes'])) + ' |')
+    lines += [''] + place_table(kept)
     page = '\n'.join(lines) + '\n'
     (root / 'NPC-POPULATION.md').write_text(page, encoding='utf-8', newline='\n')
     write_merchants(payload)
+
+
+def place_table(kept):
+    """The page's Locations section, one row for each hold, habitat and tier a place's NPCs have.
+
+    A row once took its hold, habitat and tier from the first NPC of the place
+    and its count from all of them (#4181): the open ground of Tamriel was one
+    row of 218 under Falkreath though they stand in nine holds, and Faldar's
+    Tooth read as a bandit camp of 20 when it is 7 bandits and 13 animals. So
+    each place is split by what its NPCs really have, Who says which roles
+    make up the count, and the rows add up to the hold table above. kept is
+    the retained rows, from the payload or read back from NPC-SPAWNS.csv, so
+    tier may be a number, None or text.
+    """
+    groups = collections.defaultdict(list)
+    for r in kept:
+        tier = '' if r.get('tier') in (None, '') else str(r['tier'])
+        groups[(str(r['location'] or ''), r['hold'], r['habitat'], tier)].append(r)
+    lines = ['## Locations', '',
+        'One row for each hold, habitat and tier among a place\'s NPCs, so a place that spans more',
+        'than one is on more than one row, and the rows add up to the hold table.', '',
+        '| Location | Hold | Habitat | Tier | NPC count | Who | Return minutes |', '|---|---|---|---:|---:|---|---|']
+    for (_, hold, habitat, tier), residents in sorted(groups.items()):
+        name = str(residents[0]['locationName']).replace('|', '/')
+        who = ', '.join(f'{role} {n}' for role, n in sorted(collections.Counter(r['role'] for r in residents).items()))
+        minutes = ', '.join(map(str, sorted({int(r['returnMinutes']) for r in residents})))
+        lines.append(f'| {name} | {hold} | {habitat} | {tier} | {len(residents)} | {who} | {minutes} |')
+    return lines
 
 
 def write_merchants(payload):

@@ -235,6 +235,35 @@ def trouble_remember(sid, msg, path=None):
     return True
 
 
+# Channels of failed-session posts that this bot could not reach, each said
+# once in bot.log until it can be reached again (#4944).
+_trouble_unreachable = set()
+
+
+async def _trouble_post_channel(cid, seen):
+    """
+    The channel a failed-session post is in: ('ok', channel), ('gone', None)
+    when Discord says no such channel exists any more, or ('unreachable',
+    reason) for anything else. get_channel holds only the channels this bot
+    has cached, so a channel it misses is asked of Discord once a pass
+    (seen holds this pass's answers).
+    """
+    if cid in seen:
+        return seen[cid]
+    ch = client.get_channel(cid)
+    if ch is not None:
+        got = ('ok', ch)
+    else:
+        try:
+            got = ('ok', await client.fetch_channel(cid))
+        except discord.NotFound:
+            got = ('gone', None)
+        except Exception as e:
+            got = ('unreachable', '%s: %s' % (type(e).__name__, e))
+    seen[cid] = got
+    return got
+
+
 async def trouble_forget(rows, path=None):
     """
     A FAILED SESSION'S POST GOES WHEN ITS ROW GOES (#3942). The post carries
@@ -251,6 +280,10 @@ async def trouble_forget(rows, path=None):
     deleted it) is taken off the list; any other failure is a line with
     Discord's reason, and the post stays on the list for the next pass. Said
     in bot.log by session id and count, never what a post said.
+
+    A channel Discord says is gone took its posts with it, so they are taken
+    off the list (#4944). A channel that is only out of reach keeps its posts
+    on the list for the next pass, and is said once, not every pass.
     """
     if rows is None:
         return 0, 0
@@ -267,6 +300,7 @@ async def trouble_forget(rows, path=None):
     present = _trouble_sessions(rows)
     deleted = failed = 0
     changed = False
+    seen = {}
     admitted = state.get('admitted', {})
     for sid in [key for key in admitted if key not in present]:
         del admitted[sid]
@@ -276,12 +310,24 @@ async def trouble_forget(rows, path=None):
         if 'attempt' in rec:
             continue  # Reconcile a possibly accepted private post before expiry cleanup.
         cid, mid = rec['channel'], rec['message']
-        ch = client.get_channel(cid)
-        if ch is None:
-            failed += 1
-            log('trouble: channel %d of the post for session %s is not one this '
-                'bot can see, so it is not deleted this pass' % (cid, sid))
+        how, ch = await _trouble_post_channel(cid, seen)
+        if how == 'gone':
+            log('trouble: channel %d of the post for session %s is gone from '
+                'Discord, and the post with it, so it is off the list' % (cid, sid))
+            del posts[sid]
+            changed = True
             continue
+        if how == 'unreachable':
+            failed += 1
+            if cid not in _trouble_unreachable:
+                _trouble_unreachable.add(cid)
+                log('trouble: channel %d of the post for session %s is out of this '
+                    'bot\'s reach (%s), so its posts stay on the list and are tried '
+                    'again each pass; this is said once' % (cid, sid, ch))
+            continue
+        if cid in _trouble_unreachable:
+            _trouble_unreachable.discard(cid)
+            log('trouble: channel %d is in reach again' % cid)
         try:
             await ch.get_partial_message(mid).delete()
             deleted += 1

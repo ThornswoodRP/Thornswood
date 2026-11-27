@@ -5,6 +5,10 @@ Read only. Lists the MISC and STAT records of Skyrim's five masters whose
 editor id, name or model names a hand tool of a trade, with each one's form
 id, name, model and (for a MISC) value and weight. Writes nothing.
 
+The instruments are listed too (#7167): the horn the emote wheel's Horn
+needs has to be a record of its own on a model the masters hold, the one
+the horn animation draws.
+
 WHY (#3162). Each bench trade needs its own tool, worn out after 50 uses like a
 gathering tool (Patrick's A of 22 Oct 2026). Which item each trade's tool is
 has to be one every load order holds, and a tool made as Thornswood's own
@@ -41,10 +45,14 @@ _spec.loader.exec_module(dt)
 WORDS = re.compile(r'hammer|tongs|anvil|bellows|needle|shear|scissor|thread|spool|spindle|'
                    r'yarn|loom|sew|tailor|awl|mortar|pestle|alembic|retort|alchem|ladle|'
                    r'spoon|knife|cleaver|chisel|saw|drawknife|draw knife|quill|ink|'
-                   r'enchant|soulgem|tool|kit', re.I)
+                   r'enchant|soulgem|tool|kit|'
+                   r'horn\b|flute|lute\b|drum\b', re.I)
 NOT = re.compile(r'warhammer|war ?axe|battleaxe|dagger|key|note|book|letter|journal|'
                  r'potion|poison|ingredient|ingot|ore\b', re.I)
-TOPS = (b'MISC', b'STAT')
+# ANIO, the objects an animation puts in a hand: the emote wheel's Horn
+# (IdleBlowHornStormcloak) draws its horn from one, and the horn a person
+# must carry for it (#7167) wears that model, so it is listed with them.
+TOPS = (b'MISC', b'STAT', b'ANIO')
 
 
 def walk(pl, out):

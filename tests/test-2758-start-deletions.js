@@ -252,6 +252,8 @@ try {
     const ROUTE = new Function('route', 'o_body', 'ROSTER', 'fs',
       'const req = { method: "POST" }, res = {}, cfg = { botKey: "k" };\n' +
       'function body() { return Promise.resolve(o_body); }\n' +
+      // What lib/http.js bodyObject does (#4382): JSON, and an object.
+      'async function bodyObject() { const v = JSON.parse(o_body); if (!v || typeof v !== "object" || Array.isArray(v)) throw new SyntaxError("the body is JSON, but not an object"); return v; }\n' +
       'function passBodyFailure() {}\n' +
       'function sameSecret(x, y) { return x === y; }\n' +
       'function jsonFile(p, d) { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch (e) { return d; } }\n' +

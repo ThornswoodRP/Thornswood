@@ -106,6 +106,28 @@ const third = P.learnFromTome(s3.state, { name: "Frostbite", school: "destructio
 yes("a point and no place left does not teach a third (" + (third.missing || []).map(function (m) { return m.why; }).join("; ") + ")",
   sparks.ok && s3.ok && s3.state.spells.points === 1 && P.placesLeft(s3.state) === 0 && !third.ok);
 
+// ---------------------------------------------------------- a mage's points by school rank (#4148)
+
+// Every rank of every school a mage holds is a point, two at Master, so the
+// totals the pages give are what rankUp hands out, with no semester at all.
+let climb = P.pickProfession(P.fresh(), "mage", ["destruction", "restoration"]).state;
+const steps = [];
+["destruction", "restoration"].forEach(function (school) {
+  for (let i = 0; i < 3; i++) {
+    const was = P.spellPoints(climb);
+    climb = P.rankUp(climb, school).state;
+    steps.push(P.spellPoints(climb) - was);
+  }
+});
+const bothMaster = P.spellPoints(climb);
+climb = P.pickThirdSchool(climb, "illusion").state;
+for (let i = 0; i < 3; i++) { climb = P.rankUp(climb, "illusion").state; }
+const allMaster = P.spellPoints(climb);
+yes("each school's ranks give +1, +1 and +2, school by school (" + steps.join(", ") + ")",
+  steps.join() === "1,1,2,1,1,2");
+yes("a mage with no study holds 10 with both starting schools at Master, and 14 with the third (" + bothMaster + ", " + allMaster + ")",
+  bothMaster === 10 && allMaster === 14);
+
 // ---------------------------------------------------------- the pages say the decision
 
 const magic = flat(read("docs/systems/magic.md"));
@@ -117,6 +139,12 @@ yes("magic.md says Patrick decided they need both", /Patrick decided on 4 Octobe
 yes("apprenticeship.md's gates and Where this is say the same",
   /a semester's point and a place under those 2/.test(appr) && /Patrick decided on 4 October that they need both \(issue 1387\)/.test(appr));
 yes("mage.md says each spell takes a place and a semester's point", /each spell takes a place and a point from a semester at the College/.test(mageP));
+yes("magic.md gives a mage's points per school rank and the totals the rules give (#4148)",
+  /earns more with each rank in each of their schools: \+1 at advanced, \+1 at expert, \+2 at master/.test(magic) &&
+  new RegExp("both starting schools at master that is " + bothMaster + ", and " + allMaster + " once the third school is master too").test(magic));
+yes("mage.md says the same totals (#4148)",
+  new RegExp("holds " + bothMaster + " points once both starting schools are Master, and " + allMaster + " once the third school is Master too").test(mageP) &&
+  /Each school's rank earns its own points/.test(mageP));
 yes("no page or comment still says the question is open",
   !/places alone should (still )?be enough is asked/.test(magic + appr + flat(gm.split("\n").filter(function (l) { return l.length < 2000; }).join("\n"))));
 yes("the semester's own harness is on the build's gate (not in tests/gate-excluded.txt, #3009)", !/^game\/tests\/test-1387-college\.js\s/m.test(read("tests/gate-excluded.txt")));
