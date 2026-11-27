@@ -90,6 +90,9 @@ namespace Thornswood.Tests
             // launcher\tests\test-4693-setup-reader.ps1: the install window as
             // a screen reader finds it, and nothing else.
             if (argv.Length > 1 && argv[1] == "setup-reader") return SetupReader.Run();
+            // launcher\tests\test-4708-disabled-tooltips.ps1: a greyed
+            // control's tooltip shows when hovered, and nothing else.
+            if (argv.Length > 1 && argv[1] == "disabled-tips") return DisabledTips.Run();
 
             MainWindow win = null;
             Check("the window is made from its markup", () => win = new MainWindow());
