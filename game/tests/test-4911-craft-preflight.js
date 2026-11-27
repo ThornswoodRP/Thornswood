@@ -12,8 +12,9 @@ const rows = tables.table('RECIPES_BY_ID'), benches = tables.table('BENCH_BY_BAS
 const recosted = tables.table('RECIPES_SET_IN_GAME'), moved = tables.table('RECIPES_MOVED_IN_GAME');
 const w = standIn.world({name:'4911-craft-preflight'});
 try {
-const CITY = '1691d:Skyrim.esm', HAMMER = w.idOf('5cae1:Skyrim.esm');
+const CITY = '1691d:Skyrim.esm', HAMMER = w.idOf('5cae1:Skyrim.esm'), SHEARS = w.idOf('1b000:Thornswood-Content.esp');
 const COAL = w.idOf('15481:Thornswood-Content.esp');
+const EYEPATCH = '286a:Hothtrooper44_ArmorCompilation.esp';
 const cases = [
   {label:'rank', desc:'dc9ff:Skyrim.esm', reason:/Advanced Platewright/},
   {label:'sister half', desc:'a5cd6:Skyrim.esm', reason:/sister half/},
@@ -27,9 +28,10 @@ const cases = [
   {label:'old moved ID', desc:'231c6:Hothtrooper44_ArmorCompilation.esp',
     prof:'tailor',half:'haberdasher',bench:moved['231c6:Hothtrooper44_ArmorCompilation.esp'].from,
     reason:/not made at this bench/},
-  {label:'recosted recipe', desc:'286a:Hothtrooper44_ArmorCompilation.esp',
-    prof:'tailor',half:'haberdasher',remapped:true,reason:/Advanced Haberdasher/,
-    inputs:recosted['286a:Hothtrooper44_ArmorCompilation.esp'].inputs.filter(x => x[2]).map(x => ({item:x[0],count:x[2]}))},
+  // The Eyepatch is a novice Haberdasher row since its rank comes from its
+  // last input (#7222), so its recosted recipe is held to the profession.
+  {label:'recosted recipe', desc:EYEPATCH,remapped:true,reason:/Only a Haberdasher/,
+    inputs:recosted[EYEPATCH].inputs.filter(x => x[2]).map(x => ({item:x[0],count:x[2]}))},
   {label:'moved recipe', desc:'231c6:Hothtrooper44_ArmorCompilation.esp',
     // Linen now has its novice supplier; Troll Fat sets this row's Advanced rung.
     prof:'tailor',half:'haberdasher',remapped:true,reason:/Advanced Haberdasher/,
@@ -49,15 +51,20 @@ function fixture(desc, index, options = {}) {
     prof:options.prof || 'smith',half:options.half || 'platewright',character:options.character,
     cell:CITY,pos:[pos[0]+40,0,0],inventory:{entries:[
       {baseId:15,count:40},{baseId:HAMMER,count:1},{baseId:COAL,count:10}
-    ].concat(craft.inputs.map(x => ({baseId:x.baseId,count:x.count*3})))}});
+    ].concat((options.tools || []).map(baseId => ({baseId,count:1})),
+      craft.inputs.map(x => ({baseId:x.baseId,count:x.count*3})))}});
   w.row(actor).thornswoodNeeds={food:90,drink:90,rest:90,temp:50,at:w.now()};
   return {actor,bench,craft};
 }
 cases.forEach((row,index) => Object.assign(row,fixture(row.desc,index,row)));
 const normal = fixture('dca01:Skyrim.esm',cases.length);
+// A novice Tailor at the loom with the shears makes the Eyepatch through its
+// recosted recipe.
+const eyepatch = fixture(EYEPATCH,cases.length+1,{prof:'tailor',half:'haberdasher',remapped:true,tools:[SHEARS],
+  inputs:recosted[EYEPATCH].inputs.filter(x => x[2]).map(x => ({item:x[0],count:x[2]}))});
 yes('the whole gamemode loads',w.boot());
 if (!w.loaded()) { t.done(w); }
-cases.concat(normal).forEach(row => w.arrive(row.actor));
+cases.concat(normal,eyepatch).forEach(row => w.arrive(row.actor));
 w.run(30000);
 const pack = actor => JSON.stringify(w.row(actor).inventory);
 const character = actor => JSON.stringify(w.row(actor).thornswoodCharacter);
@@ -96,6 +103,14 @@ yes('allowed completion spends the original inputs and nothing more, and makes o
   w.count(actor,craft.output) === craft.count
   && craft.inputs.every((x,i) => w.count(actor,x.baseId) === beforeInputs[i]-x.count)
   && (craft.inputs.some(x => x.baseId === COAL) || w.count(actor,COAL) === beforeCoal));
+{
+  const {actor,bench,craft} = eyepatch;
+  const before = craft.inputs.map(x => w.count(actor,x.baseId)), made = w.count(actor,craft.output);
+  const result = w.craft(actor,bench,craft);
+  yes('a novice Tailor makes the Eyepatch through its recosted recipe, and the inputs are spent',
+    result.started && result.made && w.count(actor,craft.output) === made+craft.count
+    && craft.inputs.every((x,i) => w.count(actor,x.baseId) === before[i]-x.count));
+}
 const unknown = {recipe:w.idOf('abcdef:Skyrim.esm'),output:w.idOf('abcdee:Skyrim.esm'),inputs:[]};
 const unclassified = w.craft(actor,bench,unknown);
 yes('a recipe with no known row retains its existing allowance and default time',
