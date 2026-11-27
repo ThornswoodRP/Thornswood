@@ -88,6 +88,7 @@ is gone, or says another workflow than they give.
 | `launcher/tests/test-4705-setup-asks-first.ps1` | Setup asks before it touches what is the person's: the real InstallSkyrim, compiled with a pretend Skyrim, names an open game before any close request and No leaves it running, and the real old Game folder block, run in a scratch folder, asks before the move, No leaves the folder in place and Yes keeps every file; an ordinary setup asks nothing | Pull request and nightly |
 | `launcher/tests/test-4711-setup-failures-logged.ps1` | A setup failure says what happened and what to do, and what Windows said behind it is in the install's Profile\launcher.log: the real Swallow and Failure, with a planted full disk, and the install window pointing launcher.log there before any step that can fail, with the stop naming that file | Pull request and nightly |
 | `launcher/tests/test-4702-whole-settings.ps1` | The setup's config.json, like the launcher's own settings, goes to a .new file first and is renamed over the old one in one step (InstallSteps.WriteJson), so a stopped install never leaves a short file | Pull request and nightly |
+| `launcher/tests/test-4712-accepted-note-stops.ps1` | A note of what was accepted that cannot be written stops setup before its steps start, naming the file, the reason and what to do: the real InstallAgreements, compiled with Failure, with the note's name taken by a folder in a scratch install, and the install window noting it before it makes the steps | Pull request and nightly |
 | `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
 | `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
 | `launcher/tests/test-own-folder-first.ps1` | Runs the real InstallSteps on a pretend Steam copy and package: with the own folder chosen nothing is written into the Steam copy and the files wait in `Profile\Payload`; not chosen, they go into the Steam copy with their list | Pull request and nightly |
@@ -199,7 +200,9 @@ in UTC, and for each page its address and the SHA-256 of its text as
 `https://thornswood.net/api/page/<name>` serves it at that moment, which is the
 version accepted. A page the site did not answer for is recorded with an empty
 hash, and the install carries on: the boxes were ticked either way. Nothing
-about the person or the machine goes in it. The steps then refuse to install
+about the person or the machine goes in it. A note that cannot be written
+stops setup there, before its steps start, with the file, the reason and what
+to do. The steps then refuse to install
 anything if that note is not there. The launcher reads the same file
 (`launcher\app\Acceptance.cs`) on every start and asks again when it is missing
 or a page changed.
@@ -244,7 +247,7 @@ Settings or from its entry in Windows' Installed apps.
 | Thornswood in Windows' Installed apps | `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\Thornswood-<hash of the install folder>` | `Register.Ensure`, at every start | The launcher's Uninstall (`Register.Forget`). Not Velopack's own uninstall (#5820) |
 | The install folder and its `Profile` folder | The install folder | `InstallWindow.Work`, before anything is installed, and `InstallSteps.Run` | The launcher's Uninstall, last, and only once it is empty: anything still in it keeps it, and the farewell names each thing and why |
 | The setup's log | `Profile\setup-log.txt` | `InstallWindow.Work` | The launcher's Uninstall, with Profile |
-| What was accepted before Install | `Profile\accepted.json` | `InstallAgreements.Record` | The launcher's Uninstall, with Profile |
+| What was accepted before Install | `Profile\accepted.json` | `InstallAgreements.Write` | The launcher's Uninstall, with Profile |
 | Thornswood's own game files | Into the Steam copy of Skyrim when Thornswood's own folder is not ticked; into `Profile\Payload` when it is; into the install folder's `Game` when the launcher has already made that folder | `InstallSteps.CopyPayload` | In the Steam copy: the launcher's Uninstall when it is told to remove the mods, by the list below, leaving every file Vortex deploys; and making Thornswood's own folder later takes them out of the Steam copy too (`OwnGame.CleanSteamCopy`). `Profile\Payload` and `Game`: the launcher's Uninstall when it is told to remove the mods |
 | The list of what went into the Steam copy | `Profile\installed-into-game.txt`, written through a sibling `installed-into-game.txt.<id>.tmp` | `InstallSteps.SaveOwnership` writes a complete replacement list. It keeps prior setup and update entries and records prepared copies before they move | Setup moves the temporary file into place or removes it when a write fails. The launcher's Uninstall removes the list with Profile after using it |
 | Prepared copies of new files for the Steam install | A `.tw-setup-<id>` directory next to each destination, holding a file named `payload` | `InstallSteps.CopyPayload` stages the copy, and `InstallSteps.PublishPrepared` moves it to its destination after saving its ownership record | Setup clears staging when it finishes and can clear previously recorded staging on retry. An interruption before the record is saved may leave a staging directory |
