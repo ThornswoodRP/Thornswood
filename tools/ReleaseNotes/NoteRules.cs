@@ -40,7 +40,8 @@ namespace Thornswood.ReleaseNotes;
 /// or players; an em dash; an issue or pull request number, "PR", "pull
 /// request"; a code file name; our own shop words (demoting, worktree,
 /// cherry-pick, squash, CI); an environment variable; a code identifier
-/// (camelCase, or three or more joined capitalised words) unless it is one of
+/// (camelCase, or two or more joined capitalised words, such as
+/// EnvironmentOptions or CreateAsync) unless it is one of
 /// <see cref="AllowedNames"/>; a version number in the title, and a four-part
 /// number anywhere; and the same line twice. Each problem is one line saying
 /// what and where.
@@ -55,6 +56,7 @@ public static class NoteRules
     [
         "SkyUI", "SkyMP", "SkyrimPlatform", "GitHub", "YouTube", "TikTok", "VirusTotal",
         "WebView", "NirnLab", "SunHelm", "RaceMenu", "MaxOnline", "PayPal", "JContainers",
+        "BodySlide", "QuickLoot", "SmartScreen",
     ];
 
     const RegexOptions I = RegexOptions.IgnoreCase;
@@ -76,8 +78,7 @@ public static class NoteRules
     static readonly Regex Variable = new(@"\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b", I);
     static readonly Regex Word = new(@"\b[A-Za-z][A-Za-z0-9]*\b");
     static readonly Regex Camel = new(@"^[a-z]+[A-Z][A-Za-z0-9]*$");
-    static readonly Regex Hump = new(@"[A-Z][a-z]+");
-    static readonly Regex Pascal = new(@"^[A-Z][a-z]+([A-Z][a-z0-9]+){2,}$");
+    static readonly Regex Pascal = new(@"^[A-Z][a-z]+([A-Z][a-z0-9]+)+$");
 
     /// <summary>A note has a title of three words or more that is not a placeholder, and a "- " line of 12 characters or more.</summary>
     public static string[] ShapeProblems(string? notes)
@@ -126,7 +127,7 @@ public static class NoteRules
                 var w = m.Value;
                 if (AllowedNames.Contains(w, StringComparer.OrdinalIgnoreCase)) continue;
                 var camel = Camel.IsMatch(w);
-                var pascal = Pascal.IsMatch(w) && Hump.Matches(w).Count >= 3;
+                var pascal = Pascal.IsMatch(w);
                 if (camel || pascal) { problems.Add($"{where} names something in the code ({w}): '{shortLine}'"); break; }
             }
         }
