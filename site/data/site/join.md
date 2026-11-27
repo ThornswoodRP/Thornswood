@@ -73,8 +73,8 @@ for, no second password, and no form on this site.
 One file, from the [Downloads](/downloads) page. Download it and run it.
 
 It is small because the mods are not in it. It fetches Thornswood's own content
-while you watch, about half a gigabyte, and a connection that drops carries on
-where it stopped rather than starting again. It puts in the launcher, the
+while you watch, and a connection that drops carries on where it stopped rather
+than starting again. It puts in the launcher, the
 script extender and Thornswood's own content, and nothing else.
 
 ## 3. Downgrade, if your Skyrim is on another build
