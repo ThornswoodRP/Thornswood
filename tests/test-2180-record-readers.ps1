@@ -136,7 +136,11 @@ try {
     Yes '  does not pass over a missing record' (-not $nn.Contains('if (Test-Path -LiteralPath $recordPath)') -and -not $nn.Contains('if (Test-Path -LiteralPath $PluginRecord)'))
     $j = $nn.IndexOf('-ne $BaseRevision', [Math]::Max($i, 0))
     Yes '  holds the record''s revision to the revision it starts from' ($i -gt 0 -and $j -gt $i -and $j - $i -lt 700)
-    Yes '  and both before any archive is downloaded for it' ($i -gt 0 -and $j -lt $nn.IndexOf('Get-NexusFileArchive $Game $fid'))
+    # The light-flag step's own download: the first after its record read.
+    # The -Replicate step downloads earlier in the script, so the first in the
+    # file is not this step's (#7127).
+    $dl = if ($i -gt 0) { $nn.IndexOf('Get-NexusFileArchive $Game $fid', $i) } else { -1 }
+    Yes '  and both before any archive is downloaded for it' ($i -gt 0 -and $dl -gt $j)
 
     # The builders: one shared helper in Python, the same checks.
     $wbSrc = Src 'scripts\dev\Build-WoodworkingBenches.py'
