@@ -19,6 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { noComments } = require('../../tests/html-comments');
 
 const PUB = path.join(__dirname, '..', '..', 'site', 'public');
 const HTML = fs.readFileSync(path.join(PUB, 'home.html'), 'utf8');
@@ -46,7 +47,7 @@ const still = /<img\b[^>]*\bclass="art"[^>]*>/.exec(HTML);
 yes('A5b: the still is before the video, so the video paints over it, and is hidden the same way',
     !!still && !!vm1 && still.index < vm1.index && /\salt=""/.test(still[0]) && /\saria-hidden="true"/.test(still[0]));
 yes('A6: without the browser\'s picture-in-picture and cast buttons', attr('disablepictureinpicture') && attr('disableremoteplayback'));
-yes('A7: and with no fallback text for a reader to find', vm1 && vm1[1].replace(/<source\b[^>]*>/g, '').replace(/<!--[\s\S]*?-->/g, '').trim() === '');
+yes('A7: and with no fallback text for a reader to find', vm1 && noComments(vm1[1].replace(/<source\b[^>]*>/g, '')).trim() === '');
 yes('A8: it has no accessible name, which a hidden decoration should not', !/\saria-label(ledby)?=/.test(tag) && !/\stitle=/.test(tag));
 
 const bm = /<button\b[^>]*\bid="bannerMotion"[^>]*>([^<]*)<\/button>/.exec(HTML);

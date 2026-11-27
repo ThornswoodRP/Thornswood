@@ -22,6 +22,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { noComments } = require('../../tests/html-comments');
 
 const REPO = process.env.TS_REPO || path.join(__dirname, '..', '..');
 const read = (f) => fs.readFileSync(path.join(REPO, f), 'utf8').split('\r\n').join('\n');
@@ -43,10 +44,9 @@ yes('the hub loads its own scripts (' + scripts.join(', ') + ')', scripts.indexO
 // Comments say "<button>" in prose; only code builds controls.
 function code(src, isHtml) {
   if (isHtml) {
-    // Again until nothing changes: taking one comment out can join the two
-    // halves of another (#5640).
-    for (let was = null; was !== src;) { was = src; src = src.replace(/<!--[\s\S]*?-->/g, ''); }
-    return src;
+    // The way the site takes them out (#5640, #5641): again until nothing
+    // changes, and an opener with no end hides the rest.
+    return noComments(src);
   }
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }

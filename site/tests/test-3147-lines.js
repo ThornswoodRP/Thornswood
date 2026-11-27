@@ -59,7 +59,7 @@ yes('and lore lines (' + parsed.lore.length + ')', parsed.lore.length >= 10);
 
 // Every line in the two lists is a "- " line, or under a lore line its
 // source. Anything else would be read as nothing, and silently.
-const body = (LINES || '').replace(/<!--[\s\S]*?-->/g, '');
+const body = (cut ? new Function(cut[1] + '\nreturn noComments;')() : (t) => t)(LINES || '');
 let section = null, after = false;
 const odd = [];
 body.split('\n').forEach(function (l, i) {

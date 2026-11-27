@@ -84,7 +84,9 @@ function between(src, from, to) {
   const b = to ? src.indexOf(to, a) : src.length;
   return b < 0 ? src.slice(a) : src.slice(a, b);
 }
-function uncommented(xaml) { return xaml.replace(/<!--[\s\S]*?-->/g, ''); }
+// Comments out the way the site takes them out (#5641).
+const { noComments } = require('../../tests/html-comments');
+function uncommented(xaml) { return noComments(xaml); }
 /* C# with its comments taken out, for a check about what the code does rather
    than what a comment says about it. */
 function code(cs) {

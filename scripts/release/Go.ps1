@@ -210,7 +210,12 @@ function Remove-RetiredOverlays([string]$UiDir, [string]$UiSrc) {
 # CRLF like every other text file the release carries (ShippedBytes.ps1).
 function Write-ThornswoodHints([string]$LinesMd, [string]$Out) {
   $md = [IO.File]::ReadAllText($LinesMd)
-  $md = [regex]::Replace($md, '<!--[\s\S]*?-->', '')
+  # Comments out until none is left, and an opener with no end hides the
+  # rest: one pass can join two halves into a new opener (#5641). The same
+  # steps as noComments in site\lib\pages.js.
+  do { $was = $md; $md = [regex]::Replace($md, '<!--[\s\S]*?-->', '') } while ($md -cne $was)
+  $open = $md.IndexOf('<!--')
+  if ($open -ge 0) { $md = $md.Substring(0, $open) }
   $hints = New-Object System.Collections.Generic.List[string]
   $list = $false
   foreach ($l in ($md -split "\r?\n")) {

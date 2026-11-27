@@ -19,6 +19,7 @@
 // the browser is named on /cookies. No server and no VPS: this reads files.
 
 const fs = require('fs');
+const { noComments } = require('../../tests/html-comments');
 const path = require('path');
 const siteFiles = require('../../tests/site-files');
 
@@ -63,14 +64,14 @@ const dir = path.join(ROOT, 'site', 'data', 'site');
 const pages = fs.readdirSync(dir).filter(function (f) { return /\.md$/.test(f); })
   .map(function (f) { return 'site/data/site/' + f; }).concat(['site/data/help.md']);
 pages.forEach(function (rel) {
-  const t = (read(rel) || '').replace(/<!--[\s\S]*?-->/g, '');
+  const t = noComments(read(rel) || '');
   const hits = t.split('\n').map(function (l, i) { return { n: i + 1, l: l }; })
     .filter(function (x) { return STATUS.test(x.l); });
   if (hits.length) console.log('      ' + rel + ': ' + hits.map(function (x) { return x.n + ' ' + x.l.trim(); }).join(' | '));
   yes(rel + ' says how the world works, not what is built yet', hits.length === 0);
 });
 {
-  const t = (read('site/public/home.html') || '').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, ' ');
+  const t = noComments(read('site/public/home.html') || '').replace(/<[^>]*>/g, ' ');
   yes('the home page says nothing about what is built yet', !STATUS.test(t));
 }
 
