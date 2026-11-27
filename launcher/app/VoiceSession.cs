@@ -199,6 +199,8 @@ namespace Thornswood
         volatile bool micLive;
         volatile VoicePeer[] live = new VoicePeer[0];
         long frames;
+        // The microphone's thread only (#6470).
+        readonly MicSilence micSilence = new MicSilence();
 
         void NoteHush(long pid, bool on)
         {
@@ -311,6 +313,10 @@ namespace Thornswood
             mix.Meter.Capture(pcm, micLive);
             long n = Interlocked.Increment(ref frames);
             if (!micLive) return;
+            // Before the peers: somebody alone is told their microphone is
+            // silent too, before anybody is near enough to not hear them.
+            int silence = micSilence.Held(pcm);
+            if (silence != 0) Post(delegate { Host("micsilent", silence > 0 ? "1" : "0"); });
             VoicePeer[] to = live;
             if (to.Length == 0) return;
             int len = encoder.Encode(pcm, VoiceMix.Frame, packet, packet.Length);

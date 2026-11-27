@@ -98,7 +98,7 @@ $runs += @([regex]::Matches($launcher, '(?m)^\s*(?:&\s*)?\.\\(scripts\\\S+\.ps1)
 $unlisted = @($runs | Where-Object { $_ -notin $reads })
 Yes ('  and every script or project the job runs is one of those (' + ($runs -join ', ') + ')') ($runs.Count -ge 4 -and -not $unlisted.Count)
 Yes 'the writing check''s harness runs in Tree checks for every change too' ($checks -match "foreach \(\`$n in 'tests/test-check-words\.ps1', 'scripts/tests/test-note-rules\.ps1', 'tests/test-ship-check-words\.ps1'\)")
-Yes 'Tree checks is on Linux and always runs, once "tested" found no green pull request build' ($checks -match '(?m)^    runs-on: ubuntu-latest$' -and $checks -match "(?m)^    needs: tested\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' \}\}$")
+Yes 'Tree checks is on Linux and always runs, once "tested" found no green pull request build and the pick laid the content build it reads (#7115)' ($checks -match '(?m)^    runs-on: ubuntu-latest$' -and $checks -match "(?m)^    needs: \[tested, pick\]\n    if: \$\{\{ !cancelled\(\) && needs\.tested\.outputs\.run == '' && needs\.pick\.result == 'success' \}\}$")
 $code = ($checks -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
 Yes '  and none of its steps needs Windows: no Windows PowerShell, no MSBuild, no backslash path handed to node' ($code -notmatch 'shell: powershell|Find-MSBuild|\bmsbuild\b|node\s+\S*\\|Scripts\\python\.exe')
 Yes 'the pick runs Launcher-Reach.ps1 with the base, and hands on launcher=' ($pick -match '(?m)^      launcher: \$\{\{ steps\.reach\.outputs\.launcher \}\}$' -and $pick -match '(?m)^          ./scripts/dev/Launcher-Reach\.ps1 -Base \$env:BASE$' -and $pick -match '(?m)^          BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}$')

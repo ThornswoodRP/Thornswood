@@ -1,11 +1,9 @@
 // Build-FuelTable.js
 //
-// Writes game\data\fuel-by-recipe.json, FUEL_BY_RECIPE: for every recipe at
-// a forge, a skyforge or a smelter, the grade of charcoal it burns, the metal
-// that asks for it, and whether it takes a Tool Handle. Thornswood-Last.esp
-// is built from it (#6726); the gamemode reads none of it, so it is not a
-// gamemode table (game\gamemode-tables is only what the gamemode reads,
-// #5191), and like every built file it is out of git.
+// Writes the gamemode's FUEL_BY_RECIPE table (game\gamemode-tables, #5191):
+// for every recipe the
+// server is asked about at a forge, a skyforge or a smelter, the grade of
+// charcoal it burns and the metal that asks for it.
 //
 // WHY (#1398)
 //
@@ -37,35 +35,19 @@
 // smelts nobody owns that make one of the table's ingots (the dwarven smelt
 // KEPT_SMELT keeps is one). A row that is not in this table burns nothing.
 //
-// THE HANDLE, ON THE SAME ROW (#1398, #6726). smith.md: a war axe, a
-// battleaxe, a warhammer and a mace are a metal head on a wooden haft, and
-// each takes 1 Tool Handle on top of its ingots. A recipe whose record
-// already names the handle (the three tools) does not take a second one.
-//
-// WHERE THE TABLE GOES (#6726). The forge's list is the game's own menu, and
-// it shows and takes what each record names, so the charcoal and the handle
-// are written into the records: scripts/mods/Build-LastPlugin.py adds the
-// grade's item (GRADE_ITEMS) and the handle to every recipe here it copies,
-// and scripts/dev/Build-Recost.py puts one of a plugin it never copies in
-// RECIPES_SET_IN_GAME with them on top, so each game adds them. Both take
-// the items from this file, which names them beside the table. The server
-// takes nothing of its own for either any more.
-//
-// Run it after Build-RecipeTable.ps1 rebuilds recipes.json, before
-// Build-Recost.py. game\tests\test-1398-fuel.js
+// Run it after Build-RecipeTable.ps1 rebuilds recipes.json. game\tests\test-1398-fuel.js
 // fails while the table and this script disagree.
 //
-// Read only except for game\data\fuel-by-recipe.json, which it writes.
+// Read only except for the FUEL_BY_RECIPE table, which it writes.
 //
 // Usage:
 //   node scripts\dev\Build-FuelTable.js
-//   node scripts\dev\Build-FuelTable.js --recipes <file> --out <file>
+//   node scripts\dev\Build-FuelTable.js --recipes <file> --tables <folder>
 //   node scripts\dev\Build-FuelTable.js --print
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const TABLES = require('./GamemodeTables.js');
-const FILE = path.join(__dirname, '..', '..', 'game', 'data', 'fuel-by-recipe.json');
 
 // The bench keyword, and what it is called in the sentence that refuses.
 const BENCHES = {
@@ -82,17 +64,6 @@ const METALS = {
   'nordic': 3, 'glass': 3, 'ebony': 3,
   'stalhrim': 4
 };
-
-// The item each grade is, by grade (Add-ContentRecords.py CHARCOAL_GRADES).
-// The Charcoal grade is Skyrim's own Charcoal, which the Charburner's kiln
-// makes (Patrick's B on #6726), so the charcoal found in the world is the
-// same thing.
-const GRADE_ITEMS = [null, '15481:Thornswood-Content.esp', '33760:Skyrim.esm',
-  '15484:Thornswood-Content.esp', '15485:Thornswood-Content.esp'];
-
-// The Tool Handle, and the four families fitted to one.
-const HANDLE = '15490:Thornswood-Content.esp';
-const HAFTED_FAMILIES = ['War axes', 'Battleaxes', 'Warhammers', 'Maces'];
 
 // Each metal's ingot, by the name the records give it.
 const INGOTS = {
@@ -117,17 +88,7 @@ function metalsInName(name) {
   return out;
 }
 
-/** 1 when a row is fitted to a handle its record does not name, else 0. */
-function handleOf(row) {
-  if (HAFTED_FAMILIES.indexOf(String((row && row.family) || '')) === -1) { return 0; }
-  for (const input of (row.inputItems || [])) {
-    if (input && input.item === HANDLE) { return 0; }
-  }
-  return 1;
-}
-
-/** [grade, metal, bench, handle] for one row, or null when it is at no fuel
- *  bench. */
+/** [grade, metal, bench] for one row, or null when it is at no fuel bench. */
 function fuelOf(row) {
   const bench = BENCHES[String((row && row.benchName) || '')];
   if (!bench) { return null; }
@@ -144,7 +105,7 @@ function fuelOf(row) {
     if (METALS[m] > grade || (METALS[m] === grade && !metal)) { grade = METALS[m]; metal = m; }
   }
   if (bench === 'skyforge') { grade = Math.max(1, grade - 1); }
-  return [grade, metal, bench, handleOf(row)];
+  return [grade, metal, bench];
 }
 
 /** Every row the table carries, by recipe. */
@@ -169,37 +130,13 @@ function fuelTable(data) {
 }
 
 /** The table as JSON text, recipe desc -> [grade 1 to 4, the metal that asks
- *  for it or nothing, the bench, 1 when it takes a handle], in desc order. */
+ *  for it or nothing, the bench], in desc order. */
 function tableJson(table) {
   const keys = Object.keys(table).sort();
   return '{' + keys.map(function (k) { return JSON.stringify(k) + ':' + JSON.stringify(table[k]); }).join(',') + '}';
 }
 
-/** The file's text: the item each grade is (grades, by grade, none at 0),
- *  the handle, and the table (recipes), so the builders that read it take
- *  the items from here and not from copies of their own. */
-function fileJson(table) {
-  return '{"grades":' + JSON.stringify(GRADE_ITEMS) + ',"handle":' + JSON.stringify(HANDLE) + ',"recipes":' + tableJson(table) + '}';
-}
-
-/** The built file, from its place (or another): { grades, handle, recipes }. */
-function read(file) {
-  return JSON.parse(fs.readFileSync(file || FILE, 'utf8'));
-}
-
-/** Writes the table laid out as the gamemode tables are, LF; false when the
- *  file already holds it. */
-function write(table, file) {
-  const f = file || FILE;
-  const body = TABLES.layout(fileJson(table));
-  try { if (fs.readFileSync(f, 'utf8') === body) { return false; } } catch (e) { if (e.code !== 'ENOENT') { throw e; } }
-  fs.mkdirSync(path.dirname(f), { recursive: true });
-  fs.writeFileSync(f, body);
-  return true;
-}
-
-module.exports = { FILE: FILE, read: read, write: write, fileJson: fileJson, METALS: METALS, INGOTS: INGOTS, GRADE_ITEMS: GRADE_ITEMS, HANDLE: HANDLE, HAFTED_FAMILIES: HAFTED_FAMILIES,
-  fuelOf: fuelOf, handleOf: handleOf, fuelTable: fuelTable, tableJson: tableJson };
+module.exports = { METALS: METALS, INGOTS: INGOTS, fuelOf: fuelOf, fuelTable: fuelTable, tableJson: tableJson };
 
 if (require.main === module) {
   const code = cli();
@@ -208,11 +145,11 @@ if (require.main === module) {
 // Run as a program. A function, so a stop is a return and not node's exit
 // function, which can hang on Node 24 (#6036).
 function cli() {
-  const opts = TABLES.options(process.argv.slice(2), ['--recipes', '--out'], ['--print']);
+  const opts = TABLES.options(process.argv.slice(2), ['--recipes', '--tables'], ['--print']);
   if (!opts) return;
   const ROOT = path.join(__dirname, '..', '..');
   const RECIPES = opts['--recipes'] || path.join(ROOT, 'game', 'data', 'recipes.json');
-  const OUT = opts['--out'] || FILE;
+  const DIR = opts['--tables'] || TABLES.DIR;
   const data = JSON.parse(fs.readFileSync(RECIPES, 'utf8').replace(/^﻿/, ''));
   const table = fuelTable(data);
   if (opts['--print']) {
@@ -223,10 +160,9 @@ function cli() {
     return 0;
   }
   const per = [0, 0, 0, 0, 0];
-  let handles = 0;
-  Object.keys(table).forEach(function (k) { per[table[k][0]]++; handles += table[k][3]; });
-  const changed = write(table, OUT);
+  Object.keys(table).forEach(function (k) { per[table[k][0]]++; });
+  const changed = TABLES.write('FUEL_BY_RECIPE', tableJson(table), DIR);
   console.log('FUEL_BY_RECIPE: ' + Object.keys(table).length + ' recipes at a forge, a skyforge or a smelter, out of ' +
     Object.keys(data.recipes || {}).length + '; ' + per[1] + ' burn Poor Charcoal, ' + per[2] + ' Charcoal, ' + per[3] +
-    ' Charcoal Briquette and ' + per[4] + ' Coke; ' + handles + ' take a handle' + (changed ? '; written' : '; already current'));
+    ' Charcoal Briquette and ' + per[4] + ' Coke' + (changed ? '; written' : '; already current'));
 }
