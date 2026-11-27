@@ -57,6 +57,11 @@ if (-not $move -or -not $question) { Write-Host "$pass passed, $fail failed"; ex
 
 # Process is the fake for the whole compilation; the waits are the real code's.
 $sky = $sky.Replace('using System.Diagnostics;', "using System.Diagnostics;`nusing Process = Thornswood.FakeProcess;")
+# The launcher's class is internal to its own assembly, and PowerShell finds
+# only public types by name, so the copy compiled here is made public.
+$internal = '    static class InstallSkyrim'
+Yes 'InstallSkyrim is declared where the harness makes it public' ($sky.Contains("`n" + $internal))
+$sky = $sky.Replace("`n" + $internal, "`n    public static class InstallSkyrim")
 $driver = @'
 namespace Thornswood
 {
@@ -98,7 +103,13 @@ __MOVE__
 }
 '@
 $src = $sky.Replace('using System.ComponentModel;', "using System.ComponentModel;`nusing System.Globalization;`nusing System.IO;") + "`n" + $driver.Replace('__QUESTION__', $question).Replace('__MOVE__', $move)
-Add-Type -TypeDefinition $src -Language CSharp
+$compileError = ''
+try { Add-Type -TypeDefinition $src -Language CSharp }
+catch { $compileError = $_.Exception.Message }
+$built = @('Thornswood.InstallSkyrim', 'Thornswood.FakeProcess', 'Thornswood.FolderProbe', 'Thornswood.InstallStop' | Where-Object { -not ($_ -as [type]) })
+Yes ('the real InstallSkyrim.cs and the lifted block compile' + $(if ($compileError) { ': ' + $compileError } else { '' })) (-not $compileError)
+Yes ('  and define every type the cases use' + $(if ($built.Count) { ', missing: ' + ($built -join ', ') } else { '' })) ($built.Count -eq 0)
+if ($compileError -or $built.Count) { Write-Host "$pass passed, $fail failed"; exit 1 }
 
 $P = [Thornswood.FakeProcess]
 $Sky = [Thornswood.InstallSkyrim]
