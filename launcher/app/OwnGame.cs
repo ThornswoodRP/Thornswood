@@ -2494,9 +2494,10 @@ namespace Thornswood
         /// skeleton's genital sliders (XPMSE's RaceMenuPluginSoS). Each is the
         /// script on a quest in a plugin that stays loaded and inert, the same
         /// as I4IconAddon.esp beside CrashesUs, so the load order does not
-        /// move. RaceMenu's own breast and glute sliders sit in its archive
-        /// beside Height and cannot be left out; the front plugin undoes them
-        /// ("body shape" in thornswood-front.js).
+        /// move. RaceMenu's own breast and glute sliders, in its archive beside
+        /// Height, are not put on the menu at all: the launcher's edit of
+        /// RaceMenu's menu offers Height alone of the sliders Papyrus adds
+        /// (MenuRecipe.RaceMenuMenu, #7087).
         ///
         /// Refresh also deletes them from a folder that has them, as it does
         /// RetiredFiles; Rules 9 makes every folder refresh once to do it.

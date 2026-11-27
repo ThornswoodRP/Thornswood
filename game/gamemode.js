@@ -49949,8 +49949,10 @@ mp.onDropItem = guard('onDropItem', function (actorId, baseId, count) {
   on unless it is false (Patrick, 28 September: existing characters are reset
   to the default body shape, height and weight stay adjustable). Each
   character is looked at once when it comes online and its stored appearance
-  is put through the same check. The person's own machine clears any body
-  slider it still holds on its own (thornswood-front.js, "body shape").
+  is put through the same check. On the person's own machine the creation
+  menu offers no body slider but Height (the launcher's edit of RaceMenu's
+  menu, #7087), and nothing of RaceMenu's is kept from one time playing to the
+  next, so there is nothing there to clear.
 */
 const BODY_APPEARANCE_FIELDS = ['isFemale', 'raceId', 'weight', 'skinColor', 'hairColor',
   'headpartIds', 'headTextureSetId', 'options', 'presets', 'tints', 'name'];

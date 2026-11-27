@@ -1324,6 +1324,14 @@ The SkyUI Team's inventory menu (`interface\inventorymenu.swf` in
 applies the recipe to the original from SkyUI 6.11 SE (Nexus Mods file 749043).
 `$ShipMadeFromMods` keeps the movie out of packs.
 
+expired6978's RaceMenu SE 0.4.20 (Nexus Mods mod 19080) draws the character
+creation menu, `interface\racesex_menu.swf` in `RaceMenu.bsa`. Its page
+says "You may not redistribute any files under any circumstances", and none
+is: the launcher makes the menu from the person's own `RaceMenu.bsa` the same
+way, without its four tabs, its ALL, COLORS, MAKEUP and paint categories, and
+the sliders Papyrus adds other than Height (#7087). `$ShipMadeFromMods` keeps
+the movie out of packs.
+
 `Data\SKSE\Plugins\QuickLootIE.json` does ship: QuickLoot IE 4.1.3's own
 settings file (Nexus Mods mod 120075, file 806802, which revisions 4 and 5
 both install) with one line added, which sets its loot menu's columns to
