@@ -2644,6 +2644,92 @@ yes('with no GitHub token the watcher warns once and pauses at its normal cadenc
 yes('the poll is no more often than once a minute (default %ds)' % bot.KNOWN_EVERY,
     bot.KNOWN_EVERY >= 60)
 
+
+# -------------------- 11. one listing of the archive per forum per pass --
+# #4332: _forum_post listed the forum's whole archive (_bot_threads, every
+# archived thread, 100 a request) for every new post, to find one of the
+# bot's with the same title, and _dev_post listed it and then let
+# _forum_post list it again. So a pass cost (new posts) x (archive / 100)
+# list requests, twice that in #dev-test-tasks. Each pass now lists each
+# forum's archive once, and only when it makes a post.
+def counted(forum):
+    real, seen = forum.archived_threads, {'lists': 0, 'pages': 0}
+
+    async def listing(limit=None, **k):
+        seen['lists'] += 1
+        n = 0
+        async for th in real(limit=limit, **k):
+            if n % 100 == 0:
+                seen['pages'] += 1          # discord.py asks for 100 at a time
+            n += 1
+            yield th
+        if n == 0:
+            seen['pages'] += 1
+    forum.archived_threads = listing
+    return seen
+
+
+def gh_paged(url):
+    # The stand-in above answers every page with the whole list; this section
+    # has more than 100 issues, so its lists are paged as GitHub pages them.
+    rows = gh(url)
+    if isinstance(rows, list) and 'per_page=100' in url and '&page=' in url:
+        page = int(url.split('&page=')[1].split('&')[0])
+        return rows[(page - 1) * 100:page * 100]
+    return rows
+
+
+for archive in (300, 1000):
+    ISSUES.clear()
+    COMMENTS.clear()
+    TIMELINE.clear()
+    HOUR[0] = '2026-10-20T09'
+    UPD[0] = 0
+    g, tasks, results, play, staff = server()
+    run(bot.channel_setup(g, apply=True, path=os.path.join(TMP, 'lists-%d.json' % archive)))
+    me = g.me
+    forums = {'known-issues': bot._channel_named(g, 'known-issues', ('forum',)),
+              'test-tasks': bot._channel_named(g, 'test-tasks', ('forum',)),
+              'dev-test-tasks': bot._channel_named(g, 'dev-test-tasks', ('forum',))}
+    for name, forum in forums.items():
+        for i in range(archive):
+            old = Thread('Archived %s post %d' % (name, i), [], 'An old post.', forum)
+            old.archived = True
+            forum.threads.append(old)
+    st = {}
+    run(bot.test_tasks_once(forums['test-tasks'], st, gh_paged, me_id=me.id, now='2026-10-20T08:00:00Z'))
+    run(bot.dev_tasks_once(forums['dev-test-tasks'], st, gh_paged, me_id=me.id, now='2026-10-20T08:00:30Z'))
+    for n in range(40):
+        issue(6000 + n, 'Finding %d' % n, ['Main Findings'])
+        COMMENTS[7000 + n] = [task('Fixed thing %d works' % n if n else 'Archived test-tasks post 7',
+                                   'Main', '1. Try it.', 'What should happen: it works.')]
+        issue(7000 + n, 'Fixed thing %d' % n, ['bug'], state='closed', reason='completed',
+              closed_at=tick())
+        COMMENTS[8000 + n] = [task('Dev check %d' % n, 'Dev', '1. Try it on dev.')]
+        issue(8000 + n, 'Dev thing %d' % n, ['bug'])
+    seen = dict((name, counted(f)) for name, f in forums.items())
+    made = dict((name, len(f.threads)) for name, f in forums.items())
+    kp = run(bot.known_issues_once(forums['known-issues'], {}, gh_paged, me_id=me.id))[0]
+    tp = run(bot.test_tasks_once(forums['test-tasks'], st, gh_paged, me_id=me.id))[0]
+    dp = run(bot.dev_tasks_once(forums['dev-test-tasks'], st, gh_paged, me_id=me.id))[0]
+    new = dict((name, len(f.threads) - made[name]) for name, f in forums.items())
+    yes('%d archived posts, 40 new: every new post is made, and the one whose title is '
+        'already an archived post of the bot\'s is taken up, not made twice' % archive,
+        len(kp) == 40 and len(tp) == 40 and len(dp) == 40
+        and new == {'known-issues': 40, 'test-tasks': 39, 'dev-test-tasks': 40}
+        and st['tasks']['7000']['thread_id'] == [th for th in forums['test-tasks'].threads
+                                                 if th.name == 'Archived test-tasks post 7'][0].id)
+    yes('  each forum\'s archive is listed once in the pass, whatever the number of new '
+        'posts, #dev-test-tasks too (%s)'
+        % ', '.join('%s %d listing(s), %d request(s)' % (k, v['lists'], v['pages'])
+                    for k, v in sorted(seen.items())),
+        all(v['lists'] == 1 for v in seen.values())
+        and all(v['pages'] == archive // 100 for v in seen.values()))
+    again = counted(forums['test-tasks'])
+    tp = run(bot.test_tasks_once(forums['test-tasks'], st, gh_paged, me_id=me.id))[0]
+    yes('  a pass that makes no new post lists no archive at all',
+        tp == [] and again['lists'] == 0)
+
 shutil.rmtree(TMP, ignore_errors=True)
 print('')
 print('%d passed, %d failed' % (len(PASS), len(FAIL)))
