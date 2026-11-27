@@ -126,7 +126,7 @@ Lint 'ruff' {
             }
             elseif (Get-Command uv -CommandType Application -ErrorAction SilentlyContinue) {
                 uv venv $d
-                uv pip install --quiet --require-hashes -r $req --python (Join-Path $d $bin)
+                uv pip install --quiet --only-binary :all: --require-hashes -r $req --python (Join-Path $d $bin)
             }
             else {
                 throw 'neither python nor uv found on PATH'
