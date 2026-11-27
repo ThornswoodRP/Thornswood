@@ -356,7 +356,7 @@ saved fields that come from elsewhere, as their rows say.
 | Field | Type | Written by | Read by | If wrong or missing |
 | --- | --- | --- | --- | --- |
 | `launcherVersion` | string, dotted numbers | Nothing since #4825: it stays at the last launcher from before Velopack, so that launcher is never offered the native one as a self-update. A launcher goes out only on its channel's Velopack Releases (`merge-release.yml`, `promote-main.yml`) | The site's join pass for a launcher from before Velopack while its channel has no Velopack setup program (`site/lib/passes.js:feedLaunchers`, with `minLauncher`); a Velopack launcher's number is checked against its Release instead (`site/lib/feed.js:nativePublished`). Not the launcher's own update: a launcher takes that from its Velopack channel (`VeloUpdate.cs:CheckLauncher`), and Scan goes by the same answer (`Upkeep.cs:LauncherWaiting`) | Not saved. Nothing writes it, so it cannot go wrong by a release. |
-| `launcherUrl` | string, https | Nothing since #4825 but the url move of `Feed-Rules.ps1` (#5385); it names the last launcher from before Velopack on the site, `/feed[-dev]/assets/<sha256>` (#897) | `Watch-Outside.ps1` and `Check-Outside.ps1`. No launcher downloads it since #4825 | Must pass the host list below. |
+| `launcherUrl` | string, https | Nothing since #4825 but the url move of `Feed-Rules.ps1` (#5385); it names the last launcher from before Velopack on the site, `/feed[-dev]/assets/<sha256>` (#897) | `Watch-Outside.ps1`. Not `Check-Outside.ps1` since #7232, which walks the Velopack Releases a new install reads instead. No launcher downloads it since #4825 | Must pass the host list below. |
 | `launcherSha256` | string, 64 hex | Nothing since #4825; it stays the last launcher from before Velopack's | The launcher's manifest check (`FeedManifest.cs:"launcher " + v.launcherVersion, v.launcherSha256`), which holds the feed to its signed release record | Mismatch: the manifest check refuses the feed. |
 | `serverAddress` | string | `Publish-Update.ps1:@('ServerAddress', 'serverAddress')` from config `ServerAddress`; `Set-Server.ps1:@('serverAddress', $Address)`. Not `Set-Vps.ps1`, which moves the launcher's built-in address and leaves the feed to `Set-Server.ps1` (`Set-Vps.ps1:What it does NOT do, because Set-Server.ps1 already does it properly`) | `ShellUpdate.cs:v.serverAddress != cfg.ServerAddress` | Saved, unless the config points at a server on this machine (`SkyMp.IsLocal`: 127.0.0.1, localhost, ::1), which keeps its own address, `serverPort` and `voicePort` (#5020: a restore rehearsal or a developer's own server). A change stops Ship unless `-MoveServer` (`Publish-Update.ps1:-not $MoveServer -and -not $Dev`); the dev channel skips that check. Wrong: everybody connects to the wrong box. |
 | `serverPort` | string | as above, `ServerPort` | `ShellUpdate.cs:OnVersionDoc` | Saved. Must be a string; the launcher field is a string. |
@@ -643,7 +643,7 @@ for byte, as before.
   a split one, and `/watch` hands out the same tag.
 - **A script that reads the site's feed** over https, not the store, reads it
   through `Join-FeedSettings` (`Feed-Json.ps1`): `Read-SiteFeed`,
-  `Check-Outside.ps1`, `Setup-ShipMachine.ps1` and
+  `Setup-ShipMachine.ps1` and
   `Copy-ReleaseAssets-ToSite.ps1`. The rest read the launcher fields alone.
 
 Projected from the 19 Oct main feed with the note's title, version.json is
