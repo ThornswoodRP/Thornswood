@@ -15337,7 +15337,7 @@ log('gamemode loaded:',
   function trusts(pid, now) { return !requiring() || proven(pid, now); }
 
   /*
-    THE LOGIN PROVES THE PASS ON ITS OWN CONNECTION (#1320), watched only.
+    THE LOGIN PROVES THE PASS ON ITS OWN CONNECTION (#1320).
 
     The pass reaches this block over the relay's socket, which names a profile
     and nothing else, so this block cannot tie a pass to the game connection
@@ -15350,16 +15350,17 @@ log('gamemode loaded:',
     passKey), so it never travels on the game's port, and a pass and mac seen
     on the wire prove nothing on another connection, whose nonce is another.
 
-    WATCHED ONLY, ON PURPOSE. A launcher and an engine that answer are not on
+    WATCHED BY DEFAULT. A launcher and an engine that answer are not on
     everybody's machine yet, and a client that does not know the challenge
     never answers. So the login hands over the profile asked for, exactly as
     before, and the proof, when one comes, is checked and logged: good, or
-    why not. Nothing is refused here. Waiting for a good proof, and handing
-    over the pass's profile rather than the one asked for, is the next step,
+    why not. Ordinarily this proof does not affect admission. Waiting for a
+    good proof and handing over the pass's profile is the next step,
     once main's launcher and engine carry all of it and these lines show a
     good proof for every login; it is written out on #1320.
 
-    loginProof(e, now) is what that step will ask: { ok, p } or { why }.
+    An active account freeze already requires that proof before admission.
+    loginProof(e, now) checks it: { ok, p } or { why }.
   */
   function loginProof(e, now) {
     var key = passKey(now);
@@ -15387,10 +15388,11 @@ log('gamemode loaded:',
       return 0;
     }
     if (staff.accountFreezesActive && staff.accountFreezesActive()) {
+      if (!e || !e.proof) return -1;
       var proof = loginProof(e, now);
       if (!proof.ok || proof.p !== asked || proof.why) return 0;
       var pass = readPass(e.proof.pass, passKey(now), now, serverName());
-      if (!pass.ok || !staff.restraintAdmission(asked, pass.d)) return 0;
+      return pass.ok && staff.restraintAdmission(asked, pass.d) ? asked : 0;
     }
     if (!e || !e.proof) {
       console.log('[thornswood] login of profile ' + asked + ' on user ' + (e && e.userId) +
@@ -15400,7 +15402,9 @@ log('gamemode loaded:',
     var v = loginProof(e, now);
     console.log('[thornswood] login proof from profile ' + asked + ' on user ' + e.userId + ': ' +
                 (v.ok ? (v.why ? 'good, but ' + v.why : 'good') : v.why) + ' (watching, nothing refused)');
-    return -1;
+    // The engine admits at most once. A valid proof can finish a login that
+    // began while an account freeze was active and waited for this proof.
+    return v.ok && v.p === asked && !v.why ? asked : -1;
   }
   // Set again on every load, so a hot reload's hook is this one. An engine
   // older than the fork's login challenge never calls it.

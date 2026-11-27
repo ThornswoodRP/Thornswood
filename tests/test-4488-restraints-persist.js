@@ -543,12 +543,29 @@ try {
     w.where[B].pos = [9000, 9000, 9000]; r.box.__thornswoodStaff.freezeTick();
     assert.deepEqual(w.where[B].pos, [5000, 6000, 700]);
   });
-  test('native admission verifies account proof only for active account freezes', () => {
+  test('an active account freeze waits for connection proof before admitting any character', () => {
+    const { r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    assert.equal(r.box.mp.onThornswoodLogin({ profileId: ALT, userId: 2, proof: null }), -1);
+  });
+  test('native admission refuses a proved alternate of the frozen account', () => {
     const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
-    assert.equal(r.box.mp.onThornswoodLogin({ profileId: ALT, userId: 2, proof: null }), 0);
     assert.equal(r.box.mp.onThornswoodLogin(loginAccount(w, ALT, ACCOUNT)), 0);
-    assert.equal(r.box.mp.onThornswoodLogin(loginAccount(w, OTHER, OTHER_ACCOUNT)), -1);
-    assert.equal(r.box.mp.onThornswoodLogin(loginAccount(w, TARGET, ACCOUNT)), -1);
+  });
+  test('an active account freeze admits a proved profile from a different account', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    assert.equal(r.box.mp.onThornswoodLogin(loginAccount(w, OTHER, OTHER_ACCOUNT)), OTHER);
+  });
+  test('an active account freeze admits the proved origin at its existing anchor', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    assert.equal(r.box.mp.onThornswoodLogin(loginAccount(w, TARGET, ACCOUNT)), TARGET);
+    assert.deepEqual(JSON.parse(JSON.stringify(r.box.__thornswoodStaff.state.accountFrozen[ACCOUNT].anchor.pos)), [5000, 6000, 700]);
+  });
+  test('a proved login can finish after the last account freeze lifts', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    const event = loginAccount(w, OTHER, OTHER_ACCOUNT);
+    assert.equal(r.box.mp.onThornswoodLogin({ ...event, proof: null }), -1);
+    assert.match(r.command('/unfreezeaccount ' + TARGET), /Account freeze.*lifted/i);
+    assert.equal(r.box.mp.onThornswoodLogin(event), OTHER);
   });
   test('cold account controls retain original deadlines and survive same-account character changes', () => {
     const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET); r.command('/silenceaccount ' + TARGET + ' 30m');
