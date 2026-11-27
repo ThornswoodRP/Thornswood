@@ -2190,6 +2190,47 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
 
 mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {
   /*
+    THE PIECE AN ENCHANTMENT GOES ON KEEPS ITS NAME (#4608). A piece's
+    condition is on its name, "Iron Sword (85%)", and so is a crude or
+    masterwork piece's make (the durability block), so the engine takes such a
+    piece off its named stack and says so in onCraft's seventh argument. The
+    engine gives the enchanted piece back with no name of its own, which would
+    be a free repair, so a named input was refused (inputRefusal in the
+    spoilage block) and a worn or masterwork piece could not be enchanted.
+
+    An enchantment is the craft with no recipe whose effects the engine named
+    and whose output is a piece under the runtime line (a brew's output is a
+    bottle above it). The piece is the one input of the output's own record.
+    When it came off a named stack, it is let past inputRefusal and the
+    enchanted piece is given that name (craftOutput), so its condition and its
+    make go with it, and the durability block goes on wearing it from there.
+    A plain piece is not named, so it comes back as it always did.
+  */
+  function enchantedPiece(craftedItemBaseId, recipeId, effects, inputs) {
+    var base = Number(craftedItemBaseId) || 0;
+    if (recipeId || !Array.isArray(effects) || !Array.isArray(inputs) || base <= 0 || base >= 0xff000000) {
+      return null;
+    }
+    for (var i = 0; i < inputs.length; i++) {
+      var input = inputs[i];
+      if (input && typeof input.name === 'string' && input.name &&
+          Number(input.baseId) === base && Number(input.count) === 1) {
+        return input;
+      }
+    }
+    return null;
+  }
+
+  function keepPieceName(actorId, piece) {
+    try {
+      mp.set(actorId, 'craftOutput', { name: piece.name });
+      log(actorId.toString(16), 'enchanted', piece.name, 'and it keeps that name');
+    } catch (e) {
+      log('could not keep the name', piece.name, 'on the piece', actorId.toString(16), 'enchanted:', e);
+    }
+  }
+
+  /*
     TOO SICK, TOO HURT OR TOO TIRED TO MAKE ANYTHING (#1383, #1676), asked
     before anything else, brews, enchanting and tempering included. The gate
     every way of making something asks (unfitToMake, #1733) answers the
@@ -2212,7 +2253,8 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     that spent one would hand back a plain piece. See the spoilage block.
   */
   const spoilage = globalThis.__thornswoodSpoilage;
-  const namedNo = spoilage && spoilage.inputRefusal ? spoilage.inputRefusal(arguments[6]) : '';
+  const piece = enchantedPiece(craftedItemBaseId, recipeId, effects, arguments[6]);
+  const namedNo = spoilage && spoilage.inputRefusal ? spoilage.inputRefusal(arguments[6], piece) : '';
   if (namedNo) {
     notify(actorId, namedNo);
     say(actorId, namedNo);
@@ -2280,7 +2322,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
       The inputs go on to the brew as a fifth argument (#3134): what this
       character has eaten is asked of every ingredient in it.
     */
-    return recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects, inputs);
+    const made = recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects, inputs);
+    if (made !== false && piece) { keepPieceName(actorId, piece); }
+    return made;
   }
 
   /*
