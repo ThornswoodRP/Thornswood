@@ -114,6 +114,19 @@ the job says it is done with Pay the reward on it, at that board. Then
 the whole reward goes to whoever took it. The server does not judge
 whether a job was done; its poster says so.
 
+A wanted poster is a job a person writes about somebody wanted (decided
+22 Oct, #4565). Make a post offers Wanted beside Notice and Job: a title,
+who is wanted and for what, and a bounty, a whole number of gold above
+nothing. It costs what a job costs, the 30 and the bounty, taken from the
+pack the same way, and the bounty is held on the hold's ledger. Anybody
+may put one up and anybody but its poster may take it, the way a job is
+taken. Then a guard of that hold, at its board, confirms it was earned
+with Confirm the bounty, and the whole bounty goes to whoever took it, or
+is held for them while they are away. Nobody else confirms one: not its
+poster, not the Jarl, and not a guard who took it themselves. The server
+does not judge whether it was earned; the guard says so. Nothing in the
+game notices a crime, and Skyrim's own bounty plays no part.
+
 The fee and a job's reward are taken from the pack before it goes up. If
 the gold is not there, nothing is posted. They are counted on that
 hold's ledger. See [Gold](gold.md) and [Property](property.md).
@@ -211,6 +224,12 @@ to whoever posted it: a job's reward, a letter's 15, a haul's pay. When they are
 is held for them and handed over when they are back. Whoever had taken
 it is told it is off their list. At another hold's board a guard or a
 Jarl is anybody. See [Offices](offices.md).
+
+A wanted poster comes down only by that hold's guards and its Jarl, taken
+or not; its poster cannot take it down. The 30 stays with the hold, and
+the held bounty goes back to whoever put the poster up, or is held for
+them while they are away and handed over when they are back. Whoever had
+taken it is told it is off their list, and no bounty is paid for it after.
 
 ## Where this is
 
