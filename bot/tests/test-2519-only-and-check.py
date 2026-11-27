@@ -543,6 +543,16 @@ try:
             'lore, factions. Nothing else was touched' in out and 'made 0' in out)
 
         g = live_server()
+        # Put the archive copy first so a name-only lookup picks it (#4499).
+        category, results = next((cat, s) for cat, specs in B.PLAN for s in specs
+                                 if s.get('key') == 'RESULTS')
+        planned = next(ch for ch in g.channels if ch.name == results['name']
+                       and getattr(ch.category, 'name', None) == category)
+        archive = Channel(g, 'Archive', 'category')
+        copy = Channel(g, planned.name, planned.kind, category=archive)
+        archive.channels.append(copy)
+        g.categories.append(archive)
+        g.channels[0:0] = [archive, copy]
         out = written(g, only='rules', posts=True)
         links = wrote[0][2] if wrote else {}
         named = dict((s['key'], s['name']) for _c, ss in B.PLAN for s in ss if s.get('key'))
@@ -552,6 +562,8 @@ try:
             [w[0] for w in wrote] == ['rules'] and len(said) > 0 and
             all(getattr(links.get(k), 'name', None) == named[k] for k in said)
             and g.calls == [])
+        yes('  the rules link test-findings in its planned category, not the archive copy',
+            'RESULTS' in said and links.get('RESULTS') is planned)
 
         g = live_server()
         out = written(g, only='lore,factions')

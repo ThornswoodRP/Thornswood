@@ -478,7 +478,7 @@ namespace Thornswood
             if (args[0] == "install")
             {
                 var choice = new InstallChoice { Root = args[1], Package = args[2], SteamRoot = args[3], SteamGame = args[4], MakeOwnGame = args[5] == "1", VortexGame = "" };
-                var steps = new InstallSteps(choice, Console.WriteLine, f => { });
+                var steps = new InstallSteps(choice, Console.WriteLine, f => { }, q => true);
                 try { steps.Run(); Console.WriteLine("install: done, " + steps.Bad + " failed"); }
                 catch (InstallStop e) { Console.WriteLine("install: stopped, " + e.Message); }
                 return 0;
@@ -1097,8 +1097,15 @@ Yes ('nothing in the launcher sets Paths.Game but Paths.Init (' + ($setters -joi
 $paths = [IO.File]::ReadAllText((Join-Path $App 'Paths.cs'))
 Yes 'Paths.Init points Game at Payload when the folder was chosen and not made' ($paths -match 'Game\s+= !Collection \? own : OwnFirst \? Payload : steam;')
 $ownSrc = [IO.File]::ReadAllText((Join-Path $App 'OwnGame.cs'))
-Yes 'a folder is not made while an install an older launcher synced has not kept its release''s file list (#1232)' ($ownSrc -match '(?s)if \(!made\)\s*\{.*?if \(!OursKnown\(\)\)\s*return "Thornswood is checking this install against its release first')
+Yes 'a folder is not made while an install an older launcher synced has not kept its release''s file list (#1232), and the refusal says to install with setup, not to wait for an update that never comes (#5795)' ($ownSrc -match '(?s)if \(!made\)\s*\{.*?if \(!OursKnown\(\)\)\s*return "This launcher was not installed by Thornswood''s setup.*?install Thornswood again with its setup from thornswood\.net, then make the folder\."' -and $ownSrc -notmatch 'Let the update finish, then make the folder')
 $syncSrc = [IO.File]::ReadAllText((Join-Path $App 'Sync.cs'))
+$pkgSrc = [IO.File]::ReadAllText((Join-Path $App 'SyncPackage.cs'))
+# What that refusal rests on (#5795): an install setup put in knows its files
+# from its installed package, so only a launcher setup did not install can be
+# refused there, and setup is its way out.
+Yes 'an install setup put in always knows its release''s files from its installed package, so the refusal is only for a launcher setup did not install (#6457, #5795)' (
+    $syncSrc -match '(?s)public static bool ReleaseFilesKnown\(\)\s*\{.*?if \(InstalledReleaseFiles\(\) != null\) return true;' -and
+    $pkgSrc -match '(?s)static List<string> InstalledReleaseFiles\(\)\s*\{\s*if \(!Velo\.Installed\) return null;')
 # Since #5608 every sync is of a launcher package, and every one keeps the
 # list; an install whose list is not the one of the release it says it is on
 # is not taken at its word.

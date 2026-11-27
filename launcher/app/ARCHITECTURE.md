@@ -195,8 +195,10 @@ Fix and the update are awaited paths (`PlayAsync`, `RunScanAsync`,
 with `Waiting.cs:105 Begin()`. Until #4582 the wait was `Waiting`, a nested
 dispatcher frame that Avalonia refuses during layout, after which the window
 thread waited plainly and froze.
-`Waiting.cs:124 Pump` takes the answer of something Avalonia only offers as a
-task, such as Windows' own folder picker, and `Waiting.cs:144 OnceOnScreen()`
+`Waiting.cs:124 Pump` runs the message loop until the install window at the
+first start has answered, before the launcher's own loop exists; nothing in the
+window's own life uses it, since a task is awaited there, Windows' own folder
+picker among them (#4582). `Waiting.cs:144 OnceOnScreen()`
 runs work once the window is first on screen and laid out. Voice runs on
 threads of its own (VoiceSession.cs, VoiceAudio.cs) and never on the window's.
 The HTTP requests of the launcher's own go through one shared client
@@ -316,16 +318,21 @@ minute, a file once read is kept, and when GitHub says the hour's calls are
 spent nothing more is asked until the time it gives for the reset, and every
 caller is told that time.
 
-`VeloUpdate.cs:75 CheckLauncher()` asks this install's channel for its
+`VeloUpdate.cs:81 CheckLauncher()` asks this install's channel for its
 release: `ChannelSource` reads the newest Releases that carry
 `releases.<channel>.json` (the newest and the `MaxDeltas` before it, for
 deltas) and hands Velopack the newest Release's package, up or down
 (`ChannelRelease`, `AllowVersionDowngrade`), so a promotion of an older build
 reaches the channel too. The collection revision the channel's servers run is
 read from that Release's signed record at the same time
-(`ServerCollectionRevision`, #5767). `VeloUpdate.cs:116 FetchLauncher()`
+(`ServerCollectionRevision`, #5767). On the dev channel it is the Dev
+collection's revision the record names in `devCollection`, and
+`ServerCollectionSlug` sends Vortex, the collection page and every link to
+the Dev collection instead of 7essxf (#7193); `ServerRecordRevision` is the
+same revision in the records' numbers, which the Mod Organizer 2 modlist
+names. `VeloUpdate.cs:145 FetchLauncher()`
 downloads the package into Velopack's own folder and checks it (Velo,
-below), and `VeloUpdate.cs:184 ApplyLauncher()` leaves it to go in once the
+below), and `VeloUpdate.cs:213 ApplyLauncher()` leaves it to go in once the
 launcher has closed. `Version` at the top of Updater.cs is the launcher's
 version, read from the exe: the build passes it as `-p:Version`
 (`scripts\release\LauncherVersion.ps1` works it out, #5179), in a merge
@@ -853,7 +860,7 @@ Root\Game is made with hard links that cannot cross a drive (InstallPlace.cs);
 Thornswood's own folder; and the boxes that lock Install, with the record
 Acceptance reads (InstallAgreements.cs). InstallSteps runs the steps on a
 thread of its own, every line in the window and in `Profile\setup-log.txt`:
-no Skyrim left running (InstallSkyrim.cs, which asks before it ends one),
+no Skyrim left running (InstallSkyrim.cs, which asks before it sends the game anything, #4705),
 then Thornswood's game files from the package into `Profile\Payload` or the
 Steam copy (#1226), Profile with the licence texts beside `SOURCE CODE.txt`,
 `config.json`, a shortcut in Root (InstallShortcut.cs, through the shell's

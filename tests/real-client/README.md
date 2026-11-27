@@ -176,6 +176,64 @@ reported the scripted keyboard down and up. The result records menu state
 and whether the game named the Inventory action. The Windows input receipt
 and the following inventory open or close check are reported separately.
 
+`camera-smoke.json` is a separate opt-in, local-only observation for the high
+view report (#6593). It is never part of the normal release run. Use matching
+runner/plugin bytes and an authorized test character. Run-RealClient selects
+Dev; this list adds no Main route or environment switch. It reuses the normal
+release run's entry steps and selects its existing named test character,
+Adventurer. Keep hands off the controls: after the in-world screenshot it
+requests one wheel detent forward and one backward, with a half-second pause
+between completed attempts. Each request must match its unused opted-in plan
+step. It never forces a camera or moves the actor.
+
+An opted-in timed wait or wheel step enables `camera-trace` result lines only
+while that step is active. Limits are thirty seconds from the first trace,
+eight wheel observations/requests and sixty-four receipts per run. Ordinary runs do not
+read camera state. `-Publish` is refused for any list with a camera trace:
+coordinates and screenshots remain local, with no GitHub upload. Do not attach
+these local results to a public issue. The existing dev permission and
+whose-game checks are preserved.
+
+The start sample includes actor XYZ, scale, cell/world, camera mode, browser
+focus, camera/looking controls, known menus and the last native owner target
+XYZ with its timestamp age and epoch. It copies no profile, name or inventory
+contents from the native diagnostic. Missing APIs or target data are `null`.
+`actorTargetZ` is reported only when the target location matches the actual
+world/cell; an old target is not a current walking destination. Read its age.
+
+A game mouse-wheel down records the preceding update sample, then the next
+update and a sample at least 250ms later. `beforeSampleAgeMs` makes the timing
+explicit: the first sample is not a synchronous pre-native-input measurement.
+`sameOwnerEpoch` compares process-local diagnostic epochs/location; it is not
+proof of persistent actor identity across client/controller recreation.
+`actorDeltaXYZ` is reported only within the same world/cell. Multiple attempts
+may overlap; their numbered receipts remain separate. A trace ending may
+truncate a late wheel's settled receipt. No game button event means no claim
+about whether a physical wheel was moved or swallowed before game input.
+
+The explicit `{"do":"wheel","delta":120,"cameraTrace":true}` step (or
+`delta:-120`) captures a before sample on update before asking Windows, then
+records the next update after its acknowledgment and another at least 250ms
+after the acknowledgment. These three `platform-request` receipts exist even
+when no game wheel event arrives. The Windows helper sends one wheel-only
+event after checking game focus, checks its insertion count and focus again,
+and never retries. A rejected acknowledgment fails the step after the after
+samples. An accepted acknowledgment passes delivery only; it does not prove
+Skyrim read it or changed view. A focus race between checks and insertion
+remains possible. Game wheel receipts and platform request receipts are
+separate observations and may describe the same physical input.
+`platformAckAt` is when the plugin consumed the runner's acknowledgment, not
+the exact Windows insertion time. Sampling and runner polling add latency.
+
+Stable actor XYZ while zoom changes the apparent height separates a view
+problem from actual actor movement. Changed actor Z must be investigated as
+movement. Camera mode alone cannot measure camera height: the pinned public
+API offers a screen projection and camera-state enum, but no camera world
+position getter, so camera XYZ/distance are explicitly unavailable. These
+receipts do not prove a camera displacement or a correction. Pair them with
+the local before/after screenshots and exact server/build/load route. A
+separately authorized Main observation is still needed for a Main report.
+
 The runner replies with the request number, `ok` and `note` in
 `thornswood-test-ack.txt`. Use the runner and plugin from the same checkout:
 the old runner's numeric reply cannot pass a key step. Accepted input alone
@@ -200,3 +258,37 @@ are unsupported and fail before any input is sent.
 
 PowerShell 7 must be available to run the harness regression test, including
 its fake Windows focus and input cases; missing PowerShell fails the test.
+
+## A minute in an ordinary seat
+
+`bench-seat.json` is a separate Dev acceptance fixture for #6621. It is not
+added to the automatic release run. It uses the canonical choice/world
+steps and inn trip, faces the closest free ordinary chair, bench or stool
+in that room, presses E once, observes sitting for a full minute and then
+uses one movement key to get up. Launch remains an explicitly coordinated
+real-game operation; preparing this file does not run it.
+
+`face` with `what: seat` reuses the bed tooling's bounds and side checks.
+It requires a named FURN seat, excludes beds and occupied furniture, and
+uses the pinned native `getWorkbenchType` value of zero to exclude crafting
+benches. A missing API, no valid seat or lost world is a verification error.
+`wait` with `for: furniture` and `enter: true` requires a new own event for
+that exact target after the normal key request, plus native sitting state.
+`wait` with `for: seated` requires a positive interval, the same event epoch
+and native sitting throughout, with no unobserved gap longer than a second.
+Entry and every hold sample require the exact native furniture reference.
+A null or different reference is a verification error even if sit state
+remains seated; this does not claim a transient null is a gameplay defect.
+`enter: false` requires the intentional exit's event, native standing and
+a cleared native furniture reference. The production controls fallback for
+a flickering furniture reference is unchanged.
+
+The run records its existing furniture lines and one bounded
+`seated-observation` receipt with the target, elapsed time, sample count and
+largest sample gap. Review `seat-entered` and `seat-after-minute` screenshots
+for the original standing-on-collision symptom: events/state alone do not
+prove the rendered pose. If the first-person view hides the body, visual
+acceptance needs an appropriate view or another observer. This fixture does not claim Rest recovery. The next
+phase needs a safe before/after Body Rest observation for the same character
+and session over the existing ten-minute recovery acceptance interval; it
+must not replace missing furniture events with a manufactured rest report.

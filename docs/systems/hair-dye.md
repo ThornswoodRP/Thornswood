@@ -21,7 +21,10 @@ using one is anybody's.
   loses the steep and takes nothing, the way a boil is lost. When it is
   done the inputs are taken and the dye is in the pack. If the pack holds
   the inputs of more than one dye, the first in the list is made. One steep
-  at a time, and a relog loses one under way.
+  at a time. A relog keeps a steep under way, as it keeps a boil: back
+  by the fire once its time is up, the dye is made, and back away from
+  the fire, the steep is lost. A server restart loses it, and nothing is
+  taken.
   The shared crafting check runs before starting and again before the inputs
   are spent. Rest under 15 or a disease gone bad refuses the steep. Injury
   follows the cooking spot's usual rule, which permits one-handed work.
@@ -60,7 +63,7 @@ using one is anybody's.
   they press Accept. You have to stand within `reach` of them when you offer
   and again when they accept. Either way the dye is used up.
 - **Hair, beard and brows.** The game gives a character one hair colour, so a
-  dye colours all three.
+  dye colours all three. The new colour shows on your own screen at once.
 - **No fading.** A colour stays until somebody dyes or washes it.
 
 ## The list
@@ -72,10 +75,10 @@ using one is anybody's.
 | `steepAt` | The bench keyword a dye steeps at. |
 | `reach` | How close, in game units, you stand to dye somebody else's hair (above 0, at most 2000). Ships as 300. |
 | `who` | Who may steep: `anyone` true, or `halves`, each half at the lowest rank that may (novice, advanced, expert or master), the same shape as the benches. Ships as the Tailor's two halves, `haberdasher` and `liverywright`, each from novice. |
-| `dyes` | Each dye: `id`, `name` (what the entry is called), `colour` (#rrggbb, lower case) or `wash: true`, `strength` (above 0, at most 1), `wander` (0 to 64), and `inputs` (each a record and a count). |
+| `dyes` | Each dye: `id`, `name` (what the entry is called), `colour` (`#rrggbb`, lower case) or `wash: true`, `strength` (above 0, at most 1), `wander` (0 to 64), and `inputs` (each a record and a count). |
 
 A list with any problem is refused whole, never half used: a key nobody
-reads, a colour that is not #rrggbb, two dyes with one id or name, an input
+reads, a colour that is not `#rrggbb`, two dyes with one id or name, an input
 named twice, or a dye that can never be made because an earlier dye takes
 less of the same things.
 
@@ -91,9 +94,10 @@ less of the same things.
 - The Hair dye page of K: `game/ui/thornswood-skills.js`. Dye hair under Near
   you and the offer's words: `game/ui/thornswood-party.js`. The look prompt's
   "Dye their hair": `game/plugins/thornswood-front.js`.
-- Not in yet: your own hair keeps its old colour on your screen until the
-  next load, because the engine does not redraw hair whose colour changed
-  (#2867, a fork change). The colour is on your character from the moment
-  it is dyed.
+- The redraw on your own screen: the engine fork's client calls the game's
+  `UpdateHairColor` whenever it applies your appearance
+  (`skymp5-client/src/sync/appearance.ts` in ThornswoodRP/skymp, #2867), so
+  the new colour shows the moment it is dyed, with no load. The gamemode and
+  the front plugin have no hair colour code of their own.
 - Every dye written puts one line in the server log: `hair dye:`, who did it,
   whose hair, which dye, and the colour before and after.

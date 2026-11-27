@@ -105,7 +105,7 @@ if ($pinned -and $full -ne $pinned) { Say "  note: $full is not the commit this 
 $npx = $(if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { 'npx.cmd' } else { 'npx' })
 if (-not (Get-Command $npx -ErrorAction SilentlyContinue)) { throw 'npx is not on PATH, so the front cannot be built: install node (https://nodejs.org). Nothing was written.' }
 
-$work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-front-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+$work = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('thornswood-front-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $here = Get-Location
 try {

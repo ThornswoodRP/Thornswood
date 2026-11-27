@@ -65,7 +65,8 @@ $shell = Get-Content -LiteralPath (Join-Path $app 'ShellUpdate.cs') -Raw
 $all = (Get-ChildItem -LiteralPath $app -Filter '*.cs' | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 Yes '2. the launcher''s record of a Release reads collectionRevision' ($record -match '\[JsonPropertyName\("collectionRevision"\)\] public int CollectionRevision')
 Yes '   CheckLauncher takes it from the record of the Release the channel is on' ($update.Contains('SemanticVersion on = info != null ? info.TargetFullRelease.Version : Velo.Locator?.CurrentlyInstalledVersion;') -and
-    $update.Contains('ServerCollectionRevision = VeloRecord.Get(on, out recordSaid).CollectionRevision;'))
+    $update.Contains('VeloRecord.Manifest record = VeloRecord.Get(on, out recordSaid);') -and $update.Contains('ServerRecordRevision = record.CollectionRevision;') -and
+    $update.Contains('ServerCollectionRevision = devOwn ? devc.Revision : record.CollectionRevision;'))
 Yes '   and nothing reads it from the feed any more' (-not $shell.Contains('= v.collectionRevision') -and $all -notmatch 'FeedCollectionRevision')
 
 $feed = Get-Content -LiteralPath (Join-Path $Repo 'site/lib/feed.js') -Raw

@@ -47,9 +47,9 @@ a day after. That declaration is an event, not a command.
 
 ## The building
 
-The embassy doors start held by the Ambassador's office, so the line at
-them offers nobody a claim. A steward of Haafingar does not
-evict the Accord. A Thalmor does not found a claim on it. See
+The embassy building follows ordinary property ownership. An unclaimed
+warehouse may be claimed, and its actual holder, deed and lock remain
+authoritative. Membership in an embassy roll grants no property title. See
 [The Thalmor](thalmor.md) and [Property](property.md).
 
 It is not a hold. It has no notice board of its own, no box, and no
@@ -84,12 +84,10 @@ captain variants are not made. Their references are in
 ## Where this is
 
 The Accord is on the site. This page names no building, so the server
-holds the one suggested on #1390 until the embassy is named: the
-Abandoned Warehouse in Solitude. Its doors start held: the line at them
-offers nobody a claim, a claim sent anyway answers that the embassy is
-held, a deed presented there takes nothing, and a steward's eviction
-there is refused. A claim somebody made on it before is still theirs
-until it lapses or a steward ends it.
+identifies the one suggested on #1390 until the embassy is named: the
+Abandoned Warehouse in Solitude. The identity grants no automatic title
+after a property reset (#7071). An existing claim remains its holder's
+until a valid deed transfer, lapse or authorized eviction.
 
 An admin writes the roll with `/embassy`, a staff command: `add` a
 name, with `armed` to mark them, and `arm`, `disarm` and `remove`. The

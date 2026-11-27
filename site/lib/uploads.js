@@ -9,9 +9,9 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { deleteUpload, listUploads, pendingCopies, pictureSize,
+module.exports = { clearPartUploads, deleteUpload, listUploads, pendingCopies, pictureSize,
   pruneRemovedUploads, receiveUpload, shotSrcset, smallCopy, smallFile,
-  srcsetWidths, uploadRemoved, withGalleryPending };
+  srcsetWidths, submissionName, uploadRemoved, withGalleryPending };
 
 const fs     = require('fs');
 const path   = require('path');
@@ -56,6 +56,15 @@ const GREPORTS = path.join(DATA, 'gallery-reports.json');
 // recordings. The launcher AllowExt must match this list.
 const GALLERY_ALLOW = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.webm'];
 const GALLERY_CAP = 100 * 1024 * 1024;
+/* How many pictures one account may have waiting for staff at once (#4404).
+   The hourly budget is per address, so one account sending from a few
+   addresses, through the site and the launcher, could fill the queue for 90
+   days. A sender with no Discord account (the hub's password) counts as one. */
+const GALLERY_WAITING_EACH = 20;
+/* The room the disk keeps free (#4404). The site, its stores and its logs
+   share the disk with uploads/, so no upload is taken that could leave less
+   than this, counting the file at its declared size or the door's cap. */
+const UPLOAD_FREE_FLOOR = 2 * 1024 * 1024 * 1024;
 const KIND = {
   '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.gif':'image/gif',
   '.webp':'image/webp', '.bmp':'image/bmp',
@@ -103,6 +112,18 @@ const SMALL_WIDTHS = [800, 1600];
 const SMALL_KINDS = ['.webp', '.jpg'];
 const SMALL_CAP = 8 * 1024 * 1024;
 const UP_SMALL = path.join(UP, 'small');
+/* WHERE AN UPLOAD IS WRITTEN WHILE IT ARRIVES (#4956). receiveUpload made the
+   file under its stamped name in uploads/ before the first byte came, and
+   took a half file away only from its own close handler, which never runs
+   when the site is stopped or restarted partway (Deploy-Docs restarts it).
+   The half file then sat in uploads/ with no note, listed in the hub as an
+   ordinary file, and nothing ever removed it. Now an upload is written in
+   uploads/.part, which nothing lists or serves, and moved to its name in
+   uploads/ only once it is whole and cleaned, so uploads/ never holds a
+   half file. What is in .part when the site starts was cut off by a stop:
+   no upload can be arriving before the site listens, so clearPartUploads
+   empties it then. */
+const UP_PART = path.join(UP, '.part');
 function smallFile(name, width, ext) {
   return path.join(UP_SMALL, String(name) + '.w' + width + ext);
 }
@@ -234,6 +255,18 @@ function deleteUpload(name) {
   return { ok: true };
 }
 
+/* Whether a name is one a submission could have been sent as (#4401): a
+   plain name straight under uploads/, and not the notes file uploads.json or
+   the small/ folder of smaller copies, in any case, since the box's Windows
+   reads UPLOADS.JSON as the same file. Accept and Delete on the gallery act
+   on no other name, whatever a list says. */
+function submissionName(name) {
+  const n = String(name || '');
+  const low = n.toLowerCase();
+  return !!n && n === path.basename(n) && !n.startsWith('.') &&
+    low !== path.basename(UPMETA).toLowerCase() && low !== path.basename(UP_SMALL).toLowerCase();
+}
+
 /* A gallery submission staff removed and whose file stayed on disk: marked
    on uploads.json by DELETE /api/gallery/approved, and never served again. */
 function uploadRemoved(name) {
@@ -281,6 +314,29 @@ function pruneRemovedUploads(now) {
   return out;
 }
 
+/* Empties uploads/.part on the way up (#4956): whatever is there was being
+   written when the site stopped, and no upload arrives before it listens.
+   Each file that will not go is said, by name and code. */
+function clearPartUploads() {
+  let names = [];
+  try { names = fs.readdirSync(UP_PART); }
+  catch (e) {
+    if (e.code === 'ENOENT') return { removed: 0, failed: [] };
+    console.error('[thornswood-docs] could not list the cut-off uploads in ' + UP_PART + ' (' + (e.code || e.message) + ')');
+    return { removed: 0, failed: [{ file: UP_PART, code: e.code || e.message }] };
+  }
+  const out = { removed: 0, failed: [] };
+  for (const name of names) {
+    try { fs.rmSync(path.join(UP_PART, name), { force: true, recursive: true }); out.removed++; }
+    catch (e) {
+      out.failed.push({ file: name, code: e.code || e.message });
+      console.error('[thornswood-docs] could not remove the cut-off upload ' + name + ' (' + (e.code || e.message) + ')');
+    }
+  }
+  if (out.removed) console.log('[thornswood-docs] removed ' + out.removed + ' upload(s) cut off when the site last stopped');
+  return out;
+}
+
 function listUploads() {
   const meta = jsonFile(UPMETA, {});
   const out = [];
@@ -315,8 +371,16 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
     return sendJson(res, 413, { error: 'that file is over ' + Math.round(cap / 1048576) + ' MB' });
   }
   const offered = String(asked || 'file').split(/[\\/]/).pop();
-  const safe = offered.replace(/[^A-Za-z0-9._ -]/g, '_').replace(/^[. ]+/, '')
-                      .slice(0, 90) || 'file';
+  /* At most 90 characters, cut from the end of the name and not its
+     extension: cut as a whole, a long "....png" lost its .png and the
+     gallery refused it as the wrong kind of file (#4952). An "extension"
+     as long as the cap is no extension, and the whole name is cut. */
+  const clean = offered.replace(/[^A-Za-z0-9._ -]/g, '_').replace(/^[. ]+/, '');
+  const dot = path.extname(clean);
+  const keep = dot.length > 1 && dot.length < 90 ? dot : '';
+  const safe = keep
+    ? (clean.slice(0, clean.length - keep.length).slice(0, 90 - keep.length) || 'file') + keep
+    : clean.slice(0, 90) || 'file';
   if (allow) {
     const ext = path.extname(safe).toLowerCase();
     if (allow.indexOf(ext) < 0) {
@@ -336,6 +400,26 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
     return send(res, 429, JSON.stringify({error:'This connection has reached its upload limit. Try again later.'}),
       null, {'Retry-After':String(Math.max(1, Math.ceil((budget.start + 3600000 - now) / 1000))), Connection:'close'});
   }
+  /* Room on the disk first (#4404): nothing checked it, so uploads could fill
+     the disk the site and its stores write to. The file counts at the size
+     it declares, or at the door's cap when it declares none. */
+  let room;
+  try {
+    const st = fs.statfsSync(UP);
+    room = Number(st.bavail) * Number(st.bsize);
+  } catch (e) {
+    req.resume();
+    console.error('[thornswood-docs] could not read the free space for uploads (' + (e.code || e.message) + ')');
+    return sendJson(res, 500, { error: 'The site could not tell how much room it has, so it took no file. Try again in a minute.' });
+  }
+  const declared = Number(req.headers['content-length']);
+  const need = Number.isFinite(declared) && declared > 0 ? Math.min(declared, cap) : cap;
+  if (room - need < UPLOAD_FREE_FLOOR) {
+    req.resume();
+    console.error('[thornswood-docs] upload refused: ' + JSON.stringify({ event: 'disk-low', free: room, need: need, floor: UPLOAD_FREE_FLOOR }));
+    return send(res, 507, JSON.stringify({ error: 'The site is short of disk space, so it is not taking files just now. Staff can see this in its log.' }),
+      null, { Connection: 'close' });
+  }
   if (!copy) budget.count++;
   budget.active++;
   const d = new Date();
@@ -344,10 +428,13 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
                 two(d.getHours()) + two(d.getMinutes());
   const name = stamp + '-' + crypto.randomBytes(6).toString('hex') + '-' + safe;
   const dest = path.join(UP, name);
+  // Written in .part, and moved to dest once whole (#4956).
+  const part = path.join(UP_PART, name);
   let descriptor;
-  try { descriptor = fs.openSync(dest, 'wx'); }
+  try { fs.mkdirSync(UP_PART, { recursive: true }); descriptor = fs.openSync(part, 'wx'); }
   catch (e) {
     budget.active--;
+    console.error('[thornswood-docs] could not reserve an upload file in ' + UP_PART + ' (' + (e.code || e.message) + ')');
     return sendJson(res, 500, {error:'The site could not reserve an upload file. Try again shortly.'});
   }
 
@@ -358,7 +445,7 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
      and the rest read and thrown away, and a connection that went is closed
      with nothing left to say. */
   let got = 0, over = false, cut = false, broke = false, timedOut = false, quotaExceeded = false, prefix = Buffer.alloc(0);
-  const out = fs.createWriteStream(dest, {fd:descriptor, autoClose:true});
+  const out = fs.createWriteStream(part, {fd:descriptor, autoClose:true});
   const deadline = setTimeout(() => {
     timedOut = true; req.unpipe(out); out.destroy(); req.resume();
   }, 300000);
@@ -383,7 +470,7 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
       // The half file goes. It was made above with wx, so it is there; one
       // that will not go is said, by its name and the code (#2736).
       let removed = false;
-      try { fs.unlinkSync(dest); removed = true; }
+      try { fs.unlinkSync(part); removed = true; }
       catch (e) { console.error('[thornswood-docs] could not remove the half upload ' + name + ' (' + (e.code || e.message) + ')'); }
       if (timedOut) return send(res, 408, JSON.stringify({error:'That upload took too long. Try again with a smaller file.'}), null, {Connection:'close'});
       if (quotaExceeded) return send(res, 429, JSON.stringify({error:'This connection has uploaded 500 MB in the last hour. Try again later.'}),
@@ -407,13 +494,21 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
     // about where and when it was made goes before anybody can fetch it
     // (#3648). One that cannot be cleaned is not kept as it came.
     if (mediaSignature(path.extname(safe).toLowerCase(), prefix)) {
-      const clean = stripMedia(dest);
+      const clean = stripMedia(part);
       if (!clean.ok) {
         console.error('[thornswood-docs] could not clean the upload ' + name + ': ' + clean.why);
-        try { fs.unlinkSync(dest); }
+        try { fs.unlinkSync(part); }
         catch (e) { console.error('[thornswood-docs] could not remove the upload ' + name + ' (' + (e.code || e.message) + ')'); }
         return sendJson(res, 415, { error: 'The site could not read that file to take out where and when it was made, so it did not keep it.' });
       }
+    }
+    // Whole and cleaned: only now does it get its name in uploads/ (#4956).
+    try { fs.renameSync(part, dest); }
+    catch (e) {
+      console.error('[thornswood-docs] could not move the upload ' + name + ' into ' + UP + ' (' + (e.code || e.message) + ')');
+      try { fs.unlinkSync(part); }
+      catch (e2) { console.error('[thornswood-docs] could not remove the upload ' + name + ' (' + (e2.code || e2.message) + ')'); }
+      return sendJson(res, 500, { error: 'the site could not save that file. Try again in a minute.' });
     }
     saved(name);
   });
@@ -422,8 +517,8 @@ function receiveUpload(req, res, asked, cap, allow, saved, copy) {
 // ==== end thornswood upload guard ====
 
 Object.assign(module.exports, { GALLERY, GALLERY_ALLOW, GALLERY_CAP,
-  GALLERY_HOLD_DAYS, GPENDING, GREPORTS, KIND, SMALL_CAP, SMALL_KINDS,
-  SMALL_WIDTHS, UP_SMALL, UPMETA });
+  GALLERY_HOLD_DAYS, GALLERY_WAITING_EACH, GPENDING, GREPORTS, KIND, SMALL_CAP, SMALL_KINDS,
+  SMALL_WIDTHS, UP_PART, UP_SMALL, UPLOAD_FREE_FLOOR, UPMETA });
 
 // From modules loaded after this one, taken once this one is whole, so a
 // module that needs this one back finds all of it.

@@ -1011,7 +1011,7 @@ if ($DryRun) {
         (Join-Path $ReleaseDir 'published.json')
     )) {
         if (Test-Path -LiteralPath $f) {
-            $tmp = [IO.Path]::GetTempFileName()
+            $tmp = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('ship-dry-keep-' + [Guid]::NewGuid().ToString('N'))
             Copy-Item -LiteralPath $f -Destination $tmp -Force
             $dryKeep += [pscustomobject]@{ Path = $f; Copy = $tmp }
         } else {

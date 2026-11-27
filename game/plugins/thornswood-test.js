@@ -31,6 +31,9 @@
 //   {"do":"page","js":"<an expression>"}   true, a number or a word passes
 //   {"do":"shot","name":"journal-open"}
 //   {"do":"key","code":36}                 a DirectInput scan code (J is 36)
+//   {"do":"face","what":"seat"}            closest free ordinary local seat
+//   {"do":"wait","for":"furniture","enter":true}
+//   {"do":"wait","for":"seated","ms":60000}
 //   {"do":"face","what":"bed"}             stand before the nearest bed in the cell
 //   {"do":"wait","for":"crosshair","what":"bed"}
 //   {"do":"face","what":"driver","ref":"bbf6d:CFTO.esp"}  stand before that driver
@@ -88,6 +91,7 @@ try { fs.unlinkSync(RUN); } catch (e) { log('could not delete the run file, so t
 
 const runId = String(run.id || '');
 const steps = run.steps;
+const observesSeats = steps.some(s => s && (s.what === 'seat' || s.for === 'seated' || s.for === 'furniture'));
 
 function write(obj) {
   obj.run = runId;
@@ -127,6 +131,10 @@ sp.on('menuClose', function (e) {
 // called in this context"), so what a step needs from the game is read or
 // done here and left for the step to pick up.
 let inWorld = false;
+let crosshairSeat = '';
+let facedSeat = 0, furnitureEpoch = 0, furnitureState = null;
+let seatObservation = null, seatPress = null, seatExitPress = null, seatHold = null, confirmedSeatEntry = null;
+const furnitureEvents = [];
 let crosshairBed = '';     // the bed under the crosshair now, or ''
 let crosshairDriver = '';  // the carriage or ferry driver under it, or ''
 let faceAsked = '';        // what a face step wants stood before
@@ -140,6 +148,22 @@ const moves = [];          // { t, z, sprint, drawn } a frame, for watch steps
 function isBed(ref) {
   const T = globalThis.Thornswood;
   return !!(T && typeof T.isBedRef === 'function' && T.isBedRef(ref));
+}
+function isSeat(ref) {
+  try {
+    const base = ref && ref.getBaseObject();
+    return !!(base && base.getType() === 40 && /\b(chair|bench|stool)\b/i.test(String(base.getName() || '')) &&
+      !isBed(ref) && typeof sp.getWorkbenchType === 'function' && sp.getWorkbenchType(base.getFormID()) === 0 &&
+      typeof ref.isFurnitureInUse === 'function' && ref.isFurnitureInUse(false) === false);
+  } catch (e) { return false; }
+}
+function noteFurniture(e, enter) {
+  if (!observesSeats) { return; }
+  let id = 0;
+  try { id = e.target ? e.target.getFormID() >>> 0 : 0; } catch (err) { log('seat event target is unavailable:', err); }
+  furnitureState = { epoch: ++furnitureEpoch, ref: id, enter: enter, at: Date.now() };
+  furnitureEvents.push(furnitureState);
+  if (furnitureEvents.length > 32) { furnitureEvents.shift(); }
 }
 function refName(ref) {
   let id = 0, name = '';
@@ -166,6 +190,7 @@ const EYE_HEIGHT = 115;
 // seam's is their middle, from the floor the character is on (a seam sits on
 // a wall, so its own height is no floor).
 const FACE_KINDS = {
+  seat: { types: [40], is: isSeat, standOnRef: true, aim: function (h) { return Math.min(60, h * 0.6); } },
   bed: { types: [40], is: function (r) { return isBed(r); }, standOnRef: true, aim: function (h) { return Math.min(60, h * 0.6); } },
   door: { types: [29], is: function () { return true; }, standOnRef: false, aim: function () { return 100; } },
   vein: { types: [40, 24], is: function (r) { const b = r.getBaseObject(); return !!b && /vein/i.test(String(b.getName() || '')); }, standOnRef: false, aim: function (h) { return h * 0.5; } }
@@ -178,6 +203,16 @@ function faceStart(what) {
   if (!cell) { return { ok: false, note: 'not in a cell' }; }
   const T = globalThis.Thornswood;
   if (what === 'bed' && (!T || typeof T.isBedRef !== 'function')) { return { ok: false, note: 'thornswood-front.js shares no isBedRef, so this build cannot tell a bed' }; }
+  if (what === 'seat') {
+    facedSeat = 0;
+    if (!T || typeof T.isBedRef !== 'function' || typeof sp.getWorkbenchType !== 'function') {
+      return { ok: false, note: 'seat verification needs the bed classifier and native getWorkbenchType' };
+    }
+    if (typeof pc.getSitState !== 'function' || typeof pc.getFurnitureReference !== 'function' ||
+        pc.getSitState() !== 0 || pc.getFurnitureReference()) {
+      return { ok: false, note: 'seat verification must start standing outside furniture' };
+    }
+  }
   const px = pc.getPositionX(), py = pc.getPositionY(), pz = pc.getPositionZ();
   let best = null, bestD = Infinity, beds = 0, n = 0;
   kind.types.forEach(function (type) {
@@ -219,6 +254,7 @@ function faceStep() {
     let on = '';
     try { const r = sp.Game.getCurrentCrosshairRef(); on = r ? refName(r) : ''; } catch (e) { log('could not read the crosshair:', e); }
     if (on === f.name) {
+      if (f.what === 'seat') { facedSeat = f.bed.getFormID() >>> 0; }
       faceTry = null;
       return { ok: true, note: 'before ' + f.what + ' ' + f.name + ' from its ' + f.spots[f.k].side + ', ' + f.beds + ' ' + f.what + '(s) in the cell, it was ' + f.off + ' units off' + (f.missed.length ? '; not from ' + f.missed.join(', ') : '') };
     }
@@ -318,12 +354,24 @@ sp.on('update', function () {
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
   try { cellName = cell ? String(cell.getName() || '') : ''; } catch (e) { cellName = ''; log('could not read the cell name:', e); }
   crosshairBed = '';
+  crosshairSeat = '';
   crosshairDriver = '';
   try {
     const r = sp.Game.getCurrentCrosshairRef();
     if (r && isBed(r)) { crosshairBed = refName(r); }
+    if (observesSeats && r && isSeat(r)) { crosshairSeat = refName(r); }
     if (r && isDriver(r)) { crosshairDriver = refName(r); }
   } catch (e) { log('could not read the crosshair:', e); }
+  if (observesSeats) {
+    seatObservation = null;
+    try {
+      const pc = sp.Game.getPlayer();
+      if (pc && inWorld) {
+        const ref = pc.getFurnitureReference();
+        seatObservation = { at: Date.now(), sit: pc.getSitState(), ref: ref ? ref.getFormID() >>> 0 : 0 };
+      }
+    } catch (e) { log('seat verification could not read native state:', e); }
+  }
   if (faceAsked && !faceDone) {
     try {
       if (faceAsked === 'driver') { faceDone = faceDriver(faceRef); }
@@ -345,12 +393,14 @@ sp.on('update', function () {
 sp.on('furnitureEnter', function (e) {
   try {
     if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
+    noteFurniture(e, true);
     write({ t: 'furniture', enter: true, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
   } catch (err) { log('could not note sitting down:', err); }
 });
 sp.on('furnitureExit', function (e) {
   try {
     if (!e || !e.actor || e.actor.getFormID() !== 0x14) { return; }
+    noteFurniture(e, false);
     write({ t: 'furniture', enter: false, bed: isBed(e.target), ref: e.target ? refName(e.target) : '' });
   } catch (err) { log('could not note getting up:', err); }
 });
@@ -383,7 +433,9 @@ let ackSeen = null;
 let ackReadAt = 0;
 function ask(what, arg) {
   askNo++;
-  write({ t: 'ask', n: askNo, do: what, arg: arg });
+  const row = { t: 'ask', n: askNo, do: what, arg: arg };
+  if (what === 'wheel') { row.i = at; }
+  write(row);
   return askNo;
 }
 function readAck(n) {
@@ -420,6 +472,132 @@ let passed = 0;
 // own "task" results line, passed or failed.
 const failedTasks = [];
 let inventoryKey = null;
+let cameraWheelStart = null;
+let cameraWheelRequest = null;
+
+// #6593: an explicitly opted-in timed wait observes the first wheel attempts.
+// No camera, position, input or control setter is called. Only local run receipts.
+// buttonEvent is delivered outside the update/Papyrus context, so its "before"
+// is the last update sample (with its age), not a synchronous camera read.
+if (steps.some(s => s && s.cameraTrace === true)) {
+  const seen = new Set();
+  const menus = ['Loading Menu', 'Main Menu', 'RaceSex Menu', 'InventoryMenu',
+    'TweenMenu', 'Console Native UI Menu', 'Dialogue Menu'];
+  let active = null;
+  let receipts = 0;
+  let wheelCount = 0;
+  let traceUntil = 0;
+  function safe(read) { try { return read(); } catch (e) { return null; } }
+  function number(value) { return typeof value === 'number' && Number.isFinite(value) ? value : null; }
+  function id(value) { return Number.isInteger(value) && value > 0 && value <= 0xffffffff ? value : null; }
+  function point(value) {
+    return Array.isArray(value) && value.length === 3 && value.every(v => number(v) !== null) ? value.slice() : null;
+  }
+  function flag(read) { const value = safe(read); return typeof value === 'boolean' ? value : null; }
+  function sample() {
+    const pc = safe(() => sp.Game.getPlayer());
+    const actorXYZ = point(safe(() => [pc.getPositionX(), pc.getPositionY(), pc.getPositionZ()]));
+    const cell = id(safe(() => pc.getParentCell().getFormID()));
+    const world = id(safe(() => pc.getWorldSpace().getFormID()));
+    let owner = null;
+    const text = safe(() => sp.storage.ownerOutfitDiagnostic);
+    if (typeof text === 'string' && text.length <= 32768) {
+      owner = safe(() => JSON.parse(text));
+    }
+    const targetXYZ = point(owner && owner.target && owner.target.pos);
+    const targetWorld = id(owner && owner.target && owner.target.worldOrCell);
+    const ownerEpoch = owner && Number.isSafeInteger(owner.epoch) && owner.epoch >= 0 ? owner.epoch : null;
+    const targetAt = number(owner && owner.at);
+    const targetAgeMs = targetAt !== null && targetAt <= Date.now() ? Date.now() - targetAt : null;
+    const targetLocationMatches = targetWorld !== null && (targetWorld === world || targetWorld === cell);
+    const camera = safe(() => sp.Game.getCameraState());
+    return { sampledAt: Date.now(), actorXYZ: actorXYZ, cell: cell, world: world,
+      actorScale: number(safe(() => pc.getScale())), loaded: flag(() => pc.is3DLoaded()),
+      targetXYZ: targetXYZ, targetWorld: targetWorld, targetAgeMs: targetAgeMs, ownerEpoch: ownerEpoch,
+      targetLocationMatches: targetLocationMatches,
+      actorTargetZ: actorXYZ && targetXYZ && targetLocationMatches ? actorXYZ[2] - targetXYZ[2] : null,
+      cameraState: Number.isInteger(camera) && camera >= 0 && camera <= 15 ? camera : null,
+      // The pinned public API has no camera world-position getter. Mode and
+      // actor height cannot be substituted for actual camera displacement.
+      cameraWorldAvailable: false, cameraWorldXYZ: null, cameraActorDistance: null,
+      browserFocus: flag(() => sp.browser.isFocused()),
+      cameraControls: flag(() => sp.Game.isCamSwitchControlsEnabled()),
+      lookingControls: flag(() => sp.Game.isLookingControlsEnabled()),
+      menus: menus.filter(name => !!openMenus[name]) };
+  }
+  function record(phase, value, wheel) {
+    if (receipts >= 64) { return; }
+    const row = { t: 'camera-trace', phase: phase, i: active.i, sample: value };
+    if (wheel) {
+      row.wheel = wheel.n;
+      row.direction = wheel.direction;
+      row.eventSource = wheel.platform ? 'platform-request' : 'game-buttonEvent';
+      row.wheelAt = wheel.at;
+      row.beforeSampleAgeMs = Math.max(0, wheel.at - wheel.before.sampledAt);
+      if (wheel.platform) {
+        row.requestedDelta = wheel.direction === 'up' ? 120 : -120;
+        row.platformAccepted = wheel.acknowledged ? wheel.acknowledged.ok : null;
+        row.platformAckAt = wheel.acknowledged ? wheel.acknowledged.at : null;
+      }
+      if (phase !== 'wheel-before' && phase !== 'wheel-request-before') {
+        const before = wheel.before;
+        row.sameOwnerEpoch = before.ownerEpoch !== null && before.ownerEpoch === value.ownerEpoch &&
+          before.targetWorld === value.targetWorld && before.cell === value.cell && before.world === value.world;
+        row.actorDeltaXYZ = before.actorXYZ && value.actorXYZ && before.cell === value.cell && before.world === value.world
+          ? value.actorXYZ.map((v, i) => v - before.actorXYZ[i]) : null;
+      }
+    }
+    receipts++;
+    write(row);
+  }
+  cameraWheelStart = function (delta) {
+    if (!active || active.i !== at || Date.now() >= active.until || wheelCount >= 8 || receipts >= 63) { return false; }
+    cameraWheelRequest = { n: ++wheelCount, direction: delta === 120 ? 'up' : 'down', at: Date.now(),
+      before: active.last, platform: true, acknowledged: null, after: false, done: false };
+    active.pending.push(cameraWheelRequest);
+    record('wheel-request-before', cameraWheelRequest.before, cameraWheelRequest);
+    return true;
+  };
+  sp.on('buttonEvent', function (e) {
+    if (!active || finished || failing || at !== active.i || Date.now() >= active.until || wheelCount >= 8 ||
+        !e || e.device !== 1 || (e.code !== 8 && e.code !== 9) || !e.isDown || e.isUp || e.isRepeating || e.isHeld) { return; }
+    // Native ButtonEventData exports the device-local mouse idCode (8/9),
+    // not the 256-offset DxScanCode enum (264/265).
+    const wheel = { n: ++wheelCount, direction: e.code === 8 ? 'up' : 'down', at: Date.now(), before: active.last, after: false };
+    active.pending.push(wheel);
+    record('wheel-before', wheel.before, wheel);
+  });
+  sp.on('update', function () {
+    const now = Date.now();
+    if (active && (finished || failing || at !== active.i || now >= active.until || receipts >= 63)) {
+      record('end', active.last);
+      active = null;
+    }
+    if (finished || failing) { return; }
+    const step = steps[at];
+    const timed = step && step.do === 'wait' && step.for === 'time' && Number.isFinite(step.ms) && step.ms > 0;
+    const wheelStep = step && step.do === 'wheel' && (step.delta === 120 || step.delta === -120);
+    if (!active && receipts < 63 && (!traceUntil || now < traceUntil) && !seen.has(at) && step && step.cameraTrace === true && (timed || wheelStep)) {
+      seen.add(at);
+      if (!traceUntil) { traceUntil = now + 30000; }
+      active = { i: at, until: timed ? Math.min(now + step.ms, traceUntil) : traceUntil, last: sample(), pending: [] };
+      record('start', active.last);
+    }
+    if (!active) { return; }
+    const due = active.pending.some(w => (!w.platform || w.acknowledged) && (!w.after || now - (w.acknowledged ? w.acknowledged.at : w.at) >= 250));
+    if (!due && now - active.last.sampledAt < 250) { return; }
+    const value = sample();
+    for (const wheel of active.pending) {
+      if (wheel.platform && !wheel.acknowledged) { continue; }
+      const since = wheel.acknowledged ? wheel.acknowledged.at : wheel.at;
+      if (!wheel.after) { record(wheel.platform ? 'wheel-ack-after' : 'wheel-after', value, wheel); wheel.after = true; }
+      else if (now - since >= 250) { record(wheel.platform ? 'wheel-ack-settled' : 'wheel-settled', value, wheel); wheel.done = true; }
+    }
+    active.pending = active.pending.filter(w => !w.done);
+    if (value.cameraState !== active.last.cameraState) { record('state', value); }
+    active.last = value;
+  });
+}
 
 // Windows acknowledging a press and Skyrim routing it are two observations.
 // Only explicitly traced script steps can log their own requested key.
@@ -477,6 +655,7 @@ function next() {
   stepAt = Date.now();
   waitingAsk = 0;
   pageId = '';
+  seatHold = null;
 }
 // The failing step of a task has had its screenshot: the task is failed and
 // the run goes on at the next task's first step.
@@ -494,6 +673,7 @@ function failTask() {
   faceRef = '';
   faceDone = null;
   faceTry = null;
+  seatPress = null; seatExitPress = null; seatHold = null; confirmedSeatEntry = null;
   gearAsk = null;
   gearDone = null;
 }
@@ -531,6 +711,30 @@ sp.on('tick', function () {
   const late = now - stepAt > limit;
 
   switch (s.do) {
+    case 'wheel': {
+      if (s.cameraTrace !== true || (s.delta !== 120 && s.delta !== -120)) {
+        fail('a wheel step needs cameraTrace and exactly one signed detent (120 or -120)'); return;
+      }
+      if (late) { fail('the bounded wheel request or its camera samples did not complete'); return; }
+      if (!waitingAsk) {
+        // The update handler must capture the before sample before Windows
+        // receives this request. No game API is called from this tick.
+        if (cameraWheelStart && cameraWheelStart(s.delta)) { waitingAsk = ask('wheel', s.delta); }
+        return;
+      }
+      const reply = readAck(waitingAsk);
+      if (reply && cameraWheelRequest) {
+        if (!cameraWheelRequest.acknowledged) {
+          cameraWheelRequest.acknowledged = { ok: reply.ok === true, at: now };
+          return;
+        }
+        if (cameraWheelRequest.done) {
+          if (cameraWheelRequest.acknowledged.ok) { pass('Windows accepted one wheel event; camera observations are separate evidence'); }
+          else { fail(String(reply.note || 'Windows did not accept the wheel request')); }
+        }
+      }
+      return;
+    }
     case 'wait': {
       if (s.for === 'menu') {
         // Open (or shut) now, or it opened (or closed) since the step before
@@ -555,7 +759,45 @@ sp.on('tick', function () {
         if (inWorld && here === want) { pass(cellName ? 'in ' + cellName : 'in an unnamed cell'); return; }
       } else if (s.for === 'crosshair') {
         if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
+        if (s.what === 'seat' && crosshairSeat) { pass('seat ' + crosshairSeat); return; }
         if (s.what === 'driver' && crosshairDriver) { pass('driver ' + crosshairDriver); return; }
+      } else if (s.for === 'furniture') {
+        if (!inWorld || !seatObservation || now - seatObservation.at >= 1000) { fail('seat verification lost the world or native updates'); return; }
+        const press = s.enter === false ? seatExitPress : seatPress;
+        if (!facedSeat || !press || press.ref !== facedSeat) { fail('seat verification has no matching normal key press'); return; }
+        const entries = furnitureEvents.filter(e => e.epoch > press.epoch && e.ref === facedSeat && e.enter);
+        if (s.enter !== false && entries.length > 1) { fail('one seat press produced repeated furnitureEnter events'); return; }
+        if (furnitureState && furnitureState.epoch > press.epoch && furnitureState.ref === facedSeat &&
+            furnitureState.enter === (s.enter !== false) && seatObservation &&
+            seatObservation.sit === (s.enter === false ? 0 : 3) &&
+            (s.enter === false ? seatObservation.ref === 0 : seatObservation.ref === facedSeat)) {
+          if (s.enter !== false) { confirmedSeatEntry = { epoch: furnitureEpoch, ref: facedSeat }; }
+          pass('own furniture' + (s.enter === false ? 'Exit' : 'Enter') + ' and native state for ' + facedSeat.toString(16)); return;
+        }
+        if (late) { fail('seat verification saw no fresh own furniture' + (s.enter === false ? 'Exit' : 'Enter') + ' and matching native state for ' + facedSeat.toString(16) + ' in ' + limit + ' ms'); return; }
+      } else if (s.for === 'seated') {
+        const interval = Number(s.ms);
+        if (!Number.isFinite(interval) || interval <= 0) { fail('seat verification needs a positive interval'); return; }
+        if (!inWorld || !seatObservation || now - seatObservation.at >= 1000) { fail('seat verification lost the world or native updates'); return; }
+        if (!confirmedSeatEntry || confirmedSeatEntry.epoch !== furnitureEpoch || confirmedSeatEntry.ref !== facedSeat) {
+          fail('the confirmed seat entry changed before the hold'); return;
+        }
+        if (!seatHold) { seatHold = { epoch: furnitureEpoch, ref: facedSeat, last: seatObservation.at, samples: 0, maxGap: 0 }; }
+        const sampleGap = seatObservation.at - seatHold.last;
+        if (sampleGap > 1000) { fail('seat verification has an unobserved world gap of ' + sampleGap + ' ms'); return; }
+        seatHold.maxGap = Math.max(seatHold.maxGap, sampleGap);
+        if (!seatHold.samples || seatObservation.at !== seatHold.last) { seatHold.samples++; }
+        seatHold.last = seatObservation.at;
+        if (!furnitureState || !furnitureState.enter || furnitureEpoch !== seatHold.epoch ||
+            furnitureState.ref !== seatHold.ref || seatObservation.sit !== 3 ||
+            seatObservation.ref !== seatHold.ref) {
+          fail('the seat was left or entered again before the full interval'); return;
+        }
+        if (now - stepAt >= interval) {
+          write({ t: 'seated-observation', ref: facedSeat.toString(16), ms: now - stepAt, samples: seatHold.samples, maxGap: seatHold.maxGap });
+          pass('remained in seat ' + facedSeat.toString(16) + ' for ' + (now - stepAt) + ' ms');
+        }
+        return;
       } else if (s.for === 'running') {
         // The world runs while a menu is up: update, which the game sends
         // only while it is not paused, kept coming for ms with no gap of a
@@ -665,6 +907,8 @@ sp.on('tick', function () {
       }
       if (!waitingAsk) {
         if (s.do === 'key') {
+          if (observesSeats && facedSeat && Number(s.code) === 18) { seatPress = { epoch: furnitureEpoch, ref: facedSeat }; }
+          if (observesSeats && facedSeat && Number(s.code) === 17) { seatExitPress = { epoch: furnitureEpoch, ref: facedSeat }; }
           inventoryKey = s.inventoryTrace === true
             ? { i: at, code: Number(s.code), until: now + INVENTORY_TRACE_MS, down: false, up: false }
             : null;

@@ -199,7 +199,8 @@ const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'))
     r = await request(P, 'PUT', '/api/session-keep', Object.assign({}, OWN, { cookie: admin }, json), { session: 'bjorn-session-1', who: ADMIN_D, keep: true });
     yes('the right id with the wrong account is 404', r.status === 404);
     r = await request(P, 'PUT', '/api/session-keep', Object.assign({}, OWN, { cookie: admin }, json), 'null');
-    yes('a JSON null body is 404, not a crash', r.status === 404);
+    // Refused as a body that is not an object, the way bad JSON is (#4382).
+    yes('a JSON null body is 400, not a crash', r.status === 400);
     r = await request(P, 'PUT', '/api/session-keep', Object.assign({}, OWN, { cookie: admin }, json), { session: 'bjorn-session-1', who: BJORN_D, keep: true });
     let kept = readJson(sessions, []).find((x) => x.session === 'bjorn-session-1');
     yes('an admin holds it: 200 keep true', r.status === 200 && r.j.keep === true);

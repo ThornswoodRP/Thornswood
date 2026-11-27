@@ -273,7 +273,7 @@ function partial(where, total, sent, how, extraHeaders) {
 // ------------------------------------------------------------- the page --
 function pageChecks() {
   const ga = HOME.indexOf("} else if (here === '/gallery') {");
-  const gb = HOME.indexOf("} else if (here === '/downloads') {");
+  const gb = HOME.indexOf("} else if (here === '/report') {");
   const gal = (ga >= 0 && gb > ga) ? HOME.slice(ga, gb) : '';
   yes('home.js has the gallery page', !!gal);
   yes('the gallery does not wait on who is asking before drawing the pictures (#1096)',

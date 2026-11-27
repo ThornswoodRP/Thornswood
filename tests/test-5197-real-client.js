@@ -46,6 +46,7 @@ function read(p) {
 }
 const PLUGIN = read(process.env.PLUGIN || path.join('game', 'plugins', 'thornswood-test.js'));
 const RUNNER = read(path.join('scripts', 'dev', 'Run-RealClient.ps1'));
+const WATCH_TEXT = read(path.join('scripts', 'dev', 'Watch-RealClient.ps1')) || '';
 const SKILLS = read(path.join('game', 'ui', 'thornswood-skills.js')) || '';
 const OUR_ADDRESS = JSON.parse(read(path.join('scripts', 'vps', 'vps.json'))).address;
 
@@ -815,6 +816,52 @@ foreach ($scan in @(1,23,36)) {
     yes('a PC on the lock screen stops the run inside its try, before the launcher starts',
         lock > tryAt && tryAt > 0 && start > lock && /\$_\.SessionId -eq \$mySession/.test(RUNNER) && /throw 'This PC is on the lock screen/.test(RUNNER));
   }
+  // Not from inside an app's container (27 Nov: started from the Claude
+  // app's Remote Control, the launcher's folder moves went to that app's
+  // store). Patrick's pick B: runs on One go only through the task.
+  {
+    const guard = RUNNER.indexOf('$container = Get-AppContainerStore');
+    const launch = RUNNER.indexOf('$launcher = Start-Process -FilePath $launcherExe');
+    const channel = RUNNER.indexOf('Set-RunChannel ([ordered]');
+    yes('the run looks for an app container before it changes or starts anything, and stops with where runs go instead',
+        guard > 0 && guard < channel && guard < launch &&
+        /\. \(Join-Path \$PSScriptRoot 'Get-AppContainerStore\.ps1'\)/.test(RUNNER) &&
+        /if \(\$container\) \{\s*throw \("This run is inside the app container of \$container/.test(RUNNER) &&
+        /Watch-RealClient\.ps1 -Now \[-Steps <file>\] asks it/.test(RUNNER));
+    const fnAt = WATCH_TEXT.indexOf('if ($Now) {\n    . (Join-Path $PSScriptRoot');
+    const hand = fnAt >= 0 ? WATCH_TEXT.slice(fnAt, WATCH_TEXT.indexOf('\n}\n', fnAt)) : '';
+    yes('-Now inside a container writes the request and starts the task, making no run itself',
+        /\$container = Get-AppContainerStore/.test(hand) && /WriteAllText\(\$nowFile/.test(hand) &&
+        /Start-ScheduledTask -TaskName \$taskName/.test(hand) && /return\s*\}/.test(hand) &&
+        hand.indexOf('WriteAllText($nowFile') < hand.indexOf('Start-ScheduledTask'));
+    yes('a task that is missing or turned off is said so, with the line that fixes it, and no request is left',
+        /if \(-not \$task\) \{ throw [^\n]*-Install makes it/.test(hand) &&
+        /if \(\$task\.State -eq 'Disabled'\) \{ throw [^\n]*Enable-ScheduledTask -TaskName/.test(hand) &&
+        hand.indexOf("State -eq 'Disabled'") < hand.indexOf('WriteAllText($nowFile'));
+    const lockAt = WATCH_TEXT.indexOf('[IO.File]::WriteAllText($lockFile, [string]$PID)');
+    const takeAt = WATCH_TEXT.indexOf('Remove-Item -LiteralPath $nowFile -Force');
+    yes('the task takes the request off only once its run starts, so one that finds the game open waits',
+        lockAt > 0 && takeAt > lockAt && /\} elseif \(Test-Path -LiteralPath \$nowFile\) \{/.test(WATCH_TEXT) &&
+        /\$verdict = Get-WatchVerdict [^\n]* \(\[bool\]\$asked\)/.test(WATCH_TEXT));
+    yes('the steps asked for are the Deployment worktree\'s own file',
+        /if \(\$Steps\) \{ \$runArgs \+= @\('-Steps', \(Join-Path \$tree \$Steps\)\) \}/.test(WATCH_TEXT) && /\[string\]\$Steps = ''/.test(WATCH_TEXT));
+    const helper = read(path.join('scripts', 'dev', 'Get-AppContainerStore.ps1')) || '';
+    yes('the container is told by where a new folder lands, which it takes away again',
+        /New-Item -ItemType Directory -Path \$made/.test(helper) && /LocalCache\\Local\\' \+ \$name/.test(helper) &&
+        /finally \{\s*Remove-Item -LiteralPath \$made -Force\s*\}/.test(helper));
+    const pv = cp.spawnSync('pwsh', ['--version'], { encoding: 'utf8' });
+    if (pv.status === 0) {
+      const home = fs.mkdtempSync(path.join(os.tmpdir(), 'test-5197-container-'));
+      const local = path.join(home, '.local', 'share');
+      fs.mkdirSync(path.join(local, 'Packages', 'Some.App_x', 'LocalCache', 'Local'), { recursive: true });
+      const f = path.join(REPO_DIR, 'scripts', 'dev', 'Get-AppContainerStore.ps1').replace(/'/g, "''");
+      const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', ". '" + f + "'; 'STORE [' + (Get-AppContainerStore) + ']'"],
+        { encoding: 'utf8', timeout: 120000, env: Object.assign({}, process.env, { HOME: home, XDG_DATA_HOME: local }) });
+      const left = fs.readdirSync(local).filter(function (n) { return n.indexOf('thornswood-container-look-') === 0; });
+      yes('outside a container it says none and leaves nothing behind', /STORE \[\]/.test(r.stdout || '') && left.length === 0);
+      fs.rmSync(home, { recursive: true, force: true });
+    } else { console.log('SKIP  outside a container it says none (no pwsh)'); }
+  }
   // And the launcher says why. "Could not redirect" alone, with Junction's
   // reason dropped, is all One's log had to go on.
   const swap = read(path.join('launcher', 'app', 'Swap.cs'));
@@ -1307,7 +1354,12 @@ foreach ($scan in @(1,23,36)) {
       "'G ' + (V $d @() $false $false 30 $true)\n" +
       "'H ' + (V ([pscustomobject]@{ id = '8'; state = 'in_progress'; lines = @() }) @() $false $false 30 $false)\n" +
       "'I ' + (V $null @() $false $false 30 $false)\n" +
-      "'J ' + (V ([pscustomobject]@{ id = '9'; state = $null; lines = @() }) @() $false $false 30 $false)\n";
+      "'J ' + (V ([pscustomobject]@{ id = '9'; state = $null; lines = @() }) @() $false $false 30 $false)\n" +
+      "function W($dep, $started, $open, $locked, $idle, $going) { Get-WatchVerdict $dep $started $open $locked $idle 0 $going $true }\n" +
+      "'K ' + (W ([pscustomobject]@{ id = '7'; state = 'success'; lines = @('Real game run: failed. 22 of 38 steps passed.', 'Deployed') }) @('7') $false $false 0 $false)\n" +
+      "'L ' + (W $d @() $true $false 0 $false)\n" +
+      "'M ' + (W $d @() $false $true 0 $false)\n" +
+      "'N ' + (W $d @() $false $false 0 $true)\n";
     const r = cp.spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 120000 });
     const out = (r.stdout || '') + (r.stderr || '');
     const said = function (k) { const m = new RegExp('^' + k + ' (.*)$', 'm').exec(out); return m ? m[1].trim() : ''; };
@@ -1321,8 +1373,143 @@ foreach ($scan in @(1,23,36)) {
     yes('not before the Deployment has succeeded', /in_progress, not success/.test(said('H')));
     yes('and not with no Deployment', said('I') === 'no Dev Deployment');
     yes('a Deployment with no status yet is said so, not with a blank', said('J') === 'the newest Dev Deployment has no status yet');
+    yes('a run somebody asked for is made on a Deployment that has had its run or was started for', said('K') === 'run');
+    yes('an asked-for run still waits for an open game, a locked PC and its own run going',
+        /launcher or the game is open/.test(said('L')) && /lock screen/.test(said('M')) && /still going/.test(said('N')));
     if (said('A') !== 'run') { console.log(out.split('\n').slice(0, 12).map(function (l) { return '      ' + l; }).join('\n')); }
   }
+}
+
+// A seat acceptance run observes the actual furniture event and native state.
+// It neither calls Activate directly nor repairs the animation or position.
+{
+  function seating(options) {
+    options = options || {};
+    const steps = [
+      { do: 'face', what: 'seat' },
+      { do: 'wait', for: 'crosshair', what: 'seat', timeout: 2000 },
+      { do: 'key', code: 18 },
+      { do: 'wait', for: 'furniture', enter: true, timeout: 3000 },
+      { do: 'wait', for: 'seated', ms: options.duration === undefined ? 60000 : options.duration },
+      { do: 'key', code: 17 },
+      { do: 'wait', for: 'furniture', enter: false, timeout: 3000 },
+      { do: 'end' }
+    ];
+    const g = game({ steps: steps });
+    let sit = 0, nativeRef = null;
+    const calledTypes = [];
+    function seat(id, x, name, workbench, occupied, bed) {
+      return { bed: !!bed, workbench: workbench || 0,
+        getFormID: () => id, getBaseObject: () => ({ getFormID: () => id + 0x1000,
+          getType: () => 40, getName: () => name }),
+        getPositionX: () => x, getPositionY: () => 0, getPositionZ: () => 0,
+        getAngleZ: () => 0, getWidth: () => 80, getLength: () => 80, getHeight: () => 70,
+        isFurnitureInUse: () => !!occupied };
+    }
+    const target = seat(0x303, 300, 'Bench', 0, options.occupied || options.allOccupied);
+    const farSeat = seat(0x304, 500, 'Chair', 0, options.allOccupied);
+    const refs = options.missing ? [] : [seat(0x301, 10, 'Bed', 0, false, true),
+      seat(0x302, 50, 'Crafting Bench', 1), target, farSeat];
+    const cell = { getNumRefs: type => { calledTypes.push(type); return refs.length; }, getNthRef: i => refs[i] };
+    g.world.cell = cell;
+    g.world.pc = { getFormID: () => 0x14, getParentCell: () => g.world.cell,
+      getPositionX: () => 0, getPositionY: () => 0, getPositionZ: () => 0,
+      setPosition: () => {}, setAngle: () => {}, getSitState: () => sit,
+      getFurnitureReference: () => nativeRef };
+    g.box.Thornswood.isBedRef = r => !!(r && r.bed);
+    g.box.skyrimPlatform.getWorkbenchType = id => {
+      const r = refs.find(x => x.getBaseObject().getFormID() === id); return r ? r.workbench : 0;
+    };
+    g.box.skyrimPlatform.Game.forceFirstPerson = () => {};
+    g.world.crosshair = options.occupied ? farSeat : target;
+    function advance(n, ms) { for (let i = 0; i < n; i++) { g.frame(ms || 100); g.ack(); } }
+    function enter(actor, ref) {
+      sit = 3; nativeRef = ref === undefined ? target : ref;
+      g.fire('furnitureEnter', { actor: { getFormID: () => actor || 0x14 }, target: nativeRef });
+    }
+    function exit() {
+      sit = 0; nativeRef = null;
+      g.fire('furnitureExit', { actor: { getFormID: () => 0x14 }, target: target });
+    }
+    return { g, target, advance, enter, exit, calledTypes,
+      state: value => { sit = value; }, nativeRef: value => { nativeRef = value; },
+      steps: () => g.lines().filter(l => l.t === 'step'),
+      presses: () => g.lines().filter(l => l.t === 'ask' && l.do === 'key') };
+  }
+  const normal = seating(); normal.advance(12);
+  yes('seat fixture faces the closest valid non-bed, noncraft chair or bench in this room',
+    normal.steps()[0]?.ok && /before seat 303/.test(normal.steps()[0].note) &&
+    normal.calledTypes.every(x => x === 40));
+  yes('one normal E press is requested, with no direct Activate call',
+    normal.presses().filter(x => x.arg === 18).length === 1);
+  normal.enter(); normal.advance(2);
+  yes('a fresh own enter and native seated state pass the entry wait', normal.steps()[3]?.ok === true);
+  normal.advance(59, 1000);
+  yes('the seat hold cannot pass before its full minute', !normal.steps()[4]);
+  normal.advance(2, 1000);
+  yes('the uninterrupted native seated minute passes', normal.steps()[4]?.ok === true);
+  const holdReceipt = normal.g.lines().filter(l => l.t === 'seated-observation');
+  yes('a successful hold emits one bounded native sampling receipt', holdReceipt.length === 1 &&
+    holdReceipt[0].ref === '303' && holdReceipt[0].ms >= 60000 && holdReceipt[0].samples >= 60 && holdReceipt[0].maxGap <= 1000);
+  normal.advance(3); normal.exit(); normal.advance(3);
+  yes('only the intentional movement follows the hold and its own Exit ends the wait',
+    normal.presses().filter(x => x.arg === 17).length === 1 && normal.steps()[6]?.ok === true);
+
+  const staleExit = seating(); staleExit.advance(12); staleExit.enter(); staleExit.advance(3); staleExit.advance(61, 1000); staleExit.advance(3);
+  staleExit.exit(); staleExit.nativeRef(staleExit.target); staleExit.advance(35);
+  yes('an Exit event with a stale native furniture ref cannot pass standing verification', staleExit.steps()[6]?.ok === false);
+  const missingEvent = seating(); missingEvent.advance(12); missingEvent.state(3); missingEvent.advance(35);
+  yes('native seated state without furnitureEnter cannot pass acceptance', missingEvent.steps()[3]?.ok === false);
+  const otherActor = seating(); otherActor.advance(12); otherActor.enter(0x99); otherActor.advance(35);
+  yes('another actor entering does not count as the runner entering', otherActor.steps()[3]?.ok === false);
+  const wrongTarget = seating(); wrongTarget.advance(12);
+  wrongTarget.enter(0x14, { getFormID: () => 0x304, getBaseObject: () => ({ getName: () => 'Bench' }) }); wrongTarget.advance(35);
+  yes('an enter for another same-named seat does not verify the target', wrongTarget.steps()[3]?.ok === false && /fresh own furnitureEnter/.test(wrongTarget.steps()[3].note));
+  const premature = seating(); premature.advance(12); premature.enter(); premature.advance(3); premature.exit(); premature.advance(3);
+  yes('a premature Exit fails the hold', premature.steps()[4]?.ok === false);
+  const silent = seating(); silent.advance(12); silent.enter(); silent.advance(3); silent.state(0); silent.advance(3);
+  yes('native unseating without Exit also fails the hold', silent.steps()[4]?.ok === false);
+  const reentry = seating(); reentry.advance(12); reentry.enter(); reentry.advance(3); reentry.exit(); reentry.enter(); reentry.advance(3);
+  yes('Exit followed by immediate reentry cannot conceal a broken hold', reentry.steps()[4]?.ok === false);
+  const lostWorld = seating(); lostWorld.advance(12); lostWorld.enter(); lostWorld.advance(3); lostWorld.g.world.cell = null; lostWorld.advance(2);
+  yes('a lost room fails instead of counting time outside the world', lostWorld.steps()[4]?.ok === false && /lost the world/.test(lostWorld.steps()[4].note));
+  const paused = seating(); paused.advance(12); paused.enter(); paused.advance(3); paused.g.tickOnly(1500);
+  yes('lost update/world progress fails with a verification error', paused.steps()[4]?.ok === false);
+  const blocked = seating(); blocked.advance(12); blocked.enter(); blocked.advance(3); blocked.g.frame(1500);
+  yes('a gap with neither ticks nor updates cannot be counted as continuous seating', blocked.steps()[4]?.ok === false);
+  const gap = seating(); gap.advance(12); gap.enter(); gap.advance(1); gap.exit(); gap.enter(); gap.advance(3);
+  yes('an Exit/reentry between entry confirmation and the first hold tick still fails', gap.steps()[4]?.ok === false);
+  const flicker = seating(); flicker.advance(12); flicker.enter(); flicker.advance(3); flicker.nativeRef(null); flicker.advance(61, 1000);
+  yes('a null native furniture reference cannot verify the exact occupied target', flicker.steps()[4]?.ok === false);
+  const switched = seating(); switched.advance(12); switched.enter(); switched.advance(3);
+  switched.nativeRef({ getFormID: () => 0x999 }); switched.advance(3);
+  yes('native furniture changing to another reference fails the hold', switched.steps()[4]?.ok === false);
+  const missingApi = seating(); missingApi.g.box.skyrimPlatform.getWorkbenchType = undefined; missingApi.advance(5);
+  yes('missing bench classification is an explicit verification error', missingApi.steps()[0]?.ok === false && /getWorkbenchType/.test(missingApi.steps()[0].note));
+  const occupied = seating({ occupied: true }); occupied.advance(12);
+  yes('an occupied nearest seat is skipped for the closest valid free seat', occupied.steps()[0]?.ok && /before seat 304/.test(occupied.steps()[0].note));
+  const allOccupied = seating({ allOccupied: true }); allOccupied.advance(5);
+  yes('an entirely occupied room reports that no valid seat is available', allOccupied.steps()[0]?.ok === false && /no seat/.test(allOccupied.steps()[0].note));
+  const badDuration = seating({ duration: 0 }); badDuration.advance(12); badDuration.enter(); badDuration.advance(3);
+  yes('a missing positive observation interval cannot pass a seat hold', badDuration.steps()[4]?.ok === false);
+  const absent = seating({ missing: true }); absent.advance(5);
+  yes('no ordinary seat in the local room is an actionable failure', absent.steps()[0]?.ok === false && /no seat/.test(absent.steps()[0].note));
+}
+
+{
+  const seatRun = JSON.parse(read('tests/real-client/bench-seat.json')).steps;
+  const defaultSteps = JSON.parse(read('tests/real-client/dev-release.json')).steps;
+  const prefix = defaultSteps.findIndex(s => s.do === 'shot' && s.name === 'in-world') + 1;
+  yes('the separate seat fixture preserves the exact canonical choice/world preamble', prefix > 0 &&
+    JSON.stringify(seatRun.slice(0, prefix)) === JSON.stringify(defaultSteps.slice(0, prefix)));
+  const face = seatRun.findIndex(s => s.do === 'face' && s.what === 'seat');
+  const hold = seatRun.findIndex(s => s.do === 'wait' && s.for === 'seated');
+  const exit = seatRun.findIndex(s => s.do === 'key' && s.code === 17);
+  yes('the separate seat recipe uses exactly one normal E interaction', seatRun.filter(s => s.do === 'key' && s.code === 18).length === 1);
+  yes('it waits for its own entry, holds a minute and exits intentionally in that order',
+    face >= 0 && seatRun.slice(face, hold).some(s => s.for === 'furniture' && s.enter === true) &&
+    seatRun[hold].ms === 60000 && exit > hold && seatRun.slice(exit).some(s => s.for === 'furniture' && s.enter === false));
+  yes('the seat fixture does not send a fabricated rest command', !JSON.stringify(seatRun).includes('/rest '));
 }
 
 console.log('');

@@ -264,7 +264,7 @@ if ($ForksMayGo) {
 }
 
 # ==== make the Release ============================================================
-$work = Join-Path ([IO.Path]::GetTempPath()) ('frida-sources-' + [Guid]::NewGuid().ToString('N'))
+$work = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('frida-sources-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 try {
     if (Get-Visibility) {

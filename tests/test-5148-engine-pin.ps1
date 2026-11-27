@@ -15,7 +15,8 @@
        engine-pin.yml takes, and that it never starts engine.yml again for a
        head whose record ended red;
     4. Get-EnginePinNotes: the fork pull requests by merge commit, the
-       Thornswood issues they name, and their Test tasks in the shape
+       Thornswood issues they name, and their Test tasks and explicitly authored
+       known issues in the shape
        done-on-merge.yml reads;
     5. engine-pin.yml's shape: the tick, the three jobs, which token each
        holds, that only the read only job runs the npm build, every action by
@@ -291,6 +292,57 @@ $script:body81 = "Refs Thornswood #1649.`n`nRelease note: An equipped form stays
 $n = Get-EnginePinNotes $P $H $fake
 Yes '  two notes join into one, the second headline as a line under the first' ($n.ReleaseNote -eq "The loading screen shows no flash`n- The screen stays dark until the picture is up.`n- An equipped form stays on`n- A worn piece is never drunk by mistake.")
 $pin = [IO.File]::ReadAllText((Join-Path $root 'scripts/release/Update-EnginePin.ps1'))
+
+# Explicit fork-authored known issues travel beside test tasks. A reference
+# alone must never invent an unchanged declaration for the author.
+$script:body81 = @'
+Refs Thornswood #1649.
+Known issue for Thornswood #4511: unchanged
+
+Known issue for Thornswood #5053: A drop remains out of reach
+Server: Main
+What happens: A dropped item can remain out of reach.
+Where: Beside a container.
+How to avoid it: Leave room beside the container.
+What is being done: The remaining placement case is being checked.
+Test task for Thornswood #6885: A character keeps the same view
+Server: Main
+1. Join and look around.
+What should happen: The view stays where you set it.
+Known issue for Thornswood #6886: unchanged
+'@
+$mixed = Get-EnginePinNotes $P $H $fake
+Yes 'explicit unchanged declarations survive without invented body lines' (@($mixed.KnownIssues).Count -eq 3 -and $mixed.KnownIssues[0] -ceq 'Known issue for #4511: unchanged' -and $mixed.KnownIssues[2] -ceq 'Known issue for #6886: unchanged')
+Yes 'a full known-issue block preserves authored lines and stops at the next test task' (@($mixed.KnownIssues).Count -eq 3 -and $mixed.KnownIssues[1] -ceq "Known issue for #5053: A drop remains out of reach`nServer: Main`nWhat happens: A dropped item can remain out of reach.`nWhere: Beside a container.`nHow to avoid it: Leave room beside the container.`nWhat is being done: The remaining placement case is being checked.")
+Yes 'a test task stops at a following known-issue block without losing its own steps' ($mixed.TestTasks.Count -eq 2 -and $mixed.TestTasks[1] -ceq "Test task for #6885: A character keeps the same view`nServer: Main`n1. Join and look around.`nWhat should happen: The view stays where you set it.")
+Yes 'known-only issues are still included among the pin references' ((@($mixed.Issues) -join ',') -eq '1649,3130,4511,5053,6885,6886')
+
+foreach ($ending in @('## Another section', '---', ([char]::ConvertFromUtf32(0x1F332) + ' Footer'))) {
+    $script:body81 = "Known issue for Thornswood #4511: unchanged`r`n$ending`r`nnot part of this block"
+    $bounded = Get-EnginePinNotes $P $H $fake
+    Yes ('known issue ends at the existing task terminator: ' + $ending) ($null -ne $bounded.KnownIssues -and @($bounded.KnownIssues).Count -eq 1 -and $bounded.KnownIssues[0] -ceq 'Known issue for #4511: unchanged')
+}
+$script:body81 = "Refs Thornswood #1649.`n> Known issue for Thornswood #4511: unchanged`nKnown issue for #5053: unchanged"
+$unwritten = Get-EnginePinNotes $P $H $fake
+Yes 'ordinary references, quoted headings and unqualified issue headings do not invent declarations' (@($unwritten.KnownIssues | Where-Object { $null -ne $_ }).Count -eq 0)
+$script:body81 = "Known issue for Thornswood #4511: unchanged`nUnexpected body text remains for the gate to reject."
+$invalid = Get-EnginePinNotes $P $H $fake
+Yes 'an invalid unchanged body is preserved for the existing gate, not silently sanitized' ($null -ne $invalid.KnownIssues -and @($invalid.KnownIssues).Count -eq 1 -and $invalid.KnownIssues[0].EndsWith('Unexpected body text remains for the gate to reject.'))
+
+# Execute only the actual formatter's three metadata loops. The full updater
+# also fetches/builds/stages an engine; none of those steps belongs in a unit
+# fixture. AST selection fails if the production seam is missing or changes.
+$tokens = $null; $parseErrors = $null
+$pinAst = [Management.Automation.Language.Parser]::ParseInput($pin, [ref]$tokens, [ref]$parseErrors)
+$emit = @($pinAst.FindAll({ param($node) $node -is [Management.Automation.Language.ForEachStatementAst] -and $node.Condition.Extent.Text -in @('$notes.Issues', '$notes.TestTasks', '$notes.KnownIssues') }, $true))
+Yes 'the actual pin formatter emits references, tasks and authored known issues' ($parseErrors.Count -eq 0 -and $emit.Count -eq 3)
+if ($parseErrors.Count -eq 0 -and $emit.Count -eq 3) {
+    $notes = $mixed; $body = New-Object System.Collections.Generic.List[string]
+    & ([scriptblock]::Create((@($emit | ForEach-Object { $_.Extent.Text }) -join "`n")))
+    $formatted = $body -join "`n"
+    Yes 'formatted pin metadata carries unchanged and full known issues without cross-block leakage' ($formatted.Contains($mixed.KnownIssues[0]) -and $formatted.Contains($mixed.KnownIssues[1]) -and $formatted.Contains($mixed.KnownIssues[2]) -and $formatted.Contains($mixed.TestTasks[1]))
+    Yes 'formatted references do not infer unchanged for an uncovered issue' ($formatted.Contains('Refs #1649') -and -not $formatted.Contains('Known issue for #1649:'))
+}
 Yes '  the pin body writes the joined note, none, or names the fork pull requests with no line' ($pin -match "'Release note: ' \+ \`$nl\[0\]" -and $pin -match "'Release note: none'" -and $pin -match 'carry no "Release note:" line')
 Yes '  a heading ends the last Test task before the ticked parts, so the Test tasks check does not read them as steps' ($pin.IndexOf("`$body.Add('### Which parts it touches, and what runs after the merge')") -gt $pin.IndexOf('foreach ($t in $notes.TestTasks)') -and $pin.IndexOf('foreach ($t in $notes.TestTasks)') -gt 0 -and $pin.IndexOf("`$body.Add('### Which parts it touches, and what runs after the merge')") -lt $pin.IndexOf("`$body.Add('- [x] The live server build"))
 

@@ -414,7 +414,8 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
     'tests/test-5179-merge-release.ps1': 'sets GITHUB_SHA for merge-release.yml\'s notes step, run in a scratch process over a stand-in; merge-release.yml runs on main after a merge and is no check of a build (#5179)',
     'tests/test-5191-content-take.ps1': 'reads merge-release.yml\'s text to hold that the release names the merge the box built and not the run\'s own commit (#7050); merge-release.yml runs on main after a merge and is no check of a build',
     'scripts/ops/Box-Step.js': 'box-step.yml\'s issue event: which issue was opened, edited or closed (#5611); it runs on issues and a schedule, never in a check of a build',
-    'tests/pr-read-cases.py': 'sets GITHUB_EVENT_NAME and GITHUB_RUN_ATTEMPT for bot/pr_tasks.py in its own process, over a stand-in GitHub, to hold where test-tasks.yml reads the body from on each event (#5900); test-tasks.yml is no check of a build'
+    'tests/pr-read-cases.py': 'sets GITHUB_EVENT_NAME and GITHUB_RUN_ATTEMPT for bot/pr_tasks.py in its own process, over a stand-in GitHub, to hold where test-tasks.yml reads the body from on each event (#5900); test-tasks.yml is no check of a build',
+    'bot/tests/test-5199-pr-tasks.py': 'sets GITHUB_EVENT_NAME, GITHUB_EVENT_PATH and GITHUB_RUN_ATTEMPT for bot/pr_tasks.py in its own process, over a stand-in GitHub, to hold that a merge group, a first pull request event and a rerun each take the engine pin\'s head from that same pull request (#7164); test-tasks.yml is no check of a build'
   };
   const ENVREAD = /\b(GITHUB_(EVENT_NAME|EVENT_PATH|REF|REF_NAME|REF_TYPE|SHA|HEAD_REF|BASE_REF|RUN_ID|RUN_NUMBER|ACTOR))\b/;
   const found = [];

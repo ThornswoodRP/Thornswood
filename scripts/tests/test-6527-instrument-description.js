@@ -33,8 +33,8 @@ function check(label, condition) {
   if (condition) { pass++; console.log('PASS  ' + label); }
   else { fail++; console.log('FAIL  ' + label); }
 }
-check('the production constructor makes exactly the three instrument recipes',
-  out.instruments.sort().join(',') === ['Drum', 'Flute', 'Lute'].map(n => 'COBJ ThornswoodRecipeInstrument' + n).join(','));
+check('the production constructor makes exactly the four instrument recipes (the horn, #7167)',
+  out.instruments.sort().join(',') === ['Drum', 'Flute', 'Horn', 'Lute'].map(n => 'COBJ ThornswoodRecipeInstrument' + n).join(','));
 for (let i = 0; i < out.single.length; i++) {
   check('instrument recipe ' + i + ' is explicitly described',
     out.single[i].unnamed.length === 0 && out.single[i].text.includes('instruments'));

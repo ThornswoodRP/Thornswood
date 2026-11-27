@@ -140,6 +140,8 @@ function Get-SiteText([string]$Uri) {
     $copy = Join-Path $work 'scripts/release/Publish-FridaSources.ps1'
     New-Item -ItemType Directory -Path (Split-Path -Parent $copy) -Force | Out-Null
     [IO.File]::WriteAllText($copy, $src.Substring(0, $a) + $stub + $src.Substring($b))
+    # The script takes its scratch folder from the helper beside it (#4264).
+    Copy-Item -LiteralPath (Join-Path $repo 'scripts/release/Get-ScratchDir.ps1') -Destination (Split-Path -Parent $copy)
 
     # ---- two forks, each with the tag at a commit, and the record of them ---------
     $forks = Join-Path $work 'forks'

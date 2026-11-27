@@ -49,6 +49,15 @@
   hashes and our own files, and the collection's own patches as deltas). No plugin goes in it: the plugins are other authors'
   files and stay on the runner.
 
+  THE DEV COLLECTION (#7193). When the record names one (dev: { collection,
+  offset }), every step above is on it: the change publishes as Dev's next
+  revision, and Vortex offers it to Dev's testers alone. Main's testers get
+  it when main is promoted to a build on it (promote-main.yml copies it to
+  the main collection with Copy-NexusRevision.ps1). Everything in -Out is in
+  the records' numbering, the main collection's: Dev's revision n is the
+  records' n + offset, and the layout is named for it
+  (Install-NexusRevision.ps1 -RecordSlug -RecordRevision).
+
   WHAT THE LOG SHOWS. The steps, the change, and a STOP line from any script
   that stopped. The scripts' own output is not printed, as Nexus-Run.ps1
   keeps it out of the public log (#2841).
@@ -114,8 +123,8 @@ if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Obj
 if ($RefreshTag.Count -and $Replicate.Count) { Stop-Record '-RefreshTag and -Replicate each go in a revision of their own.' }
 
 if (-not $Record) { $Record = Join-Path $Repo 'records/collection.json' }
-$base = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
-$Work = Join-Path $base ('thornswood-collection-record-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+$name = 'thornswood-collection-record-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+$Work = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP $name } else { & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') $name }
 if (-not $Out) { $Out = Join-Path $Work 'out' }
 New-Item -ItemType Directory -Force -Path $Work, $Out | Out-Null
 $shell = (Get-Process -Id $PID).Path
@@ -161,14 +170,21 @@ if ($LASTEXITCODE -ne 0) {
     Stop-Record 'The record on main does not pass Check-CollectionRecord.ps1, so it is not drafted.'
 }
 Say ("  collection $($want.collection), following revision $($want.revision): " + @($want.mods).Count + ' files, ' + @($want.plugins).Count + ' plugins') 'Green'
-try { $published = [int](& (Join-Path $Here 'NexusPublished.ps1') -Slug $want.collection -Game $want.game) } catch { Stop-Record $_.Exception.Message }
-if ($published -gt [int]$want.revision) { Stop-Record "Nexus has published revision $published and the record follows revision $($want.revision). The records follow revision $published first (New-CollectionRecord.ps1 from its layout); a change is drafted on the newest revision only." }
-if ($published -lt [int]$want.revision) { Stop-Record "The record follows revision $($want.revision), and the newest Nexus has published is $published, so it names a revision nobody published." }
-Say "  Nexus has published revision $published, the one the record follows" 'Green'
+# Where the change publishes: the Dev collection when the record names one
+# (#7193), with its own numbers, $off behind the records'.
+$hasDev = (Get-CollectionKeys $want) -contains 'dev'
+$nx = if ($hasDev) { [string]$want.dev.collection } else { [string]$want.collection }
+$off = if ($hasDev) { [int]$want.dev.offset } else { 0 }
+$on = if ($hasDev) { "the Dev collection $nx" } else { "collection $nx" }
+try { $published = [int](& (Join-Path $Here 'NexusPublished.ps1') -Slug $nx -Game $want.game) } catch { Stop-Record $_.Exception.Message }
+$pubRec = $published + $off
+if ($pubRec -gt [int]$want.revision) { Stop-Record "Nexus has published revision $published of $on, the records' $pubRec, and the record follows revision $($want.revision). The records follow revision $pubRec first (New-CollectionRecord.ps1 from its layout); a change is drafted on the newest revision only." }
+if ($pubRec -lt [int]$want.revision) { Stop-Record "The record follows revision $($want.revision), and the newest Nexus has published of $on is $published, the records' $pubRec, so it names a revision nobody published." }
+Say ("  Nexus has published revision $published of $on, the one the record follows" + $(if ($off) { " (the records' $pubRec)" } else { '' })) 'Green'
 
 # ------------------------------------------------------------ 2. the change --
-Head "What the record changes on revision $published"
-try { $arc = Receive-NexusRevisionArchive $want.collection $want.game $published (Join-Path $Work 'published') } catch { Stop-Record $_.Exception.Message }
+Head "What the record changes on revision $published of $on"
+try { $arc = Receive-NexusRevisionArchive $nx $want.game $published (Join-Path $Work 'published') } catch { Stop-Record $_.Exception.Message }
 $sz = Find-SevenZip
 if (-not $sz) { Stop-Record '7-Zip is not on this machine, and the published revision is a 7z archive.' }
 $extract = @('x', '-y', ('-o' + (Join-Path $Work 'published/x')), $arc.Path)
@@ -208,11 +224,14 @@ foreach ($l in (Format-CollectionChangeSet $cs)) { Say "  $l" }
 
 # ------------------------------------------------------------- 3. the draft --
 Head 'The new files'
-$params = [ordered]@{ NoPause = $true; Slug = [string]$want.collection; Game = [string]$want.game }
+$params = [ordered]@{ NoPause = $true; Slug = $nx; Game = [string]$want.game }
 if ($RefreshTag.Count) { $params.RefreshTag = [string[]]$RefreshTag }
 if ($Replicate.Count) { $params.Replicate = [string[]]$Replicate }
 try {
     if ($cs.Move.Count) {
+        # A moved entry that lists its files gets the new archive's list, by
+        # its installer with the answers this record gives the new file (#6908).
+        $params.CollectionRecord = $Record
         $params.Mod = [string[]]@($cs.Move | ForEach-Object { [string]$_.modId })
         $params.FileId = [string[]]@($cs.Move | ForEach-Object { [string]$_.fileId })
         $params.Archive = [string[]]@($cs.Move | ForEach-Object { $g = Get-NexusFileArchive $want.game ([string]$_.fileId) (Join-Path $Work 'archives'); Say ("  file $($_.fileId): $($g.Name), $($g.Size) bytes"); $g.Path })
@@ -258,7 +277,7 @@ if ($WhatIf) {
 
 Head "Drafting revision $($published + 1)"
 $code = Invoke-RecordStep 'New-NexusRevision' $params
-$q = '{ collection(slug: "' + $want.collection + '", domainName: "' + $want.game + '") { draftRevisionNumber } }'
+$q = '{ collection(slug: "' + $nx + '", domainName: "' + $want.game + '") { draftRevisionNumber } }'
 $draft = 0
 $draftUnread = ''
 try { $draft = [int](Get-NexusField (Get-NexusField (Invoke-NexusGraph $q $null 'Reading the draft') 'collection') 'draftRevisionNumber') }
@@ -275,7 +294,11 @@ Say "  draft revision $draft" 'Green'
 # ------------------------------------------------- 4 and 5. laid out, held --
 Head "Laying out revision $draft and holding it to the record"
 $lay = Join-Path $Work 'layout'
-$code = Invoke-RecordStep 'Install-NexusRevision' ([ordered]@{ Revision = $draft; Slug = [string]$want.collection; GameDomain = [string]$want.game; Record = $lay; KeepPlugins = $true; Modlist = $true; NoPause = $true })
+$draftRec = $draft + $off
+$layParams = [ordered]@{ Revision = $draft; Slug = $nx; GameDomain = [string]$want.game; Record = $lay; KeepPlugins = $true; Modlist = $true; NoPause = $true }
+# Dev's revision is laid out under the records' name and number (#7193).
+if ($hasDev) { $layParams.RecordSlug = [string]$want.collection; $layParams.RecordRevision = $draftRec }
+$code = Invoke-RecordStep 'Install-NexusRevision' $layParams
 $why = ''
 $diff = @()
 $got = $null
@@ -285,7 +308,7 @@ else {
     if ($got) { $diff = @(Compare-CollectionRecord $want $got) }
     if ($diff.Count) { $why = "draft revision $draft is not what the record says" }
     if (-not $why) {
-        try { $rebuildOrder = Get-PublishedCollectionOrderText $Repo $want $got $draft }
+        try { $rebuildOrder = Get-PublishedCollectionOrderText $Repo $want $got $draftRec }
         catch { $why = $_.Exception.Message }
     }
 }
@@ -293,7 +316,7 @@ else {
 if ($RefreshTag.Count -and -not $why) {
     try {
         $tagDir = Join-Path $Work 'tag-check'
-        $tagArc = Receive-NexusRevisionArchive $want.collection $want.game $draft $tagDir
+        $tagArc = Receive-NexusRevisionArchive $nx $want.game $draft $tagDir
         & $sz x -y ('-o' + (Join-Path $tagDir 'x')) $tagArc.Path | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'The draft archive could not be read.' }
         $node = Get-Command node -ErrorAction Stop
@@ -306,7 +329,7 @@ if ($RefreshTag.Count -and -not $why) {
 if ($Replicate.Count -and -not $why) {
     try {
         $repDir = Join-Path $Work 'replicate-check'
-        $repArc = Receive-NexusRevisionArchive $want.collection $want.game $draft $repDir
+        $repArc = Receive-NexusRevisionArchive $nx $want.game $draft $repDir
         & $sz x -y ('-o' + (Join-Path $repDir 'x')) $repArc.Path | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'The draft archive could not be read.' }
         $node = Get-Command node -ErrorAction Stop
@@ -317,7 +340,7 @@ if ($Replicate.Count -and -not $why) {
 }
 if ($why) {
     foreach ($d in $diff) { Say "  NO  $d" 'Red' }
-    $dc = Invoke-RecordStep 'New-NexusRevision' ([ordered]@{ Discard = $draft; Slug = [string]$want.collection; Game = [string]$want.game; NoPause = $true })
+    $dc = Invoke-RecordStep 'New-NexusRevision' ([ordered]@{ Discard = $draft; Slug = $nx; Game = [string]$want.game; NoPause = $true })
     if ($dc -eq 0) { $script:OnNexus.Clear(); Say "  draft revision $draft discarded" 'Yellow' }
     else { $script:OnNexus.Add("draft revision $draft could not be discarded (exit $dc): discard it before the next merge") }
     Stop-Record "$why, so it is not published. Nothing the pull request reviewed would be what Nexus hands out."
@@ -326,7 +349,7 @@ Say "  revision $draft is the record: the same files, plugins, order, rules and 
 
 # ------------------------------------------------------------ 6. published --
 Head "Publishing revision $draft"
-$code = Invoke-RecordStep 'New-NexusRevision' ([ordered]@{ Publish = $draft; Slug = [string]$want.collection; Game = [string]$want.game; NoPause = $true })
+$code = Invoke-RecordStep 'New-NexusRevision' ([ordered]@{ Publish = $draft; Slug = $nx; Game = [string]$want.game; NoPause = $true })
 if ($code -ne 0) { Stop-Record "New-NexusRevision.ps1 -Publish $draft stopped (exit $code); the draft is held to the record and waits." }
 $script:OnNexus.Clear()
 Say "  revision $draft is published" 'Green'
@@ -334,13 +357,14 @@ Say "  revision $draft is published" 'Green'
 [IO.File]::WriteAllText((Join-Path $Out 'load-order.json'), $rebuildOrder, $utf8)
 foreach ($f in @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt')) { Copy-Item -LiteralPath (Join-Path $lay $f) -Destination (Join-Path $Out $f) }
 Copy-Item -LiteralPath (Join-Path $lay 'thornswood.wabbajack') -Destination (Join-Path $Out 'collection-modlist.wabbajack')
-$got.revision = $draft
+$got.revision = $draftRec
+if ($hasDev) { $got | Add-Member -NotePropertyName dev -NotePropertyValue $want.dev -Force }
 [IO.File]::WriteAllText((Join-Path $Out 'collection.json'), (ConvertTo-CollectionRecordText $got), $utf8)
-$dropped = [ordered]@{ collection = [string]$want.collection; revision = $draft; dropped = @(@($want.dropped) | Where-Object { $_ }) }
+$dropped = [ordered]@{ collection = [string]$want.collection; revision = $draftRec; dropped = @(@($want.dropped) | Where-Object { $_ }) }
 [IO.File]::WriteAllText((Join-Path $Out 'dropped.json'), ($dropped | ConvertTo-Json -Depth 4), $utf8)
 $na = Join-Path $Work 'draft'
 try {
-    $da = Receive-NexusRevisionArchive $want.collection $want.game $draft $na
+    $da = Receive-NexusRevisionArchive $nx $want.game $draft $na
     & $sz x -y ('-o' + (Join-Path $na 'x')) $da.Path 'collection.json' | Out-Null
     Copy-Item -LiteralPath (Join-Path $na 'x/collection.json') -Destination (Join-Path $Out 'nexus-collection.json')
 } catch { Say ('  the published revision''s collection.json could not be kept for collection-permissions.js update: ' + $_.Exception.Message) 'Yellow' }
@@ -363,7 +387,7 @@ if (Test-Path -LiteralPath $recipe -PathType Leaf) {
 }
 [IO.File]::WriteAllText((Join-Path $Out 'last-rebuild.txt'), (($rebuild -join "`n") + "`n"), $utf8)
 # Allow the workflow's follow-up only after the rebuild inputs are written.
-if ($env:GITHUB_OUTPUT) { [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "published=$draft`n", $utf8) }
+if ($env:GITHUB_OUTPUT) { [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "published=$draftRec`n", $utf8) }
 Say ''
-Say ("  the records follow revision $draft from $Out" + $(if ($rebuild.Count) { "; the Last plugin reads $($rebuild.Count) plugin(s) it changes" } else { '' })) 'Green'
+Say ("  the records follow revision $draftRec from $Out" + $(if ($rebuild.Count) { "; the Last plugin reads $($rebuild.Count) plugin(s) it changes" } else { '' })) 'Green'
 exit 0

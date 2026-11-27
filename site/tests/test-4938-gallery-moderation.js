@@ -62,6 +62,10 @@ function seed(name, reports = []) {
   write('data/gallery.json', []); write('data/gallery-pending.json', [{ name, by: 'Photographer', at: Date.now() }]);
   write('data/gallery-reports.json', reports); fs.writeFileSync(path.join(dir, 'refuse.txt'), '');
 }
+// Accept takes only a picture whose file is on the site (#4401).
+function shotFile(name) {
+  fs.mkdirSync(path.join(dir, 'uploads'), { recursive: true }); fs.writeFileSync(path.join(dir, 'uploads', name), 'picture');
+}
 async function act(method, route, body, id = first, launcher = false) {
   const response = await fetch('http://127.0.0.1:' + port + route + (launcher ? '?ticket=' + encodeURIComponent(ticket(id)) : ''), {
     method, redirect: 'manual', headers: { 'content-type': 'application/json', origin: 'http://127.0.0.1:' + port,
@@ -88,7 +92,7 @@ function recorded(before, did, name, actor) {
     });
     let stderr = ''; child.stderr.on('data', data => { stderr += data; }); port = (await siteFiles.listening(child)).port;
     const image = '20261125-' + 'a'.repeat(40) + '.png';
-    seed(image); let before = audit().length;
+    seed(image); shotFile(image); let before = audit().length;
     let result = await act('POST', '/api/gallery/approve', { name: image, by: 'Forged actor', byName: 'Forged actor', byId: second });
     yes('approval really commits public entry and removes pending', result.status === 200 && read('data/gallery.json')[0].name === image && read('data/gallery-pending.json').length === 0);
     yes('approval audit uses current authenticated staff name and exact picture', recorded(before, 'galleryapprove', image, 'Current Aela'));
@@ -115,7 +119,7 @@ function recorded(before, did, name, actor) {
       result = await act(method, route, body, plain, true);
       yes('unauthorized action cannot mutate or audit ' + route, result.status === 403 && audit().length === before && read('data/gallery-pending.json').length === 1 && read('data/gallery-reports.json').length === 1);
     }
-    seed(image); before = audit().length; fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery.json');
+    seed(image); shotFile(image); before = audit().length; fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery.json');
     result = await act('POST', '/api/gallery/approve', { name: image });
     yes('refused first approval save has no success audit', result.status === 500 && audit().length === before && read('data/gallery.json').length === 0);
     fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-pending.json');
@@ -123,6 +127,7 @@ function recorded(before, did, name, actor) {
     yes('committed approval still audited if later queue cleanup fails', result.status === 500 && result.body.approved === true && recorded(before, 'galleryapprove', image, 'Current Aela'));
     before = audit().length; fs.writeFileSync(path.join(dir, 'refuse.txt'), ''); await act('POST', '/api/gallery/approve', { name: image });
     yes('finishing pending cleanup does not repeat committed approval audit', audit().length === before && read('data/gallery-pending.json').length === 0);
+    fs.rmSync(path.join(dir, 'uploads', image));
     seed(image, [{ id: 'held', name: image, why: 'Evidence' }]); write('data/gallery.json', [{ name: image }]); before = audit().length;
     fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-pending.json');
     result = await act('DELETE', '/api/gallery/approved', { name: image });

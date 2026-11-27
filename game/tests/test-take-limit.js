@@ -44,11 +44,21 @@ function lift(from, to) {
 // guard() counts its time through countSpent() since #385, so both are lifted.
 const guardSrc = lift('function guard(name, fn) {', '\n}\n') &&
   lift('function guard(name, fn) {', '\n}\n') + '\n' + (lift('function countSpent(name, began) {', '\n}\n') || '');
-// The audit helpers and the take watcher, through the line that closes it.
-const watchSrc = lift('function auditProfile(refrId) {', "'from', auditSource(sourceRefrId), 'in', auditCell(actorId));\n});");
+// The audit helpers and the take watcher, through the line that closes the
+// watcher (its first "});" at the start of a line), whatever it does after its
+// audit log line: since #6276 it also hands gold to the gold and trade log.
+function liftWatcher() {
+  const a = src.indexOf('function auditProfile(refrId) {');
+  const w = a < 0 ? -1 : src.indexOf('mp.onTakeItem = guard(', a);
+  const b = w < 0 ? -1 : src.indexOf('\n});', w);
+  return b < 0 ? null : src.slice(a, b + '\n});'.length);
+}
+const watchSrc = liftWatcher();
 const limitSrc = lift('/*\n  THE TAKE LIMIT: A FEW THINGS', '})();\n// end of the take limit');
 yes('gamemode.js has guard(), the take watcher and the take limit',
     guardSrc !== null && watchSrc !== null && limitSrc !== null);
+yes('  and the take watcher lifted whole, with its gold and trade log call (#6276)',
+    watchSrc !== null && watchSrc.indexOf("ledgerTake.gold('take'") >= 0);
 if (guardSrc === null || watchSrc === null || limitSrc === null) done();
 else {
 

@@ -11,10 +11,12 @@
   ones that reach five people before anybody notices.
 
   By default the run ends by publishing a dev release: Ship.ps1 -Channel dev,
-  which builds the launcher itself and needs this machine's VPS access and
-  signing (docs/guide/set-up-a-machine.md, "Setting up a machine"). It never
-  publishes to main. -NoShip only installs: the steps run, the launcher is
-  built and put in place here, and nothing is published.
+  which needs this machine's VPS access and signing
+  (docs/guide/set-up-a-machine.md, "Setting up a machine"). It never
+  publishes to main. Ship sends no launcher (#4825), so the launcher is built
+  and put in place here either way. -NoShip only installs: the steps run, the
+  launcher is built and put in place here, and nothing is published. A
+  publish that does not finish stops the run with exit 1 (#4427).
 
   Nothing here starts a server or a game. When it finishes, press Play.
 
@@ -184,21 +186,6 @@ foreach ($s in $steps) {
         continue
     }
 
-    # Ship builds the launcher itself, so doing it here as well compiles the
-    # same exe twice in a row. The second attempt lands while Explorer still has
-    # the file open from the icon refresh the first one triggered, and csc fails
-    # with "used by another process". One build, done by whoever is going to
-    # publish it.
-    if ($key -eq 'launcher' -and -not $NoShip -and (Test-Path -LiteralPath (Join-Path $Here '..\release\Ship.ps1'))) {
-        # Both launcher steps land here, and Ship does both, so it is said once.
-        if ($done -notcontains 'Launcher') {
-            Head 'Launcher'
-            Note 'built as part of publishing, just below'
-            $done += 'Launcher'
-        }
-        continue
-    }
-
     if ($s.ContainsKey('NeedsServer') -and $s.NeedsServer -and -not (Test-Path -LiteralPath $Server)) {
         Head $s.Name
         Note "no server build at $Server, so this step does not apply on this machine"
@@ -276,10 +263,13 @@ foreach ($d in $done) { Good $d }
 foreach ($k in $skipped) { Note "skipped: $k" }
 
 # ---------------------------------------------------------------- publish ---
-# Unless told otherwise, and only when the launcher was actually rebuilt: a
-# publish with nothing in it still burns a version number.
+# Unless told otherwise, and only after a run that reached the launcher, the
+# last step: an -Only run of one other step publishes nothing. Ship sends no
+# launcher (#4825), so the launcher steps above always build and install it
+# here; until #4427 they were skipped for Ship, which no longer builds it.
 $shipped = $false
-if (-not $NoShip -and ($done -contains 'Launcher')) {
+$publishing = (-not $NoShip -and ($done -contains 'Launcher'))
+if ($publishing) {
     $ship = Join-Path $Here '..\release\Ship.ps1'
     if (Test-Path -LiteralPath $ship) {
         Head 'Publishing'
@@ -311,10 +301,21 @@ if (-not $NoShip -and ($done -contains 'Launcher')) {
     else { Note 'Ship.ps1 is not here, so nothing was published.' }
 }
 
+# A publish that was asked for and did not finish is a failed run (#4427):
+# whatever ran this reads the exit code, and "press Play" would say it worked.
+# Ship.ps1 being absent is said above and is not a publish that failed.
+if ($publishing -and (Test-Path -LiteralPath (Join-Path $Here '..\release\Ship.ps1')) -and -not $shipped) {
+    Write-Host ''
+    Say 'STOP. Publishing to the dev build did not finish. The install here is done, but nothing was published.' 'Red'
+    Say 'What Ship.ps1 printed above says why. Fix that, then run .\scripts\release\Ship.ps1 -Channel dev "what changed".' 'Red'
+    if (-not $NoPause) { [void](Read-Host 'Enter to exit') }
+    exit 1
+}
+
 Write-Host ''
 Say 'Open the launcher and press Play.' 'Green'
 if ($shipped) { Note 'Published on the dev channel, so your friends on that build get it on their next launcher start.' }
-elseif (-not $NoShip -and ($done -contains 'Launcher')) { Note 'Publishing did not finish. Run .\scripts\release\Ship.ps1 -Channel dev "what changed" yourself.' }
 Write-Host ''
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }
+exit 0
