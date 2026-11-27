@@ -4,7 +4,7 @@
   "what": "The load order the servers run and every content build reads, at the collection revision records/collection-plugins.json names: the five masters first and Thornswood-Last.esp last. A plugin a revision adds goes on the end of its kind and none moves to another index (docs/LIGHT-ORDER-DRIFT.md). scripts/mods/Set-LoadOrder.ps1 writes it in the pull request that moves the records to a new revision, and tests/test-5191-load-order.ps1 fails while it is another revision's.",
   "builtBy": "scripts/mods/Set-LoadOrder.ps1",
   "collection": "7essxf",
-  "revision": 12,
+  "revision": 13,
   "loadOrder": [
     "Skyrim.esm",
     "Update.esm",
@@ -93,7 +93,6 @@
     "Hothtrooper44_Armor_Ecksstra.esp",
     "IA CBBE Patch.esp",
     "KhisartinBeards.esp",
-    "McmRecorder.esp",
     "MCMHelper.esp",
     "MoreCraftableEquipment_CloaksandCapes.esp",
     "Precision.esp",
