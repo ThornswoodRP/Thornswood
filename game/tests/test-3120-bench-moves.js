@@ -187,7 +187,7 @@ yes('S3 a moved recipe whose counts are set in each game is not named at its rec
 const onCraft = take('mp.onCraft = guard(\'onCraft\', function', '\n});\n') || '';
 const setAt = onCraft.indexOf('desc = recipeSetInGame(');
 const movedAt = onCraft.indexOf('desc = recipeMovedInGame(');
-const recipelessAt = onCraft.indexOf('return recipelessCraft(');
+const recipelessAt = onCraft.indexOf('= recipelessCraft(actorId, craftedItemBaseId');
 yes('O1 onCraft names a craft with no recipe id as a moved recipe after the recipes set in game, before treating it as recipeless',
     setAt > 0 && movedAt > setAt && recipelessAt > movedAt);
 const refuseAt = onCraft.indexOf('const no = recipeMetadataRefusal(desc);');

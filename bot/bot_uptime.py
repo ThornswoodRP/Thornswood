@@ -5,6 +5,7 @@ Part of the bot: bot.py loads it (#5357).
 """
 import asyncio
 import os
+import re
 import time
 import traceback
 import urllib.request
@@ -38,10 +39,19 @@ PING_LOOK = 5
 _ping = {'down': False, 'ok_once': False}
 
 
+# The one shape of ping address there is, the one Install-Bot.ps1 -SetPing
+# takes (#4465): https://, a host with a dot in it, a path, no spaces, at most
+# PING_MOST characters. It is a secret, so it is never sent in plain text: an
+# http:// address put in bot.env.json by hand is refused here as -SetPing
+# refuses it. The test holds the two patterns to the same text.
+PING_SHAPE = r'^https://[^\s/]+\.[^\s/]+/\S+$'
+PING_MOST = 400
+_ping_shape = re.compile(PING_SHAPE, re.IGNORECASE)
+
+
 def ping_shape_ok(url):
-    """A web address, and nothing that could be a file or a command."""
-    return (url.lower().startswith(('https://', 'http://'))
-            and not any(c.isspace() for c in url))
+    """The address -SetPing would take: https://, a host, a path, no spaces."""
+    return len(url) <= PING_MOST and _ping_shape.match(url) is not None
 
 
 def _ping_scrub(text, url):
@@ -99,8 +109,9 @@ async def uptime_ping():
             'monitor hears from this bot. Install-Bot.ps1 -SetPing sets it.')
         return
     if not ping_shape_ok(PING_URL):
-        log('uptime ping: PING_URL in bot.env.json is not a web address, so '
-            'nothing is sent. Install-Bot.ps1 -SetPing sets it again.')
+        log('uptime ping: PING_URL in bot.env.json is not an https:// ping '
+            'address, so nothing is sent. Install-Bot.ps1 -SetPing sets it '
+            'again.')
         return
     loop = asyncio.get_running_loop()
     inflight = None

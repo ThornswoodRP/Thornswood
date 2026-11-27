@@ -30,9 +30,9 @@ in the Temple of Kynareth in Whiterun, the fallback, and the death log
 says why (`own-world-no-door`, or `own-world-no-hold` when no hold was
 known behind the door).
 
-The wounds you already had come with you. A disease you already had
-comes with you. The temple stopped the death. It did not wash a cut,
-set a break, or cure a fever. See [Injury](injury.md) and
+The temple cleans and closes the cuts, bites and burns you had. A
+break, a crooked heal and a disease you already had come with you: the
+temple did not set a bone or cure a fever. See [Injury](injury.md) and
 [Disease](disease.md).
 
 The same towns you can choose at creation are the towns a wake can
@@ -46,8 +46,8 @@ If the world did it, and nobody stabilizes you, the wake is the
 temple.
 
 If another person did it, those 3 minutes are when the question is
-asked. Silence is the temple, with the wounds you already had, and no
-new loss.
+asked. Silence is the temple, with the breaks and diseases you already
+had, and no new loss.
 
 ## What needs a yes
 

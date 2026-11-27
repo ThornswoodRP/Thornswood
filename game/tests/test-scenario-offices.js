@@ -22,8 +22,8 @@
        client whose lock script did not run sends it, and onActivate
        refuses it: the cell stays shut and he is told only a guard opens it.
        Torvar opens it.
-    D  The jail building is the Jarl's alone: Corvin's claim at its door is
-       refused and nothing is written; Svana claims it.
+    D  Corvin claims the ordinary building; Svana cannot take his holding.
+       The claim grants no guard authority and leaves actual cells locked.
     E  A restart: the cell is still locked and Torvar still the guard. He
        unlocks it and it opens for Corvin.
     Z  No handler threw, no engine call the engine does not have was made,
@@ -110,11 +110,12 @@ yes('C3 Torvar opens it', w.activate(CELL, TORVAR).opened);
 // ----------------------------------------------------- D. the building --
 w.activate(FRONT, CORVIN);
 w.say(CORVIN, '/claim');
-yes('D1 the jail is the Jarl\'s alone: Corvin\'s claim is refused and nothing is written (' + last(CORVIN) + ')',
-    /is Windhelm's jail\. Only the Jarl of Windhelm claims it\./.test(last(CORVIN)) && !P().holderOf(BARRACKS));
+yes('D1 Corvin may claim the ordinary jail building (' + last(CORVIN) + ')',
+    /^You claim/.test(last(CORVIN)) && P().holderOf(BARRACKS)?.by === 1002);
 w.activate(FRONT, SVANA);
 w.say(SVANA, '/claim');
-yes('D2 Svana claims it (' + last(SVANA) + ')', !!P().holderOf(BARRACKS) && P().holderOf(BARRACKS).by === 3000);
+yes('D2 Svana cannot take Corvin\'s existing holding without its deed (' + last(SVANA) + ')',
+    /is held by/.test(last(SVANA)) && P().holderOf(BARRACKS)?.by === 1002);
 yes('D2 and her claim leaves the cell as the guard left it', (law().cells || {})[CELL_DESC] === true);
 
 // ----------------------------------------------------------- E. restart --

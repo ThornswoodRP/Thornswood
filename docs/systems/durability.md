@@ -138,7 +138,9 @@ In the server. A piece's condition is written on its name when it is
 not 100%: Iron Sword (85%). A piece made crude or masterwork at a
 bench carries that before its condition, Iron Sword (Masterwork) (85%),
 and keeps it through every repair ([Professions](professions.md)). A plain piece is at 100%, and so is every
-piece as it is made. Rings, amulets and circlets carry no condition.
+piece as it is made. An enchanted piece keeps the name it had, so a
+worn, crude or masterwork piece can be enchanted and keeps its
+condition and its make (#4608). Rings, amulets and circlets carry no condition.
 The pickaxe, the woodcutter's axe and the shovel wear out by use
 instead, 50 uses each, and so do the fishing pole and the bench trades'
 hammer, shears, ladle, alembic and rune knife (#3162). A trade hands a piece over at the condition on
@@ -193,8 +195,10 @@ Not yet:
 
 - The 5% more damage and armour at 120% is not applied, because the
   engine works damage out on its own.
-- A piece that is not at 100% cannot be enchanted, because the engine
-  takes a plain piece for an enchantment.
+- With a plain copy and a worn or masterwork copy of the same piece in
+  the pack, an enchantment takes the plain copy whichever one was put on
+  the enchanter, because the client names the piece by its record alone
+  (#4608).
 - The shut grindstone and armour table are on main and not in a
   release yet. Until a release carries them, both still open the
   crafting menu and only the temper is refused.

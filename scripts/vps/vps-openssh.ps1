@@ -7,8 +7,8 @@
   pinned host key first, from your machine, and sends this; run that instead.
 
   WHY (#1043). From 28 Sep 2026 every ssh from One printed "connection is not
-  using a post-quantum key exchange algorithm". The box's sshd is the one
-  Windows Server 2022 ships (C:\Windows\System32\OpenSSH, 9.5.5.3 when
+  using a post-quantum key exchange algorithm". The box's sshd was then the
+  one Windows Server 2022 ships (C:\Windows\System32\OpenSSH, 9.5.5.3 when
   measured on 26 Oct 2026), and that build has no post-quantum key exchange
   at all: its ssh -Q kex lists none, and sshd -T offers curve25519, ecdh and
   diffie-hellman only, with nothing in sshd_config narrowing it. The cause is
@@ -19,6 +19,13 @@
   one for Server 2022, so the newer one comes from Microsoft's own release,
   PowerShell/Win32-OpenSSH 10.4.0.0p1-Preview (20 Oct 2026), its 64-bit MSI,
   pinned below by SHA256 and checked to be signed by Microsoft.
+
+  DONE ON 26 OCT 2026. The box has run OpenSSH for Windows 10.4 since
+  9:42 PM that night, with the three pinned host keys kept, and a login
+  negotiates sntrup761x25519-sha512. That run stopped at its port 22 step
+  (#4040 fixed the cause) and its last steps were done by hand (#1043), so
+  the 9.5 build above is the box as it was before. This script is kept for
+  rebuilding a box that still has it.
 
   WHY THE INBOX ONE IS REMOVED FIRST. The MSI registers services named sshd
   and ssh-agent, which the inbox OpenSSH.Server and OpenSSH.Client

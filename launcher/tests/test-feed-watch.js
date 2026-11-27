@@ -84,7 +84,12 @@ const watchSrc = route('const feedWatch = p.match(', "if (feedWatch && req.metho
 yes('the /feed/watch route is where this expects it', !!watchSrc);
 yes('watch waits up to fifty seconds', /WAIT_MS\s*=\s*50000/.test(watchSrc));
 yes('watch answers 204 when the ETag is unchanged through the wait', /204/.test(watchSrc));
-yes('watch answers 200 when the ETag differs', /have !== tag/.test(watchSrc) || /!have \|\| have !== tag/.test(watchSrc));
+// The tag is compared as version.json's 304 compares it, weakly and over a
+// list (noneMatch, #4923), so a tag a proxy marked W/ still waits.
+yes('watch answers 200 when the ETag differs', /!noneMatch\(have, tag\)/.test(watchSrc));
+const noneMatchSrc = grab('function noneMatch(');
+yes('server.js has noneMatch()', !!noneMatchSrc);
+eval(noneMatchSrc);
 
 const watchRoute = eval('(function (p, req, res, head) {\n' + watchSrc + '\n})');
 

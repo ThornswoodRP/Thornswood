@@ -423,11 +423,11 @@ if (social && trade && commands) {
     const near = html.slice(html.indexOf('<h3>Near you</h3>'), html.indexOf('<h3>Muted and hidden</h3>'));
     const hidden = html.slice(html.indexOf('<h3>Muted and hidden</h3>'));
     const aelaRow = near.slice(near.indexOf('Aela'));
-    yes('P2 a person near who is not a friend has Add friend, Trade, Mute, Text and Name',
-        /Add friend[\s\S]*Trade[\s\S]*Unmute[\s\S]*Text[\s\S]*Show/.test(aelaRow));
+    yes('P2 a person near who is not a friend has Add friend, Trade, and the voice, text and name switches',
+        /Add friend[\s\S]*Trade[\s\S]*Unmute voice[\s\S]*Hide text[\s\S]*Show name/.test(aelaRow));
     const seraRow = near.slice(near.indexOf('Sera'), near.indexOf('Aela') < near.indexOf('Sera') ? near.length : near.indexOf('Aela'));
     yes('P2 a friend near has no Add friend, and a friend tag', seraRow.indexOf('Add friend') === -1 && /tag">friend</.test(seraRow));
-    yes('P2 Muted and hidden has both, with their switches', /Aela/.test(hidden) && /Olfrid/.test(hidden) && /Read/.test(hidden));
+    yes('P2 Muted and hidden has both, with their switches', /Aela/.test(hidden) && /Olfrid/.test(hidden) && /Show text/.test(hidden));
 
     const buttons = body.querySelectorAll('button[data-do]');
     function press(label, who) {
@@ -440,12 +440,12 @@ if (social && trade && commands) {
     }
     yes('P3 Add friend sends the friend line with the form id, as Y does', press('Add friend', 'ff000003') === '/friend ff000003');
     yes('P3 Trade sends the trade line with the form id, as H does', press('Trade', 'ff000003') === '/trade ff000003');
-    yes('P3 Unmute sends the profile id', press('Unmute', 103) === '/mute 103');
-    yes('P3 Text sends the text switch by profile id', press('Text', 103) === '/mute text 103');
-    yes('P3 Show sends the name switch by profile id', press('Show', 103) === '/hidename 103');
-    yes('P3 Read on somebody away sends the text switch for them', press('Read', 150) === '/mute text 150');
+    yes('P3 Unmute sends the profile id', press('Unmute voice', 103) === '/mute 103');
+    yes('P3 Text sends the text switch by profile id', press('Hide text', 103) === '/mute text 103');
+    yes('P3 Show sends the name switch by profile id', press('Show name', 103) === '/hidename 103');
+    yes('P3 Read on somebody away sends the text switch for them', press('Show text', 150) === '/mute text 150');
     yes('P3 a friend\'s Mute sends the profile id, the same as Text and Name',
-        press('Mute', 102) === '/mute 102');
+        press('Mute voice', 102) === '/mute 102');
     yes('P4 Accept and Refuse on the panel send the answer lines',
         press('Accept') === '/yes' && press('Refuse') === '/no');
 

@@ -47,6 +47,8 @@
     process or another task names it, or when it holds a crash dump (*.dmp),
     which somebody reads first. The task still goes; the folder stays.
     removes the task, then the folder, and reads both back.
+  A folder left here still has the Users rule from C:\ until
+  Lock-VpsFolders.ps1 takes it off, and that run says it was left (#4344).
   A task or folder that is not there any more is said and skipped, so a
   second run changes nothing. -WhatIf says what it would remove and removes
   nothing. Exits 1 when anything was refused or did not go.

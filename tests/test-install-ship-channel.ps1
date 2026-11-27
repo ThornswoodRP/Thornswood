@@ -47,7 +47,10 @@ Yes 'Install-Thornswood.ps1 parses' ($errs.Count -eq 0)
 
 $text = [IO.File]::ReadAllText($install)
 
-$pubPat = '(?s)\$ship\s*=\s*Join-Path \$Here ''\.\.\\release\\Ship\.ps1''.+?elseif \(-not \$NoShip'
+# From the line that names Ship.ps1 to the note for a tree without it, the
+# end of the publish block (since #4427 it is entered on $publishing, not on
+# an elseif after the launcher steps).
+$pubPat = '(?s)\$ship\s*=\s*Join-Path \$Here ''\.\.\\release\\Ship\.ps1''.+?Ship\.ps1 is not here'
 $pub = [regex]::Match($text, $pubPat)
 Yes 'the publish block that calls Ship is still there' $pub.Success
 $block = if ($pub.Success) { $pub.Value } else { '' }

@@ -99,7 +99,7 @@ function Invoke-ThornswoodLastPluginMake {
     # 4e): every caller lays the dev server's build of its commit first, the
     # one every Release carries, and the artifact holds the recipe to it.
     $artifact = New-ThornswoodArtifact -Component lastplugin -RepoDir $RepoDir -Paths $ThornswoodLastTools -Content dev
-    $local = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-lastplugin-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+    $local = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('thornswood-lastplugin-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
     New-Item -ItemType Directory -Force -Path $local | Out-Null
     $box = $null
     $lines = @()
