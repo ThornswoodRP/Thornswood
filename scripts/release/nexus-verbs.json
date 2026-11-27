@@ -116,6 +116,7 @@
         "Slug": "^[a-z0-9]{1,16}$",
         "Game": "^[a-z0-9]{1,40}$",
         "Publish": "^[0-9]{1,4}$",
+        "CategoryFrom": "^[a-z0-9]{1,16}$",
         "WaitSeconds": "^[0-9]{1,4}$",
         "WhatIf": "switch"
       }

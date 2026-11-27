@@ -238,6 +238,7 @@ Yes '4. and none of them wrote anything to Nexus' (@(Writes).Count -eq 0)
 # ---- 1: -WhatIf ----------------------------------------------------------------------
 $r = Run @('-Slug', '7essxf', '-Revision', '2', '-New', '-WhatIf')
 YesR '1. -WhatIf builds the copy, names POST /v3/collections and writes nothing' ($r.Code -eq 0 -and $r.Out -match 'POST /v3/collections  ' -and $r.Out -match 'Nothing was written to Nexus' -and @(Writes).Count -eq 0) $r
+YesR '1. and names the category the new collection takes, which a publish needs' ($r.Out -match 'PATCH /v3/collections/<its id>  \{"category_id":1\}, 7essxf''s category "Total Overhaul"') $r
 
 # ---- 2: -New, the Dev collection ------------------------------------------------------
 $r = Run @('-Slug', '7essxf', '-Revision', '2', '-New')
@@ -250,6 +251,40 @@ $sent = if ($dev) { $dev.revisions.'1'.data.collection_manifest } else { $null }
 Yes '2. named Thornswood Dev, with the Dev summary' ($sent -and $sent.info.name -eq 'Thornswood Dev' -and $sent.info.summary -eq 'The dev server''s mod list.')
 Yes '2. with the source''s mod entry as it was' ($sent -and @($sent.mods).Count -eq 1 -and $sent.mods[0].source.file_id -eq 811029)
 Yes '2. and 7essxf is left on revision 2' ($st.collection.latest -eq 2 -and $null -eq $st.collection.draft)
+$reqs = @($st.requests | ForEach-Object { $_ })
+$patchAt = -1; $pubAt = -1
+for ($i = 0; $i -lt $reqs.Count; $i++) {
+    if ($dev -and $reqs[$i].method -eq 'PATCH' -and $reqs[$i].path -eq ('/v3/collections/' + $dev.id)) { $patchAt = $i }
+    if ($reqs[$i].path -eq '/v2/graphql' -and ([string]$reqs[$i].json.query) -match 'publishRevision') { $pubAt = $i }
+}
+Yes '2. it has 7essxf''s category, given before the publish (Nexus publishes no revision without one)' ($dev -and $dev.category.id -eq 1 -and $patchAt -ge 0 -and $patchAt -lt $pubAt)
+
+# The Dev collection made on 27 Nov had no category, and its revision 1 stayed a
+# draft: New-NexusRevision -Publish -CategoryFrom gives it one and publishes it.
+function RunNew([string[]]$arguments) {
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = $pwsh
+    $all = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Q (Join-Path $rel 'New-NexusRevision.ps1'))) + @(@($arguments) + @('-Permissions', $perm, '-NoPause') | ForEach-Object { Q $_ })
+    $psi.Arguments = $all -join ' '
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+    $p = [Diagnostics.Process]::Start($psi)
+    $e = $p.StandardError.ReadToEndAsync()
+    $o = $p.StandardOutput.ReadToEnd()
+    $p.WaitForExit()
+    return [pscustomobject]@{ Code = $p.ExitCode; Out = ($o + $e.Result) }
+}
+Control @{ addCollection = @{ id = 556834; slug = 'nocat'; name = 'Thornswood Dev' } }
+Control @{ addRevision = @{ slug = 'nocat'; n = 1; id = 857991; status = 'draft'; archive = $archive } }
+$n0 = @(Writes).Count
+$r = RunNew @('-Slug', 'nocat', '-Publish', '1')
+YesR '2. a draft of a collection with no category is not published, and the run says -CategoryFrom' ($r.Code -eq 1 -and $r.Out -match 'has no category' -and $r.Out -match '-CategoryFrom 7essxf' -and @(Writes).Count -eq $n0) $r
+$r = RunNew @('-Slug', 'nocat', '-Publish', '1', '-CategoryFrom', '7essxf', '-WhatIf')
+YesR '2. -CategoryFrom -WhatIf names the category it would give and sends nothing' ($r.Code -eq 0 -and $r.Out -match 'would send PATCH /v3/collections/556834  \{"category_id":1\}' -and @(Writes).Count -eq $n0) $r
+$r = RunNew @('-Slug', 'nocat', '-Publish', '1', '-CategoryFrom', '7essxf')
+$nc = @((State).others) | Where-Object { $_.slug -eq 'nocat' } | Select-Object -First 1
+YesR '2. -CategoryFrom 7essxf gives it 7essxf''s category and publishes revision 1' ($r.Code -eq 0 -and $nc.category.id -eq 1 -and $nc.latest -eq 1 -and $null -eq $nc.draft) $r
+$r = RunNew @('-Slug', 'nocat', '-CategoryFrom', '7essxf')
+YesR '2. -CategoryFrom without -Publish is refused' ($r.Code -eq 1 -and $r.Out -match 'goes with -Publish') $r
 
 # ---- 3: -To, back to main's, and -Number --------------------------------------------
 $n0 = @(Writes).Count
