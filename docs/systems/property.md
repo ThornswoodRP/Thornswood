@@ -88,7 +88,9 @@ than one building (six Halls of the Dead), so the hold is what tells them
 apart, and where two in one hold share a name a number follows it, as on
 a master key: Warehouse, Windhelm, no. 2. Keys and key molds are named the
 same way, and a key, mold or deed opens and hands over only the one
-building its name says.
+building its name says. Keys and master keys sit under Keys in the
+inventory, beside Skyrim's own; a mold is under Misc and a deed
+under Books.
 
 What you hold is on the property page of the K panel: each building,
 whether it is locked, the rent owed on it, and your farm with the days

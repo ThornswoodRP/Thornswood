@@ -350,11 +350,12 @@ the recipe's bench, and because the server then refuses it too.
 
 THE MASTER KEY (issue #2254)
 
-    ThornswoodMiscMasterKey       one MISC, named per instance in the pack:
+    ThornswoodMiscMasterKey       one KEYM, named per instance in the pack:
                                   "Master key to Breezehome, no. 12". Handed
                                   with the deed at a claim and cut again at a
                                   forge by the server, so no recipe. On the
                                   key's mesh, weightless, worth nothing.
+                                  A KEYM since #7171, so it sorts under Keys.
 
 THIS IS A SHIPPED FILE, so its size changing means a release and every client
 downloading it again.
@@ -483,7 +484,7 @@ CONTENTS = (
      'own', 'tools and handles'),
     (r'COBJ ThornswoodRecipeInstrument(Flute|Lute|Drum|Horn)$', 'own', 'instruments'),
     (r'BOOK ThornswoodBookDeed$', 'own', 'deeds'),
-    (r'(MISC ThornswoodMisc(Master)?Key(Mold)?|COBJ ThornswoodRecipeKey(Mold)?)$', 'own', 'keys and molds'),
+    (r'(KEYM ThornswoodMisc(Master)?Key|MISC ThornswoodMiscKeyMold|COBJ ThornswoodRecipeKey(Mold)?)$', 'own', 'keys and molds'),
     (r'(MISC ThornswoodMisc(Pole\w+|FishTrap)|FLOR ThornswoodFish\w+|COBJ ThornswoodRecipe(Pole\w+|FishTrap))$',
      'own', 'fishing'),
     (r'(MISC ThornswoodMisc|COBJ ThornswoodRecipe)(Weapon|Armor|Sewing)Kit$', 'own', 'repair kits'),
@@ -559,17 +560,20 @@ RECIPE_SHOVEL = 0x5015492
 # document rather than a spell tome or a skill book.
 DEED = 0x5015493
 
-# A KEY AND A KEY MOLD, AND WHY BOTH ARE MISC RATHER THAN KEYM.
-#
-# Skyrim has a record type for keys and this does not use it. A KEYM lands in the
-# Keys tab, which is a list the game treats as yours: a vanilla key is weightless,
-# is not dropped, and is not what a pickpocket takes.
+# A KEY AND A KEY MOLD. THE KEY IS A KEYM, THE MOLD A MISC.
 #
 # Patrick, 21 September, on what a key is for here: it "can be given to people
 # used by you or pickpocketed or taken out of unlocked chests or lockpicked", and
-# "a stolen key only gets you in". Every one of those is a thing a MISC does and a
-# KEYM does not. So a key here is an object somebody carries and can lose, which
-# is the whole point of it, and the Keys tab is the wrong home for it.
+# "a stolen key only gets you in". So a key here is an object somebody carries
+# and can lose, which is the whole point of it.
+#
+# Until #7171 the key was a MISC, because the engine did not count a KEYM as an
+# item: the server refused every pack that held one and never picked one up, so
+# a KEYM key could not be handed over, dropped or lifted. A MISC sorts under Misc
+# in the inventory, where nobody looks for a key. Fork #220 made a KEYM an item
+# on the server and the client, so the key and the master key are KEYM records
+# now, under Keys like Skyrim's own, with Skyrim's VendorItemKey keyword. The
+# mold is not a key and stays a MISC.
 #
 # Both are one record for the whole game, named per instance in the pack exactly
 # as the deed is: "Key to Breezehome", "Key mold for Honeyside".
@@ -591,9 +595,9 @@ RECIPE_KEY = 0x5015497
 # THE MASTER KEY (#2254). Patrick, 12 Oct 2026: a "Master key to" one building,
 # handed with the deed when the building is claimed, which opens it and turns
 # its lock, works only while the person it was cut for holds the building, and
-# is re-cut from the mold for 2 iron ingots. One MISC for every building, named
+# is re-cut from the mold for 2 iron ingots. One KEYM for every building, named
 # per instance in the pack like the key ("Master key to Breezehome, no. 12"),
-# a MISC for the reasons the key is one, on the key's own mesh. It has no
+# a KEYM as the key is one (#7171), on the key's own mesh. It has no
 # recipe: it is handed at the claim and cut at a forge by the server, never
 # made in the crafting menu, because a master key nobody cut for a holder
 # opens nothing. 0x50154D0 is the drop box (#2298), so after a gap from it.
@@ -1264,6 +1268,7 @@ FORM_TAIL = struct.pack('<IHH', 0, 44, 0)
 
 # Keywords and records of Bethesda's that the remade records point at.
 VENDOR_ITEM_TOOL = 0x000914EE         # the keyword Skyrim's own Charcoal carries
+VENDOR_ITEM_KEY = 0x000914EF          # VendorItemKey, the keyword Skyrim's own keys carry
 FURNITURE_FORCE_3RD = 0x000A56D8      # FurnitureForce3rdPerson
 FURNITURE_SPECIAL = 0x0006E9C7        # FurnitureSpecial
 RACE_TO_SCALE = 0x000FD0E1            # RaceToScale
@@ -1467,6 +1472,15 @@ def misc(fid, edid, name, model, box, value, weight, kws=(VENDOR_ITEM_TOOL,)):
     return own_record(b'MISC', fid, [
         (b'EDID', zstr(edid)), (b'OBND', bounds(box)), (b'FULL', zstr(name)),
         (b'MODL', zstr(model))] + keywords(kws) + [
+        (b'DATA', struct.pack('<If', value, weight))])
+
+
+def key_record(fid, edid, name, model, box, value, weight):
+    """A key (#7171): a KEYM, laid out as a MISC is (its DATA a value and a
+    weight), so it sorts under Keys in the inventory like Skyrim's own keys."""
+    return own_record(b'KEYM', fid, [
+        (b'EDID', zstr(edid)), (b'OBND', bounds(box)), (b'FULL', zstr(name)),
+        (b'MODL', zstr(model))] + keywords((VENDOR_ITEM_KEY,)) + [
         (b'DATA', struct.pack('<If', value, weight))])
 
 
@@ -1976,7 +1990,7 @@ def thornswood_records(clam, scrap):
         note(fid, edid, title, passage_words(title, line)) for fid, edid, title, line in PASSAGES
     ] + [
         note(DEED, 'ThornswoodBookDeed', 'Deed', DEED_WORDS),
-        misc(KEY, 'ThornswoodMiscKey', 'Key', KEY_MODEL, KEY_BOUNDS, 0, 0.0),
+        key_record(KEY, 'ThornswoodMiscKey', 'Key', KEY_MODEL, KEY_BOUNDS, 0, 0.0),
         misc(MOLD, 'ThornswoodMiscKeyMold', 'Key Mold', MOLD_MODEL, MOLD_BOUNDS, 25, 1.0),
         cobj(RECIPE_MOLD, 'ThornswoodRecipeKeyMold', [(IRON_INGOT, 1)], MOLD, FORGE_KEYWORD),
         # Never listed (#2487): a key is cut by the server, named, at the forge's lock key.
@@ -2060,7 +2074,7 @@ def thornswood_records(clam, scrap):
         cobj(fid, edid, [(globals()[name], 1) for name in inputs], potion, ALCHEMY_KEYWORD)
         for fid, edid, potion, inputs in POTION_RECIPES
     ] + [
-        misc(MASTER_KEY, 'ThornswoodMiscMasterKey', 'Master Key', KEY_MODEL, KEY_BOUNDS, 0, 0.0),
+        key_record(MASTER_KEY, 'ThornswoodMiscMasterKey', 'Master Key', KEY_MODEL, KEY_BOUNDS, 0, 0.0),
     ]
     # Tea, its recipes and the screen looks (#1382, #3153).
     out += needs_records()
@@ -2687,7 +2701,7 @@ PLUGIN_MASTERS = ('Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm'
 PLUGIN_AUTHOR = 'Thornswood'
 HEDR_VERSION = 1.71
 NEXT_OBJECT_ID = 0x00E80054
-GROUP_ORDER = (b'KYWD', b'ACTI', b'BOOK', b'MISC', b'FLOR', b'FURN', b'COBJ', b'CELL', b'WRLD',
+GROUP_ORDER = (b'KYWD', b'ACTI', b'BOOK', b'MISC', b'KEYM', b'FLOR', b'FURN', b'COBJ', b'CELL', b'WRLD',
                b'MGEF', b'ALCH', b'IMAD')
 # A group header ends in eight bytes the game does not read: a date and
 # version control numbers in the Creation Kit's files. This writes them as
