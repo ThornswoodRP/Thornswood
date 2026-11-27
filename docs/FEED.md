@@ -4,9 +4,13 @@
 of this any more: it takes its channel's release, game files included,
 straight from GitHub's Releases through Velopack, held to the signed release
 record (launcher\app\ARCHITECTURE.md, Updater and Velo). The feed stays on the
-site only for launchers from before that, until the site side of #5608
-(#5783) takes it down with the scripts that write it. What follows is the
-feed as it was, for that site side; the launcher names in it are history.
+site only for launchers from before that, until the site side of #5608 (#5783)
+takes it down with the scripts that write it. What follows is the feed as it
+was, for that site side; the launcher names in it are history, written as the
+file and the name apart (`Updater.cs` `Pending`), from before #5608. A
+launcher name written as one (`launcher\app\GitHub.cs:AssetUrl`) is code the
+launcher has now, and tests\test-1075-script-citations.js fails when it is
+not.
 
 Every Thornswood launcher decides what to download from one file:
 `version.json`. It is served from **thornswood.net** (`/feed/version.json`
@@ -347,7 +351,7 @@ The dev feed (branch `dev`, commit 12f71c8) has the same shape with
 
 "Saved" means the launcher writes the value into its own `config.json`, so it
 stays after the feed changes, and a later feed can only replace it with
-another non-empty value (`ShellUpdate.cs:OnVersionDoc`). Every saved field the
+another non-empty value (`ShellUpdate.cs` `OnVersionDoc`). Every saved field the
 publishing machine's own `config.json` holds is overwritten from it on each Ship
 (`Publish-Update.ps1:Whatever this machine's launcher is pointed at`,
 `Publish-Update.ps1:@('ServerAddress', 'serverAddress')`), so a wrong value on
@@ -356,33 +360,33 @@ saved fields that come from elsewhere, as their rows say.
 
 | Field | Type | Written by | Read by | If wrong or missing |
 | --- | --- | --- | --- | --- |
-| `launcherVersion` | string, dotted numbers | Nothing since #4825: it stays at the last launcher from before Velopack, so that launcher is never offered the native one as a self-update. A launcher goes out only on its channel's Velopack Releases (`merge-release.yml`, `promote-main.yml`) | The site's join pass for a launcher from before Velopack while its channel has no Velopack setup program (`site/lib/passes.js:feedLaunchers`, with `minLauncher`); a Velopack launcher's number is checked against its Release instead (`site/lib/feed.js:nativePublished`). Not the launcher's own update: a launcher takes that from its Velopack channel (`VeloUpdate.cs:CheckLauncher`), and Scan goes by the same answer (`Upkeep.cs:LauncherWaiting`) | Not saved. Nothing writes it, so it cannot go wrong by a release. |
+| `launcherVersion` | string, dotted numbers | Nothing since #4825: it stays at the last launcher from before Velopack, so that launcher is never offered the native one as a self-update. A launcher goes out only on its channel's Velopack Releases (`merge-release.yml`, `promote-main.yml`) | The site's join pass for a launcher from before Velopack while its channel has no Velopack setup program (`site/lib/passes.js:feedLaunchers`, with `minLauncher`); a Velopack launcher's number is checked against its Release instead (`site/lib/feed.js:nativePublished`). Not the launcher's own update: a launcher takes that from its Velopack channel (`VeloUpdate.cs` `CheckLauncher`), and Scan goes by the same answer (`Upkeep.cs` `LauncherWaiting`) | Not saved. Nothing writes it, so it cannot go wrong by a release. |
 | `launcherUrl` | string, https | Nothing since #4825 but the url move of `Feed-Rules.ps1` (#5385); it names the last launcher from before Velopack on the site, `/feed[-dev]/assets/<sha256>` (#897) | `Watch-Outside.ps1`. Not `Check-Outside.ps1` since #7232, which walks the Velopack Releases a new install reads instead. No launcher downloads it since #4825 | Must pass the host list below. |
-| `launcherSha256` | string, 64 hex | Nothing since #4825; it stays the last launcher from before Velopack's | The launcher's manifest check (`FeedManifest.cs:"launcher " + v.launcherVersion, v.launcherSha256`), which holds the feed to its signed release record | Mismatch: the manifest check refuses the feed. |
-| `serverAddress` | string | `Publish-Update.ps1:@('ServerAddress', 'serverAddress')` from config `ServerAddress`; `Set-Server.ps1:@('serverAddress', $Address)`. Not `Set-Vps.ps1`, which moves the launcher's built-in address and leaves the feed to `Set-Server.ps1` (`Set-Vps.ps1:What it does NOT do, because Set-Server.ps1 already does it properly`) | `ShellUpdate.cs:v.serverAddress != cfg.ServerAddress` | Saved, unless the config points at a server on this machine (`SkyMp.IsLocal`: 127.0.0.1, localhost, ::1), which keeps its own address, `serverPort` and `voicePort` (#5020: a restore rehearsal or a developer's own server). A change stops Ship unless `-MoveServer` (`Publish-Update.ps1:-not $MoveServer -and -not $Dev`); the dev channel skips that check. Wrong: everybody connects to the wrong box. |
-| `serverPort` | string | as above, `ServerPort` | `ShellUpdate.cs:OnVersionDoc` | Saved. Must be a string; the launcher field is a string. |
-| `maxOnline` | number | `Publish-Update.ps1`, from `records\most-online.json` by way of `scripts\deploy\MaxOnline.ps1` (#481): the channel's seats, people and staff seats together (30 on main, 5 on dev from its `dev` numbers; Patrick, 12 Oct) | `ShellUpdate.cs:v.maxOnline > 0` | Saved when above 0. Written as a number because a quoted `"30"` reads as 0. It is the M of "N of M awake". The Play page prefers the number the running server announces as `max` in its `online.json` (`Online.cs`), which is the same seats. |
-| `collectionUrl` | string | `Set-Collection.ps1:$doc.collectionUrl = $Url` only; Ship carries it forward untouched | `ShellUpdate.cs:OnVersionDoc` | Saved. The collection the buttons send people to; they open its page for the feed's `collectionRevision` (`Checks.CollectionRevisionUrl`, `.../revisions/<N>`), never the bare page, which Nexus shows at its newest revision (#4115). |
-| `collectionRevision` | number | `Publish-Update.ps1:Set-Prop $doc 'collectionRevision' $ShipCollectionRevision`, the revision `records\collection-plugins.json` names; Ship and Publish-Update stop unless the shipping machine's Vortex (or, from the feed, the last release) is on it (`CollectionRevision.ps1`, #3597); from the feed a release behind the record moves up to it, carrying `game\data\last-plugin.json`'s order as its plugin list (`Get-ShipFeedMoveRevision`, `New-ShipFeedMoveLists`, #4069), and unless it is the newest revision published on Nexus (`NexusPublished.ps1`, #4068); `Check-CollectionRevisions.ps1` held both feeds to Nexus every hour until #5767 | Read by nothing since #5767 (11 Nov 2026): the launcher takes the server's revision from the signed manifest of the Release its channel runs (`VeloUpdate.cs:CheckLauncher`, `Updater.ServerCollectionRevision`, then `Shell.cs:CollectionProblem`), the Downloads page from main's (`feed.js:serverRevision`), and the hourly check from both (`ReleaseRevision.ps1`) | Not saved. 0 or missing: the launcher says nothing about the collection being behind or ahead. Wrong: lets an install on an old revision in (both feeds said 2 while the collection was on 5, #3597), or tells people to reinstall a collection that is fine. |
+| `launcherSha256` | string, 64 hex | Nothing since #4825; it stays the last launcher from before Velopack's | The launcher's manifest check (`FeedManifest.cs` `"launcher " + v.launcherVersion, v.launcherSha256`), which holds the feed to its signed release record | Mismatch: the manifest check refuses the feed. |
+| `serverAddress` | string | `Publish-Update.ps1:@('ServerAddress', 'serverAddress')` from config `ServerAddress`; `Set-Server.ps1:@('serverAddress', $Address)`. Not `Set-Vps.ps1`, which moves the launcher's built-in address and leaves the feed to `Set-Server.ps1` (`Set-Vps.ps1:What it does NOT do, because Set-Server.ps1 already does it properly`) | `ShellUpdate.cs` `v.serverAddress != cfg.ServerAddress` | Saved, unless the config points at a server on this machine (`SkyMp.IsLocal`: 127.0.0.1, localhost, ::1), which keeps its own address, `serverPort` and `voicePort` (#5020: a restore rehearsal or a developer's own server). A change stops Ship unless `-MoveServer` (`Publish-Update.ps1:-not $MoveServer -and -not $Dev`); the dev channel skips that check. Wrong: everybody connects to the wrong box. |
+| `serverPort` | string | as above, `ServerPort` | `ShellUpdate.cs` `OnVersionDoc` | Saved. Must be a string; the launcher field is a string. |
+| `maxOnline` | number | `Publish-Update.ps1`, from `records\most-online.json` by way of `scripts\deploy\MaxOnline.ps1` (#481): the channel's seats, people and staff seats together (30 on main, 5 on dev from its `dev` numbers; Patrick, 12 Oct) | `ShellUpdate.cs` `v.maxOnline > 0` | Saved when above 0. Written as a number because a quoted `"30"` reads as 0. It is the M of "N of M awake". The Play page prefers the number the running server announces as `max` in its `online.json` (`Online.cs`), which is the same seats. |
+| `collectionUrl` | string | `Set-Collection.ps1:$doc.collectionUrl = $Url` only; Ship carries it forward untouched | `ShellUpdate.cs` `OnVersionDoc` | Saved. The collection the buttons send people to; they open its page for the feed's `collectionRevision` (`Checks.CollectionRevisionUrl`, `.../revisions/<N>`), never the bare page, which Nexus shows at its newest revision (#4115). |
+| `collectionRevision` | number | `Publish-Update.ps1:Set-Prop $doc 'collectionRevision' $ShipCollectionRevision`, the revision `records\collection-plugins.json` names; Ship and Publish-Update stop unless the shipping machine's Vortex (or, from the feed, the last release) is on it (`CollectionRevision.ps1`, #3597); from the feed a release behind the record moves up to it, carrying `game\data\last-plugin.json`'s order as its plugin list (`Get-ShipFeedMoveRevision`, `New-ShipFeedMoveLists`, #4069), and unless it is the newest revision published on Nexus (`NexusPublished.ps1`, #4068); `Check-CollectionRevisions.ps1` held both feeds to Nexus every hour until #5767 | Read by nothing since #5767 (11 Nov 2026): the launcher takes the server's revision from the signed manifest of the Release its channel runs (`VeloUpdate.cs` `CheckLauncher`, `Updater.ServerCollectionRevision`, then `Shell.cs` `CollectionProblem`), the Downloads page from main's (`feed.js:serverRevision`), and the hourly check from both (`ReleaseRevision.ps1`) | Not saved. 0 or missing: the launcher says nothing about the collection being behind or ahead. Wrong: lets an install on an old revision in (both feeds said 2 while the collection was on 5, #3597), or tells people to reinstall a collection that is fine. |
 | `updateRepo` | string `owner/name` | Nobody since #907: `Publish-Update.ps1` takes it out of the feed | `Feed-Rules.ps1` only (a feed that still names one keeps its GitHub pack urls legal until its next Ship) | Launchers from #907 on ignore it. Older ones save it and ask that repository, via the GitHub Contents API, when the site does not answer; once it is deleted that answers 404 and they ask the site again. |
 | `updateFeedUrl` | string, https | `Publish-Update.ps1` from `UpdateFeedUrl` (defaults to the site live/dev URL by channel) | `Shell.cs`, `Updater.FeedUrl` | Saved, quietly. The one `version.json` fetch since #907. Publish the new URL under the old feed first, then move. Since #937 only an https address on thornswood.net is used; anything else in `config.json`, empty included, is the built-in live or dev address, so editing the file cannot switch the update check off. |
-| `voicePort` | string | from `VoicePort` | `ShellUpdate.cs:v.voicePort != cfg.VoicePort` | Saved, quietly. Was the raw port's number for an empty `voiceUrl`; since #1304 the launcher never connects to the raw port, and this only goes into `Thornswood.ini` for the game. |
-| `voiceUrl` | string or absent | `Publish-Update.ps1:Set-Prop $doc 'voiceUrl' $vu`; `-dev` appended on the dev channel (`Publish-Update.ps1:$vu.TrimEnd('/') + '-dev'`) | `ShellUpdate.cs:v.voiceUrl != null && v.voiceUrl != cfg.VoiceUrl` | Saved, quietly. The one field that can be cleared: `""` used to send launchers back to the raw port, and since #1304 gives them the built-in `https://thornswood.net/voice` (`/voice-dev` on the dev build, `Config.Voice`, `Config.VoiceBase`); anything not https is treated the same. Absent changes nothing (`Config.cs:voiceUrl`). |
-| `discordAppId`, `siteUrl`, `presenceImage` | string | from config, `Publish-Update.ps1:@('DiscordAppId', 'discordAppId')` | `ShellUpdate.cs:v.discordAppId != cfg.DiscordAppId` | Saved, quietly. The Discord presence card and its buttons. |
-| `message` | string | Nobody: set by hand in the feed (received, edited and sent with `Feed-Store.ps1`; `FeedNotice.cs:FeedNotice`) | `FeedNotice.From` (`FeedNotice.cs:From`) | A bar above Play until a feed without it arrives. Never holds Play on its own. |
-| `maintenance` | string (read as on only for `true`, `1`, `yes`, `on`) | By hand | `FeedNotice.cs:On` | On: Play held, button says CLOSED FOR MAINTENANCE. Absent in the current feeds. |
-| `minLauncher` | string, dotted numbers | `Publish-Update.ps1` on every publish, as the feed's `launcherVersion` (#937) | `FeedNotice.cs:From`; the site's `/api/play/pass` | A launcher below it holds Play, and the site refuses it a join pass, so the game server ends its session. The site also refuses a launcher above `launcherVersion`, a number never published. A value that is not digits and dots is ignored by the launcher, so a typo cannot lock everybody out (`FeedNotice.cs:IsVersion`); the site reads such a value as `launcherVersion`. Updating needs no pass. |
-| `packs` | array | `Publish-Update.ps1:Set-Prop $doc 'packs' $packs` appended until #1050; `Repair-Manifest.ps1` removes. Since #1050 `[]` on a channel whose minLauncher syncs to the record (the packs gone block, `Test-FeedPacksGone`) | `Updater.Pending` (`Updater.cs:Pending`) | See below, and "When the packs can go". |
+| `voicePort` | string | from `VoicePort` | `ShellUpdate.cs` `v.voicePort != cfg.VoicePort` | Saved, quietly. Was the raw port's number for an empty `voiceUrl`; since #1304 the launcher never connects to the raw port, and this only goes into `Thornswood.ini` for the game. |
+| `voiceUrl` | string or absent | `Publish-Update.ps1:Set-Prop $doc 'voiceUrl' $vu`; `-dev` appended on the dev channel (`Publish-Update.ps1:$vu.TrimEnd('/') + '-dev'`) | `ShellUpdate.cs` `v.voiceUrl != null && v.voiceUrl != cfg.VoiceUrl` | Saved, quietly. The one field that can be cleared: `""` used to send launchers back to the raw port, and since #1304 gives them the built-in `https://thornswood.net/voice` (`/voice-dev` on the dev build, `Config.Voice`, `Config.VoiceBase`); anything not https is treated the same. Absent changes nothing (`Config.cs` `voiceUrl`). |
+| `discordAppId`, `siteUrl`, `presenceImage` | string | from config, `Publish-Update.ps1:@('DiscordAppId', 'discordAppId')` | `ShellUpdate.cs` `v.discordAppId != cfg.DiscordAppId` | Saved, quietly. The Discord presence card and its buttons. |
+| `message` | string | Nobody: set by hand in the feed (received, edited and sent with `Feed-Store.ps1`; `FeedNotice.cs` `FeedNotice`) | `FeedNotice.From` (`FeedNotice.cs` `From`) | A bar above Play until a feed without it arrives. Never holds Play on its own. |
+| `maintenance` | string (read as on only for `true`, `1`, `yes`, `on`) | By hand | `FeedNotice.cs` `On` | On: Play held, button says CLOSED FOR MAINTENANCE. Absent in the current feeds. |
+| `minLauncher` | string, dotted numbers | `Publish-Update.ps1` on every publish, as the feed's `launcherVersion` (#937) | `FeedNotice.cs` `From`; the site's `/api/play/pass` | A launcher below it holds Play, and the site refuses it a join pass, so the game server ends its session. The site also refuses a launcher above `launcherVersion`, a number never published. A value that is not digits and dots is ignored by the launcher, so a typo cannot lock everybody out (`FeedNotice.cs` `IsVersion`); the site reads such a value as `launcherVersion`. Updating needs no pass. |
+| `packs` | array | `Publish-Update.ps1:Set-Prop $doc 'packs' $packs` appended until #1050; `Repair-Manifest.ps1` removes. Since #1050 `[]` on a channel whose minLauncher syncs to the record (the packs gone block, `Test-FeedPacksGone`) | `Updater.Pending` (`Updater.cs` `Pending`) | See below, and "When the packs can go". |
 | `optional` | array | `Publish-Pack.ps1:$optional` | Add-ons on the Diagnostics page (`ShellPacks.cs DrawAddons`, #1170), the only place they show since the hidden Mods page went (#3146) | Absent in both feeds today; `scripts/release/optional-packs.txt` lists none. |
-| `clientRuntime` | object | `Publish-Update.ps1:Set-Prop $doc 'clientRuntime'`, only when the fork commit or its source notice changed (`Publish-Update.ps1:PUBLISHED ONLY WHEN IT CHANGES`) | `ClientRuntime.Heal` (`ClientRuntime.cs:Heal`) | Null or no `url`: a missing client file cannot be repaired from it. Same host and sha256 checks as a pack. |
+| `clientRuntime` | object | `Publish-Update.ps1:Set-Prop $doc 'clientRuntime'`, only when the fork commit or its source notice changed (`Publish-Update.ps1:PUBLISHED ONLY WHEN IT CHANGES`) | `ClientRuntime.Heal` (`ClientRuntime.cs` `Heal`) | Null or no `url`: a missing client file cannot be repaired from it. Same host and sha256 checks as a pack. |
 | `baseline` | object `{ id, sha256, url, entries, notes? }` | `Publish-Update.ps1` on every release that sends to the site (the release manifest block, #441); taken out by a `-NoUpload` run. `notes`, the release note's title (its first line), since #1050: the update card of a launcher that syncs shows it (`Sync.cs RecordDue`), the packs that used to carry it being off the feed. The whole note is the newest entry of the news file | The launcher from #1050 on, which syncs the install to it (`Updater.SyncRecord`, `launcher\app\Sync.cs`; see "Syncing to the release record"). The next `Publish-Update.ps1`, through `Resolve-ReleaseBaseline` (`Release-Baseline.ps1`) | The release record: what that release left installed, every file of ours as `<bytes>:<sha256>`, at `/feed[-dev]/assets/<sha256>`, the same bytes as the store's `published.json`. The next release is diffed against it; a missing or stale store copy is replaced by it, checked by sha256. The launcher reads it apart from the rest of the feed (`RecordRef.FromFeed`), so a `baseline` of any other shape costs that one field and never the whole feed. |
 | `releases` | array, newest first, at most 30, of `{ id, sha256, url, entries, lastPack, to? }` | Gone from the feed since #1050: the list is `releases.json` in the channel's store beside the feed (see "The feed store on the VPS"), written by `Publish-Update.ps1` on every release that names a `baseline` (the release list block, #442) and by `Rollback-Feed.ps1`, with `to` naming the release a rollback went back to. A feed that still carries the field (written before #1050, or by a Ship from a branch without it) is read too, merged by id, and the next write takes it out | No launcher. `Rollback-Feed.ps1`, `Scrub-Feed.ps1`, Ship's release tag check (`Get-StoreReleases`, `Release-Baseline.ps1`; `Read-ReleaseListFile`, `Release-Name.ps1`) | The record each release published, the same shape as `baseline`, plus `lastPack`, the last pack on the feed once that release was out, whose plugin list is the one it shipped ('' once the packs are gone: the record's own `:golden:` entries hold it). What a channel can be put back to; a release older than the newest thirty cannot be. The first release after #442 started the list with the `baseline` the feed already named. |
 | `release` | object `{ id, channel, launcherVersion, packs, baseline, commit, branch, uncommitted, tag }` | `Publish-Update.ps1` on every release (the release record block, #444) | No launcher. Ship, which tags `commit` as `tag` once the feed is out (`Add-ReleaseTag`, `Release-Name.ps1`); the store's `releases.txt` | The release's one name is `id`, the id its packs and its `baseline` carry (`20260928-1630`, dev `20260928-2324-dev`). The rest is what else it is known by: the launcher the feed offers with it (the same across Ships that keep their launcher, #921), the packs it added, its baseline id (empty on a `-NoUpload` run), the commit it was built from and how many tracked files differed from it, and the tag `release/main/<id>` or `release/dev/<id>` (empty when it was not built from a git checkout). `Get-ReleaseDisagreements` says whether they agree, with each other and with `releases`, whose newest entry is the same id ending on its last pack. After a main Ship the dev feed carries main's, `channel` main. `Rollback-Feed.ps1` does not rewrite it yet, so after a rollback it still names the last Ship until the next. |
 | `signedManifest` | object `{ url, sha256, catalogUrl, catalogSha256 }` | `Publish-Update.ps1` on every release that sends to the site (the signed manifest block, #2163 phase B); taken out by a `-NoUpload` run | No launcher yet (phase C of `docs\SIGNED-RELEASES.md`) | `release.json`, the sha256 of every asset of the release that carries code or names files (launcher, client runtime, packs, optional packs, the baseline record) with the commit it was built from, and a Windows catalog over it signed by ThornswoodRelease, both at `/feed[-dev]/assets/<sha256>`. Written only after the catalog was signed and passed the publish gate and `Signature.cs`; a signing failure stops the Ship before this file moves. Feed edits after a Ship carry it forward untouched. |
 | `news` | array, newest first, at most 40 | `Publish-Update.ps1:Set-Prop $doc 'news' $news`; `Publish-Server.ps1:$newsList`. On the dev feed each entry's `channel` is `"dev"` while main has not had it, set by `Dev-News.ps1:Update-DevNewsChannels` | Nothing since #5801. The launcher's News tab reads the build Releases its channel's Deployment reached (`launcher\app\ReleaseNews.cs`, #5187), and the site's News page the build Releases at or before main's (`site/lib/news.js` "news from the Release") | Cosmetic. Every launcher up to 1.2.3 reads the notes only here, so they stay here until the channel's minLauncher reads `newsFile` (#1050), and from then it is `[]`. Every script reads and writes the notes through `scripts\release\Feed-News.ps1` (`Get-FeedNewsList`, `Open-FeedNewsList`, `Set-FeedNewsList`), wherever the channel keeps them. |
 | `newsFile` | object `{ url, sha256, count }` or absent | `Set-FeedNewsList` (`Feed-News.ps1`), called by Publish-Update (the news out block), Rollback-Feed, Publish-Server's news entry and a dev marks refresh (`Update-DevFeedMarks`), once the channel's minLauncher is at or above `$FeedNewsFileLauncher` (1.2.4, the first launcher with FeedNews.cs): every note, at most 40, as one asset at `/feed[-dev]/assets/<sha256>`, sent to the site before the feed names it. Absent before that. `Remirror-Site-Feed.ps1` checks it is on the site like any asset | Nothing since #5801. Launchers from #1050 until #5187 read it (`FeedNews.cs`, gone), and the site's News page until #5801; both read the build Releases now (`launcher\app\ReleaseNews.cs`, `site/lib/news.js`) | Cosmetic. A file that cannot be had or read leaves the notes `news` carries and one line in launcher.log; the update check goes on. |
-| `mainVersion` | string | `Dev-News.ps1:Set-DevFeedMarks`: the main feed's `launcherVersion`, read off the site, with the DEV marks, on every dev ship (one with nothing new included), after every main ship (`Refresh-DevNews.ps1`), and by `Refresh-DevNews.ps1` run by hand; `""` on a main ship (`Publish-Update.ps1:Set-Prop $doc 'mainVersion' ''`) | Nothing since #5385: the dev News tab asks main's newest Release (`MainVersion.cs:MainLauncherVersion`) | Cosmetic. |
-| `serverPassword` | string | Nobody. Every ship deletes it (`Publish-Update.ps1:$doc.PSObject.Properties.Remove('serverPassword')`) | No longer declared in `Config.cs:VersionDoc`; read by nothing since 1.0.197 | Must never come back: the feed is public. |
+| `mainVersion` | string | `Dev-News.ps1:Set-DevFeedMarks`: the main feed's `launcherVersion`, read off the site, with the DEV marks, on every dev ship (one with nothing new included), after every main ship (`Refresh-DevNews.ps1`), and by `Refresh-DevNews.ps1` run by hand; `""` on a main ship (`Publish-Update.ps1:Set-Prop $doc 'mainVersion' ''`) | Nothing since #5385: the dev News tab asks main's newest Release (`MainVersion.cs` `MainLauncherVersion`) | Cosmetic. |
+| `serverPassword` | string | Nobody. Every ship deletes it (`Publish-Update.ps1:$doc.PSObject.Properties.Remove('serverPassword')`) | No longer declared in `Config.cs` `VersionDoc`; read by nothing since 1.0.197 | Must never come back: the feed is public. |
 
 ### A pack entry
 
@@ -390,51 +394,51 @@ saved fields that come from elsewhere, as their rows say.
 | --- | --- | --- |
 | `id` | string | `yyyyMMdd-HHmmssZ`, the UTC time the release was made (`yyyyMMdd-HHmmss` and `yyyyMMdd-HHmm` in Mountain time before #4950 and #1057; `Release-Name.ps1:Get-ReleaseIdUtc` reads all three as the instant they name), `-dev` added on the dev channel, never one the feed already names (`Release-Name.ps1:New-ReleaseId`). A release is one pack since #1053 (`Publish-Update.ps1:so a release is not split into parts`); an id ending `-<part>` is an older pack, split to stay under GitHub's 2 GiB asset limit. Compared case-insensitively with `applied.txt`. An empty id is never offered. |
 | `url` | string | A thornswood.net host asset under `/feed/assets/<sha256>` or `/feed-dev/assets/<sha256>`, **or**, on a feed that still names `updateRepo`, a GitHub release asset in it (`Feed-Rules.ps1`). Since #897 a new pack is written as the site address. A GitHub one (a pack published before 28 Sep) is the browser download address, `https://github.com/<owner>/<name>/releases/download/<tag>/<file>`, since #445, or the older `api.github.com` asset id address; both stop answering when Thornswood-Releases is deleted (#907). Empty: the launcher skips it and writes it off as applied. A url that answers 404 fails the whole update and Play stays off. |
-| `sha256` | string, 64 hex | Mandatory; checked after download (`Updater.cs:Download`). |
-| `notes` | string | The whole Ship note, first line first. The update card shows it (`ShellUpdate.cs:pendingPacks[0].notes`). |
-| `name`, `bytes` | string, number | Optional packs only: Add-ons on the Diagnostics page shows them (`Config.cs:Pack`). Publish-Pack also writes `notes` as a file count. |
+| `sha256` | string, 64 hex | Mandatory; launchers before #5608 checked it after download (`Updater.cs` `Download`). Today's launcher downloads no pack; see Checks on every download. |
+| `notes` | string | The whole Ship note, first line first. The update card shows it (`ShellUpdate.cs` `pendingPacks[0].notes`). |
+| `name`, `bytes` | string, number | Optional packs only: Add-ons on the Diagnostics page shows them (`Config.cs` `Pack`). Publish-Pack also writes `notes` as a file count. |
 
 There is no `size` or `files` field on a pack. The files a pack wrote are
 recorded on each machine in `Profile\Packs\<id>.files`, not in the feed
-(`Updater.cs:PackListFile`). A news entry's `files` was shown on the News tab
+(`Updater.cs` `PackListFile`). A news entry's `files` was shown on the News tab
 of the launchers before #5187; the launcher now reads its news from the build
-Releases' notes (`ReleaseNews.cs:ReadReleaseNews`) and no feed news at all, and
+Releases' notes (`ReleaseNews.cs` `ReadReleaseNews`) and no feed news at all, and
 no publisher fills it any more: `Publish-Update.ps1:$entry` has no `files`, and
 `Publish-Server.ps1:$entry` writes it empty.
 
 A pack is a zip with a `game/` tree (into the game folder), a `profile/` tree
 (into `Profile\Default`, and a carried plugin list is put in place at once),
 and an optional `delete.txt` of game paths to remove. Each tree is fenced to
-its folder (`Updater.cs:Install`).
+its folder (`Updater.cs` `Install`).
 
 ### A news entry
 
 `date` (`M-d-yyyy h:mm tt`; older shapes are converted when read,
-`Config.cs:NewsItem`), `title`, `body`, `details` (the note's `- ` lines, then
+`Config.cs` `NewsItem`), `title`, `body`, `details` (the note's `- ` lines, then
 lines worked out from the diff), `channel` (`"dev"` or `""`). A Ship with the
 same title and body as the newest entry adds nothing (`Publish-Update.ps1:same note as last time, so no new news entry`).
 
 ## How a launcher decides what is new
 
-1. It reads the feed and saves the saved fields (`ShellUpdate.cs:OnVersionDoc`).
+1. It reads the feed and saves the saved fields (`ShellUpdate.cs` `OnVersionDoc`).
 2. From #1050 on: when the feed names a `baseline` this install has not synced
    to (`Profile\release.txt`), that release is the one pending update, and no
    pack is replayed (`Updater.Pending`, `Sync.cs RecordDue`). See "Syncing to
    the release record". Otherwise, and in every launcher before #1050:
    pending packs are every `packs` entry whose `id` is not a line in
-   `Profile\applied.txt`, in feed order (`Updater.cs:Applied`, `Updater.cs:Pending`). Order
+   `Profile\applied.txt`, in feed order (`Updater.cs` `Applied`, `Updater.cs` `Pending`). Order
    matters: part one before part two.
 3. The launcher is not offered by the feed since #4825: it is offered when its
-   Velopack channel on GitHub has a newer one (`VeloUpdate.cs:CheckLauncher`).
+   Velopack channel on GitHub has a newer one (`VeloUpdate.cs` `CheckLauncher`).
 4. Packs go in first, one by one, each id appended to `applied.txt` once it is
-   in (`Updater.cs:MarkApplied`). Then Velopack applies the launcher in a
+   in (`Updater.cs` `MarkApplied`). Then Velopack applies the launcher in a
    process of its own and keeps the version before in its packages folder,
-   after every check in `VeloUpdate.cs:FetchLauncher`.
+   after every check in `VeloUpdate.cs` `FetchLauncher`.
 5. A fresh install gets an `applied.txt` listing every pack in the feed at
    build time, because the setup package already contains them
    (`Build-SetupFiles.ps1:applied.txt: every pack the channel's feed lists`).
    The dev build copies the main build's `applied.txt` when it is installed
-   (`DevBuild.cs:Install`).
+   (`DevBuild.cs` `Install`).
 
 A machine that loses `applied.txt` asks for every pack on the feed again. A
 launcher from #1050 on does not: it syncs to the record, which needs no
@@ -663,15 +667,23 @@ reads a feed that is not split the same as before, so the site can go first.
 
 ## Checks on every download
 
-- **Host allow list.** https only, and the host must be `github.com`,
+- **No host list.** The launcher keeps no host allow list any more: since
+  #5608 it downloads nothing from the feed, and every file it takes comes from
+  a GitHub API address that has to be one of this repository's Release files,
+  or the download is refused (`launcher\app\GitHub.cs:AssetUrl`). No token
+  goes with it: the launcher keeps no update token. Before #5608 the list was
+  `Updater.cs` `AllowedHosts`: https only, and `github.com`,
   `objects.githubusercontent.com`, `release-assets.githubusercontent.com`,
-  `api.github.com` or `thornswood.net`, or under one of them
-  (`Updater.cs:AllowedHosts`). No token goes with any of them: the
-  launcher keeps no update token.
-- **sha256.** Required for packs and the client runtime; an empty one refuses
-  the download (`Updater.cs:Download`). The launcher's Velopack package is
-  held to its channel's feed and to the Release's signed record
-  (`VeloUpdate.cs:FetchLauncher`).
+  `api.github.com` or `thornswood.net`.
+- **sha256.** Each Release file is held to the sha256 GitHub lists for it,
+  when GitHub lists one (`launcher\app\GitHub.cs:Download`). The launcher's
+  Velopack package is then held to its channel's feed and to the Release's
+  signed record whether or not GitHub listed one, on a new root
+  (`SyncPackage.cs:SeedFromChannel`) and on every update
+  (`VeloUpdate.cs:FetchLauncher`). Packs and the client runtime are no longer
+  downloaded at all: the game files come in that package, and the client
+  runtime is copied from it (`ClientRuntime.cs:Heal`). Before #5608 an empty
+  sha256 refused a pack or runtime download (`Updater.cs` `Download`).
 - **Signature.** Every program in a downloaded launcher package, and
   Velopack's Update.exe, must carry a signer whose Subject contains
   `ExpectedSigner`, the name on the signing certificate (the profile is
