@@ -1937,6 +1937,50 @@ async function handle(req, res) {
       return sendJson(res, 404, { error: 'That picture is not waiting for staff or on the gallery.' });
     }
 
+    /* The removed mark goes on first (#7373), the way expirePending marks
+       before it takes a name off the queue. Then every way a Delete can stop
+       part way leaves the name where a second Delete or the hourly sweep
+       finds it: marked, or on a list. It used to be written last, after the
+       lists, so a Delete whose unlink failed and whose note then would not
+       save left the file on disk, on no list and unmarked: refused by a
+       second Delete (#4401) and passed over by pruneRemovedUploads, which
+       takes only marked files. A marked file is never served (/up/<name>
+       refuses it), so a list that then will not save shows the picture as
+       gone, which is what staff asked for, and asking again finishes it.
+       Only a submission's own file is marked or deleted (#4401): never the
+       notes file or the small folder, even for a name a list holds. */
+    if (!Array.isArray(reports)) return notSaved('the reports');
+    const kept = reports.filter((r) => String(r.name) !== name);
+    const itsReports = reports.filter((r) => String(r.name) === name);
+    const hasFile = submissionName(name) && fs.existsSync(path.join(UP, name));
+    const now = Date.now();
+    let meta = null, heldUntil = 0;
+    if (hasFile) {
+      if (!notes || typeof notes !== 'object' || Array.isArray(notes)) {
+        retentionSay('gallery', { event: 'note-read-failed', file: name });
+        return sendJson(res, 500, { ok: false, name: name,
+          error: 'The site could not read its notes on uploads, so nothing was removed. Try again in a minute.' });
+      }
+      meta = new Map(Object.entries(notes));
+      const oldNote = meta.get(name) || {};
+      heldUntil = Number(oldNote.heldUntil) || 0;
+      /* The file (#2352, option C). Deleted, unless the submission had an
+         open report against it: then it is taken down after a report, and
+         its file stays on the site's disk, unshown, for GALLERY_HOLD_DAYS
+         with those reports beside it on uploads.json, and
+         pruneRemovedUploads deletes it once that time is up. The only copy
+         of those reports stays in the open list until this note is saved. */
+      const hold = itsReports.length > 0 && !heldUntil;
+      if (hold) heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
+      if (hold || !(Number(oldNote.removed) > 0)) {
+        meta.set(name, hold
+          ? { ...oldNote, removed: Number(oldNote.removed) || now, heldUntil: heldUntil, heldReports: itsReports.slice(-20) }
+          : { ...oldNote, removed: now });
+        if (!putJson(UPMETA, Object.fromEntries(meta))) return notSaved('its note');
+        recordRemoval('hidden');
+      }
+    }
+
     const leftGal = gallery.filter((x) => String(x.name) !== name);
     const removedGal = gallery.length - leftGal.length;
     if (removedGal && !putJson(GALLERY, leftGal)) return notSaved('the gallery');
@@ -1949,25 +1993,15 @@ async function handle(req, res) {
 
     // Drop open reports against this name too, so the reports list does not
     // keep asking about a picture that is already gone.
-    if (!Array.isArray(reports)) return notSaved('the reports');
-    const kept = reports.filter((r) => String(r.name) !== name);
-    const itsReports = reports.filter((r) => String(r.name) === name);
+    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
+    if (kept.length !== reports.length) recordRemoval('reports');
 
-    /*
-      The file (#2352, option C). Deleted, unless the submission had an open
-      report against it: then it is taken down after a report, and its file
-      stays on the site's disk, unshown, for GALLERY_HOLD_DAYS with those
-      reports beside it on uploads.json, and pruneRemovedUploads deletes it
-      once that time is up. deleteFile from a client is no longer read: the
-      hub asked it as a second question and the launcher never sent it, so
-      the same removal kept or deleted the file depending on the button.
-      Either way the file is marked removed while it is on disk, which
-      /up/<name> refuses, so the site does not serve it on a new request.
-      A delete that fails is said, never answered ok: the entry is still off
-      both lists, the file is marked removed so it is not served, the answer
-      and the site's log say it is still there, and the retention timer
-      deletes it once it can.
-    */
+    /* deleteFile from a client is no longer read: the hub asked it as a
+       second question and the launcher never sent it, so the same removal
+       kept or deleted the file depending on the button. A delete that fails
+       is said, never answered ok: the entry is off both lists, the file is
+       marked removed so it is not served, the answer and the site's log say
+       it is still there, and the retention timer deletes it once it can. */
     const answer = {
       ok: true,
       name: name,
@@ -1976,36 +2010,6 @@ async function handle(req, res) {
       removedPending: removedPend,
       fileDeleted: false
     };
-    // The file only when it is a submission's own (#4401): never the notes
-    // file or the small folder, even for a name a list holds.
-    const hasFile = submissionName(name) && fs.existsSync(path.join(UP, name));
-    const now = Date.now();
-    const savedMeta = hasFile ? jsonFile(UPMETA, fs.existsSync(UPMETA) ? null : {}) : {};
-    const noteNotSaved = () => {
-      retentionSay('gallery', { event: 'note-write-failed', file: name });
-      answer.ok = false;
-      answer.fileKept = !answer.fileDeleted;
-      answer.error = 'Taken off the gallery, but the site could not record that, so ' +
-                     (answer.fileDeleted ? 'its note is still listed.' : 'its file is still on the site. Try again.');
-      return sendJson(res, 500, answer);
-    };
-    if (!savedMeta || typeof savedMeta !== 'object' || Array.isArray(savedMeta)) return noteNotSaved();
-    const meta = new Map(Object.entries(savedMeta));
-    const oldNote = meta.get(name) || {};
-    const wasRemoved = Number(oldNote.removed) > 0;
-    let heldUntil = Number(oldNote.heldUntil) || 0;
-    if (hasFile && itsReports.length && !heldUntil) {
-      heldUntil = now + GALLERY_HOLD_DAYS * 86400000;
-      meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now,
-        heldUntil: heldUntil, heldReports: itsReports.slice(-20) });
-      // The only copy of these reports stays in the open list until their
-      // retention receipt is saved beside the file.
-      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
-      recordRemoval('hidden');
-    }
-    if (kept.length !== reports.length && !putJson(GREPORTS, kept)) return notSaved('the reports');
-    if (kept.length !== reports.length) recordRemoval('reports');
-
     if (hasFile && heldUntil > now) {
       answer.heldForReport = true;
       answer.heldUntil = heldUntil;
@@ -2013,21 +2017,23 @@ async function handle(req, res) {
     }
     if (hasFile) {
       const gone = deleteUpload(name);
-      if (gone.ok) {
-        meta.delete(name);
-        answer.fileDeleted = true;
-        recordRemoval('file');
-      } else {
-        meta.set(name, { ...oldNote, removed: Number(oldNote.removed) || now });
-      }
-      if (!putJson(UPMETA, Object.fromEntries(meta))) return noteNotSaved();
-      if (!wasRemoved) recordRemoval('hidden');
       if (!gone.ok) {
         answer.ok = false;
         answer.fileKept = true;
         answer.code = gone.code;
         answer.error = 'Taken off the gallery, but its file could not be deleted (' + gone.code +
                        '). It is no longer shown anywhere, and the site deletes it within the hour once it can.';
+        return sendJson(res, 500, answer);
+      }
+      answer.fileDeleted = true;
+      recordRemoval('file');
+      // The file is gone; a note that will not drop is the sweep's, which
+      // finds a marked name with no file and takes the note off.
+      meta.delete(name);
+      if (!putJson(UPMETA, Object.fromEntries(meta))) {
+        retentionSay('gallery', { event: 'note-write-failed', file: name });
+        answer.ok = false;
+        answer.error = 'Taken off the gallery and its file deleted, but the site could not record that, so its note is still listed.';
         return sendJson(res, 500, answer);
       }
     }

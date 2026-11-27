@@ -171,10 +171,12 @@ function recorded(before, did, name, actor) {
     fs.writeFileSync(path.join(dir, 'refuse.txt'), 'uploads.json');
     before = audit().length;
     result = await act('DELETE', '/api/gallery/approved', { name: retryImage });
-    yes('refused evidence metadata write preserves the file and source report',
-      result.status === 500 && result.body.fileKept === true &&
+    // The removed mark and the held reports go on first (#7373), so a note
+    // that will not save stops the Delete before it changes anything.
+    yes('refused evidence metadata write preserves the file and source report, and changes nothing',
+      result.status === 500 && !result.body.fileKept &&
       fs.existsSync(path.join(dir, 'uploads', retryImage)) && read('data/gallery-reports.json').length === 1 &&
-      recorded(before, 'galleryremove', retryImage, 'Current Aela') && audit().at(-1).phase === 'approved');
+      read('data/gallery.json').length === 1 && audit().length === before);
     fs.writeFileSync(path.join(dir, 'refuse.txt'), 'gallery-reports.json');
     before = audit().length;
     result = await act('DELETE', '/api/gallery/approved', { name: retryImage }, second, true);
