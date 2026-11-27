@@ -15,7 +15,11 @@ let key='one';
    100ms made the concurrent same-name check flake on a loaded VPS: one stream's
    close could land after the mocked deadline and return 408 (Refs #2541). */
 let compressDeadlineMs=null;
-const box={fs,path,crypto,Buffer,Map,Date,UP:work,reportFrom:()=>key,
+// receiveUpload counts each sender through budgets.js (#4316); the box gives
+// it a real budget and one sender's keys, whichever key the test is on.
+const {uploadBudget,UPLOAD_BYTES}=require('../lib/budgets');
+const box={fs,path,crypto,Buffer,Map,Date,UP:work,senderKeys:()=>[key],
+  takeUploadBudget:uploadBudget(),UPLOAD_BYTES,
   setTimeout:(fn,ms)=>setTimeout(fn, compressDeadlineMs==null ? ms : Math.min(ms,compressDeadlineMs)),clearTimeout,
   send:(res,status,payload,type,headers)=>res.finish({status,payload,headers}),
   sendJson:(res,status,payload)=>res.finish({status,payload})};

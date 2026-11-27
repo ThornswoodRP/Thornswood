@@ -57,6 +57,7 @@ require('./lib/public');
 require('./lib/game');
 require('./lib/store');
 require('./lib/news');
+require('./lib/budgets');
 require('./lib/limits');
 require('./lib/downloads');
 require('./lib/media');
