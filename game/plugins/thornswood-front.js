@@ -2530,6 +2530,12 @@
     cursor, the same trap the cap was written to end. Found by the review of
     the J journal.
 
+    The furniture panel claimed the keyboard and had no name here, so the
+    cap released it with the panel left drawn and its Escape and Close out of
+    reach (#4812). Every name that claims the keyboard, the chat box apart
+    (it has its own three watchdogs below), has its window here;
+    tests\test-4812-cap-closes-every-claim.js holds the two lists together.
+
     The trade window's close hides it and leaves the trade to the server: the
     next change to either pile draws it again, and so does H, or Trade on the
     P panel, while the trade stands (#1628), which puts Walk away back. The
@@ -2542,7 +2548,8 @@
     board: 'thornswoodBoard', repair: 'thornswoodRepair', treat: 'thornswoodTreat', preserve: 'thornswoodPreserve',
     trade: 'thornswoodTrade', merchant: 'thornswoodMerchant', select: 'thornswoodSelect', wheel: 'thornswoodEmotes',
     afk: 'thornswoodAfk', maneuvers: 'thornswoodManeuvers', ride: 'thornswoodRide',
-    help: 'thornswoodHelp', settings: 'thornswoodSettings', box: 'thornswoodBox', ship: 'thornswoodShip', stall: 'thornswoodStall'
+    help: 'thornswoodHelp', settings: 'thornswoodSettings', box: 'thornswoodBox', ship: 'thornswoodShip', stall: 'thornswoodStall',
+    furniture: 'thornswoodFurniture'
   };
 
   T.claimFocus = function (who, on) {
