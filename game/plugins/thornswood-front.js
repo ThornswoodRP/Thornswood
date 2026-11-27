@@ -3631,6 +3631,20 @@
   let afterEnded = 0;            // when the last mining spell ended, 0 for none
   let afterWaitEquip = false;    // a line is still owed for the next equip
   let afterEvents = {};          // event names written since the last end, once each
+  /*
+    THE START OF A SPELL TOO (#4549). The session logs of 23 Nov 2026 have
+    a spell that ended with the character sitting nowhere (sit 0) and the
+    weapon out, where every other spell ended in the mining state (sit 3):
+    IdlePickaxeEnter was asked for and not taken, and that spell is the one
+    a Main tester reported, with the pickaxe drawn, the pickaxe gone, the ore
+    with no swing, and no normal movement until the pickaxe came off. So the
+    same line is written as the idle is asked for and half a second into it,
+    which says whether it was taken and what the character was in when it
+    was asked for, and the events of the three seconds before it are written
+    in one line, which shows the sheathe the gamemode asks for first.
+  */
+  const AFTER_BEFORE_MS = 3000;
+  let afterRecent = [];          // [name, when] of the last events, newest last
 
   /*
     ONLY THE CHARACTER'S OWN EQUIP COUNTS. The game sends equip and unequip
@@ -3674,7 +3688,17 @@
           const name = String(ctx.animEventName || '');
           if (!name) { return; }
           const now = Date.now();
-          if (MINE_START.test(name)) { afterPick = true; return; }
+          if (MINE_START.test(name)) {
+            afterPick = true;
+            const before = afterRecent.filter((r) => now - r[1] <= AFTER_BEFORE_MS)
+              .map((r) => r[0] + ' ' + (r[1] - now) + 'ms').join(', ');
+            say('after mining: before ' + name + ': ' + (before || 'no events in the last ' + AFTER_BEFORE_MS + 'ms'));
+            afterRecent = [];
+            afterAsked.push(['as ' + name + ' was asked for', now], ['0.5 s into ' + name, now + 500]);
+            return;
+          }
+          afterRecent.push([name, now]);
+          if (afterRecent.length > 12) { afterRecent.shift(); }
           if (/^idlechairexitstart$/i.test(name) && afterPick) {
             afterPick = false;
             afterEnded = now;
