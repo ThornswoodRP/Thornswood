@@ -9723,7 +9723,12 @@
       }
     }
     if (leaving && now - leaving > 5000) {
-      leaving = now + 3600000;   // never twice
+      /* Once per outage (#4774). This used to push leaving an hour ahead,
+         which brought the countdown and the quit back an hour later, at the
+         menu or in whatever world the person was in by then. The outage ends
+         here: checkServer stands down until they are in a world again. */
+      leaving = 0;
+      quitFor = true;
       // No longer in the world, and said so before the quit rather than after,
       // because after it there is no tick to say it in.
       try { globalThis.__thornswoodInWorld = false; } catch (e) { }
@@ -9884,9 +9889,29 @@
   let leavingSaid = 0;
   /* When the server last said a countdown was running. See PROBE_STRIKES. */
   let toldRestarting = 0;
+  /* The quit for an outage has run, and nothing is watched until the person
+     is in a world again: there is no game connection left to lose (#4774).
+     The world flag is set by the first arrival in the tick above; coming
+     back after leaving the world does not set it again yet, which is #4615,
+     so until that lands the check stays off for the rest of the session. */
+  let quitFor = false;
 
   function checkServer(now) {
     if (!probe || leaving) return;
+    if (quitFor) {
+      let here = false;
+      try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+      if (!here) return;
+      // A new world, so a new watch: none of the last outage carries over.
+      quitFor = false;
+      strikes = 0;
+      probing = false;
+      lastProbe = 0;
+      leftClosed = false;
+      leavingSaid = 0;
+      toldRestarting = 0;
+      log('in a world again, watching the server again');
+    }
     if (probing && now - probeStartedAt > PROBE_DEADLINE_MS) {
       probing = false;
       log('the server has not answered in', PROBE_DEADLINE_MS / 1000, 'seconds');
