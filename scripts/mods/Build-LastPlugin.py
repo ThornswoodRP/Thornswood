@@ -332,6 +332,7 @@ import gamemode_tables  # noqa: E402  (where a table the gamemode reads is writt
 import riftweald  # noqa: E402 (the exact retired TG07 door and bar contract)
 import claimable_doors  # noqa: E402 (four individually reviewed XLOC-only overrides)
 sys.path.insert(0, HERE)
+import cistern_passage  # noqa: E402 (retired TG01 physical surface-passage sequence)
 import last_recipe  # noqa: E402  (the recipe each machine builds this plugin from, #2791)
 import own_plugins  # noqa: E402  (where each plugin of the load order is read from, #2923)
 
@@ -1593,6 +1594,9 @@ def build(data_dir):
             raise SystemExit('STOP. the town gate %s already has no lock in %s; take it off GATES. '
                              'Nothing was written.' % (what, plugins[e.pi].name))
         gates.append(e)
+    cistern_passage.require_stopped({'quests': {'stopped': quests_cut}}, policy)
+    cistern_copies = cistern_passage.entries(plugins, win, policy, subrecords, vmad_parse)
+    cistern_entries = [e for e, _ in cistern_copies]
     riftweald_copies = riftweald.entries(plugins, win, policy, subrecords, vmad_parse)
     riftweald_entries = [e for e, _ in riftweald_copies]
     claimable_entries = claimable_doors.entries(plugins, win, policy, subrecords, vmad_parse)
@@ -1816,7 +1820,7 @@ def build(data_dir):
         actors.remove(e)
         refs['disabled'].remove(actor_ref[(e.pi, e.fid)])
         refs['heldByServer'].append(actor_ref[(e.pi, e.fid)])
-    for e in actors + gates + riftweald_entries + claimable_entries:
+    for e in actors + gates + riftweald_entries + cistern_entries + claimable_entries:
         stand(e)
     # The cells only the floor items need: what this adds to the records the
     # plugin copies from other authors (#2791), counted by who wins each.
@@ -1868,7 +1872,7 @@ def build(data_dir):
     # (Build-Recost.py lists those under notCopied instead).
     held = sorted('%s %s (won by %s)%s' % (e.tag.decode(), desc_of(plugins[e.pi].gid(e.fid), canon),
                                            plugins[e.pi].name, placed(e))
-                  for e in actors + gates + riftweald_entries + claimable_entries + qentries + [e for e, _ in qprops] +
+                  for e in actors + gates + riftweald_entries + cistern_entries + claimable_entries + qentries + [e for e, _ in qprops] +
                   [e for e, _, _ in hold_locs]
                   if plugins[e.pi].name.lower() in blocked)
     for e, row in recipes:
@@ -1924,6 +1928,11 @@ def build(data_dir):
             if kind == 'bar':
                 flags |= DISABLED
             out['refr'].append((rn.one(src, e.fid, 'Riftweald'), flags, pack_subrecords(pairs), e))
+        for e, mode in cistern_copies:
+            src = plugins[e.pi]
+            pairs = cistern_passage.copy_pairs(src, subrecords(src.data(e)), rn, mode)
+            out['refr'].append((rn.one(src, e.fid, 'Cistern passage'), cistern_passage.flags(e, mode),
+                                pack_subrecords(pairs), e))
         for e in claimable_entries:
             src = plugins[e.pi]
             pairs = claimable_doors.copy_pairs(src, subrecords(src.data(e)), rn)
@@ -2087,6 +2096,7 @@ def build(data_dir):
         'refs': {k: sorted(v, key=ref_key) for k, v in refs.items()},
         'gatesUnlocked': [desc_of(g, canon) for g in GATES],
         'riftwealdUnlocked': list(riftweald.policy_refs(policy)),
+        'cisternPassage': cistern_passage.receipt(policy),
         'claimableDoorsUnlocked': list(claimable_doors.policy_refs(policy)),
         'quests': {'stopped': quests_cut, 'kept': quests_kept, 'modStopped': mod_stopped},
         # The mod quests whose script properties are set here (#3101), each
@@ -2685,6 +2695,8 @@ def verify(data_dir, plugin_bytes, manifest):
     if {row['recipe'] for row in manifest.get('seasonedRecipes', [])} != expected_ids:
         fails.append('seasoned recipe manifest does not cover the complete source plan')
     rn = Renumber(); rn.masters = [name.lower() for name in last.masters]
+    fails.extend(cistern_passage.verify(plugins, source_win, win, last, manifest, policy,
+                                       subrecords, vmad_parse, rn))
     fails.extend(riftweald.verify(plugins, source_win, win, last, manifest, policy,
                                  subrecords, vmad_parse, rn))
     fails.extend(claimable_doors.verify(plugins, source_win, win, last, manifest, policy,

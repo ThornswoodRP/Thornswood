@@ -151,6 +151,7 @@
    "e9e08:Skyrim.esm": {"type": "DOOR", "winner": "Skyrim.esm", "sourceSha256": "2bbc77fdec35a70ef96b710f8c525e50a1db9e63e11a391a0eb9ee8f56d36107", "dataSha256": "d2dd9e7ed5f5b5781508e0f3d20e3343e1dcf64703db73094f39c97cc8e9f12b", "flags": 0}
   }
  },
+ "cisternPassage": {"enabled": true},
  "riftwealdUnlocked": {
   "why": "The obsolete vanilla TG07 key lock and its three secured bolts no longer restrict Riftweald Manor. Only the exact reviewed placed records are changed; the unlocked way out, teleport, Thornswood claims and staff or quest locks elsewhere stay intact. A changed winning record stops the build for review.",
   "door": "27eed:Skyrim.esm",
