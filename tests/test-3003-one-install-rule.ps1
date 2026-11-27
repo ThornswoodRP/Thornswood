@@ -30,8 +30,11 @@
     1. a function named Find-Root or Find-InstallRoot in any script outside
        Where.ps1;
     2. any script outside Where.ps1 that walks the drives for
-       Launcher\Thornswood.exe, the rule itself under another name or none
-       (a Get-PSDrive call and that file name in one script);
+       Launcher\Thornswood.exe or a Thornswood folder, the rule itself under
+       another name or none (a Get-PSDrive call or [IO.DriveInfo]::GetDrives(),
+       and that file name or 'Thornswood' alone, in one script). #5626:
+       Check-Plugins walked the fixed drives for Thornswood\Profile\Default\
+       plugins.txt with DriveInfo, which the Get-PSDrive reader did not see;
     3. one of the seven scripts not asking Where.ps1 Install, or any script
        writing an install folder (C:\Thornswood, C:\Thornswood-DevBuild or
        a folder under either, on any drive) into a string of its own. Left
@@ -66,6 +69,7 @@ $FnAst = [System.Management.Automation.Language.FunctionDefinitionAst]
 $CmdAst = [System.Management.Automation.Language.CommandAst]
 $StrAst = [System.Management.Automation.Language.StringConstantExpressionAst]
 $XStrAst = [System.Management.Automation.Language.ExpandableStringExpressionAst]
+$InvokeAst = [System.Management.Automation.Language.InvokeMemberExpressionAst]
 
 # A Get-PSDrive that lists every drive rather than asking for one by name
 # (Get-PSDrive C, -Name): the walk the rule makes. The value after any other
@@ -94,9 +98,11 @@ function Get-RuleCopies($ast) {
         $out += ("line {0}: function {1}" -f $f.Extent.StartLineNumber, $f.Name)
     }
     $drives = @($ast.FindAll({ param($n) $n -is $CmdAst -and $n.GetCommandName() -eq 'Get-PSDrive' }, $true) | Where-Object { Test-EveryDrive $_ })
-    $exe = @($ast.FindAll({ param($n) ($n -is $StrAst -or $n -is $XStrAst) -and $n.Value -match '(?i)Launcher[\\/]Thornswood\.exe' }, $true))
+    # [IO.DriveInfo]::GetDrives() lists every drive too (#5626).
+    $drives += @($ast.FindAll({ param($n) $n -is $InvokeAst -and $n.Static -and "$($n.Member)" -eq 'GetDrives' -and $n.Expression.TypeName.FullName -match '^(?i)(System\.)?IO\.DriveInfo$' }, $true))
+    $exe = @($ast.FindAll({ param($n) ($n -is $StrAst -or $n -is $XStrAst) -and $n.Value -match '(?i)Launcher[\\/]Thornswood\.exe|^Thornswood([\\/]|$)' }, $true))
     if ($drives.Count -and $exe.Count) {
-        $out += ("line {0}: walks the drives for Launcher\Thornswood.exe" -f $drives[0].Extent.StartLineNumber)
+        $out += ("line {0}: walks the drives for the Thornswood install" -f $drives[0].Extent.StartLineNumber)
     }
     return $out
 }
@@ -123,6 +129,13 @@ $planted = [ordered]@{
     'the rule under another name'   = "function Get-Install {`n$walk    return 'C:\Thornswood'`n}"
     'the rule inline, as Check-Editions had it' = "`$root = 'C:\Thornswood'`nif (-not `$Data) {`n$walk}"
     'a Find-InstallRoot of its own' = "function Find-InstallRoot { return 'C:\Thornswood' }"
+    'the DriveInfo walk Check-Plugins had (#5626)' = @'
+foreach ($d in [IO.DriveInfo]::GetDrives()) {
+  if ($d.DriveType -ne 'Fixed' -or -not $d.IsReady) { continue }
+  $t = Join-Path $d.RootDirectory.FullName (Join-Path 'Thornswood' (Join-Path 'Profile' (Join-Path 'Default' 'plugins.txt')))
+  if (Test-Path -LiteralPath $t) { $ref = $t; break }
+}
+'@
 }
 foreach ($k in $planted.Keys) {
     Yes ("found: $k") (@(Get-RuleCopies (Parse-Text $planted[$k])).Count -gt 0)
@@ -133,6 +146,13 @@ $free = (Get-PSDrive C).Free
 Write-Host 'no launcher at C:\Thornswood\Launcher\Thornswood.exe' # a word about it is not a copy
 '@
 Yes 'not found: a script that asks Where.ps1, and reads a drive for another reason' (@(Get-RuleCopies (Parse-Text $clean)).Count -eq 0)
+# Build-Engine.ps1 lists every drive with DriveInfo for the letters taken,
+# and names no Thornswood folder: not a copy.
+$cleanDrives = @'
+$taken = @([IO.DriveInfo]::GetDrives() | ForEach-Object { $_.Name.Substring(0, 1).ToUpper() })
+$out = Join-Path $root 'Thornswood-Engine'
+'@
+Yes 'not found: a script that lists every drive for another reason' (@(Get-RuleCopies (Parse-Text $cleanDrives)).Count -eq 0)
 
 # ---- 2. every script here -----------------------------------------------------
 Write-Host ''
@@ -188,11 +208,11 @@ Write-Host ('no launcher at ' + $Root)
 Yes 'not found: a script that asks Where.ps1 and names the box''s own folders' (@(Get-InstallLiterals (Parse-Text $cleanLit)).Count -eq 0)
 
 Write-Host ''
-Write-Host 'the seven scripts that had a copy ask Where.ps1'
+Write-Host 'the scripts that had a copy ask Where.ps1'
 $asks = [regex]"Where\.ps1'\) (Install\b|\`$\(if \(.+\) \{ 'InstallDev' \} else \{ 'Install' \}\))"
 foreach ($rel in 'scripts\release\Publish-Update.ps1', 'scripts\release\Repair-Manifest.ps1', 'scripts\release\Sync-Client.ps1',
                  'scripts\release\Go.ps1', 'scripts\deploy\Deploy-Gamemode.ps1', 'scripts\mods\Check-CollectionRules.ps1',
-                 'scripts\mods\Check-Editions.ps1') {
+                 'scripts\mods\Check-Editions.ps1', 'scripts\mods\Check-Plugins.ps1') {
     $path = Join-Path $Repo $rel
     $name = ($rel -split '\\')[-1]
     if (-not (Test-Path -LiteralPath $path)) { Yes "$name is here" $false; continue }
