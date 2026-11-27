@@ -58019,7 +58019,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   to the person and everybody near them, and one log line says who, whose
   hair, which dye, and the colour before and after. The first dye on somebody
   stores the colour they were made with, which a wash goes back towards. The
-  person's own game redraws the hair in the front plugin ("hair colour").
+  person's own game redraws the hair at once in the engine fork's client,
+  which calls the game's UpdateHairColor when an appearance is applied
+  (skymp5-client/src/sync/appearance.ts, #2867); nothing here or in the front
+  plugin draws it.
 
   A DYE IS NOT A PLAIN ITEM. Each dye is registered with mintedEntry, so
   addItem, takeItem, the merchants and anything else that reads the record
