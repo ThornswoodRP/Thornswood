@@ -252,7 +252,9 @@ const keys = (o) => Object.keys(o || {}).sort().join(',');
   const bobRow = roster && roster.peers.find((p) => p.profileId === 21);
   yes('the roster carries the name with nothing that is not a character in it', !!bobRow && !BAD.test(bobRow.name), why);
   yes('at most forty characters (' + (bobRow ? bobRow.name.length : -1) + ')', !!bobRow && bobRow.name.length <= 40, why);
-  yes('and the visible part of it as sent', !!bobRow && /^Bob\[voice\] REFUSED a join/.test(bobRow.name), why);
+  // Each hidden mark is a space since #4355 (headlines.plainLine), so the
+  // words either side of a line break stay apart.
+  yes('and the visible part of it as sent', !!bobRow && /^Bob \[voice\] REFUSED a join/.test(bobRow.name), why);
   const solvi = roster && roster.peers.find((p) => p.profileId === 20);
   yes('an ordinary name with accents, an apostrophe and a hyphen is kept as is',
       !!solvi && solvi.name === 'S' + C(0xf6) + 'lvi Two-Feather\'s', why);

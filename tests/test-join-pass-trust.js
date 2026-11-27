@@ -406,7 +406,7 @@ section(function () {
   yes('voice: and an unproven connection never borrows a character name for its claimed number',
       box.peerName({ proven: false, profileId: 700, name: 'Me' }) === 'Me');
   yes('voice: the room\'s chat, the roster and the chat log all use it',
-      /name: peerName\(me\),\s*text: text,/.test(code) && /name: peerName\(p\), mode:/.test(code) && /name: peerName\(me\),\s*proven:/.test(code));
+      /name: peerName\(me\),\s*text: said,/.test(code) && /name: peerName\(p\), mode:/.test(code) && /name: peerName\(me\),\s*proven:/.test(code));
   const feed = src.slice(src.indexOf('// ==== thornswood voice feed'), src.indexOf('// ==== end thornswood voice feed'));
   yes('feed: the gamemode sends the switch with the positions, every tick, with nobody in the world too',
       /send\(\{ who: who, requirePass: requirePass \}\)/.test(feed) && !/if \(who\.length === 0\) return;/.test(feed));
