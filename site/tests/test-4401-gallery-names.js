@@ -60,7 +60,23 @@ const adminCookie = () => {
   const raw = ADMIN_ID + '|Admin|' + at + '|' + sign(ADMIN_ID + '|Admin|' + at);
   return 'twa=' + encodeURIComponent(raw);
 };
-const memberCookie = () => 'tw=' + crypto.createHash('sha256').update('thornswood:' + PASSWORD).digest('hex');
+/* The hub's member cookie, from the site's own sign in with the password,
+   as the hub gets it. */
+let MEMBER = '';
+const memberCookie = () => MEMBER;
+function signIn(port) {
+  return new Promise((done, failed) => {
+    const text = JSON.stringify({ password: PASSWORD });
+    const req = http.request({ host: '127.0.0.1', port: port, method: 'POST', path: '/api/login', agent: false,
+      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(text), origin: 'http://127.0.0.1:' + port } }, (res) => {
+      res.resume();
+      const c = String((res.headers['set-cookie'] || []).find((x) => /^tw=/.test(x)) || '').split(';')[0];
+      if (res.statusCode === 200 && c) done(c); else failed(new Error('the hub sign in answered ' + res.statusCode));
+    });
+    req.on('error', failed);
+    req.end(text);
+  });
+}
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } };
 const listed = () => (readJson(GALLERY) || []).map((g) => g.name);
 
@@ -113,6 +129,7 @@ const remove = (name) => ask('DELETE', '/api/gallery/approved', Object.assign({}
     srv.stdout.on('data', (d) => { out += d; });
     srv.stderr.on('data', (d) => { out += d; });
     PORT = (await siteFiles.listening(srv)).port;
+    MEMBER = await signIn(PORT);
 
     // A picture sent to the gallery, a hub upload, and a small copy's folder.
     let r = await ask('POST', '/api/gallery/submit?name=a.png&by=Ada', { 'content-type': 'image/png', cookie: memberCookie() }, PNG);
