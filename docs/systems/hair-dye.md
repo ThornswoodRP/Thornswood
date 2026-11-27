@@ -32,15 +32,14 @@ using one is anybody's.
   and the steep keeps the boil's rule that walking away from the fire loses
   it. The loom is the Tailor's own bench but has no fire, so a dye steeps at
   the cooking spot. `steepAt` moves it if staff ever decide otherwise.
-- **The bottle of water.** The bottle a dye takes comes out of the server's
-  count of where your water came from, by the rule a drink uses: the worst
-  water carried first. So a dye takes an unboiled bottle before a boiled one,
-  and the count never names a bottle you no longer carry.
-- **A dye and a boil on one press.** Carrying a dye's inputs and unboiled
-  water, one press at the fire starts both. When the dye is done it takes
-  its one bottle first, and the boil then turns whatever unboiled water is
-  left into boiled. If the dye took the last unboiled bottle, the boil has
-  nothing to do and says nothing.
+- **The bottle of water.** A dye takes a bottle of Glacier Water, the
+  clean water a well or a boil gives, as its inputs say. River Water is a
+  bottle of its own (#4790) and does not count until it is boiled.
+- **A dye and a boil on one press.** Carrying a dye's inputs and River
+  Water, one press at the fire starts both. When the dye is done it takes
+  its bottle of Glacier Water first, and the boil then turns the River
+  Water still carried into Glacier Water. If no River Water is left by
+  then, the boil has nothing to do and says nothing.
 - **What it is carried as.** One vanilla misc record, the Bowl
   (`98626:Skyrim.esm`), with the dye's name on the entry, the way a deed is
   a named entry. Nothing else in the game reads that record, and the server

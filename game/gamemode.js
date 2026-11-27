@@ -54463,15 +54463,21 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     // row unless WATERS names it otherwise.
     waterClass: { river: 'river', still: 'standing', marsh: 'standing', puddle: 'standing',
                   deep: 'sea', ice: 'ice' },
-    // What drinking takes first: the worst you are carrying, never a guess in
-    // your favour.
-    waterOrder: ['standing', 'sea', 'river', 'ice', 'well', 'boiled'],
-    unboiled: ['standing', 'sea', 'river'],
     // drink.md: "Boiling is a cook fire, a minute at it." Leaving the fire
     // before the minute is up, as the client reports it, loses the boil.
     boilSeconds: 60,
-    // An empty wine bottle fills; a bottle of water is what it fills into.
-    waterItems: { empty: 'f2012:Skyrim.esm', full: '13f598:WindhelmSSE.esp' },
+    /*
+      An empty wine bottle fills; what it fills into says where the water
+      came from (#4790). full is Glacier Water, clean: a well's, a boil's or
+      an inn's. river is the content plugin's River Water, which the water
+      bucket fills and a boil turns into full. Each is a record of its own,
+      so the bottle carries where it came from through a trade, a sale, a
+      drop or a chest, and a drink is judged by the bottle drunk. Before
+      #4790 every filled bottle was Glacier Water and the server counted
+      sources on the person who filled it, a count that stayed behind when
+      a bottle left their pack.
+    */
+    waterItems: { empty: 'f2012:Skyrim.esm', full: '13f598:WindhelmSSE.esp', river: '18040:Thornswood-Content.esp' },
     /*
       THE WELLS (Patrick, 12 Oct 2026): activating a well with an empty bottle
       fills it, at the game's own activation range. Every placed vanilla well
@@ -54888,9 +54894,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       mealFeast: !!v.mealFeast,
       // When a burnt meal's slow stamina ends (#2906).
       burntUntil: Number(v.burntUntil) || 0,
-      // Water carried, by where it came from, a boil under way, and the
-      // wells this person has filled at lately (#1382).
-      water: waterHeld(v.water),
+      // A boil under way, and the wells this person has filled at lately
+      // (#1382). Where carried water came from is the bottle's own record
+      // (#4790, NEEDS.waterItems), never a count here.
       boilFrom: (typeof v.boilFrom === 'number') ? v.boilFrom : null,
       boilFire: !!v.boilFire,
       wellAt: wellsUsed(v.wellAt)
@@ -55934,7 +55940,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
 
   function consumed(actorId, baseId) {
     if (!baseId) { return ''; }
-    if (isWaterItem(baseId)) { return drankWater(actorId); }
+    if (isWaterItem(baseId)) { return drankWater(actorId, baseId); }
     var kind = foodKind(baseId);
     var group = foodGroup(baseId);
     if (group === 'ale' || group === 'drink' || group === 'potion') { kind = group; }
@@ -56639,17 +56645,6 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   */
   function waterOwn(o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); }
 
-  function waterHeld(v) {
-    var out = {};
-    if (!v || typeof v !== 'object') { return out; }
-    for (var k in NEEDS.waterSource) {
-      if (!waterOwn(NEEDS.waterSource, k) || !waterOwn(v, k)) { continue; }
-      var c = Math.floor(Number(v[k]) || 0);
-      if (c > 0) { out[k] = c; }
-    }
-    return out;
-  }
-
   function wellsUsed(v) {
     var out = {};
     if (!v || typeof v !== 'object') { return out; }
@@ -56666,20 +56661,69 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       waterIds = {};
       try { waterIds.empty = idOf(NEEDS.waterItems.empty) || 0; } catch (e) { waterIds.empty = 0; }
       try { waterIds.full = idOf(NEEDS.waterItems.full) || 0; } catch (e) { waterIds.full = 0; }
+      try { waterIds.river = idOf(NEEDS.waterItems.river) || 0; } catch (e) { waterIds.river = 0; }
     }
     return waterIds[which] || 0;
   }
-  function isWaterItem(baseId) { return !!baseId && baseId === waterId('full'); }
+  function isWaterItem(baseId) { return !!baseId && (baseId === waterId('full') || baseId === waterId('river')); }
 
   function nearFire(n) {
     var d = Number(n && n.fire);
     return isFinite(d) && d >= 0 && d < (NEEDS.fire.reach || 1);
   }
 
-  function unboiledHeld(n) {
-    var c = 0;
-    for (var i = 0; i < NEEDS.unboiled.length; i++) { c += (n.water && n.water[NEEDS.unboiled[i]]) || 0; }
+  function packEntries(actorId) {
+    var inv = null;
+    try { inv = mp.get(actorId, 'inventory'); } catch (e) { inv = null; }
+    return (inv && Array.isArray(inv.entries)) ? inv.entries : null;
+  }
+
+  // The bottles of river water in the pack, by their record (#4790).
+  function riverHeld(actorId) {
+    var river = waterId('river'), entries = packEntries(actorId) || [], c = 0;
+    if (!river) { return 0; }
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i] && entries[i].baseId === river) { c += Math.max(0, Number(entries[i].count) || 0); }
+    }
     return c;
+  }
+
+  /*
+    A FINISHED BOIL (#4790): every bottle of river water in the pack becomes
+    Glacier Water, in one write of the pack, but keep: the one a drink is
+    taking as the boil finishes stays river water for the engine to take
+    off after the drink (MpActor::OnEquip takes it by its record). Answers
+    how many were boiled, the kept one among them.
+  */
+  function boilCarried(actorId, keep) {
+    var river = waterId('river'), full = waterId('full');
+    var entries = packEntries(actorId);
+    if (!river || !full || !entries) { return 0; }
+    var held = 0, out = [];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (e && e.baseId === river) { held += Math.max(0, Number(e.count) || 0); continue; }
+      out.push(e);
+    }
+    var left = Math.min(held, Math.max(0, keep || 0));
+    var moved = held - left;
+    if (!held) { return 0; }
+    if (moved > 0) {
+      var plain = null;
+      for (var j = 0; j < out.length; j++) {
+        var o = out[j];
+        if (o && o.baseId === full && Object.keys(o).every(function (k) { return k === 'baseId' || k === 'count'; })) {
+          plain = o; break;
+        }
+      }
+      if (plain) { plain.count = (Number(plain.count) || 0) + moved; } else { out.push({ baseId: full, count: moved }); }
+    }
+    if (left > 0) { out.push({ baseId: river, count: left }); }
+    try { mp.set(actorId, 'inventory', { entries: out }); } catch (e2) {
+      log('needs: could not boil the water of', Number(actorId).toString(16) + ':', e2);
+      return 0;
+    }
+    return held;
   }
 
   /*
@@ -56693,38 +56737,37 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       return 'You have drawn from this well today. Try another well, or wait ' +
              left + (left === 1 ? ' minute.' : ' minutes.');
     }
-    var refused = fillBottle(actorId);
+    var refused = fillBottle(actorId, NEEDS.waterItems.full);
     if (refused !== null) { return refused; }
-    n.water.well = (n.water.well || 0) + 1;
     n.wellAt[wellKey] = Date.now();
     write(actorId, n);
     return 'You fill a bottle at the well. The water is clean.';
   }
 
   /*
-    An empty bottle swapped for a full one. Answers null when it filled, else
-    what to tell them, '' when the bottles are not known at all.
+    An empty bottle swapped for a full one, of the record fullDesc (#4790).
+    Answers null when it filled, else what to tell them, '' when the bottles
+    are not known at all.
   */
-  function fillBottle(actorId) {
-    var empty = waterId('empty'), full = waterId('full');
+  function fillBottle(actorId, fullDesc) {
+    var empty = waterId('empty'), full = 0;
+    try { full = idOf(fullDesc) || 0; } catch (e) { full = 0; }
     if (!empty || !full) { return ''; }
     if (typeof takeItemById !== 'function' || !takeItemById(actorId, empty, 1)) {
       return 'You need an empty bottle to draw water.';
     }
-    if (typeof addItem !== 'function' || !addItem(actorId, NEEDS.waterItems.full, 1)) {
+    if (typeof addItem !== 'function' || !addItem(actorId, fullDesc, 1)) {
       if (typeof addItem === 'function') { addItem(actorId, NEEDS.waterItems.empty, 1); }
       return 'The bottle would not fill.';
     }
     return null;
   }
 
-  // At the water bucket by a river or a lake (#1382): river water, to boil.
+  // At the water bucket by a river or a lake (#1382): a bottle of River
+  // Water, to boil (#4790).
   function fillAtRiver(actorId) {
-    var n = settle(actorId);
-    var refused = fillBottle(actorId);
+    var refused = fillBottle(actorId, NEEDS.waterItems.river);
     if (refused !== null) { return refused; }
-    n.water.river = (n.water.river || 0) + 1;
-    write(actorId, n);
     return 'You fill a bottle from the water. Boil it before you drink it.';
   }
 
@@ -56743,7 +56786,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
     if (benchKeyword && benchKeyword === NEEDS.cookKeyword) {
       var n = settle(actorId);
-      if (!unboiledHeld(n) || typeof n.boilFrom === 'number') { return ''; }
+      if (!riverHeld(actorId) || typeof n.boilFrom === 'number') { return ''; }
       n.boilFrom = Date.now();
       n.boilFire = nearFire(n);
       write(actorId, n);
@@ -56753,8 +56796,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   // A boil under way: done after a minute at the fire, lost if they left it.
-  // Writes and answers a line when something changed, or ''.
-  function boilCheck(actorId, n) {
+  // Writes and answers a line when something changed, or ''. keep is the
+  // bottle of river water a drink is taking, left for the engine (boilCarried);
+  // done.boiled says whether the boil finished.
+  function boilCheck(actorId, n, keep, done) {
     if (typeof n.boilFrom !== 'number') { return ''; }
     if (n.boilFire && !nearFire(n)) {
       n.boilFrom = null;
@@ -56763,27 +56808,27 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       return 'You left the fire, and the water did not boil.';
     }
     if (Date.now() - n.boilFrom < NEEDS.boilSeconds * 1000) { return ''; }
-    var moved = unboiledHeld(n);
-    for (var i = 0; i < NEEDS.unboiled.length; i++) { delete n.water[NEEDS.unboiled[i]]; }
-    if (moved) { n.water.boiled = (n.water.boiled || 0) + moved; }
+    var moved = boilCarried(actorId, keep);
     n.boilFrom = null;
     n.boilFire = false;
     write(actorId, n);
-    // A hair dye's steep can have spent the last unboiled bottle first
-    // (#2675): with nothing boiled there is nothing to say.
+    if (done) { done.boiled = true; }
+    // The river water can have gone from the pack before the minute was up
+    // (drunk, handed on or dropped): with nothing boiled there is nothing to
+    // say.
     return moved ? 'The water has boiled. It is safe to drink.' : '';
   }
 
   /*
     EVERYTHING AT THE FIRE, in one order, wherever it is settled from (#2675):
-    a hair dye steeping there first, then the boil. The steep spends its
-    bottle through spendWater, which writes the record, so the boil reads the
-    record again rather than writing back the one it was handed. Answers the
-    lines and the record as it now is. boilSay and a drink both come here, so
-    a drink before the next place report cannot boil the bottle a finished
-    steep was about to take.
+    a hair dye steeping there first, then the boil. The steep takes a bottle
+    of Glacier Water from the pack as its recipe says, and the boil reads the
+    pack after it. Answers the lines, the record as it now is and whether a
+    boil finished. boilSay and a drink both come here, so a drink before the
+    next place report settles the fire first; keep is a drink's bottle of
+    river water (boilCheck).
   */
-  function fireSettle(actorId, n) {
+  function fireSettle(actorId, n, keep) {
     var lines = [];
     var D = g.__thornswoodHairDye;
     if (D && D.fireCheck) {
@@ -56791,9 +56836,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       try { dyeLine = D.fireCheck(actorId, nearFire(n)) || ''; } catch (eDye) { log('the hair dye steep threw:', eDye); }
       if (dyeLine) { lines.push(dyeLine); n = settle(actorId); }
     }
-    var line = boilCheck(actorId, n);
+    var done = { boiled: false };
+    var line = boilCheck(actorId, n, keep, done);
     if (line) { lines.push(line); }
-    return { lines: lines, n: n };
+    return { lines: lines, n: n, boiled: done.boiled };
   }
 
   function boilSay(actorId, n) {
@@ -56804,44 +56850,20 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     return lines.join(' ');
   }
 
-  /*
-    ONE BOTTLE OUT OF THE LEDGER, by the rule a drink uses: the worst source
-    carried first, never a guess in anybody's favour. Answers the source, or
-    'safe' for a bottle the ledger never counted (an inn's). A drink and a
-    hair dye's steep (#2675) both spend through here, so the count of bottles
-    by source stays the count of bottles carried.
-  */
-  function spendBottle(n) {
-    for (var i = 0; i < NEEDS.waterOrder.length; i++) {
-      var src = NEEDS.waterOrder[i];
-      if (n.water[src] > 0) {
-        n.water[src]--;
-        if (!n.water[src]) { delete n.water[src]; }
-        return src;
-      }
-    }
-    return 'safe';
-  }
-
-  /* Bottles of water used up by something other than a drink (#2675). */
-  function spendWater(actorId, count) {
-    var n = settle(actorId);
-    var k = Math.max(0, Math.floor(Number(count) || 0));
-    var spent = [];
-    for (var i = 0; i < k; i++) { spent.push(spendBottle(n)); }
-    if (k) { write(actorId, n); }
-    return spent;
-  }
-
   /* Whether the client last said a fire is in reach, without settling (#2675). */
   function fireNear(actorId) { return nearFire(read(actorId)); }
 
-  function drankWater(actorId) {
-    var atFire = fireSettle(actorId, settle(actorId));
-    var n = atFire.n;
+  /*
+    A BOTTLE DRUNK, judged by its own record (#4790): River Water is the
+    river's row unless a boil finished as it went down, Glacier Water is
+    clean. The fire is settled first, with the river bottle being drunk kept
+    for the engine to take off.
+  */
+  function drankWater(actorId, baseId) {
+    var river = !!baseId && baseId === waterId('river');
+    var atFire = fireSettle(actorId, settle(actorId), river ? 1 : 0);
     var first = atFire.lines.join(' ');
-    var src = spendBottle(n);
-    if (src !== 'safe') { write(actorId, n); }
+    var src = river && !atFire.boiled ? 'river' : 'safe';
     var row = NEEDS.waterSource[src];
     var line = ate(actorId, 'drink', row.thirst);
     if (row.fouled) {
@@ -57992,9 +58014,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     eaten: eaten,
     // Water at a well and over a cooking fire, from mp.onActivate (#1382).
     activatedWater: activatedWater, drankWater: drankWater,
-    // A bottle used up by a hair dye's steep, and the fire it steeps at (#2675).
-    spendWater: spendWater, fireNear: fireNear,
-    waterItem: function () { return NEEDS.waterItems.full; },
+    // The fire a hair dye steeps at (#2675).
+    fireNear: fireNear,
     // The potion window (#1382), asked by mp.onEatItem before the engine applies it.
     potionScale: potionScale,
     // What the engine applies of a swallowed record: 0 for a food whose own
@@ -58053,18 +58074,15 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   back away from the fire it is lost. It is kept in this block's memory
   only, so a server restart loses it, and nothing was taken yet.
 
-  THE BOTTLE OF WATER A DYE TAKES IS SPENT FROM THE WATER LEDGER. The game
-  cannot mark where a bottle's water came from, so the needs block counts
-  bottles by source (n.water). Taking a bottle for a dye without telling it
-  would leave a bottle counted that is no longer carried, and the next drink
-  would be judged by a bottle that is gone. So the steep hands the count to
-  the needs block's spendWater, the same worst-first rule a drink uses.
+  THE BOTTLE OF WATER A DYE TAKES IS A BOTTLE OF GLACIER WATER, the clean
+  water a well or a boil gives, taken from the pack as the dye's inputs say.
+  Where a bottle's water came from is its own record since #4790 (River
+  Water is the content plugin's), so nothing else is counted or spent.
 
-  ONE PRESS, A DYE AND UNBOILED WATER. The same press starts both, and they
-  are settled in one order: the steep first, spending its bottle (the worst
-  one carried, an unboiled one when there is one), then the boil, which turns
-  whatever unboiled water is still carried into boiled. Neither eats the
-  other, and a boil left with nothing to boil says nothing.
+  ONE PRESS, A DYE AND RIVER WATER. The same press starts both, and they are
+  settled in one order: the steep first, taking its bottle of clean water,
+  then the boil, which turns whatever River Water is still carried into
+  Glacier Water. Neither eats the other.
 
   USING ONE. Your own hair from the Hair dye page on K, anywhere. Somebody
   else's from that page with them in front of you (the look prompt's K), or
@@ -58563,15 +58581,10 @@ module.exports = {
     var pack = packOf(actorId);
     var next = HAIR_DYE.afterSteep(pack, dye, LIST, inputIds(), dyeItemId());
     if (!next) { return 'You no longer carry everything ' + dye.name + ' takes, so nothing steeped.'; }
-    var N = g.__thornswoodNeeds;
-    var water = (N && N.waterItem) ? N.waterItem() : '';
-    var bottles = 0;
-    dye.inputs.forEach(function (p) { if (p.item === water) { bottles += p.count; } });
     try { setPack(actorId, next); } catch (e) {
       hlog('could not write the pack of', Number(actorId).toString(16), 'for', dye.name + ':', e);
       return 'The dye would not steep. Say so in the dev channel.';
     }
-    if (bottles && N && N.spendWater) { N.spendWater(actorId, bottles); }
     hlog(auditPerson(actorId), 'steeped', dye.name);
     redraw(actorId);
     return dye.name + ' has steeped. It is in your pack.';

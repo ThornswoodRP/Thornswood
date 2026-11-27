@@ -16,10 +16,12 @@
 // T: A TAILOR'S JOB (Patrick, 18 Oct). Only the list's halves may steep, asked
 //    the way a bench asks; anybody else is told whose work it is, nothing is
 //    taken, and their boil still runs. Using a dye stays anybody's.
-// W: THE WATER LEDGER. The bottle a dye takes is spent from n.water by the
-//    rule a drink uses, worst first. With a dye and a boil on one press the
-//    dye takes its bottle first and the boil turns what is left; a boil left
-//    with nothing to turn says nothing; a drink settles the fire the same way.
+// W: THE WATER. Where a bottle's water came from is its own record (#4790):
+//    a dye takes a bottle of Glacier Water as its inputs say, and nothing
+//    is counted on the person. With a dye and a boil on one press the dye
+//    takes its bottle first and the boil turns the River Water carried into
+//    Glacier Water; a boil left with nothing to turn says nothing; a drink
+//    settles the fire the same way.
 // O: THE OFFER. Somebody else's hair is an offer of kind 'dye'. Nothing is
 //    taken or written on the offer; on Accept it is all checked again (the
 //    dye carried, both within reach, the same character) and only then the
@@ -85,25 +87,24 @@ yes('G6 the builder writes what is there', typeof BUILD.region === 'function' &&
 
 // --------------------------------------------------------- the stand-ins
 const blockSrc = lift('// ==== thornswood hair dye ====', '// ==== end thornswood hair dye ====');
-const needsFns = ['  function nearFire(n) {', '  function unboiledHeld(n) {', '  function boilCheck(actorId, n) {',
-  '  function fireSettle(actorId, n) {', '  function boilSay(actorId, n) {', '  function spendBottle(n) {',
-  '  function spendWater(actorId, count) {'].map((h) => lift(h, '\n  }\n'))
+const needsFns = ['  function waterId(which) {', '  function nearFire(n) {', '  function packEntries(actorId) {',
+  '  function riverHeld(actorId) {', '  function boilCarried(actorId, keep) {', '  function boilCheck(actorId, n, keep, done) {',
+  '  function fireSettle(actorId, n, keep) {', '  function boilSay(actorId, n) {'].map((h) => lift(h, '\n  }\n'))
   .concat([(() => { const one = '  function fireNear(actorId) { return nearFire(read(actorId)); }\n'; return gm.indexOf(one) >= 0 ? one : null; })()]);
 const topFns = ['function unfitToMake(actorId, workbenchId) {', 'function mintedBy(owner, test) {', 'function mintedEntry(entry) {', 'function addItem(actorId, itemDesc, count) {',
   'function takeItem(', 'function takeItemById(', 'function bodyShapeGuard(appearance) {'].map((h) => lift(h, '\n}\n'));
 const atomic = lift('function addItemsAtomic(', '\n}\n');
 const bodyConsts = lift('const BODY_APPEARANCE_FIELDS', "'name'];") + '\nconst BODY_WEIGHT_MIN = 0;\nconst BODY_WEIGHT_MAX = 100;\nconst BODY_WEIGHT_DEFAULT = 50;\n';
-const order = /waterOrder: (\[[^\]]*\])/.exec(gm), unboiled = /unboiled: (\[[^\]]*\])/.exec(gm);
 const boilSecs = /boilSeconds: (\d+)/.exec(gm), fireReach = /fire: \{ at: \d+, master: \d+, reach: (\d+) \}/.exec(gm);
 yes('S0 the hair dye block and the needs and item helpers are found',
-    !!blockSrc && needsFns.every(Boolean) && topFns.every(Boolean) && !!atomic && !!order && !!unboiled && !!boilSecs && !!fireReach);
+    !!blockSrc && needsFns.every(Boolean) && topFns.every(Boolean) && !!atomic && !!boilSecs && !!fireReach);
 if (fail) done();
 else {
 
 const IDS = {};
 let nextId = 0x5000;
 function idFor(desc) { if (!IDS[desc]) { IDS[desc] = nextId++; } return IDS[desc]; }
-const WATER = '13f598:WindhelmSSE.esp';
+const WATER = '13f598:WindhelmSSE.esp', RIVER_WATER = '18040:Thornswood-Content.esp';
 const COOK = DATA.steepAt;
 
 function world() {
@@ -123,18 +124,18 @@ function world() {
     log: function () { W.logs.push('[thornswood] ' + Array.prototype.slice.call(arguments).join(' ')); },
     say: (id, line) => W.said.push([id, line]), notify: () => {},
     auditPerson: (id) => 'P' + Number(id).toString(16),
-    NEEDS: { waterOrder: JSON.parse(order[1].replace(/'/g, '"')), unboiled: JSON.parse(unboiled[1].replace(/'/g, '"')),
-             boilSeconds: Number(boilSecs[1]), fire: { reach: Number(fireReach[1]) }, waterItems: { full: WATER } },
-    settle: (id) => { W.needs[id] = W.needs[id] || { water: {}, fire: -1 }; return JSON.parse(JSON.stringify(W.needs[id])); },
-    read: (id) => JSON.parse(JSON.stringify(W.needs[id] || { water: {}, fire: -1 })),
+    NEEDS: { boilSeconds: Number(boilSecs[1]), fire: { reach: Number(fireReach[1]) },
+             waterItems: { empty: 'f2012:Skyrim.esm', full: WATER, river: RIVER_WATER } },
+    settle: (id) => { W.needs[id] = W.needs[id] || { fire: -1 }; return JSON.parse(JSON.stringify(W.needs[id])); },
+    read: (id) => JSON.parse(JSON.stringify(W.needs[id] || { fire: -1 })),
     write: (id, n) => { W.needs[id] = JSON.parse(JSON.stringify(n)); },
     W: W
   };
   ctx.globalThis = g; g.mp = mp;
   vm.createContext(ctx);
   ctx.g = g;
-  vm.runInContext('var globalThis = g;\n' + bodyConsts + topFns.join('\n') + atomic + needsFns.join('\n') +
-    '\ng.__thornswoodNeeds = { spendWater: spendWater, fireNear: fireNear, waterItem: function () { return NEEDS.waterItems.full; } };\n' +
+  vm.runInContext('var globalThis = g;\nvar waterIds = null;\n' + bodyConsts + topFns.join('\n') + atomic + needsFns.join('\n') +
+    '\ng.__thornswoodNeeds = { fireNear: fireNear };\n' +
     'this.boilSay = boilSay; this.fireSettle = fireSettle; this.addItem = addItem; this.takeItem = takeItem;' +
     'this.takeItemById = takeItemById; this.mintedEntry = mintedEntry; this.addItemsAtomic = addItemsAtomic;\n', ctx);
   // The character and social stand-ins.
@@ -202,7 +203,7 @@ const BOWL = idFor(DATA.item);
   yes('S2 a press with no dye\'s inputs is none of the dye\'s business', W.HD.pressed(A, COOK) === '');
   W.mp.set(A, 'inventory', { entries: packWith(brown) });
   yes('S3 a press at another bench is none of its business', W.HD.pressed(A, 'other:Skyrim.esm') === '');
-  W.needs[A] = { water: { river: 1 }, fire: 10 };
+  W.needs[A] = { fire: 10 };
   const line = W.HD.pressed(A, COOK);
   yes('S4 a press at the cooking spot with the inputs starts a steep', /You set Brown Hair Dye to steep/.test(line), line);
   yes('S5 one steep at a time', W.HD.pressed(A, COOK) === '');
@@ -215,7 +216,7 @@ const BOWL = idFor(DATA.item);
   W.ctx.boilSay(A, W.ctx.read(A));
   yes('S7 leaving the fire early loses the steep', W.said.some((s) => /You left the fire, and Brown Hair Dye did not steep/.test(s[1])));
   const inv = W.mp.get(A, 'inventory').entries;
-  yes('S8 ...and takes nothing', JSON.stringify(inv) === JSON.stringify(packWith(brown)) && W.needs[A].water.river === 1);
+  yes('S8 ...and takes nothing', JSON.stringify(inv) === JSON.stringify(packWith(brown)));
   W.needs[A].fire = 10;
   W.HD.pressed(A, COOK);
   W.clock += DATA.steepSeconds * 1000;
@@ -270,16 +271,16 @@ const BOWL = idFor(DATA.item);
   const NOT = 'Steeping hair dye is work for a Haberdasher or Liverywright. Nothing was taken from your pack.';
   const W = world(); people(W);
   W.ranks[A] = { hearthcook: 'master' };
-  W.mp.set(A, 'inventory', { entries: packWith(brown) });
-  W.needs[A] = { water: { river: 1 }, fire: 10, boilFrom: W.clock, boilFire: true };
+  W.mp.set(A, 'inventory', { entries: packWith(brown, [{ baseId: idFor(RIVER_WATER), count: 1 }]) });
+  W.needs[A] = { fire: 10, boilFrom: W.clock, boilFire: true };
   const line = W.HD.pressed(A, COOK);
   yes('T1 somebody who is not a tailor pressing E with a dye\'s inputs is told whose work it is', line === NOT, line);
   yes('T2 ...no steep starts and nothing is taken', !Object.prototype.hasOwnProperty.call(W.HD.steeps, A) &&
-      JSON.stringify(W.mp.get(A, 'inventory').entries) === JSON.stringify(packWith(brown)));
+      JSON.stringify(W.mp.get(A, 'inventory').entries) === JSON.stringify(packWith(brown, [{ baseId: idFor(RIVER_WATER), count: 1 }])));
   W.clock += 61000; W.said.length = 0;
   W.ctx.boilSay(A, W.ctx.read(A));
   yes('T3 ...and the boil on the same press still runs', W.said.length === 1 && /The water has boiled/.test(W.said[0][1]) &&
-      W.needs[A].water.boiled === 1 && !W.needs[A].water.river, JSON.stringify(W.said));
+      count(W.mp.get(A, 'inventory').entries, idFor(RIVER_WATER)) === 0, JSON.stringify(W.said));
   yes('T4 the onActivate hook runs the boil whatever the dye answered',
       /if \(dLine\) \{ notify\(casterRefrId, dLine\); say\(casterRefrId, dLine\); answeredHere = true; \}\n\s*var wLine = needsW\.activatedWater\(/.test(gm));
   W.ranks[A] = { liverywright: 'novice' };
@@ -291,8 +292,9 @@ const BOWL = idFor(DATA.item);
   W.clock += DATA.steepSeconds * 1000;
   W.said.length = 0;
   W.ctx.boilSay(A, W.ctx.read(A));
+  // T3's boil turned its River Water into Glacier Water, which is still carried.
   yes('T7 a steep whose maker is no longer a tailor when it is done takes nothing', W.said.some((s) => s[1] === NOT) &&
-      JSON.stringify(W.mp.get(A, 'inventory').entries) === JSON.stringify(packWith(brown)));
+      JSON.stringify(W.mp.get(A, 'inventory').entries) === JSON.stringify(packWith(brown, [{ baseId: idFor(WATER), count: 1 }])));
   W.mp.set(A, 'inventory', { entries: [{ baseId: BOWL, count: 1, name: 'Brown Hair Dye' }] });
   yes('T8 using a dye is still anybody\'s', W.HD.command(['/hairdye', 'self', 'brown'], A) === 'You dye your hair with Brown Hair Dye.');
   const W2 = world(); people(W2);
@@ -303,53 +305,47 @@ const BOWL = idFor(DATA.item);
       blockSrc.replace(lift('  // ==== HAIR_DYES ====', '  // ==== end HAIR_DYES ====', blockSrc), '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')));
 }
 
-// -------------------------------------------------------- W: water ledger
+// -------------------------------------------------------- W: the water
 {
   const W = world(); people(W);
-  // Three bottles: two from the river, one from a well. A boil and a dye on one press.
-  W.mp.set(A, 'inventory', { entries: packWith(brown, [{ baseId: idFor(WATER), count: 2 }]) });
-  W.needs[A] = { water: { river: 2, well: 1 }, fire: 10, boilFrom: W.clock, boilFire: true };
+  // Two bottles of River Water and one of Glacier Water. A boil and a dye on one press.
+  W.mp.set(A, 'inventory', { entries: packWith(brown, [{ baseId: idFor(RIVER_WATER), count: 2 }]) });
+  const clean = count(W.mp.get(A, 'inventory').entries, idFor(WATER));
+  W.needs[A] = { fire: 10, boilFrom: W.clock, boilFire: true };
   W.HD.pressed(A, COOK);
   W.clock += Math.max(DATA.steepSeconds, Number(boilSecs[1])) * 1000;
   W.said.length = 0;
   W.ctx.boilSay(A, W.ctx.read(A));
-  const w = W.needs[A].water;
-  yes('W1 the dye takes its bottle first, the worst one carried', !w.river && w.well === 1 && w.boiled === 1, JSON.stringify(w));
-  yes('W2 the ledger counts the bottles still carried', (w.well || 0) + (w.boiled || 0) === count(W.mp.get(A, 'inventory').entries, idFor(WATER)));
+  const after = W.mp.get(A, 'inventory').entries;
+  yes('W1 the dye takes a bottle of Glacier Water, as its inputs say, and the boil turns both River Water (#4790)',
+      count(after, idFor(RIVER_WATER)) === 0 && count(after, idFor(WATER)) === clean - 1 + 2, JSON.stringify(after));
+  yes('W2 nothing is counted on the person (#4790)', !('water' in W.needs[A]), JSON.stringify(W.needs[A]));
   yes('W3 both are said, the dye first', W.said.length === 2 && /steeped/.test(W.said[0][1]) && /The water has boiled/.test(W.said[1][1]),
       JSON.stringify(W.said));
-  // The dye takes the last unboiled bottle: the boil has nothing to do.
+  // No River Water left when the minute is up: the boil has nothing to do.
   const W2 = world(); people(W2);
   W2.mp.set(A, 'inventory', { entries: packWith(brown) });
-  W2.needs[A] = { water: { sea: 1 }, fire: 10, boilFrom: W2.clock, boilFire: true };
+  W2.needs[A] = { fire: 10, boilFrom: W2.clock, boilFire: true };
   W2.HD.pressed(A, COOK);
   W2.clock += 61000; W2.said.length = 0;
   W2.ctx.boilSay(A, W2.ctx.read(A));
   yes('W4 a boil left with nothing to boil says nothing', W2.said.length === 1 && /steeped/.test(W2.said[0][1]) &&
-      Object.keys(W2.needs[A].water).length === 0 && W2.needs[A].boilFrom === null, JSON.stringify(W2.said) + JSON.stringify(W2.needs[A]));
-  // A bottle the ledger never counted (an inn's) costs the ledger nothing.
-  const W3 = world(); people(W3);
-  W3.mp.set(A, 'inventory', { entries: packWith(brown) });
-  W3.needs[A] = { water: {}, fire: 10 };
-  W3.HD.pressed(A, COOK); W3.clock += 61000; W3.ctx.boilSay(A, W3.ctx.read(A));
-  yes('W5 a bottle the ledger never counted leaves it as it was', Object.keys(W3.needs[A].water).length === 0 &&
-      count(W3.mp.get(A, 'inventory').entries, BOWL, 'Brown Hair Dye') === 1);
+      W2.needs[A].boilFrom === null, JSON.stringify(W2.said) + JSON.stringify(W2.needs[A]));
   // A drink before the next place report settles the fire the same way.
   const W4 = world(); people(W4);
-  W4.mp.set(A, 'inventory', { entries: packWith(brown, [{ baseId: idFor(WATER), count: 1 }]) });
-  W4.needs[A] = { water: { river: 2 }, fire: 10, boilFrom: W4.clock, boilFire: true };
+  W4.mp.set(A, 'inventory', { entries: packWith(brown, [{ baseId: idFor(RIVER_WATER), count: 2 }]) });
+  W4.needs[A] = { fire: 10, boilFrom: W4.clock, boilFire: true };
   W4.HD.pressed(A, COOK); W4.clock += 61000;
-  const fsd = W4.ctx.fireSettle(A, W4.ctx.settle(A));
-  yes('W6 fireSettle takes the dye\'s bottle before the boil', fsd.lines.length === 2 && fsd.n.water.boiled === 1 && !fsd.n.water.river,
-      JSON.stringify(fsd));
-  const drank = lift('  function drankWater(actorId) {', '\n  }\n');
-  yes('W7 a drink settles the fire through fireSettle and spends through spendBottle',
-      !!drank && /fireSettle\(actorId, settle\(actorId\)\)/.test(drank) && /spendBottle\(n\)/.test(drank) &&
-      !/boilCheck\(/.test(drank) && !/n\.water\[src\]--/.test(drank));
-  yes('W8 nothing but spendBottle takes a bottle off the ledger',
-      (gm.match(/n\.water\[[a-zA-Z]+\]--/g) || []).length === 1 && /function spendBottle[\s\S]{0,400}n\.water\[src\]--/.test(gm));
-  yes('W9 the needs block hands spendWater, fireNear and waterItem out', /spendWater: spendWater, fireNear: fireNear,/.test(gm) &&
-      /waterItem: function \(\) \{ return NEEDS\.waterItems\.full; \}/.test(gm));
+  const fsd = W4.ctx.fireSettle(A, W4.ctx.settle(A), 1);
+  const left = W4.mp.get(A, 'inventory').entries;
+  yes('W6 fireSettle takes the dye\'s bottle before the boil, and keeps a drink\'s River Water for the engine',
+      fsd.lines.length === 2 && fsd.boiled === true && count(left, idFor(RIVER_WATER)) === 1, JSON.stringify(fsd) + JSON.stringify(left));
+  const drank = lift('  function drankWater(actorId, baseId) {', '\n  }\n');
+  yes('W7 a drink settles the fire through fireSettle and is judged by the bottle drunk',
+      !!drank && /fireSettle\(actorId, settle\(actorId\), river \? 1 : 0\)/.test(drank) && /baseId === waterId\('river'\)/.test(drank) &&
+      !/boilCheck\(/.test(drank));
+  yes('W8 nothing keeps a count of where water came from (#4790)', !/n\.water\[/.test(gm) && !/spendWater|spendBottle/.test(gm));
+  yes('W9 the steep spends nothing through the needs block', !/spendWater/.test(blockSrc));
   yes('W10 onActivate asks the dye with the cooking reference before the water', /dyeW\.pressed\(casterRefrId, kwW, refrId\)[\s\S]{0,300}needsW\.activatedWater\(casterRefrId/.test(gm));
 }
 

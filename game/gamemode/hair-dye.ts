@@ -21,18 +21,15 @@
   back away from the fire it is lost. It is kept in this block's memory
   only, so a server restart loses it, and nothing was taken yet.
 
-  THE BOTTLE OF WATER A DYE TAKES IS SPENT FROM THE WATER LEDGER. The game
-  cannot mark where a bottle's water came from, so the needs block counts
-  bottles by source (n.water). Taking a bottle for a dye without telling it
-  would leave a bottle counted that is no longer carried, and the next drink
-  would be judged by a bottle that is gone. So the steep hands the count to
-  the needs block's spendWater, the same worst-first rule a drink uses.
+  THE BOTTLE OF WATER A DYE TAKES IS A BOTTLE OF GLACIER WATER, the clean
+  water a well or a boil gives, taken from the pack as the dye's inputs say.
+  Where a bottle's water came from is its own record since #4790 (River
+  Water is the content plugin's), so nothing else is counted or spent.
 
-  ONE PRESS, A DYE AND UNBOILED WATER. The same press starts both, and they
-  are settled in one order: the steep first, spending its bottle (the worst
-  one carried, an unboiled one when there is one), then the boil, which turns
-  whatever unboiled water is still carried into boiled. Neither eats the
-  other, and a boil left with nothing to boil says nothing.
+  ONE PRESS, A DYE AND RIVER WATER. The same press starts both, and they are
+  settled in one order: the steep first, taking its bottle of clean water,
+  then the boil, which turns whatever River Water is still carried into
+  Glacier Water. Neither eats the other.
 
   USING ONE. Your own hair from the Hair dye page on K, anywhere. Somebody
   else's from that page with them in front of you (the look prompt's K), or
@@ -531,15 +528,10 @@ module.exports = {
     var pack = packOf(actorId);
     var next = HAIR_DYE.afterSteep(pack, dye, LIST, inputIds(), dyeItemId());
     if (!next) { return 'You no longer carry everything ' + dye.name + ' takes, so nothing steeped.'; }
-    var N = g.__thornswoodNeeds;
-    var water = (N && N.waterItem) ? N.waterItem() : '';
-    var bottles = 0;
-    dye.inputs.forEach(function (p) { if (p.item === water) { bottles += p.count; } });
     try { setPack(actorId, next); } catch (e) {
       hlog('could not write the pack of', Number(actorId).toString(16), 'for', dye.name + ':', e);
       return 'The dye would not steep. Say so in the dev channel.';
     }
-    if (bottles && N && N.spendWater) { N.spendWater(actorId, bottles); }
     hlog(auditPerson(actorId), 'steeped', dye.name);
     redraw(actorId);
     return dye.name + ' has steeped. It is in your pack.';

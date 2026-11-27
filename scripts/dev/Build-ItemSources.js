@@ -369,10 +369,13 @@ function main() {
   });
 
   // Water: anybody fills an empty bottle at a well or the water bucket
-  // (docs/systems/drink.md), and the bottle of water is a new item.
+  // (docs/systems/drink.md), and the bottle of water is a new item. The
+  // bucket's is River Water, which a boil turns into the well's (#4790).
   const water = literalAfter('waterItems: ');
   asked(water.empty, '', '', 'NEEDS.waterItems');
-  add(water.full, { kind: 'gathered', by: 'anybody', rank: '', table: 'game/gamemode.js NEEDS.waterItems, an empty bottle filled at a well or the water bucket' });
+  add(water.full, { kind: 'gathered', by: 'anybody', rank: '', table: 'game/gamemode.js NEEDS.waterItems, an empty bottle filled at a well, or River Water boiled at a cook fire' });
+  if (!water.river) { die('game/gamemode.js NEEDS.waterItems names no river water'); }
+  add(water.river, { kind: 'gathered', by: 'anybody', rank: '', table: 'game/gamemode.js NEEDS.waterItems, an empty bottle filled at the water bucket' });
 
   // Quests. The scarce work draws (each file names its item), the longfin
   // markers, the mammoth ground (the hunting table's mammoth, dd641, which

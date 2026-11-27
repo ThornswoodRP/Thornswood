@@ -149,7 +149,7 @@ yes('T7 ...the same halves the loom row in BENCH_ACCESS names', !!loom &&
 const expert = clone(data); expert.who = { anyone: false, halves: { haberdasher: 'expert' } };
 yes('T8 expert is a rank the list may name, as RANK_LADDER has it', dye.checkDyes(expert).length === 0 &&
     /const RANK_LADDER = \['novice', 'advanced', 'expert', 'master'\];/.test(gm));
-const water = /waterItems: \{ empty: '([^']+)', full: '([^']+)' \}/.exec(gm);
+const water = /waterItems: \{ empty: '([^']+)', full: '([^']+)'/.exec(gm);
 const waterless = data.dyes.filter((d) => !water || !d.inputs.some((p) => p.item === water[2])).map((d) => d.id);
 yes('T5 every dye takes a bottle of water, the record the needs code fills', !!water && waterless.length === 0, waterless.join(', '));
 

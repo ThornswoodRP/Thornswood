@@ -46,7 +46,7 @@ const feast = num(/feast:\s*\{\s*food:\s*(\d+)/);
 
 const FEATURES = [
   { what: 'where the water you drank came from',
-    done: /waterSource:\s*\{/.test(needs) && /waterOrder:/.test(needs) && sea > 0,
+    done: /waterSource:\s*\{/.test(needs) && /waterItems:\s*\{[^}]*river:/.test(needs) && sea > 0,
     said: /\bnot yet know\b[^.]*\bwater\b|\bwater\b[^.]*\bnot yet\b/i },
   { what: 'a soup\'s thirst on top of its hunger',
     done: soupDrink > 0,
