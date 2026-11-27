@@ -100,7 +100,7 @@ const ENGINE_METHODS = [
   'writePrivateEconomyLedger', 'writeFileWhole', 'tick', 'on', 'createActor', 'setUserActor',
   'getUserActor', 'getUserGuid', 'isConnected', 'getActorPos', 'getActorCellOrWorld', 'getActorName',
   'destroyActor', 'setRaceMenuOpen', 'getActorsByProfileId', 'getUnreadableChangeForms', 'setEnabled',
-  'createBot', 'getUserByActor', 'getUserIp', 'getConnectionStats', 'kick', 'getLocalizedString', 'getServerSettings', 'clear',
+  'createBot', 'getUserByActor', 'getUserIp', 'kick', 'getLocalizedString', 'getServerSettings', 'clear',
   'makeProperty', 'makeEventSource', 'get', 'set', 'compareAndSetInventory',
   'compareAndSetInventoryAndProperty', 'compareAndSetActorProperty', 'compareAndSetActorPropertyAndSpells', 'getInventoryReceipt',
   'getSavedInventoryReceipt', 'place', 'lookupEspmRecordById', 'getEspmLoadOrder',
