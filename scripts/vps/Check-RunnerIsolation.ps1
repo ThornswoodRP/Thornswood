@@ -8,8 +8,9 @@
     through Remote.ps1, and the repository's Actions settings through gh
     api GET calls (visibility, fork pull request policy, default token
     permissions, the runners and their labels, how many collaborators).
-  It saves them to -Facts. Collecting is a live step: Claude's
-  (the ops repo's ops\claude-queue\2161-runner-isolation.md).
+  It saves them to -Facts. Collecting is a live step, and Claude runs it
+  after any Install-Runner.ps1 or Lock-VpsFolders.ps1 run and monthly, as
+  section 5 of the ops repo's docs\RUNNER-ISOLATION.md says.
 
   Without -Collect it compares a saved -Facts file with
   records\runner-isolation.json and the workflows in .github\workflows.
@@ -25,7 +26,7 @@
   not read, an account with no SID (its groups and firewall rules unknown).
 
   Each row is ok, intentional (the record's reason), or risk. A risk row is
-  a finding for the threat model in the ops repo's RUNNER-ISOLATION.md, not a change:
+  a finding for the threat model in the ops repo's docs\RUNNER-ISOLATION.md, not a change:
   this script never changes a runner, an ACL, a setting or a credential.
   Rights come from reading ACLs, not from Windows' effective access check,
   and the report says so. No file contents, setting values or tokens are
@@ -276,7 +277,7 @@ foreach ($ru in $facRunners) {
     }
     Row 'cleanup' "$id _work\_temp" "nothing older than $($r.tempMaxHours) h" ("$($ru.tempLeftFiles) files, oldest $($ru.tempOldestHours) h") (-not ($ru.tempLeftFiles -gt 0 -and [double]$ru.tempOldestHours -gt [double]$r.tempMaxHours))
     $fwKnown = -not $noSid -and $null -ne $ru.firewallRules
-    Row 'network' "$id outbound" 'limited to GitHub, as Install-Runner -OffBox does' $(if ($fwKnown) { "$($ru.firewallRules) firewall rules name the account" } else { 'not counted, the account has no SID' }) ($fwKnown -and [int]$ru.firewallRules -gt 0)
+    Row 'network' "$id outbound" 'limited to GitHub and the package feeds the record names, as Install-Runner -NetworkOnly -AllowHost puts on' $(if ($fwKnown) { "$($ru.firewallRules) firewall rules name the account" } else { 'not counted, the account has no SID' }) ($fwKnown -and [int]$ru.firewallRules -gt 0)
     Row 'credentials' "$id .credentials" 'readable by its own jobs (GitHub design)' $(if ($ru.hasCredentials) { 'present' } else { 'absent' }) $true
 }
 
