@@ -181,18 +181,26 @@ view report (#6593). It is never part of the normal release run. Use matching
 runner/plugin bytes and an authorized test character. Run-RealClient selects
 Dev; this list adds no Main route or environment switch. It reuses the normal
 release run's entry steps and selects its existing named test character,
-Adventurer. Keep hands off the controls: after the in-world screenshot it
-requests one wheel detent forward and one backward, with a half-second pause
-between completed attempts. Each request must match its unused opted-in plan
+Adventurer. Keep hands off the controls: the opted-in world wait captures the
+first update satisfying the normal world-ready check, before that wait passes.
+The next step requests one wheel detent forward, followed by one backward,
+with a half-second pause between completed attempts. Each request must match its unused opted-in plan
 step. It never forces a camera or moves the actor.
 
-An opted-in timed wait or wheel step enables `camera-trace` result lines only
-while that step is active. Limits are thirty seconds from the first trace,
+An opted-in world wait, timed wait or wheel step enables `camera-trace` result
+lines only while that step is active. Limits are thirty seconds from the first trace,
 eight wheel observations/requests and sixty-four receipts per run. Ordinary runs do not
 read camera state. `-Publish` is refused for any list with a camera trace:
 coordinates and screenshots remain local, with no GitHub upload. Do not attach
 these local results to a public issue. The existing dev permission and
 whose-game checks are preserved.
+
+The world-ready sample is an update observation, not the instant of native
+arrival. Loading time does not start the thirty-second trace budget. This
+recipe takes its screenshot after the wheel attempts; there is no pre-wheel
+screenshot or fixed delay before the first request. Tick/runner polling and
+Windows delivery still add latency, so this cannot prove the first possible
+physical input after arrival or the exact moment controls become responsive.
 
 The start sample includes actor XYZ, scale, cell/world, camera mode, browser
 focus, camera/looking controls, known menus and the last native owner target

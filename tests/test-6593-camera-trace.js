@@ -55,6 +55,40 @@ test('ordinary test runs never read camera state or emit a trace', () => {
   const f = fixture(false); f.frame(); f.wheel(); f.frame();
   assert.equal(f.reads, 0); assert.equal(f.receipts().length, 0);
 });
+
+test('opt-in world wait observes its first ready update before passing or requesting a wheel', () => {
+  const f = fixture(true, { steps: [
+    { do: 'wait', for: 'world', timeout: 300000, cameraTrace: true },
+    { do: 'wheel', delta: 120, cameraTrace: true }, { do: 'end' }
+  ] });
+  f.fire('menuOpen', { name: 'Loading Menu' });
+  f.frame(35000);
+  assert.equal(f.reads, 0); assert.equal(f.receipts().length, 0);
+  assert.ok(!f.lines().some(r => r.t === 'ask' && r.do === 'wheel'));
+  f.fire('menuClose', { name: 'Loading Menu' });
+  f.state.pos[2] = 444; f.state.camera = 0; f.frame();
+  const ready = f.receipts().find(r => r.phase === 'start' && r.i === 0);
+  assert.ok(ready); assert.deepEqual(ready.sample.actorXYZ, [11, 22, 444]);
+  assert.equal(ready.sample.cameraState, 0); assert.equal(ready.sample.cameraWorldAvailable, false);
+  const lines = f.lines();
+  assert.ok(lines.findIndex(r => r.t === 'camera-trace' && r.i === 0) <
+    lines.findIndex(r => r.t === 'step' && r.i === 0 && r.ok));
+  f.frame();
+  const before = f.receipts().find(r => r.phase === 'wheel-request-before');
+  assert.ok(before); assert.equal(before.i, 1);
+  assert.ok(f.lines().some(r => r.t === 'ask' && r.do === 'wheel'));
+  f.ack(); f.frame(300); f.frame(); f.frame(300);
+  assert.ok(f.lines().some(r => r.t === 'step' && r.i === 1 && r.ok));
+});
+
+test('normal world wait stays unobserved and a traced world timeout does not sample an unready world', () => {
+  const normal = fixture(false, { steps: [{ do: 'wait', for: 'world' }, { do: 'end' }] });
+  normal.frame(); assert.equal(normal.reads, 0); assert.equal(normal.receipts().length, 0);
+  const missing = fixture(true, { steps: [{ do: 'wait', for: 'world', timeout: 100, cameraTrace: true }] });
+  missing.fire('menuOpen', { name: 'Loading Menu' }); missing.frame(101);
+  assert.equal(missing.reads, 0); assert.equal(missing.receipts().length, 0);
+  assert.ok(missing.lines().some(r => r.t === 'step' && !r.ok));
+});
 test('opt-in baseline separates actual actor height from authoritative target without private names', () => {
   const f = fixture(); f.frame();
   const r = f.receipts().find(r => r.phase === 'start');
@@ -168,9 +202,12 @@ test('a wheel request requires explicit local trace and exactly one signed deten
 test('smoke list reuses exact owned-character entry and opts into exactly two bounded wheel requests', () => {
   const load = name => JSON.parse(fs.readFileSync(path.join(__dirname, 'real-client', name), 'utf8')).steps;
   const normal = load('dev-release.json'); const smoke = load('camera-smoke.json');
-  const end = normal.findIndex(s => s.do === 'shot' && s.name === 'in-world') + 1;
-  assert.deepEqual(smoke.slice(0, end), normal.slice(0, end));
-  assert.deepEqual(smoke.slice(end).map(s => s.do), ['wait', 'wheel', 'wait', 'wheel', 'wait', 'shot', 'end']);
+  const world = normal.findIndex(s => s.do === 'wait' && s.for === 'world');
+  assert.ok(world >= 0);
+  assert.deepEqual(smoke.slice(0, world), normal.slice(0, world));
+  assert.deepEqual(smoke[world], { ...normal[world], cameraTrace: true });
+  const end = world + 1;
+  assert.deepEqual(smoke.slice(end).map(s => s.do), ['wheel', 'wait', 'wheel', 'wait', 'shot', 'end']);
   assert.deepEqual(smoke.slice(end).filter(s => s.do === 'wheel').map(s => s.delta), [120, -120]);
   assert.ok(smoke.slice(end).filter(s => s.do === 'wheel').every(s => s.cameraTrace === true));
   assert.ok(smoke.slice(end).filter(s => s.do === 'wait').every(s => s.ms === 500 && s.cameraTrace === true));

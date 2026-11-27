@@ -128,16 +128,7 @@
       "do": "wait",
       "for": "world",
       "why": "in the world, no loading screen",
-      "timeout": 300000
-    },
-    {
-      "do": "shot",
-      "name": "in-world"
-    },
-    {
-      "do": "wait",
-      "for": "time",
-      "ms": 500,
+      "timeout": 300000,
       "cameraTrace": true
     },
     { "do": "wheel", "delta": 120, "cameraTrace": true },
