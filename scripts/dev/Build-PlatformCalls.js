@@ -91,7 +91,8 @@ if (require.main === module) {
   const [fork, commit] = process.argv.slice(2);
   if (!fork || !commit) {
     console.error('usage: node scripts/dev/Build-PlatformCalls.js <fork clone> <commit>');
-    process.exit(2);
+    process.exitCode = 2;
+  } else {
+    process.stdout.write(JSON.stringify(platformCalls(fork, commit)) + '\n');
   }
-  process.stdout.write(JSON.stringify(platformCalls(fork, commit)) + '\n');
 }
