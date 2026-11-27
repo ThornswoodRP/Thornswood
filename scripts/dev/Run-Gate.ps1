@@ -400,26 +400,6 @@ if ($Pick -gt 0) {
                 $whole = $false
                 Say ('{0} content checks do not run here: the newest content build is not of this checkout''s inputs, and each reads one it changed (named above). The merge release runs every content check over the merge''s own build before anything carries it.' -f ($before - $list.Count))
             }
-            # A TABLE THE BUILD LACKS (#7244). A harness that joins every
-            # table into the gamemode (tests\gamemode-tables.js joined())
-            # opens each table the checkout's gamemode calls, names none of
-            # them, and stops with ENOENT on one an older build lacks, as
-            # three did in merge queue run 45950343805 over a build made
-            # before #7191. Over a build of this checkout's own inputs a
-            # missing table is a real fault, so they stay in there.
-            $tmpT = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
-            $tablesGate = Join-Path $tmpT 'tables-gate.txt'
-            $tablesOut = Join-Path $tmpT 'tables-held.txt'
-            [IO.File]::WriteAllLines($tablesGate, [string[]]$list)
-            & node $Affected tables $tablesGate $tablesOut 2>&1 | ForEach-Object { Say ([string]$_) }
-            if ($LASTEXITCODE -ne 0) { throw ('Affected-Harnesses.js tables failed (exit ' + $LASTEXITCODE + '), the lines above say why') }
-            $held = @([IO.File]::ReadAllLines($tablesOut) | Where-Object { $_.Trim() })
-            $before = $list.Count
-            $list = @($list | Where-Object { $held -notcontains $_ })
-            if ($list.Count -lt $before) {
-                $whole = $false
-                Say ('{0} harnesses that join every table into the gamemode do not run here: the laid content build lacks a table this checkout''s gamemode calls (named above). The merge release runs every content check over the merge''s own build before anything carries it.' -f ($before - $list.Count))
-            }
         }
     } catch {
         Write-Host ('::error::' + $_.Exception.Message)

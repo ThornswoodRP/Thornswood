@@ -39,14 +39,6 @@
 //      (#6893: test-5191-gamemode-tables.js lists game/gamemode-tables and
 //      ran over the old build when a pull request added a table); a folder
 //      git holds files in, such as game/data, is not enough.
-//   9. over a laid content build that lacks a table the checkout's gamemode
-//      calls, every harness that joins the tables into the gamemode through
-//      tests/gamemode-tables.js joined() is held back, since joined() opens
-//      every table the gamemode calls and stops on the missing one (#7244:
-//      merge queue run 45950343805, STATIONS_THE_SERVER_STANDS since #7191);
-//      one that reads only a table the build has is not, and the pick does
-//      this only over a build of other inputs, where a newer build brings
-//      the table.
 'use strict';
 const path = require('path');
 const REPO = path.join(__dirname, '..');
@@ -331,37 +323,6 @@ try {
   yes('  one that names only a folder git holds files in is not (' + (r.why[other] || 'not held') + ')', r.run.indexOf(other) < 0);
   const same = A.staleChecks(cmap, [tables], base, base, ['game/gamemode-tables/NEW_TABLE.json'], ['scripts/dev']);
   yes('  and with no input changed nothing is held', same.run.length === 0 && same.changed === 0);
-}
-
-// 9. a table the gamemode calls that the laid build lacks (#7244)
-{
-  const fs = require('fs');
-  const gm = "const A_TABLE = table('A_TABLE');\nconst NEW_TABLE = table('NEW_TABLE');\nconst B = 1;\n";
-  const texts = {
-    'test-joins.js': "const gm = require('./gamemode-tables.js').joined(read('game/gamemode.js'));\n",
-    'game/tests/test-joins-too.js': "const GT = require('../../tests/gamemode-tables.js');\nconst gm = GT.joined(src);\n",
-    'test-destructures.js': "const { joined } = require('./gamemode-tables.js');\n",
-    'test-one-table.js': "const T = require('./gamemode-tables.js');\nconst a = T.table('A_TABLE');\n",
-    'test-plain.js': "const joined = [1, 2].join('');\n",
-  };
-  const gateT = Object.keys(texts);
-  const read = (n) => texts[n];
-  const has = (n) => n === 'A_TABLE';
-  const t = typeof A.tablesHold === 'function' ? A.tablesHold(gateT, gm, has, read) : null;
-  yes('9. the tables the gamemode calls that the laid build lacks are named (' + (t ? t.missing.join(', ') : 'no tablesHold') + ')', !!t && t.missing.join(' ') === 'NEW_TABLE');
-  yes('  and every harness that joins the tables into the gamemode is held back, whichever way it takes joined()', !!t &&
-      ['test-joins.js', 'game/tests/test-joins-too.js', 'test-destructures.js'].every(n => t.run.indexOf(n) >= 0 && /joins every table the gamemode calls/.test(t.why[n]) && /NEW_TABLE/.test(t.why[n])));
-  yes('  one that reads one table it has, and one that only says joined, are not', !!t && t.run.indexOf('test-one-table.js') < 0 && t.run.indexOf('test-plain.js') < 0);
-  const full = typeof A.tablesHold === 'function' ? A.tablesHold(gateT, gm, () => true, read) : null;
-  yes('  with every table laid nothing is held', !!full && full.missing.length === 0 && full.run.length === 0);
-  // The three that stopped with ENOENT in merge queue run 45950343805.
-  const real = ['test-1385-perks.js', 'test-513-world-stage.js', 'test-1398-weaver.js'].map(n => (fs.existsSync(path.join(REPO, 'tests', n)) ? n : 'game/tests/' + n));
-  const readReal = (n) => fs.readFileSync(n.indexOf('/') >= 0 ? path.join(REPO, n) : path.join(REPO, 'tests', n), 'utf8');
-  const r9 = typeof A.tablesHold === 'function' ? A.tablesHold(real, gm, has, readReal) : null;
-  yes('  the three run 45950343805 stopped on are held back over a build that lacks a table (' + real.join(', ') + ')', !!r9 && r9.run.length === 3);
-  const rg = fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Run-Gate.ps1'), 'utf8');
-  yes('  and the pick takes them out of the gate over a build of other inputs, never over one of its own, where a missing table is a fault',
-      /elseif \(\[string\]\$env:CONTENT_SAME -eq 'no'\) \{[\s\S]*?& node \$Affected tables \$tablesGate \$tablesOut[\s\S]*?\$list = @\(\$list \| Where-Object \{ \$held -notcontains \$_ \}\)[\s\S]*?\n        \}\n    \} catch/.test(rg));
 }
 
 console.log(pass + ' passed, ' + fail + ' failed');
