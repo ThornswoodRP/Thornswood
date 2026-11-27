@@ -200,3 +200,33 @@ are unsupported and fail before any input is sent.
 
 PowerShell 7 must be available to run the harness regression test, including
 its fake Windows focus and input cases; missing PowerShell fails the test.
+
+## A minute in an ordinary seat
+
+`bench-seat.json` is a separate Dev acceptance fixture for #6621. It is not
+added to the automatic release run. It uses the canonical choice/world
+steps and inn trip, faces the closest free ordinary chair, bench or stool
+in that room, presses E once, observes sitting for a full minute and then
+uses one movement key to get up. Launch remains an explicitly coordinated
+real-game operation; preparing this file does not run it.
+
+`face` with `what: seat` reuses the bed tooling's bounds and side checks.
+It requires a named FURN seat, excludes beds and occupied furniture, and
+uses the pinned native `getWorkbenchType` value of zero to exclude crafting
+benches. A missing API, no valid seat or lost world is a verification error.
+`wait` with `for: furniture` and `enter: true` requires a new own event for
+that exact target after the normal key request, plus native sitting state.
+`wait` with `for: seated` requires a positive interval, the same event epoch
+and native sitting throughout, with no unobserved gap longer than a second.
+A flickering null furniture reference does not override the continuing sit
+state and original entry; a different non-null reference does fail.
+`enter: false` requires the intentional exit's event and native standing.
+
+The run records its existing furniture lines and one bounded
+`seated-observation` receipt with the target, elapsed time, sample count and
+largest sample gap. Review `seat-entered` and `seat-after-minute` screenshots
+for the original standing-on-collision symptom: events/state alone do not
+prove the rendered pose. This fixture does not claim Rest recovery. The next
+phase needs a safe before/after Body Rest observation for the same character
+and session over the existing ten-minute recovery acceptance interval; it
+must not replace missing furniture events with a manufactured rest report.
