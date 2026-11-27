@@ -370,7 +370,7 @@ function Add-ReleaseTag([string]$RepoDir, [string]$VersionFile, [string]$Publish
     $o.Commit = Get-ReleaseField $r 'commit'
     $o.Tag = Get-ReleaseField $r 'tag'
     if (-not $o.Commit) { $o.Why = "release $id was not built from a git checkout, so there is no commit to tag"; return $o }
-    $msgFile = [IO.Path]::GetTempFileName()
+    $msgFile = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('tag-message-' + [Guid]::NewGuid().ToString('N') + '.txt')
     # Put back afterwards: Ship runs off its end, so the last native exit code
     # is Ship's own, and a refused push must not turn a release into a failure.
     $rcWas = $global:LASTEXITCODE

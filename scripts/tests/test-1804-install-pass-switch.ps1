@@ -77,6 +77,9 @@ if (-not $node) { Write-Host 'SKIP  the installer runs need node, which this mac
 
 $T = Join-Path ([IO.Path]::GetTempPath()) ('ts-1804-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $T | Out-Null
+# The try opens where the folder is made, so a stop while the box is laid out
+# still removes it (#4264).
+try {
 # The installer and what it loads from beside it, as Publish-Server sends them.
 $box = Join-Path $T 'box'
 foreach ($f in 'Install-ThornswoodServer.ps1', 'ServerSettings.ps1', 'ServerBuild.ps1', 'ServerReadyWait.ps1') {
@@ -128,7 +131,6 @@ function Stages([string]$root) {
 }
 $passRefusal = 'thornswoodRequirePass is (missing|neither true nor false) on this server and this run did not say which'
 
-try {
     # ---- 1. a running server with no switch ------------------------------------
     Write-Host ''
     Write-Host 'a running server'

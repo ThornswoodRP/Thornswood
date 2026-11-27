@@ -69,6 +69,7 @@ function Get-Step([string]$text, [string]$nameStart) {
 
 $head = $code.Substring(0, [Math]::Max(0, $code.IndexOf("`njobs:")))
 $job = Get-Job 'engine'
+$whichJob = Get-Job 'which'
 
 # ---- 1. when it runs ----------------------------------------------------------
 Yes 'it is the Engine build workflow' ($code -match '(?m)^name: Engine build$')
@@ -79,12 +80,19 @@ Yes 'it runs only when started by hand: no pull request, push or other trigger (
 $wake = Get-Job 'wake'
 Yes 'the token reads the repository, and only the wake job writes, and only to start a workflow' ($head -match '(?m)^permissions:\n  contents: read$' -and
     ($code.Replace($wake, '')) -notmatch ':\s*write\b' -and $wake -match '(?m)^    permissions:\n      contents: read\n      actions: write$')
-Yes 'a build is never cancelled by another run for the same commit' ($head -match '(?m)^  cancel-in-progress: false$')
+# One commit, one group, whether typed in or taken from the pin (#4321): the
+# group is the build job's, named by the commit the which job worked out.
+Yes 'the run as a whole has no concurrency group, which could only name the commit as typed (#4321)' ($head -notmatch '(?m)^concurrency:')
+Yes 'the build job''s group is the fork commit the which job worked out, typed in or the pin (#4321)' ($job -match '(?m)^    needs: which$' -and
+    $job -match '(?m)^    concurrency:\n      group: engine-\$\{\{ needs\.which\.outputs\.commit \}\}\n      cancel-in-progress: false$')
+Yes '  and a build that has started is never cancelled by another' ($job -match '(?m)^      cancel-in-progress: false$')
+$cq = [regex]::Match($wf, '(?ms)^    # One build of one fork commit at a time.*?(?=^    concurrency:)').Value
+Yes '  its comment says a third run cancels the waiting second, as GitHub does (#4321)' ($cq -match 'a third cancels the waiting second' -and $cq -notmatch 'never cancelled by another: a second')
 
 # ---- 2. where: GitHub's runner alone (#4983) -----------------------------------
 Yes 'the job is GitHub''s windows-2022, the image with the generator the fork demands' ($job -match '(?m)^    runs-on: windows-2022$')
-Yes '  two jobs, the record and the wake: no VPS fallback, no runner of the box, no BUILD_RUNNER switch' (
-    (@([regex]::Matches(($code.Substring($code.IndexOf("`njobs:"))), '(?m)^  (\S+):') | ForEach-Object { $_.Groups[1].Value }) -join ',') -eq 'engine,wake' -and $code -notmatch '(?<!deny-)self-hosted|thornswood-vps|BUILD_RUNNER')
+Yes '  three jobs, which commit, the record and the wake: no VPS fallback, no runner of the box, no BUILD_RUNNER switch' (
+    (@([regex]::Matches(($code.Substring($code.IndexOf("`njobs:"))), '(?m)^  (\S+):') | ForEach-Object { $_.Groups[1].Value }) -join ',') -eq 'which,engine,wake' -and $code -notmatch '(?<!deny-)self-hosted|thornswood-vps|BUILD_RUNNER')
 # The wake (plan part 8): engine-pin.yml hears the moment a run on main ends,
 # by a workflow_dispatch, because GitHub starts no workflow_run for a run the
 # workflow token started, which is how engine-pin.yml starts this one.
@@ -95,19 +103,24 @@ $tj = [regex]::Match($job, 'timeout-minutes: (\d+)')
 Yes 'it has 30 minutes: it only takes the fork''s build (#3014, #3399)' ($tj.Success -and [int]$tj.Groups[1].Value -eq 30)
 
 # ---- 3. what it runs, in order ------------------------------------------------
-$order = @('uses: actions/checkout@', '- name: Which fork commit', '- name: Fetch the fork at that commit', '- name: Look for the fork''s build',
+Yes 'the which job checks out the code without keeping a token and works out the commit on GitHub''s Linux runner with a timeout' (
+    $whichJob -match 'uses: actions/checkout@' -and $whichJob -match 'persist-credentials: false' -and $whichJob.IndexOf('uses: actions/checkout@') -lt $whichJob.IndexOf('- name: Which fork commit') -and
+    $whichJob -match '(?m)^    runs-on: ubuntu-latest$' -and $whichJob -match '(?m)^    timeout-minutes: \d+$' -and $whichJob -match '(?m)^      commit: \$\{\{ steps\.which\.outputs\.commit \}\}$')
+Yes 'every step of the build that needs the commit takes the which job''s, and none works it out again' (
+    $job -notmatch '- name: Which fork commit' -and $job -notmatch 'steps\.which\.' -and @([regex]::Matches($job, 'COMMIT: \$\{\{ needs\.which\.outputs\.commit \}\}')).Count -eq 3)
+$order = @('uses: actions/checkout@', '- name: Fetch the fork at that commit', '- name: Look for the fork''s build',
            '- name: Record the fork''s server build', '- name: Record the client', '- name: Check the records name this commit', '- name: Hand the records back in the log')
 $at = -1; $inOrder = $true
 foreach ($o in $order) { $i = $job.IndexOf($o); if ($i -le $at) { $inOrder = $false; Write-Host "  out of order or missing: $o" }; $at = $i }
 Yes 'the steps run in the order the header gives' $inOrder
 Yes 'every action is pinned to a full commit with its tag beside it' (@([regex]::Matches($code, '(?m)^\s*(- )?uses: (\S+)') | Where-Object { $_.Groups[2].Value -notmatch '@[0-9a-f]{40}$' }).Count -eq 0 -and
                                                                     @([regex]::Matches($wf, '(?m)^\s*(- )?uses: \S+@[0-9a-f]{40}(?! # v)')).Count -eq 0)
-$which = Get-Step $job 'Which fork commit'
-# Named in two places only: the env line that hands it to the script, and the
-# concurrency group. Anywhere else it would be pasted into a script's text.
+$which = Get-Step $whichJob 'Which fork commit'
+# Named in one place only: the env line that hands it to the script. Anywhere
+# else it would be pasted into a script's text.
 $named = @($code -split "`n" | Where-Object { $_ -match 'github\.event\.inputs\.commit' })
 Yes 'the commit asked for reaches the script through env, never pasted into it' ($which -match 'INPUT_COMMIT: \$\{\{ github\.event\.inputs\.commit \}\}' -and
-                                                                                $named.Count -eq 2 -and @($named | Where-Object { $_ -match '^\s+INPUT_COMMIT: ' -or $_ -match '^  group: engine-' }).Count -eq 2)
+                                                                                $named.Count -eq 1 -and $named[0] -match '^\s+INPUT_COMMIT: ')
 Yes 'with none asked, the commit is the one this branch pins' ($which -match 'git ls-tree HEAD engine/skymp')
 $fetch = Get-Step $job 'Fetch the fork at that commit'
 # Run 39149317535: the runner reused a fork git folder nightly.yml had fetched

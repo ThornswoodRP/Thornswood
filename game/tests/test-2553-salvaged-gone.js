@@ -135,7 +135,7 @@ yes('the register\'s counts are its rows', sorted(counts) === sorted(reg.counts)
 // out the bytes the plugin held. Each is rebuilt here from its page's row.
 const ITEMS = {
   'firewood': 0x0006F993, 'iron ingot': 0x0005ACE4, 'tool handle': 0x05015490,
-  'poor charcoal': 0x05015481, 'charcoal': 0x05015482, 'charcoal briquette': 0x05015484, 'coke': 0x05015485,
+  'poor charcoal': 0x05015481, 'charcoal': 0x00033760, 'charcoal briquette': 0x05015484, 'coke': 0x05015485,
   'pickaxe': 0x000E3C16, "woodcutter's axe": 0x0002F2F4,
 };
 const KILN = 0x0501547F, FORGE = 0x00088105;
@@ -230,12 +230,10 @@ yes('2 every cell and world the register keeps is there and holds a placement ('
 // ------------------------------- 3. the placements are Thornswood's own --
 // Every placement is one game/data/station-sites.json measures (written by
 // scripts/dev/Build-StationSites.py), at its point and turn, in its cell.
-// The kiln, the lab, the hive, the salt quarry, the well and water buckets (#1382), the study desk (#1387),
-// and Skyrim's own cooking pot in an inn with none (#6893, master 0's CraftingCookingPotSm).
-const STATIONS = new Set([0x05042E69, 0x0501547E, 0x05DBF8B3, 0x05DDE4EF, 0x05018030, 0x05018031, 0x05018032, 0x001010B3]);
+// The kiln, the lab, the hive, the salt quarry, the well and water buckets (#1382), and the study desk (#1387).
+const STATIONS = new Set([0x05042E69, 0x0501547E, 0x05DBF8B3, 0x05DDE4EF, 0x05018030, 0x05018031, 0x05018032]);
 const table = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'station-sites.json'), 'utf8'));
-// A station the server stands (#6893, standBy server) is in a cell the plugin cannot place into: not in the plugin.
-const sites = Object.keys(table.sites).map(k => table.sites[k]).filter(s => s.standBy !== 'server');
+const sites = Object.keys(table.sites).map(k => table.sites[k]);
 const allRefs = plugin.records.filter(r => r.tag === 'REFR');
 const questSites = Object.values(JSON.parse(fs.readFileSync(path.join(ROOT, 'game/data/quest-content.json'), 'utf8')).sites);
 const questIds = new Set(questSites.map(s => localFid(s.ref)));

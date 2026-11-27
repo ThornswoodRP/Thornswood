@@ -151,6 +151,32 @@ public sealed partial class AgentTests
         Assert.Equal(new[] { "Skyrim.esm", Eyes }, OrderOf(s).Select(ServerOrder.NameOf));
         Assert.Equal(new[] { "Skyrim.esm", Eyes }, seen()!["loadOrder"]!.AsArray().Select(x => ServerOrder.NameOf(x!.GetValue<string>())));
         Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
+        // The engine is told its forms can go, so a save naming one loads.
+        Assert.Contains("Thornswood.esp goes in forgetPlugins", log);
+        Assert.Equal(new[] { "Thornswood.esp" }, ForgetOf(s));
+        Assert.Equal(new[] { "Thornswood.esp" }, seen()!["forgetPlugins"]!.AsArray().Select(x => x!.GetValue<string>()));
+    }
+
+    static List<string> ForgetOf(FakeServer s) =>
+        JsonNode.Parse(s.Read("server-settings.json"))!["forgetPlugins"] is JsonArray a ? a.Select(x => x!.GetValue<string>()).ToList() : new();
+
+    [Fact]
+    public void ForgetPluginsKeepsWhatWasForgottenAndLetsGoOfWhatLoadsAgain()
+    {
+        var root = Temp(); var stage = Temp(); var store = Temp();
+        Directory.CreateDirectory(Path.Combine(root, ServerPlugins.Dir));
+        foreach (var n in new[] { "Skyrim.esm", "A.esp", "B.esp" }) File.WriteAllBytes(Path.Combine(root, ServerPlugins.Dir, n), B("plugin " + n));
+        File.WriteAllText(Path.Combine(root, ServerOrder.Settings), new JsonObject
+        {
+            ["loadOrder"] = new JsonArray("Skyrim.esm", "A.esp", "B.esp"),
+            ["forgetPlugins"] = new JsonArray("Old.esp", "A.esp"),
+        }.ToJsonString());
+        var record = ServerOrder.ReadRecord(CollectionRecord(("Skyrim.esm", B("plugin Skyrim.esm")), ("A.esp", B("plugin A.esp")), ("B.esp", B("plugin B.esp"))));
+        var lines = new List<string>();
+        var move = ServerOrder.Stage(root, new[] { "Skyrim.esm", "A.esp" }, record, store, stage, Array.Empty<string>(), lines.Add, new[] { "B.esp" });
+        var staged = JsonNode.Parse(File.ReadAllText(move.Files[ServerOrder.Settings]))!;
+        Assert.Equal(new[] { "Old.esp", "B.esp" }, staged["forgetPlugins"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Contains(lines, l => l.Contains("A.esp leaves forgetPlugins"));
     }
 
     [Theory]

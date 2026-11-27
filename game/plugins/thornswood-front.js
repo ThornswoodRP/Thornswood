@@ -2530,6 +2530,12 @@
     cursor, the same trap the cap was written to end. Found by the review of
     the J journal.
 
+    The furniture panel claimed the keyboard and had no name here, so the
+    cap released it with the panel left drawn and its Escape and Close out of
+    reach (#4812). Every name that claims the keyboard, the chat box apart
+    (it has its own three watchdogs below), has its window here;
+    tests\test-4812-cap-closes-every-claim.js holds the two lists together.
+
     The trade window's close hides it and leaves the trade to the server: the
     next change to either pile draws it again, and so does H, or Trade on the
     P panel, while the trade stands (#1628), which puts Walk away back. The
@@ -2542,7 +2548,8 @@
     board: 'thornswoodBoard', repair: 'thornswoodRepair', treat: 'thornswoodTreat', preserve: 'thornswoodPreserve',
     trade: 'thornswoodTrade', merchant: 'thornswoodMerchant', select: 'thornswoodSelect', wheel: 'thornswoodEmotes',
     afk: 'thornswoodAfk', maneuvers: 'thornswoodManeuvers', ride: 'thornswoodRide',
-    help: 'thornswoodHelp', settings: 'thornswoodSettings', box: 'thornswoodBox', ship: 'thornswoodShip', stall: 'thornswoodStall'
+    help: 'thornswoodHelp', settings: 'thornswoodSettings', box: 'thornswoodBox', ship: 'thornswoodShip', stall: 'thornswoodStall',
+    furniture: 'thornswoodFurniture'
   };
 
   T.claimFocus = function (who, on) {
@@ -4778,6 +4785,45 @@
   // is about 128 units tall, so this is roughly waist deep.
   const WADE_DEEP = 70;
   /*
+    SNOW IS WHAT YOU STAND IN, NOT WHAT FALLS ON YOU (#4653).
+
+    The cold rules say the snow place is standing in snow on the ground
+    (docs/systems/temperature.md), and until 27 Nov 2026 this said snow only
+    while the weather was snowing: a clear day in deep snow in the Pale was
+    plain outdoors, and a snowfall on bare road was snow. Snow falling on you
+    is the weather's own line on the server (NEEDS.weather.snow, read from
+    the weather id this line carries), so the place is only the ground.
+
+    The ground is the landscape's material under your feet, which the game
+    keeps for every exterior cell and plays footsteps from. Papyrus Extender
+    (in the collection) reads it: PO3_SKSEFunctions.GetLandMaterialType
+    gives the material's name, "Snow" for the snow textures and "SnowStairs"
+    for snowy steps. Indoors and in the water it is not asked.
+  */
+  const SNOW_GROUND = ['Snow', 'SnowStairs'];
+  // What the last ground read threw, said in the heartbeat until one works.
+  let groundWhy = '';
+  function groundUnder(px, py, pz) {
+    try {
+      const material = sp.callNative('PO3_SKSEFunctions', 'GetLandMaterialType', undefined, px, py, pz);
+      groundWhy = '';
+      return typeof material === 'string' ? material : '';
+    } catch (e) {
+      groundWhy = 'GetLandMaterialType threw: ' + (e && e.message ? e.message : e);
+      return '';
+    }
+  }
+  // One word, in order of what wins: water, then a roof, then snow under
+  // your feet, then rain falling on you, and outdoors last.
+  function placeKind(p) {
+    if (p.swimming) { return 'water'; }
+    if (p.wading) { return 'shallow'; }
+    if (p.indoors) { return 'indoors'; }
+    if (SNOW_GROUND.indexOf(p.ground) >= 0) { return 'snow'; }
+    if (p.sky === 2) { return 'rain'; }
+    return 'outdoors';
+  }
+  /*
     PLACED WATER, READ OUT OF THE RECORDS (#2302).
 
     There used to be a feet slack of 24 here (#608): wading counted with the
@@ -5374,18 +5420,14 @@
 
       Water first, because being in it beats everything else about a place.
       Then fire, which beats a roof: the point of the Bannered Mare is the fire
-      in the middle of it. Then the roof, then the weather, and outdoors last,
-      which is slightly cool rather than neutral so that walking into a
+      in the middle of it. Then the roof, then snow underfoot (#4653), then
+      rain, and outdoors last, which is slightly cool rather than neutral so that walking into a
       building is felt. Everything the server does not know a word for is
       comfortable, so a client from before this says nothing and its owner
       simply has no weather.
     */
-    let kind = 'outdoors';
-    if (swimming) { kind = 'water'; }
-    else if (wading) { kind = 'shallow'; }
-    else if (indoors) { kind = 'indoors'; }
-    else if (sky === 3) { kind = 'snow'; }
-    else if (sky === 2) { kind = 'rain'; }
+    const ground = (swimming || wading || indoors) ? '' : groundUnder(px, py, pz);
+    const kind = placeKind({ swimming: swimming, wading: wading, indoors: indoors, ground: ground, sky: sky });
 
     /*
       ONE LINE, AND IT IS SENT WHEN ANY OF IT CHANGES.
@@ -5449,7 +5491,8 @@
       say('place: ' + line + '  [fire probe: ' + fireBases + ' bases, ' + fireHits +
           ' in this cell of ' + fireWalked + ' looked at, ' + fireThrew + ' threw' +
           (fireWhy ? ' (' + fireWhy + ')' : '') + ']' +
-          (waterSaid ? '  [' + waterSaid + ']' : '') + looking);
+          (waterSaid ? '  [' + waterSaid + ']' : '') +
+          '  [ground ' + (ground || 'not read') + (groundWhy ? ', ' + groundWhy : '') + ']' + looking);
     }
 
     /*
@@ -5606,6 +5649,7 @@
   const NEAR_EVERY = 320;
   let nearAt = 0;
   let lookingAt = '';      // the form id hex the prompt is currently drawn for
+  let lookingCamera = -1;  // the camera mode last recorded for that person
   let lookingSig = '';     // what the prompt says, so it is not redrawn per poll
 
   function nearList() {
@@ -5753,10 +5797,8 @@
     the two copies are the HUD and that widget, before anything is changed.
     It reads; it changes nothing.
   */
-  function gamePromptSaid(ref) {
+  function gamePromptSaid(ref, cam) {
     const bits = [];
-    let cam = -1;
-    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
     // SKSE's numbers: 0 first person, 8 and 9 the two third person states.
     bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
     const read = function (target) {
@@ -5878,9 +5920,15 @@
     const row = Object.prototype.hasOwnProperty.call(near, hex) ? near[hex] : null;
     if (!row) { lookingAt = ''; drawPrompt(null); return; }
 
-    if (hex !== lookingAt) {
+    let camera = -1;
+    try { camera = Number(sp.Game.getCameraState()); } catch (e) { camera = -1; }
+    if (!Number.isFinite(camera)) { camera = -1; }
+    // Both third-person states describe the same capture in #4584.
+    if (camera === 8) { camera = 9; }
+    if (hex !== lookingAt || camera !== lookingCamera) {
       lookingAt = hex;
-      say('looking at ' + row.n + ' (' + hex + ')' + gamePromptSaid(ref));
+      lookingCamera = camera;
+      say('looking at ' + row.n + ' (' + hex + ')' + gamePromptSaid(ref, camera));
     }
     const cover = lookCoveredBy();
     if (cover !== lookCover) {
@@ -9151,11 +9199,39 @@
   }
 
   // except: the menu that is closing right now, which is not in the way.
+  // What the panel waited on is said once a wait (#4581): no press on a
+  // driver from 15 to 27 November opened it, and the log said nothing after
+  // "asked the server where driver ... goes".
+  let rideWaitSaid = '';
   function rideOpenIfFree(except) {
     if (rideState !== 'waiting') { return; }
-    if (!rideInReach()) { rideState = ''; return; }
-    if (busyMenuOpenNow(except)) { return; }
+    if (!rideInReach()) {
+      rideState = '';
+      say('the ride panel is not opened: driver ' + (rideDriver >>> 0).toString(16) + ' is out of reach (' + rideApart() + ')');
+      return;
+    }
+    const busy = busyMenuOpenNow(except);
+    if (busy) {
+      if (rideWaitSaid !== busy) { rideWaitSaid = busy; say('the ride panel waits for the ' + busy + ' to close'); }
+      return;
+    }
+    rideWaitSaid = '';
     T.js('try{window.thornswoodRide&&window.thornswoodRide.open();}catch(e){}');
+  }
+
+  // How far the driver pressed is, for the line above: a distance, or why none.
+  function rideApart() {
+    if (!rideDriver) { return 'no driver kept'; }
+    try {
+      const pc = sp.Game.getPlayer();
+      const ref = sp.ObjectReference.from(sp.Game.getFormEx(rideDriver));
+      if (!pc) { return 'no character'; }
+      if (!ref) { return 'he is not loaded'; }
+      const dx = pc.getPositionX() - ref.getPositionX();
+      const dy = pc.getPositionY() - ref.getPositionY();
+      const dz = pc.getPositionZ() - ref.getPositionZ();
+      return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz)) + ' apart, reach ' + RIDE_REACH;
+    } catch (err) { return 'unreadable: ' + err; }
   }
 
   function rideDriverIdSet() {
@@ -10487,7 +10563,10 @@
       return;
     }
     // The ride panel (#1635): see THE RIDE PANEL WAITS above.
-    if (what === 'ride:wants') { rideState = 'waiting'; rideOpenIfFree(''); return; }
+    if (what === 'ride:wants') {
+      say('the server sent the ride panel for driver ' + (rideDriver >>> 0).toString(16));
+      rideState = 'waiting'; rideOpenIfFree(''); return;
+    }
     if (what === 'ride:opened') { rideState = 'up'; T.claimFocus('ride', true); return; }
     if (what === 'ride:closed') {
       T.claimFocus('ride', false);

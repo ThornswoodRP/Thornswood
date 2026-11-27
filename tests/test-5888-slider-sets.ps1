@@ -112,7 +112,7 @@ $rec1 = $inr.IndexOf('if ($Record) {', [Math]::Max(0, $loop))
 $read1 = $inr.IndexOf('$script:SliderSetsRead[$s.Full] = ', [Math]::Max(0, $loop))
 Yes '   it reads each slider set file in the install loop, before the -Record block takes the unpacked copy' ($loop -gt 0 -and $read1 -gt $loop -and $read1 -lt $rec1)
 Yes '   from the staged copy, so a patched .osp is read as it is placed' ($inr.Contains('$script:SliderSetsRead[$s.Full] = Step { Read-SliderSetFile $s.Full $s.Rel }'))
-Yes '   and writes slidersets.json with the other records' ($inr -match "New-SliderSetRecord \`$Slug \`$Revision \`$placed \`$script:SliderSetsRead \`$col\.Entries" -and $inr -match "Join-Path \`$dir 'slidersets\.json'")
+Yes '   and writes slidersets.json with the other records' ($inr -match "New-SliderSetRecord \`$nameSlug \`$nameRev \`$placed \`$script:SliderSetsRead \`$col\.Entries" -and $inr -match "Join-Path \`$dir 'slidersets\.json'")
 Yes '   a -Record folder may already hold slidersets.json' ($inr -match "@\('layout\.json', 'files\.txt', 'plugins\.txt', 'loadorder\.txt', 'slidersets\.json',")
 Yes '   and a game folder''s old slidersets.json goes with its other records' ($inr -match "foreach \(\`$n in 'layout\.json', 'files\.txt', 'plugins\.txt', 'loadorder\.txt', 'slidersets\.json', 'placed\.tsv'\)")
 
