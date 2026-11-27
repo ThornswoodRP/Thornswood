@@ -10,6 +10,41 @@ const load=name=>require('../../game/data/'+name+'.json'),copy=value=>JSON.parse
 const doc=load('merchant-ranked-quests'),source={legacy:load('merchant-quests').quests,roster:load('merchant-roster').merchants,
  roles:load('merchant-role-tables'),gates,recipes:load('recipes').recipes,harvests:load('harvests').harvests,ores:load('ores').ores,
  published:Object.fromEntries(load('merchant-quest-activation').commissions.map(pin=>[pin.id,pin.sha256]))};
+{
+ const retired=[['q-solitude-enchanter-advanced-parcel','f46d0:Skyrim.esm','56a9e:Skyrim.esm'],
+  ['q-riften-smith-advanced-parcel','f46cc:Skyrim.esm','18388:Skyrim.esm']];
+ const cut={...copy(source),gates};
+ for(const [id,reference,item] of retired) {
+  const {merchant:{role}}=doc.quests.find(row=>row.id===id);
+  cut.recipes[reference].book='cut';
+  cut.roles.tables[role].buy=cut.roles.tables[role].buy.filter(entry=>entry!==item);
+  delete cut.roles.records[item];
+  delete cut.roles.evidence[item];
+ }
+ const compiled=validateRankedQuests(doc,cut);
+ assert.deepEqual(compiled.filter(row=>row.accepting===false).map(row=>row.id).sort(),retired.map(([id])=>id).sort());
+ for(const [id,reference,item] of retired) {
+  const {itemTypes,accepting,...definition}=compiled.find(row=>row.id===id);
+  assert.equal(itemTypes[item],'ARMO');
+  assert.equal(accepting,false);
+  assert.deepEqual(definition,doc.quests.find(row=>row.id===id),'existing acceptance uses the original published definition');
+  const proposed={...copy(doc),quests:[copy(definition)]};
+  const altered={...copy(cut),gates};
+  delete altered.published[id];
+  assert.throws(()=>validateRankedQuests(proposed,altered),/source evidence/,'only a pinned job may be retired');
+  proposed.quests[0].id+='-new';
+  altered.published[proposed.quests[0].id]=require('node:crypto').createHash('sha256')
+   .update(JSON.stringify(proposed.quests[0])).digest('hex');
+  assert.throws(()=>validateRankedQuests(proposed,altered),/source evidence/,'a different job cannot publish a cut recipe');
+  altered.published[id]=cut.published[id];
+  altered.recipes[reference].out='12:Skyrim.esm';
+  assert.throws(()=>validateRankedQuests({...doc,quests:[definition]},altered),/source evidence/,'the cut recipe must still identify the original item');
+  altered.recipes[reference]=cut.recipes[reference];
+  const resealed={...definition,text:definition.text+' Changed.'};
+  altered.published[id]=require('node:crypto').createHash('sha256').update(JSON.stringify(resealed)).digest('hex');
+  assert.throws(()=>validateRankedQuests({...doc,quests:[resealed]},altered),/source evidence/,'retirement must keep the historical pin');
+ }
+}
 assert.equal(validateRankedQuests(doc,source).length,231);
 for(const defect of ['source','quantity','price','merchant','tier','duplicate','half-source','missing-part','difficulty','held','gate','school','class-half','public-proof','other-logistics','lower-producer','lower-recipe','copied-logistics','non-tailor-batches']) {
  const broken=copy(doc),sources={...copy(source),gates};
