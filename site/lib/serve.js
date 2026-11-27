@@ -197,6 +197,27 @@ async function handle(req, res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Permissions-Policy', PERMISSIONS_POLICY);
+  /* Set once, here, rather than inside send(): the streamed answers below
+     write their own headers and never go through it. Node keeps a setHeader
+     value through a later writeHead, so one line covers every route.
+
+     CSP and Referrer-Policy (#1366) ride the same path so a Range answer or a
+     piped file is not the one reply without them. send() also sets them for
+     the ordinary answers.
+
+     Only on an answer that came in over the certificate. Caddy holds 443 and
+     the plain to secure redirect already works, so this is the part that stops
+     a browser trying the plain one again. On plain HTTP it means nothing and
+     is left off.
+
+     Here with the others, before the address is read (#4586): set below the
+     read, a 400 for an address that cannot be read went out without it. */
+  // No try (#2736): setHeader throws only once the headers are sent, and
+  // nothing has been sent at the top of the handler.
+  if (secureHere(req)) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+
   /* The address is a path on this site, so it is read as one (#929).
 
      new URL(req.url, 'http://x') read an address that starts with two slashes
@@ -224,24 +245,6 @@ async function handle(req, res) {
   // download.
   const head = req.method === 'HEAD';
   if (head) req.method = 'GET';
-
-  /* Set once, here, rather than inside send(): the streamed answers below
-     write their own headers and never go through it. Node keeps a setHeader
-     value through a later writeHead, so one line covers every route.
-
-     CSP and Referrer-Policy (#1366) ride the same path so a Range answer or a
-     piped file is not the one reply without them. send() also sets them for
-     the ordinary answers.
-
-     Only on an answer that came in over the certificate. Caddy holds 443 and
-     the plain to secure redirect already works, so this is the part that stops
-     a browser trying the plain one again. On plain HTTP it means nothing and
-     is left off. */
-  // No try (#2736): setHeader throws only once the headers are sent, and
-  // nothing has been sent at the top of the handler.
-  if (secureHere(req)) {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  }
 
   /* Two slashes together are one (#929). The site already reads /rules/ and
      /rules// as /rules, so //rules, /feed//version.json and // itself are
