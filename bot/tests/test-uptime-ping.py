@@ -31,10 +31,13 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
 import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #2276)
 import asyncio
+import http.client
 import http.server
 import socket
+import re
 import threading
 import time
+import urllib.request
 
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 # Whatever the machine running this has, the module is read with none set.
@@ -95,7 +98,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 PORT = server.server_address[1]
 # Made here, the shape a monitor's address has: a path nobody could guess.
 SECRET = 'ping-' + os.urandom(12).hex()
-URL = 'http://127.0.0.1:%d/%s' % (PORT, SECRET)
+URL = 'https://127.0.0.1:%d/%s' % (PORT, SECRET)
 
 # A port nothing listens on, for a monitor that refuses.
 s = socket.socket()
@@ -103,6 +106,18 @@ s.bind(('127.0.0.1', 0))
 DEAD_PORT = s.getsockname()[1]
 s.close()
 DEAD = 'http://127.0.0.1:%d/%s' % (DEAD_PORT, SECRET)
+
+
+# The bot takes only an https:// address (#4465), and the fake monitor above
+# speaks plain HTTP on this machine. So the https:// request the bot's own
+# ping_once makes is carried to it without TLS; the request, its timeout,
+# its answer and everything the bot does with them are the bot's.
+class PlainForHttps(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(http.client.HTTPConnection, req)
+
+
+urllib.request.install_opener(urllib.request.build_opener(PlainForHttps))
 
 
 def reset(mode='up'):
@@ -190,10 +205,28 @@ try:
     said.clear()
     done, exc, _ = run_for(0.2)
     yes('not a web address: the loop ends, said once', done and exc is None and len(said) == 1
-        and 'not a web address' in said[0])
+        and 'not an https:// ping address' in said[0])
     yes('and the value is not in what it said', SECRET not in ' '.join(said))
-    yes('ping_shape_ok takes https and http only', bot.ping_shape_ok('https://hc-ping.com/x')
-        and not bot.ping_shape_ok('ftp://x/y') and not bot.ping_shape_ok('https://a b/c'))
+
+    # ------------------------------------------- an http:// address (#4465) --
+    bot.PING_URL = 'http://127.0.0.1:%d/%s' % (PORT, SECRET)
+    reset()
+    said.clear()
+    done, exc, _ = run_for(0.3)
+    yes('an http:// address is refused: the loop ends, said once, and nothing is sent',
+        done and exc is None and len(said) == 1 and 'not an https:// ping address' in said[0]
+        and Monitor.hits == [])
+    yes('and the value is not in what it said', SECRET not in ' '.join(said))
+    ok_shapes = ['https://hc-ping.com/x', 'HTTPS://hc-ping.com/abc-123', 'https://uptime.example.org/api/push/K3y?status=up']
+    bad_shapes = ['http://hc-ping.com/x', 'ftp://x/y', 'https://a b/c', 'https://localhost/x', 'https://hc-ping.com',
+                  'https://hc-ping.com/', 'file:///C:/x', 'https://hc-ping.com/' + 'a' * 400]
+    yes('ping_shape_ok takes an https:// address with a host and a path, of 400 characters at most',
+        all(bot.ping_shape_ok(u) for u in ok_shapes))
+    yes('and refuses http://, another scheme, a space, a host with no dot, no path and a long one',
+        not any(bot.ping_shape_ok(u) for u in bad_shapes))
+    shape = re.search(r"\$pingUrl -match '([^']+)' -and \$pingUrl\.Length -le (\d+)", ib)
+    yes('and its pattern and its most are the ones Install-Bot.ps1 -SetPing takes',
+        shape is not None and shape.group(1) == bot.PING_SHAPE and int(shape.group(2)) == bot.PING_MOST)
 
     # ------------------------------------------------------------------ up --
     reset('up')

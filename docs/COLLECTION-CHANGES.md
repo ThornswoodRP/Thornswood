@@ -212,13 +212,31 @@ and which of them the Last plugin's recipe reads.
 To see what a merge would do without writing anything to Nexus, run the
 workflow by hand with "whatif" left on.
 
+### Main and Dev have a collection each
+
+Every step above is on the Dev collection, the one `records/collection.json`
+names in `dev` (#7193). So a merged change is offered by Vortex to Dev's
+testers alone, and main's testers never see a revision before main runs it.
+Main's collection, 7essxf, takes the revision when main is promoted to a
+build on it: once Patrick approves the promotion, `promote-main.yml` copies
+each revision 7essxf does not have yet from Dev
+(`scripts/release/Promote-Collection.ps1`, which runs
+`Copy-NexusRevision.ps1`), before main's launchers or the live server are
+told of the build.
+
+The records keep 7essxf's numbers. Dev's revision is the records' revision
+less `dev.offset`, so with an offset of 12, Dev's revision 1 is revision 13
+in every record, load order, Release and page. A Release's signed manifest
+names both (`collectionRevision`, and `devCollection` with Dev's slug and
+number), and a dev launcher holds an install to Dev's and opens Dev's page.
+
 ## After the publish
 
 The records follow the new revision in a pull request of their own:
 `collection-plugins.json`, `collection-dropped.json` (from the record's
 `dropped`), `collection-permissions.json`, the Last plugin's recipe, and the
-record's `revision`. The run's `collection-record` artifact holds what they
-are made from. The Last plugin is built again on the box, which has the
+record's `revision`, in 7essxf's numbers. The run's `collection-record`
+artifact holds what they are made from. The Last plugin is built again on the box, which has the
 base game files. Then a dev release names the new revision.
 
 On a tester's machine, the launcher's collection card opens Vortex straight

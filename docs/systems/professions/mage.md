@@ -29,9 +29,12 @@ Expert is Expert. Master is Master.
 | Expert in a school | +1 |
 | Master in a school | +2 |
 
-The Master award replaces the ordinary rank award. For example, reaching
-Advanced in both starting schools earns one point from each, even without
-College study. Class ranks do not give spell points.
+Each school's rank earns its own points, so every school a mage holds
+adds 4 on its way to Master. The Master award replaces the ordinary rank
+award. Reaching Advanced in both starting schools earns one point from
+each, even without College study. A mage with no College study holds 10
+points once both starting schools are Master, and 14 once the third school
+is Master too. Class ranks do not give spell points.
 Learning a spell spends one. A novice spell needs no spell below it.
 Anything higher needs a spell of that school one rank down, and needs
 your rank in that school to be at least the spell's rank.

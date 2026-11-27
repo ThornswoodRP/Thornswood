@@ -6,7 +6,7 @@
   (tools/DeployAgent/ReleaseFetch.cs):
 
       manifest.json   { schema: 1, repo, commit, tag, version, made,
-                        [launcherVersion,] [collectionRevision,]
+                        [launcherVersion,] [collectionRevision,] [devCollection,]
                         parts: { <part>: [ { name, sha256, size } ] } }
       manifest.cat    a catalog over manifest.json alone (New-FileCatalog,
                       version 2, SHA256), the shape release.cat has over
@@ -65,6 +65,9 @@
   that carries the record and main with its promotion (#5767). Until then the
   number was the feed's, which only a Ship writes, and since releases stopped
   going through a Ship a bump stalled: revision 8 sat behind 7 from 8 to 11 Nov.
+  devCollection { slug, revision }, beside it when records\collection.json
+  names a Dev collection (#7193): the same revision as Dev's own number,
+  which dev's launchers hold an install to and open in Vortex.
 
 #>
 [CmdletBinding()]
@@ -180,7 +183,16 @@ $m = [ordered]@{
 if ($LauncherVersion) { $m['launcherVersion'] = $LauncherVersion }
 if ($Tag -like 'build-*') {
   . (Join-Path $PSScriptRoot 'CollectionRevision.ps1')
-  $m['collectionRevision'] = (Get-ShipRecordedCollectionRevision -RepoDir (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path).Revision
+  $repoDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+  $m['collectionRevision'] = (Get-ShipRecordedCollectionRevision -RepoDir $repoDir).Revision
+  # The same revision in the Dev collection (#7193), which dev's launchers
+  # send Vortex to; main's go to the main collection's collectionRevision.
+  $devc = Get-DevCollection $repoDir
+  if ($devc) {
+    $dn = [int]$m['collectionRevision'] - $devc.Offset
+    if ($dn -lt 1) { throw "Collection revision $($m['collectionRevision']) is from before the Dev collection $($devc.Slug) (its revision 1 is $($devc.Offset + 1)), so dev's launchers would be sent to no revision of it." }
+    $m['devCollection'] = [ordered]@{ slug = $devc.Slug; revision = $dn }
+  }
 }
 $m['parts'] = $parts
 $json = Join-Path $filesDir 'manifest.json'

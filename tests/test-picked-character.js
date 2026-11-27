@@ -311,6 +311,8 @@ if (PUSH && ASK && FRESH) {
     'const ROSTER = "roster"; const ROSTER_HELD_FRESH_MS = ' + FRESH + ';\n' +
     'const Date = { now: function () { return NOW; } };\n' +
     'function body() { return Promise.resolve(o_body); }\n' +
+    // What lib/http.js bodyObject does (#4382): JSON, and an object.
+    'async function bodyObject() { const v = JSON.parse(o_body); if (!v || typeof v !== "object" || Array.isArray(v)) throw new SyntaxError("the body is JSON, but not an object"); return v; }\n' +
     'function sameSecret(a, b) { return a === b; }\n' +
     'function jsonFile(f, d) { if (f === "linked") return LINKED; if (f === "pk") return d; return store.file ? JSON.parse(JSON.stringify(store.file)) : d; }\n' +
     // Nor any PK an admin undid (#1010): pk.json is empty here.

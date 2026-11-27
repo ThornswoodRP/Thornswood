@@ -7,26 +7,24 @@
   #5198. The lines the game server says for people, end to end: the WHOLE
   of game/gamemode.js over the stand-in server (tests/stand-in-server.js),
   every step a message the engine sends in the order it sends them. A typed
-  /ooc or /roll reaches the gamemode through the voice queue, and what each
-  person is told comes back from it, as on the live server. A plain line,
-  /me, /do, /w and /s never reach the game server: the voice service says
-  them (voice/voice-server.js, game/tests/test-voice-range.js and the rest), and
-  the line above the head is the game's.
+  /roll reaches the gamemode through the voice queue, and what each person
+  is told comes back from it, as on the live server. A plain line, /me,
+  /do, /w, /s and /ooc never reach the game server: the voice service says
+  them, /ooc's reach, brackets, cut, usage line and silence included
+  (voice/voice-server.js, voice/tests/test-local-chat.js, #4238), and the
+  line above the head is the game's.
 
   Brenna and Aldis stand 15 metres apart in Whiterun's square. Corvin is 70
   metres off across it. Dagny is in the house beside them, at the same
   spot, in another cell. Sam is staff.
 
-    A  /ooc: Brenna's line, in brackets with her name, reaches her and Aldis,
-       and not Corvin, out of reach, nor Dagny, in another cell. /o is the
-       same. /ooc alone says how it is used.
-    B  A line over 300 characters is cut to 300.
-    C  Corvin, with nobody near enough, is told so.
-    D  /roll: the server rolls it, and the same people /ooc reaches see it.
-       /roll alone is a twenty; d6x3 is three six sided dice, each shown,
-       with the total; past 12 dice only the total. 1001 sides is refused.
-    E  Staff silence Brenna: her /ooc and her /roll reach nobody, and she is
-       told how long is left. After the minutes run out she is heard again.
+    D  /roll: the server rolls it, and the same people /ooc reaches see it:
+       Brenna and Aldis, not Corvin, out of reach, nor Dagny, in another
+       cell. /roll alone is a twenty; d6x3 is three six sided dice, each
+       shown, with the total; past 12 dice only the total. 1001 sides is
+       refused.
+    E  Staff silence Brenna: her /roll reaches nobody, and she is told how
+       long is left. After the minutes run out she is heard again.
     Z  No handler threw, no engine call the engine does not have was made,
        and no timer threw.
 
@@ -61,31 +59,9 @@ function heardBy(m, line) {
     .map(function (a) { return w.row(a).appearance.name; }).join(',');
 }
 
-// -------------------------------------------------------------- A. ooc --
-let m = marks();
-w.say(BRENNA, '/ooc brb, door');
-yes('A1 /ooc: in brackets with her name, to her and Aldis, not Corvin far off, not Dagny in the house (' + heardBy(m, '(( Brenna: brb, door ))') + ')',
-    heardBy(m, '(( Brenna: brb, door ))') === 'Brenna,Aldis');
-m = marks();
-w.say(ALDIS, '/o fine');
-yes('A2 /o is the same (' + heardBy(m, '(( Aldis: fine ))') + ')', heardBy(m, '(( Aldis: fine ))') === 'Brenna,Aldis');
-w.say(BRENNA, '/ooc');
-yes('A3 /ooc alone says how it is used (' + last(BRENNA) + ')', last(BRENNA) === 'Say /ooc and then whatever you meant to say.');
-
-// ------------------------------------------------------------ B. the cut --
-m = marks();
-w.say(BRENNA, '/ooc ' + 'a'.repeat(400));
-yes('B1 a line over 300 characters is cut to 300', heardBy(m, '(( Brenna: ' + 'a'.repeat(300) + ' ))') === 'Brenna,Aldis');
-
-// ------------------------------------------------------- C. nobody near --
-m = marks();
-w.say(CORVIN, '/ooc anyone?');
-yes('C1 Corvin, with nobody near enough, is told so (' + w.heardSince(CORVIN, m[CORVIN]).join(' | ') + ')',
-    heardBy(m, '(( Corvin: anyone? ))') === 'Corvin' && last(CORVIN) === 'Nobody near enough to hear that.');
-
 // ------------------------------------------------------------ D. the dice --
 w.dice(0.5);
-m = marks();
+let m = marks();
 w.say(BRENNA, '/roll');
 yes('D1 /roll alone is a twenty, rolled by the server, to the same people /ooc reaches (' + heardBy(m, 'Brenna rolls 20: 11') + ')',
     heardBy(m, 'Brenna rolls 20: 11') === 'Brenna,Aldis');
@@ -107,15 +83,15 @@ w.say(SAM, '/silence Brenna 5 shouting over a scene');
 yes('E1 Sam silences Brenna for 5 minutes, and she is told (' + last(BRENNA) + ')',
     /^Staff have silenced you for 5 minutes: shouting over a scene\./.test(last(BRENNA)));
 m = marks();
-w.say(BRENNA, '/ooc can you hear me');
-yes('E2 her /ooc reaches nobody, and she is told how long is left (' + last(BRENNA) + ')',
-    w.heardSince(ALDIS, m[ALDIS]).length === 0 && /^Staff have silenced you for another [45] minutes, so that did not reach anybody\.$/.test(last(BRENNA)));
 w.say(BRENNA, '/roll');
-yes('E3 nor her /roll', w.heardSince(ALDIS, m[ALDIS]).length === 0 && /did not reach anybody/.test(last(BRENNA)));
+yes('E2 her /roll reaches nobody, and she is told how long is left (' + last(BRENNA) + ')',
+    w.heardSince(ALDIS, m[ALDIS]).length === 0 && /^Staff have silenced you for another [45] minutes, so that did not reach anybody\.$/.test(last(BRENNA)));
 w.run(5 * 60 * 1000);
+w.dice(0.5);
 m = marks();
-w.say(BRENNA, '/ooc back');
-yes('E4 once the minutes run out she is heard again (' + heardBy(m, '(( Brenna: back ))') + ')', heardBy(m, '(( Brenna: back ))') === 'Brenna,Aldis');
+w.say(BRENNA, '/roll');
+yes('E4 once the minutes run out she is heard again (' + heardBy(m, 'Brenna rolls 20: 11') + ')', heardBy(m, 'Brenna rolls 20: 11') === 'Brenna,Aldis');
+w.dice(null);
 
 // ------------------------------------------------------------- Z. clean --
 yes('Z no handler threw and nothing the engine would refuse was done (' + w.faults.slice(0, 3).join(' | ') + ')', w.faults.length === 0);

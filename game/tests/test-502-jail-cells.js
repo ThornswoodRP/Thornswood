@@ -103,11 +103,13 @@ yes('T6 game/data/jails.json is the script\'s, and names the same doors and hold
 yes('T7 scripts/dev/Build-JailTable.py is in the repo',
     fs.existsSync(path.join(REPO_DIR, 'scripts', 'dev', 'Build-JailTable.py')));
 
-// Two cells in Dragonsreach Dungeon and one in Riften Jail, all shipped locked.
-const W_CELLS = Object.keys(JAIL_DOOR).filter(function (d) { return JAIL_DOOR[d] === 'whiterun' && JAIL_SHUT[d]; });
-const R_CELL = Object.keys(JAIL_DOOR).filter(function (d) { return JAIL_DOOR[d] === 'riften' && JAIL_SHUT[d]; })[0];
+// Actual cell identities are independent of authored default locks. The broad
+// unlock policy removes those defaults; active guard locks still work.
+const W_CELLS = Object.keys(JAIL_DOOR).filter(function (d) { return JAIL_DOOR[d] === 'whiterun'; });
+const R_CELL = Object.keys(JAIL_DOOR).filter(function (d) { return JAIL_DOOR[d] === 'riften'; })[0];
 const CELL = W_CELLS[0], CELL2 = W_CELLS[1];
-yes('the test has two shipped locked cells in Whiterun\'s jail and one in Riften\'s', !!CELL && !!CELL2 && !!R_CELL);
+const initialLocked = !!JAIL_SHUT[CELL], initialLocked2 = !!JAIL_SHUT[CELL2];
+yes('the test has two actual cells in Whiterun\'s jail and one in Riften\'s', !!CELL && !!CELL2 && !!R_CELL);
 const JAIL = BUILDING_BY_DOOR[CELL];
 
 // ============================================================== the server
@@ -234,7 +236,7 @@ function word(p, w, args) {
 open(GUARD_W, CELL);
 let ln = lineOf(GUARD_W);
 yes('D1 a guard of Whiterun at a Dragonsreach cell gets the cell on the lock key: "' + (ln && ln.x) + ' ' + (ln && ln.n) + '"',
-    !!ln && ln.x === 'unlock' && ln.n === 'the cell' && ln.d.length === 1 && ln.d[0] === hex(CELL));
+    !!ln && ln.x === (initialLocked ? 'unlock' : 'lock') && ln.n === 'the cell' && ln.d.length === 1 && ln.d[0] === hex(CELL));
 open(PRISONER, CELL);
 ln = lineOf(PRISONER);
 yes('D2 anybody else there is at a door of the jail building, not the cell', !!ln && ln.n !== 'the cell' &&
@@ -246,14 +248,15 @@ yes('D3 so is a guard of another hold', !!ln && ln.n !== 'the cell');
 let r = word(GUARD_R, '/unlock', [hex(CELL)]);
 yes('D4 a guard of Riften cannot turn a Whiterun cell: "' + r.mine + '"',
     r.handled === true && /That cell is in Dragonsreach Dungeon\. A guard keeps the cells of their own hold\./.test(r.mine) &&
-    W.cellLocked(CELL) === true);
+    W.cellLocked(CELL) === initialLocked);
 r = word(PRISONER, '/unlock', [hex(CELL)]);
 yes('D5 nor can anybody who is not a guard: "' + r.mine + '"', /A cell is a guard's to lock\./.test(r.mine));
-r = word(GUARD_W, '/lock', [hex(CELL)]);
-yes('D6 a cell the game ships locked is already locked: "' + r.mine + '"', /already locked/.test(r.mine));
+r = word(GUARD_W, initialLocked ? '/lock' : '/unlock', [hex(CELL)]);
+yes('D6 repeating the authored default state is a no-op: "' + r.mine + '"',
+    r.mine.includes(initialLocked ? 'already locked' : 'already unlocked') && W.cellLocked(CELL) === initialLocked);
 r = word(GUARD_W, '/unlock', [hex(CELL2)]);
 yes('D7 the key turns only the cell door they just opened', /Open the cell door you mean first\./.test(r.mine) &&
-    W.cellLocked(CELL2) === true);
+    W.cellLocked(CELL2) === initialLocked2);
 
 // ---------------------------------------------------------- what each is told
 function has(list, desc) { return list.indexOf(idOf(desc)) !== -1; }
@@ -271,6 +274,10 @@ yes('P5 a guard of Riften has Riften\'s cells open and not Whiterun\'s',
     has(locksOf(GUARD_R).open, R_CELL) && !has(locksOf(GUARD_R).open, CELL));
 
 open(GUARD_W, CELL);
+const explicitlyLocked = word(GUARD_W, '/lock', [hex(CELL)]);
+yes('P6 the real guard route establishes the closed state without relying on an authored lock',
+    W.cellLocked(CELL) && (initialLocked ? /already locked/.test(explicitlyLocked.mine) :
+      explicitlyLocked.mine === 'You lock the cell. Only a guard of this hold opens it now; anybody else has to pick the lock.'));
 r = word(GUARD_W, '/unlock', [hex(CELL)]);
 yes('U1 the guard unlocks the cell: "' + r.mine + '"', r.mine === 'You unlock the cell. It opens for anybody now.' &&
     W.cellLocked(CELL) === false);
@@ -318,7 +325,7 @@ if (refusal) {
 S = boot();
 W = S.W;
 yes('S1 after a restart the cell is still locked and the guards are still guards',
-    W.cellLocked(CELL) === true && W.cellLocked(CELL2) === true && W.isGuard(101, 'whiterun') && W.isGuard(202, 'riften'));
+    W.cellLocked(CELL) === true && W.cellLocked(CELL2) === initialLocked2 && W.isGuard(101, 'whiterun') && W.isGuard(202, 'riften'));
 const saved = JSON.parse(fs.readFileSync(path.join(dir, 'private', 'law.json'), 'utf8'));
 yes('S2 the register on disk is the one cell a guard turned and who holds the offices, and the old guards and seat are gone (#2551)',
     saved.cells[CELL] === true && Object.keys(saved.cells).length === 1 && !saved.guards && !saved.jarls &&
