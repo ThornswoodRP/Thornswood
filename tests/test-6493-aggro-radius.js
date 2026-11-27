@@ -58,6 +58,12 @@ function run() {
       hostile(skeever, person, 2500) === false);
   yes('without the radius it never attacks a person, however near (the cause)',
       hostile(Object.assign({}, skeever, { aggroRadius: [0, 0, 0] }), person, 100) === false);
+  yes('a disabled radius does not make an Aggressive but Neutral NPC hostile at zero distance',
+      hostile(Object.assign({}, skeever, { aggroRadius: [0, 0, 0] }), person, 0) === false);
+  yes('the positive radius includes its authored outer boundary',
+      hostile(skeever, person, 1500) === true);
+  yes('a person just outside the positive radius is not acquired through it',
+      hostile(skeever, person, 1500.001) === false);
   yes('a person its factions count as a friend is never attacked, even inside the radius',
       hostile(skeever, Object.assign({}, person, { factions: [{ id: FRIEND_OF_PEOPLE, rank: 0 }] }), 100) === false);
   yes('the radius is for people only: a skeever does not attack a Neutral NPC inside it',
@@ -68,6 +74,10 @@ function run() {
       hostile(wolf, person, 1900) === true);
   yes('and an Unaggressive NPC without it attacks nobody',
       hostile(Object.assign({}, wolf, { aggroRadius: [0, 0, 0] }), person, 100) === false);
+  yes('an Unaggressive NPC with a disabled radius stays neutral at zero distance too',
+      hostile(Object.assign({}, wolf, { aggroRadius: [0, 0, 0] }), person, 0) === false);
+  yes('a warning-only radius does not authorize combat at zero distance',
+      hostile(Object.assign({}, wolf, { aggroRadius: [3000, 0, 0] }), person, 0) === false);
 
   const deer = { isHuman: false, aggression: 0, aggroRadius: [0, 0, 1500], factions: [{ id: PREY, rank: 0 }] };
   yes('a deer (attack 1500, warn or attack 0) counts a person 1400 away, so it flees by its confidence',
@@ -75,6 +85,8 @@ function run() {
 
   const bandit = { isHuman: false, aggression: 2, aggroRadius: [0, 0, 0], factions: [{ id: BANDIT, rank: 0 }] };
   yes('a Very Aggressive bandit still attacks a Neutral person within sight', hostile(bandit, Object.assign({}, person, { factions: [] }), 1100) === true);
+  yes('a disabled radius does not suppress ordinary aggression at zero distance',
+      hostile(bandit, Object.assign({}, person, { factions: [] }), 0) === true);
   yes('and not beyond sight', hostile(bandit, Object.assign({}, person, { factions: [] }), 1300) === false);
   const aggressiveBandit = Object.assign({}, bandit, { aggression: 1 });
   yes('an Aggressive one attacks a person its faction names as an Enemy within sight', hostile(aggressiveBandit, person, 1000) === true);

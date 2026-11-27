@@ -257,7 +257,7 @@ try {
 
     # ---- 8. the workflows -------------------------------------------------------
     $wf = Join-Path $repo '.github\workflows'
-    foreach ($pair in @(@('build.yml', 'Run-Gate', 'gate-report', 'report', 'Gate report', 'needs.pick.outputs.shares'), @('build-pr.yml', 'Run-Gate', 'gate-report', 'report', 'Gate report', 'needs.pick.outputs.shares'), @('nightly.yml', 'Nightly-Harnesses', 'harness-report', 'harness-report', 'Harness report', '-Expect 2'))) {
+    foreach ($pair in @(@('build.yml', 'Run-Gate', 'gate-report', 'report', 'Gate report', 'needs.pick.outputs.shares'), @('build-pr.yml', 'Run-Gate', 'gate-report', 'report', 'Gate report', 'needs.pick.outputs.shares'), @('nightly.yml', 'Nightly-Harnesses', 'harness-report', 'harness-report', 'Harness report', 'needs.shares.outputs.count'))) {
         $k, $runs, $art, $job, $name, $expect = $pair
         $y = [IO.File]::ReadAllText((Join-Path $wf $k))
         Yes "8. $k's shares each write a report" ($y -match ('(?m)^\s+\.\\scripts\\dev\\' + $runs + '\.ps1 -Shard .* -Report \(Join-Path \$env:RUNNER_TEMP ''' + $art + '\\share\.xml''\)\s*$'))

@@ -28,7 +28,9 @@
   and mp.onCraft's seventh argument names an input that came off a named
   stack; inputRefusal below refuses any named input that is not food
   carrying its days, so a worn sword (85%), a house's mold or a woven
-  garment is still never spent by a craft, as it never could be.
+  garment is still never spent by a craft, as it never could be. The one
+  exception is the piece an enchantment goes on, which comes back with the
+  same name (#4608).
 
   WHICH FOOD SPOILS AND HOW FAST is FOOD_GROUPS.spoil
   (game/data/food-groups.json): days by group (raw meat and fish, and the
@@ -485,12 +487,17 @@
       piece's condition, a house's mold, a woven garment's mark and a dye
       each sit on a name too, and a craft that took one would give back a
       plain piece (a free repair) or lose what the name said.
+
+      except is the one input that is let through by name (#4608): the piece
+      an enchantment goes on, which the bench gives back carrying the same
+      name (enchantedPiece in the bench block), so nothing the name said is
+      lost and nothing is repaired.
     */
-    function inputRefusal(inputs) {
+    function inputRefusal(inputs, except) {
       if (!Array.isArray(inputs)) { return ''; }
       for (var i = 0; i < inputs.length; i++) {
         var input = inputs[i];
-        if (!input || !input.name) { continue; }
+        if (!input || !input.name || input === except) { continue; }
         var entry = { baseId: Number(input.baseId) || 0, name: String(input.name) };
         if (ownName(entry)) { continue; }
         return 'Your ' + entry.name + ' cannot go into that. Keep it, or use a plain one.';

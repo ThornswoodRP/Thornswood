@@ -49,6 +49,19 @@ const loop = (loopAt >= 0 && loopEnd > loopAt) ? ps.slice(loopAt, loopEnd) : '';
 yes('Build-RecipeTable.ps1 has its move loop', loop.indexOf('MovedFromName') >= 0);
 yes('the move loop does not pass over a cut row', !!loop && !/Book\s+-eq\s+'cut'/.test(loop));
 
+// #5886: the rule that gives a fishing pole that is a MISC record to the
+// Woodwright matched the spear words too, and outside a WEAP "Spear" is in
+// the name of two Playable Rieklings spell tomes. It matches the fishing
+// pole words alone.
+const poleWords = (ps.match(/^\$FISHING_POLE_WORDS = @\(([^)]*)\)/m) || [])[1] || '';
+yes('the fishing pole words are only fishing pole words (#5886)',
+  /Fishing ?Pole/.test(poleWords) && !/'(Spear|Pike|Halberd)'/.test(poleWords));
+const poleAt = ps.indexOf("$reason = 'the output is a fishing pole");
+const poleRule = poleAt < 0 ? '' : ps.slice(ps.lastIndexOf('\n', ps.lastIndexOf('if (', poleAt)), poleAt);
+yes('the rule for a fishing pole that is not a WEAP matches the fishing pole words, not the spear words (#5886)',
+  /MatchesWord \$o\.Edid \$FISHING_POLE_WORDS/.test(poleRule) && /MatchesWord \$o\.Name \$FISHING_POLE_WORDS/.test(poleRule) &&
+  poleRule.indexOf('$SPEAR_WORDS') < 0);
+
 // ---- the rows, in the content build -----------------------------------------
 
 const FORGE = 'CraftingSmithingForge';
@@ -95,6 +108,17 @@ for (const list of ['recipes', 'refused', 'unowned']) {
     }
   }
 }
+// A spell tome is never woodworking (#5886), in any of the three lists.
+const tomes = [];
+for (const list of ['recipes', 'refused', 'unowned']) {
+  for (const [id, row] of Object.entries(table[list] || {})) {
+    if ((row.type === 'BOOK' || /^Spell Tome\b/.test(row.name || '')) && (row.owner === 'Woodworker' || row.half === 'Woodwright')) {
+      tomes.push(row.name + ' (' + id + ', ' + row.editorId + ', ' + list + ')');
+    }
+  }
+}
+yes('no spell tome or other book is the Woodwright\'s (#5886)', tomes.length === 0);
+for (const w of tomes) console.log('      the Woodwright\'s: ' + w);
 for (const k of KINDS) yes('the table has the Woodwright\'s ' + k + ' rows (' + found[k] + ')', found[k] > 0);
 yes('the woodworking bench is a keyword of Thornswood-Content.esp', !!benchKey && /:thornswood-content\.esp$/.test(benchKey));
 yes('no bow, arrow, bolt, instrument or fishing pole is at the forge', atForge.length === 0);

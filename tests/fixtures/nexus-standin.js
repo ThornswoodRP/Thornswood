@@ -90,7 +90,7 @@ const files = {
     { id: 'ver-2222', game_scoped_id: '2222', name: 'Hashed', version: '2.0', category: 'main', uploaded_at: '2026-01-01T00:00:00Z', is_primary: true, position: '1' }] },
 };
 let nextFileId = 812345;
-const collection = { id: 515846, slug: '7essxf', name: 'Thornswood', category: { id: 1, name: 'Total Overhaul' }, latest: 2, draft: null,
+const collection = { id: 515846, slug: '7essxf', name: 'Thornswood', summary: 'Main\'s summary.', description: 'Main\'s description.', category: { id: 1, name: 'Total Overhaul' }, latest: 2, draft: null,
   revisions: { 2: { id: '801014', status: 'published', upload: null } } };
 // Collections made with POST /v3/collections (Copy-NexusRevision.ps1 -New,
 // #7193), and the one the harness adds, beside 7essxf.
@@ -268,12 +268,19 @@ function api(req, res, url, body, json) {
     col.draft = n;
     return send(res, 200, { data: { id: rid, collection_id: String(col.id), revision_number: n, revision_status: 'draft' } });
   }
-  // editCollection: a collection's category, which a publish needs (#7193).
+  // editCollection: a collection's own name, summary, description and
+  // category, which a publish needs (#7193).
   if (req.method === 'PATCH' && (m = p.match(/^\/v3\/collections\/(\d+)$/))) {
     const col = byId(m[1]);
     if (!col) return problem(res, 404, 'No collection');
-    if (!json || !Number.isInteger(json.category_id) || json.category_id < 1) return problem(res, 422, 'category_id');
-    col.category = { id: json.category_id, name: json.category_id === 1 ? 'Total Overhaul' : 'Category ' + json.category_id };
+    const keys = json && typeof json === 'object' ? Object.keys(json) : [];
+    if (!keys.length || keys.some(k => ['name', 'summary', 'description', 'category_id'].indexOf(k) < 0)) return problem(res, 422, 'EditCollectionRequest');
+    if ('category_id' in json && (!Number.isInteger(json.category_id) || json.category_id < 1)) return problem(res, 422, 'category_id');
+    if ('name' in json && (typeof json.name !== 'string' || json.name.length < 3 || json.name.length > 36)) return problem(res, 422, 'name');
+    if ('summary' in json && (typeof json.summary !== 'string' || json.summary.length > 255)) return problem(res, 422, 'summary');
+    if ('description' in json && typeof json.description !== 'string') return problem(res, 422, 'description');
+    if ('category_id' in json) col.category = { id: json.category_id, name: json.category_id === 1 ? 'Total Overhaul' : 'Category ' + json.category_id };
+    for (const k of ['name', 'summary', 'description']) if (k in json) col[k] = json[k];
     res.writeHead(204); return res.end();
   }
   if (req.method === 'POST' && p === '/v3/collections') {
@@ -283,7 +290,7 @@ function api(req, res, url, body, json) {
     if (!payloadOk(d)) return problem(res, 422, 'collection_data does not match CollectionPayload');
     u.claimed = true;
     const id = 600001 + others.length;
-    const col = { id: id, slug: 'dv' + id.toString(36), name: d.collection_manifest.info.name, category: null, latest: 0, draft: 1, revisions: {} };
+    const col = { id: id, slug: 'dv' + id.toString(36), name: d.collection_manifest.info.name, summary: '', description: '', category: null, latest: 0, draft: 1, revisions: {} };
     col.revisions[1] = { id: String(id * 10 + 1), status: 'draft', upload: u.id, data: d };
     others.push(col);
     return send(res, 200, { data: { id: String(id), slug: col.slug, revision_id: String(id * 10 + 1), revision_number: 1, revision_status: 'draft' } });
@@ -301,6 +308,7 @@ function graph(req, res, json) {
     if (control.refusePublish) return send(res, 200, { data: { publishRevision: { success: false } } });
     // As Nexus answered the Dev collection's first publish on 27 Nov (#7193).
     if (!hit.c.category) return send(res, 200, { errors: [{ message: 'CollectionRevision cannot be published without a category' }] });
+    if (!hit.c.summary || !hit.c.description) return send(res, 200, { errors: [{ message: 'Collection metadata is missing' }] });
     hit.c.revisions[hit.n].status = 'published'; hit.c.latest = Number(hit.n); hit.c.draft = null;
     return send(res, 200, { data: { publishRevision: { success: true } } });
   }
@@ -332,7 +340,7 @@ function graph(req, res, json) {
     const col = bySlug(m[1]);
     if (!col) return send(res, 200, { data: { collection: null }, errors: [{ message: 'Collection not found' }] });
     const lp = col.latest ? { id: Number(col.revisions[col.latest].id), revisionNumber: col.latest } : null;
-    return send(res, 200, { data: { collection: { id: col.id, name: col.name, category: col.category || null, latestPublishedRevision: lp, draftRevisionNumber: col.draft } } });
+    return send(res, 200, { data: { collection: { id: col.id, name: col.name, summary: col.summary || '', description: col.description || '', category: col.category || null, latestPublishedRevision: lp, draftRevisionNumber: col.draft } } });
   }
   return send(res, 200, { errors: [{ message: 'The stand-in does not know this query' }] });
 }
@@ -427,7 +435,7 @@ const server = http.createServer((req, res) => {
       if (c.setStored) { mods[c.setStored.mod].description = c.setStored.stored; mods[c.setStored.mod].cached = undefined; delete c.setStored; }
       // A revision whose download is a local collection archive.
       // A collection beside 7essxf, with no revision yet (#7193).
-      if (c.addCollection) { others.push({ id: c.addCollection.id, slug: c.addCollection.slug, name: c.addCollection.name, category: c.addCollection.category || null, latest: 0, draft: null, revisions: {} }); delete c.addCollection; }
+      if (c.addCollection) { others.push({ id: c.addCollection.id, slug: c.addCollection.slug, name: c.addCollection.name, summary: c.addCollection.summary || '', description: c.addCollection.description || '', category: c.addCollection.category || null, latest: 0, draft: null, revisions: {} }); delete c.addCollection; }
       if (c.addRevision) {
         const col = bySlug(c.addRevision.slug || '7essxf');
         // A revision number, never a name the request picks: a key such as

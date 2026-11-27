@@ -84,8 +84,9 @@ A swing of your own work also costs rest, by the rank you are climbing:
 Under 15 rest, crafting is refused. The class verbs still happen, and
 they still cost the rest.
 
-Work done while somebody from your party is in the same cell banks
-15% of a piece. At a whole piece it pays one extra. That is every
+Work done while somebody from your party is with you (the same
+building or cave, or outdoors near enough to be in your Near you
+list) banks 15% of a piece. At a whole piece it pays one extra. That is every
 seventh piece. Listed on a party and standing somewhere else pays
 nothing. See [People beside you](people.md).
 
