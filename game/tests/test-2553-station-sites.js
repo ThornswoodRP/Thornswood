@@ -49,6 +49,8 @@ const BASES = {
   well: '18030:Thornswood-Content.esp', river: '18031:Thornswood-Content.esp',
   study: '18032:Thornswood-Content.esp',
 };
+const MASTERS = ['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm'];
+const bySrv = (n) => sites[n].standBy === 'server';
 
 let pass = 0, fail = 0;
 function yes(w, c) { if (c) { pass++; console.log('PASS  ' + w); } else { fail++; console.log('FAIL  ' + w); } }
@@ -77,9 +79,16 @@ yes('T3 every site names its kind, where, anchor, point, angle, cell and space',
     s.pos.every(Number.isFinite) && Number.isFinite(s.angle) && s.angle >= 0 && s.angle < 360 &&
     typeof s.interior === 'boolean';
 }));
-const refs = names.map((n) => sites[n].ref);
+const refs = names.filter((n) => !bySrv(n)).map((n) => sites[n].ref);
 yes('T4 each placement has a form id of its own in ' + CONTENT, refs.every((r) => /^[0-9a-f]+:Thornswood-Content\.esp$/.test(r)) &&
     new Set(refs).size === refs.length);
+// #6893: a station the server stands has no placement in the plugin, and is
+// only in a cell of a plugin that is not one of the content plugin's masters,
+// next to that room's own furniture.
+const srv = names.filter(bySrv);
+yes('T4a each station the server stands (' + srv.length + ') has no placement in the plugin, stands in a cell the plugin cannot place into, and names the furniture of that room it is moved next to',
+    srv.every((n) => sites[n].ref === null && sites[n].interior && desc.test(sites[n].beside) &&
+      MASTERS.indexOf(sites[n].cell.split(':')[1].toLowerCase()) < 0));
 yes('T5 and what was measured there: the ground within the kind\'s flat, the station on its lowest point, 30 units or more to the nearest solid thing',
     names.every((n) => {
       const s = sites[n];
@@ -92,6 +101,9 @@ yes('T6 and why the copy of its cell, and of an exterior\'s worldspace, changes 
     names.every((n) => {
       const s = sites[n];
       const ok = (w) => typeof w === 'string' && /^(carried after the content plugin by|won by )/.test(w);
+      if (bySrv(n)) {
+        return /^stood by the server at start: a record of .+, which is not a master of the content plugin$/.test(s.cellCopy);
+      }
       return ok(s.cellCopy) && (s.interior || ok(s.worldCopy));
     }));
 

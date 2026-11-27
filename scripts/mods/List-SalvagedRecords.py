@@ -143,6 +143,9 @@ def station_cells():
     Thornswood places stands in, as (object id, plugin name in lower case)."""
     out = set()
     for row in json.load(open(STATION_SITES, encoding='utf-8'))['sites'].values():
+        if row.get('standBy') == 'server':
+            # The server stands it (#6893): the plugin places nothing in that cell.
+            continue
         for field in ('cell',) + (() if row['interior'] else ('space',)):
             obj, owner = row[field].split(':', 1)
             out.add((int(obj, 16), owner.lower()))
