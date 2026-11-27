@@ -271,7 +271,10 @@ const TYPES = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
   '.gif': 'image/gif', '.avif': 'image/avif',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.m4v': 'video/mp4',
-  '.woff2': 'font/woff2', '.woff': 'font/woff'
+  '.woff2': 'font/woff2', '.woff': 'font/woff',
+  // The licence texts are UTF-8 with a (c) sign and curly quotes, and nosniff
+  // is on, so with no charset a browser read them as Windows-1252 (#4925).
+  '.txt': 'text/plain; charset=utf-8', '.json': 'application/json; charset=utf-8'
 };
 
 const origin = (req) => {
