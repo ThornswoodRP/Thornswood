@@ -1071,7 +1071,7 @@ foreach ($scan in @(1,23,36)) {
   let st = g.lines().filter(function (l) { return l.t === 'step'; });
   yes('  then equips and draws it', st.length >= 1 && st[0].ok && pc.equipped === pick && pc.drawn && /drawn after/.test(st[0].note) && /given by \/give pickaxe/.test(st[0].note));
   // The jump: the key, then the character rises 60 units and comes down.
-  let asks = g.ack({}); g.frame(16);
+  g.ack({}); g.frame(16);
   [20, 45, 60, 40, 0].forEach(function (z) { pc.z = z; g.frame(100); });
   for (let i = 0; i < 8; i++) { g.frame(100); }
   const keyAsk = g.lines().filter(function (l) { return l.t === 'ask' && l.do === 'key'; });
