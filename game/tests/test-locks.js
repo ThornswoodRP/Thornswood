@@ -496,17 +496,53 @@ function liftFn(name) {
     yes('every way out is a door of a building the server knows', stray === 0);
 
     let inside = 0, insideMissed = 0, street = 0, streetOut = 0;
+    const streetDoors = [];
     for (const d in ALL) {
       const r = placed[d];
       if (!r) { continue; }
       if (r.cell === ALL[d]) { inside++; if (!WAY[d]) { insideMissed++; } }
       const c = cells[r.cell];
-      if (c && !c.interior) { street++; if (WAY[d]) { streetOut++; } }
+      if (c && !c.interior) { street++; streetDoors.push(d); if (WAY[d]) { streetOut++; } }
     }
     yes('every door standing inside its own building is a way out (' + inside + ' of them)',
         inside > 3000 && insideMissed === 0);
-    yes('and not one of the ' + street + ' doors on open ground is, so a lock still keeps people out',
-        street > 900 && streetOut === 0);
+    if (!Object.hasOwn(doorsJson, 'sites')) {
+      yes('and not one of the ' + street + ' doors on open ground is, so a lock still keeps people out',
+          street > 900 && streetOut === 0);
+    } else {
+      const sites = doorsJson.sites || {};
+      // These established paired gates retain their exact entry/exit sides.
+      const townSides = {
+        '1b1f1:Skyrim.esm': ['gate:whiterun-main', false],
+        '1b1f3:Skyrim.esm': ['gate:whiterun-main', true],
+        '42283:Skyrim.esm': ['gate:riften-main', true],
+        '42284:Skyrim.esm': ['gate:riften-main', false],
+        '42285:Skyrim.esm': ['gate:riften-main', true],
+        '42286:Skyrim.esm': ['gate:riften-main', false],
+      };
+      const passage = { 'exterior-gateway': { count: 0, missed: 0 }, standalone: { count: 0, missed: 0 } };
+      let ingress = 0, ingressOut = 0;
+      for (const d of streetDoors) {
+        const site = sites[ALL[d]], town = townSides[d];
+        if (town && ALL[d] === town[0]) { continue; }
+        // An interior site's passageOnly flag cannot exempt its street side.
+        if (site && site.passageOnly === true && Object.hasOwn(passage, site.kind)) {
+          passage[site.kind].count++;
+          if (!WAY[d]) { passage[site.kind].missed++; }
+        } else {
+          ingress++;
+          if (WAY[d]) { ingressOut++; }
+        }
+      }
+      yes('established exterior ingress keeps its locks (' + ingress + ' doors)', ingress > 900 && ingressOut === 0);
+      for (const kind of Object.keys(passage)) {
+        yes('every new passage-only ' + kind + ' leaf stays passable (' + passage[kind].count + ')',
+            passage[kind].count > 0 && passage[kind].missed === 0);
+      }
+      yes('all six established town-gate leaves keep their exact entry/exit sides',
+          Object.entries(townSides).every(([d, side]) => streetDoors.includes(d) && ALL[d] === side[0] &&
+            sites[side[0]]?.kind === 'established-gateway' && !!WAY[d] === side[1]));
+    }
 
     // A Hearthfire cellar, where a guest is most likely to be when the holder
     // locks up, and the Winking Skeever's lower cellar, two rooms down.
