@@ -301,11 +301,13 @@ if (COMMANDS && STAFF) {
       Math.abs(last.profiles[BJORN] - (Date.now() + 600000)) < 5000);
   yes('and answers both', /^Silenced Bjorn Iron-Hand for 10 minutes/.test(to(got, STAFFER)[0] || '') &&
       /silenced you for 10 minutes: shouting slurs\./.test(to(got, BJORN)[0] || ''));
-  got = run(w, BJORN, '/ooc can anybody hear me');
-  yes('/ooc from somebody silenced reaches nobody and says why',
-      got.length === 1 && got[0].to === BJORN && /silenced you for another 10 minutes/.test(got[0].text));
+  // /ooc from somebody silenced is the voice service's to hold back: it says
+  // /ooc and never sends it here (#4238, voice/tests/test-local-chat.js).
   got = run(w, BJORN, '/roll 20');
-  yes('nor does /roll', got.length === 1 && /silenced/.test(got[0].text));
+  yes('/roll from somebody silenced reaches nobody and says why',
+      got.length === 1 && got[0].to === BJORN && /silenced you for another 10 minutes/.test(got[0].text));
+  got = run(w, BJORN, '/r 6');
+  yes('nor does /r', got.length === 1 && /silenced/.test(got[0].text));
   got = run(w, STAFFER, '/unsilence Bjorn');
   yes('/unsilence clears it at the voice service too',
       JSON.stringify((w.silencedPosts[w.silencedPosts.length - 1] || {}).profiles) === '{}' &&

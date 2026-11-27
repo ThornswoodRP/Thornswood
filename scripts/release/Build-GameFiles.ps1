@@ -108,7 +108,7 @@ function Stop-Build([string]$Why) { Write-Host "::error title=Game files::$Why";
 
 if (-not $Commit) { $Commit = "$(git -C $RepoDir rev-parse HEAD)".Trim() }
 if ($Commit -notmatch '^[0-9a-f]{40}$') { Stop-Build "the commit '$Commit' is not 40 hex" }
-if (-not $Root) { $Root = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-game-files' }
+if (-not $Root) { $Root = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('thornswood-game-files-' + $Commit.Substring(0, 12)) }
 $game = Join-Path $Root 'Game'
 
 . (Join-Path $Here 'Read-JsonFile.ps1')

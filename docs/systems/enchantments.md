@@ -77,6 +77,11 @@ from the client names the piece and not its enchantment, so the menu
 still applies whatever Skyrim would. [#1389](https://github.com/ThornswoodRP/Thornswood/issues/1389)
 says what the engine has to pass.
 
+A worn, crude or masterwork piece can be enchanted. Its condition and
+its make are on its name (see [Durability](durability.md)), and the
+enchanted piece keeps that name, so nothing is repaired and nothing is
+lost ([#4608](https://github.com/ThornswoodRP/Thornswood/issues/4608)).
+
 The soul gem table above is checked ([#1648](https://github.com/ThornswoodRP/Thornswood/issues/1648)):
 the engine hands the gamemode the craft's inputs, and a gem above your
 rank in the half that owns the piece is refused with the gem and the

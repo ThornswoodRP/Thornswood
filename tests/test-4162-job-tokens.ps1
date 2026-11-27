@@ -125,7 +125,7 @@ $Writes = [ordered]@{
     'merge-release.yml/content'   = @('contents', 'deployments')
     # gh release create/upload/edit of main-<tag> (contents); POST
     # deployments to Main (deployments).
-    'promote-main.yml/promote'    = @('contents', 'deployments')
+    'promote-main.yml/deploy'     = @('contents', 'deployments')
     # Publish-ReleaseFiles.ps1: a draft Release, its files, then published.
     'release-files.yml/files'     = @('contents')
     # Publish-FridaSources.ps1: the same, for the sources' Release.

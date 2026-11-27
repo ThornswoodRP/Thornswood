@@ -425,6 +425,47 @@ async function on() {
         !!oom && oom.kind === 'ooc' && oom.text === 'brb' && oom.head === '(( brb ))');
     yes('ON and /ooc is not queued', (await queued(svc)).length === 0);
 
+    // The rest of /ooc lives here too: the game server never sees it
+    // (#4238), so its alias, usage line, cut, nobody-near line and silence
+    // are this service's to prove.
+    await place(svc, rows(['Aela', 'Brand', 'Cass', 'Dagny', 'Eorlund']));
+    heard = await say(svc, b, '/o fine', ['Aela', 'Brand', 'Dagny']);
+    yes('ON /o is /ooc', heardBy(heard, ['Aela', 'Brand', 'Dagny']) &&
+        !!lineOf(a) && lineOf(a).kind === 'ooc' && lineOf(a).head === '(( fine ))');
+    yes('ON and /o is not queued', (await queued(svc)).length === 0);
+
+    heard = await say(svc, a, '/ooc', ['Aela']);
+    yes('ON /ooc on its own goes to nobody else', heardBy(heard, ['Aela']));
+    yes('ON and says how it is used',
+        !!noteOf(a) && noteOf(a).text === 'Say /ooc and then whatever you meant to say.');
+    yes('ON and is not queued', (await queued(svc)).length === 0);
+
+    heard = await say(svc, a, '/ooc ' + 'a'.repeat(400), ['Aela', 'Brand', 'Dagny']);
+    const cutLine = lineOf(b);
+    yes('ON an /ooc over 300 characters is cut to 300',
+        heardBy(heard, ['Aela', 'Brand', 'Dagny']) && !!cutLine && cutLine.text === 'a'.repeat(300));
+
+    heard = await say(svc, c, '/ooc anyone?', ['Cass']);
+    yes('ON an /ooc nobody is near enough for goes back to the sender alone', heardBy(heard, ['Cass']));
+    yes('ON and they are told nobody heard it',
+        !!noteOf(c) && noteOf(c).text === 'Nobody near enough to hear that.');
+
+    const hushed = await fetch(svc.base + '/silenced', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profiles: { 101: Date.now() + 5 * 60000 } })
+    });
+    yes('ON (staff silence Aela)', hushed.status === 200);
+    heard = await say(svc, a, '/ooc can you hear me', ['Aela']);
+    yes('ON a silenced /ooc reaches nobody else', heardBy(heard, ['Aela']) && !lineOf(b));
+    yes('ON and she is told how long is left',
+        !!noteOf(a) && /^Staff have silenced you for another [45] minutes, so that did not reach anybody\.$/.test(noteOf(a).text));
+    yes('ON and it is not queued for the game server either', (await queued(svc)).length === 0);
+    await fetch(svc.base + '/silenced', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ profiles: {} })
+    });
+    heard = await say(svc, a, '/ooc back', ['Aela', 'Brand', 'Dagny']);
+    yes('ON and once it is lifted she is heard again', heardBy(heard, ['Aela', 'Brand', 'Dagny']));
+
     for (const line of ['/roll 20', '/meow', '/spawn cheese']) {
       await place(svc, rows(['Aela', 'Brand', 'Cass', 'Dagny', 'Eorlund']));
       await queued(svc);

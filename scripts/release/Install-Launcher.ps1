@@ -3,8 +3,8 @@
   Puts a launcher that Build-Launcher.ps1 has already built into an install,
   and does the things around it that only an install should do.
 
-      .\scripts\release\Build-Launcher.ps1 -Root C:\Thornswood-DevBuild -OutDir $env:TEMP\tsl -NoPause
-      .\scripts\release\Install-Launcher.ps1 -Root C:\Thornswood-DevBuild -From $env:TEMP\tsl -NoPause
+      .\scripts\release\Build-Launcher.ps1 -Root C:\Thornswood-DevBuild -OutDir .\temp\tsl -NoPause
+      .\scripts\release\Install-Launcher.ps1 -Root C:\Thornswood-DevBuild -From .\temp\tsl -NoPause
 
   In order: closes a game and a launcher left running (Close-Launcher.ps1),
   copies the launcher from -From into <Root>\Launcher, writes the icon file

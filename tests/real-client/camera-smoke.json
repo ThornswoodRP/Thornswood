@@ -39,8 +39,14 @@
       "menu": "RaceSex Menu",
       "open": true,
       "timeout": 90000,
-      "skip": 9,
+      "skip": 10,
       "why": "a character this server has not got is made first: the race menu opens in the hall. A character it has goes straight to the world, and the race menu steps are skipped"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 3000,
+      "why": "the menu's camera swings round to the character's face while the menu is open and the game paused (#6979); a shot a second after it opens caught the hall door"
     },
     {
       "do": "shot",

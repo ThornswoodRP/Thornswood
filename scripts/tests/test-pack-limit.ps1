@@ -45,8 +45,21 @@ function Slice([string]$src, [string]$start, [string]$end) {
     return $src.Substring($a, $b - $a)
 }
 
+# One section of the script, from its divider to the next divider, whatever
+# that one is called. The pack section used to be cut to the "launcher exe"
+# divider; #5381 took that section out, the cut came back empty and none of
+# the checks after it ran (#6425). Null when the divider is not there.
+function Section([string]$src, [string]$name) {
+    $m = [regex]::Match($src, '(?m)^# -{20,} ' + [regex]::Escape($name) + '\r?$')
+    if (-not $m.Success) { return $null }
+    $rest = $src.Substring($m.Index + $m.Length)
+    $next = [regex]::Match($rest, '(?m)^# -{20,} \S')
+    if (-not $next.Success) { return $null }
+    return $src.Substring($m.Index, $m.Length + $next.Index)
+}
+
 $src = [IO.File]::ReadAllText($PublishPath)
-$pack = Slice $src '# ------------------------------------------------------------ pack' '# ------------------------------------------------------------ launcher exe'
+$pack = Section $src 'pack'
 $size = Slice $src '# ==== thornswood release size ====' '# ==== end thornswood release size ===='
 
 Yes 'the pack section is in Publish-Update.ps1' ($null -ne $pack)

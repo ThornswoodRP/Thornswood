@@ -231,7 +231,7 @@ if ($Newest) {
     # plugin, the catalogue built in the order before the chain, and every
     # path the chain writes.
     $writes = Get-ThornswoodBuiltPaths -Repo $Repo
-    $work = Join-Path ([IO.Path]::GetTempPath()) ('content-newest-' + [Guid]::NewGuid().ToString('n'))
+    $work = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('content-newest-' + [Guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Path $work | Out-Null
     try {
         if ($ArtifactDir) { foreach ($n in 'content.zip', 'content-build.json') { Copy-Item -LiteralPath (Join-Path $ArtifactDir $n) -Destination (Join-Path $work $n) }; $from = "the folder $ArtifactDir" }
@@ -336,7 +336,7 @@ Say-Output 'found=yes'
 if (-not $Take) { exit 0 }
 
 # ---- take it ---------------------------------------------------------------
-$work = Join-Path ([IO.Path]::GetTempPath()) ('content-take-' + [Guid]::NewGuid().ToString('n'))
+$work = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('content-take-' + [Guid]::NewGuid().ToString('n'))
 New-Item -ItemType Directory -Path $work | Out-Null
 try {
     foreach ($a in @($zipAsset[0], $recAsset[0])) {
