@@ -234,5 +234,120 @@ ISSUE['updated_at'] = '2026-10-22T11:00:00Z'      # the bot's own comment moves 
 asyncio.run(bot.dev_tasks_once(Forum(), ds, gh, me_id=1, say=lambda n, t: said.append(n)))
 yes('the next pass does not comment again', said == [41])
 
+# Exercise the real passes and their edit paths against in-memory forums.
+from types import SimpleNamespace
+
+
+class EditPost:
+    id = 101
+    owner_id = 1
+    archived = False
+
+    def __init__(self, forum, name, content):
+        self.forum = forum
+        self.name = name
+        self.content = content
+        self.starter_message = SimpleNamespace(edit=self.edit)
+
+    async def edit(self, **changes):
+        self.forum.writes.append('edit')
+        self.__dict__.update(changes)
+        return self
+
+    async def delete(self):
+        self.forum.writes.append('delete')
+        self.forum.threads.remove(self)
+
+
+class EditForum:
+    id = 100
+    available_tags = []
+
+    def __init__(self):
+        self.threads = []
+        self.writes = []
+        self.guild = SimpleNamespace(get_thread=self.get_thread)
+
+    def get_thread(self, tid):
+        return next((th for th in self.threads if th.id == tid), None)
+
+    async def create_thread(self, name, content, **kwargs):
+        self.writes.append('create')
+        thread = EditPost(self, name, content)
+        self.threads.append(thread)
+        return SimpleNamespace(thread=thread)
+
+
+async def check_edit(channel, pass_once, marker, body, *, outside_list=False):
+    forum = EditForum()
+    state = {'since': '2026-10-20T00:00:00Z', 'dev_since': '2026-10-20T00:00:00Z'}
+    row = dict(ISSUE, labels=[{'name': 'Main Findings'}] if channel == 'known-issues' else [],
+               updated_at='2026-10-22T10:00:00Z')
+    if channel == 'test-tasks':
+        row.update(state='closed', state_reason='completed', closed_at=row['updated_at'])
+    comment = dict(COMM[0], body=marker + 'A good title\n' + body)
+    comments = [comment]
+    said = []
+    in_list = True
+    comment_reads = 0
+
+    def get(url):
+        nonlocal comment_reads
+        path = url.split('?')[0]
+        if path.endswith('/comments'):
+            comment_reads += 1
+            return list(comments)
+        if path.endswith('/timeline') or '/releases?' in url:
+            return []
+        if path.endswith('/issues/41'):
+            return dict(row)
+        if path.endswith('/issues'):
+            if any(part.startswith('page=') and part != 'page=1' for part in url.split('?')[-1].split('&')):
+                return []
+            return [dict(row)] if in_list else []
+        raise AssertionError(url)
+
+    def say(number, text):
+        said.append((number, text))
+        comments.append({'body': text, 'created_at': '2026-10-22T12:00:00Z'})
+        row['updated_at'] = '2026-10-22T12:00:00Z'
+        return True
+
+    async def again():
+        return await pass_once(forum, state, get, me_id=1, say=say)
+
+    label = '#' + channel + (' (tracked issue outside closed list)' if outside_list else '')
+    result = await again()
+    made = result == ([41], [], []) and forum.writes == ['create'] and len(forum.threads) == 1 and not said
+    yes(label + ': valid comment creates one post', made)
+    if not made:
+        return
+    thread = forum.threads[0]
+    original = thread.name, thread.content
+    forum.writes.clear()
+    in_list = not outside_list
+    comment['body'] = marker + 'x' * 46 + '\n' + body
+    row['updated_at'] = '2026-10-22T11:00:00Z'
+    for attempt in range(2):
+        if attempt:
+            # Another issue update forces a read of the same refused text.
+            row['updated_at'] = '2026-10-22T13:00:00Z'
+        before = comment_reads
+        result = await again()
+        yes(label + ': refused rewrite is read on pass %d' % (attempt + 1), comment_reads > before)
+        yes(label + ': refused rewrite leaves the original post untouched on pass %d' % (attempt + 1),
+            result == ([], [], []) and not forum.writes and forum.threads == [thread]
+            and (thread.name, thread.content) == original)
+        yes(label + ': exactly one comment names the title rule on pass %d' % (attempt + 1),
+            len(said) == 1 and said[0][0] == 41 and label.split(' ')[0] in said[0][1]
+            and 'Format: the title' in said[0][1])
+
+
+asyncio.run(check_edit('known-issues', bot.known_issues_once, 'Known issue: ', 'What happens: doors stick.'))
+asyncio.run(check_edit('test-tasks', bot.test_tasks_once, 'Test task: ', 'Server: Main\n' + MAIN_OK))
+asyncio.run(check_edit('test-tasks', bot.test_tasks_once, 'Test task: ', 'Server: Main\n' + MAIN_OK,
+                       outside_list=True))
+asyncio.run(check_edit('dev-test-tasks', bot.dev_tasks_once, 'Test task: ', 'Server: Dev\n' + DEV_OK))
+
 print('\n%d failed' % len(FAIL) if FAIL else '\nall passed')
 sys.exit(1 if FAIL else 0)
