@@ -116,7 +116,10 @@ if ($have -gt $want) {
 }
 
 $shell = (Get-Process -Id $PID).Path
-$work = Join-Path $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }) ('thornswood-promote-collection-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+# Its copy logs go under the run's own temp in CI, and from a checkout under
+# the repository's temp folder (Get-ScratchDir.ps1, #4264), not the system's.
+$workName = 'thornswood-promote-collection-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+$work = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP $workName } else { & (Join-Path $Here 'Get-ScratchDir.ps1') $workName }
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 for ($r = $have + 1; $r -le $want; $r++) {
     $from = $r - $off
