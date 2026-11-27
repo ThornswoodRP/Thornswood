@@ -69244,7 +69244,8 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       enemy ||= r===1;
     }
     if(friend) return false;
-    if(b.isHuman && d<=Math.max(a.aggroRadius[1],a.aggroRadius[2])) return true;
+    const radius=b.isHuman ? Math.max(a.aggroRadius[1],a.aggroRadius[2]) : 0;
+    if(radius>0 && d<=radius) return true;
     if(a.aggression===0 || d>SIGHT) return false;
     return a.aggression===3 || a.aggression===2 || (a.aggression===1 && enemy);
   }
