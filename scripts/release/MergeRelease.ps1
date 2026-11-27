@@ -16,6 +16,10 @@
           every Release, all pages, in GitHub's order (which is not newest first)
       Get-MergeReleasePrevious [-Repo owner/name]
           the highest published build-1.3.<n> Release and its manifest, or $null
+      Resolve-ContentBuiltCommit -Event <obj> -Head <sha> -Releases <list>
+                                 -After <scriptblock>
+          the merge a run releases: the one the box's content build was made
+          from when a Content Deployment's success started it, else -Head
       Get-MergeReleasePrint -Manifest <obj> -Part <name>
           one line that changes exactly when the part's content does
       Get-MergeReleaseChanged -Manifest <obj> [-Previous <obj>]
@@ -284,6 +288,66 @@ function Get-MergeReleasePrevious {
     return [pscustomobject]@{ Tag = [string]$r.tag_name; Commit = [string]$m.commit; Id = $r.id; Manifest = $m; Assets = @($r.assets) }
   }
   return $null
+}
+
+# WHICH MERGE A FINISHED CONTENT BUILD RELEASES (#7050). The deploy agent
+# builds main as it is when it takes a Content Deployment (ContentBuild.cs),
+# and the run its success starts checks out main as it is when the status
+# comes, which is not the same commit once a merge has landed during the
+# build. Until 27 Nov 2026 that run looked for the key of main's newest
+# merge, found no build of it, and asked the box again, so during a burst of
+# merges each finished build was thrown away and Dev waited 20 to 45 minutes
+# for a release: on 26 Nov the build of 0520022 came back at 00:11 UTC, its
+# run checked out 961d07c, and nothing was released until 00:42.
+#
+# So that run releases the merge the build was made from. The agent's
+# success says "built <key, 12 hex> from <commit>" (ContentBuild.Apply); the
+# draft content-<server>-<key> it put up targets that commit, which names it
+# whole. It is taken only when it is at or after the commit that asked and at
+# or before -Head, so a build the box reused from older inputs never puts an
+# older merge out. -After { param($Base, $Commit) } is $true when $Commit is
+# $Base or comes after it. Anything else releases -Head, as before, and says
+# why. Returns Commit and Why.
+function Resolve-ContentBuiltCommit {
+  param(
+    [Parameter(Mandatory)] $Event,
+    [Parameter(Mandatory)] [string]$Head,
+    [object[]]$Releases = @(),
+    [scriptblock]$After = { param($Base, $Commit) $false }
+  )
+  function Keep([string]$Why) { [pscustomobject]@{ Commit = $Head; Why = $Why } }
+  # A push's event has neither, and strict mode refuses a property that is
+  # not there.
+  function Prop($o, [string]$n) { if ($null -ne $o -and $o.PSObject.Properties[$n]) { $o.$n } else { $null } }
+  $d = Prop $Event 'deployment'; $st = Prop $Event 'deployment_status'
+  if (-not $d -or -not $st -or [string](Prop $d 'environment') -cne 'Content' -or [string](Prop $st 'state') -cne 'success') {
+    return Keep 'not started by a content build, so this run releases its own commit'
+  }
+  $p = Prop $d 'payload'
+  if ($p -is [string]) { try { $p = $p | ConvertFrom-Json } catch { $p = $null } }
+  $server = [string](Prop $p 'server')
+  $asked = [string](Prop $p 'commit')
+  if ($server -cnotin @('dev', 'main') -or $asked -cnotmatch '^[0-9a-f]{40}$') {
+    return Keep 'the Content Deployment names no server and commit, so this run releases main as it is'
+  }
+  $desc = [string](Prop $st 'description')
+  $m = [regex]::Match($desc, '^built ([0-9a-f]{12}) from ([0-9a-f]{7,40})\b')
+  if (-not $m.Success) { return Keep "the build's status names no build (`"$desc`"), so this run releases main as it is" }
+  $key12 = $m.Groups[1].Value; $short = $m.Groups[2].Value
+  $drafts = @($Releases | Where-Object { (Prop $_ 'draft') -and [string](Prop $_ 'tag_name') -cmatch "^content-$server-$key12[0-9a-f]{52}$" })
+  if ($drafts.Count -ne 1) { return Keep "$($drafts.Count) drafts are of the build $key12 for $server, not one, so this run releases main as it is" }
+  $built = [string](Prop $drafts[0] 'target_commitish')
+  if ($built -cnotmatch '^[0-9a-f]{40}$' -or -not $built.StartsWith($short)) {
+    return Keep "the draft $($drafts[0].tag_name) targets $built, not the $short its status names, so this run releases main as it is"
+  }
+  if ($built -ceq $Head) { return [pscustomobject]@{ Commit = $Head; Why = "the box built $($Head.Substring(0, 7)), main as it is" } }
+  if (-not (& $After $asked $built)) {
+    return Keep "the build is of $($built.Substring(0, 7)), from before $($asked.Substring(0, 7)) that asked for it, so this run releases main as it is"
+  }
+  if (-not (& $After $built $Head)) {
+    return Keep "the build is of $($built.Substring(0, 7)), which main $($Head.Substring(0, 7)) does not hold, so this run releases main as it is"
+  }
+  return [pscustomobject]@{ Commit = $built; Why = "main moved on to $($Head.Substring(0, 7)) during the build, so this run releases $($built.Substring(0, 7)), the merge the box built, and main's newer merges come in the next release" }
 }
 
 # ---- main's launcher package, put out by the promotion (#5181, #4825) ------------

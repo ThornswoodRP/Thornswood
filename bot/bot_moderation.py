@@ -80,6 +80,8 @@ _MOD_DID = {
     'evict': 'ended the claim of %s',
     'rent': 'set the rent on the claim of %s',
     'norent': 'took the rent off the claim of %s',
+    # A free building granted to somebody (#6894): the who is who got it.
+    'grant': 'granted a building to %s',
     # Rent handed over in person, marked paid on the Office page (#3895).
     'rentpaid': 'marked rent paid by %s',
     # Staff on the world's card, the Office page of K (#513): the stage is
