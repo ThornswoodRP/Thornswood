@@ -24387,17 +24387,7 @@ module.exports = {
       toProfile(profileId, 'Pick somebody in the world on the Office page of K.');
       return true;
     }
-    var accordGrant = globalThis.__thornswoodEmbassy;
-    if (accordGrant && accordGrant.holds(building)) {
-      toProfile(profileId, accordGrant.CLAIM_REFUSED);
-      return true;
-    }
     var whoName = personName(them);
-    if (!mayHold(them, pid, building)) {
-      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
-      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' + jailTown + ' holds it.');
-      return true;
-    }
     var held = holderOf(building);
     if (held) {
       toProfile(profileId, nameOf(building) + ' is held by ' + held.name + '. End that claim first to grant it.');
@@ -24724,7 +24714,10 @@ module.exports = {
   function placeOf(building) {
     var hold = holdOfBuilding(building);
     var place = nameOf(building);
-    if (hold && Object.prototype.hasOwnProperty.call(HOLD_TOWN, hold)) { place += ', ' + HOLD_TOWN[hold]; }
+    // The shipped town gate titles already name the town. Preserve the
+    // wording on their keys when the hold table starts mapping them.
+    var townGate = building === 'gate:whiterun-main' || building === 'gate:riften-main';
+    if (!townGate && hold && Object.prototype.hasOwnProperty.call(HOLD_TOWN, hold)) { place += ', ' + HOLD_TOWN[hold]; }
     if (Object.prototype.hasOwnProperty.call(LABEL_NO, building)) { place += ', no. ' + LABEL_NO[building]; }
     return place;
   }

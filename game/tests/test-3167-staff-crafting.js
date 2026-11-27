@@ -81,7 +81,8 @@ try { TABLE = require('../../tests/gamemode-tables.js').inGamemode(src, 'RECIPES
 const keptAt = src.indexOf('const KEPT_SMELT = {');
 const keptEnd = src.indexOf('\n};', keptAt);
 const KEPT_SMELTS = vm.runInNewContext(src.slice(keptAt, keptEnd + 3) + '\nKEPT_SMELT;');
-const OFFICE_VIEW = between('  function officeView(actorId, profileId) {', '\n  /*\n    THE JAIL RULE');
+const officeMatch = /^  function officeView\(actorId, profileId\) \{[\s\S]*?^  \}/m.exec(src);
+const OFFICE_VIEW = officeMatch && officeMatch[0];
 [['the chat command block', COMMANDS], ['the staff block', STAFF], ['the staff crafting block', CRAFT],
  ['the progression block', RULES], ['placeActors', PLACE_ACTORS], ['the recipe list writer', HIDDEN],
  ['the character block', CHARACTER], ['the recipe table', TABLE], ['the Office page\'s view', OFFICE_VIEW]]
@@ -104,8 +105,23 @@ yes('W2 it is in the staff block\'s WORDS_STAFF, so the staff gate is asked firs
 const cmdAt = STAFF.indexOf("if (word === '/craftstaff') {");
 yes('W3 and the staff block hands it on only after the staff and proof checks',
     cmdAt > STAFF.indexOf('tell(pid, REFUSED);') && cmdAt > STAFF.indexOf('var why = unproven(cmd, pid);'));
-yes('W4 the Office page carries the card for staff only, from the staff crafting block',
-    /view\.craft = \(staff && craftApi && craftApi\.staffView\) \? craftApi\.staffView\(pid\) : null;/.test(OFFICE_VIEW));
+const craftCalls = [];
+let officeStaff = true;
+let officeCraft = function (pid) { craftCalls.push(pid); return { rank: 'novice' }; };
+const office = vm.runInNewContext(OFFICE_VIEW + '\nofficeView;', {
+  officesOfProfile: () => ({ jarl: [], court: [], steward: [], guard: [] }),
+  jarlClashOf: () => [], stewardHoldsOf: () => ['whiterun'], officesToHold: () => [],
+  isStaffHere: () => officeStaff, mp: { get: () => [] }, here: () => '',
+  LEDGER_HOLDS: [], g: { __thornswoodStaffCraft: { staffView: (pid) => officeCraft(pid) } }
+});
+yes('W4 the Office page calls the crafting view with the staff profile',
+    office(100, 23).craft.rank === 'novice' && craftCalls.join(',') === '23');
+officeStaff = false;
+yes('W4 a steward who is not staff has no crafting card',
+    office(100, 23).craft === null && craftCalls.join(',') === '23');
+officeStaff = true;
+officeCraft = () => { throw new Error('crafting view unavailable'); };
+yes('W4 the Office page remains available if the crafting view fails', office(100, 23).craft === null);
 
 /* -------------------------------------------------------- a pretend world */
 const KNOWN = { '71cf3:Skyrim.esm': 0x71cf3, 'f:Skyrim.esm': 0xf };

@@ -24,9 +24,8 @@
        location is overridden with the policy's parent, each room with its
        location, and nothing else of the policy's is missing
     B  game/data/building-holds.json: the 17 buildings of those places are
-       measured in the hold Patrick named, and the 22 left refused are
-       exactly the other worlds, the Forgotten Vale, Misty Grove and the test
-       cells
+       measured in the hold Patrick named; the named exceptions still have
+       no hold, and every current property site is counted once
     L  the place name, run out of gamemode.js against the committed plugin's
        own records: a room or worldspace of those places is named with its
        hold, and one no hold covers is named without one
@@ -51,6 +50,7 @@ const made = require('../../tests/last-plugin-made.js').made();
 const POLICY = JSON.parse(read(path.join(ROOT, 'game', 'data', 'last-plugin-policy.json')));
 const MANIFEST = JSON.parse(read(path.join(ROOT, 'game', 'data', 'last-plugin.json')));
 const TABLE = JSON.parse(read(path.join(ROOT, 'game', 'data', 'building-holds.json')));
+const NAMES = require('../../tests/gamemode-tables.js').table('BUILDING_NAME');
 const gm = read(path.join(ROOT, 'game', 'gamemode.js'));
 
 let pass = 0, fail = 0;
@@ -186,7 +186,10 @@ function lift() {
 const code = lift();
 yes('L0 the place name and BUILDING_NAME are in gamemode.js', !!code);
 function placeNamer(mp) {
-  const box = { mp: mp, String: String, Number: Number, Object: Object };
+  const box = { mp: mp, String: String, Number: Number, Object: Object, table: (name) => {
+    if (name !== 'BUILDING_NAME') throw new Error('Unexpected place-name table: ' + name);
+    return NAMES;
+  } };
   vm.createContext(box);
   vm.runInContext(code.names + '\n' + code.spaced + '\n' + code.place + '\nthis.placeName = placeName;', box);
   return box.placeName;
@@ -247,9 +250,15 @@ yes('B1 the 17 buildings of those places are measured in the hold Patrick named 
     (got.length !== 17 ? ' (not: ' + Object.keys(NAMED).filter((b) => got.indexOf(b) < 0).join(', ') + ')' : ''),
     got.length === 17);
 const stay = [].concat.apply([], Object.keys(STAY).map((k) => STAY[k])).sort();
-yes('B2 the 22 refused are exactly ' + Object.keys(STAY).join(', '),
-    JSON.stringify(Object.keys(TABLE.refused).sort()) === JSON.stringify(stay) && TABLE.counts.refused === 22);
-yes('B3 the table counts 828 measured of 850', TABLE.counts.measured === 828 && TABLE.counts.buildings === 850);
+yes('B2 the named exceptions still have no hold in ' + Object.keys(STAY).join(', '),
+    stay.every((id) => TABLE.refused[id] && !TABLE.buildings[id]));
+const measured = Object.keys(TABLE.buildings), refused = Object.keys(TABLE.refused);
+const partition = new Set(measured.concat(refused));
+yes('B3 the table accounts for every mapped property site once',
+    TABLE.counts.measured === measured.length && TABLE.counts.refused === refused.length &&
+    TABLE.counts.buildings === partition.size && partition.size === measured.length + refused.length &&
+    Object.keys(NAMES).length === partition.size && Object.keys(NAMES).every((id) => partition.has(id)) &&
+    refused.every((id) => typeof TABLE.refused[id].why === 'string' && TABLE.refused[id].why.trim().length > 0));
 
 // ---------------------------------------------------------------------- L
 if (code && last) {

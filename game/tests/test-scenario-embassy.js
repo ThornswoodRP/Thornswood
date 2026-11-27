@@ -24,8 +24,8 @@
        armed mark comes off, and Brenna is marked armed, and told.
     C  The gear: off the roll Brenna cannot make an Imperial Helmet at the
        forge, and nothing leaves her pack. On it, she makes one.
-    D  The door: its line offers nobody a claim, a claim sent anyway is
-       refused, and the Steward of Haafingar cannot evict the Accord.
+    D  The door follows ordinary property ownership. The Steward can end
+       an actual claim without changing embassy membership.
     E  A restart: the roll is as it was. Taken off, Brenna is told, and the
        count drops.
     Z  No handler threw, no engine call the engine does not have was made,
@@ -150,14 +150,24 @@ yes('C2 on the roll she makes one (' + JSON.stringify(c2) + ')', c2.made && w.co
 w.moveTo(ALDIS, SOLITUDE, at(30));
 w.activate(DOOR, ALDIS);
 const line = w.prop(ALDIS, 'thornswoodDoorLine') || {};
-yes('D1 the embassy door\'s line offers nobody a claim (' + JSON.stringify(line).slice(0, 120) + ')', line.x !== 'claim');
-yes('D2 a claim sent anyway is refused (' + say(ALDIS, '/claim') + ')',
-    last(ALDIS) === 'The embassy is held by the Ambassador\'s office under the Accord. It cannot be claimed.');
+const property = w.box().__thornswoodProperty;
+const embassy = E().EMBASSY_BUILDING;
+yes('D1 the unclaimed embassy warehouse offers an ordinary claim', line.x === 'claim' && !property.holderOf(embassy));
+yes('D2 a person off the roll can claim the warehouse (' + say(ALDIS, '/claim') + ')',
+    property.holderOf(embassy)?.by === 1001 && !onRoll(ALDIS));
+const rollBeforeEviction = JSON.stringify(roll());
 say(HROKI, '/office hold steward solitude');
 yes('D3 Hroki takes the office of Steward of Haafingar (' + last(HROKI) + ')', /holds Steward of /.test(last(HROKI)));
 w.activate(DOOR, HROKI);
-yes('D3 and cannot evict the Accord (' + say(HROKI, '/evict') + ')',
-    last(HROKI) === 'The embassy is not a house of the hold. A steward of Haafingar does not evict the Accord.');
+yes('D3 the steward ends the actual claim without changing the roll (' + say(HROKI, '/evict') + ')',
+    !property.holderOf(embassy) && JSON.stringify(roll()) === rollBeforeEviction);
+say(HROKI, '/office grant 1001');
+const grant = property.holderOf(embassy);
+yes('D4 the steward can grant the vacant warehouse to someone off the roll',
+    grant?.by === 1001 && grant.granted?.by === 2000 && !onRoll(ALDIS));
+say(HROKI, '/office grant 1000');
+yes('D5 a second grant respects the existing claim and leaves the roll alone',
+    property.holderOf(embassy)?.by === 1001 && JSON.stringify(roll()) === rollBeforeEviction);
 
 // ------------------------------------------------------------- E. restart --
 const kept = JSON.stringify(roll());

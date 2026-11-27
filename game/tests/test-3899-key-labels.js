@@ -260,6 +260,9 @@ if (!W || !W.keyLabel || !W.placeOf || !W.LABEL_NO) { done(); } else {
       W.keyLabel('965b3:Skyrim.esm') === 'Key to Warehouse, Windhelm, no. 2');
   yes('U5 a building whose name is its own still says its hold: "' + W.deedLabel('165a8:Skyrim.esm') + '"',
       W.deedLabel('165a8:Skyrim.esm') === 'Deed to Breezehome, Whiterun');
+  yes('U6 town gate keys and molds keep their issued names when the hold table adds those gates',
+      W.keyLabel('gate:whiterun-main') === 'Key to Whiterun Main Gate' &&
+      W.moldLabel('gate:riften-main') === 'Key mold for Riften Main Gate');
 }
 
 // ============================================= B. two Halls of the Dead
