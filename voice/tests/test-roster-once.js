@@ -189,7 +189,21 @@ async function openPage(port, pid) {
   a voice place and is on the roster (#3570), so everybody this joins is put
   in the world first. All in one cell, a step apart, so each is in reach of
   everybody else: a roster names only who is in reach (#5516).
+
+  Sent five times a second for the whole run, as the gamemode sends it
+  (#7395). The service drops a position older than STALE_MS, three seconds,
+  and this harness once sent it a single time: on a busy runner, opening the
+  60 sockets took longer than that, so by the joins every position was stale
+  and every roster named nobody. A post that fails is kept and said at the
+  end, since a feed that stopped would fail the counts for another reason.
 */
+let feeding = null;
+const feedFailed = [];
+function feed(port, pids) {
+  return inWorld(port, pids).then(() => {
+    feeding = setInterval(() => { inWorld(port, pids).catch((e) => feedFailed.push(e.message)); }, 200);
+  });
+}
 function inWorld(port, pids) {
   return new Promise((ok, bad) => {
     const body = JSON.stringify({ who: pids.map((pid, k) => ({ profileId: pid, pos: [k, 0, 0], angleZ: 0,
@@ -232,7 +246,7 @@ function worst(list, from) {
 (async () => {
   const site = await siteThatSaysYes();
   const s = await service(site);
-  await inWorld(s.port, Array.from({ length: PEOPLE }, (_, k) => 5000 + k).concat([9000]));
+  await feed(s.port, Array.from({ length: PEOPLE }, (_, k) => 5000 + k).concat([9000]));
 
   // ------------------------------------------------------- all in at once
   const pages = [];
@@ -305,6 +319,8 @@ function worst(list, from) {
   yes('with exactly one roster to each socket for that one join',
       staying.every((p, i) => rosters(p).length - mark[i] === 1) && rosters(late).length === 1,
       staying.map((p, i) => rosters(p).length - mark[i]).join(',') + ' / ' + rosters(late).length);
+  yes('the stand-in position feed was taken every time (' + feedFailed.length + ' refused)', feedFailed.length === 0,
+      feedFailed.slice(0, 3).join('; '));
 
   finish();
 })().catch((err) => {
@@ -314,6 +330,7 @@ function worst(list, from) {
 });
 
 function finish() {
+  if (feeding) clearInterval(feeding);
   for (const ws of opened) { try { ws.close(); } catch (e) { } }
   // The service's asks to the stand-in site leave kept-alive connections open.
   if (siteServer) { siteServer.closeAllConnections(); siteServer.close(); }

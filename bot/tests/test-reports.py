@@ -322,6 +322,17 @@ try:
                                **{'from': 'the public page, signed in'}))
     yes('R12 a report from the site names the account that sent it',
         'Aela reported Brynjolf on the site' in t and '<@123456>' in t)
+    # The account is the one part as_typed does not escape, so only a number
+    # goes into a mention (#4659): letters or markup in it put none there.
+    # Digits of other scripts are digits to str.isdigit, and none is a
+    # Discord account (#7417): Arabic-Indic, full-width and a superscript.
+    for acct in ('abc', '123abc', '123> <@456', '<@&999>', '@everyone', '12 34',
+                 '\u0661\u0662\u0663', '\uff11\uff12', '\u00b2', '12\u0663'):
+        w = bot.report_text(report(1, kind='report', by='Aela', about='Brynjolf',
+                                   title='harassing people', discordId=acct,
+                                   **{'from': 'the public page, signed in'}))
+        yes('R12 an account that is not a number makes no mention: %r' % acct,
+            'Aela reported Brynjolf on the site' in w and '<@' not in w)
     for w in (bot.report_text(helprow), t):
         if 'player' in w.lower() or '—' in w:
             yes('R12 the words are the site\'s words', False)

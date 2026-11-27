@@ -104,28 +104,23 @@ on:
         default: ''
 permissions:
   contents: read
-# One run for one commit at a time, never cancelled by another: a second run
-# for the same commit waits for the first.
-concurrency:
-  group: engine-${{ github.event.inputs.commit || github.ref }}
-  cancel-in-progress: false
 jobs:
-  engine:
-    name: Engine build
-    runs-on: windows-2022
-    timeout-minutes: 30
+  # Which fork commit this run records, worked out before the build so the
+  # build's concurrency group can name it (#4321): a run that types the commit
+  # in and a run that leaves it empty for the pin land in the same group when
+  # they mean the same commit.
+  which:
+    name: Which fork commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.which.outputs.commit }}
     steps:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
           persist-credentials: false
-
-      # The hosted image's node is whatever it has this month, as in build.yml.
-      - name: Set up Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
 
       - name: Which fork commit
         id: which
@@ -141,12 +136,38 @@ jobs:
           if ($commit -notmatch '^[0-9a-f]{40}$') { Write-Host "::error::'$commit' is not a fork commit (40 hex)"; exit 1 }
           Write-Host ("fork commit {0}{1}" -f $commit, $(if ($commit -eq $pin) { ', the one this branch pins' } else { ', asked for; this branch pins ' + $pin }))
           Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("commit=" + $commit)
-          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ("short=" + $commit.Substring(0, 12))
+
+  engine:
+    name: Engine build
+    needs: which
+    runs-on: windows-2022
+    timeout-minutes: 30
+    # One build of one fork commit at a time, however the commit was named.
+    # GitHub keeps at most one waiting run per group: while one builds, a
+    # second waits, and a third cancels the waiting second and waits in its
+    # place. All three are the same commit, so the one that builds records
+    # what the cancelled one would have. A build that has started is never
+    # cancelled by another.
+    concurrency:
+      group: engine-${{ needs.which.outputs.commit }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+
+      # The hosted image's node is whatever it has this month, as in build.yml.
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
 
       - name: Fetch the fork at that commit
         shell: pwsh
         env:
-          COMMIT: ${{ steps.which.outputs.commit }}
+          COMMIT: ${{ needs.which.outputs.commit }}
         run: |
           # As committed, LF, the way One checks the fork out and the fork's
           # own build does since fork #79. A runner's git turns text to CR LF
@@ -189,7 +210,7 @@ jobs:
         id: fork
         shell: pwsh
         env:
-          COMMIT: ${{ steps.which.outputs.commit }}
+          COMMIT: ${{ needs.which.outputs.commit }}
           GH_TOKEN: ${{ github.token }}
         run: |
           # Header, THE FORK'S OWN BUILD, AND ONLY IT: the fork's build goes in
@@ -256,7 +277,7 @@ jobs:
       - name: Check the records name this commit
         shell: pwsh
         env:
-          COMMIT: ${{ steps.which.outputs.commit }}
+          COMMIT: ${{ needs.which.outputs.commit }}
         run: |
           .\scripts\release\Check-Records.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }

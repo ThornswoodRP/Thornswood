@@ -5,16 +5,14 @@
   docs/systems/embassy.md, thalmor.md, npcs.md and cut-items.md are the
   design. Every number here is one of theirs.
 
-  THE BUILDING. "The embassy doors start held by the Ambassador's office,
-  so the line at them offers nobody a claim. A steward of Haafingar does
-  not evict the Accord." The page calls it a warehouse in Solitude
+  THE BUILDING. The embassy roll names a warehouse in Solitude
   ("The Empire wanted the province and got a warehouse. This is that
   warehouse") and names none. EMBASSY_BUILDING is the answer suggested on
   #1390, the Abandoned Warehouse: the one warehouse in Solitude that is
   not a shop and not the East Empire Company's, which the trading company
   replaces. If Patrick names another building, that one line changes. The
-  property block asks holds() for the line at the door, before a claim and
-  an eviction, and before a deed presented at the door. It is not a hold:
+  property block uses ordinary saved ownership there (#7071); the embassy
+  identity does not manufacture a claim after a reset. It is not a hold:
   nothing here makes a box, a board, a ledger or a mint, and Solitude's box
   and board stay Haafingar's.
 
@@ -70,10 +68,6 @@
 
   var ROLL_NAME = { embassy: 'the embassy roll', remnant: 'the Thalmor remnant roll' };
 
-  var CLAIM_REFUSED = 'The embassy is held by the Ambassador\'s office under the Accord. ' +
-                      'It cannot be claimed.';
-  var EVICT_REFUSED = 'The embassy is not a house of the hold. A steward of Haafingar ' +
-                      'does not evict the Accord.';
   var NOT_ADMIN = {
     embassy: 'Only an admin writes the embassy roll.',
     remnant: 'The remnant roll is an application. Only an admin writes it.'
@@ -213,7 +207,7 @@
 
   // ------------------------------------------------------- what is asked --
 
-  /** True when this building is the embassy. Asked by the property block. */
+  /** Exact embassy identity; identifying a place does not manufacture title. */
   function holds(building) {
     return !!building && String(building) === EMBASSY_BUILDING;
   }
@@ -491,7 +485,6 @@
     release: release,
     holds: holds, command: command, enter: enter, setArmed: setArmed, leave: leave,
     listing: listing, rolls: function () { return reg; },
-    CLAIM_REFUSED: CLAIM_REFUSED, EVICT_REFUSED: EVICT_REFUSED,
     EMBASSY_BUILDING: EMBASSY_BUILDING, ROLL_MOST: ROLL_MOST, ARMED_MOST: ARMED_MOST
   };
   g.__thornswoodRolls = { has: has };

@@ -2,7 +2,7 @@
   Watch-RealClient.ps1
 
       pwsh scripts\dev\Watch-RealClient.ps1 [-Root <install>] [-IdleMinutes 10]
-      pwsh scripts\dev\Watch-RealClient.ps1 -Now [-Root <install>]
+      pwsh scripts\dev\Watch-RealClient.ps1 -Now [-Steps <file>] [-Root <install>]
       pwsh scripts\dev\Watch-RealClient.ps1 -Install
       pwsh scripts\dev\Watch-RealClient.ps1 -Uninstall
 
@@ -31,7 +31,20 @@
 
   -Now is a look somebody asks for: it skips the wait for an idle PC (26 Nov,
   Patrick: "do it now dont wait"), and they keep off the keyboard and mouse
-  while it runs. Every other condition holds as above.
+  while it runs. -Steps names the steps file it runs, a path in the
+  repository such as tests\real-client\test-tasks.json; left out, it is the
+  dev release's own. A run somebody asks for is made even when the newest
+  Dev Deployment has had its run. Every other condition holds as above.
+
+  ONLY THROUGH THE TASK. A run started inside an app package's container,
+  as everything started from the Claude app's Remote Control on One is,
+  cannot move Windows' Skyrim folders (Run-RealClient.ps1 says why and
+  stops). Patrick chose on 27 Nov that runs on One go only through this
+  task, which runs outside any app (q-5197-sandbox-exit, B). So -Now from
+  inside a container makes no run itself: it writes what was asked to
+  temp\real-client\now.json and starts the task, and the task's look takes
+  that request, deletes it and runs it. The task must be turned on; it says
+  so when it is not.
 
   The task runs this script from worktrees\real-client-watcher, a worktree
   -Install makes and every look first moves to origin/main, so a look is
@@ -46,6 +59,7 @@ param(
     [int]$IdleMinutes = 10,
     [string]$Repo = 'ThornswoodRP/Thornswood',
     [switch]$Now,
+    [string]$Steps = '',
     [switch]$Install,
     [switch]$Uninstall
 )
@@ -58,12 +72,16 @@ $taskName = 'Thornswood real game run'
 # $started: the Deployments this has started a run for, from watch-started.txt,
 # so a run that stopped before it could say so on the Deployment is not
 # started again every five minutes.
-function Get-WatchVerdict($deployment, [string[]]$started, [bool]$gameOpen, [bool]$locked, [double]$idleMinutes, [int]$idleNeeded, [bool]$runGoing) {
+# $asked: somebody asked for this run (now.json), which is made even when
+# the newest Deployment has had its run or one was started for it.
+function Get-WatchVerdict($deployment, [string[]]$started, [bool]$gameOpen, [bool]$locked, [double]$idleMinutes, [int]$idleNeeded, [bool]$runGoing, [bool]$asked = $false) {
     if (-not $deployment) { return 'no Dev Deployment' }
     if (-not $deployment.state) { return 'the newest Dev Deployment has no status yet' }
     if ($deployment.state -ne 'success') { return "the newest Dev Deployment is $($deployment.state), not success" }
-    if (@($deployment.lines | Where-Object { ([string]$_).StartsWith('Real game run:') }).Count) { return 'the newest Dev Deployment has had its run' }
-    if (@($started) -contains [string]$deployment.id) { return 'a run was started for the newest Dev Deployment already; watch.log and its run folder say how it went' }
+    if (-not $asked) {
+        if (@($deployment.lines | Where-Object { ([string]$_).StartsWith('Real game run:') }).Count) { return 'the newest Dev Deployment has had its run' }
+        if (@($started) -contains [string]$deployment.id) { return 'a run was started for the newest Dev Deployment already; watch.log and its run folder say how it went' }
+    }
     if ($runGoing) { return 'a run is still going' }
     if ($gameOpen) { return 'the launcher or the game is open' }
     if ($locked) { return 'the PC is on the lock screen' }
@@ -122,6 +140,35 @@ $watchLog = Join-Path $dir 'watch.log'
 $lockFile = Join-Path $dir 'watch.pid'
 $startedFile = Join-Path $dir 'watch-started.txt'
 function Note([string]$text) { Add-Content -LiteralPath $watchLog -Value ((Get-Date).ToString('yyyy-MM-dd HH:mm:ss') + ' ' + $text) }
+$nowFile = Join-Path $dir 'now.json'
+
+# -Now from inside an app's container hands the run to the task (see ONLY
+# THROUGH THE TASK above). The request waits in now.json until a look of the
+# task takes it: one already going when the task is started takes it at its
+# next five-minute look.
+$asked = $null
+if ($Now) {
+    . (Join-Path $PSScriptRoot 'Get-AppContainerStore.ps1')
+    $container = Get-AppContainerStore
+    if ($container) {
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if (-not $task) { throw "This look is inside the app container of $container, so the run goes through the task '$taskName', and that task is not there: Watch-RealClient.ps1 -Install makes it." }
+        if ($task.State -eq 'Disabled') { throw "This look is inside the app container of $container, so the run goes through the task '$taskName', and that task is turned off: Enable-ScheduledTask -TaskName '$taskName' turns it on." }
+        [IO.File]::WriteAllText($nowFile, ([ordered]@{ steps = $Steps; asked = (Get-Date).ToString('o') } | ConvertTo-Json -Compress))
+        Start-ScheduledTask -TaskName $taskName
+        Note ("Asked the task for a run now" + $(if ($Steps) { " with $Steps" } else { '' }) + ", since this look is inside the app container of $container.")
+        Write-Host "Asked the task '$taskName' for a run now; temp\real-client\watch.log says when it starts and how it ends."
+        return
+    }
+    $asked = [pscustomobject]@{ steps = $Steps; asked = (Get-Date).ToString('o') }
+} elseif (Test-Path -LiteralPath $nowFile) {
+    # Taken off only when its run starts, so a request that finds the game
+    # open or the PC locked waits for the next look rather than being lost.
+    $asked = Get-Content -Raw -LiteralPath $nowFile | ConvertFrom-Json
+    $Now = $true
+    $IdleMinutes = 0
+    if ($asked.steps) { $Steps = [string]$asked.steps }
+}
 
 if (-not ('ThornswoodRealClient.Idle' -as [type])) {
     Add-Type -TypeDefinition @'
@@ -160,13 +207,17 @@ try {
     }
     $idle = [ThornswoodRealClient.Idle]::Minutes()
     $started = @(if (Test-Path -LiteralPath $startedFile) { Get-Content -LiteralPath $startedFile | ForEach-Object { $_.Trim() } | Where-Object { $_ } })
-    $verdict = Get-WatchVerdict $seen $started $gameOpen $locked $idle $IdleMinutes $runGoing
+    $verdict = Get-WatchVerdict $seen $started $gameOpen $locked $idle $IdleMinutes $runGoing ([bool]$asked)
     if ($verdict -ne 'run') {
         if ($dep) { Note ("Deployment $($dep.id) ($($dep.payload.release)): not now, " + $verdict + '.') } else { Note ('Not now, ' + $verdict + '.') }
         return
     }
 
     [IO.File]::WriteAllText($lockFile, [string]$PID)
+    if (Test-Path -LiteralPath $nowFile) {
+        Remove-Item -LiteralPath $nowFile -Force
+        Note ("Took the run asked for at $($asked.asked)" + $(if ($Steps) { " with $Steps" } else { '' }) + '.')
+    }
     Add-Content -LiteralPath $startedFile -Value ([string]$dep.id)
     $tree = Join-Path $repoRoot 'worktrees\real-client-watch'
     if (Test-Path -LiteralPath $tree) { git -C $repoRoot worktree remove --force $tree | Out-Null }
@@ -178,6 +229,7 @@ try {
     try {
         $runArgs = @('-NoProfile', '-NonInteractive', '-File', (Join-Path $tree 'scripts\dev\Run-RealClient.ps1'), '-Publish', '-Deployment', [string]$dep.id, '-Out', (Join-Path $dir ((Get-Date).ToString('yyyyMMdd-HHmmss'))))
         if ($Root) { $runArgs += @('-Root', $Root) }
+        if ($Steps) { $runArgs += @('-Steps', (Join-Path $tree $Steps)) }
         & (Get-Command pwsh).Source @runArgs
         Note "Deployment $($dep.id): the run ended with exit code $LASTEXITCODE."
     } finally {

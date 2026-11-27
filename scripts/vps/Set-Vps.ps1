@@ -10,9 +10,17 @@
 
   Why this exists: the name lives in scripts\vps\vps.json, and the admin
   scripts read it through Vps.ps1. The same name is written into the few
-  files that cannot read vps.json at run time: the launcher source, the
-  whose-game plugin, the example config and the docs. This script walks the
-  repo (vps.json included) so one rename stays one rename.
+  files that cannot read vps.json at run time: the launcher's default
+  (launcher\app\Config.cs), the example config (config.example.json), the
+  whose-game gate in game\plugins\thornswood-front.js, the chat page's Dev
+  guard in game\ui\thornswood-chat.js, and the docs that name it.
+  tests\test-vps-defaults.ps1 holds the list. This script walks the repo
+  (vps.json included) so one rename stays one rename.
+
+  It changes the name only where it stands whole (#4525): a longer name
+  that holds it, such as one more label in front (dev.<name>) or more
+  letters after it, is a different name and is neither counted nor
+  rewritten.
 
   A BOX MOVE IS NOT THIS (#3690). The repository names the box only by its
   name, a DNS record in Cloudflare, and never by its address, because the
@@ -92,6 +100,11 @@ if ($Address -notmatch '^[A-Za-z0-9]([A-Za-z0-9\-\.]*[A-Za-z0-9])?$') {
 }
 if ($Address -eq $Old) { Die "That is already the address. Nothing has been changed." }
 
+# The old name where it stands whole: not one more label or letter of a
+# longer name on either side. A full stop after it that ends a sentence is
+# not part of a name; one followed by a letter or digit is.
+$Whole = New-Object regex ('(?<![A-Za-z0-9\-\.])' + [regex]::Escape($Old) + '(?![A-Za-z0-9\-]|\.[A-Za-z0-9])')
+
 Say "  becomes   $Address" 'Green'
 
 # ------------------------------------------------------------ the files ---
@@ -112,9 +125,8 @@ foreach ($f in (Get-ChildItem -LiteralPath $RepoDir -Recurse -File -ErrorAction 
 
   $text = ''
   try { $text = ReadText $f.FullName } catch { continue }
-  if ($text.IndexOf($Old, [StringComparison]::Ordinal) -lt 0) { continue }
-
-  $n = ([regex]::Matches($text, [regex]::Escape($Old))).Count
+  $n = $Whole.Matches($text).Count
+  if ($n -eq 0) { continue }
 
   # data\board.json and the like are a record of what was said, not a setting.
   # Rewriting history there would make old messages describe a box that never
@@ -154,7 +166,7 @@ if ("$yes".Trim().ToLower() -ne 'y') { Die 'Left alone, as asked.' }
 Head 'Changing them'
 
 foreach ($h in ($hits | Sort-Object Rel)) {
-  $new = $h.Text.Replace($Old, $Address)
+  $new = $Whole.Replace($h.Text, $Address)
   WriteText $h.Path $new
   Say ("  {0}" -f $h.Rel) 'Green'
 }

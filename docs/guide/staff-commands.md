@@ -52,8 +52,10 @@ The other needs first account for their elapsed time. The selected value is then
 | --- | --- |
 | `/setneeds` | Set your own hunger, thirst, rest or temperature. Admins may name another character. |
 | `/repairgear` | Repair your carried gear. Admins may name another character. |
+| `/rankup class`, `/rankup profession [school]` | Advance your current class, or the chosen half or school of your profession, by one rank. Admins may add `for <person>`. See [Test progression](#test-progression) |
+| `/setclass <class>`, `/setprofession <profession> <half or school,school>` | Replace your gathering class or your profession at Novice. Admins may add `for <person>` |
 | `/tp` | Lists the towns you can name |
-| `/tp <place>`, `/goto <place>` | Moves you to a town, or to any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare` |
+| `/tp <place>`, `/goto <place>` | Moves you to a town, a carriage or ferry stop (where the ride puts you down), or any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare`, `/tp mixwater` |
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
 | `/spawn <creature> [count] [keep]` | Puts it a few steps in front of you, several spread round you. Any named actor, or a form id: `/spawn troll`, `/spawn skeleton 3`, `/spawn 23aba`. Up to 40. It is temporary unless the line ends in `keep`: when it dies its body lies the usual time and then it is gone, and a restart takes it too. `/spawn troll keep` stays (#2623) |
 | `/where` | Your cell, position and facing, for a bug report or a new place. Refused to anybody who is not a tester (#1633) |
@@ -131,6 +133,20 @@ A steward runs `/evict`, `/rent` and `/stall end` in their own hold only; staff 
 | `/evict`, `/rent <gold>`, `/rent -`, `/rent paid <profile> <gold>` | Ends the claim on the door opened in the last minute, sets its rent, takes the rent off, or marks rent paid, at any building. Logged for staff (#2551). Evict, Set rent, No rent and Rent paid on the Office page of K send them |
 | `/stall end` | Ends somebody's keeping of a market stall, logged. End this claim on the stall's panel sends it (#3160) |
 | `/cart staff`, `/cart draft`, `/cart confirm <base>`, `/cart add <stop>`, `/cart bring <cart>` | The cart stops and roads: opens them, drafts and confirms a change, puts a new cart at a stop, and brings in a cart on the road. Cart stops and roads on the Office page of K opens them (#3158) |
+| `/ship staff`, `/ship draft`, `/ship confirm <base>`, `/ship add <port>` | The ports and routes of the trade ships: opens them, drafts and confirms a change, and puts a new hold at a port. Ports and routes on the Office page of K opens them (#2700) |
+
+## The world and the company
+
+Two cards on the Office page of K are staff's: the world's stage in the Thalmor war (#513), and the Trading Company's terms (#512, #2695). On each, one press proposes and another confirms or drops what is waiting, and nothing moves by itself. Every press is in the staff log, and a confirm made against something that changed since the proposal is refused. The cards send these lines rather than anybody typing them.
+
+| Command | What it does |
+| --- | --- |
+| `/world propose <stage>`, `/world confirm <stage> <when>`, `/world drop <when>` | Proposes moving the whole province to another war stage, confirms the move, or drops it |
+| `/companyterms propose <terms>`, `/companyterms confirm <when>`, `/companyterms drop <when>` | Proposes a change to the company's terms, confirms it, or drops it |
+
+## Test progression
+
+`/rankup`, `/setclass` and `/setprofession` change ranks, a class or a profession through the same rules play uses. Playtesters use them on themselves on Dev and Main; admins add `for <person>`. Examples are on [Testing progression](../systems/testing-progression.md).
 
 ## Guild work
 

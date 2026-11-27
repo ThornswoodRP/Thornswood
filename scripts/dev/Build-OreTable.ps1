@@ -43,7 +43,7 @@
     .\scripts\dev\Build-OreTable.ps1
     .\scripts\dev\Build-OreTable.ps1 -Data 'C:\Thornswood\Game\Data'
     .\scripts\dev\Build-OreTable.ps1 -NoInstall
-    .\scripts\dev\Build-OreTable.ps1 -JsOut "$env:TEMP\ores.js"
+    .\scripts\dev\Build-OreTable.ps1 -JsOut .\temp\ores.js
 
   Exit code 1 if a vein's ore does not resolve to a record, if an ore has no
   value to rank it by, if the game folder changed under it, or if any other

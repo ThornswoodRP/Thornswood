@@ -95,8 +95,20 @@ if (-not $Path -or $Path.Count -eq 0) {
   }
 }
 
+# The services are whatever the headers carry, so one added to the collector
+# is read here without a change. Each file has its own header: when the
+# collector's header changes it moves the old record to load.1.csv, so a
+# service added since is named only in load.csv's header, and every file's
+# header is read for the names, in the order they first appear.
 $rows = @()
+$names = @()
 foreach ($p in $Path) {
+  $head = @(Get-Content -LiteralPath $p -TotalCount 1)
+  if ($head.Count) {
+    foreach ($col in @($head[0] -split ',')) {
+      if ($col.Trim('"') -match '^(.+)_pid$' -and $names -notcontains $Matches[1]) { $names += $Matches[1] }
+    }
+  }
   foreach ($r in @(Import-Csv -LiteralPath $p)) {
     $t = [DateTimeOffset]::MinValue
     if (-not [DateTimeOffset]::TryParse("$($r.time)", $inv, [Globalization.DateTimeStyles]::None, [ref]$t)) { continue }
@@ -111,13 +123,6 @@ if ($rows.Count -lt 2) {
   Say ''
   Say ('  Only ' + $rows.Count + ' line(s) so far. It takes two, five minutes apart, to measure anything.') 'Yellow'
   Done 1
-}
-
-# The services are whatever the header carries, so one added to the collector
-# is read here without a change.
-$names = @()
-foreach ($prop in $rows[0].PSObject.Properties) {
-  if ($prop.Name -match '^(.+)_pid$') { $names += $Matches[1] }
 }
 
 # ---------------------------------------------------------- the intervals ---
@@ -207,7 +212,10 @@ foreach ($r in $rows) {
 # ---------------------------------------------------------- each service ---
 $svc = @()
 foreach ($n in $names) {
-  $up = @($rows | Where-Object { "$($_.($n + '_pid'))".Trim() -ne '' })
+  # Up is out of the lines whose header names the service: a line from before
+  # it was added did not record it, which is not the same as it being down.
+  $known = @($rows | Where-Object { $null -ne $_.PSObject.Properties[$n + '_pid'] })
+  $up = @($known | Where-Object { "$($_.($n + '_pid'))".Trim() -ne '' })
   $mem = @($up | ForEach-Object { D $_.($n + '_mem_mb') } | Where-Object { $null -ne $_ })
 
   # A restart is the pid changing from one it was seen with to another, with
@@ -231,7 +239,7 @@ foreach ($n in $names) {
 
   $svc += [pscustomobject]@{
     Name       = $n
-    Up         = $(if ($rows.Count) { 100.0 * $up.Count / $rows.Count } else { 0 })
+    Up         = $(if ($known.Count) { 100.0 * $up.Count / $known.Count } else { 0 })
     CoresAvg   = Avg $coreList
     CoresPeak  = Peak $coreList
     CpuSeconds = $cpuSeconds
