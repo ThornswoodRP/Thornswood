@@ -525,31 +525,6 @@
  "decided": "Patrick, 16 October 2026, A on #2553: Thornswood measures its own spots for the kilns, salt quarries, beehives and alchemy labs, the way the woodworking benches were placed, and the content plugin places them.",
  "issue": 2553,
  "kinds": {
-  "cook": {
-   "amongPlants": false,
-   "base": "1010b3:Skyrim.esm",
-   "bounds": [
-    -32,
-    -10,
-    -34,
-    32,
-    64,
-    94
-   ],
-   "count": 2,
-   "edid": "CraftingCookingPotSm",
-   "flat": 8.0,
-   "name": "cooking pot",
-   "reach": 600,
-   "rule": "One in each inn that has no cooking station of its own (#6893): a room the game counts as an inn (its location carries LocTypeInn) with no pot, spit or oven anybody can cook at. It stands beside the room's own cooking scenery, or its fireplace where it has none, so a keeper can hire a cook to work there (cook.md). Measured 26 Nov 2026 over the 33 inn rooms: only the New Gnisis Cornerclub in Windhelm and North Keep's inn have none. A room in a cell of a plugin that is not a master of the content plugin cannot take a placement there, so the server stands that pot at start, the way it stands the woodworking benches (#516).",
-   "setIntoRock": false,
-   "user": [
-    -35.0,
-    -55.0,
-    35.0,
-    8.0
-   ]
-  },
   "hive": {
    "amongPlants": false,
    "base": "dbf8b3:Thornswood-Content.esp",
@@ -732,100 +707,6 @@
  "measure": "Each station stands at the nearest clear spot to its anchor, tried every step units out to its reach in eight turns of the anchor's angle, a turn costing 60 units. Its outline and its user's place lie on the navmesh, on ground flat to the kind's flat and within 60 units of the anchor's height, out of doors above the water, and touch no furniture, container, door, item, plant or static under 250 by 250, nor where anybody stands at other furniture, the way through a door, a woodworking bench, a notice board, or another station, from 6 to 140 units above the floor, with 30 units to the nearest solid thing. A kiln stands 1000 units or more from every woodworking bench. A kiln may stand among small plants, and a salt vein is set into rock: only its miner's place needs the ground (Patrick, B on #2553). The cell and worldspace records the plugin carries are Bethesda's and change nothing in the game.",
  "readFrom": "game/data/last-plugin.json loadOrder, the collection's bytes; from Thornswood-Content.esp only its four station records; Thornswood-Last.esp place nothing",
  "sites": {
-  "cook-newgnisis": {
-   "anchor": "10e3a7:Skyrim.esm",
-   "anchorAngle": 269.47,
-   "anchorAt": [
-    2548.8,
-    -2412.2,
-    -0.1
-   ],
-   "anchorEdid": "CookingStone01",
-   "anchorRecordFrom": "Skyrim.esm",
-   "anchorTouchedBy": [
-    "Skyrim.esm"
-   ],
-   "angle": 269.47,
-   "base": "1010b3:Skyrim.esm",
-   "cell": "1677f:Skyrim.esm",
-   "cellCopy": "carried after the content plugin by Skyrim Unbound.esp, so the copy never wins",
-   "cellEdid": "WindhelmNewGnisisCornerclub",
-   "fromAnchor": 132,
-   "groundUnder": [
-    -1.3,
-    2.6
-   ],
-   "interior": true,
-   "kind": "cook",
-   "nearest": {
-    "edid": "CookingSpitSm01",
-    "ref": "10e3a6:Skyrim.esm",
-    "units": 37
-   },
-   "offset": [
-    -120,
-    -56
-   ],
-   "passedOver": [],
-   "pos": [
-    2605.9,
-    -2531.7,
-    -1.3
-   ],
-   "ref": "18160:Thornswood-Content.esp",
-   "space": "1677f:Skyrim.esm",
-   "spaceEdid": "WindhelmNewGnisisCornerclub",
-   "turn": 0,
-   "where": "the New Gnisis Cornerclub, Windhelm"
-  },
-  "cook-northkeep": {
-   "anchor": "72c69:North Keep.esp",
-   "anchorAngle": 135.0,
-   "anchorAt": [
-    325.4,
-    -351.5,
-    13.8
-   ],
-   "anchorEdid": "ImpFireplace01",
-   "anchorRecordFrom": "North Keep.esp",
-   "anchorTouchedBy": [
-    "North Keep.esp"
-   ],
-   "angle": 135.0,
-   "base": "1010b3:Skyrim.esm",
-   "beside": "72c1c:North Keep.esp",
-   "cell": "3a988:North Keep.esp",
-   "cellCopy": "stood by the server at start: a record of north keep.esp, which is not a master of the content plugin",
-   "cellEdid": "NorthkeepInn",
-   "fromAnchor": 344,
-   "groundUnder": [
-    0.6,
-    1.2
-   ],
-   "interior": true,
-   "kind": "cook",
-   "nearest": {
-    "edid": "Bucket02a",
-    "ref": "72c3c:North Keep.esp",
-    "units": 31
-   },
-   "offset": [
-    -8,
-    -344
-   ],
-   "passedOver": [],
-   "pos": [
-    87.8,
-    -102.6,
-    0.6
-   ],
-   "ref": null,
-   "space": "3a988:North Keep.esp",
-   "spaceEdid": "NorthkeepInn",
-   "standBy": "server",
-   "turn": 0,
-   "where": "the inn at North Keep"
-  },
   "hive-brandymug": {
    "anchor": "28c4b:Skyrim.esm",
    "anchorAngle": 338.51,

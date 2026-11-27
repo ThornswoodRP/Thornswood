@@ -121,15 +121,6 @@ Each row is the well the bucket stands beside, by its base and cell, as the tabl
 | the Hall of Countenance, the College of Winterhold | the square table on the lower floor | 138 units | a wall shelf, 39 units |
 | the Hall of the Elements, the College of Winterhold | a bench | 234 units | that bench, 31 units |
 
-### Cooking pots (2), 27 Nov 2026 (#6893)
-
-| Where | Beside | From its anchor | Nearest solid thing | Placed by |
-| --- | --- | --- | --- | --- |
-| the New Gnisis Cornerclub, Windhelm | the room's cooking stone and spit | 132 units | the spit, 37 units | the content plugin |
-| the inn at North Keep | the fireplace | 344 units | a bucket, 31 units | the server, at start, as North Keep.esp's room is not the content plugin's to place into |
-
-Skyrim's own small cooking pot (CraftingCookingPotSm, 1010b3), the one the other inns' cooks work at. Measured on the box on 27 Nov over main once the cook kind merged (#7191).
-
 Measured on the box on 26 Oct, when the station table first read the floor items Thornswood-Last.esp switches off (#3077) as nothing in the way. Three spots measured before that moved within their cells: Arcadia's Cauldron's lab, and the well buckets at Hrodulf's House and in POITundra08.
 
 ### Where the rule led to the other server's spot
