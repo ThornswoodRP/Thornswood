@@ -9,10 +9,11 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { body, bodyObject, crossSite, cspFor, passBodyFailure, rangeReply,
-  send };
+module.exports = { body, bodyObject, crossSite, cspFor, isFile, passBodyFailure, rangeReply,
+  send, streamFile };
 
 const fs     = require('fs');
+const { pipeline } = require('stream');
 const { versionAssets } = require('./public');
 const { ADMIN, COOKIE, cookies } = require('./auth');
 
@@ -126,7 +127,7 @@ function rangeReply(req, res, file, size, headers, head) {
   end = Math.min(end, size - 1);
   // send() puts the security headers on every other answer; a range must not
   // be the one reply that quietly goes out without them.
-  res.writeHead(206, Object.assign({}, headers, {
+  const ranged = Object.assign({}, headers, {
     'content-range': 'bytes ' + start + '-' + end + '/' + size,
     'content-length': (end - start) + 1,
     'accept-ranges': 'bytes',
@@ -134,10 +135,51 @@ function rangeReply(req, res, file, size, headers, head) {
     'x-content-type-options': 'nosniff',
     'content-security-policy': cspFor(res),
     'referrer-policy': 'strict-origin-when-cross-origin'
-  }));
-  if (head) { res.end(); return true; }
-  fs.createReadStream(file, { start: start, end: end }).pipe(res);
+  });
+  if (head) { res.writeHead(206, ranged); res.end(); return true; }
+  streamFile(res, file, 206, ranged, { start: start, end: end });
   return true;
+}
+
+/*
+  Whether a regular file is there to send (#4402). existsSync is true for a
+  folder too, and a folder handed to a read stream is EISDIR: /up/small,
+  the smaller copies' folder, stopped the site that way. A name that is not
+  there is false; anything else stat cannot answer is thrown, inside the
+  request, where handle() answers it.
+*/
+function isFile(file) {
+  const st = fs.statSync(file, { throwIfNoEntry: false });
+  return !!st && st.isFile();
+}
+
+/*
+  A file's bytes as the answer (#4402). The file is opened before anything is
+  written, so one that cannot be opened (removed or locked since the stat
+  that said it was there, or not readable) is answered 404 or 500, not a 200
+  or 206 with nothing after it; and the read runs through pipeline, so one
+  that fails once it has started ends this one answer. Every file the site
+  streams goes through here, because a read stream with no 'error' listener
+  throws outside handle(), the uncaught exception handler stops the site,
+  and one GET was enough to do it. The stream holds the file it was opened
+  on and closes it, also when the visitor goes away part way through, which
+  is not an error worth a line.
+*/
+function streamFile(res, file, code, headers, range) {
+  let fd;
+  try { fd = fs.openSync(file, 'r'); }
+  catch (e) {
+    console.log('[thornswood-docs] could not open ' + file + ' to send it: ' + e.message);
+    if (e.code === 'ENOENT') send(res, 404, 'no such file', 'text/plain; charset=utf-8');
+    else send(res, 500, 'that file could not be read just now', 'text/plain; charset=utf-8');
+    return;
+  }
+  res.writeHead(code, headers);
+  pipeline(fs.createReadStream(file, Object.assign({ fd: fd }, range || {})), res, (e) => {
+    if (e && e.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+      console.log('[thornswood-docs] stopped sending ' + file + ' part way: ' + e.message);
+    }
+  });
 }
 
 /*

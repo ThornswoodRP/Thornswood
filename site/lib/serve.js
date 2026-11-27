@@ -47,9 +47,9 @@ const { ADMIN, ADMIN_DAYS, allowed, COOKIE, cookies, discordReady, endSignIn,
   standCache, standingCached, standingLate, standingsForDoor, SUBMIT_DOORS,
   SUBMIT_WAIT_MS, who, within } = require('./auth');
 const { ATTEMPT, ATTEMPT_MS, attemptCookie, attemptsSpent, body, BodyFailed, bodyObject,
-  crossSite, cspFor, keyInAddress, origin, passBodyFailure,
+  crossSite, cspFor, isFile, keyInAddress, origin, passBodyFailure,
   PERMISSIONS_POLICY, rangeReply, secureHere, send, sendJson, setCookie,
-  TYPES } = require('./http');
+  streamFile, TYPES } = require('./http');
 const { LINKED, post } = require('./discord');
 const { cleanEconomy, ECONOMY, ECONOMY_KEEP_DAYS, economyNow, ROSTER,
   ROSTER_HELD_FRESH_MS, slotsFor } = require('./roster');
@@ -408,7 +408,7 @@ async function handle(req, res) {
   if (proof && req.method === 'GET') {
     const dir = path.join(PUBLIC, '.well-known');
     const file = path.join(dir, proof[1]);
-    if (file.startsWith(dir + path.sep) && fs.existsSync(file)) {
+    if (file.startsWith(dir + path.sep) && isFile(file)) {
       return send(res, 200, fs.readFileSync(file), 'text/plain; charset=utf-8',
         { 'Cache-Control': 'no-store' });
     }
@@ -1170,7 +1170,7 @@ async function handle(req, res) {
     const file = !item ? ''
       : wide === null ? path.join(UP, String(item.name))
       : srcsetWidths(item.srcset).indexOf(Number(wide)) >= 0 ? smallCopy(item.name, Number(wide)) : '';
-    if (!file || !file.startsWith(UP + path.sep) || !fs.existsSync(file)) {
+    if (!file || !file.startsWith(UP + path.sep) || !isFile(file)) {
       return errorAnswer(req, res, 404, 'no such picture', undefined,
         ['That picture is not on the gallery.', 'It may have been taken off it. The gallery shows every picture that is.']);
     }
@@ -1185,12 +1185,12 @@ async function handle(req, res) {
     // Byte range when asked: a recording will not play in Safari/iOS without it,
     // the same reason public/ and /file already call rangeReply.
     if (rangeReply(req, res, file, st.size, shotKind, head)) return;
-    res.writeHead(200, Object.assign({}, shotKind, {
+    const shotWhole = Object.assign({}, shotKind, {
       'content-length': st.size,
       'accept-ranges': 'bytes'
-    }));
-    if (head) return res.end();
-    return fs.createReadStream(file).pipe(res);
+    });
+    if (head) { res.writeHead(200, shotWhole); return res.end(); }
+    return streamFile(res, file, 200, shotWhole);
   }
 
   // ---------------------------------------------------------------- static
@@ -1202,7 +1202,7 @@ async function handle(req, res) {
   if (req.method === 'GET' && /^\/[A-Za-z0-9._-]+$/.test(p)) {
     if (/\.map$/i.test(p)) return errorAnswer(req, res, 404, 'not here');
     const file = path.join(PUBLIC, p.slice(1));
-    if (file.startsWith(PUBLIC + path.sep) && fs.existsSync(file)) {
+    if (file.startsWith(PUBLIC + path.sep) && isFile(file)) {
       const type = TYPES[path.extname(file).toLowerCase()] || 'text/plain';
       /*
         How long it may be kept. A name asked for with the hash it has now
@@ -1285,7 +1285,7 @@ async function handle(req, res) {
     // Only what files.json publishes (downloadServed, #3798).
     const meta = jsonFile(path.join(FILES, 'files.json'), {});
     if (!file.startsWith(FILES + path.sep) || !downloadServed(dl[1], meta) ||
-        !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+        !isFile(file)) {
       return errorAnswer(req, res, 404, 'no such file', undefined,
         ['There is no download at that address.', 'The Downloads page has what there is to take now.']);
     }
@@ -1303,12 +1303,12 @@ async function handle(req, res) {
       'last-modified': new Date(st.mtimeMs).toUTCString()
     };
     if (rangeReply(req, res, file, st.size, kind, head)) return;
-    res.writeHead(200, Object.assign({}, kind, {
+    const whole = Object.assign({}, kind, {
       'content-length': st.size,
       'accept-ranges': 'bytes'
-    }));
-    if (head) return res.end();
-    return fs.createReadStream(file).pipe(res);
+    });
+    if (head) { res.writeHead(200, whole); return res.end(); }
+    return streamFile(res, file, 200, whole);
   }
 
   // --------------------------------------------------------------- ship feed
@@ -1411,7 +1411,7 @@ async function handle(req, res) {
   if (feedAsset && req.method === 'GET') {
     const dir = path.join(ROOT, feedAsset[1], 'assets');
     const file = path.join(dir, feedAsset[2]);
-    if (!file.startsWith(dir + path.sep) || !fs.existsSync(file)) {
+    if (!file.startsWith(dir + path.sep) || !isFile(file)) {
       // The rest of the feed, which version.json names as "settings" and
       // which is only ever here (feedView, #1050). Small, so no Range.
       const settings = feedSettings(feedAsset[1], feedAsset[2]);
@@ -1447,13 +1447,13 @@ async function handle(req, res) {
       'cache-control': 'public, max-age=31536000, immutable'
     };
     if (rangeReply(req, res, file, st.size, kind, head)) return;
-    res.writeHead(200, Object.assign({}, kind, {
+    const whole = Object.assign({}, kind, {
       'content-length': st.size,
       'accept-ranges': 'bytes',
       'x-content-type-options': 'nosniff'
-    }));
-    if (head) return res.end();
-    return fs.createReadStream(file).pipe(res);
+    });
+    if (head) { res.writeHead(200, whole); return res.end(); }
+    return streamFile(res, file, 200, whole);
   }
   // ------------------------------------------------------ release files
   // The launcher reads the Releases and fetches every file of one through
@@ -1527,19 +1527,22 @@ async function handle(req, res) {
     if (uploadRemoved(up[1])) {
       return errorAnswer(req, res, 404, 'removed from the gallery', undefined, ['That picture was taken off the gallery.']);
     }
+    // Only a file: small, the folder of the smaller copies, is a name here
+    // too, and a folder handed to a read stream stopped the site (#4402).
+    if (!isFile(file)) return errorAnswer(req, res, 404, 'no such file');
     const st = fs.statSync(file);
     const kind = KIND[path.extname(file).toLowerCase()];
     const inline = kind && !url.searchParams.get('dl');
-    res.writeHead(200, {
+    const upKind = {
       'Content-Type': inline ? kind : 'application/octet-stream',
       'Content-Length': st.size,
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
       'Content-Disposition': (inline ? 'inline' : 'attachment') +
         '; filename="' + path.basename(file) + '"'
-    });
-    if (head) return res.end();
-    return fs.createReadStream(file).pipe(res);
+    };
+    if (head) { res.writeHead(200, upKind); return res.end(); }
+    return streamFile(res, file, 200, upKind);
   }
 
   if (p === '/api/upload' && req.method === 'POST') {
