@@ -7,13 +7,15 @@ form feed, so the text does not say what it was written to say. ruff's E9 does n
 bot.py's docstring. Compiles each file with SyntaxWarning made an error, the
 way a later Python will read it. Runs nothing it compiles.
 """
-import ast
 import os
 import sys
-import warnings
+# bot\, the folder above: the bot's tests sit in bot\tests (#5341), and
+# _pyguard is found from there.
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
-import _pyguard  # noqa: F401,E402
+import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #2276)
+import ast
+import warnings
 
 passed = failed = 0
 
