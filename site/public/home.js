@@ -1098,12 +1098,15 @@ function startSlideshow(show, dots, shots, reduce) {
      them are "in view" once the box is, and scrolling down to it fetched
      every shot in the gallery at once, 5 MB on 21 Oct 2026. Lazy now, as
      the band is far below the first screen. */
+  var viewport = document.createElement('div');
+  viewport.className = 'gal-frames';
+  show.appendChild(viewport);
   var frames = shots.map(function (s, n) {
     var img = document.createElement('img');
     img.alt = s.alt || 'Skyrim scene shared by ' + (s.by || 'the Thornswood community');
     img.loading = 'lazy';
     if (n === 0) img.className = 'on';
-    show.appendChild(img);
+    viewport.appendChild(img);
     return img;
   });
   // A picture's smaller copies (#3218) are set with its address, so
@@ -1187,8 +1190,8 @@ function startSlideshow(show, dots, shots, reduce) {
   next.setAttribute('aria-label', 'Next picture');
   next.innerHTML = '&#8250;';
   next.onclick = function () { userStep(i + 1); };
-  show.appendChild(prev);
-  show.appendChild(next);
+  viewport.appendChild(prev);
+  viewport.appendChild(next);
   if (!reduce) {
     var pause = document.createElement('button');
     pause.type = 'button';
@@ -1203,7 +1206,7 @@ function startSlideshow(show, dots, shots, reduce) {
       said();
       if (stopped) stopFlip(); else startFlip();
     };
-    show.appendChild(pause);
+    viewport.appendChild(pause);
   }
   show.addEventListener('mouseenter', function () { hovered = true; stopFlip(); });
   show.addEventListener('mouseleave', function () { hovered = false; startFlip(); });
