@@ -119,9 +119,10 @@ says what to do when the build is not 1.6.1170.
 
 **The outside.** The day of the run, Patrick runs `.\scripts\dev\Check-Outside.ps1`
 from the repo folder on his own machine. It only reads, sends no token, and
-walks what a first install fetches from outside the project: the update feed,
-every pack, the launcher, the client runtime, Steam's public build and the
-collection page. Keep what it prints with the run's screenshots. A red line
+walks what a first install fetches from outside the project: the channel's
+Releases on GitHub (its Velopack feed and package, the signed record's files,
+the setup program), 7-Zip's Release, Steam's public build and the Nexus
+collection. Keep what it prints with the run's screenshots. A red line
 there is a row the run should expect to fail.
 
 **The accounts.** Name each one in the rows. Never write down a password, a code
@@ -568,7 +569,7 @@ right or wrong. To Do entries are named by title, because their numbers move.
   line.
 - M1 to M6 and M8 can become one script that writes its answers to a file, so
   the measuring rows are pasted rather than typed. `scripts\dev\Check-Outside.ps1`
-  already scripts the outside half: what the feed, GitHub, Steam and Nexus
+  already scripts the outside half: what the Releases, 7-Zip, Steam and Nexus
   answer a stranger.
 - The setup window writes every line it shows to
   `C:\Thornswood\Profile\setup-log.txt`, so rows 20 to 22 can be pasted from

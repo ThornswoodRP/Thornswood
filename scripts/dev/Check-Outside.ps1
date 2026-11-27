@@ -1,39 +1,57 @@
 <#
   Check-Outside.ps1
 
-      .\scripts\dev\Check-Outside.ps1                  the live feed
-      .\scripts\dev\Check-Outside.ps1 -Branch dev      the dev feed
-      .\scripts\dev\Check-Outside.ps1 -FeedUrl <url>   any feed; point it at a wrong
+      .\scripts\dev\Check-Outside.ps1                  the main channel
+      .\scripts\dev\Check-Outside.ps1 -Branch dev      the dev channel
+      .\scripts\dev\Check-Outside.ps1 -Repo <owner/name>   any repository's
+                                                 Releases; point it at a wrong
                                                  one to see this go red
 
   Walks the path a first install takes through the things this project does
   not run itself, and says which of them is broken or has moved. Nothing
   watched them. Watch-Services looks at ports on the server and nothing else,
   and the build check on GitHub only runs when somebody opens a pull request.
-  So a feed entry pointing at a file nobody can download, or a Steam update
-  that changes what a new install starts from, was found out when a person
-  could not get in.
+  So a Release missing a file, or a Steam update that changes what a new
+  install starts from, was found out when a person could not get in.
+
+  WHAT A FIRST INSTALL READS since #5796 (launcher\app\Velo*.cs, GitHub.cs,
+  ModlistFetch.cs). The setup program is Velopack's, on a Release of this
+  repository; the launcher it puts down reads its channel's Releases through
+  GitHub's API itself, never thornswood.net (#5608), and every file of them
+  through GitHub.AssetUrl, which takes only this repository's
+  /releases/assets/<id> addresses. Before #5796 a launcher read version.json
+  on the site and checked every pack against its AllowedHosts; neither is
+  read by anything a new install runs now, so neither is asked here.
 
   What it asks, all of it anonymously, the way a launcher on somebody's
   machine asks with no token of its own:
 
-    the feed      version.json, read from https://thornswood.net/feed/version.json
-                  (feed-dev with -Branch dev), the one address on the site this
-                  asks, because it is what every launcher reads. It has to
-                  answer and be JSON. Until #907 it was read from
-                  Thornswood-Releases through the GitHub contents API; -Repo
-                  still reads a repository that way.
-    every url     every pack, the launcher and the client runtime: https, a
-                  host the launcher's AllowedHosts accepts (read out of
-                  Updater.cs, so the list here cannot go stale), a checksum,
-                  and an asset that the repository it names still lists to a
-                  stranger. That is one listing per repository, not one
-                  request per pack: a stranger gets sixty GitHub API calls an
-                  hour, the feed held 227 packs on 24 September, and every
-                  launcher on the same connection shares the sixty.
-    the bytes     the launcher, the client runtime and the newest pack, asked
-                  for the way the launcher asks (Accept octet-stream), then the
-                  first byte of wherever GitHub sends that on to.
+    the Releases  this repository's list (the name in Velo.cs), a hundred a
+                  page, up to five pages, as GitHub.Releases reads it. One
+                  listing answers for every file below: a stranger gets sixty
+                  GitHub API calls an hour, and every launcher on the same
+                  connection shares the sixty.
+    the channel   the newest published Release carrying
+                  releases.<channel>.json, the one VeloUpdate.cs's
+                  ChannelSource takes. Its feed is downloaded and read: the
+                  full package it names must be on that Release, uploaded,
+                  and the size the feed gives.
+    the record    the build Release that made that package (build-1.3.<n>,
+                  VeloRecord.TagOf): manifest.json, manifest.cat,
+                  game-files.json and collection-modlist.wabbajack, and the
+                  channel's setup-files.<channel>.json (on the main- Release
+                  for main, VeloRecord.Setup).
+    the setup     the setup program the Downloads page offers: the newest
+                  Release of the channel's kind with Thornswood-Setup.exe
+                  (main-build-<n>) or Thornswood-Dev-Setup.exe (build-<n>),
+                  the way site\lib\feed.js picks it, with GitHub's sha256.
+    the bytes     the package and the setup program, asked for the way the
+                  launcher asks (Accept octet-stream), then the first byte of
+                  wherever GitHub sends that on to, against the size GitHub
+                  lists.
+    7-Zip         the Release the modlist install takes 7-Zip from
+                  (ModlistFetch.cs, SevenZip.Repo and Tag): both files it
+                  pins, there at the size it pins, and their first bytes.
     Steam         the public build of Skyrim Special Edition, against the one
                   written down in steam-build.json. It comes from
                   api.steamcmd.net, a third party and not Valve, so when that
@@ -48,25 +66,16 @@
 
   What it cannot ask: whether the three depot manifests Downgrade.cs pins at
   1.6.1170 can still be downloaded. Steam hands a depot only to an account
-  that owns the game, so that stays a check by hand.
+  that owns the game, so that stays a check by hand. Nor the archives the
+  modlist itself downloads, which are listed inside the .wabbajack.
 
   When Steam's public build moves this goes red on purpose, because that is
   the day somebody should try the downgrade on one machine. Once it works,
   write the new build into records\steam-build.json and it goes green again.
 
-  Measured 24 September, the first run: red for one reason. 164 of the 227
-  packs point at EvilPatrick06/Thornswood, which answers a stranger with 404,
-  so a launcher that has to replay them cannot. The other 63, the launcher
-  and the client runtime were all there and downloaded; Steam matched the
-  record; Nexus's collection page answered 403. From 2 October the collection
-  is asked through Nexus's public GraphQL instead (#1064), the same way
-  Watch-Outside asks it. It stays red until those packs move to the
-  public repository or leave the feed.
-
   Read only. It sends no token and reads no config.json, and it never
   contacts the server: thornswood.net and the game server are the VPS, and
-  Watch-Services and Check-Site are what look at those. A feed address that
-  points at the server is reported and not requested. The signed download
+  Watch-Services and Check-Site are what look at those. The signed download
   address GitHub redirects to is never printed, only its host, because the
   address is itself a credential for as long as it lasts.
 
@@ -74,14 +83,12 @@
 #>
 [CmdletBinding()]
 param(
-  # owner/name of a releases repository to read the feed from through the
-  # GitHub contents API, as launchers did before the site feed. Left out, the
-  # feed is the site's (#907).
+  # owner/name of the repository whose Releases a launcher reads. Left out,
+  # the one launcher\app\Velo.cs names.
   [string]$Repo,
-  # main is the live feed, dev the dev one.
+  # main or dev: the channel a new install is on.
+  [ValidateSet('main', 'dev')]
   [string]$Branch = 'main',
-  # Read the feed from here instead of the releases repository.
-  [string]$FeedUrl,
   # The Steam build last looked at and accepted. records\steam-build.json.
   [string]$SteamRecord
 )
@@ -93,6 +100,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 try {
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 } catch { }
+
 
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
 function Head($m) { Write-Host ''; Write-Host "  $m" -ForegroundColor Cyan }
@@ -193,7 +201,7 @@ function Allowance() {
     try { $t = ' until ' + [DateTimeOffset]::FromUnixTimeSeconds([long]$script:Reset).ToLocalTime().ToString('HH:mm') } catch { }
   }
   return ("GitHub's sixty anonymous API calls an hour for this connection are used up" + $t +
-          ". That is GitHub, not the feed, and every launcher on this connection is turned away the same way until then.")
+          ". That is GitHub, not the Releases, and every launcher on this connection is turned away the same way until then.")
 }
 
 function Host-Of([string]$url) {
@@ -213,41 +221,14 @@ function Next-Link([string]$link) {
   return ''
 }
 
-# ------------------------------------------------------------ what the launcher accepts
-# Updater.CheckUrl, in the same order and for the same reasons: an address, https,
-# and a host on AllowedHosts. Empty when the launcher would take it.
-function Refused([string]$url, [string[]]$hosts) {
-  $u = $null
-  if (-not $url -or -not [Uri]::TryCreate($url, [UriKind]::Absolute, [ref]$u)) { return 'has no address the launcher can read' }
-  if ($u.Scheme -ne 'https') { return 'is not https, and the launcher refuses plain http' }
-  # Filtered, because @($null) is one element and an empty list would read as
-  # a list holding one blank host.
-  $hs = @(@($hosts) | Where-Object { $_ })
-  if ($hs.Count -gt 0) {
-    $h = $u.Host.ToLowerInvariant()
-    foreach ($a in $hs) { if ($h -eq $a -or $h.EndsWith('.' + $a)) { return '' } }
-    return ('points at ' + $u.Host + ', which the launcher refuses')
-  }
-  return ''
-}
 
-function Read-AllowedHosts([string]$updaterCs) {
-  if (-not (Test-Path -LiteralPath $updaterCs)) { return @() }
-  $cs = [IO.File]::ReadAllText($updaterCs)
-  $m = [regex]::Match($cs, 'AllowedHosts\s*=\s*\{([^}]*)\}')
-  if (-not $m.Success) { return @() }
-  return @([regex]::Matches($m.Groups[1].Value, '"([^"]+)"') | ForEach-Object { $_.Groups[1].Value.ToLowerInvariant() })
-}
-
-# The releases repository, the collection and the server, from the launcher's
-# own config, which is the one place Set-Vps.ps1 and a rename keep them true.
+# ------------------------------------------------------------ what the launcher names
+# The collection and the server, from the launcher's own config, which is the
+# one place Set-Vps.ps1 and a rename keep them true.
 function Read-Defaults([string]$configCs) {
-  # No releases repository by default any more: Config.cs names none since #907.
-  $o = @{ Repo = ''; Collection = ''; SiteHost = 'thornswood.net'; ServerAddress = '' }
+  $o = @{ Collection = ''; SiteHost = 'thornswood.net'; ServerAddress = '' }
   if (-not (Test-Path -LiteralPath $configCs)) { return $o }
   $cs = [IO.File]::ReadAllText($configCs)
-  $m = [regex]::Match($cs, 'UpdateRepo\s*=\s*"([^"/\s]+/[^"\s]+)"')
-  if ($m.Success) { $o.Repo = $m.Groups[1].Value }
   $m = [regex]::Match($cs, 'const\s+string\s+Collection\s*=\s*"([^"]+)"')
   if ($m.Success) { $o.Collection = $m.Groups[1].Value }
   $m = [regex]::Match($cs, 'public\s+string\s+SiteUrl\s*=\s*"([^"]+)"')
@@ -257,56 +238,135 @@ function Read-Defaults([string]$configCs) {
   return $o
 }
 
+# The repository whose Releases every launcher reads (Velo.Repo), so the name
+# here cannot go stale. Empty when Velo.cs names none.
+function Read-VeloRepo([string]$veloCs) {
+  if (-not (Test-Path -LiteralPath $veloCs)) { return '' }
+  $m = [regex]::Match([IO.File]::ReadAllText($veloCs), 'const\s+string\s+Repo\s*=\s*"([A-Za-z0-9-]+/[A-Za-z0-9._-]+)"')
+  if ($m.Success) { return $m.Groups[1].Value }
+  return ''
+}
+
+# The 7-Zip Release the modlist install fetches and the two files it pins
+# (SevenZip in ModlistFetch.cs), or $null when the file does not say.
+function Read-SevenZip([string]$fetchCs) {
+  if (-not (Test-Path -LiteralPath $fetchCs)) { return $null }
+  $cs = [IO.File]::ReadAllText($fetchCs)
+  $repo = [regex]::Match($cs, 'class\s+SevenZip[\s\S]*?const\s+string\s+Repo\s*=\s*"([^"]+)"')
+  $tag = [regex]::Match($cs, 'class\s+SevenZip[\s\S]*?const\s+string\s+Tag\s*=\s*"([^"]+)"')
+  $pins = @()
+  foreach ($which in @('Unpacker', 'Installer')) {
+    $m = [regex]::Match($cs, 'static\s+Pin\s+' + $which + '\s*=\s*new\s+Pin\s*\{\s*Name\s*=\s*"([^"]+)",\s*Size\s*=\s*(\d+)')
+    if ($m.Success) { $pins += [pscustomobject]@{ Name = $m.Groups[1].Value; Size = [long]$m.Groups[2].Value } }
+  }
+  if (-not $repo.Success -or -not $tag.Success -or $pins.Count -ne 2) { return $null }
+  return [pscustomobject]@{ Repo = $repo.Groups[1].Value; Tag = $tag.Groups[1].Value; Pins = $pins }
+}
+
 # ------------------------------------------------------------ the pieces
-function Asset-Of([string]$url) {
-  $m = [regex]::Match([string]$url, '^https://api\.github\.com/repos/([^/]+/[^/]+)/releases/assets/(\d+)$', 'IgnoreCase')
-  if ($m.Success) { return @{ repo = $m.Groups[1].Value; id = $m.Groups[2].Value } }
+# The kind of Release each channel's setup program is on, and its name: the
+# same as SETUP_KINDS in site\lib\feed.js, which picks the one the Downloads
+# page offers.
+$script:SetupKinds = @{
+  main = @{ Tag = '^main-build-(?:\d{8}\.\d+|1\.3\.\d+)$'; Name = 'Thornswood-Setup.exe' }
+  dev  = @{ Tag = '^build-(?:\d{8}\.\d+|1\.3\.\d+)$'; Name = 'Thornswood-Dev-Setup.exe' }
+}
+
+function When-Of($r) {
+  $t = $r.published_at
+  if ($t -is [DateTime]) { return $t.ToUniversalTime() }
+  $d = [DateTime]::MinValue
+  if ([DateTime]::TryParse([string]$t, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]'AdjustToUniversal,AssumeUniversal', [ref]$d)) { return $d }
+  return [DateTime]::MinValue
+}
+
+# The asset of a Release by name, only once its upload has finished, as
+# GitHub.Release.File and the launcher's Uploaded read it. $null otherwise.
+function Asset-Named($r, [string]$name) {
+  if ($null -eq $r) { return $null }
+  foreach ($a in @($r.assets)) {
+    if ($null -ne $a -and [string]$a.name -eq $name -and [string]$a.state -eq 'uploaded') { return $a }
+  }
   return $null
 }
 
-# Every asset a stranger can see in one repository, id -> state.
-function Read-Assets([string]$repo) {
-  $ids = @{}
+# The address the launcher fetches an asset from: its API address, which has
+# to be one of that repository's Release files (GitHub.AssetUrl and SaveTo).
+# Empty when GitHub named anything else.
+function Url-Of($a, [string]$repo) {
+  $want = 'https://api.github.com/repos/' + $repo + '/releases/assets/'
+  $u = [string]$a.url
+  if (-not $u) { $u = $want + [string]$a.id }
+  if (-not $u.StartsWith($want, [StringComparison]::OrdinalIgnoreCase)) { return '' }
+  if ($u.Substring($want.Length) -notmatch '^\d{1,19}$') { return '' }
+  return $u
+}
+
+# One page after another of the Releases a stranger sees, newest published
+# first, until $Enough says the walk has what it needs or GitHub has no more
+# (five pages at most, as GitHub.cs reads). ok is false with the probe that
+# failed when a page could not be read.
+function Read-Releases([string]$repo, [scriptblock]$Enough) {
+  $all = New-Object 'System.Collections.Generic.List[object]'
   $url = 'https://api.github.com/repos/' + $repo + '/releases?per_page=100'
-  for ($page = 0; $page -lt 30 -and $url; $page++) {
+  for ($page = 0; $page -lt 5 -and $url; $page++) {
     $p = Ask $url 'application/vnd.github+json' -Body
-    if ($p.code -ne 200) { return @{ ok = $false; probe = $p; ids = $ids } }
-    $list = $null
-    try { $list = $p.body | ConvertFrom-Json } catch { return @{ ok = $false; probe = @{ code = 0; error = 'the listing was not JSON' }; ids = $ids } }
-    foreach ($rel in @($list)) {
-      if ($null -eq $rel) { continue }
-      foreach ($a in @($rel.assets)) { if ($null -ne $a) { $ids[[string]$a.id] = [string]$a.state } }
-    }
+    if ($p.code -ne 200) { return @{ ok = $false; probe = $p; list = $all } }
+    $got = $null
+    try { $got = $p.body | ConvertFrom-Json } catch { return @{ ok = $false; probe = @{ code = 0; error = 'the listing was not JSON' }; list = $all } }
+    foreach ($r in @($got)) { if ($null -ne $r -and -not $r.draft -and $r.tag_name) { $all.Add($r) } }
+    if (& $Enough $all) { break }
     $url = Next-Link $p.link
   }
-  return @{ ok = $true; ids = $ids }
+  $sorted = @($all | Sort-Object -Property @{ Expression = { When-Of $_ }; Descending = $true })
+  return @{ ok = $true; list = $sorted }
 }
 
-# Through the pipeline, never @($list): @() over a generic List of objects
-# throws "Argument types do not match" in both PowerShell 5.1 and 7.
-function Items($list) { return @($list | ForEach-Object { $_ }) }
-
-# "63 packs, the launcher and the client runtime"
-function What($list) {
-  $all = Items $list
-  $packs = @($all | Where-Object { $_.Pack }).Count
-  $bits = @()
-  if ($packs -eq 1) { $bits += '1 pack' } elseif ($packs -gt 1) { $bits += ([string]$packs + ' packs') }
-  foreach ($x in $all) { if (-not $x.Pack) { $bits += $x.Name } }
-  if ($bits.Count -le 1) { return ($bits -join '') }
-  return ((($bits[0..($bits.Count - 2)]) -join ', ') + ' and ' + $bits[-1])
+# One Release by tag: from the pages already read, or one more call.
+function Release-Tagged([string]$repo, $list, [string]$tag) {
+  foreach ($r in @($list)) { if ([string]$r.tag_name -eq $tag) { return @{ ok = $true; release = $r } } }
+  $p = Ask ('https://api.github.com/repos/' + $repo + '/releases/tags/' + [Uri]::EscapeDataString($tag)) 'application/vnd.github+json' -Body
+  if ($p.code -ne 200) { return @{ ok = $false; probe = $p } }
+  try { return @{ ok = $true; release = ($p.body | ConvertFrom-Json) } } catch { return @{ ok = $false; probe = @{ code = 0; error = 'the Release was not JSON' } } }
 }
 
-function Are($list, [string]$one, [string]$many) {
-  if (@(Items $list).Count -eq 1) { return $one }
-  return $many
+# A small file of a Release (a Velopack feed), the way GitHub.Download asks:
+# its API address with Accept octet-stream, then wherever GitHub sends it on
+# to. ok is false with what was said when it did not arrive.
+function Read-Asset([string]$url) {
+  $a = Ask $url 'application/octet-stream' -Body
+  if (Spent $a) { return @{ ok = $false; why = (Allowance) } }
+  if ($a.code -eq 200) { return @{ ok = $true; body = $a.body } }
+  if (($a.code -eq 301 -or $a.code -eq 302 -or $a.code -eq 307) -and $a.location) {
+    $b = Ask $a.location '' -Body
+    if ($b.code -eq 200) { return @{ ok = $true; body = $b.body } }
+    return @{ ok = $false; why = ('GitHub sends it on to ' + (Host-Of $a.location) + ', which answers ' + (Answer $b) + '.') }
+  }
+  return @{ ok = $false; why = ('GitHub answers ' + (Answer $a) + '.') }
 }
 
-function Span($list) {
-  $ids = @($list | Where-Object { $_.Pack } | ForEach-Object { $_.Id2 })
-  if ($ids.Count -eq 0) { return '' }
-  if ($ids.Count -eq 1) { return (' The pack is ' + $ids[0] + '.') }
-  return (' The oldest is ' + $ids[0] + ' and the newest ' + $ids[-1] + '.')
+# The full package a Velopack feed names for its Release: of its Full
+# entries, the highest version, which is the Release's own (vpk keeps the
+# full package of the release before in the feed too; ChannelRelease in
+# VeloUpdate.cs). $null when it names none.
+function Full-Of($feed) {
+  $best = $null; $bestV = $null
+  foreach ($e in @($feed.Assets)) {
+    if ($null -eq $e) { continue }
+    if ([string]$e.Type -ne 'Full' -and [string]$e.Type -ne '1') { continue }
+    $v = $null
+    if (-not [Version]::TryParse([string]$e.Version, [ref]$v)) { continue }
+    if ($null -eq $best -or $v -gt $bestV) { $best = $e; $bestV = $v }
+  }
+  return $best
+}
+
+# The tag of the build Release that made a package of this version, the way
+# VeloRecord.TagOf names it: 1.3.N is build-1.3.N. Empty for any other.
+function Record-Tag([string]$version) {
+  $m = [regex]::Match([string]$version, '^1\.3\.(\d{1,5})$')
+  if (-not $m.Success -or [int]$m.Groups[1].Value -gt 65534) { return '' }
+  return ('build-1.3.' + [int]$m.Groups[1].Value)
 }
 
 function Fetch-One($it) {
@@ -320,7 +380,7 @@ function Fetch-One($it) {
     if ($b.code -eq 206 -or $b.code -eq 200) {
       $total = Total-Of $b.range
       if ($it.Bytes -gt 0 -and $total -gt 0 -and $total -ne $it.Bytes) {
-        Bad ($it.Name + ' is ' + $total + ' bytes at ' + $to + ' and the feed says ' + $it.Bytes + '. The launcher will fetch it and refuse it.')
+        Bad ($it.Name + ' is ' + $total + ' bytes at ' + $to + ' and GitHub lists it as ' + $it.Bytes + '. The launcher will fetch it and refuse it.')
         return
       }
       $size = ''
@@ -386,164 +446,173 @@ function Check-CollectionPage($collection, [string]$slug, [string]$record) {
   else { Ok 'the public summary and description match collection-page.json.' }
 }
 
+
 # ------------------------------------------------------------ the walk
 function Invoke-Outside {
   param(
     [string]$Repo,
     [string]$Branch = 'main',
-    [string]$FeedUrl,
-    [string[]]$Hosts,
     [string]$SteamRecord,
     [string]$Collection,
     [string]$PageRecord = (Join-Path $PSScriptRoot '../../records/collection-page.json'),
     [string[]]$Server,
-    # The feed is on the site (#907). Asked once, directly, although the site
-    # is the server: it is the one file every launcher reads.
-    [switch]$FeedFromSite
+    # SevenZip's Release and pins, from Read-SevenZip. $null when it could not be read.
+    $SevenZip
   )
   $script:Problems = 0
   $script:Found = New-Object 'System.Collections.Generic.List[object]'
   $script:Left = ''; $script:Reset = ''
   $script:ServerHosts = @(@($Server) | Where-Object { $_ })
+  $ch = $Branch
+  $feedName = 'releases.' + $ch + '.json'
+  $kind = $script:SetupKinds[$ch]
+  Say ('  ' + $Repo + ', the ' + $ch + ' channel') 'DarkGray'
 
-  # The same door the launcher uses: the contents API, raw. A check that read
-  # the file some other way could pass while every launcher failed.
-  if (-not $FeedUrl) { $FeedUrl = 'https://api.github.com/repos/' + $Repo + '/contents/version.json?ref=' + $Branch }
-  Say ('  feed  ' + $FeedUrl) 'DarkGray'
+  # ---- the Releases
+  Head 'The Releases'
+  $channel = $null; $setupRel = $null; $setup = $null
+  # Run by Read-Releases from inside this walk, so $feedName and $kind are this
+  # walk's own.
+  $enough = {
+    param($list)
+    $a = @($list | Where-Object { Asset-Named $_ $feedName }).Count -gt 0
+    $b = @($list | Where-Object { [string]$_.tag_name -match $kind.Tag -and (Asset-Named $_ $kind.Name) }).Count -gt 0
+    return ($a -and $b)
+  }
+  $rs = $null
+  if (-not $Repo) { Bad 'no repository was named, and launcher\app\Velo.cs names none, so there are no Releases to read.' }
+  else { $rs = Read-Releases $Repo $enough }
+  if ($rs -and -not $rs.ok) {
+    $p = $rs.probe
+    if (Spent $p) { Bad ('the Releases were not read. ' + (Allowance)) }
+    elseif ($p.code -eq 404) { Bad ($Repo + ' answers a stranger with 404: it is private, or it is gone. Every launcher reads its Releases with no token, so nobody can install or update.') }
+    else { Bad ('could not list the Releases of ' + $Repo + ': ' + (Answer $p) + '. Nothing below them was checked.') }
+    $rs = $null
+  }
+  $list = @()
+  if ($rs) {
+    $list = @($rs.list)
+    Ok ($Repo + ' lists ' + $list.Count + ' published Releases to a stranger.')
+    foreach ($r in $list) { if (-not $channel -and (Asset-Named $r $feedName)) { $channel = $r } }
+    foreach ($r in $list) {
+      if ($setupRel) { break }
+      if ([string]$r.tag_name -notmatch $kind.Tag) { continue }
+      $a = Asset-Named $r $kind.Name
+      if ($null -eq $a) { continue }
+      if ([string]$a.digest -notmatch '^sha256:[0-9a-f]{64}$' -or [long]$a.size -le 0) { continue }
+      $setupRel = $r; $setup = $a
+    }
+  }
 
-  # ---- the feed
-  Head 'The feed'
-  $v = $null
-  $f = if ($FeedFromSite) { Probe $FeedUrl 'application/json' -Body } else { Ask $FeedUrl 'application/vnd.github.raw' -Body }
-  if (Spent $f) { Bad ('version.json was not read. ' + (Allowance)) }
-  elseif ($f.code -ne 200) { Bad ('version.json answers ' + (Answer $f) + ', so no launcher can read it and no pack or download can be checked.') }
-  else {
-    try { $v = $f.body.TrimStart([char]0xFEFF) | ConvertFrom-Json } catch { $v = $null }
-    if ($null -eq $v -or $null -eq $v.packs) {
-      Bad 'version.json answers but is not a feed: it is not JSON, or it has no packs. No launcher can use it.'
-      $v = $null
+  # ---- the channel's Release and its feed
+  $package = $null
+  $recordTag = ''
+  if ($rs) {
+    Head ('The ' + $ch + ' channel')
+    if (-not $channel) {
+      Bad ('no published Release carries ' + $feedName + ', so a launcher on ' + $ch + ' finds nothing to install or update to.')
     } else {
-      Ok ('version.json answers and reads: launcher ' + $v.launcherVersion + ', ' + @($v.packs).Count + ' packs.')
-      # The rest of the feed, when version.json names it as settings of its
-      # own (#1050): what a launcher fetches next, checked the same way.
-      if ($v.PSObject.Properties['settings']) {
-        . (Join-Path $PSScriptRoot '..\release\Feed-Json.ps1')
-        $named = [string]$v.settings.sha256
-        try {
-          $v = Join-FeedSettings $v $FeedUrl
-          Ok ('the settings it names (' + $named + ') answer and hash to their name.')
-        }
-        catch {
-          Bad ('version.json names settings of its own, and a launcher cannot have them: ' + $_.Exception.Message + ' No launcher that reads them can check for updates.')
-          $v = $null
+      Ok ('the newest Release with ' + $feedName + ' is ' + $channel.tag_name + '.')
+      $fa = Asset-Named $channel $feedName
+      $fu = Url-Of $fa $Repo
+      $feed = $null
+      if (-not $fu) { Bad ($feedName + ' on ' + $channel.tag_name + ' is not at one of ' + $Repo + '''s Release file addresses, and the launcher fetches nothing else.') }
+      else {
+        $got = Read-Asset $fu
+        if (-not $got.ok) { Bad ($feedName + ' on ' + $channel.tag_name + ' could not be read: ' + $got.why) }
+        else {
+          try { $feed = ([string]$got.body).TrimStart([char]0xFEFF) | ConvertFrom-Json } catch { $feed = $null }
+          if ($null -eq $feed -or $null -eq $feed.Assets) { Bad ($feedName + ' on ' + $channel.tag_name + ' is not a Velopack feed, so no launcher can read it.'); $feed = $null }
         }
       }
-      if ($v -and $v.updateRepo -and $Repo -and ([string]$v.updateRepo) -ne $Repo) {
-        Bad ('the feed sends every launcher to ' + $v.updateRepo + ' for its next check, not ' + $Repo + '.')
+      if ($feed) {
+        $full = Full-Of $feed
+        if (-not $full) { Bad ($feedName + ' on ' + $channel.tag_name + ' names no full package, so a new install has nothing to take.') }
+        else {
+          $pa = Asset-Named $channel ([string]$full.FileName)
+          if (-not $pa) { Bad ($feedName + ' on ' + $channel.tag_name + ' names ' + $full.FileName + ', which that Release does not carry as a finished upload.') }
+          elseif ([long]$full.Size -gt 0 -and [long]$pa.size -ne [long]$full.Size) { Bad ($full.FileName + ' on ' + $channel.tag_name + ' is ' + $pa.size + ' bytes and the feed says ' + $full.Size + '. Velopack will fetch it and refuse it.') }
+          else {
+            Ok ('it names the full package ' + $full.FileName + ', version ' + $full.Version + ', which the Release carries.')
+            $pu = Url-Of $pa $Repo
+            if (-not $pu) { Bad ($full.FileName + ' is not at one of ' + $Repo + '''s Release file addresses, and the launcher fetches nothing else.') }
+            else { $package = [pscustomobject]@{ Name = $full.FileName; Url = $pu; Bytes = [long]$pa.size } }
+          }
+          $recordTag = Record-Tag ([string]$full.Version)
+          if (-not $recordTag) { Bad ('the package''s version, ' + $full.Version + ', is not one a Thornswood release makes, so the launcher has no signed record to hold it to.') }
+        }
       }
     }
   }
 
-  if ($v) {
-    if ($v.serverAddress) { $script:ServerHosts += [string]$v.serverAddress }
-    if ($v.siteUrl) { try { $script:ServerHosts += ([Uri][string]$v.siteUrl).Host } catch { } }
-
-    # ---- every address, without a request per address
-    Head 'Every address in it'
-    if (@(@($Hosts) | Where-Object { $_ }).Count -eq 0) {
-      Bad "could not read AllowedHosts out of launcher\app\Updater.cs, so no address was checked against the launcher's list."
-    }
-    $items = New-Object 'System.Collections.Generic.List[object]'
-    foreach ($p in @($v.packs)) {
-      if ($null -eq $p) { continue }
-      $items.Add([pscustomobject]@{ Name = 'pack ' + $p.id; Id2 = [string]$p.id; Pack = $true; Url = [string]$p.url; Sha = [string]$p.sha256; Bytes = [long]0; Repo = ''; Id = '' })
-    }
-    $packCount = $items.Count
-    $launcher = [pscustomobject]@{ Name = 'the launcher'; Id2 = ''; Pack = $false; Url = [string]$v.launcherUrl; Sha = [string]$v.launcherSha256; Bytes = [long]0; Repo = ''; Id = '' }
-    $items.Add($launcher)
-    $client = $null
-    if ($v.clientRuntime -and $v.clientRuntime.url) {
-      $client = [pscustomobject]@{ Name = 'the client runtime'; Id2 = ''; Pack = $false; Url = [string]$v.clientRuntime.url; Sha = [string]$v.clientRuntime.sha256; Bytes = [long]$v.clientRuntime.bytes; Repo = ''; Id = '' }
-      $items.Add($client)
-    }
-    $newest = $null
-    if ($packCount -gt 0) { $newest = $items[$packCount - 1] }
-
-    $wrong = New-Object 'System.Collections.Generic.List[string]'
-    $onServer = New-Object 'System.Collections.Generic.List[object]'
-    $elsewhere = New-Object 'System.Collections.Generic.List[object]'
-    $byRepo = [ordered]@{}
-    foreach ($it in $items) {
-      $why = Refused $it.Url $Hosts
-      if ($why) { $wrong.Add($it.Name + ' ' + $why); continue }
-      if (-not $it.Sha) { $wrong.Add($it.Name + ' has no checksum, and the launcher refuses a download without one'); continue }
-      if (On-Server $it.Url) { $onServer.Add($it); continue }
-      $a = Asset-Of $it.Url
-      if (-not $a) { $elsewhere.Add($it); continue }
-      $it.Repo = $a.repo; $it.Id = $a.id
-      $k = $a.repo.ToLowerInvariant()
-      if (-not $byRepo.Contains($k)) { $byRepo[$k] = New-Object 'System.Collections.Generic.List[object]' }
-      $byRepo[$k].Add($it)
-    }
-
-    if ($wrong.Count) {
-      Bad ([string]$wrong.Count + ' address(es) in the feed the launcher will not download:')
-      Few $wrong
-    }
-    if ($onServer.Count) {
-      Skip ((What $onServer) + ' on the server, which this does not contact. Check-Site looks at the site.')
-    }
-    if ($elsewhere.Count) {
-      Skip ((What $elsewhere) + ' not at a GitHub release asset address, so nothing here knows how to check it.')
-    }
-
-    $alive = @{}
-    foreach ($k in @($byRepo.Keys)) {
-      $list = $byRepo[$k]
-      $repoName = $list[0].Repo
-      $r = Read-Assets $repoName
-      if (-not $r.ok) {
-        $p = $r.probe
-        if (Spent $p) { Bad ((What $list) + ' in ' + $repoName + (Are $list ' was' ' were') + ' not checked. ' + (Allowance)) }
-        elseif ($p.code -eq 404) {
-          Bad ($repoName + ' answers a stranger with 404: it is private, or it is gone. ' + (What $list) + ' in the feed' +
-               (Are $list ' points' ' point') + ' there, and a launcher with no token cannot fetch' + (Are $list ' it.' ' them.') + (Span $list))
+  # ---- the signed record and its lists
+  if ($recordTag) {
+    Head 'The signed record'
+    $rec = Release-Tagged $Repo $list $recordTag
+    if (-not $rec.ok) {
+      if (Spent $rec.probe) { Bad ('the Release ' + $recordTag + ' was not read. ' + (Allowance)) }
+      else { Bad ('the Release ' + $recordTag + ', which made the package, answers ' + (Answer $rec.probe) + '. The launcher holds the package to its record, so it refuses it.') }
+    } else {
+      $want = @('manifest.json', 'manifest.cat', 'game-files.json', 'collection-modlist.wabbajack')
+      if ($ch -ne 'main') { $want += ('setup-files.' + $ch + '.json') }
+      $gone = @($want | Where-Object { -not (Asset-Named $rec.release $_) })
+      if ($gone.Count) { Bad ($recordTag + ' does not carry ' + ($gone -join ', ') + ', which the launcher reads from it on the first start.') }
+      else { Ok ($recordTag + ' carries ' + ($want -join ', ') + '.') }
+      if ($ch -eq 'main') {
+        $mainTag = 'main-' + $recordTag
+        $setupList = 'setup-files.main.json'
+        $mr = Release-Tagged $Repo $list $mainTag
+        if (-not $mr.ok) {
+          if (Spent $mr.probe) { Bad ('the Release ' + $mainTag + ' was not read. ' + (Allowance)) }
+          else { Bad ('the Release ' + $mainTag + ' answers ' + (Answer $mr.probe) + ', and a main launcher reads ' + $setupList + ' from it.') }
         }
-        else { Bad ('could not list the releases in ' + $repoName + ': ' + (Answer $p) + '. ' + (What $list) + ' there' + (Are $list ' was' ' were') + ' not checked.') }
-        continue
+        elseif (-not (Asset-Named $mr.release $setupList)) { Bad ($mainTag + ' does not carry ' + $setupList + ', which a main launcher reads from it on the first start.') }
+        else { Ok ($mainTag + ' carries ' + $setupList + '.') }
       }
-      $alive[$k] = $r.ids
-      $missing = @($list | Where-Object { -not $r.ids.ContainsKey($_.Id) })
-      $half = @($list | Where-Object { $r.ids.ContainsKey($_.Id) -and $r.ids[$_.Id] -ne 'uploaded' })
-      if ($missing.Count) {
-        Bad ($repoName + ' no longer lists the asset behind ' + (What $missing) + ':')
-        Few ($missing | ForEach-Object { $_.Name + ', asset ' + $_.Id })
-      }
-      if ($half.Count) {
-        Bad ('in ' + $repoName + ', the upload behind ' + (What $half) + ' never finished:')
-        Few ($half | ForEach-Object { $_.Name + ', asset ' + $_.Id + ', ' + $r.ids[$_.Id] })
-      }
-      $good = @($list | Where-Object { $r.ids.ContainsKey($_.Id) -and $r.ids[$_.Id] -eq 'uploaded' })
-      if ($good.Count) { Ok ((What $good) + ' ' + $(if ($good.Count -eq 1) { 'is' } else { 'are all' }) + ' listed in ' + $repoName + '.') }
     }
+  }
 
-    # ---- the bytes, for the three things a launcher fetches first
+  # ---- the setup program the Downloads page offers
+  if ($rs) {
+    Head 'The setup program'
+    if (-not $setup) { Bad ('no published Release of the ' + $ch + ' kind carries ' + $kind.Name + ' with GitHub''s sha256, so the Downloads page has no installer to offer.') }
+    else { Ok ($kind.Name + ' is on ' + $setupRel.tag_name + ', ' + $setup.size + ' bytes.') }
+  }
+
+  # ---- the bytes, for the two things a new install downloads first
+  if ($rs) {
     Head 'The downloads'
-    $seen = @{}
     $tried = 0
-    foreach ($it in @($launcher, $client, $newest)) {
-      if ($null -eq $it -or -not $it.Id) { continue }
-      if ($seen.ContainsKey($it.Url)) { continue }
-      $seen[$it.Url] = $true
-      $k = $it.Repo.ToLowerInvariant()
-      if (-not $alive.ContainsKey($k) -or -not $alive[$k].ContainsKey($it.Id)) { continue }
-      $tried++
-      Fetch-One $it
+    if ($package) { $tried++; Fetch-One $package }
+    if ($setup) {
+      $su = Url-Of $setup $Repo
+      if (-not $su) { Bad ($kind.Name + ' is not at one of ' + $Repo + '''s Release file addresses.') }
+      else { $tried++; Fetch-One ([pscustomobject]@{ Name = $kind.Name; Url = $su; Bytes = [long]$setup.size }) }
     }
-    if ($tried -eq 0) { Skip 'nothing to download: every address above was already wrong or could not be listed.' }
+    if ($tried -eq 0) { Skip 'nothing to download: every file above was already wrong or could not be found.' }
   }
 
-  # ---- Steam, which the feed does not name
+  # ---- 7-Zip, which the modlist install takes from its own Release
+  Head '7-Zip'
+  if ($null -eq $SevenZip) { Bad 'could not read which 7-Zip Release launcher\app\ModlistFetch.cs pins, so it was not checked.' }
+  else {
+    $z = Release-Tagged $SevenZip.Repo @() $SevenZip.Tag
+    if (-not $z.ok) {
+      if (Spent $z.probe) { Bad ('7-Zip ' + $SevenZip.Tag + ' was not read. ' + (Allowance)) }
+      else { Bad ('7-Zip''s Release ' + $SevenZip.Tag + ' in ' + $SevenZip.Repo + ' answers ' + (Answer $z.probe) + ', and the modlist install takes 7-Zip from it.') }
+    } else {
+      foreach ($pin in @($SevenZip.Pins)) {
+        $a = Asset-Named $z.release $pin.Name
+        if (-not $a) { Bad ('7-Zip''s Release ' + $SevenZip.Tag + ' has no ' + $pin.Name + ', which the modlist install downloads.'); continue }
+        if ([long]$a.size -ne [long]$pin.Size) { Bad ($pin.Name + ' on 7-Zip''s Release ' + $SevenZip.Tag + ' is ' + $a.size + ' bytes and the launcher pins ' + $pin.Size + ', so it refuses it.'); continue }
+        $u = Url-Of $a $SevenZip.Repo
+        if (-not $u) { Bad ($pin.Name + ' is not at one of ' + $SevenZip.Repo + '''s Release file addresses.'); continue }
+        Fetch-One ([pscustomobject]@{ Name = ('7-Zip''s ' + $pin.Name); Url = $u; Bytes = [long]$pin.Size })
+      }
+    }
+  }
+
+  # ---- Steam, which no Release names
   Head 'Steam'
   Check-Steam $SteamRecord
   Skip ('whether the three depot manifests launcher\app\Downgrade.cs pins at 1.6.1170 can still be downloaded.' +
@@ -552,9 +621,8 @@ function Invoke-Outside {
   # ---- Nexus (same anonymous GraphQL POST as Watch-Outside / #1063)
   Head 'Nexus'
   $c = $Collection
-  if ($v -and $v.collectionUrl) { $c = [string]$v.collectionUrl }
-  if (-not $c) { Skip 'the collection: there is no collection address in the feed or in Config.cs.' }
-  elseif (On-Server $c) { Skip 'the collection: its address in the feed is on the server, which this does not contact.' }
+  if (-not $c) { Skip 'the collection: there is no collection address in Config.cs.' }
+  elseif (On-Server $c) { Skip 'the collection: its address is on the server, which this does not contact.' }
   else {
     $nx = [regex]::Match([string]$c, 'nexusmods\.com/games/([A-Za-z0-9]+)/collections/([A-Za-z0-9]+)')
     if (-not $nx.Success) {
@@ -596,25 +664,18 @@ function Invoke-Outside {
 }
 
 # Dot-sourced by tests\test-check-outside.ps1, which wants the functions and
-# not a run against the real feed.
+# not a run against the real Releases.
 if ($MyInvocation.InvocationName -eq '.') { return }
 
 $d = Read-Defaults (Join-Path $Here '..\..\launcher\app\Config.cs')
-if (-not $Repo) { $Repo = $d.Repo }
-# The feed launchers read is the site's (#907), unless a repository or an
-# address was named.
-$fromSite = $false
-if (-not $FeedUrl -and -not $Repo) {
-  $FeedUrl = 'https://' + $d.SiteHost + $(if ($Branch -eq 'dev') { '/feed-dev' } else { '/feed' }) + '/version.json'
-  $fromSite = $true
-}
+if (-not $Repo) { $Repo = Read-VeloRepo (Join-Path $Here '..\..\launcher\app\Velo.cs') }
 if (-not $SteamRecord) { $SteamRecord = Join-Path $Here '..\..\records\steam-build.json' }
-$allowed = Read-AllowedHosts (Join-Path $Here '..\..\launcher\app\Updater.cs')
+$sevenZip = Read-SevenZip (Join-Path $Here '..\..\launcher\app\ModlistFetch.cs')
 
 Write-Host ''
 Write-Host '  THORNSWOOD  -  what a first install needs that we do not run' -ForegroundColor White
 
-$problems = Invoke-Outside -Repo $Repo -Branch $Branch -FeedUrl $FeedUrl -Hosts $allowed -SteamRecord $SteamRecord `
-  -Collection $d.Collection -Server @($d.SiteHost, $d.ServerAddress) -FeedFromSite:$fromSite
+$problems = Invoke-Outside -Repo $Repo -Branch $Branch -SteamRecord $SteamRecord `
+  -Collection $d.Collection -Server @($d.SiteHost, $d.ServerAddress) -SevenZip $sevenZip
 if ($problems -gt 0) { exit 1 }
 exit 0
