@@ -38,6 +38,8 @@ const NAMES = [
   /^game\/Thornswood\.ini$/,
   /^game\/thornswood-emote-slots\.json$/,
   /^game\/thornswood-intro\.txt$/,
+  // QuickLoot's menu, in the one file of its own it reads back (#4511).
+  /^game\/quickloot\.json$/,
   /^mcm\/[A-Za-z0-9 _.()'-]{1,80}\.ini$/
 ];
 // Thornswood.ini is 8,523 bytes on One (12 Nov); a mod menu's file is one

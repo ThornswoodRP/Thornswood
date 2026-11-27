@@ -8756,6 +8756,88 @@
   }));
   // ---------------------------------------------- end mod settings menus
 
+  // ---------------------------------------------- QuickLoot's own file (#4511)
+  /*
+    QUICKLOOT'S MENU IS KEPT IN THE FILE QUICKLOOT ITSELF READS.
+
+    QuickLoot IE keeps every option of its menu in its script (QLIE_ShowInCombat,
+    the window, the columns, the keys) and nowhere else, except one file of its
+    own: Data\SKSE\Plugins\QuickLootIE\DefaultConfig.json, its ConfigPath. It
+    reads that file at the start of every session, which does run here
+    (QuickLootIE.log: OnConfigInit, then ImportSettings), and it writes it only
+    from its Export settings button. So nobody's file existed, the import found
+    nothing and loaded the defaults, and every change was gone next time.
+    Measured 26 Nov 2026 from its compiled scripts.
+
+    SO WHEN THE JOURNAL CLOSES, where its menu lives, the file is written the
+    way that button writes it: QuickLootIEMCM's five ExportSettings_ steps with
+    its own ConfigPath, one after another, then JsonUtil.Save. Not
+    ExportSettings itself, which ends in a message box. The steps are the
+    script's own Papyrus, which callNative cannot run, so runScriptFunction
+    (engine fork, Thornswood #4511) runs them and says when each returned.
+
+    NOT BEFORE ITS OWN IMPORT. OnConfigInit sets IsInitialLoad to False once it
+    has read the file; a journal closed before that would write the defaults
+    over what was kept. So nothing is written while IsInitialLoad is not False.
+
+    The launcher keeps the file with the person's settings on thornswood.net
+    (YourSettings.cs), the way it keeps the MCM Helper menus' files.
+  */
+  const QLIE_PLUGIN = 'QuickLootIE.esp';
+  const QLIE_QUEST = 0x1;          // MCMQuickLootIE, the quest the menu is on
+  const QLIE_SCRIPT = 'QuickLootIEMCM';
+  const QLIE_STEPS = ['ExportSettings_General', 'ExportSettings_Display', 'ExportSettings_Sorting',
+                      'ExportSettings_Controls', 'ExportSettings_Compatibility'];
+  let qlieQuestId = 0;
+  let qlieWriting = false;
+  let qlieAgain = false;
+
+  function qlieQuest() {
+    if (qlieQuestId) { return qlieQuestId; }
+    try {
+      const form = sp.Game.getFormFromFile(QLIE_QUEST, QLIE_PLUGIN);
+      qlieQuestId = form ? form.getFormID() : 0;
+    } catch (e) { qlieQuestId = 0; }
+    return qlieQuestId;
+  }
+
+  function qlieDone(why) {
+    qlieWriting = false;
+    log('quickloot settings: ' + (why || 'written'));
+    if (qlieAgain) { qlieAgain = false; qlieWrite(); }
+  }
+
+  function qlieWrite() {
+    if (qlieWriting) { qlieAgain = true; return; }
+    const quest = qlieQuest();
+    if (!quest) { return; }
+    if (sp.getScriptProperty(quest, QLIE_SCRIPT, 'IsInitialLoad') !== false) { return; }
+    const file = sp.getScriptProperty(quest, QLIE_SCRIPT, 'ConfigPath');
+    if (typeof file !== 'string' || !file) { log('quickloot settings: its menu has no ConfigPath'); return; }
+    qlieWriting = true;
+    let i = 0;
+    // Each step starts when the one before it has returned; any throw ends
+    // the run with what it said, so the next close can write again.
+    const next = (ran) => {
+      try {
+        if (!ran) { qlieDone(QLIE_STEPS[i - 1] + ' did not run, so nothing was saved'); return; }
+        if (i < QLIE_STEPS.length) {
+          sp.runScriptFunction(quest, QLIE_SCRIPT, QLIE_STEPS[i++], [file])
+            .then(next, (err) => qlieDone(QLIE_STEPS[i - 1] + ' failed, so nothing was saved: ' + err));
+          return;
+        }
+        const saved = !!sp.callNative('JsonUtil', 'Save', undefined, file, false);
+        qlieDone(saved ? '' : 'JsonUtil.Save did not write ' + file);
+      } catch (e) { qlieDone('stopped: ' + (e && e.message ? e.message : e)); }
+    };
+    next(true);
+  }
+
+  sp.on('menuClose', guard('quickloot settings close', (e) => {
+    if (e && e.name === JOURNAL_MENU) { qlieWrite(); }
+  }));
+  // ---------------------------------------------- end QuickLoot's own file
+
   /*
     / OPENS THE CHAT WITH A SLASH IN IT, AND ONLY THE CHAT.
 
