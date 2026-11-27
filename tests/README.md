@@ -351,4 +351,6 @@ to Chrome's own: the driver's `--hrtf` tool renders a signal through it, and
 `tests\chrome-audio.js` renders the same signal through a PannerNode in a
 headless Chrome over the DevTools protocol, with node's own WebSocket and no
 packages. `chrome-audio.js` finds Chrome on its own (CHROME names one); with
-none on the machine those checks say SKIP.
+none on the machine those checks say SKIP. Its cost check reads the bench
+thread's own CPU clock, not a wall clock, so other harnesses busy on the same
+cores don't count against the mix (#5654).
