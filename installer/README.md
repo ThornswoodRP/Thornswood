@@ -86,6 +86,7 @@ is gone, or says another workflow than they give.
 | `launcher/tests/test-4696-reinstall-config.ps1` | Exercises setup's saved configuration and its folder choice across reinstalls | Pull request and nightly |
 | `launcher/tests/test-4697-setup-ownership.ps1` | Runs setup's copy stage and uninstall in scratch folders: a collision leaves the existing file alone, failed copies do not become owned, and the list keeps files from earlier setups and launcher updates | Pull request and nightly |
 | `launcher/tests/test-4702-whole-settings.ps1` | The setup's config.json, like the launcher's own settings, goes to a .new file first and is renamed over the old one in one step (InstallSteps.WriteJson), so a stopped install never leaves a short file | Pull request and nightly |
+| `launcher/tests/test-4712-accepted-note-stops.ps1` | A note of what was accepted that cannot be written stops setup before its steps start, naming the file, the reason and what to do: the real InstallAgreements, compiled with Failure, with the note's name taken by a folder in a scratch install, and the install window noting it before it makes the steps | Pull request and nightly |
 | `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
 | `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
 | `launcher/tests/test-own-folder-first.ps1` | Runs the real InstallSteps on a pretend Steam copy and package: with the own folder chosen nothing is written into the Steam copy and the files wait in `Profile\Payload`; not chosen, they go into the Steam copy with their list | Pull request and nightly |
@@ -196,7 +197,9 @@ in UTC, and for each page its address and the SHA-256 of its text as
 `https://thornswood.net/api/page/<name>` serves it at that moment, which is the
 version accepted. A page the site did not answer for is recorded with an empty
 hash, and the install carries on: the boxes were ticked either way. Nothing
-about the person or the machine goes in it. The steps then refuse to install
+about the person or the machine goes in it. A note that cannot be written
+stops setup there, before its steps start, with the file, the reason and what
+to do. The steps then refuse to install
 anything if that note is not there. The launcher reads the same file
 (`launcher\app\Acceptance.cs`) on every start and asks again when it is missing
 or a page changed.
