@@ -51,6 +51,7 @@ function RunFrom([string]$base, [string]$label) {
     Push-Location -LiteralPath $repo
     try { $out = (& pwsh -NoProfile -File (Join-Path $repo 'scripts\dev\Lint.ps1') -Files bad.js -Tools $tools -Only eslint 2>&1 | Out-String) } finally { Pop-Location }
     Check ($out -match 'no-unreachable') "$label : eslint reports the no-unreachable finding"
+    Check ($out -match '(?m)^::warning file=[^\r\n]*bad\.js,line=3,col=3::no-unreachable: ') "$label : as a ::warning line on bad.js line 3, the way ruff's are (#4311)"
     Check ($out -notmatch 'Oops!|ERR_UNSUPPORTED_DIR_IMPORT|is not recognized|Cannot find module|fetched eslint') "$label : eslint did not crash, and ran from -Tools without fetching"
     if ($out -notmatch 'no-unreachable') { Write-Host (($out.Trim() -split "`n" | Select-Object -First 6) -join "`n") }
 }
