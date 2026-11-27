@@ -64,6 +64,10 @@ var PAGES = { '/world':1, '/rules':1, '/join':1, '/credits':1,
               '/classes':1, '/known':1, '/help':1,
               '/privacy':1, '/terms':1, '/cookies':1 };
 var here = location.pathname.replace(/\/+$/, '').toLowerCase() || '/';
+// The pages the site gates itself, sending the age gate or the page by the
+// cookie ageOk() reads (#4330, #5624). The same list as AGE_PAGES in
+// site/lib/pages.js, which site/tests/test-age-gate.js holds the same.
+var AGE_PAGES = { '/downloads': 1, '/join': 1 };
 
 /* The open page's link in the top bar says so (#4127): aria-current="page"
    on the one link to where this is, and on no other. Only the breadcrumb
@@ -194,7 +198,11 @@ function show(html) {
    is. Only a page that came with nothing says it could not load, and gives a
    Try again button, which asks the server for the whole page again. */
 var pageBody = document.getElementById('pagebody');
-var pageSent = !!(pageBody && pageBody.children && pageBody.children.length);
+// The age gate the site sends in place of a gated page (#5624, AGE_PAGES
+// below) is not that page's content, so a page drawn over it may still say
+// it could not load.
+var pageSent = !!(pageBody && pageBody.children && pageBody.children.length) &&
+  !(AGE_PAGES[here] && document.getElementById('ageGate'));
 function pageFailed(title) {
   if (pageSent) return;
   show('<h1>' + esc(title) + '</h1><p>Could not load it. The site did not answer in time, or answered with an error.</p>' +
@@ -225,10 +233,6 @@ function pageFailed(title) {
    the answer the gate reads last, so a store that cannot be used is read as
    one with nothing in it and nothing else is lost (#2736). */
 var AGE_KEY = 'tw-age-18';
-// /downloads is gated by the site itself, which sends the gate or the page
-// by the cookie below (#4330, site/lib/downloads.js, with the same policy
-// number); its branch below gives the gate's button its click.
-var AGE_PATHS = { '/join': 1 };
 var AGE_POLICY = 1;
 var AGE_DAYS = 365;
 var AGE_DAY_MS = 86400000;
@@ -261,22 +265,7 @@ function ageRemember() {
   document.cookie = 'tw-age-18=' + AGE_POLICY + '; path=/; expires=' + exp.toUTCString() + '; SameSite=Lax' +
     (location.protocol === 'https:' ? '; Secure' : '');
 }
-function showAgeGate() {
-  show(
-    '<div class="age-gate" id="ageGate">' +
-    '<h1>Eighteen and over</h1>' +
-    '<p>Thornswood is an adult roleplay server. It contains sexual content between adult characters, violence, and language that is not written for children.</p>' +
-    '<p>Confirming here is you stating that you are eighteen or older. That ' +
-    'statement is kept as a record of what you said, not as verification of your age.</p>' +
-    '<p class="quiet">The <a href="/rules">rules</a> and <a href="/terms">terms</a> say the same.</p>' +
-    '<div class="acts">' +
-    '<button class="btn first" type="button" id="ageYes">I am eighteen or older</button>' +
-    '<a class="btn ghost" href="/">Leave</a>' +
-    '</div></div>'
-  );
-  bindAgeGate();
-}
-// The gate's button, on the gate this page drew or the one the site sent.
+// The gate's button, on the gate the site sent.
 function bindAgeGate() {
   var yes = document.getElementById('ageYes');
   if (yes) {
@@ -288,8 +277,21 @@ function bindAgeGate() {
   }
 }
 
-if (AGE_PATHS[here] && !ageOk()) {
-  showAgeGate();
+if (AGE_PAGES[here] && document.getElementById('ageGate')) {
+  /* The site sent the age gate in place of /downloads or /join (#4330,
+     #5624), so nothing here draws the page over it, which is what made both
+     jump. The gate's button needs its click. And a browser that keeps the
+     statement only in localStorage, because it will not keep the cookie, was
+     sent the gate the site could not know to leave out: that one asks for
+     the page's body, the same body, and shows it. */
+  if (ageOk()) {
+    request(here === '/downloads' ? '/api/downloads' : '/api/page' + here)
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (d) { show(d.html); jumpToHash(); })
+      .catch(function () { pageFailed(here === '/downloads' ? 'Download' : 'How to join'); });
+  } else {
+    bindAgeGate();
+  }
 } else if (PAGES[here] && document.getElementById('pagebody').children.length) {
   /* The server sent this page with its words already in it (entry 247), so
      there is nothing to fetch. The browser finds /world#accord on its own
@@ -736,25 +738,6 @@ if (AGE_PATHS[here] && !ageOk()) {
     }
     bindGalleryReports();
   }
-} else if (here === '/downloads') {
-  /* The site sends this page whole (#4330, site/lib/downloads.js): the age
-     gate, or the steps and the download buttons once the browser's cookie
-     says it gave its age statement. So nothing here draws the page over the
-     one the site sent, which is what made it jump. Two things are left to
-     do. The gate's button needs its click. And a browser that keeps the
-     statement only in localStorage, because it will not keep the cookie,
-     was sent the gate the site could not know to leave out: that one asks
-     for the page's body, the same body, and shows it. */
-  if (document.getElementById('ageGate')) {
-    if (ageOk()) {
-      request('/api/downloads').then(function (r) { return r.json(); }).then(function (d) {
-        show(d.html);
-      }).catch(function () { show('<h1>Download</h1><p>Could not load it.</p>'); });
-    } else {
-      bindAgeGate();
-    }
-  }
-
 } else if (here === '/report') {
   /* Open to anybody. Somebody whose install will not start cannot sign in to
      say so, and telling them to ask in Discord first is how a bug becomes

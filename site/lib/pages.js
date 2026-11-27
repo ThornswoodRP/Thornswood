@@ -72,6 +72,14 @@ const LEVEL = {
    the rest from there, and a merge's change shows within five minutes of
    going in. */
 const PUBLIC_EDGE_SECONDS = 300;
+/* The pages behind the eighteen-and-over gate (#4330, #5624). The site
+   sends each one whole: the gate, or the page once the browser's cookie says
+   it gave its age statement (ageStated in downloads.js), so the page's script
+   swaps nothing in after load. Neither answer is marked for Cloudflare's
+   edge, since each says something about who is asking. The Cloudflare Pages
+   copy (scripts/deploy/Export-Pages.js) leaves them out and sends them to the
+   site, because a plain file cannot read the cookie. */
+const AGE_PAGES = ['/downloads', '/join'];
 const PUBLIC_PAGES = ['/', '/world', '/rules', '/credits', '/join',
                       '/classes', '/roadmap', '/news', '/gallery',
                       '/downloads', '/report',
@@ -476,7 +484,7 @@ function fillCreditsCommits(md, deployed, feeds) {
 }
 // ==== end thornswood credits fill ====
 
-Object.assign(module.exports, { BLURB, DOCS, escAttr, LEVEL,
+Object.assign(module.exports, { AGE_PAGES, BLURB, DOCS, escAttr, LEVEL,
   MD_PAGES, PUBLIC_EDGE_SECONDS, PUBLIC_PAGES });
 
 // From modules loaded after this one, taken once this one is whole, so a

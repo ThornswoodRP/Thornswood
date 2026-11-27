@@ -15,7 +15,7 @@ const path   = require('path');
 const crypto = require('crypto');
 const { FILES, PUBLIC, ROOT, UP } = require('./base');
 const { andList, cfg, forMode, notAcceptedYet } = require('./config');
-const { BLURB, DOCS, escAttr, fillCreditsCommits, fillLoreLine,
+const { AGE_PAGES, BLURB, DOCS, escAttr, fillCreditsCommits, fillLoreLine,
   fillPage, LEVEL, MD_PAGES, pageHtml, pageMarkdown, PUBLIC_EDGE_SECONDS,
   PUBLIC_PAGES, readLines, roadmapBoard } = require('./pages');
 const { assetLocation, feedFile, feedSettings, feedView, nativePublished, nativeTag, newestSetup, releaseAsset, releaseCopy,
@@ -634,7 +634,12 @@ async function handle(req, res) {
       }
       // A written page goes out with its words in it. After the invite link
       // above, so nothing anybody typed is mistaken for DISCORD_URL.
-      if (MD_PAGES.indexOf(route) >= 0) {
+      if (AGE_PAGES.indexOf(route) >= 0 && !ageStated(req)) {
+        // The gate in place of the page (#4330, #5624), with no page under
+        // it for the script to swap. Its title is publicDiscovery's, below.
+        html = fillPage(html, ageGateBody() + '<noscript><p>Confirming needs JavaScript. The ' +
+          '<a href="/rules">rules</a> and <a href="/help">Help</a> read without it.</p></noscript>');
+      } else if (MD_PAGES.indexOf(route) >= 0) {
         let md = pageMarkdown(route.slice(1));
         if (md !== null && route === '/credits') {
           const facts = creditsFacts();
@@ -643,12 +648,9 @@ async function handle(req, res) {
         if (md === null) return send(res, 404, notFoundPage(), TYPES['.html']);
         html = fillPage(html, singlePageHeading(pageHtml(md), blurb[0]));
       } else if (route === '/downloads') {
-        // The page goes out whole, the gate or the steps, by the browser's
-        // age statement (#4330, downloads.js), so its script swaps nothing.
-        // Its title is publicDiscovery's, below, from BLURB.
-        html = fillPage(html, ageStated(req) ? downloadsBody(downloadsFacts())
-          : ageGateBody() + '<noscript><p>Confirming needs JavaScript. <a href="/join">How to join</a> ' +
-            'and <a href="/help">Help</a> read without it.</p></noscript>');
+        // The steps, for a browser that gave its age statement (#4330). Its
+        // title is publicDiscovery's, below, from BLURB.
+        html = fillPage(html, downloadsBody(downloadsFacts()));
       } else if (route !== '/') {
         // The remaining public pages draw themselves after an API fetch. Do not
         // paint the home landing while that request is in flight.
@@ -672,9 +674,9 @@ async function handle(req, res) {
          nothing that does not carry it, so a page that says who is asking
          can never be kept at the edge. A merge's new page is out everywhere
          within that time of the agent putting it in. */
-      if (route === '/downloads') {
-        /* Except /downloads, which does say something about who is asking:
-           whether this browser gave its age statement (#4330). It is never
+      if (AGE_PAGES.indexOf(route) >= 0) {
+        /* Except the gated pages, which do say something about who is asking:
+           whether this browser gave its age statement (#4330, #5624). Each is never
            marked for Cloudflare, so the cache rule passes it through every
            time and nobody is sent the page somebody else's cookie chose.
            private keeps it out of any other shared cache, and Vary names
