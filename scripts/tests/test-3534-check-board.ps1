@@ -19,7 +19,13 @@
     3. an archived card and an open pull request with no Order are left out;
        an issue made after the board was read is not called missing;
     4. it stops (exit 1) on no file, a file that is not a board, and issue
-       numbers that are not numbers.
+       numbers that are not numbers;
+    5. a row of Check-Makers.waiting.json whose issue is closed or gone is
+       named under "waiting gone" (#6022), once for each issue with how many
+       rows wait on it; a row whose issue is open, made after the read too,
+       is not; a row with no #N is left to Check-Makers.js; with no -Waiting
+       it reads the repository's own list, and it stops on a list that is
+       not there.
 
   Nothing connects anywhere. Everything it writes is in its own temp folder.
 #>
@@ -66,12 +72,15 @@ function Board($items, $statuses = @('Todo', 'In Progress', 'Merged', 'Done'), $
 }
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-3534b-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmp | Out-Null
-function Run($board, [string[]]$issues) {
+function Row([string]$name, [string]$issue) { [ordered]@{ desc = ('1:' + $name); name = $name; issue = $issue; why = 'made here' } }
+function Run($board, [string[]]$issues, $rows = @((Row 'cheese' '#1'))) {
     $bf = Join-Path $tmp 'board.json'
     $if = Join-Path $tmp 'issues.txt'
+    $wf = Join-Path $tmp 'waiting.json'
     [IO.File]::WriteAllText($bf, ($board | ConvertTo-Json -Depth 6))
     [IO.File]::WriteAllLines($if, $issues)
-    $o = @(& $check -Board $bf -Issues $if 6>&1 2>&1 | ForEach-Object { "$_" })
+    [IO.File]::WriteAllText($wf, ([ordered]@{ note = 'made here'; items = @($rows); exempt = @() } | ConvertTo-Json -Depth 6))
+    $o = @(& $check -Board $bf -Issues $if -Waiting $wf 6>&1 2>&1 | ForEach-Object { "$_" })
     return [pscustomobject]@{ Code = $LASTEXITCODE; Out = ($o -join "`n") }
 }
 
@@ -101,6 +110,27 @@ try {
     $nb.workflows = $null; $nb['workflows_unread'] = 'the board answered: You do not have permission to access workflows'
     $r = Run $nb @('1', '2', '4')
     Yes ("workflows the board App could not read: no rule broken, and it says Auto-close was not checked: exit 0 ($($r.Code))") ($r.Code -eq 0 -and $r.Out -match '"workflows" not checked' -and $r.Out -match 'Auto-close issue must be off')
+
+    $rows = @((Row 'cheese' '#1'), (Row 'ale' '#3'), (Row 'wine' '#3'), (Row 'honey' '#99'), (Row 'bread' '#12'), (Row 'salt' 'soon'))
+    $r = Run (Board $good) @('1', '2', '4', '12@2026-10-27T00:00:00Z') $rows
+    Yes ("rows waiting on an issue that is not open: exit 3 ($($r.Code))") ($r.Code -eq 3)
+    Yes '  each closed or gone issue is named once, with its rows' ($r.Out -match '(?m)^waiting gone: 2\n  #3 is not open, and 2 rows wait on it: ale, wine\n  #99 is not open, and 1 row waits on it: honey$')
+    Yes '  a row on an open issue made after the read is not named' ($r.Out -notmatch '#12 is not open')
+    Yes '  a row with no #N is left to Check-Makers.js' ($r.Out -notmatch 'salt')
+    $many = @(1..5 | ForEach-Object { Row ('item ' + $_) '#7' })
+    $r = Run (Board $good) @('1', '2', '4') $many
+    Yes '  past three rows it names three and counts the rest' ($r.Out -match '#7 is not open, and 5 rows wait on it: item 1, item 2, item 3 and 2 more')
+    $r = Run (Board $good) @('1', '2', '4') @()
+    Yes ("an empty list names nothing: exit 0 ($($r.Code))") ($r.Code -eq 0)
+
+    $bf = Join-Path $tmp 'board.json'
+    $if = Join-Path $tmp 'issues.txt'
+    [IO.File]::WriteAllText($bf, ((Board $good) | ConvertTo-Json -Depth 6))
+    [IO.File]::WriteAllLines($if, @('1', '2', '4'))
+    $o = (@(& $check -Board $bf -Issues $if 6>&1 2>&1 | ForEach-Object { "$_" }) -join "`n")
+    Yes 'with no -Waiting it reads the repository''s own Check-Makers.waiting.json' ($o -match 'rows of \S*Check-Makers\.waiting\.json wait on one' -and $o -match '(?m)^waiting gone: ')
+    $o = @(& $check -Board $bf -Issues $if -Waiting (Join-Path $tmp 'gone.json') 6>&1 2>&1 | ForEach-Object { "$_" })
+    Yes 'a list that is not there: exit 1' ($LASTEXITCODE -eq 1 -and ($o -join ' ') -match 'issues its rows wait on cannot be checked')
 
     $o = @(& $check -Board (Join-Path $tmp 'none.json') -NoIssues 6>&1 2>&1 | ForEach-Object { "$_" })
     Yes 'no file: exit 1' ($LASTEXITCODE -eq 1 -and ($o -join ' ') -match 'Read-Board\.ps1 -OutFile')
