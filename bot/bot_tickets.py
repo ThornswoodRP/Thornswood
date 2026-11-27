@@ -1141,6 +1141,17 @@ def can_close_ticket(who, ch):
     return is_faction_leader_thread(ch) and holds_upper_staff(who)
 
 
+# What close_here says when Discord archives a ticket but will not lock it
+# (#6965). Unlocked, anybody in the thread opens it again by posting in it,
+# where the closing line has just said it takes staff.
+UNLOCKED_IN_TICKET = ('Discord would not lock this ticket, so anybody in it '
+                      'can open it again by posting here.')
+UNLOCKED_TO_CLOSER = ('Archived, but Discord would not lock it (%s), so anybody '
+                      'in it can open it again by posting.')
+UNLOCKED_IN_LOG = ('Not locked: **%s**. Discord would not lock it (%s), so '
+                   'anybody in it can open it again by posting.\n%s')
+
+
 async def close_here(interaction, why=None):
     """
     Close the ticket this was used in.
@@ -1187,6 +1198,7 @@ async def close_here(interaction, why=None):
     # closed ticket nobody can find again is barely better than a lost one, so
     # a line is written down somewhere searchable with a link straight back to
     # it. Somewhere being the staff channel, not the one people apply in.
+    book = None
     try:
         book = await log_channel(interaction.guild)
         if book is not None:
@@ -1196,18 +1208,46 @@ async def close_here(interaction, why=None):
     except Exception:
         log('could not write the ticket down:\n' + traceback.format_exc())
 
-    # Sent first, then archived. The other way round the message never lands,
-    # because an archived thread will not take one.
+    # Locked, then archived, as two asks, so a lock Discord refuses is known
+    # as that and said, rather than hidden behind a second archive (#6965).
+    # Archived last: a thread takes no message once it is archived, so the
+    # line below that it is not locked has to land before.
+    lock_refused = None
+    try:
+        await ch.edit(locked=True)
+    except Exception as e:
+        lock_refused = as_typed(getattr(e, 'text', None) or type(e).__name__, 200)
+        log('could not lock the ticket thread:\n' + traceback.format_exc())
+        try:
+            await ch.send(UNLOCKED_IN_TICKET, allowed_mentions=mentions,
+                          suppress_embeds=True)
+        except Exception:
+            log('could not say in the ticket that it is not locked:\n'
+                + traceback.format_exc())
+
     archived = False
     try:
-        await ch.edit(archived=True, locked=True)
+        await ch.edit(archived=True)
         archived = True
     except Exception:
+        log('could not archive the ticket thread:\n' + traceback.format_exc())
+
+    if archived and lock_refused is not None:
         try:
-            await ch.edit(archived=True)
-            archived = True
+            await interaction.followup.send(
+                UNLOCKED_TO_CLOSER % lock_refused, ephemeral=True,
+                allowed_mentions=mentions, suppress_embeds=True)
         except Exception:
-            log('could not archive the ticket thread:\n' + traceback.format_exc())
+            log('could not tell the closer the ticket is not locked:\n'
+                + traceback.format_exc())
+        try:
+            if book is not None:
+                await book.send(
+                    UNLOCKED_IN_LOG % (as_typed(ch.name, 100), lock_refused, ch.jump_url),
+                    allowed_mentions=mentions, suppress_embeds=True)
+        except Exception:
+            log('could not write down that the ticket is not locked:\n'
+                + traceback.format_exc())
 
     if not archived:
         fail_msg = 'Discord could not archive the ticket thread, so it remains open.'

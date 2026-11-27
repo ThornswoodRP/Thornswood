@@ -467,8 +467,8 @@ for name in STAFF_ROLES:
     ask, ticket = close_as(Person([name]))
     yes('%s closes a ticket: archived, locked and written down' % name,
         ask.response.said and ask.response.said[0][0].startswith('Closed by')
-        and ticket.edited and ticket.edited[0].get('archived')
-        and ticket.edited[0].get('locked') and len(BOOK) == 1)
+        and ticket.edited == [{'locked': True}, {'archived': True}]
+        and len(BOOK) == 1)
 
 for name in TASK_ROLES:
     # No test-tasks forum and no dev-test-tasks forum, so nothing is posted.

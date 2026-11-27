@@ -239,9 +239,8 @@ for label, way in WAYS:
         yes('%s as staff in a ticket off #%s closes it' % (label, name),
             len(said) == 1 and (said[0][0] or '').startswith('Closed by')
             and said[0][1] is False)
-        yes('  archived and locked',
-            len(thread.edited) == 1 and thread.edited[0].get('archived') is True
-            and thread.edited[0].get('locked') is True)
+        yes('  locked, then archived, once each (#6965)',
+            thread.edited == [{'locked': True}, {'archived': True}])
         yes('  and written down once, with the link back to it',
             len(BOOK) == 1 and 'Closed: **Apply to be an alpha playtester, Dee**'
             in BOOK[0][0] and thread.jump_url in BOOK[0][0])
@@ -313,6 +312,62 @@ yes('a failed archive is corrected in the ticket thread',
 yes('a failed archive is corrected in the staff log',
     len(BOOK) >= 2
     and any('still open' in b[0].lower() or 'archive failed' in b[0].lower() for b in BOOK))
+
+
+# ------------------------------------ Discord will not lock it (#6965) --
+# Discord refuses the lock (a bot without Manage Threads is one way) and takes
+# the archive. The ticket is closed but not locked, so anybody in it opens it
+# again by posting, where the closing line said it takes staff. close_here
+# used to catch that, archive a second time without the lock and say nothing.
+class Refusal(object):
+    """The response discord.Forbidden is built from."""
+    status = 403
+    reason = 'Forbidden'
+
+
+class LockRefusedThread(Thread):
+    async def edit(self, **k):
+        self.edited.append(k)
+        if k.get('locked'):
+            raise discord.Forbidden(Refusal(), 'Missing Permissions')
+
+
+del BOOK[:]
+LOGGED[:] = []
+unlocked = LockRefusedThread('Apply: Content Creator, Ria', Channel(bot.TICKETS[0]))
+unlocked_ask = run(by_command, unlocked, fail_closer)
+yes('a refused lock is asked once and the archive once, never the archive again',
+    unlocked.edited == [{'locked': True}, {'archived': True}])
+yes('  whoever ran /close is told, to them alone, that it is archived but not '
+    'locked, with why',
+    any('would not lock' in (s[0] or '') and 'Missing Permissions' in (s[0] or '')
+        and s[1] is True for s in unlocked_ask.response.said))
+yes('  and is not told it could not be archived, because it was',
+    not any('could not archive' in (s[0] or '').lower()
+            for s in unlocked_ask.response.said))
+yes('  the ticket says so before it is archived, so the line lands',
+    unlocked.sent == [(bot.UNLOCKED_IN_TICKET,)])
+yes('  the staff log has it, with the reason and the link back',
+    len(BOOK) == 2 and BOOK[1][0].startswith('Not locked: **Apply: Content Creator, Ria**')
+    and 'Missing Permissions' in BOOK[1][0] and unlocked.jump_url in BOOK[1][0])
+yes('  with mentions and previews off in both',
+    literal_send(BOOK[1][1])
+    and all(literal_send(o) for o in unlocked_ask.response.options[1:]))
+yes('  and the bot log says the lock was refused',
+    any('could not lock the ticket thread' in s for s in LOGGED))
+
+# A lock that goes through says none of it.
+del BOOK[:]
+plain_close = Thread('Ferry ticket', Channel(bot.TICKETS[0]))
+plain_ask = run(by_command, plain_close)
+yes('a lock that goes through says nothing about locking anywhere',
+    not plain_close.sent and len(BOOK) == 1 and len(plain_ask.response.said) == 1)
+
+# The words people read.
+for name in ('UNLOCKED_IN_TICKET', 'UNLOCKED_TO_CLOSER', 'UNLOCKED_IN_LOG'):
+    text = getattr(bot, name)
+    yes('%s does not say player or use a dash' % name,
+        'player' not in text.lower() and '\u2014' not in text and '\u2013' not in text)
 
 
 # ------------------------------------------------------------- the words --
