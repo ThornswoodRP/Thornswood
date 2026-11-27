@@ -135,7 +135,7 @@ yes('the register\'s counts are its rows', sorted(counts) === sorted(reg.counts)
 // out the bytes the plugin held. Each is rebuilt here from its page's row.
 const ITEMS = {
   'firewood': 0x0006F993, 'iron ingot': 0x0005ACE4, 'tool handle': 0x05015490,
-  'poor charcoal': 0x05015481, 'charcoal': 0x05015482, 'charcoal briquette': 0x05015484, 'coke': 0x05015485,
+  'poor charcoal': 0x05015481, 'charcoal': 0x00033760, 'charcoal briquette': 0x05015484, 'coke': 0x05015485,
   'pickaxe': 0x000E3C16, "woodcutter's axe": 0x0002F2F4,
 };
 const KILN = 0x0501547F, FORGE = 0x00088105;
