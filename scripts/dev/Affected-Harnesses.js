@@ -449,7 +449,8 @@ function pick(tracesFile, treeFile, commit, gate) {
   input beside it, so one that holds a table to its source fails until the
   box builds the new one. The map says so for a harness it traced. For one
   it cannot clear (always run, or not in the map) its own text decides:
-  naming a file the build writes. The merge release runs them all over the
+  naming a file the build writes, or a folder the build writes into that
+  git holds nothing in. The merge release runs them all over the
   merge's own build before anything carries it.
 
   writes: the files and folders the build writes; inputs: the paths its key
@@ -478,7 +479,14 @@ function staleChecks(map, gate, base, head, writes, inputs) {
   const out = { run: [], why: {}, changed: changed.length };
   if (!changed.length) { return out; }
   const reach = select({ map: map, gate: checks.run, changes: changed, baseFiles: [...base.keys()], headFiles: files });
-  const marks = writes.map(w => (path.extname(w) ? path.basename(w) : w));
+  // A folder the build writes into and git holds nothing in, such as
+  // game/gamemode-tables, is all build: a harness that names it reads the
+  // build though it names no one file in it. test-5191-gamemode-tables.js
+  // lists that folder and holds it to the gamemode's table() calls, so a
+  // pull request that adds a table failed it over the old build (#6893).
+  const folders = [...new Set(writes.filter(w => path.extname(w)).map(w => w.split('/').slice(0, -1).join('/')))]
+    .filter(d => d && !files.some(f => lower(f).startsWith(lower(d) + '/')));
+  const marks = writes.map(w => (path.extname(w) ? path.basename(w) : w)).concat(folders);
   for (const n of checks.run) {
     const h = map && map.harnesses ? map.harnesses[n] : null;
     if (h && !h.always) {
