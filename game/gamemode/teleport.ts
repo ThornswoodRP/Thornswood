@@ -51,9 +51,10 @@
   }
 
   /** A line in the chat, to one person. */
-  // How far out of character talk carries. About the length of a longhouse,
-  // which is roughly the group a scene has in it.
-  var OOC_RANGE = 4000;
+  // How far a /roll carries: 4000 units, about the length of a longhouse,
+  // which is roughly the group a scene has in it. The same reach as /ooc,
+  // which the voice service says (SPEECH in voice/headlines.js, #4238).
+  var ROLL_RANGE = 4000;
 
   /*
     The dice, and their limits.
@@ -1888,8 +1889,9 @@
       person (#412). The staff block at the end of this file does the work
       and says whether it took the line; it reuses /give's, /spawn's and
       /tp's lookups, handed over here. A /give, /spawn, /tp or /goto that
-      names no person goes on to the branches below, and /ooc or /roll from
-      somebody staff silenced stops here.
+      names no person goes on to the branches below, and /roll from somebody
+      staff silenced stops here. Their /ooc never arrives: the voice service
+      says it, and holds it back from them itself (#4238).
     */
     var commandTools = g.__thornswoodCommandTools;
     if (commandTools && commandTools.command(cmd, word, parts, profileId, actorId)) { return; }
@@ -2156,76 +2158,6 @@
       return;
     }
 
-    // ------------------------------------------------------------- ooc ---
-    //
-    // Brackets worked, but only if everybody remembered them, and a line of
-    // out of character talk typed without them lands in the middle of a scene
-    // as though somebody's character said it.
-    //
-    // This is deliberately LOCAL. Out of character talk belongs to the scene
-    // it interrupts, not to everybody in Skyrim, and a server wide one would
-    // be a second general chat inside the game.
-    // The chat box handles both aliases in voice/headlines.js (#4238).
-    // Direct game-server calls still use this handler.
-    if (word === '/ooc' || word === '/o') {
-      var said = parts.slice(1).join(' ').trim();
-      if (!said) {
-        toProfile(profileId, 'Say /ooc and then whatever you meant to say.');
-        return;
-      }
-      // Needs a character: who hears it is worked out from where that
-      // character is standing.
-      if (!needCharacter()) { return; }
-      if (said.length > 300) { said = said.slice(0, 300); }
-
-      var myPos = [0, 0, 0], myCell = '';
-      try {
-        myPos = mp.get(actorId, 'pos') || [0, 0, 0];
-        myCell = String(mp.get(actorId, 'worldOrCellDesc') || '');
-      } catch (e) { }
-
-      var who = '';
-      try {
-        var ap = mp.get(actorId, 'appearance');
-        who = String((ap && ap.name) || '');
-      } catch (e) { }
-      if (!who) { who = 'Somebody'; }
-
-      var line = '(( ' + who + ': ' + said + ' ))';
-
-      var near = [];
-      try { near = mp.get(0, 'onlinePlayers') || []; } catch (e) { near = []; }
-
-      var heard = 0;
-      for (var oi = 0; oi < near.length; oi++) {
-        var oid = near[oi], opid = 0;
-        try { opid = Number(mp.get(oid, 'profileId')) || 0; } catch (e) { continue; }
-        if (!opid) { continue; }
-
-        if (oid !== actorId) {
-          var oCell = '', oPos = [0, 0, 0];
-          try {
-            oCell = String(mp.get(oid, 'worldOrCellDesc') || '');
-            oPos = mp.get(oid, 'pos') || [0, 0, 0];
-          } catch (e) { continue; }
-          // Same room first. Two people at the same coordinates in different
-          // cells are not in earshot of each other.
-          if (oCell !== myCell) { continue; }
-          var dx = oPos[0] - myPos[0], dy = oPos[1] - myPos[1], dz = oPos[2] - myPos[2];
-          if ((dx * dx + dy * dy + dz * dz) > (OOC_RANGE * OOC_RANGE)) { continue; }
-        }
-
-        toProfile(opid, line);
-        heard++;
-      }
-
-      if (heard <= 1) {
-        toProfile(profileId, 'Nobody near enough to hear that.');
-      }
-      log('command: /ooc', actorId.toString(16), 'heard by', heard);
-      return;
-    }
-
     /*
       ------------------------------------------------------------- the dice
 
@@ -2249,7 +2181,10 @@
       such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
-      part of a conversation and belongs in the room it happened in.
+      part of a conversation and belongs in the room it happened in. /ooc is
+      said by the voice service and never reaches this server (#4238), so the
+      same cell and ROLL_RANGE here are its reach written twice: a change to
+      one is a change to voice/headlines.js too.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
@@ -2313,7 +2248,7 @@
           } catch (e) { continue; }
           if (rc !== rCell) { continue; }
           var rdx = rp[0] - rPos[0], rdy = rp[1] - rPos[1], rdz = rp[2] - rPos[2];
-          if ((rdx * rdx + rdy * rdy + rdz * rdz) > (OOC_RANGE * OOC_RANGE)) { continue; }
+          if ((rdx * rdx + rdy * rdy + rdz * rdz) > (ROLL_RANGE * ROLL_RANGE)) { continue; }
         }
         toProfile(rpid, rline);
         rHeard++;
