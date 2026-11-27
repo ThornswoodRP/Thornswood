@@ -26,12 +26,16 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const BOT = path.join(__dirname, '..', 'bot');
-const CANDIDATES = [
+// THORNSWOOD_BOT_PYTHON, when set, is asked first: the gate's and the
+// nightly's jobs install the hash-pinned libraries into a venv of their own
+// (never the runner's Python) and name its python there (#7114).
+const CANDIDATES = [].concat(
+  process.env.THORNSWOOD_BOT_PYTHON ? [{ cmd: process.env.THORNSWOOD_BOT_PYTHON, args: [] }] : [], [
   { cmd: 'py', args: ['-3.12'] },
   { cmd: 'python3.12', args: [] },
   { cmd: 'python', args: [] },
   { cmd: 'python3', args: [] }
-];
+]);
 
 function lastLine(text) {
   const lines = String(text || '').trim().split(/\r?\n/).filter((l) => l.trim());

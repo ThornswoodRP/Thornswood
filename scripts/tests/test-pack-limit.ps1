@@ -46,7 +46,9 @@ function Slice([string]$src, [string]$start, [string]$end) {
 }
 
 $src = [IO.File]::ReadAllText($PublishPath)
-$pack = Slice $src '# ------------------------------------------------------------ pack' '# ------------------------------------------------------------ launcher exe'
+# The pack section ends where the upload starts. It ended at the launcher exe
+# section until the launcher left Publish-Update for Velopack (#5381).
+$pack = Slice $src '# ------------------------------------------------------------ pack' '# ------------------------------------------------------------ upload'
 $size = Slice $src '# ==== thornswood release size ====' '# ==== end thornswood release size ===='
 
 Yes 'the pack section is in Publish-Update.ps1' ($null -ne $pack)

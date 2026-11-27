@@ -275,7 +275,8 @@ try {
             $p = RunCmd $line $vr
             $vrolled = @(Get-ChildItem -LiteralPath $vr -Filter 'voice.log.*' | Where-Object { $_.Name -match '^voice\.log\.\d+$' })
             Yes 'a voice.log past 4 MB is rolled before voice starts' ($vrolled.Count -eq 1 -and $vrolled[0].Length -eq (4MB + 7))
-            Yes 'each line voice writes is stamped, so it can be aged (#2166)' ((Get $vlog) -match '(?m)^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] stand-in voice up on 7999 auth on')
+            # The writer's UTC receipt time since #6833 (#4948), "[2026-11-01T08:25:00.000Z]".
+            Yes 'each line voice writes is stamped with its UTC time, so it can be aged (#2166, #6833)' ((Get $vlog) -match '(?m)^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\] stand-in voice up on 7999 auth on')
             # Auth is on, written into the line since #1303 took -Auth away.
             Yes 'voice is still writing to voice.log afterwards, with its settings' ((Count (Get $vlog) 'stand-in voice up on 7999 auth on') -eq 1)
             Yes 'the command line still names the log, which is how the installer finds its own process' ($line -like ('*' + $vlog + '*'))

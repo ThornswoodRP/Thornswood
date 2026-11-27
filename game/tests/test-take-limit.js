@@ -44,8 +44,14 @@ function lift(from, to) {
 // guard() counts its time through countSpent() since #385, so both are lifted.
 const guardSrc = lift('function guard(name, fn) {', '\n}\n') &&
   lift('function guard(name, fn) {', '\n}\n') + '\n' + (lift('function countSpent(name, began) {', '\n}\n') || '');
-// The audit helpers and the take watcher, through the line that closes it.
-const watchSrc = lift('function auditProfile(refrId) {', "'from', auditSource(sourceRefrId), 'in', auditCell(actorId));\n});");
+// The audit helpers and the take watcher, through the line that closes the
+// watcher. It ends at the watcher's own closing line, not at a line inside
+// it: the gold and trade log (#6276) went in after the take's log line, and
+// a lift that ended at that line stopped finding the watcher at all.
+const watchAt = src.indexOf('function auditProfile(refrId) {');
+const takeAt = watchAt < 0 ? -1 : src.indexOf("mp.onTakeItem = guard('onTakeItem'", watchAt);
+const takeEnd = takeAt < 0 ? -1 : src.indexOf('\n});\n', takeAt);
+const watchSrc = takeEnd < 0 ? null : src.slice(watchAt, takeEnd + 4);
 const limitSrc = lift('/*\n  THE TAKE LIMIT: A FEW THINGS', '})();\n// end of the take limit');
 yes('gamemode.js has guard(), the take watcher and the take limit',
     guardSrc !== null && watchSrc !== null && limitSrc !== null);

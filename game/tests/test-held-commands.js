@@ -58,7 +58,13 @@ function rig(world, clock, G, throwOn) {
   const a = src.indexOf('  if (!globalThis.__thornswoodLastActor)');
   const b = a < 0 ? -1 : src.indexOf('  /** key -> where /tp sends staff', a);
   if (a < 0 || b < 0) { return null; }
-  const block = src.slice(a, b);
+  // dispatch() splits a line with commandParts() since #6821, which keeps a
+  // saved page's payload whole. It is declared further down the same scope,
+  // so it is lifted beside the block, as the gamemode hoists it.
+  const p = src.indexOf('  function commandParts(text) {');
+  const q = p < 0 ? -1 : src.indexOf('\n  }\n', p);
+  if (p < 0 || q < 0) { return null; }
+  const block = src.slice(a, b) + '\n' + src.slice(p, q + 4);
   if (block.indexOf('function dispatch(') < 0 || block.indexOf('function drainHeld(') < 0) {
     return null;
   }

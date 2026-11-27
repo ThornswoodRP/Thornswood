@@ -42,6 +42,6 @@ foreach($scriptName in 'Publish-Update.ps1'){
   Yes "$scriptName still counts a collection file as the collection's" (Test-FromCollection $other)
 }
 $publish=[IO.File]::ReadAllText((Join-Path $repo 'scripts\release\Publish-Update.ps1'))
-Yes 'Publish-Update never makes a built file hash-gone, so no update deletes what an install built' ($publish -match '\(Test-ShipBackup \$k\) -or \(Test-ShipGenerated \$k\)\) \{ continue \}')
+Yes 'Publish-Update never makes a built file hash-gone, so no update deletes what an install built' ($publish -match '(?m)^\s*if \(.*\(Test-ShipGenerated \$k\)[^\r\n]*\) \{ continue \}')
 Write-Host "$pass passed, $fail failed"
 if($fail){exit 1}

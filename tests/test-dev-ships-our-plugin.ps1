@@ -50,7 +50,12 @@ if ($fn) {
 }
 
 $code = Get-Content -LiteralPath $src -Raw
-yes 'the launcher side it relies on is still there: Updater unshares before it extracts' ((Get-Content -LiteralPath (Join-Path $here 'launcher\app\Updater.cs') -Raw) -match 'OwnGame\.Unshare\(full\);\s*\r?\n\s*e\.ExtractToFile\(full, true\);')
+# Since the launcher took its game files out of its Velopack package
+# (#5796, SyncPackage.cs) they go in through Sync.cs, not Updater's packs:
+# a game file is unshared before it is written over, so a linked copy of
+# Vortex's is never rewritten with ours.
+$sync = Get-Content -LiteralPath (Join-Path $here 'launcher\app\Sync.cs') -Raw
+yes 'the launcher side it relies on is still there: Sync unshares a game file before it writes over it' ($sync -match 'if \(it\.InGame\) OwnGame\.Unshare\(it\.Dest\);[\s\S]{0,400}?File\.Copy\(src, it\.Dest, true\);')
 
 Write-Host ''
 Write-Host ('{0} passed, {1} failed' -f $pass, $fail)

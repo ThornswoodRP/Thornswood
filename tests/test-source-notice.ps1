@@ -84,8 +84,14 @@ function Leaf([string]$p) { return $p.Substring($p.LastIndexOf('\') + 1) }
 $rt = @(Get-SourceNoticeEntries $record $six 'runtime' $licences)
 $lr = Read-Json $libRecord
 $ports = @($lr.ports.PSObject.Properties.Name | Sort-Object)
-$wantNames = @('README.txt', 'GPL-3.0.txt', 'AGPL-3.0.txt') + @($ports | ForEach-Object { 'licences/' + $_ + '.txt' })
-Yes ('the client runtime gets README.txt, GPL-3.0.txt, AGPL-3.0.txt and the ' + $ports.Count + ' library texts: ' + ((Names $rt) -join ', ')) `
+# The libraries the record keeps beside the ports since #5012 (#3751): each
+# one's text goes with the files it is in, after the ports'.
+$libs = @(if ($lr.libraries) { @($lr.libraries.PSObject.Properties.Name | Sort-Object) })
+function LibsIn([string[]]$files) {
+    return @($libs | Where-Object { $n = $_; @($lr.libraries.$n.in | Where-Object { $files -contains [string]$_ }).Count -gt 0 })
+}
+$wantNames = @('README.txt', 'GPL-3.0.txt', 'AGPL-3.0.txt') + @(@($ports) + @(LibsIn $six) | ForEach-Object { 'licences/' + $_ + '.txt' })
+Yes ('the client runtime gets README.txt, GPL-3.0.txt, AGPL-3.0.txt and the ' + ($wantNames.Count - 3) + ' library texts: ' + ((Names $rt) -join ', ')) `
     (((Names $rt) -join '|') -eq ($wantNames -join '|'))
 $readme = Text $rt 'README.txt'
 Yes ('it names the recorded commit ' + $commit + ' and links its tree') ($readme.Contains($fork + '/tree/' + $commit))
@@ -129,7 +135,7 @@ foreach ($n in $ports) {
 }
 Yes ('the README lists every library with its version, licence and the files it is in' + $(if ($unlisted.Count) { ', not: ' + ($unlisted -join ', ') } else { '' })) ($unlisted.Count -eq 0)
 $impl = @($six | Where-Object { $_ -match 'SkyrimPlatformImpl\.dll$' })
-$implPorts = @($lr.files.($impl[0]) | Sort-Object)
+$implPorts = @(@($lr.files.($impl[0]) | Sort-Object) + @(LibsIn $impl))
 $ie = @(Get-SourceNoticeEntries $record $impl 'pack' $licences)
 Yes ('a pack carrying only SkyrimPlatformImpl.dll carries the texts of its ' + $implPorts.Count + ' libraries and no others') `
     (((@(Names $ie) | Where-Object { $_ -like 'licences/*' }) -join '|') -eq ((@($implPorts | ForEach-Object { 'licences/' + $_ + '.txt' })) -join '|'))
@@ -185,8 +191,8 @@ Yes 'a pack of only our own files gets nothing' (@(Get-SourceNoticeEntries $reco
 Yes 'nor does a pack of nothing, like one that only removes' (@(Get-SourceNoticeEntries $record @() 'pack' $licences | Where-Object { $_ }).Count -eq 0)
 $one = @(Get-SourceNoticeEntries $record ($own + 'Data\Platform\Plugins\skymp5-client.js') 'pack' $licences)
 $src = Text $one 'SOURCE CODE.txt'
-Yes ('a pack carrying skymp5-client.js gets SOURCE CODE.txt and both texts: ' + ((Names $one) -join ', ')) `
-    (((Names $one) -join '|') -eq 'SOURCE CODE.txt|GPL-3.0.txt|AGPL-3.0.txt')
+Yes ('a pack carrying skymp5-client.js gets SOURCE CODE.txt, both texts and its libraries'' texts: ' + ((Names $one) -join ', ')) `
+    (((Names $one) -join '|') -eq ((@('SOURCE CODE.txt', 'GPL-3.0.txt', 'AGPL-3.0.txt') + @(LibsIn @('Data\Platform\Plugins\skymp5-client.js') | ForEach-Object { 'licences/' + $_ + '.txt' })) -join '|'))
 Yes '  naming skymp5-client.js, skymp5-client, GNU GPL version 3' ($src -match '(?m)^\s{2}skymp5-client\.js\s{2,}skymp5-client\s{2,}GNU GPL version 3\s*$')
 Yes '  and the recorded commit' ($src.Contains($fork + '/tree/' + $commit))
 Yes '  and not the files it does not carry' (-not $src.Contains('SkyrimPlatformImpl.dll') -and -not $src.Contains('thornswood-front.js'))
@@ -271,7 +277,7 @@ try {
         $libsAdded[$x[0]] = [ordered]@{ kind = $x[1]; version = $x[2]; licence = $x[3]; from = 'somewhere'; in = @($x[4])
             sha256 = (Get-FileHash -LiteralPath $tp -Algorithm SHA256).Hash.ToLowerInvariant(); bytes = (Get-Item -LiteralPath $tp).Length }
     }
-    $l3 | Add-Member -NotePropertyName libraries -NotePropertyValue ([pscustomobject]$libsAdded)
+    $l3 | Add-Member -NotePropertyName libraries -NotePropertyValue ([pscustomobject]$libsAdded) -Force
     [IO.File]::WriteAllText((Join-Path $lx 'client-licences.json'), ($l3 | ConvertTo-Json -Depth 6))
     $lxRecord = Join-Path $lx 'client-build.json'
     $got = @(Get-ClientLicences $lxRecord @('Data\SKSE\Plugins\MpClientPlugin.dll'))
@@ -348,7 +354,7 @@ try {
     $z = [IO.Compression.ZipFile]::OpenRead($zp6)
     try { $names6 = @($z.Entries | ForEach-Object { $_.FullName }) } finally { $z.Dispose() }
     Yes ('a pack carrying the six holds every library text under licences/: ' + @($names6 | Where-Object { $_ -like 'licences/*' }).Count) `
-        (@($names6 | Where-Object { $_ -like 'licences/*' }).Count -eq $ports.Count)
+        (@($names6 | Where-Object { $_ -like 'licences/*' }).Count -eq ($ports.Count + @(LibsIn $six).Count))
     $out6 = (@(& (Join-Path $Repo 'scripts\dev\Check-Secrets.ps1') -Zip $zp6 *>&1 | ForEach-Object { [string]$_ }) -join "`n")
     Yes ('Check-Secrets passes a zip carrying every library text (exit ' + $LASTEXITCODE + ')') ($LASTEXITCODE -eq 0)
     if ($LASTEXITCODE -ne 0) { Write-Host $out6 }
@@ -393,7 +399,7 @@ if ($m.Success) {
 # too (Build-SetupFiles.ps1), and the install copies them into its folder.
 $st = @(Get-SourceNoticeEntries $record $six 'setup' $licences)
 $setupNote = Text $st 'SOURCE CODE.txt'
-$wantSetup = @('SOURCE CODE.txt', 'GPL-3.0.txt', 'AGPL-3.0.txt') + @($ports | ForEach-Object { 'licences/' + $_ + '.txt' })
+$wantSetup = @('SOURCE CODE.txt', 'GPL-3.0.txt', 'AGPL-3.0.txt') + @(@($ports) + @(LibsIn $six) | ForEach-Object { 'licences/' + $_ + '.txt' })
 Yes ('the Velopack package''s game files get SOURCE CODE.txt, both texts and the library texts: ' + ((Names $st) -join ', ')) `
     (((Names $st) -join '|') -eq ($wantSetup -join '|'))
 Yes '  naming the recorded commit and every one of the six, and saying setup put them there' (
@@ -411,11 +417,14 @@ Yes 'the install copies SOURCE CODE.txt, the two texts and licences\ out of the 
 
 # ---- the launcher ignores what this adds -------------------------------------
 $cr = Get-Content -LiteralPath (Join-Path $Repo 'launcher\app\ClientRuntime.cs') -Raw
-Yes 'ClientRuntime.cs takes out only the recorded paths it wants (Find by name)' `
-    ($cr -match 'ZipArchiveEntry en = Find\(ar, rel\);' -and $cr -match 'string rel = want\[i\];')
+# Since the Velopack launcher (#5381) and updates from GitHub (#5796) no pack
+# zip is read by the launcher at all: ClientRuntime copies the recorded paths
+# it wants out of the installed package, one by one, so a note and texts
+# beside them are never taken for game files.
+Yes 'ClientRuntime.cs copies only the recorded paths it wants out of the installed package' `
+    ($cr -match 'string rel = want\[i\];' -and $cr.Contains('string src = Path.Combine(from, rel);') -and $cr -notmatch 'ZipArchive')
 $up2 = Get-Content -LiteralPath (Join-Path $Repo 'launcher\app\Updater.cs') -Raw
-Yes 'Updater.cs skips a pack entry that is not game\, profile\ or delete.txt' `
-    ($up2 -match '(?s)rel\.Equals\("delete\.txt", StringComparison\.OrdinalIgnoreCase\)\)\s*continue;\s*else if \(rel\.Equals\("ui-assets\.txt", StringComparison\.OrdinalIgnoreCase\)\)\s*\{.*?\bcontinue;\s*\}\s*else\s*continue;\s*// The fence is')
+Yes '  and Updater.cs opens no pack zip whose extra entries it could take for game files' ($up2 -notmatch 'ZipArchive|ZipFile\.Open')
 
 # ---- THIRD-PARTY.md says so, and not what stopped being true ----------------
 $tp = Get-Content -LiteralPath (Join-Path $Repo 'THIRD-PARTY.md') -Raw

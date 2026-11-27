@@ -29,7 +29,7 @@
     2. The wiring, read from the real files: the fill in the Primary theme's
        template in MainWindow.axaml, the timer and the fill in ShellProgress.cs,
        DrawStatus putting the words first and keeping the button off, and
-       every caller (Updater.Download, Sync, RunUpdate, the client repair,
+       every caller (GitHub.SaveTo, Sync, RunUpdate, the client repair,
        OwnGame.Make and Refresh, StartOwnGame, Verify.Bytes) reporting and
        closing what it opens.
 
@@ -358,7 +358,7 @@ Yes 'ShellProgress.cs: redrawn when the window is resized' ($sp -match 'btnPlay\
 $shell = Read-Text (Join-Path $AppDir 'Shell.cs')
 $draw = Body $shell 'static bool DrawStatus()'
 Yes 'Shell.cs: WireProgress is called' ($shell -match 'WireProgress\(\);')
-Yes 'DrawStatus: the button is off while work runs' ($draw -match '!working &&')
+Yes 'DrawStatus: the button is off while work runs' ($draw -match 'btnPlay\.IsEnabled = [^;]*!working\b[^;]*;')
 $wAt = $draw.IndexOf('if (working && !playing)')
 Yes 'DrawStatus: the progress words come before every other reason' ($wAt -ge 0 -and $wAt -lt $draw.IndexOf('else if (ownGameBusy && !playing)') -and $wAt -lt $draw.IndexOf('else if (updatePending && !playing)'))
 Yes 'DrawStatus: with no work, the fill goes' ($draw -match 'if \(!working\) HidePlayFill\(\);')
@@ -366,24 +366,28 @@ Yes 'DrawStatus: PLAY is still the last word' ($draw -match 'btnPlay\.Content = 
 $heal = Body $shell 'static void HealClientBackground()'
 Yes 'the client repair opens the button before it starts and closes it in its finally' ($heal -match 'PlayProgress\.Begin\("Updating", 1\)' -and $heal -match 'finally\s*\{[^}]*PlayProgress\.End\(\);')
 
-$upd = Read-Text (Join-Path $AppDir 'Updater.cs')
-$dl = Body $upd 'static string Download(Config cfg'
-Yes 'Updater.Download reports each piece it reads' ($dl -match 'PlayProgress\.Part\(had, length\)' -and $dl -match 'PlayProgress\.PartDone\(\)')
-Yes 'Updater.Download reads the size the server gives' ($dl -match 'long length = res\.Content\.Headers\.ContentLength \?\? -1;')
-Yes 'Updater.Download no longer uses DownloadFile, and throws a half file away' ($dl -notmatch '\.DownloadFile\(' -and $dl -match 'File\.Delete\(tmp\)')
-Yes 'Updater.Download still checks the url and the checksum' ($dl -match 'CheckUrl\(url\)' -and $dl -match 'Checksum did not match')
+# Since updates come from GitHub (#5796) a Release's file is fetched by
+# GitHub.SaveTo, and the launcher's package by Velopack (VeloUpdate.FetchLauncher,
+# below); Updater.Download went with the feed.
+$gh = Read-Text (Join-Path $AppDir 'GitHub.cs')
+$save = Body $gh 'internal static void SaveTo(string repo, Asset a, string file, Action<long> onBytes)'
+Yes 'GitHub.SaveTo reports each piece it writes' ($save -match 'Http\.CopyBody\(res, fs, Http\.DefaultReadMs, onBytes\);')
+Yes 'GitHub.SaveTo holds the file to the size GitHub lists' ($save -match 'if \(fs\.Length != a\.Size\) throw')
+Yes 'GitHub.SaveTo writes through a .part and throws a half file away' ($save -match 'string part = file \+ "\.part";' -and $save -match 'System\.IO\.File\.Delete\(part\)')
+Yes 'GitHub.SaveTo still checks the address and the checksum' ($save -match 'is not one of " \+ repo \+ "''s Release files' -and $save -match 'if \(sha\.Length > 0 && got != sha\) throw')
 
 $sync = Read-Text (Join-Path $AppDir 'Sync.cs')
 Yes 'Sync: checking the install counts every file' ($sync -match 'PlayProgress\.Files\("Checking files", \+\+looked, items\.Count\)')
 Yes 'Sync: the downloads report their bytes against the total' ($sync -match 'PlayProgress\.Bytes\("Updating", before \+ Math\.Min\(had, f\.Value\), total\)')
-Yes 'Sync: Transfer reports as it writes' ((Body $sync 'static void Transfer(') -match 'Http\.CopyBody\([^;]*n => onBytes\(had \+ n\)\);')
-Yes 'Sync: packs after a record without its files are planned as downloads' ($sync -match 'PlayProgress\.Plan\("Updating", count, "updates"\)')
+# Since #5796 the game files come out of the update package, one fetch each
+# (PlanSync's fetch), and there are no packs to plan.
+Yes 'Sync: each file the update takes out reports its bytes as they come' ($sync -match 'fetch\(f\.Key, f\.Value, Path\.Combine\(stage, f\.Key\),\s*delegate\(long had\) \{ PlayProgress\.Bytes\(')
 
 $su = Read-Text (Join-Path $AppDir 'ShellUpdate.cs')
 # Since #2627 RunUpdate(after) does the work; Fix and, since #3201, Install
 # now call it with what to do once the update is in or has failed.
 $run = Body $su 'static async Task RunUpdateAsync(Action<bool> after)'
-Yes 'RunUpdate opens the button with one download per pack' ($run -match 'PlayProgress\.Begin\("Updating", downloads\)')
+Yes 'RunUpdate opens the button with one download, the update package' ($run -match 'PlayProgress\.Begin\("Updating", 1\)')
 $stages = Read-Text (Join-Path $AppDir 'UpdateStages.cs')
 # Since the launcher updates through Velopack (#4825), its download is
 # VeloUpdate.FetchLauncher, which FetchUpdate calls.
@@ -392,7 +396,10 @@ Yes 'the update''s download: the self-update is its own phase' (
     (Body $stages 'public static Fetched FetchUpdate(') -match 'FetchLauncher\(launcher, log\);' -and
     (Body $velo 'public static void FetchLauncher(') -match 'PlayProgress\.Plan\("Updating the launcher", 1, "updates"\);\s*PlayProgress\.Part\(0, size\);')
 Yes 'RunUpdate marks its thread second, so a folder being prepared keeps the button (#2210)' ($run -match 'PlayProgress\.Second\(true\);' -and $run -match 'finally \{ PlayProgress\.Second\(false\); \}')
-Yes 'RunUpdate closes it when it finishes and when it fails, before DrawStatus' (([regex]::Matches($run, 'PlayProgress\.End\(\);\s*((updatePending|updating) = false;\s*)*DrawStatus\(\)')).Count -eq 2)
+# A finished update closes the launcher for Velopack to put the new one in
+# (Velo.ExitApply), so only a failure gives the button back.
+Yes 'RunUpdate closes it when it fails, before DrawStatus, and closes the launcher when it is in' (
+    ([regex]::Matches($run, 'PlayProgress\.End\(\);\s*((updatePending|updating) = false;\s*)*DrawStatus\(\)')).Count -eq 1 -and $run -match 'Updater\.ApplyLauncher\(launcher\);' -and $run -match 'win\.Close\(\);')
 
 $sog = Read-Text (Join-Path $AppDir 'ShellOwnGame.cs')
 # The overload that does the work. Since #1584 StartOwnGame(make, loud) only

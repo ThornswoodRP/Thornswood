@@ -370,6 +370,13 @@ jobs:
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
+      # eslint for the lint harness and the bot's libraries in a venv of
+      # this run's own, named in THORNSWOOD_BOT_PYTHON (#7114).
+      - name: Install what some harnesses need
+        shell: pwsh
+        run: |
+          ./scripts/dev/Install-HarnessTools.ps1
+          exit $LASTEXITCODE
 
       - name: Run the gate harnesses
         id: gate
@@ -497,6 +504,13 @@ jobs:
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: '10.0.x'
+      # eslint for the lint harness and the bot's libraries in a venv of
+      # this run's own, named in THORNSWOOD_BOT_PYTHON (#7114).
+      - name: Install what some harnesses need
+        shell: pwsh
+        run: |
+          ./scripts/dev/Install-HarnessTools.ps1
+          exit $LASTEXITCODE
 
       - name: Run the gate harnesses
         id: gate

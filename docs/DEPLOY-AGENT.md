@@ -393,7 +393,7 @@ a copy of dev that nobody plays on:
    `C:\Thornswood-BotPass\passes\<when it last wrote>-<its Deployment>`
    (`run\pass.txt` names the Deployment; a pass from an agent before that is
    kept as `unnamed`). The newest 30 stay, and of a log past 8 MiB its end.
-   `Install-DeployAgent -Status` lists them and `-Status -Pass <name>` prints
+   `Install-DeployAgent -Status` lists them and `-Status -BotPass <name>` prints
    one.
 
 The bot pass rides in the gamemode Release as a part of its own, `bot`

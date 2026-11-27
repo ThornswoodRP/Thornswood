@@ -22,9 +22,17 @@
       $gate = @(& .\scripts\dev\Gate-Harnesses.ps1)
 
   It stops with exit 1, and runs nothing, on a gate-excluded.txt line with no
-  reason, one naming a harness there is not, a name on two lines, lines
+  reason, a reason of "not sorted yet", a "fails on main" reason that names
+  no issue, one naming a harness there is not, a name on two lines, lines
   out of name order, or no harness left to run. Each fault is printed as a
   GitHub error on its line.
+
+  NOTHING OFF THE GATE FOR WANT OF SORTING (#7100). From 21 Oct to 27 Nov
+  2026, 277 harnesses were off the gate as "not sorted yet" and ran only in
+  the nightly, which never once passed. 16 of them went red one by one, a
+  harness of a fix from 23 Sep among them, and no pull request said so. Since
+  #5183 a pull request runs only what its change can reach, so a harness on
+  the gate costs nothing unless the change can break it.
 
   BESIDE THEIR CODE (plan line 42, 1 Nov 2026). A harness may live in its
   product's own folder, <product>\tests\, as well as in tests\.
@@ -61,7 +69,13 @@ if (Test-Path -LiteralPath $listFile) {
         $m = [regex]::Match($t, '^(\S+)(?:\s+(.*))?$')
         $n = $m.Groups[1].Value
         $at = "::error file=tests/gate-excluded.txt,line=${i}::"
-        if (-not $m.Groups[2].Value.Trim()) { $faults.Add("$at$n has no reason") }
+        $why = $m.Groups[2].Value.Trim()
+        if (-not $why) { $faults.Add("$at$n has no reason") }
+        # A harness of a fix runs on every pull request its change can reach.
+        # 277 lines said "not sorted yet" from 21 Oct to 27 Nov 2026 and ran
+        # only in a nightly that never passed, so 16 went red unseen (#7100).
+        elseif ($why -match '^(?i)not sorted yet\b') { $faults.Add("$at$n is off the gate as not sorted yet: put it on the gate, or give the reason it cannot run there (#7100)") }
+        elseif ($why -match '^(?i)fails on main\b' -and $why -notmatch '#\d+') { $faults.Add("$at$n fails on main and names no issue that puts it right (#7100)") }
         if (-not (Test-HarnessName (Split-Path -Leaf $n)) -or -not (Test-Path -LiteralPath (Get-HarnessFile $Root $n) -PathType Leaf)) { $faults.Add("$at$n is not a harness in tests or a product's tests folder") }
         if ($excluded.ContainsKey($n)) { $faults.Add("$at$n is on line $($excluded[$n]) already") }
         elseif ([string]::CompareOrdinal($n, $last) -lt 0) { $faults.Add("$at$n is out of name order, after $last") }

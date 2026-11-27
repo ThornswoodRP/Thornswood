@@ -131,7 +131,7 @@ $bad = @($words | Where-Object { -not $_ -or $_ -match '[^\x00-\x7F]' -or $_ -ma
 Yes 'every reason is plain ASCII, never says player, and leaves the full stop to the message' ($bad.Count -eq 0)
 
 # ---- the whole watcher, on a fake clock ---------------------------------------
-$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'HeldProblem', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
+$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'ReadyProblem', 'HeldProblem', 'EndTask', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
 $body = @()
 foreach ($s in $inner.EndBlock.Statements) {
     if ($s -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $fake -contains $s.Name) { continue }
@@ -183,6 +183,13 @@ function SiteAnswers($url) { return $true }
 function BotAlive() { return $script:alive }
 function BotProcs() { if ($script:alive) { return @(@{ Id = 4242; Started = $script:procStart }) } return @() }
 function HealthProblem($url) { return '' }
+# The tunnel's readiness and the end of a task that runs and does not work
+# (#5790), which test-watch-alerts.ps1 holds; here the tunnel is fine. Until
+# these stood in, every run asked the real 127.0.0.1:20241/ready, found
+# nothing, and ended the tunnel's task through the real
+# Get-NetTCPConnection, so no part of the run below passed (#7100).
+function ReadyProblem($url) { return '' }
+function EndTask($task, $port) { $script:runs += ('end ' + $task); return ('ended ' + $task) }
 # The website's readiness (#4448), which test-4448-site-ready.ps1 holds; here it is fine.
 function HeldProblem($url) { return '' }
 function HowItEnded($task) { return '' }
@@ -332,7 +339,11 @@ try {
     # The bot's own floor (bot\_pyguard.py, #2276): 3.10 or newer. Until #2504
     # this tried py -3.9 first and never asked the version, so on a machine
     # whose 3.9 had discord.py the real bot refused to start and wrote nothing.
-    foreach ($c in @(@('py', '-3.12'), @('python'))) {
+    # THORNSWOOD_BOT_PYTHON first: the venv Install-HarnessTools.ps1 makes on
+    # a runner with the bot's libraries in it (#7114).
+    $cands = @(@('py', '-3.12'), @('python'))
+    if ($env:THORNSWOOD_BOT_PYTHON) { $cands = @(, @($env:THORNSWOOD_BOT_PYTHON)) + $cands }
+    foreach ($c in $cands) {
         $exe = Get-Command $c[0] -EA SilentlyContinue
         if (-not $exe) { continue }
         $pre = @(); if ($c.Count -gt 1) { $pre = @($c[1]) }

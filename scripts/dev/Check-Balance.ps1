@@ -378,7 +378,7 @@ Head 'The chain: what a recipe asks for against what it is ranked at'
 #
 # WHY A ROW IS MORE THAN ONE RUNG OUT, issue #398, whose done-when is that every
 # such row is one somebody looked at and kept. Every one falls under one of
-# two causes, each read off the row itself, or it is a new imbalance nobody
+# four causes, each read off the row itself, or it is a new imbalance nobody
 # has looked at and this script fails on it:
 #   kept         its rank is named outright in RECIPE_RANK, with the reason on
 #                the row. The four charcoal grades: coke is a master
@@ -391,22 +391,70 @@ Head 'The chain: what a recipe asks for against what it is ranked at'
 #                is produced by no class (Dragon Bone, Linen Wrap and the like),
 #                so the price holds it up, and the row says it is kept on
 #                purpose: Patrick decided on 28 September that those stay dear.
-# There is no third. The Bladebinder's staves were one until 28 September,
+# The Bladebinder's staves were one until 28 September,
 # ranked by the second rule below what a master miner's Heart Stone cost.
 # Patrick made the stone advanced mining that day, and when the miner page put
 # it back on master he answered #1622 on 4 October: each college book staff at
 # its spell's rank. That is a decision written in RECIPE_RANK, so those rows are
 # kept, and a second rule row out of step is still a new imbalance.
-function FarReason($row, [int]$gap) {
+#
+# Two rules came after those two, and each carries a reason of its own:
+#   seasoned     a garlic or salt dish (#6902) takes the rank of the dish it
+#                seasons, with that dish's inputs and one more, so it is out
+#                for exactly the reason its unseasoned dish is. It is judged by
+#                that dish's row, found through food-groups.json's season
+#                table, the same map Build-RecipeTable.ps1 ranks it by. The
+#                Garlic and Salted Boar Stews sit at expert because Boar Stew
+#                does, held dear over Boar Meat, which nobody gathers.
+#   way in       the cheapest row of a half a new character can reach, moved to
+#                novice so the half has a way in (NOVICE_MUST_BE_REACHABLE),
+#                in a half whose table names that rung in
+#                rungsNobodyCanGatherFor with andThatIsAllowedBecause: the
+#                decision is the half's, written down there. The Confectioner's
+#                Apple Dumpling, behind a farmer's expert Red Apple, because
+#                every Confectioner row wants flour (HALVES_WITH_AN_UNSTANDABLE_RUNG).
+# Until 27 Nov 2026 this knew only the first two, so those three rows read as
+# nobody's and the nightly's balance harness failed on them (#7100).
+$seasonedBase = @{}
+$fg = Load 'food-groups.json'
+if ($fg -and $fg.PSObject.Properties.Name -contains 'season') {
+    foreach ($dp in $fg.season.dishes.PSObject.Properties) {
+        $dish = $dp.Value
+        if (-not ($dish.PSObject.Properties.Name -contains 'recipe') -or -not $dish.recipe) { continue }
+        $base = $fg.season.recipes.PSObject.Properties[[string]$dish.of]
+        if ($base) { $seasonedBase[[string]$dish.recipe] = [string]$base.Value }
+    }
+}
+function FarReason($row, [int]$gap, [string]$id = '') {
     $rf = [string]$row.rankFrom
+    if ($rf -eq 'the unseasoned recipe' -and $seasonedBase.ContainsKey($id)) {
+        $bid = $seasonedBase[$id]
+        $b = $recipes.recipes.PSObject.Properties[$bid]
+        if ($b -and [string]$b.Value.rank -eq [string]$row.rank) {
+            $bgap = [array]::IndexOf($RANKS, [string]$b.Value.rank) - [array]::IndexOf($RANKS, [string]$b.Value.inputRank)
+            if ([string]$b.Value.inputRank -and [Math]::Sign($bgap) -eq [Math]::Sign($gap)) {
+                $why = FarReason $b.Value $bgap $bid
+                if ($why -ne 'nobody') { return 'seasoned' }
+            }
+        }
+        return 'nobody'
+    }
     if ($rf.StartsWith('named outright in RECIPE_RANK')) { return 'kept' }
     if ($gap -gt 0 -and [int]$row.inputsWithNoProducer -gt 0 -and $rf.Contains('held above what its placed inputs cost') -and
         $rf.Contains('Kept on purpose')) { return 'unproduced' }
+    if ($gap -lt 0 -and [string]$row.rank -eq 'novice' -and
+        ([string]$row.whyThatRank).StartsWith('the cheapest row of this half that a new character can reach, moved to novice')) {
+        $half = [string]$row.owner + '/' + [string]$row.half
+        $hv = $recipes.halves.PSObject.Properties[$half]
+        if ($hv -and ([string]$hv.Value.rungsNobodyCanGatherFor).StartsWith('the novice rung') -and [string]$hv.Value.andThatIsAllowedBecause) {
+            return 'way in'
+        }
+    }
     return 'nobody'
 }
 if ($recipes) {
     $inStep = 0; $outStep = 0; $noChain = 0; $far = @()
-    $farWhy = [ordered]@{ kept = 0; unproduced = 0; nobody = 0 }
+    $farWhy = [ordered]@{ kept = 0; unproduced = 0; seasoned = 0; 'way in' = 0; nobody = 0 }
     $farNobody = @()
     $perHalf = @{}
     foreach ($k in $recipes.recipes.PSObject.Properties.Name) {
@@ -447,8 +495,9 @@ if ($recipes) {
             if ($gap -lt 0) { $which = 'below' }
             $far += ('{0}: {1} is ranked {2} and its dearest input, {3}, is {4} work for a {5}. {6} rung(s) {7} what it costs.' -f `
                      $half, [string]$row.name, [string]$row.rank, $dearest, $ir, [string]$row.inputRankWho, [Math]::Abs($gap), $which)
-            $farWhy[(FarReason $row $gap)] += 1
-            if ((FarReason $row $gap) -eq 'nobody') { $farNobody += $far[$far.Count - 1] }
+            $why = FarReason $row $gap $k
+            $farWhy[$why] += 1
+            if ($why -eq 'nobody') { $farNobody += $far[$far.Count - 1] }
         }
     }
 
@@ -489,6 +538,8 @@ if ($recipes) {
         Say '  Why each of them is out, read off the row (FarReason, issue #398):'
         Say ('    {0,4}  kept on purpose: a rank named in RECIPE_RANK with its reason, the charcoal grades, the kept smelt rows and the college book staves' -f $farWhy.kept)
         Say ('    {0,4}  kept on purpose: held above its inputs because something on its list nobody gathers, Patrick 28 September' -f $farWhy.unproduced)
+        Say ('    {0,4}  kept on purpose: a garlic or salt dish at the rank of the dish it seasons, which is kept for one of those reasons (#6902)' -f $farWhy.seasoned)
+        Say ('    {0,4}  kept on purpose: the way into a half whose novice rung its table names as decided, rungsNobodyCanGatherFor' -f $farWhy['way in'])
         if ($farWhy.nobody -gt 0) {
             Bad ("{0} recipe(s) are more than one rung out for none of those reasons, so nobody has looked at them:" -f $farWhy.nobody)
             foreach ($f in ($farNobody | Select-Object -First 10)) { Write-Host ('          ' + $f) -ForegroundColor Red }

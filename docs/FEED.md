@@ -643,8 +643,9 @@ for byte, as before.
   a split one, and `/watch` hands out the same tag.
 - **A script that reads the site's feed** over https, not the store, reads it
   through `Join-FeedSettings` (`Feed-Json.ps1`): `Read-SiteFeed`,
-  `Check-Outside.ps1`, `Setup-ShipMachine.ps1` and
-  `Copy-ReleaseAssets-ToSite.ps1`. The rest read the launcher fields alone.
+  `Setup-ShipMachine.ps1` and `Copy-ReleaseAssets-ToSite.ps1`.
+  `Check-Outside.ps1` reads the launcher's Releases on GitHub instead
+  since #7114, as the launcher has since #5796. The rest read the launcher fields alone.
 
 Projected from the 19 Oct main feed with the note's title, version.json is
 about 650 bytes. `launcher\tests\test-1050-feed-split.js` holds the site to this, and

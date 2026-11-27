@@ -10,7 +10,7 @@
 
       .\scripts\deploy\Install-DeployAgent.ps1            install, or move to the newest Release
       .\scripts\deploy\Install-DeployAgent.ps1 -Status    what is there, its check and its log
-      .\scripts\deploy\Install-DeployAgent.ps1 -Status -Pass <kept pass>
+      .\scripts\deploy\Install-DeployAgent.ps1 -Status -BotPass <kept pass>
                                                          one kept bot pass's logs (#5196)
       .\scripts\deploy\Install-DeployAgent.ps1 -Remove    take it off again (not a gate verb)
 
@@ -106,7 +106,7 @@ param(
     [switch]$Status,
     # With -Status: one bot pass the agent kept, by its folder's name under
     # C:\Thornswood-BotPass\passes, which -Status lists.
-    [string]$Pass    = '',
+    [string]$BotPass = '',
     [switch]$Remove,
     # Leave the bot pass off (#5196): no task, and agent.json names no folder.
     [switch]$NoBotPass,
@@ -140,8 +140,8 @@ function Die($m) { Write-Host ''; Write-Host "STOP. $m" -ForegroundColor Red; if
 if ($Main -and $NoMain) { Die '-Main and -NoMain each do one thing, so pass one of them. Nothing was sent.' }
 if ($Status -and $Remove) { Die '-Status and -Remove each do one thing, so pass one of them. Nothing was sent.' }
 if ($Tag -and $Tag -notmatch '^agent-v\d+\.\d+\.\d+$') { Die "-Tag $Tag is not agent-v<a.b.c>. Nothing was sent." }
-if ($Pass -and -not $Status) { Die '-Pass names a kept bot pass for -Status to print, so it goes with -Status. Nothing was sent.' }
-if ($Pass -and $Pass -notmatch '^\d{8}-\d{6}-[A-Za-z0-9-]{1,64}$') { Die "-Pass $Pass is not a kept pass's name (<yyyyMMdd-HHmmss>-<deployment>), as -Status lists them. Nothing was sent." }
+if ($BotPass -and -not $Status) { Die '-BotPass names a kept bot pass for -Status to print, so it goes with -Status. Nothing was sent.' }
+if ($BotPass -and $BotPass -notmatch '^\d{8}-\d{6}-[A-Za-z0-9-]{1,64}$') { Die "-BotPass $BotPass is not a kept pass's name (<yyyyMMdd-HHmmss>-<deployment>), as -Status lists them. Nothing was sent." }
 if ($Root -notmatch '^[A-Za-z]:\\[A-Za-z0-9._\\-]+$') { Die "-Root $Root is not a plain folder on the box. Nothing was sent." }
 if (-not $Repo) {
     # The gate's checkout reads ssh://git@ssh.github.com:443/<owner>/<name>.git
@@ -189,11 +189,11 @@ if (Test-Path -LiteralPath `$res) { try { `$r = [IO.File]::ReadAllText(`$res) | 
 # Where a pass got to, as the agent says it in a Deployment's log when a
 # pass runs out (#5196): its own lines and the copy's server's. The last
 # pass's are in the run folder; the agent keeps each earlier one's under
-# passes\ when the next pass empties it (-Pass prints one of those).
+# passes\ when the next pass empties it (-BotPass prints one of those).
 # Addresses never leave the box.
-`$from = if ('$Pass') { '$passRoot\passes\$Pass' } else { '$passRoot\run' }
-if ('$Pass' -and -not (Test-Path -LiteralPath `$from)) { 'no kept pass ' + `$from }
-foreach (`$tail in @(@((Join-Path `$from 'bot-pass.log'), 40), @((Join-Path `$from `$(if ('$Pass') { 'bot-pass-server.log' } else { 'server\bot-pass-server.log' })), 80))) {
+`$from = if ('$BotPass') { '$passRoot\passes\$BotPass' } else { '$passRoot\run' }
+if ('$BotPass' -and -not (Test-Path -LiteralPath `$from)) { 'no kept pass ' + `$from }
+foreach (`$tail in @(@((Join-Path `$from 'bot-pass.log'), 40), @((Join-Path `$from `$(if ('$BotPass') { 'bot-pass-server.log' } else { 'server\bot-pass-server.log' })), 80))) {
   if (Test-Path -LiteralPath `$tail[0]) {
     '--- ' + `$tail[0] + ', last ' + `$tail[1] + ', written ' + (Get-Item -LiteralPath `$tail[0]).LastWriteTimeUtc.ToString('yyyy-MM-dd HH:mm:ss') + 'Z ---'
     Get-Content -LiteralPath `$tail[0] -Tail `$tail[1] | ForEach-Object { `$_ -replace '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b', '<address>' }
@@ -205,14 +205,14 @@ foreach (`$tail in @(@((Join-Path `$from 'bot-pass.log'), 40), @((Join-Path `$fr
 # ends in the tick's own frame (index.ts:192), which is how a throw caught
 # inside the tick is written, the login's among them (#6346). The lines
 # before it hold the message.
-`$srv = Join-Path `$from `$(if ('$Pass') { 'bot-pass-server.log' } else { 'server\bot-pass-server.log' })
+`$srv = Join-Path `$from `$(if ('$BotPass') { 'bot-pass-server.log' } else { 'server\bot-pass-server.log' })
 if (Test-Path -LiteralPath `$srv) {
   `$thrown = @(Select-String -LiteralPath `$srv -Pattern 'in server\.tick|index\.ts:192:' -Context 12,8)
   '--- what the copy''s server threw: ' + `$thrown.Count + ' line(s) in the tick, the first 5 with what was around them ---'
   foreach (`$m in @(`$thrown | Select-Object -First 5)) { '  ---'; foreach (`$c in @(`$m.Context.PreContext) + @(`$m.Line) + @(`$m.Context.PostContext)) { `$c -replace '\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b', '<address>' } }
 }
 `$kept =@(Get-ChildItem -LiteralPath '$passRoot\passes' -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 10)
-if (`$kept.Count) { '--- kept passes, newest 10 (-Status -Pass <name> prints one) ---'; foreach (`$k in `$kept) { '  ' + `$k.Name } } else { 'no kept passes yet in $passRoot\passes' }
+if (`$kept.Count) { '--- kept passes, newest 10 (-Status -BotPass <name> prints one) ---'; foreach (`$k in `$kept) { '  ' + `$k.Name } } else { 'no kept passes yet in $passRoot\passes' }
 '--- agent.log, last 30 ---'
 `$log = '$Root\logs\agent.log'
 if (Test-Path -LiteralPath `$log) { Get-Content -LiteralPath `$log -Tail 30 } else { 'no log yet' }
