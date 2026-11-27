@@ -280,58 +280,22 @@ function benchGate(actorId, baseDesc) {
 }
 
 /*
-  The handle, and which recipes want one. Argued for at the call in mp.onCraft.
+  THE CHARCOAL AND THE HANDLE ARE IN THE RECIPES (#1398, #6726).
 
-  Keyed off the family the recipe table already puts on every owned row, so this
-  list is checked against real data rather than against a memory of what Skyrim
-  contains: game\tests\test-1398-fuel.js counts the rows in each of these families and fails if
-  a family here matches nothing, because a family name that has been renamed
-  under it would turn this rule off without a word.
+  docs/systems/professions/smith.md: every forge, skyforge and smelter
+  recipe burns one charcoal of the grade its metal asks for, and a war axe,
+  a battleaxe, a warhammer and a mace take a Tool Handle as well. Until
+  #6726 the server took both after the craft, so the game's own list never
+  named them and a tester only learned of them from a line in chat.
+  Patrick's B on #6726: they are inputs on the records, so the list shows
+  them and the engine takes them like any other input, from the pack or the
+  bench's stock. scripts/dev/Build-FuelTable.js says which recipe takes
+  which (FUEL_BY_RECIPE), scripts/mods/Build-LastPlugin.py writes them into
+  every recipe it copies, and a recipe of a plugin it never copies takes
+  them in each person's game (RECIPES_SET_IN_GAME, below). The
+  Charcoal grade is Skyrim's own Charcoal, which the Charburner's kiln
+  makes.
 */
-const HANDLE_DESC = '15490:Thornswood-Content.esp';
-/*
-  CHARCOAL FOR THE FIRE, BY GRADE (#1398).
-
-  docs/systems/professions/smith.md: "Every forge and every skyforge burns one
-  charcoal. No charcoal of the grade the metal asks for, the piece is not
-  made." Then the grade table, the smelter at the same grade as its metal, and
-  the skyforge one grade poorer. Which grade each recipe asks for is
-  FUEL_BY_RECIPE below, worked out of game\data\recipes.json by
-  scripts\dev\Build-FuelTable.js, because the rows the server carries name
-  neither their bench nor their metal. The rule before this read a bench off
-  the row, no installed row carries one, and so no forge took any charcoal.
-
-  The same shape as the handle: not an ingredient on the record, which would
-  couple this to every smithing plugin, but taken here once the craft is
-  allowed.
-
-  THE GRADE THE TABLE NAMES, AND ONLY THAT GRADE. It used to burn the cheapest
-  piece in the pack, Poor Charcoal first, whatever the metal. A hotter grade
-  is not burned in place of the one asked for: the page says no charcoal of
-  that grade, no piece. Skyrim's own Charcoal is the Charcoal grade, by its
-  name, as it was always taken here.
-*/
-const CHARCOAL_GRADES = [
-  null,
-  { name: 'Poor Charcoal', descs: [ITEMS.charcoalT1] },
-  { name: 'Charcoal', descs: [ITEMS.charcoalT2, ITEMS.charcoal] },
-  { name: 'Charcoal Briquette', descs: [ITEMS.charcoalT3] },
-  { name: 'Coke', descs: [ITEMS.charcoalT4] }
-];
-
-/* Written by scripts\dev\Build-FuelTable.js out of game\data\recipes.json into its table file:
-   every recipe at a forge, a skyforge or a smelter, which prints the counts.
-   Recipe desc -> [grade 1 to 4, the metal that asks for it or nothing, the bench]. */
-const FUEL_BY_RECIPE = table('FUEL_BY_RECIPE');
-
-/** The fuel a recipe burns, { grade, metal, bench }, or null when it burns none. */
-function fuelFor(recipeDesc) {
-  if (!Object.prototype.hasOwnProperty.call(FUEL_BY_RECIPE, recipeDesc)) { return null; }
-  const f = FUEL_BY_RECIPE[recipeDesc];
-  const grade = Number(f && f[0]);
-  if (!CHARCOAL_GRADES[grade]) { return null; }
-  return { grade: grade, metal: String(f[1] || ''), bench: String(f[2] || 'forge') };
-}
 
 /** How many of one item a pack holds, every stack of it counted. */
 function packCount(actorId, itemDesc) {
@@ -345,57 +309,6 @@ function packCount(actorId, itemDesc) {
     if (entries[i] && entries[i].baseId === baseId) { n += Number(entries[i].count) || 0; }
   }
   return n;
-}
-
-/** The charcoal of exactly that grade in this pack, or '' when there is none. */
-function charcoalHeld(actorId, grade) {
-  const g = CHARCOAL_GRADES[grade];
-  if (!g) { return ''; }
-  for (let i = 0; i < g.descs.length; i++) {
-    if (g.descs[i] && packCount(actorId, g.descs[i]) > 0) { return g.descs[i]; }
-  }
-  return '';
-}
-
-/** What is said when the grade a piece asks for is not in the pack. */
-function fuelRefusal(fuel) {
-  const grade = CHARCOAL_GRADES[fuel.grade].name;
-  const metal = fuel.metal.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
-  let first;
-  if (fuel.bench === 'smelter') {
-    first = metal ? 'Smelting ' + metal + ' burns ' + grade : 'A smelter burns ' + grade;
-  } else {
-    const at = fuel.bench === 'skyforge' ? 'the skyforge' : 'a forge';
-    first = metal ? metal + ' at ' + at + ' burns ' + grade
-                  : (fuel.bench === 'skyforge' ? 'The skyforge' : 'A forge') + ' burns ' + grade;
-  }
-  return first + ', and you have none. A Charburner makes it from firewood at a kiln.';
-}
-
-/*
-  The four hafted families on the smith page: a war axe, a battleaxe, a
-  warhammer and a mace are a metal head on a wooden haft. Other weapons was
-  on this list too, and in the table that family is the woodcutter's axe and
-  the drum, the flute and the lute, so the instruments were asked for a
-  handle (#1398). An instrument is not a haft.
-*/
-const HAFTED_FAMILIES = ['War axes', 'Battleaxes', 'Warhammers', 'Maces'];
-
-/** True when this recipe makes something fitted to a wooden handle. */
-function wantsAHandle(row) {
-  if (!row || typeof row !== 'object') { return false; }
-  // The three tools ask for a handle in the records, so the rule must not ask
-  // for a second one. Their outputs are the ones TOOLS names.
-  const out = String(row.out || '');
-  for (const key in TOOLS) {
-    if (!Object.prototype.hasOwnProperty.call(TOOLS, key)) { continue; }
-    if (TOOLS[key].give === out) { return false; }
-  }
-  const family = String(row.family || '');
-  for (let i = 0; i < HAFTED_FAMILIES.length; i++) {
-    if (HAFTED_FAMILIES[i] === family) { return true; }
-  }
-  return false;
 }
 
 /*
@@ -1339,7 +1252,7 @@ function handRecipesHidden(actorId) {
   a craft at the new counts matches no record and arrives with no recipe id.
   recipeSetInGame names the recipe from its output, its bench and exactly the
   new counts, and onCraft treats it as that recipe from there: the same gate,
-  charcoal, handle and credit as any other. A craft at the mod's own counts,
+  tool and credit as any other. A craft at the mod's own counts,
   from a game that has not set the new ones yet, matches the record and is
   refused, so nobody pays the coins or the old counts.
 
@@ -1347,8 +1260,27 @@ function handRecipesHidden(actorId) {
 */
 // Written by scripts\dev\Build-Recost.py from game\data\recost.json into its table file.
 // The re-costed recipes of a plugin Thornswood-Last.esp never copies from (#613, #2454),
-// set in each person's game instead: each input as [item, count it had, count it asks].
+// and its forge, skyforge and smelter ones given their charcoal and handle (#6726),
+// set in each person's game instead: each input as [item, count it had, count it asks],
+// an input the record does not name after the ones it does, with 0 for what it had.
 var RECIPES_SET_IN_GAME = table('RECIPES_SET_IN_GAME');
+
+/*
+  THE CHARCOAL AND THE HANDLE IN EACH GAME TOO (#6726).
+
+  Thornswood-Last.esp writes the charcoal and the handle into every forge,
+  skyforge and smelter recipe it copies (the block at the top of this file).
+  Immersive Armors' are never copied (#2454), so Build-Recost.py puts each
+  of those in RECIPES_SET_IN_GAME as well, with the charcoal and the handle
+  as inputs on top of its counts. One its record does not name has 0 for
+  the count it had, and each person's game adds it to its own copy of the
+  record with the fork's TESModPlatform.SetCraftingInput, which SKSE's
+  ConstructibleObject has no call for. Its craft then matches no server
+  record, as a re-costed one does, and recipeSetInGame names it from its
+  output, its bench and the counts with the charcoal and handle in them. A
+  craft at the record's own counts, from a game that has not added them, is
+  refused, so nobody makes one without them.
+*/
 
 var RECIPE_COUNTS_PROPERTY = 'thornswoodRecipeCounts';
 // One stamp per load, so a deploy that changes the table hands it again.
@@ -1374,9 +1306,18 @@ function recipeCountsScript() {
     // A plugin this game does not have lists nothing, so there is nothing to set.
     '      if (!cobj) { continue; }',
     '      var inputs = v.rows[key];',
-    '      if (cobj.getNumIngredients() !== inputs.length) { continue; }',
+    // The inputs the record names come first; the ones it does not (had 0)
+    // are added after them, so a game that added them already has them all.
+    '      var named = 0;',
+    '      while (named < inputs.length && inputs[named][1] > 0) { named++; }',
+    '      var num = cobj.getNumIngredients();',
+    '      if (num !== named && num !== inputs.length) { continue; }',
+    // A client from before the fork's SetCraftingInput cannot add one, so
+    // it leaves the recipe as its record has it, and the server refuses a
+    // craft at those counts (recipeMetadataRefusal).
+    '      if (named < inputs.length && !(sp.TESModPlatform && typeof sp.TESModPlatform.setCraftingInput === "function")) { continue; }',
     '      var same = true;',
-    '      for (var i = 0; i < inputs.length && same; i++) {',
+    '      for (var i = 0; i < num && same; i++) {',
     '        var item = formOf(inputs[i][0]);',
     '        var has = cobj.getNthIngredient(i);',
     '        var count = cobj.getNthIngredientQuantity(i);',
@@ -1384,8 +1325,13 @@ function recipeCountsScript() {
     '               (count === inputs[i][1] || count === inputs[i][2]);',
     '      }',
     '      if (!same) { continue; }',
-    '      for (var n = 0; n < inputs.length; n++) {',
+    '      for (var n = 0; n < named; n++) {',
     '        if (cobj.getNthIngredientQuantity(n) !== inputs[n][2]) { cobj.setNthIngredientQuantity(inputs[n][2], n); }',
+    '      }',
+    // SetCraftingInput sets the count, so asking again changes nothing.
+    '      for (var m = named; m < inputs.length; m++) {',
+    '        var more = formOf(inputs[m][0]);',
+    '        if (more) { sp.TESModPlatform.setCraftingInput(formOf(key), more, inputs[m][2]); }',
     '      }',
     '    }',
     '  } catch (e) { }',
@@ -1522,9 +1468,10 @@ function recipeMovedInGame(craftedItemBaseId, workbenchId, inputs) {
     if (!own.call(RECIPES_MOVED_IN_GAME, desc)) { continue; }
     var row = RECIPES_MOVED_IN_GAME[desc];
     if (row.out !== outDesc || row.to !== benchKey) { continue; }
-    // A recipe whose counts are set in each game too is named by
-    // recipeSetInGame at its new counts, at this bench; its record's own
-    // counts are the ones that game refuses.
+    // A recipe whose counts are set in each game too (re-costed, or given
+    // its charcoal and handle) is named by recipeSetInGame at its new
+    // counts, at this bench; its record's own counts are the ones that game
+    // refuses.
     if (typeof RECIPES_SET_IN_GAME === 'object' && RECIPES_SET_IN_GAME && own.call(RECIPES_SET_IN_GAME, desc)) { continue; }
     var want = {};
     for (var n = 0; n < row.inputs.length; n++) {
@@ -2270,9 +2217,10 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     engine's eighth argument is what it is about to take from them. Asked
     again here, because the building may have changed hands since: a craft
     that draws on chests that are no longer theirs is refused, and nothing
-    leaves the pack or the chests. The charcoal and the handle below come
-    out of the same chests when the pack has none. An engine before fork
-    #116, or a person at a bench with no chests, gets the pack alone.
+    leaves the pack or the chests. The charcoal and the handle are inputs
+    on the record (#6726), so they come out of the same chests as any other
+    input when the pack has none. An engine before fork #116, or a person at
+    a bench with no chests, gets the pack alone.
   */
   const propForStock = globalThis.__thornswoodProperty;
   const stock = (propForStock && typeof propForStock.benchStock === 'function')
@@ -2381,41 +2329,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
   }
 
   /*
-    THE FUEL AND THE HANDLE ARE ASKED FOR BEFORE ANYTHING IS TAKEN (#1398), so
-    a refusal for one never costs the other, and a key is never named for a
-    craft that did not happen. They are taken below, once nothing can refuse.
-  */
-  const fuel = fuelFor(desc);
-  let coal = fuel ? charcoalHeld(actorId, fuel.grade) : '';
-  let coalFrom = actorId;
-  for (let i = 0; fuel && !coal && i < stock.from.length; i++) {
-    coal = charcoalHeld(stock.from[i], fuel.grade);
-    if (coal) { coalFrom = stock.from[i]; }
-  }
-  if (fuel && !coal) {
-    const no = fuelRefusal(fuel);
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', CHARCOAL_GRADES[fuel.grade].name);
-    return false;
-  }
-  const hafted = wantsAHandle(row);
-  let handleFrom = actorId;
-  for (let i = 0; hafted && packCount(handleFrom, HANDLE_DESC) < 1 && i < stock.from.length; i++) {
-    handleFrom = stock.from[i];
-  }
-  if (hafted && packCount(handleFrom, HANDLE_DESC) < 1) {
-    const no = 'A ' + String(row.name || 'that') + ' is fitted to a wooden handle and you ' +
-               'have none. A woodworker cuts them from firewood at a kiln.';
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no handle');
-    return false;
-  }
-  /*
-    THE TRADE'S TOOL (#3162), asked with the fuel and the handle, before
-    anything is taken, and worn below once the craft has gone through. The
-    tool is never an input: an input is taken, and a tool is held and wears.
+    THE TRADE'S TOOL (#3162), asked before anything is taken, and worn
+    below once the craft has gone through. The tool is never an input: an
+    input is taken, and a tool is held and wears.
   */
   const toolKey = benchToolKey(row);
   const noTool = toolKey ? toolGate(actorId, toolKey) : null;
@@ -2444,52 +2360,6 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     say(actorId, no);
     return false;
   }
-  /*
-    THE HANDLE, AND EVERY OTHER HAFTED THING.
-
-    Patrick, 21 September: the woodworker makes handles "that the smith needs
-    for Pickaxes, Shovels, Axes and other items that have wooden handles like
-    that". The pickaxe, the axe and the shovel ask for one in the records, which
-    is where a requirement belongs. The "other items" are the problem: there are
-    Counted rather than guessed, 21 September: 277 of the 3,439 owned rows in
-    tools
-ecipes.json are hafted, and 126 of those are rows the server is
-    actually asked about. They come out of Bethesda's five plugins and half a
-    dozen mods.
-
-    SO IT IS A RULE HERE RATHER THAN 277 OVERRIDES. Overriding another mod's
-    COBJ records couples this plugin to their versions: Immersive Weapons owns a
-    good number of these, and an override is a copy that goes stale silently the
-    day they change one. A rule keyed off the family already on every row covers
-    the same recipes, covers anything added later with no plugin edit at all,
-    and cannot go stale against a mod it has never heard of.
-
-    WHAT IT COSTS TO DO IT THIS WAY, said out loud because it is a real gap:
-    Build-RecipeTable ranks a row by what its INPUTS cost, and it reads inputs
-    out of the records. A handle required here is not in the records, so the
-    table does not know about it and the 269 rows are ranked as though the
-    handle were free. It is worth five gold and a novice woodworker's minute, so
-    the error is small, but it is an error and not a rounding.
-
-    THE FOUR FAMILIES. A haft is a shaft you hold in two hands or one, with the
-    weight at the end: war axes, battleaxes, warhammers and maces, the four the
-    smith page names. Other weapons was a fifth, and in the table it is the
-    woodcutter's axe, which names its handle in its own record, and the drum,
-    the flute and the lute, which are not hafted (#1398). Swords, greatswords
-    and daggers are a tang and a grip rather than a haft. Bows and staves are
-    wooden through and through, which is a different thing from having a
-    handle fitted to them, and a bow that wanted a handle would read as a
-    mistake to anybody holding one.
-  */
-  if (coal && !takeItem(coalFrom, coal, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the charcoal could not be taken');
-    return false;
-  }
-  if (hafted && !takeItem(handleFrom, HANDLE_DESC, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the handle could not be taken');
-    return false;
-  }
-
   // The skill that made the piece is the rank before this craft counts (#3151).
   const margin = qualityMargin(actorId, row);
   if (answer.credit) {
