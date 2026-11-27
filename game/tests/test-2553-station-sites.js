@@ -21,9 +21,7 @@
        the four hold capitals on the Sea of Ghosts; a hive at each named farm
        with 5 crop plots or more in its claim circle; a lab in the apothecary
        of each of the nine hold capitals, indoors; a study desk in each of
-       the College's four halls (#1387); a cooking pot in each of the two
-       inns with no cooking station, indoors in that room, the server
-       standing the one in a cell the content plugin cannot place into (#6893)
+       the College's four halls (#1387)
     C  no two stations stand on top of each other
     B  the table was built against the collection's own bytes, and leaves
        out the content plugin it is written into; Thornswood's two plugins
@@ -50,11 +48,7 @@ const BASES = {
   hive: 'dbf8b3:Thornswood-Content.esp', lab: '42e69:Thornswood-Content.esp',
   well: '18030:Thornswood-Content.esp', river: '18031:Thornswood-Content.esp',
   study: '18032:Thornswood-Content.esp',
-  // #6893: Skyrim's own cooking pot, CraftingCookingPotSm, the pot every inn's cook uses.
-  cook: '1010b3:Skyrim.esm',
 };
-// The two inns with no cooking station (#6893, measured 26 Nov 2026 over the 33 inn rooms).
-const INNS = { 'the New Gnisis Cornerclub, Windhelm': '1677f:Skyrim.esm', 'the inn at North Keep': '3a988:North Keep.esp' };
 const MASTERS = ['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm'];
 const bySrv = (n) => sites[n].standBy === 'server';
 
@@ -154,15 +148,9 @@ yes('K9 a study desk for each of the College\'s four halls, indoors in that hall
       ['1380e:Skyrim.esm', '1380f:Skyrim.esm', 'cab91:Skyrim.esm', '13810:Skyrim.esm'].indexOf(sites[n].cell) >= 0) &&
     new Set(of('study').map((n) => sites[n].cell)).size === of('study').length);
 
-yes('K10 a cooking pot for each of the two inns with no cooking station, indoors in that room, placed or left out (' +
-    of('cook').length + ' placed, #6893)',
-    JSON.stringify(placesOf('cook')) === JSON.stringify(Object.keys(INNS).sort()) &&
-    of('cook').every((n) => sites[n].interior && sites[n].space === sites[n].cell && INNS[sites[n].where] === sites[n].cell) &&
-    of('cook').every((n) => bySrv(n) === (MASTERS.indexOf(sites[n].cell.split(':')[1].toLowerCase()) < 0)));
-
 yes("K7 Patrick's B: a kiln may stand among small plants and a salt vein is set into rock, and no other kind loosens",
     table.kinds.kiln.amongPlants === true && table.kinds.salt.setIntoRock === true &&
-    ['hive', 'lab', 'study', 'cook'].every((k) => table.kinds[k].amongPlants === false && table.kinds[k].setIntoRock === false) &&
+    ['hive', 'lab', 'study'].every((k) => table.kinds[k].amongPlants === false && table.kinds[k].setIntoRock === false) &&
     table.kinds.kiln.setIntoRock === false && table.kinds.salt.amongPlants === false);
 yes("K8 only Solitude's and Markarth's kilns look 20,000 units out for a chopping block",
     kilns.every((n) => (sites[n].townReach || 0) === 0 || ['Solitude', 'Markarth'].indexOf(sites[n].where) >= 0));

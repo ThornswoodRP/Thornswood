@@ -10,11 +10,6 @@ Hearthcook's, from novice, so a confectioner at the pot is making
 their sister half and stops at novice meals.
 The grain mill is Hearthcook only.
 
-Every inn has a cookpot, spit or oven a cook can work at, so a keeper
-can hire one. The two that had none, the New Gnisis Cornerclub in
-Windhelm and North Keep's inn, have one of Skyrim's own cooking pots
-since #6893 ([Station placement](../station-placement.md) says where).
-
 ## Salting and smoking
 
 Either half, from novice, preserves raw meat and fish so it never
