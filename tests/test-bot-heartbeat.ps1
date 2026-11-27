@@ -108,7 +108,7 @@ $r = BeatProblem $null $running $at
 Yes 'no heartbeat file two hours after it started is down' ($r -match '^Its python process has been running for 120 minutes and there is no heartbeat file, so it is stuck before it got going or cannot write the file$')
 Yes '  but two minutes after it started it may still be starting, and is fine' ((BeatProblem $null @(@{ Id = 4242; Started = $at - 120 }) $at) -eq '')
 Yes '  and a process Windows gave no start time for is not judged on its age' ((BeatProblem $null @(@{ Id = 4242; Started = 0 }) $at) -eq '')
-$bad = [pscustomobject]@{ Unreadable = $true }
+$bad = 'unreadable'
 $r = BeatProblem $bad $running $at
 Yes 'a heartbeat file that cannot be read, two hours in, is down' ($r -match '^Its python process has been running for 120 minutes and its heartbeat file cannot be read, so nothing says it is working$')
 Yes '  but not two minutes in' ((BeatProblem $bad @(@{ Id = 4242; Started = $at - 120 }) $at) -eq '')
@@ -116,12 +116,14 @@ $rb = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-readbeat-' + [Guid]::New
 try {
     Yes 'ReadBeat gives nothing for no file' ($null -eq (ReadBeat $rb))
     [IO.File]::WriteAllText($rb, '{"pid": 42, "writ')
-    Yes 'ReadBeat says a file cut short cannot be read' ([bool](ReadBeat $rb).PSObject.Properties['Unreadable'])
+    Yes 'ReadBeat says a file cut short cannot be read' ((ReadBeat $rb) -eq 'unreadable')
     [IO.File]::WriteAllText($rb, '[]')
-    Yes 'ReadBeat says JSON that is no heartbeat cannot be read' ([bool](ReadBeat $rb).PSObject.Properties['Unreadable'])
+    Yes 'ReadBeat says JSON that is no heartbeat cannot be read' ((ReadBeat $rb) -eq 'unreadable')
+    [IO.File]::WriteAllText($rb, '"written"')
+    Yes 'ReadBeat says a JSON string cannot be read either' ((ReadBeat $rb) -eq 'unreadable')
     [IO.File]::WriteAllText($rb, '{"pid": 42, "started": 1, "written": 2, "connected": true, "connected_at": 2, "last_event": 0}')
     $rr = ReadBeat $rb
-    Yes 'ReadBeat reads a heartbeat' ([int64]$rr.written -eq 2 -and -not $rr.PSObject.Properties['Unreadable'])
+    Yes 'ReadBeat reads a heartbeat' ([int64]$rr.written -eq 2 -and -not ($rr -is [string]))
 } finally { Remove-Item -LiteralPath $rb -Force -EA SilentlyContinue }
 $r = BeatProblem (B ($at - 660) $true ($at - 660)) $running $at
 Yes 'a heartbeat eleven minutes old is a hung bot' ($r -match '^Its python process is running, but its heartbeat stopped 11 minutes ago, so it is hung$')
@@ -149,7 +151,7 @@ $words = @(
     (BeatProblem (B ($at - 20) $false 0 ($at - 720)) @(@{ Id = 4242; Started = $at - 720 }) $at),
     (BeatProblem $old @(@{ Id = 4242; Started = $at - 1200 }) $at),
     (BeatProblem $null $running $at),
-    (BeatProblem ([pscustomobject]@{ Unreadable = $true }) $running $at))
+    (BeatProblem 'unreadable' $running $at))
 $bad = @($words | Where-Object { -not $_ -or $_ -match '[^\x00-\x7F]' -or $_ -match '(?i)\bplayers?\b' -or $_ -match '\.$' })
 Yes 'every reason is plain ASCII, never says player, and leaves the full stop to the message' ($bad.Count -eq 0)
 

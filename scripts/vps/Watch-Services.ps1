@@ -369,12 +369,14 @@ function BotProcs() {
   return $list
 }
 
-# heartbeat.json as an object, $null when it is not there, or an object with
-# only Unreadable set when it is there but cannot be read as a heartbeat.
+# heartbeat.json as an object, $null when it is not there, or the string
+# 'unreadable' when it is there but cannot be read as a heartbeat. A string,
+# not an object with a field of its own, so BeatProblem reads no field off
+# $beat that the bot does not write (bot/tests/test-heartbeat.py holds that).
 function ReadBeat($path) {
   if (-not (Test-Path -LiteralPath $path)) { return $null }
-  try { $b = Get-Content -LiteralPath $path -Raw -Encoding UTF8 -EA Stop | ConvertFrom-Json -EA Stop } catch { return [pscustomobject]@{ Unreadable = $true } }
-  if ($null -eq $b -or $null -eq $b.PSObject.Properties['written']) { return [pscustomobject]@{ Unreadable = $true } }
+  try { $b = Get-Content -LiteralPath $path -Raw -Encoding UTF8 -EA Stop | ConvertFrom-Json -EA Stop } catch { return 'unreadable' }
+  if ($null -eq $b -or $null -eq -not ($b -is [pscustomobject]) -or $null -eq $b.PSObject.Properties['written']) { return 'unreadable' }
   return $b
 }
 
@@ -398,7 +400,7 @@ function BeatProblem($beat, $procs, $at) {
   # old. A process Windows gave no start time for is not judged on its age.
   $none = ''
   if ($null -eq $beat) { $none = 'there is no heartbeat file, so it is stuck before it got going or cannot write the file' }
-  elseif ($beat.PSObject.Properties['Unreadable']) { $none = 'its heartbeat file cannot be read, so nothing says it is working' }
+  elseif ($beat -is [string]) { $none = 'its heartbeat file cannot be read, so nothing says it is working' }
   if ($none) {
     if ($young -le $beatStale -or $young -eq [int64]::MaxValue) { return '' }
     return ('Its python process has been running for ' + (Mins $young) + ' and ' + $none)
