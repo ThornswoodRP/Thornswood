@@ -1,9 +1,15 @@
 """Synthetic plugins through the real Last serializer; no game files."""
+import ast
+import contextlib
+import copy
+import io
+import os
 import importlib.util
 import pathlib
 import struct
 import sys
 import unittest
+from types import SimpleNamespace
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts/mods'))
@@ -158,5 +164,55 @@ class CisternTests(unittest.TestCase):
         unrelated=win[b'REFR',('skyrim.esm',0x12345)]
         self.assertEqual(unrelated.pi,0)
         self.assertEqual(verify(),[])
+
+class StationGuardTests(unittest.TestCase):
+    def test_actual_station_guard_accounts_only_for_the_declared_refs(self):
+        tree=ast.parse((ROOT/'scripts/dev/Build-StationSites.py').read_text())
+        main=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='main')
+        nodes=[]
+        for node in main.body:
+            if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id in
+                    ('door_fields','door_edits','passage','floor_off') for t in node.targets): nodes.append(node)
+            elif (isinstance(node,ast.Expr) and isinstance(node.value,ast.Call) and
+                  isinstance(node.value.func,ast.Attribute) and isinstance(node.value.func.value,ast.Name) and
+                  node.value.func.value.id=='door_edits'): nodes.append(node)
+            elif (isinstance(node,ast.For) and isinstance(node.target,ast.Name) and node.target.id=='n' and
+                  isinstance(node.iter,ast.Name) and node.iter.id=='OURS_AFTER'): nodes.append(node)
+        self.assertTrue(any(isinstance(n,ast.For) for n in nodes))
+        # Execute the actual identity/count guard with synthetic Plugin rows;
+        # measurements, filesystem reads and source archives are not invoked.
+        wrapper=ast.parse('def check(lo_doc):\n pass\n').body[0]
+        wrapper.body=copy.deepcopy(nodes)+[ast.Return(ast.Constant(0))]
+        current=[]
+        class Plugin:
+            def __init__(self,*args): self.masters=['Skyrim.esm']
+            def walk(self,callback,tops):
+                for fid,flags in current: callback(b'REFR',0,0,flags,fid,None,None)
+        namespace={'wb':SimpleNamespace(Plugin=Plugin),'os':os,
+                   'own_plugins':SimpleNamespace(plugin_path=lambda data,name:name),
+                   'args':SimpleNamespace(data='synthetic'),'OURS_AFTER':['Thornswood-Last.esp'],
+                   'DELETED':0x20,'DISABLED':0x800}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[wrapper],type_ignores=[])),
+                     '<actual-station-guard>','exec'),namespace)
+        passage={'enabled':['2d2dd:Skyrim.esm','2d2fa:Skyrim.esm'],
+                 'disabled':['16c1d:Skyrim.esm','16d1e:Skyrim.esm','c730a:Skyrim.esm']}
+        manifest={'gatesUnlocked':['1b1f1:Skyrim.esm','42284:Skyrim.esm','42286:Skyrim.esm'],
+                  'cisternPassage':passage,'floorItems':{'off':2},'unrecognizedCategory':['999:Skyrim.esm']}
+        rows=[(int(ref.split(':')[0],16),0) for ref in manifest['gatesUnlocked']+passage['enabled']]
+        rows += [(int(ref.split(':')[0],16),0x800) for ref in passage['disabled']]
+        rows += [(0x1001,0x800),(0x1002,0x800)]
+        def run(doc,records):
+            current[:]=records
+            with contextlib.redirect_stdout(io.StringIO()): return namespace['check'](doc)
+        self.assertEqual(run(manifest,rows),0)
+        self.assertNotEqual(run(manifest,rows+[(0x999,0)]),0)
+        self.assertNotEqual(run(manifest,rows+[(0x999,0x800)]),0)
+        self.assertNotEqual(run(manifest,rows[1:]),0)
+        deleted=[(fid,flag|0x20) if fid==0x2d2dd else (fid,flag) for fid,flag in rows]
+        self.assertNotEqual(run(manifest,deleted),0)
+        old=copy.deepcopy(manifest);del old['cisternPassage']
+        ids={int(x.split(':')[0],16) for refs in passage.values() for x in refs}
+        self.assertEqual(run(old,[row for row in rows if row[0] not in ids]),0)
+
 
 if __name__=='__main__': unittest.main(verbosity=2)
