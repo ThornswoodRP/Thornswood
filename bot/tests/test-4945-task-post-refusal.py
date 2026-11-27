@@ -15,7 +15,6 @@ fine.
 
 The real bot module is imported. Never connects to anything.
 """
-import inspect
 import os
 import sys
 # bot\, the folder above: the bot's tests sit in bot\tests (#5341), and
@@ -23,6 +22,7 @@ import sys
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
 import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #2276)
+import inspect
 
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 
