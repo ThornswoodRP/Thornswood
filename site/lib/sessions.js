@@ -16,6 +16,7 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 const { DATA } = require('./base');
+const { writeWhole } = require('./whole');
 const { jsonFile, putJson } = require('./store');
 
 /* Who played, when they started, when they stopped, and on which build.
@@ -244,9 +245,10 @@ function slogFile(key) { return path.join(SLOGS, key + '.json'); }
    its saved time (#4432). pruneSessionLogs ages a set by that time alone and
    never opens it, so every write of a set goes through here: the first, a
    replay marked on it, a kept session's chat copied in or dropped. A set
-   written again is not younger for it. Throws as writeFileSync does. */
+   written again is not younger for it. Written whole (#5890), so a crash
+   part way through leaves the set as it was. Throws as writeWhole does. */
 function writeSlogSet(file, set) {
-  fs.writeFileSync(file, JSON.stringify(set));
+  writeWhole(file, JSON.stringify(set));
   const at = Number(set && set.at);
   if (at > 0) fs.utimesSync(file, new Date(at), new Date(at));
 }

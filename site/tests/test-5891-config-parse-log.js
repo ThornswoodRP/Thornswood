@@ -122,6 +122,18 @@ async function startOn(text) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
+/* How many of an unquoted word's first letters a JSON reader takes before it
+   breaks: those that match the start of true, false or null (#7441). A word
+   that starts with n or t breaks there, a letter or more in, not at its first. */
+function wordStart(w) {
+  for (const lit of ['true', 'false', 'null']) {
+    if (w[0] !== lit[0]) continue;
+    let k = 0;
+    while (k < w.length && k < lit.length && w[k] === lit[k]) k++;
+    return k;
+  }
+  return 0;
+}
 function lineCol(text, at) {
   const before = text.slice(0, at).split('\n');
   return 'line ' + before.length + ' column ' + (before[before.length - 1].length + 1);
@@ -137,7 +149,10 @@ function lineCol(text, at) {
   const cut = whole.indexOf(botToken) + 20;
   const cases = [
     { name: 'cut short inside the bot token', text: whole.slice(0, cut), at: cut },
-    { name: 'the client secret left unquoted', text: whole.replace('"' + clientSecret + '"', clientSecret), at: whole.indexOf('"' + clientSecret + '"') },
+    { name: 'the client secret left unquoted', text: whole.replace('"' + clientSecret + '"', clientSecret), at: whole.indexOf('"' + clientSecret + '"') + wordStart(clientSecret) },
+    // Secrets that start like null and true, so the break is letters in, every run (#7441).
+    { name: 'a botKey that starts like null left unquoted', text: whole.replace('"' + botKey + '"', 'nu' + botKey), at: whole.indexOf('"' + botKey + '"') + wordStart('nu' + botKey) },
+    { name: 'a botKey that starts like true left unquoted', text: whole.replace('"' + botKey + '"', 'tr' + botKey), at: whole.indexOf('"' + botKey + '"') + wordStart('tr' + botKey) },
     { name: 'a stray word after botKey', text: whole.replace('"' + botKey + '"', '"' + botKey + '" ' + secret.slice(0, 12)), at: whole.indexOf('"' + botKey + '"') + botKey.length + 3 },
     { name: 'nothing after the opening brace', text: '{', at: 1 }
   ];

@@ -15,6 +15,7 @@ const fs     = require('fs');
 const path   = require('path');
 const { DATA, FOR_BOT, LISTS } = require('./base');
 const { DOCS } = require('./pages');
+const { writeWhole } = require('./whole');
 
 const jsonFile = (p, fallback) => {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
@@ -73,24 +74,18 @@ const putFile = (p, text) => {
   // A held file that is there and will not read is never written over
   // (#2180, heldNow says it on the log): the write it would be is the empty
   // fallback plus one row, which is every other row gone.
+  // A rename that fails is said and refused (#5890). It used to be copied
+  // over the file in place, on Windows where a rename onto a file another
+  // program holds open fails, which is the write cut short all this is here
+  // to stop.
   if (heldShape(p) && heldNow(p).broken) return false;
-  const tmp = path.join(path.dirname(p), '.' + path.basename(p) + '.' + process.pid + '.tmp');
-  const dropTmp = () => {
-    if (!fs.existsSync(tmp)) return;
-    try { fs.unlinkSync(tmp); }
-    catch (e2) { console.error('[thornswood-docs] could not remove ' + tmp + ' (' + (e2.code || e2.message) + ')'); }
-  };
   try {
-    const body = typeof text === 'function' ? text() : String(text);
-    fs.writeFileSync(tmp, body, 'utf8');
-    try { fs.renameSync(tmp, p); }
-    catch (e) {
-      // Windows: rename onto an existing file can fail; replace then drop tmp.
-      try { fs.copyFileSync(tmp, p); } finally { dropTmp(); }
-    }
+    writeWhole(p, typeof text === 'function' ? text() : String(text));
     return true;
   } catch (e) {
-    dropTmp();
+    if (e && e.step === 'rename') {
+      console.error('[thornswood-docs] could not put ' + path.basename(p) + ' in place (' + (e.code || e.message) + '), so it was not saved');
+    }
     return false;
   }
 };
@@ -117,13 +112,19 @@ function writeDoc(n, text) {
     // The page is still saved when its .bak cannot be made, and that is said
     // (#2736), so the undo that is not there is not found out when it is
     // needed.
+    // Both written whole (#5890): the page used to be written in place, so
+    // a crash part way through left it cut short, and the .bak was copied
+    // over in place the same way.
     if (fs.existsSync(p)) {
-      try { fs.copyFileSync(p, p + '.bak'); }
+      try { writeWhole(p + '.bak', fs.readFileSync(p)); }
       catch (e) { console.error('[thornswood-docs] could not keep ' + path.basename(p) + '.bak before saving it (' + (e.code || e.message) + ')'); }
     }
-    fs.writeFileSync(p, text, 'utf8');
+    writeWhole(p, String(text));
     return true;
-  } catch (e) { return false; }
+  } catch (e) {
+    console.error('[thornswood-docs] could not save ' + path.basename(p) + ' (' + (e.code || e.message) + ')');
+    return false;
+  }
 }
 
 // The hub's boards, their file and their save (#2188) went in #4359: the

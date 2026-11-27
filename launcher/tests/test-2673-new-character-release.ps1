@@ -97,7 +97,9 @@ function Put([string]$path, [string]$body) {
 function RunNew([string]$exe, [string[]]$arg) {
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try {
-        $out = @(& $exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $NewPs @arg 2>&1 | ForEach-Object { "$_" })
+        # Through tests\ServerPorts.ps1, which holds no game port, so this does
+        # not stop on what this machine runs (#4243).
+        $out = @(& $exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tests') 'ServerPorts.ps1') $NewPs @arg 2>&1 | ForEach-Object { "$_" })
         return @{ out = $out; code = $LASTEXITCODE }
     }
     finally { $ErrorActionPreference = $eap }

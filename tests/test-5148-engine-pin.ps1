@@ -48,7 +48,7 @@ function Yes([string]$what, [bool]$cond) {
 
 # ---- 1. the pages match the records ------------------------------------------
 $diff = @(Update-EnginePinText -Repo $root -Check)
-Yes ('every pin block of THIRD-PARTY.md and credits.md matches the records (' + $(if ($diff.Count) { 'differs: ' + ($diff -join '; ') } else { 'all five' }) + ')') ($diff.Count -eq 0)
+Yes ('every pin block of THIRD-PARTY.md and credits.md matches the records (' + $(if ($diff.Count) { 'differs: ' + ($diff -join '; ') } else { 'all seven' }) + ')') ($diff.Count -eq 0)
 $facts = Get-EnginePinFacts $root
 Yes 'the records name one engine, and the facts read from them' ($facts.Commit -match '^[0-9a-f]{40}$' -and $facts.ServerSha256 -match '^[0-9a-f]{64}$' -and $facts.FrontFiles -gt 0)
 
@@ -56,7 +56,7 @@ Yes 'the records name one engine, and the facts read from them' ($facts.Commit -
 $plant = Join-Path ([IO.Path]::GetTempPath()) ('test-5148-' + [Guid]::NewGuid().ToString('N').Substring(0, 10))
 try {
     foreach ($d in 'records', 'site/data/site') { $null = New-Item -ItemType Directory -Force -Path (Join-Path $plant $d) }
-    foreach ($f in 'records/server-build.json', 'records/client-build.json', 'records/front-build.json', 'site/data/site/credits.md') {
+    foreach ($f in 'records/server-build.json', 'records/client-build.json', 'records/front-build.json', 'records/client-licences.json', 'site/data/site/credits.md') {
         Copy-Item -LiteralPath (Join-Path $root $f) -Destination (Join-Path $plant $f)
     }
     # THIRD-PARTY.md with CR LF, as a Windows checkout holds it.
@@ -71,16 +71,16 @@ try {
     $s = [IO.File]::ReadAllText($sp) | ConvertFrom-Json
     $s.source.commit = $new; $s.sha256 = ('5' * 64)
     [IO.File]::WriteAllText($sp, ($s | ConvertTo-Json -Depth 10))
-    foreach ($n in 'client-build.json', 'front-build.json') {
+    foreach ($n in 'client-build.json', 'front-build.json', 'client-licences.json') {
         $p = Join-Path $plant "records/$n"
         $j = [IO.File]::ReadAllText($p) | ConvertFrom-Json
-        $j.forkCommit = $(if ($n -eq 'client-build.json') { $new.Substring(0, 8) } else { $new })
+        $j.forkCommit = $(if ($n -ne 'front-build.json') { $new.Substring(0, 8) } else { $new })
         # The fork's skymp5-front changed too, so build.js has a new size and hash (#6200).
         if ($n -eq 'front-build.json') { $j.files.'build.js'.sha256 = ('7' * 64); $j.files.'build.js'.bytes = 1234567 }
         [IO.File]::WriteAllText($p, ($j | ConvertTo-Json -Depth 10))
     }
     $named = @(Update-EnginePinText -Repo $plant -Check)
-    Yes ('a moved record makes -Check name all five blocks (' + ($named -join '; ') + ')') ($named.Count -eq 5)
+    Yes ('a moved source record makes -Check name its five source blocks (' + ($named -join '; ') + ')') ($named.Count -eq 5)
     $wrote = @(Update-EnginePinText -Repo $plant)
     Yes 'a write changes the two pages' ($wrote.Count -eq 2)
     Yes '  and then every block matches' (@(Update-EnginePinText -Repo $plant -Check).Count -eq 0)
@@ -101,6 +101,43 @@ try {
     $same = [IO.File]::ReadAllText((Join-Path $plant 'THIRD-PARTY.md'))
     Yes 'when main runs the pin the page says so, with one source link' ($same.Contains("Main runs ``$new`` as well") -and -not $same.Contains('For the engine Main runs until then'))
     Yes '  and main is read back from that line' ((Get-EnginePinMain $plant) -eq $new)
+
+    # A new link layout brings new ports and fork libraries, not just a new SHA.
+    $lp = Join-Path $plant 'records/client-licences.json'
+    $licences = [IO.File]::ReadAllText($lp) | ConvertFrom-Json
+    $licences.ports | Add-Member -NotePropertyName 'fixture-port' -NotePropertyValue ([pscustomobject]@{
+        version = '1.2.3'; licence = 'fixture-declaration'; in = @('Data\SKSE\Plugins\MpClientPlugin.dll')
+    })
+    $licences.libraries | Add-Member -NotePropertyName 'fixture-library' -NotePropertyValue ([pscustomobject]@{
+        kind = 'fork'; version = $null; licence = $null; in = @('Data/SKSE/Plugins/MpClientPlugin.dll')
+    })
+    [IO.File]::WriteAllText($lp, ($licences | ConvertTo-Json -Depth 10))
+    $tables = @(Update-EnginePinText -Repo $plant -Check)
+    Yes 'changed measured libraries name exactly the two inventory blocks' ($tables.Count -eq 2 -and $tables -contains 'THIRD-PARTY.md ports' -and $tables -contains 'THIRD-PARTY.md libraries')
+    $tableWrote = @(Update-EnginePinText -Repo $plant)
+    Yes 'a library-only change writes only THIRD-PARTY.md' ($tableWrote.Count -eq 1 -and $tableWrote[0] -eq 'THIRD-PARTY.md')
+    $measuredPage = [IO.File]::ReadAllText((Join-Path $plant 'THIRD-PARTY.md'))
+    Yes 'both measured rows retain declared values and normalize their file leaves' ($measuredPage.Contains('| fixture-port | 1.2.3 | fixture-declaration | `MpClientPlugin.dll` |') -and $measuredPage.Contains('| fixture-library | the fork''s | not declared; its text is in `fixture-library.txt` | `MpClientPlugin.dll` |'))
+    Yes 'generated inventory tables round trip through Check' (@(Update-EnginePinText -Repo $plant -Check).Count -eq 0)
+    Yes 'library updates preserve unrelated text and the credits page' ((& $outside $same) -eq (& $outside $measuredPage) -and [IO.File]::ReadAllText((Join-Path $plant 'site/data/site/credits.md')).Contains("/tree/$new)"))
+    $badRecord = [IO.File]::ReadAllText($lp) | ConvertFrom-Json
+    $badRecord.forkCommit = '0' * 8
+    [IO.File]::WriteAllText($lp, ($badRecord | ConvertTo-Json -Depth 10))
+    $threw = $false; try { $null = Update-EnginePinText -Repo $plant } catch { $threw = $true }
+    Yes 'a licence record from another client stops before writing pages' ($threw -and [IO.File]::ReadAllText((Join-Path $plant 'THIRD-PARTY.md')) -eq $measuredPage)
+    $badRecord = [IO.File]::ReadAllText($lp) | ConvertFrom-Json
+    $badRecord.forkCommit = $licences.forkCommit
+    $badRecord.ports.'fixture-port'.in = @()
+    [IO.File]::WriteAllText($lp, ($badRecord | ConvertTo-Json -Depth 10))
+    $threw = $false; try { $null = Update-EnginePinText -Repo $plant } catch { $threw = $true }
+    Yes 'a measured port with no client association stops before writing pages' ($threw -and [IO.File]::ReadAllText((Join-Path $plant 'THIRD-PARTY.md')) -eq $measuredPage)
+    [IO.File]::WriteAllText($lp, ($licences | ConvertTo-Json -Depth 10))
+    foreach ($table in 'ports', 'libraries') {
+        [IO.File]::WriteAllText((Join-Path $plant 'THIRD-PARTY.md'), $measuredPage.Replace("<!-- /engine-pin:$table -->", ''))
+        $threw = $false; try { $null = Update-EnginePinText -Repo $plant } catch { $threw = $true }
+        Yes "a missing $table end marker stops its write" $threw
+        [IO.File]::WriteAllText((Join-Path $plant 'THIRD-PARTY.md'), $measuredPage)
+    }
 
     $broken = $after -replace '<!-- /engine-pin:front -->', ''
     [IO.File]::WriteAllText((Join-Path $plant 'THIRD-PARTY.md'), $broken)

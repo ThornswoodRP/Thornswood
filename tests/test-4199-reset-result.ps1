@@ -68,8 +68,11 @@ function Block([string]$forms) {
     $at = Get-Date
     foreach ($s in 0..180) { Put (Join-Path $forms ('_discarded-' + $at.AddSeconds($s).ToString('yyyyMMdd-HHmmss'))) 'in the way' }
 }
+# Through tests\ServerPorts.ps1, which holds no game port, so New-Character
+# does not stop on what this machine runs (#4243).
+$Ports = Join-Path $PSScriptRoot 'ServerPorts.ps1'
 function Run([string]$file, [string[]]$arg) {
-    $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file @arg 2>&1 | ForEach-Object { "$_" })
+    $said = @(& $boxPs -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Ports $file @arg 2>&1 | ForEach-Object { "$_" })
     return @{ Code = $LASTEXITCODE; Said = ($said -join "`n") }
 }
 
@@ -93,6 +96,8 @@ function Run-UseLocal([string]$root) {
 . '$(Join-Path $Repo 'scripts\deploy\World.ps1')'
 `$body = $($bodyAssign[0].Right.Extent.Text)
 `$Local = '$root'
+`$Character = 'ff000a01'
+`$Yes = `$true
 `$NoPause = `$true
 `$stopAndMove = '$(Join-Path $Repo 'scripts\deploy\StopAndMove.ps1')'
 function Say(`$m, `$c) { Write-Host `$m }
@@ -114,14 +119,14 @@ try {
     $r = Run-UseLocal $bad
     Yes ('1. -UseLocal with a change form it could not move exits 1 (exit ' + $r.Code + ')') ($r.Code -eq 1)
     Yes '   and names it' ($r.Said -match 'could not move 0\.json')
-    Yes '   and never says Done' ($r.Said -notmatch 'Done\. Press Play')
+    Yes '   and never says Done' ($r.Said -notmatch 'Done\. The next time that person presses Play')
     Yes '   and the character is still there' (Test-Path -LiteralPath (Join-Path $bad 'world\changeForms\0.json'))
     if ($r.Code -ne 1) { Write-Host ('      it said: ' + ($r.Said -replace "`n", ' / ')) }
 
     # ---- 2. a reset that works --------------------------------------------------------
     $good = Server 'reset-good'
     $r = Run-UseLocal $good
-    Yes ('2. -UseLocal whose reset worked says Done and exits 0 (exit ' + $r.Code + ')') ($r.Code -eq 0 -and $r.Said -match 'Done\. Press Play')
+    Yes ('2. -UseLocal whose reset worked says Done and exits 0 (exit ' + $r.Code + ')') ($r.Code -eq 0 -and $r.Said -match 'Done\. The next time that person presses Play')
     Yes '   and the character is gone, the world''s form kept' (
         -not (Test-Path -LiteralPath (Join-Path $good 'world\changeForms\0.json')) -and
         (Test-Path -LiteralPath (Join-Path $good 'world\changeForms\13164_Skyrim.esm.json')))

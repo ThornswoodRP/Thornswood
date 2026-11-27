@@ -43,13 +43,34 @@ $EnginePinBranch = 'engine-pin/next'
 $EnginePinThornswood = 'ThornswoodRP/Thornswood'
 $EnginePinPages = @('THIRD-PARTY.md', 'site/data/site/credits.md')
 $EnginePinBlockNames = [ordered]@{
-    'THIRD-PARTY.md'            = @('fork', 'front', 'servers', 'source')
+    'THIRD-PARTY.md'            = @('fork', 'front', 'servers', 'source', 'ports', 'libraries')
     'site/data/site/credits.md' = @('credits')
 }
 
 function Read-EnginePinJson([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "there is no $Path" }
     return ([IO.File]::ReadAllText($Path) | ConvertFrom-Json)
+}
+
+# The measured file associations and licence labels, not a fixed library list.
+function Get-EnginePinLicenceRows($Record, [string]$Kind) {
+    $group = $Record.PSObject.Properties[$Kind]
+    if (-not $group -or -not @($group.Value.PSObject.Properties).Count) { throw "client-licences.json has no $Kind" }
+    $heading = if ($Kind -eq 'ports') { 'as its port declares it' } else { 'as its folder or package gives it' }
+    $rows = @("| Library | Version | Licence, $heading | In |", '|---|---|---|---|')
+    [string[]]$names = @($group.Value.PSObject.Properties.Name)
+    [Array]::Sort($names, [StringComparer]::Ordinal)
+    foreach ($name in $names) {
+        $p = $group.Value.PSObject.Properties[$name].Value
+        $version = if ($Kind -eq 'libraries' -and $p.kind -eq 'fork') { "the fork's" } else { [string]$p.version }
+        $licence = if ($p.licence) { [string]$p.licence } else { 'not declared; its text is in `' + $name + '.txt`' }
+        [string[]]$files = @($p.in | ForEach-Object { (([string]$_).Replace('/', '\') -split '\\')[-1] })
+        if (-not $files.Count) { throw "client-licences.json lists $name in no client file" }
+        [Array]::Sort($files, [StringComparer]::Ordinal)
+        $where = (@($files | ForEach-Object { '`' + $_ + '`' }) -join ', ')
+        $rows += "| $name | $version | $licence | $where |"
+    }
+    return $rows
 }
 
 # What the records in the checkout at $Repo say the pin is. Throws when they
@@ -60,10 +81,12 @@ function Get-EnginePinFacts([string]$Repo) {
     $s = Read-EnginePinJson (Join-Path $rec 'server-build.json')
     $c = Read-EnginePinJson (Join-Path $rec 'client-build.json')
     $f = Read-EnginePinJson (Join-Path $rec 'front-build.json')
+    $l = Read-EnginePinJson (Join-Path $rec 'client-licences.json')
     $commit = ([string]$s.source.commit).ToLowerInvariant()
     if ($commit -notmatch '^[0-9a-f]{40}$') { throw 'records\server-build.json names no fork commit (source.commit)' }
     if (-not $commit.StartsWith(([string]$c.forkCommit).ToLowerInvariant()) -or -not [string]$c.forkCommit) { throw "records\client-build.json names $($c.forkCommit), not $commit" }
     if (([string]$f.forkCommit).ToLowerInvariant() -ne $commit) { throw "records\front-build.json is the build of $($f.forkCommit), not ${commit}: run Build-Front.ps1 -Record" }
+    if (-not [string]$l.forkCommit -or ([string]$l.forkCommit).ToLowerInvariant() -ne ([string]$c.forkCommit).ToLowerInvariant()) { throw 'records\client-licences.json does not name the client build commit' }
     $base = ([string]$s.source.upstreamBase).ToLowerInvariant()
     if ($base -notmatch '^[0-9a-f]{40}$') { throw 'records\server-build.json names no upstream base (source.upstreamBase)' }
     $sha = ([string]$s.sha256).ToLowerInvariant()
@@ -89,6 +112,8 @@ function Get-EnginePinFacts([string]$Repo) {
         Fork = $repoUrl; Branch = [string]$s.source.branch
         FrontFiles = $files.Count; FrontBytes = $bytes
         FrontJsBytes = [long]$js.bytes; FrontJsSha256 = $jsSha
+        PortRows = @(Get-EnginePinLicenceRows $l 'ports')
+        LibraryRows = @(Get-EnginePinLicenceRows $l 'libraries')
     }
 }
 
@@ -139,6 +164,8 @@ function Get-EnginePinBlocks($Facts, [string]$Main) {
             "  is ``$($Facts.ServerSha256)``, built",
             "  $($Facts.ServerBuilt). This is the recorded next release, not a deployment") + $mainLine
         source = $source
+        ports = @($Facts.PortRows)
+        libraries = @($Facts.LibraryRows)
         credits = @(
             'The server''s engine recorded for the next release, `scam_native.node`, is',
             'built from one commit,',
