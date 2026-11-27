@@ -5822,6 +5822,84 @@
     return ': ' + bits.join(', ');
   }
 
+  /*
+    WHERE A LOAD PUTS THE CHARACTER, AND WHICH CAMERA IT IS IN (#6593, #6594).
+
+    Dev Test #1 on 18 Nov: one tester spawned up in the air, another spawned
+    in first person with the mouse wheel doing nothing for a while. Their logs
+    could not say either. The first feet height came from a place line 35 to
+    50 s after the load, and the camera only from a "looking at" line, which
+    needs somebody in front of you.
+
+    So after each arrival (the first world, a new cell indoors, a new
+    worldspace, or a jump of more than 2000 units, which is a teleport), this
+    writes where the feet are, whether the game has the character in the air
+    and which camera it is in. It writes at 0.25, 1, 3 and 6 s after the
+    arrival, so a fall shows as the height dropping and a camera change shows
+    when it came. It reads only and changes nothing.
+  */
+  function landingSaid(pc) {
+    const bits = [];
+    let z = NaN;
+    try { z = Number(pc.getPositionZ()); } catch (e) { z = NaN; }
+    bits.push('feet at ' + (isFinite(z) ? Math.round(z) : 'unknown'));
+    let air = 'unknown';
+    try { air = pc.getAnimationVariableBool('bInJumpState') ? 'yes' : 'no'; } catch (e) { air = 'unknown'; }
+    bits.push('in the air ' + air);
+    let cam = -1;
+    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
+    bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
+    let menu = 'unknown';
+    try { menu = sp.Utility.isInMenuMode() ? 'yes' : 'no'; } catch (e) { menu = 'unknown'; }
+    bits.push('menu ' + menu);
+    return bits.join(', ');
+  }
+
+  // Where the character is, as a key that changes only on an arrival: the
+  // cell indoors, the worldspace outdoors, so walking across exterior cells is
+  // not one.
+  function landingKey(pc) {
+    let cell = null;
+    try { cell = pc.getParentCell(); } catch (e) { cell = null; }
+    let inside = false;
+    try { inside = !!(cell && cell.isInterior()); } catch (e) { inside = false; }
+    if (inside) {
+      try { return 'cell ' + cell.getFormID().toString(16); } catch (e) { return 'cell ?'; }
+    }
+    let world = null;
+    try { world = pc.getWorldSpace(); } catch (e) { world = null; }
+    try { return 'world ' + (world ? world.getFormID().toString(16) : '?'); } catch (e) { return 'world ?'; }
+  }
+
+  const LAND_AFTER = [250, 1000, 3000, 6000];
+  const LAND_JUMP = 2000;
+  let landWas = null;     // { key, x, y, z } at the last look
+  let landAt = 0;         // when the last arrival was seen
+  let landNext = LAND_AFTER.length;
+  let landLookAt = 0;
+  sp.on('update', guard('landing', () => {
+    const now = Date.now();
+    if (now < landLookAt) { return; }
+    landLookAt = now + 100;
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { landWas = null; return; }
+    let x = 0, y = 0, z = 0;
+    try { x = pc.getPositionX(); y = pc.getPositionY(); z = pc.getPositionZ(); } catch (e) { return; }
+    const key = landingKey(pc);
+    let arrived = !landWas || landWas.key !== key;
+    if (!arrived) {
+      const dx = x - landWas.x, dy = y - landWas.y, dz = z - landWas.z;
+      arrived = dx * dx + dy * dy + dz * dz > LAND_JUMP * LAND_JUMP;
+    }
+    landWas = { key: key, x: x, y: y, z: z };
+    if (arrived) { landAt = now; landNext = 0; return; }
+    if (landNext < LAND_AFTER.length && now - landAt >= LAND_AFTER[landNext]) {
+      log('landing: ' + LAND_AFTER[landNext] + 'ms after arriving in ' + key + ', ' + landingSaid(pc));
+      landNext++;
+    }
+  }));
+
   // A claim is a variable read, so it is asked every frame and a panel takes
   // the prompt down in the frame it opens, not on the next poll.
   sp.on('update', guard('crosshair', () => {
