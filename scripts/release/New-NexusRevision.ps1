@@ -1199,8 +1199,13 @@ if ($adds.Count -or $rules.Count -or $Remove.Count) {
 if (-not (Test-Path -LiteralPath $PageRecord)) { Die ('There is no page record at ' + $PageRecord + ', so the revision would go out with the text of the one before it. Nothing was built.') }
 $pageDoc = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($PageRecord)) $PageRecord }
 # The Dev collection's revisions go out with Dev's own name and summary, the
-# page record's "dev", whose slug says which collection that is (#7193).
-$toDev = [bool]($pageDoc.PSObject.Properties['dev'] -and $pageDoc.dev -and $pageDoc.dev.PSObject.Properties['slug'] -and [string]$pageDoc.dev.slug -eq $Slug)
+# page record's "dev"; records\collection.json's "dev" says which collection
+# that is (#7193).
+$toDev = $false
+if (Test-Path -LiteralPath $CollectionRecord) {
+  $devRec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($CollectionRecord)) $CollectionRecord }
+  $toDev = [bool]($devRec.PSObject.Properties['dev'] -and $devRec.dev -and [string]$devRec.dev.collection -eq $Slug)
+}
 $swaps.Add([ordered]@{ page = $pageDoc; dev = $toDev })
 Say ('  the page''s text, from ' + $PageRecord + $(if ($toDev) { ', with the Dev collection''s name and summary' } else { '' })) 'DarkGray'
 $swapsJson = Join-Path $scratch 'swaps.json'

@@ -19,7 +19,8 @@
        says "copied <from> <n> to <slug> 1" last; every mod entry, rule and
        file of the archive is the source revision's;
     3. -To a collection copies into it as its next revision and publishes it,
-       named with main's name again;
+       named with main's name again, or with Dev's when records\collection.json's
+       "dev" names that collection;
     4. -Number that is not the next revision stops before anything is sent;
        so does a draft waiting in the collection it goes to, a revision of
        the source that is not published, a mod whose page the permission
@@ -198,6 +199,11 @@ $r = Run @('-Slug', $dev.slug, '-Revision', '1', '-To', '7essxf', '-Number', '3'
 $st = State
 YesR '3. -To copies Dev''s revision 1 into 7essxf as revision 3 and publishes it' ($r.Code -eq 0 -and $st.collection.latest -eq 3 -and $null -eq $st.collection.draft) $r
 Yes '3. named Thornswood again, with main''s summary' ($st.collection.revisions.'3'.data.collection_manifest.info.name -eq 'Thornswood' -and $st.collection.revisions.'3'.data.collection_manifest.info.summary -eq 'A made-up collection.')
+$colRec = Join-Path $T 'collection.json'
+Put $colRec ('{"collection":"7essxf","revision":3,"dev":{"collection":"' + $dev.slug + '","offset":2}}')
+$r = Run @('-Slug', '7essxf', '-Revision', '3', '-To', $dev.slug, '-Number', '2', '-CollectionRecord', $colRec)
+$d2 = @((State).others) | Where-Object { $_.slug -eq $dev.slug } | Select-Object -First 1
+YesR '3. a copy into the collection the record''s "dev" names is named as Dev' ($r.Code -eq 0 -and $d2.latest -eq 2 -and $d2.revisions.'2'.data.collection_manifest.info.name -eq 'Thornswood Dev') $r
 Control @{ addRevision = @{ n = 4; id = 900004; status = 'draft'; archive = $archive } }
 $n0 = @(Writes).Count
 $r = Run @('-Slug', $dev.slug, '-To', '7essxf')

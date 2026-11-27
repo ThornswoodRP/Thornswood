@@ -114,7 +114,6 @@ function shapeProblems(page) {
       if (!named(page.dev.name)) out.push('dev.name is not a collection name of 3 to 36 characters on one line.');
       else if (page.name !== undefined && page.dev.name === page.name) out.push('dev.name is the same as name, so nobody could tell the two collections apart.');
       if (typeof page.dev.summary !== 'string' || !page.dev.summary.trim() || /[\r\n]/.test(page.dev.summary)) out.push('dev.summary is not one line of text.');
-      if (page.dev.slug !== undefined && (typeof page.dev.slug !== 'string' || !/^[a-z0-9]+$/.test(page.dev.slug) || page.dev.slug === page.collection)) out.push('dev.slug is not the slug of a collection other than ' + page.collection + '.');
     }
   }
   if (!Array.isArray(page.notSaid)) out.push('notSaid is not a list.');

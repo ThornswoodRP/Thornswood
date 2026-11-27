@@ -24,7 +24,7 @@
   with the key, with every entry, patch, rule and file as it is. Only the
   page's text, the name and the summary are those of the collection it goes
   to, from records\collection-page.json (its "dev" name and summary for the
-  Dev collection), written by nexus-collection.js --copy, which stops on any
+  Dev collection, the one records\collection.json's "dev" names), written by nexus-collection.js --copy, which stops on any
   other change. The new archive is held to the same files and folders as the
   source's before it goes up, and every mod in it to what its page allows
   (collection-permissions.js), as a publish of New-NexusRevision.ps1 is.
@@ -69,6 +69,10 @@
   What each mod's page allows: records\collection-permissions.json unless
   said otherwise.
 
+.PARAMETER CollectionRecord
+  records\collection.json unless said otherwise, whose "dev" names the Dev
+  collection.
+
 .PARAMETER Game
   The game's domain on Nexus. skyrimspecialedition unless said otherwise.
 
@@ -91,6 +95,7 @@ param(
   [int]$Number = 0,
   [string]$PageRecord,
   [string]$Permissions,
+  [string]$CollectionRecord,
   [string]$Game = 'skyrimspecialedition',
   [int]$WaitSeconds = 600,
   [switch]$WhatIf,
@@ -116,6 +121,7 @@ function Die($m) {
 }
 function Step([scriptblock]$b) { try { return (& $b) } catch { Die $_.Exception.Message } }
 if (-not $PageRecord) { $PageRecord = Join-Path $Here '..\..\records\collection-page.json' }
+if (-not $CollectionRecord) { $CollectionRecord = Join-Path $Here '..\..\records\collection.json' }
 if (-not $Permissions) { $Permissions = Join-Path $Here '..\..\records\collection-permissions.json' }
 
 # A program run with its output kept apart from its errors (as
@@ -161,11 +167,15 @@ if ($To -eq $Slug) { Die ('-To is ' + $To + ', the collection it is copied from.
 if ($New -and $Number -gt 1) { Die ('A new collection''s first revision is revision 1, not ' + $Number + '.') }
 if (-not (Test-Path -LiteralPath $PageRecord -PathType Leaf)) { Die ('There is no page record at ' + $PageRecord + '.') }
 $page = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($PageRecord)) $PageRecord }
-# The Dev collection's name and summary are the page's "dev"; any other
-# collection a copy goes to is main's (records\collection.json names which).
+# The Dev collection's name and summary are the page's "dev"; the Dev
+# collection is the one records\collection.json's "dev" names, and any other
+# a copy goes to is main's.
 $channel = 'main'
 if ($New) { $channel = 'dev' }
-elseif ($page.PSObject.Properties['dev'] -and $page.dev -and [string]$page.dev.slug -eq $To) { $channel = 'dev' }
+elseif (Test-Path -LiteralPath $CollectionRecord) {
+  $rec = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($CollectionRecord)) $CollectionRecord }
+  if ($rec.PSObject.Properties['dev'] -and $rec.dev -and [string]$rec.dev.collection -eq $To) { $channel = 'dev' }
+}
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) { Die 'node is not on this machine, and nexus-collection.js writes collection.json the way Vortex does.' }
 $sz = Find-SevenZip
