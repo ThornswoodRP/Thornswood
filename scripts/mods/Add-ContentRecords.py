@@ -1168,6 +1168,11 @@ RIVER_BUCKET = 0x5018031
 # block of gamemode.js). Where each one stands is game\data\station-sites.json,
 # kind study, measured by scripts\dev\Build-StationSites.py.
 STUDY_DESK = 0x5018032
+# THE INN'S COOKING POT (#6893): Skyrim's own CraftingCookingPotSm, the pot
+# every inn's cook already uses, placed in an inn that has no cooking station
+# where game\data\station-sites.json, kind cook, measures. It is a master's
+# record, so its form id here is Skyrim.esm's (master 0).
+INN_COOKPOT = 0x001010B3
 STUDY_DESK_MODEL = 'Furniture\\Noble\\NobleDesk01.nif'
 STUDY_DESK_BOUNDS = (-44, -49, 0, 44, 12, 63)
 
@@ -2185,7 +2190,7 @@ STATION_SITES = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__
                                               'game', 'data', 'station-sites.json'))
 STATION_NAMES = {KILN: 'charcoal kilns', SALT_QUARRY: 'salt quarries', BEEHIVE: 'beehives',
                  ALCHEMY_LAB: 'alchemy labs', WELL_BUCKET: 'well buckets', RIVER_BUCKET: 'water buckets',
-                 STUDY_DESK: 'study desks'}
+                 STUDY_DESK: 'study desks', INN_COOKPOT: 'inn cooking pots'}
 STATION_BASES = set(STATION_NAMES)
 QUEST_CONTENT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
                                              'game', 'data', 'quest-content.json'))
@@ -2913,7 +2918,9 @@ def main():
     want, want_cell, want_world = {}, {}, {}
     quest_doc = quest_content()
     quest_sites = quest_doc['sites']
-    authored_sites = dict(sites['sites'])
+    # A site the server stands (#6893, standBy server) is in a cell this plugin
+    # cannot place into: the gamemode stands it, so it is not written here.
+    authored_sites = {n: r for n, r in sites['sites'].items() if r.get('standBy') != 'server'}
     if set(authored_sites) & set(quest_sites):
         raise ValueError('A quest and a station share a site name')
     authored_sites.update(quest_sites)
