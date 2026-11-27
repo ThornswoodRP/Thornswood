@@ -3202,9 +3202,14 @@ Ok ("{0} seasoned recipes take their exact source inputs and conditions before L
 # Build-Recost.py changes it, the chain runs this again (#4087). A row whose
 # inputs are no longer the ones recost.json measured is left as its mod has
 # it, and Build-Recost.py measures it again from that. A row of a plugin the
-# Last plugin never copies from is under notCopied and is not read here: each
-# person's game sets its counts (RECIPES_SET_IN_GAME), and its record stays
-# as its mod has it.
+# Last plugin never copies from is under notCopied: its record stays as its
+# mod has it, and each person's game sets the same counts on its own copy of
+# that record (RECIPES_SET_IN_GAME), coins to 0. So it is read here as well,
+# and the table lists what the game asks of it. Until #4625 it was not, and
+# the Eyepatch and nine Hothtrooper forge pieces still listed the gold coins
+# every game had taken out of them. Build-Recost.py keeps a notCopied row's
+# first measured inputs, as it does a re-costed one's, so reading it back
+# changes nothing there.
 function Use-RecostCounts($recipes, $rows) {
     # Each row of recost.json's recipes onto its recipe: every input's count
     # becomes its 'to', and an input taken to 0 (the coins) comes off, as
@@ -3240,9 +3245,10 @@ Write-Host 'the re-costed counts' -ForegroundColor Cyan
 if (-not (Test-Path -LiteralPath $RECOST_FILE)) {
     Note ("there is no {0} yet, so every recipe keeps its mod's counts; Build-Recost.py writes it, and the chain runs this again" -f $RECOST_FILE)
 } else {
-    $recostRows = @(([IO.File]::ReadAllText($RECOST_FILE) | ConvertFrom-Json).recipes)
+    $recostData = [IO.File]::ReadAllText($RECOST_FILE) | ConvertFrom-Json
+    $recostRows = @(@($recostData.recipes) + @($recostData.notCopied) | Where-Object { $_ })
     $recostGot = Use-RecostCounts $recipes $recostRows
-    Ok ("{0} of {1} recipe(s) take the counts recost.json gives them, as Thornswood-Last.esp carries them" -f $recostGot.Applied.Count, $recostRows.Count)
+    Ok ("{0} of {1} recipe(s) take the counts recost.json gives them, as Thornswood-Last.esp carries them or each game sets them" -f $recostGot.Applied.Count, $recostRows.Count)
     if ($recostGot.Stale.Count) {
         Note ("{0} row(s) of recost.json name inputs their recipe no longer has, and keep their mod's counts until Build-Recost.py measures them again: {1}" -f $recostGot.Stale.Count, (($recostGot.Stale | Select-Object -First 6) -join ', '))
     }
