@@ -89,6 +89,13 @@
   It is put into this checkout at the same path, and listed, so git diff
   shows what the run did. A tool that changed nothing brings nothing back.
 
+  A COMMIT NOT ON MAIN (-From, -Limited; #6879). -From names the checkout
+  whose commit goes up, a merge the queue holds (Build-ContentOnBox.ps1
+  -Queued); this checkout's scripts send it and run none of its files here.
+  -Limited runs the tool on the box as its limited account, which reads the
+  game data and changes only the run's folder (OnBox.ps1, THE LIMITED RUN),
+  never as the administrator every other run is.
+
   The tools themselves are unchanged: run on One, they read
   C:\Thornswood\Game\Data as before.
 #>
@@ -112,7 +119,16 @@ param(
     # The box's store of the collection's plugins at the revision
     # records\collection-plugins.json names (CollectionStore.ps1): the run is
     # then built from the commit's record, the header says how.
-    [string]$Collection = ''
+    [string]$Collection = '',
+
+    # The checkout whose commit goes up, when it is not this one: a commit
+    # not on main yet, laid out by Build-ContentOnBox.ps1 -Queued, which this
+    # checkout's scripts send and never run (#6879).
+    [string]$From = '',
+
+    # Run the tool as the box's limited account, not as its administrator
+    # (OnBox.ps1, THE LIMITED RUN): every run of a commit not on main yet.
+    [switch]$Limited
 )
 
 $ErrorActionPreference = 'Stop'
@@ -123,7 +139,7 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 . (Join-Path $Here 'ContentPaths.ps1')
 if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
 if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
-$repo = (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath
+$repo = (Resolve-Path -LiteralPath $(if ($From) { $From } else { Join-Path $Here '..\..' })).ProviderPath
 $target = "$VpsUser@$VpsHost"
 $ssh = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
 
@@ -180,13 +196,13 @@ try {
     $runFar = $box.Far
     foreach ($l in $box.Said) { Say ('box  ' + $l) 'DarkGray' }
     if (-not $box.Made) { throw ('could not make ' + $run + ' on the box. What ssh said is above.') }
-    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch -Order $order -Collection $Collection -Own $own
+    $farRun = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $serverRoot -Tool $tool -Arguments $Arguments -Watch $watch -Order $order -Collection $Collection -Own $own -Limited:$Limited
     # The run's own script goes into its folder, so it goes with the folder.
     $farFile = Join-Path $local 'run.ps1'
     [IO.File]::WriteAllText($farFile, $farRun, (New-Object Text.UTF8Encoding($true)))
     Send-ThornswoodArtifactFile $artifact.Zip $target $ssh ($runFar + '/tools.zip')
     Send-ThornswoodArtifactFile $farFile $target $ssh ($runFar + '/run.ps1')
-    Say ("running $tool on the box, against the $Server server's plugins" + $(if ($Collection) { ' with the collection''s store over them, in the order this commit records' } else { '' })) 'Cyan'
+    Say ("running $tool on the box" + $(if ($Limited) { ' as its limited account' } else { '' }) + ", against the $Server server's plugins" + $(if ($Collection) { ' with the collection''s store over them, in the order this commit records' } else { '' })) 'Cyan'
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try { $lines = @(Invoke-ThornswoodRemote -Target $target -SshArgs $ssh -Bypass -Script ("& '" + $run + "\run.ps1'") | Where-Object { $_ -is [string] } | ForEach-Object { $_.Trim() }) } finally { $ErrorActionPreference = $eap }

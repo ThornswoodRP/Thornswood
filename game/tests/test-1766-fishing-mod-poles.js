@@ -58,7 +58,7 @@ const accept = box.TOOLS && box.TOOLS.fisher ? box.TOOLS.fisher.accept : [];
 const outs = OURS.map(function (id) { return recipes.recipes[id].out; });
 yes("the poles that fish are what our three recipes make", accept.slice().sort().join() === outs.slice().sort().join());
 const BOOK = require('../../tests/gamemode-tables.js').table('RECIPES_BY_ID');
-const FUEL = require('../../tests/gamemode-tables.js').table('FUEL_BY_RECIPE');
+const FUEL = require('../../scripts/dev/Build-FuelTable.js').read().recipes;
 MOD.forEach(function (id) {
   yes("RECIPES_BY_ID refuses " + id + " as cut", !!BOOK[id] && /^Cut from the open book/.test(BOOK[id].nobody || ""));
   yes("  and FUEL_BY_RECIPE no longer burns charcoal for it", !Object.prototype.hasOwnProperty.call(FUEL, id));

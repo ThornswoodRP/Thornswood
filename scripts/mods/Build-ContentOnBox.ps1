@@ -90,6 +90,33 @@
   them, for that pull request, and the line MEASURED <key> says which build
   it measured over.
 
+  A MERGE THE QUEUE HOLDS (-Queued <commit>, #6879). Patrick's A on #6879
+  (26 Nov 2026): a pull request that changes a content input is built and
+  checked while the merge queue holds it, so a red content check drops it
+  from the queue instead of stopping the release after it merged. The
+  commit is built only when it is the head of one of the queue's
+  gh-readonly-queue/main/ branches on GitHub, as git ls-remote reads them
+  with the gate's deploy key. It is fetched and laid out in a worktree of
+  this checkout, and main's own scripts (this one, Run-OnBox.ps1,
+  ContentPaths.ps1, the collection's fetch) build it: none of the queued
+  commit's files runs here. Every tool of it runs on the box as the box's
+  limited account (Run-OnBox.ps1 -Limited; OnBox.ps1, THE LIMITED RUN),
+  which reads the game data and changes only its run's folder. The build is
+  kept apart, under <Cache>\queue-<server>, so no release ever takes it: the
+  merge release builds the merge again once it is on main. The deploy agent
+  puts it on its own draft for the merge group's content checks
+  (ContentBuild.cs).
+
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Build-Content -Queued <commit>'
+
+  -Limited without -Queued builds main the same way, under
+  <Cache>\limited-<server>, and says MATCHES or DIFFERS against the
+  administrator's build of the same key: the measurement that the limited
+  account makes the same build, taken on the box before the queue waits on
+  it.
+
+      pwsh scripts/vps/Box-Run.ps1 -Line 'Build-Content -Limited'
+
   WITHOUT THE LAST PLUGIN BEFORE IT IS MADE (#5191). Patrick's B on
   q-5191-last-plugin-loop (15 Nov 2026): the steps of the chain before
   Build-LastPlugin.py never read Thornswood-Last.esp, which is made from
@@ -127,7 +154,19 @@ param(
 
     # Measure the stations over the newest build kept here, then build over
     # them and keep nothing (THE STATIONS, above).
-    [switch]$Stations
+    [switch]$Stations,
+
+    # A merge the queue holds, by its commit: the head of a
+    # gh-readonly-queue/main/ branch on GitHub. Built as the box's limited
+    # account and kept apart from main's builds (A MERGE THE QUEUE HOLDS,
+    # above).
+    [ValidatePattern('^([0-9a-f]{40})?$')]
+    [string]$Queued = '',
+
+    # Build main as the limited account, kept apart, and say whether every
+    # file is the administrator's build of the same key: how the limited run
+    # is measured on the box before the queue waits on it.
+    [switch]$Limited
 )
 
 $ErrorActionPreference = 'Stop'
@@ -136,6 +175,9 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition 
 . (Join-Path $Here 'ContentPaths.ps1')
 if (-not $Runner) { $Runner = Join-Path $Here 'Run-OnBox.ps1' }
 $repo = (Resolve-Path -LiteralPath (Join-Path $Here '..\..')).ProviderPath
+# The gate's checkout of main, whose scripts run; $repo is what is built,
+# the queued merge's own checkout with -Queued.
+$mainRepo = $repo
 $Plugin = 'game/content/Thornswood-Content.esp'
 
 function Invoke-BuildGit([string[]]$Words) {
@@ -158,7 +200,28 @@ function Get-Sha256([string]$Path) {
     try { return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($s)).ToLowerInvariant() } finally { $s.Dispose() }
 }
 
+if ($Queued -and $Stations) { Stop-Build '-Queued builds a merge the queue holds, and -Stations measures over main''s builds; they do not go together. Nothing was built.' }
+if ($Queued) {
+    # Only the head of one of the merge queue's branches, as GitHub has it
+    # now: a commit nobody may push there but the queue.
+    $heads = Invoke-BuildGit @('ls-remote', 'origin', 'refs/heads/gh-readonly-queue/main/*')
+    if ($heads.Code -ne 0) { Stop-Build ('git could not list the merge queue''s branches on GitHub: ' + (@($heads.Out | Select-Object -Last 2) -join ' ') + ' Nothing was built.') }
+    $queueRef = @($heads.Out | ForEach-Object { if ($_ -cmatch ('^' + $Queued + '\t(refs/heads/gh-readonly-queue/main/[A-Za-z0-9._/-]+)$')) { $Matches[1] } } | Select-Object -First 1)
+    if (-not $queueRef.Count) { Stop-Build "$Queued is the head of no branch of the merge queue, so it is not built: the queue has moved on or never held it. Nothing was built." }
+    $f = Invoke-BuildGit @('fetch', '--quiet', '--depth', '1', '--no-tags', 'origin', ('+' + $queueRef[0] + ':refs/remotes/origin/queued'))
+    $got = (Invoke-BuildGit @('rev-parse', '--verify', 'refs/remotes/origin/queued^{commit}')).Out -join ''
+    if ($f.Code -ne 0 -or $got -cne $Queued) { Stop-Build ("git could not fetch $($queueRef[0]) as $Queued (it fetched '$got'): " + (@($f.Out | Select-Object -Last 2) -join ' ') + ' Nothing was built.') }
+    $null = Invoke-BuildGit @('worktree', 'prune')
+    $tree = Join-Path $mainRepo ('worktrees\queue-' + $Queued.Substring(0, 12))
+    if (Test-Path -LiteralPath $tree) { $null = Invoke-BuildGit @('worktree', 'remove', '--force', $tree); if (Test-Path -LiteralPath $tree) { Remove-Item -LiteralPath $tree -Recurse -Force } }
+    $w = Invoke-BuildGit @('worktree', 'add', '--quiet', '--detach', $tree, $Queued)
+    if ($w.Code -ne 0) { Stop-Build ("git could not lay out $Queued in $tree" + ': ' + (@($w.Out | Select-Object -Last 2) -join ' ') + ' Nothing was built.') }
+    $repo = (Resolve-Path -LiteralPath $tree).ProviderPath
+    $Limited = $true
+    Write-Host ("the merge queue's $($queueRef[0]), at $Queued, laid out in $repo; its tools run as the box's limited account")
+}
 $commit = (Invoke-BuildGit @('rev-parse', '--verify', 'HEAD^{commit}')).Out -join ''
+if ($Queued -and $commit -cne $Queued) { Stop-Build "the queued merge's checkout is at $commit, not $Queued. Nothing was built." }
 if ($commit -cnotmatch '^[0-9a-f]{40}$') { Stop-Build 'this checkout has no commit to build. Nothing was built.' }
 $dirty = Invoke-BuildGit @('status', '--porcelain', '--untracked-files=no')
 if ($dirty.Code -ne 0 -or $dirty.Out.Count) { Stop-Build ('this checkout has uncommitted changes, so its commit is not what would be built: ' + ($dirty.Out | Select-Object -First 3) -join ' ') }
@@ -170,7 +233,10 @@ try { $k = Get-ThornswoodContentKey -Repo $repo -Commit $commit -Server $Server 
 $key = $k.Key
 Write-Host ("inputs: $($k.Files) files at $commit, against the $Server server's plugins; key $key")
 
-$home_ = Join-Path $Cache $Server
+# A queued merge's builds and the limited measurement's are kept apart from
+# main's: neither is ever taken for a release.
+$home_ = Join-Path $Cache $(if ($Queued) { 'queue-' + $Server } elseif ($Limited) { 'limited-' + $Server } else { $Server })
+if ($Queued -or $Limited) { $Keep = [Math]::Min($Keep, 4) }
 New-Item -ItemType Directory -Force -Path $home_ | Out-Null
 $done = Join-Path $home_ $key
 
@@ -237,7 +303,10 @@ if ($built) {
         $order = Get-ThornswoodContentOrder -Repo $repo
         if (-not $Store) {
             . (Join-Path $Here '..\deploy\CollectionStore.ps1')
-            $Store = (Get-ThornswoodCollectionStore -RecordPath (Join-Path $repo 'records\collection-plugins.json') -Fetch { param($w, $h) Invoke-ThornswoodCollectionFetch -Work $w -Head $h -Repo $repo } -Say { param($m) Write-Host $m }).Dir
+            # The record is the built commit's; the fetch is main's own
+            # scripts, never the queued merge's (Invoke-ThornswoodCollectionFetch
+            # runs the Nexus-Run of the checkout it is given).
+            $Store = (Get-ThornswoodCollectionStore -RecordPath (Join-Path $repo 'records\collection-plugins.json') -Fetch { param($w, $h) Invoke-ThornswoodCollectionFetch -Work $w -Head $h -Repo $mainRepo } -Say { param($m) Write-Host $m }).Dir
         }
     } catch { Stop-Build ('the record''s plugins are not on the box: ' + $_.Exception.Message + ' Nothing was built.') }
     Write-Host ("the load order: collection $($order.Slug) revision $($order.Revision), $($order.Names.Count) plugins" +
@@ -249,7 +318,10 @@ if ($built) {
     # reason: the runner's last STOP line (Run-OnBox.ps1 says the tool's
     # last, #6351). What the runner says is passed on as it is said.
     function Invoke-Step([string]$Tool, [string[]]$Words, [string]$Then) {
-        $said = @(& $Runner $Tool @Words -Server $Server -Collection $Store 6>&1 | ForEach-Object { $t = [string]$_; Write-Host $t; $t })
+        $as = @{ Server = $Server; Collection = $Store }
+        if ($repo -cne $mainRepo) { $as.From = $repo }
+        if ($Limited) { $as.Limited = $true }
+        $said = @(& $Runner $Tool @Words @as 6>&1 | ForEach-Object { $t = [string]$_; Write-Host $t; $t })
         $code = $LASTEXITCODE
         if ($code -ne 0) {
             $why = @($said | Where-Object { $_ -cmatch '^STOP\. ' }) | Select-Object -Last 1
@@ -329,6 +401,8 @@ if ($built) {
         collection = [ordered]@{ slug = $order.Slug; revision = $order.Revision; plugins = $order.Names.Count; moved = [bool]$order.Moved }
         key    = $key
         commit = $commit
+        queued = [bool]$Queued
+        limited = [bool]$Limited
         built  = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
         files  = $files
     }
@@ -343,6 +417,18 @@ if ($built) {
     # The newest $Keep builds of this server stay.
     $old = @(Get-ChildItem -LiteralPath $home_ -Directory | Where-Object { $_.Name -match '^[0-9a-f]{64}$' } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -Skip $Keep)
     foreach ($o in $old) { Remove-Item -LiteralPath $o.FullName -Recurse -Force; Write-Host ("removed the older build $($o.Name)") }
+}
+
+if ($Limited -and -not $Queued) {
+    # The measurement: the administrator's build of the same key, file by file.
+    $admin = Test-Build (Join-Path (Join-Path $Cache $Server) $key)
+    if (-not $admin) { Write-Host "no administrator's build of $key is kept here to hold this one to; Build-Content makes it" }
+    else {
+        $mine = $built.files
+        $differ = @(@($mine.PSObject.Properties.Name) + @($admin.files.PSObject.Properties.Name) | Sort-Object -Unique | Where-Object { [string]$mine.$_ -cne [string]$admin.files.$_ })
+        if ($differ.Count) { Write-Host ("DIFFERS from the administrator's build of $key in $($differ.Count) file(s): " + (@($differ | Select-Object -First 10) -join ', ')) }
+        else { Write-Host ("MATCHES the administrator's build of $key, every one of its $(@($mine.PSObject.Properties).Count) files") }
+    }
 }
 
 if ($Out) {

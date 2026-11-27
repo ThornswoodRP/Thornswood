@@ -16,14 +16,16 @@ The full table: [lists/woodworker-charburner.md](../../lists/woodworker-charburn
 A forge and a skyforge burn one charcoal per piece. The four grades
 are how hot the fire is. A higher metal needs a hotter grade. The
 table is on [Smith](../smith.md). A skyforge asks for one grade
-poorer, and Poor Charcoal does not get poorer. The server burns the
-grade the metal asks for and no other, whatever else is in the pack.
-No charcoal of the grade the metal asks for, the forge refuses the
-piece, including a smith's.
+poorer, and Poor Charcoal does not get poorer. The charcoal is one of
+the piece's ingredients, so the forge's list names the grade and takes
+it, and with none of that grade the piece cannot be made, including by
+a smith. The Charcoal grade is Skyrim's own Charcoal, so a piece found
+in the world burns the same as one from the kiln. Thornswood's older
+Charcoal is no longer made and does not fire a forge.
 
-A hafted weapon takes one tool handle on top of its own ingredients.
-The handle was not in those ingredients when the weapon's rank was
-set.
+A hafted weapon takes one tool handle on top of its own ingredients,
+named in the forge's list with them. The handle was not in those
+ingredients when the weapon's rank was set.
 
 ## What you are handed
 
@@ -48,5 +50,6 @@ Every recipe, by rank and with its id: [woodworker-charburner](../../lists/woodw
 
 ## Where this is
 
-The kiln gate is in the server. The forge's
-charcoal take, by grade, is in the server. So is the hotter kiln.
+The kiln gate is in the server. The forge's charcoal, by grade, is an
+ingredient of each recipe, written by Thornswood-Last.esp. The hotter
+kiln is in the server.

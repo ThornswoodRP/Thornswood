@@ -98,8 +98,21 @@ function atStop(a, s) {
 let v = press(BRENNA, BJORLAM);
 yes('A1 E on Bjorlam from across the yard: walk up first, and no panel (' + last(BRENNA) + ')',
     last(BRENNA) === 'Walk up to Bjorlam first.' && !w.prop(BRENNA, 'thornswoodRideView'));
+// What a press found is said on the server (#4581), one line a press.
+const pressLine = (who, what) => new RegExp('^\\[carriages\\] E on ' + (BJORLAM >>> 0).toString(16) + ' by ' + (who >>> 0).toString(16) + ': ' + what);
+yes('A1 the server says he was out of reach, and where both stood (' + w.logged(/E on /).slice(-1)[0] + ')',
+    w.logged(pressLine(BRENNA, 'Bjorlam at carriage:whiterun is out of reach: the person at 3c:Skyrim\\.esm [-0-9,]+, ' +
+                       'the driver at 3c:Skyrim\\.esm [-0-9,]+, 900 apart$')).length === 1);
 w.moveTo(BRENNA, WHITERUN.world, by(WHITERUN, 80));
 v = press(BRENNA, BJORLAM);
+yes('A2 the server says his panel was sent (' + w.logged(/E on /).slice(-1)[0] + ')',
+    w.logged(pressLine(BRENNA, 'Bjorlam at carriage:whiterun, 80 apart: the panel is sent$')).length === 1);
+const NOBODY = w.ref(0xff300009, { base: '13698:Skyrim.esm', type: 'NPC_', cell: TAMRIEL, pos: by(WHITERUN, 40) });
+const heardBefore = w.heard(BRENNA).length;
+w.say(BRENNA, '/ride e ' + (NOBODY >>> 0).toString(16));
+yes('A3 E on a person who drives nothing answers nothing, and the server says the base it read (' + w.logged(/E on ff300009/).slice(-1)[0] + ')',
+    w.heard(BRENNA).length === heardBefore &&
+    w.logged(new RegExp('^\\[carriages\\] E on ff300009 by ' + (BRENNA >>> 0).toString(16) + ': no driver, its base is 13698:Skyrim\\.esm$')).length === 1);
 yes('A2 from beside him, his panel opens (' + JSON.stringify({ driver: v.driver, from: v.from, stops: (v.stops || []).length }) + ')',
     v.open === true && v.driver === 'Bjorlam' && v.from === 'Whiterun');
 yes('A2 with Solitude at 20 and Riverwood, a village of his hold, at 10 (' + fareOf(v, 'Solitude') + ', ' + fareOf(v, 'Riverwood') + ')',

@@ -525,6 +525,79 @@ try { (function () {
         (rows.slice(0, 5).map(function (r) {
           return r.k + ' ' + r.ms.toFixed(0) + 'ms/' + r.runs + ' worst ' + r.worst.toFixed(1) + 'ms';
         }).join('; ') || 'nothing ran'));
+    netLines(secs);
+  }
+
+  /*
+    WHAT EACH CONNECTION DID, one "net:" line a person a minute (#5053).
+
+    "The dev server lags, worst at the Whiterun market" was measured on 26 Nov
+    2026 from every source the box holds, and none of them showed it: the
+    server was 5 to 7% of one core with its loop p99 at 8 ms, and testers'
+    games drew the market as fast as anywhere outdoors. Nothing on the server
+    or in the games said what a connection did, so lag between the server and
+    one person could be neither shown nor ruled out. The engine's transport
+    knows (mp.getConnectionStats, fork PR #202), and this says it beside where
+    the person stood:
+
+      ping       the transport's last, average and lowest round trip
+      sent       bytes a second to this person over the minute, on the wire,
+                 resends included; resent, the part sent again
+      received   bytes a second from them
+      waiting    messages queued to send right now, and sent but not yet
+                 acknowledged; a queue that grows is the server sending
+                 faster than the link takes it
+      loss       the packets lost since they connected
+      and "held back by congestion control" when the transport is slowing
+      itself down for this link.
+
+    READ IT AS the same person in the market and elsewhere: a ping, a queue
+    or a rate that rises only in the market is the server's traffic there,
+    and one that is high everywhere is the person's link. Reads only.
+  */
+  const netWas = {};
+  function netLines(secs) {
+    let people = [];
+    try { people = mp.get(0, 'onlinePlayers') || []; } catch (e) { people = []; }
+    if (!people.length) { return; }
+    if (typeof mp.getConnectionStats !== 'function') {
+      log('net: not measured; this engine has no getConnectionStats');
+      return;
+    }
+    const seen = {};
+    const kib = function (bytes) { return (bytes / secs / 1024).toFixed(1); };
+    for (let i = 0; i < people.length; i++) {
+      const actor = people[i];
+      let user = -1, s = null;
+      try { user = mp.getUserByActor(actor); } catch (e) { user = -1; }
+      if (typeof user !== 'number' || user < 0) { continue; }
+      try { s = mp.getConnectionStats(user); } catch (e) { s = null; }
+      if (!s || typeof s !== 'object') { continue; }
+      const key = user + ':' + actor;
+      seen[key] = true;
+      const was = netWas[key];
+      netWas[key] = { sent: s.bytesSent, resent: s.bytesResent, got: s.bytesReceived };
+      let rates = 'its first minute';
+      if (was && s.bytesSent >= was.sent && s.bytesReceived >= was.got) {
+        rates = 'sent ' + kib(s.bytesSent - was.sent) + ' KiB/s, resent ' +
+                kib(Math.max(0, s.bytesResent - was.resent)) + ' KiB/s, received ' +
+                kib(s.bytesReceived - was.got) + ' KiB/s';
+      }
+      let cell, at = '?';
+      try { cell = String(mp.get(actor, 'worldOrCellDesc') || '?'); } catch (e) { cell = '?'; }
+      try {
+        const pos = mp.get(actor, 'pos');
+        if (pos && pos.length >= 2) { at = Math.round(pos[0]) + ',' + Math.round(pos[1]); }
+      } catch (e) { at = '?'; }
+      log('net: ' + (actor >>> 0).toString(16) + ' in ' + cell + ' at ' + at + ': ping ' + s.lastPingMs +
+          'ms (average ' + s.averagePingMs + ', lowest ' + s.lowestPingMs + '), ' + rates + ', ' +
+          s.messagesWaiting + ' waiting to send, ' + s.messagesToResend + ' unacknowledged, loss ' +
+          (Number(s.packetLoss || 0) * 100).toFixed(1) + '%' +
+          (s.limitedByCongestion ? ', held back by congestion control' : ''));
+    }
+    for (const k in netWas) {
+      if (Object.prototype.hasOwnProperty.call(netWas, k) && !seen[k]) { delete netWas[k]; }
+    }
   }
 
   g.__thornswoodServerBeat = { timer: setInterval(function () {
@@ -9680,58 +9753,22 @@ function benchGate(actorId, baseDesc) {
 }
 
 /*
-  The handle, and which recipes want one. Argued for at the call in mp.onCraft.
+  THE CHARCOAL AND THE HANDLE ARE IN THE RECIPES (#1398, #6726).
 
-  Keyed off the family the recipe table already puts on every owned row, so this
-  list is checked against real data rather than against a memory of what Skyrim
-  contains: game\tests\test-1398-fuel.js counts the rows in each of these families and fails if
-  a family here matches nothing, because a family name that has been renamed
-  under it would turn this rule off without a word.
+  docs/systems/professions/smith.md: every forge, skyforge and smelter
+  recipe burns one charcoal of the grade its metal asks for, and a war axe,
+  a battleaxe, a warhammer and a mace take a Tool Handle as well. Until
+  #6726 the server took both after the craft, so the game's own list never
+  named them and a tester only learned of them from a line in chat.
+  Patrick's B on #6726: they are inputs on the records, so the list shows
+  them and the engine takes them like any other input, from the pack or the
+  bench's stock. scripts/dev/Build-FuelTable.js says which recipe takes
+  which (FUEL_BY_RECIPE), scripts/mods/Build-LastPlugin.py writes them into
+  every recipe it copies, and a recipe of a plugin it never copies takes
+  them in each person's game (RECIPES_SET_IN_GAME, below). The
+  Charcoal grade is Skyrim's own Charcoal, which the Charburner's kiln
+  makes.
 */
-const HANDLE_DESC = '15490:Thornswood-Content.esp';
-/*
-  CHARCOAL FOR THE FIRE, BY GRADE (#1398).
-
-  docs/systems/professions/smith.md: "Every forge and every skyforge burns one
-  charcoal. No charcoal of the grade the metal asks for, the piece is not
-  made." Then the grade table, the smelter at the same grade as its metal, and
-  the skyforge one grade poorer. Which grade each recipe asks for is
-  FUEL_BY_RECIPE below, worked out of game\data\recipes.json by
-  scripts\dev\Build-FuelTable.js, because the rows the server carries name
-  neither their bench nor their metal. The rule before this read a bench off
-  the row, no installed row carries one, and so no forge took any charcoal.
-
-  The same shape as the handle: not an ingredient on the record, which would
-  couple this to every smithing plugin, but taken here once the craft is
-  allowed.
-
-  THE GRADE THE TABLE NAMES, AND ONLY THAT GRADE. It used to burn the cheapest
-  piece in the pack, Poor Charcoal first, whatever the metal. A hotter grade
-  is not burned in place of the one asked for: the page says no charcoal of
-  that grade, no piece. Skyrim's own Charcoal is the Charcoal grade, by its
-  name, as it was always taken here.
-*/
-const CHARCOAL_GRADES = [
-  null,
-  { name: 'Poor Charcoal', descs: [ITEMS.charcoalT1] },
-  { name: 'Charcoal', descs: [ITEMS.charcoalT2, ITEMS.charcoal] },
-  { name: 'Charcoal Briquette', descs: [ITEMS.charcoalT3] },
-  { name: 'Coke', descs: [ITEMS.charcoalT4] }
-];
-
-/* Written by scripts\dev\Build-FuelTable.js out of game\data\recipes.json into its table file:
-   every recipe at a forge, a skyforge or a smelter, which prints the counts.
-   Recipe desc -> [grade 1 to 4, the metal that asks for it or nothing, the bench]. */
-const FUEL_BY_RECIPE = table('FUEL_BY_RECIPE');
-
-/** The fuel a recipe burns, { grade, metal, bench }, or null when it burns none. */
-function fuelFor(recipeDesc) {
-  if (!Object.prototype.hasOwnProperty.call(FUEL_BY_RECIPE, recipeDesc)) { return null; }
-  const f = FUEL_BY_RECIPE[recipeDesc];
-  const grade = Number(f && f[0]);
-  if (!CHARCOAL_GRADES[grade]) { return null; }
-  return { grade: grade, metal: String(f[1] || ''), bench: String(f[2] || 'forge') };
-}
 
 /** How many of one item a pack holds, every stack of it counted. */
 function packCount(actorId, itemDesc) {
@@ -9745,57 +9782,6 @@ function packCount(actorId, itemDesc) {
     if (entries[i] && entries[i].baseId === baseId) { n += Number(entries[i].count) || 0; }
   }
   return n;
-}
-
-/** The charcoal of exactly that grade in this pack, or '' when there is none. */
-function charcoalHeld(actorId, grade) {
-  const g = CHARCOAL_GRADES[grade];
-  if (!g) { return ''; }
-  for (let i = 0; i < g.descs.length; i++) {
-    if (g.descs[i] && packCount(actorId, g.descs[i]) > 0) { return g.descs[i]; }
-  }
-  return '';
-}
-
-/** What is said when the grade a piece asks for is not in the pack. */
-function fuelRefusal(fuel) {
-  const grade = CHARCOAL_GRADES[fuel.grade].name;
-  const metal = fuel.metal.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
-  let first;
-  if (fuel.bench === 'smelter') {
-    first = metal ? 'Smelting ' + metal + ' burns ' + grade : 'A smelter burns ' + grade;
-  } else {
-    const at = fuel.bench === 'skyforge' ? 'the skyforge' : 'a forge';
-    first = metal ? metal + ' at ' + at + ' burns ' + grade
-                  : (fuel.bench === 'skyforge' ? 'The skyforge' : 'A forge') + ' burns ' + grade;
-  }
-  return first + ', and you have none. A Charburner makes it from firewood at a kiln.';
-}
-
-/*
-  The four hafted families on the smith page: a war axe, a battleaxe, a
-  warhammer and a mace are a metal head on a wooden haft. Other weapons was
-  on this list too, and in the table that family is the woodcutter's axe and
-  the drum, the flute and the lute, so the instruments were asked for a
-  handle (#1398). An instrument is not a haft.
-*/
-const HAFTED_FAMILIES = ['War axes', 'Battleaxes', 'Warhammers', 'Maces'];
-
-/** True when this recipe makes something fitted to a wooden handle. */
-function wantsAHandle(row) {
-  if (!row || typeof row !== 'object') { return false; }
-  // The three tools ask for a handle in the records, so the rule must not ask
-  // for a second one. Their outputs are the ones TOOLS names.
-  const out = String(row.out || '');
-  for (const key in TOOLS) {
-    if (!Object.prototype.hasOwnProperty.call(TOOLS, key)) { continue; }
-    if (TOOLS[key].give === out) { return false; }
-  }
-  const family = String(row.family || '');
-  for (let i = 0; i < HAFTED_FAMILIES.length; i++) {
-    if (HAFTED_FAMILIES[i] === family) { return true; }
-  }
-  return false;
 }
 
 /*
@@ -10739,7 +10725,7 @@ function handRecipesHidden(actorId) {
   a craft at the new counts matches no record and arrives with no recipe id.
   recipeSetInGame names the recipe from its output, its bench and exactly the
   new counts, and onCraft treats it as that recipe from there: the same gate,
-  charcoal, handle and credit as any other. A craft at the mod's own counts,
+  tool and credit as any other. A craft at the mod's own counts,
   from a game that has not set the new ones yet, matches the record and is
   refused, so nobody pays the coins or the old counts.
 
@@ -10747,8 +10733,27 @@ function handRecipesHidden(actorId) {
 */
 // Written by scripts\dev\Build-Recost.py from game\data\recost.json into its table file.
 // The re-costed recipes of a plugin Thornswood-Last.esp never copies from (#613, #2454),
-// set in each person's game instead: each input as [item, count it had, count it asks].
+// and its forge, skyforge and smelter ones given their charcoal and handle (#6726),
+// set in each person's game instead: each input as [item, count it had, count it asks],
+// an input the record does not name after the ones it does, with 0 for what it had.
 var RECIPES_SET_IN_GAME = table('RECIPES_SET_IN_GAME');
+
+/*
+  THE CHARCOAL AND THE HANDLE IN EACH GAME TOO (#6726).
+
+  Thornswood-Last.esp writes the charcoal and the handle into every forge,
+  skyforge and smelter recipe it copies (the block at the top of this file).
+  Immersive Armors' are never copied (#2454), so Build-Recost.py puts each
+  of those in RECIPES_SET_IN_GAME as well, with the charcoal and the handle
+  as inputs on top of its counts. One its record does not name has 0 for
+  the count it had, and each person's game adds it to its own copy of the
+  record with the fork's TESModPlatform.SetCraftingInput, which SKSE's
+  ConstructibleObject has no call for. Its craft then matches no server
+  record, as a re-costed one does, and recipeSetInGame names it from its
+  output, its bench and the counts with the charcoal and handle in them. A
+  craft at the record's own counts, from a game that has not added them, is
+  refused, so nobody makes one without them.
+*/
 
 var RECIPE_COUNTS_PROPERTY = 'thornswoodRecipeCounts';
 // One stamp per load, so a deploy that changes the table hands it again.
@@ -10774,9 +10779,18 @@ function recipeCountsScript() {
     // A plugin this game does not have lists nothing, so there is nothing to set.
     '      if (!cobj) { continue; }',
     '      var inputs = v.rows[key];',
-    '      if (cobj.getNumIngredients() !== inputs.length) { continue; }',
+    // The inputs the record names come first; the ones it does not (had 0)
+    // are added after them, so a game that added them already has them all.
+    '      var named = 0;',
+    '      while (named < inputs.length && inputs[named][1] > 0) { named++; }',
+    '      var num = cobj.getNumIngredients();',
+    '      if (num !== named && num !== inputs.length) { continue; }',
+    // A client from before the fork's SetCraftingInput cannot add one, so
+    // it leaves the recipe as its record has it, and the server refuses a
+    // craft at those counts (recipeMetadataRefusal).
+    '      if (named < inputs.length && !(sp.TESModPlatform && typeof sp.TESModPlatform.setCraftingInput === "function")) { continue; }',
     '      var same = true;',
-    '      for (var i = 0; i < inputs.length && same; i++) {',
+    '      for (var i = 0; i < num && same; i++) {',
     '        var item = formOf(inputs[i][0]);',
     '        var has = cobj.getNthIngredient(i);',
     '        var count = cobj.getNthIngredientQuantity(i);',
@@ -10784,8 +10798,13 @@ function recipeCountsScript() {
     '               (count === inputs[i][1] || count === inputs[i][2]);',
     '      }',
     '      if (!same) { continue; }',
-    '      for (var n = 0; n < inputs.length; n++) {',
+    '      for (var n = 0; n < named; n++) {',
     '        if (cobj.getNthIngredientQuantity(n) !== inputs[n][2]) { cobj.setNthIngredientQuantity(inputs[n][2], n); }',
+    '      }',
+    // SetCraftingInput sets the count, so asking again changes nothing.
+    '      for (var m = named; m < inputs.length; m++) {',
+    '        var more = formOf(inputs[m][0]);',
+    '        if (more) { sp.TESModPlatform.setCraftingInput(formOf(key), more, inputs[m][2]); }',
     '      }',
     '    }',
     '  } catch (e) { }',
@@ -10922,9 +10941,10 @@ function recipeMovedInGame(craftedItemBaseId, workbenchId, inputs) {
     if (!own.call(RECIPES_MOVED_IN_GAME, desc)) { continue; }
     var row = RECIPES_MOVED_IN_GAME[desc];
     if (row.out !== outDesc || row.to !== benchKey) { continue; }
-    // A recipe whose counts are set in each game too is named by
-    // recipeSetInGame at its new counts, at this bench; its record's own
-    // counts are the ones that game refuses.
+    // A recipe whose counts are set in each game too (re-costed, or given
+    // its charcoal and handle) is named by recipeSetInGame at its new
+    // counts, at this bench; its record's own counts are the ones that game
+    // refuses.
     if (typeof RECIPES_SET_IN_GAME === 'object' && RECIPES_SET_IN_GAME && own.call(RECIPES_SET_IN_GAME, desc)) { continue; }
     var want = {};
     for (var n = 0; n < row.inputs.length; n++) {
@@ -11619,6 +11639,16 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
     log(actorId.toString(16), 'was refused', desc, '(' + (row && row.name || 'recipe') + '):', refusal);
     return false;
   }
+  // The trade's tool (#3162), asked now the way mp.onCraft asks it, so a
+  // missing tool is said before the wait and not when it is over (#6804).
+  const toolKey = row && typeof row === 'object' ? benchToolKey(row) : null;
+  const noTool = toolKey ? toolGate(actorId, toolKey) : null;
+  if (noTool) {
+    notify(actorId, noTool);
+    say(actorId, noTool);
+    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', toolFor(toolKey).name);
+    return false;
+  }
   const size = craftSize(row, workbenchId);
   mp.set(actorId, 'craftWork', { ms: CRAFT_WORK_MS[size] });
 
@@ -11670,9 +11700,10 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     engine's eighth argument is what it is about to take from them. Asked
     again here, because the building may have changed hands since: a craft
     that draws on chests that are no longer theirs is refused, and nothing
-    leaves the pack or the chests. The charcoal and the handle below come
-    out of the same chests when the pack has none. An engine before fork
-    #116, or a person at a bench with no chests, gets the pack alone.
+    leaves the pack or the chests. The charcoal and the handle are inputs
+    on the record (#6726), so they come out of the same chests as any other
+    input when the pack has none. An engine before fork #116, or a person at
+    a bench with no chests, gets the pack alone.
   */
   const propForStock = globalThis.__thornswoodProperty;
   const stock = (propForStock && typeof propForStock.benchStock === 'function')
@@ -11781,41 +11812,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
   }
 
   /*
-    THE FUEL AND THE HANDLE ARE ASKED FOR BEFORE ANYTHING IS TAKEN (#1398), so
-    a refusal for one never costs the other, and a key is never named for a
-    craft that did not happen. They are taken below, once nothing can refuse.
-  */
-  const fuel = fuelFor(desc);
-  let coal = fuel ? charcoalHeld(actorId, fuel.grade) : '';
-  let coalFrom = actorId;
-  for (let i = 0; fuel && !coal && i < stock.from.length; i++) {
-    coal = charcoalHeld(stock.from[i], fuel.grade);
-    if (coal) { coalFrom = stock.from[i]; }
-  }
-  if (fuel && !coal) {
-    const no = fuelRefusal(fuel);
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', CHARCOAL_GRADES[fuel.grade].name);
-    return false;
-  }
-  const hafted = wantsAHandle(row);
-  let handleFrom = actorId;
-  for (let i = 0; hafted && packCount(handleFrom, HANDLE_DESC) < 1 && i < stock.from.length; i++) {
-    handleFrom = stock.from[i];
-  }
-  if (hafted && packCount(handleFrom, HANDLE_DESC) < 1) {
-    const no = 'A ' + String(row.name || 'that') + ' is fitted to a wooden handle and you ' +
-               'have none. A woodworker cuts them from firewood at a kiln.';
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no handle');
-    return false;
-  }
-  /*
-    THE TRADE'S TOOL (#3162), asked with the fuel and the handle, before
-    anything is taken, and worn below once the craft has gone through. The
-    tool is never an input: an input is taken, and a tool is held and wears.
+    THE TRADE'S TOOL (#3162), asked before anything is taken, and worn
+    below once the craft has gone through. The tool is never an input: an
+    input is taken, and a tool is held and wears.
   */
   const toolKey = benchToolKey(row);
   const noTool = toolKey ? toolGate(actorId, toolKey) : null;
@@ -11844,52 +11843,6 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     say(actorId, no);
     return false;
   }
-  /*
-    THE HANDLE, AND EVERY OTHER HAFTED THING.
-
-    Patrick, 21 September: the woodworker makes handles "that the smith needs
-    for Pickaxes, Shovels, Axes and other items that have wooden handles like
-    that". The pickaxe, the axe and the shovel ask for one in the records, which
-    is where a requirement belongs. The "other items" are the problem: there are
-    Counted rather than guessed, 21 September: 277 of the 3,439 owned rows in
-    tools
-ecipes.json are hafted, and 126 of those are rows the server is
-    actually asked about. They come out of Bethesda's five plugins and half a
-    dozen mods.
-
-    SO IT IS A RULE HERE RATHER THAN 277 OVERRIDES. Overriding another mod's
-    COBJ records couples this plugin to their versions: Immersive Weapons owns a
-    good number of these, and an override is a copy that goes stale silently the
-    day they change one. A rule keyed off the family already on every row covers
-    the same recipes, covers anything added later with no plugin edit at all,
-    and cannot go stale against a mod it has never heard of.
-
-    WHAT IT COSTS TO DO IT THIS WAY, said out loud because it is a real gap:
-    Build-RecipeTable ranks a row by what its INPUTS cost, and it reads inputs
-    out of the records. A handle required here is not in the records, so the
-    table does not know about it and the 269 rows are ranked as though the
-    handle were free. It is worth five gold and a novice woodworker's minute, so
-    the error is small, but it is an error and not a rounding.
-
-    THE FOUR FAMILIES. A haft is a shaft you hold in two hands or one, with the
-    weight at the end: war axes, battleaxes, warhammers and maces, the four the
-    smith page names. Other weapons was a fifth, and in the table it is the
-    woodcutter's axe, which names its handle in its own record, and the drum,
-    the flute and the lute, which are not hafted (#1398). Swords, greatswords
-    and daggers are a tang and a grip rather than a haft. Bows and staves are
-    wooden through and through, which is a different thing from having a
-    handle fitted to them, and a bow that wanted a handle would read as a
-    mistake to anybody holding one.
-  */
-  if (coal && !takeItem(coalFrom, coal, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the charcoal could not be taken');
-    return false;
-  }
-  if (hafted && !takeItem(handleFrom, HANDLE_DESC, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the handle could not be taken');
-    return false;
-  }
-
   // The skill that made the piece is the rank before this craft counts (#3151).
   const margin = qualityMargin(actorId, row);
   if (answer.credit) {
@@ -32956,15 +32909,39 @@ module.exports = {
   */
   var pressedBy = {};
 
+  /*
+    WHAT A PRESS FOUND IS SAID (#4581). Every press on a driver that people
+    made from 15 to 27 November reached this server as /ride e with the
+    driver's own id (Read-RideLines, the chat logs), and not one opened the
+    panel, while the server said nothing about any of them. So each press
+    says here which of the three ways it went, with what decided it: the
+    base the server read for that id when it is no driver's, where both
+    stood when he was out of reach, and the stop when his panel was sent.
+    One line a press, and a press is somebody's E.
+  */
+  function pressSaid(driverId, actorId, what) {
+    plog('E on ' + (Number(driverId) >>> 0).toString(16) + ' by ' + (Number(actorId) >>> 0).toString(16) + ': ' + what);
+  }
+
+  function placeSaid(p) {
+    return p ? p.cell + ' ' + p.pos.map(Math.round).join(',') : 'nowhere the server can read';
+  }
+
   function pressDriver(actorId, driverId) {
-    var base = '';
-    try { base = String(mp.get(driverId, 'baseDesc') || ''); } catch (e) { base = ''; }
+    var base = '', why = '';
+    try { base = String(mp.get(driverId, 'baseDesc') || ''); } catch (e) { base = ''; why = String(e && e.message || e); }
     var stop = stopByBase(base);
-    if (!stop) { return null; }
+    if (!stop) {
+      pressSaid(driverId, actorId, 'no driver, its base is ' + (base || 'unreadable' + (why ? ' (' + why + ')' : '')));
+      return null;
+    }
     var me = placeOf(actorId), them = placeOf(driverId);
     if (!me || !them || me.cell !== them.cell || apart(me.pos, them.pos) > RIDE_REACH) {
+      pressSaid(driverId, actorId, stop.driver + ' at ' + stop.key + ' is out of reach: the person at ' + placeSaid(me) +
+                ', the driver at ' + placeSaid(them) + (me && them && me.cell === them.cell ? ', ' + Math.round(apart(me.pos, them.pos)) + ' apart' : ''));
       return { stop: stop, far: true };
     }
+    pressSaid(driverId, actorId, stop.driver + ' at ' + stop.key + ', ' + Math.round(apart(me.pos, them.pos)) + ' apart: the panel is sent');
     pressedBy[actorId] = { stop: stop.key, driver: driverId, at: Date.now() };
     return { stop: stop, far: false };
   }
@@ -38702,6 +38679,14 @@ return module.exports;
       // at creation. The panel draws these as placed rather than spent, and
       // nothing takes one back out.
       placed: s.placed || {},
+      /*
+        What each class, profession, half and school places (#7168), the
+        table progression's place() reads, sent only while creating. Then a
+        class and a profession are the panel's until Confirm, so the panel adds
+        up what its own picks will place and the tree shows them before the
+        server has them. In the world every pick is already sent and in tree.
+      */
+      placing: creating && P.TUNING ? P.TUNING.placed : undefined,
       points: s.points || 0,
       perks: P.perks(s),
       /*
@@ -58110,7 +58095,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   // ==== HAIR_DYES ====
   /* Built by scripts\dev\Build-HairDyeGamemode.js out of game\data\hair-dyes.json and
      game\hair-dye.js. Do not hand edit: change those two and run it again. */
-  var HAIR_DYES = {"about":"Hair dye (#2675). The staff's list: what a dye is carried as, where and how long it steeps, how close you stand to dye somebody else's hair, who may steep, and each dye's colour and what it takes. game/hair-dye.js reads it and names none of it. docs/systems/hair-dye.md says what each field does.","item":"98626:Skyrim.esm","steepSeconds":60,"steepAt":"a5cb3:Skyrim.esm","reach":300,"who":{"anyone":false,"halves":{"haberdasher":"novice","liverywright":"novice"}},"dyes":[{"id":"black","name":"Black Hair Dye","colour":"#1b1918","strength":0.75,"wander":10,"inputs":[{"item":"15482:Thornswood-Content.esp","count":1},{"item":"16e26:Dragonborn.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"brown","name":"Brown Hair Dye","colour":"#4a3020","strength":0.6,"wander":14,"inputs":[{"item":"5076e:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"red","name":"Red Hair Dye","colour":"#7a2418","strength":0.55,"wander":16,"inputs":[{"item":"1b3bd:Skyrim.esm","count":2},{"item":"77e1d:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"deep-red","name":"Deep Red Hair Dye","colour":"#5a1014","strength":0.6,"wander":12,"inputs":[{"item":"4da20:Skyrim.esm","count":1},{"item":"b701a:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"gold","name":"Gold Hair Dye","colour":"#b8945a","strength":0.5,"wander":14,"inputs":[{"item":"4b0ba:Skyrim.esm","count":2},{"item":"2a78:Dawnguard.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"copper","name":"Copper Hair Dye","colour":"#a4512a","strength":0.55,"wander":16,"inputs":[{"item":"889a2:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"blue","name":"Blue Hair Dye","colour":"#2b3f6e","strength":0.5,"wander":18,"inputs":[{"item":"77e1c:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"purple","name":"Purple Hair Dye","colour":"#4e2c5e","strength":0.5,"wander":18,"inputs":[{"item":"77e1e:Skyrim.esm","count":2},{"item":"45c28:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"nightshade","name":"Nightshade Hair Dye","colour":"#2a1a30","strength":0.65,"wander":10,"inputs":[{"item":"516c8:Skyrim.esm","count":1},{"item":"2f44c:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"green","name":"Green Hair Dye","colour":"#3d5a2c","strength":0.5,"wander":18,"inputs":[{"item":"57f91:Skyrim.esm","count":2},{"item":"134aa:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"hair-wash","name":"Hair Wash","wash":true,"strength":0.6,"wander":6,"inputs":[{"item":"34cdd:Skyrim.esm","count":1},{"item":"34cdf:Skyrim.esm","count":1},{"item":"3f7f8:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]}]};
+  var HAIR_DYES = {"about":"Hair dye (#2675). The staff's list: what a dye is carried as, where and how long it steeps, how close you stand to dye somebody else's hair, who may steep, and each dye's colour and what it takes. game/hair-dye.js reads it and names none of it. docs/systems/hair-dye.md says what each field does.","item":"98626:Skyrim.esm","steepSeconds":60,"steepAt":"a5cb3:Skyrim.esm","reach":300,"who":{"anyone":false,"halves":{"haberdasher":"novice","liverywright":"novice"}},"dyes":[{"id":"black","name":"Black Hair Dye","colour":"#1b1918","strength":0.75,"wander":10,"inputs":[{"item":"33760:Skyrim.esm","count":1},{"item":"16e26:Dragonborn.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"brown","name":"Brown Hair Dye","colour":"#4a3020","strength":0.6,"wander":14,"inputs":[{"item":"5076e:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"red","name":"Red Hair Dye","colour":"#7a2418","strength":0.55,"wander":16,"inputs":[{"item":"1b3bd:Skyrim.esm","count":2},{"item":"77e1d:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"deep-red","name":"Deep Red Hair Dye","colour":"#5a1014","strength":0.6,"wander":12,"inputs":[{"item":"4da20:Skyrim.esm","count":1},{"item":"b701a:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"gold","name":"Gold Hair Dye","colour":"#b8945a","strength":0.5,"wander":14,"inputs":[{"item":"4b0ba:Skyrim.esm","count":2},{"item":"2a78:Dawnguard.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"copper","name":"Copper Hair Dye","colour":"#a4512a","strength":0.55,"wander":16,"inputs":[{"item":"889a2:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"blue","name":"Blue Hair Dye","colour":"#2b3f6e","strength":0.5,"wander":18,"inputs":[{"item":"77e1c:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"purple","name":"Purple Hair Dye","colour":"#4e2c5e","strength":0.5,"wander":18,"inputs":[{"item":"77e1e:Skyrim.esm","count":2},{"item":"45c28:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"nightshade","name":"Nightshade Hair Dye","colour":"#2a1a30","strength":0.65,"wander":10,"inputs":[{"item":"516c8:Skyrim.esm","count":1},{"item":"2f44c:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"green","name":"Green Hair Dye","colour":"#3d5a2c","strength":0.5,"wander":18,"inputs":[{"item":"57f91:Skyrim.esm","count":2},{"item":"134aa:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"hair-wash","name":"Hair Wash","wash":true,"strength":0.6,"wander":6,"inputs":[{"item":"34cdd:Skyrim.esm","count":1},{"item":"34cdf:Skyrim.esm","count":1},{"item":"3f7f8:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]}]};
   var HAIR_DYE = (function () {
   var module = { exports: {} };
 'use strict';
@@ -69243,7 +69228,14 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
     missing.forEach(id=>knownFactions.add(id));
     return s;
   }
-  function hostile(a,b) {
+  // Whether a starts a fight with b, d away. Aggression and faction
+  // reactions count within SIGHT. A person inside the larger of a's warn or
+  // attack and attack radius counts too unless a is their friend, whatever
+  // a's aggression: the game's own rule for the aggro radius, read from its
+  // code (#6493). An Aggressive skeever has no Enemy faction toward people,
+  // so without the radius it never attacked them.
+  const SIGHT=1200;
+  function hostile(a,b,d) {
     let enemy=false,friend=false;
     for(const f of a.factions) for(const g of b.factions) {
       // Friendship and common membership suppress conflicting enemy entries.
@@ -69251,14 +69243,17 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       friend ||= f.id===g.id || r===2 || r===3;
       enemy ||= r===1;
     }
-    if(friend || a.aggression===0) return false;
-    return a.aggression===3 || (a.aggression===2 && !friend) || (a.aggression===1 && enemy);
+    if(friend) return false;
+    if(b.isHuman && d<=Math.max(a.aggroRadius[1],a.aggroRadius[2])) return true;
+    if(a.aggression===0 || d>SIGHT) return false;
+    return a.aggression===3 || a.aggression===2 || (a.aggression===1 && enemy);
   }
   function validState(s) {
     return s && Number.isInteger(s.cellOrWorld) && Array.isArray(s.pos) &&
       s.pos.length===3 && s.pos.every(Number.isFinite) && Array.isArray(s.rot) &&
       s.rot.length===3 && s.rot.every(Number.isFinite) && Number.isInteger(s.aggression) &&
       s.aggression>=0 && s.aggression<=3 && Number.isInteger(s.confidence) && s.confidence>=0 && s.confidence<=4 &&
+      Array.isArray(s.aggroRadius) && s.aggroRadius.length===3 && s.aggroRadius.every(r=>Number.isFinite(r) && r>=0) &&
       Number.isFinite(s.meleeReach) && s.meleeReach>=0 && Number.isFinite(s.meleeAllowance) &&
       s.meleeAllowance>=16 && s.meleeAllowance<=96;
   }
@@ -69572,10 +69567,10 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       retaliation=true;
       targetState=humans.get(target) || actors.get(target).state;
     } else {
-      let best=1200;
+      let best=Infinity;
       for(const [id,h] of humans) {
         const d=h.cellOrWorld===a.cell ? distance(h.pos,a.pos) : Infinity;
-        if(d<best && hostile(s,h)) {target=id;targetState=h;best=d;}
+        if(d<best && hostile(s,h,d)) {target=id;targetState=h;best=d;}
       }
       // NPC combat uses the same spatial index when nobody is connected.
       // Inspect a bounded local sample rather than comparing the full cast.
@@ -69587,7 +69582,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
           const other=actors.get(id);
           if(!other || other.state.isDead || other.state.isDisabled) continue;
           const d=distance(other.pos,a.pos);
-          if(d<best && hostile(s,other.state)) {target=id;targetState=other.state;best=d;}
+          if(d<best && hostile(s,other.state,d)) {target=id;targetState=other.state;best=d;}
           if(++inspected>=32) break search;
         }
       }
@@ -69599,7 +69594,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
         const live=nativeCall('getNpcAIState',target);
         if(!validState(live) || live.isDead || live.isDisabled || (live.isHuman && !live.isConnected) || live.cellOrWorld!==a.cell ||
             distance(a.pos,live.pos)>4096 || !withinHome(a,live.pos)) {target=0;targetState=null;}
-        else if(!retaliation && !hostile(s,factionData(live))) {target=0;targetState=null;}
+        else if(!retaliation && !hostile(s,factionData(live),distance(a.pos,live.pos))) {target=0;targetState=null;}
         else targetState=live;
       } catch(e) {target=0;targetState=null;}
     }
@@ -70639,6 +70634,12 @@ const INVENTORY=typeof MERCHANT_SETTLEMENT!=='undefined'?MERCHANT_SETTLEMENT:req
 const copy=value=>JSON.parse(JSON.stringify(value));
 const hash=value=>require('node:crypto').createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Published jobs remain routable while their accepted promises exist.
+// A published job whose goods nothing makes any more is retired by taking it
+// off this list, and given a new id when it comes back with other goods: the
+// four woodworker parcels that asked for Thornswood's Charcoal went when the
+// kiln began making Skyrim's own (#6726), and came back as the four
+// *-charcoal-parcel ids. A retired job is not finished for anybody who had
+// accepted it.
 const publication=Object.freeze({
  'q-whiterun-smith-straps':'8f03bdc903aaf1e37727f54a3e49bfdea5a2b817bc7534ba0111c88d25502734',
  'q-rift-woodworker-hunt-arrows':'84b31663cd265c9b26068ff7343622f04b332ddce394e58b52a55b0b6cbb3a89',
@@ -70721,7 +70722,7 @@ const publication=Object.freeze({
  'q-markarth-smith-expert-parcel':'9f8a055c39abe1c6da78e026d06439129cb9209423504f58d10aab4011fd5a2d',
  'q-markarth-smith-master-parcel':'f9b1854ae2954c03148c0953b29b7f03077aee9842b9a0405a4340d8ff388bec',
  'q-markarth-woodworker-novice-parcel':'8a14d28f769296a7779f86bfe78517a8388e58d86feded698a791cbcefe9538e',
- 'q-markarth-woodworker-advanced-parcel':'83dc5ab0d102b917460dc3ad68b39b8ea25dffaf511f6f0b520356b6b3dd931b',
+ 'q-markarth-woodworker-advanced-charcoal-parcel':'962355eff1861bf51f5bc4f9efa9cacf392b60d0ebadc7a26d3f231f2c09a3cc',
  'q-markarth-woodworker-expert-parcel':'2bdfa338694777b2af3bf7dad169013e990a12f7b92c1c3bc3fb417b0eff8c69',
  'q-markarth-woodworker-master-parcel':'8378ba65a73153a84b4a6dbde433ed97caf1cbd4d3e4167ce52bc5fe8da8c538',
  'q-markarth-tailor-novice-parcel':'41d6dcf835ba00f47aad39321873750c027453c2f72770f22ac49665b6d7c42b',
@@ -70769,7 +70770,7 @@ const publication=Object.freeze({
  'q-morthal-smith-expert-parcel':'419ddedc579950eee90774f768d1b51574f440c2453a2b703f03da5d114355e9',
  'q-morthal-smith-master-parcel':'00d8e6292fbb97467975120876fed4b80579849c1d8ac6c4b2748340c48ae6fd',
  'q-morthal-woodworker-novice-parcel':'1826e4d2d9f8f54abfc7d117dee2a025d9ed97bea817310f72df3509a6e79c41',
- 'q-morthal-woodworker-advanced-parcel':'51ce93d15b6ba610a43424b4a32dc4ea099354575112aa27f0893d87327bdc69',
+ 'q-morthal-woodworker-advanced-charcoal-parcel':'21ee6794881ea168206bf0d18863483b2f7dc71051e331ffd2de7ac89ff1e38a',
  'q-morthal-woodworker-expert-parcel':'0dc1b3f60331ccec3ef609a166dbaf47ff8196d31ebc49b3d780759272cd0f40',
  'q-morthal-woodworker-master-parcel':'189e472f274ba7a5fc2b9c537c23d1fb1a699c6963d4afdd9c0f28b4465ffa2d',
  'q-morthal-tailor-novice-parcel':'020ac422c90a12d91d074c53ab7f1a0e325ff4a85eb8c77bf9031d8a274c40a5',
@@ -70816,9 +70817,9 @@ const publication=Object.freeze({
  'q-winterhold-smith-expert-parcel':'75c5bceb51d5f24af727c4ee968774097754b7cc0f64f10cb415d58330cd7e60',
  'q-winterhold-smith-master-parcel':'59f73bf6d038034fa2c9ac65b1b85a6582c9502c77e512349ef309125969f02d',
  'q-winterhold-woodworker-novice-parcel':'c77c432bc1a72f7da71368a839140359f67880dcc6d2dd928ceee18091aa6339',
- 'q-winterhold-woodworker-advanced-parcel':'7362c2e1c85870d505ba5fad8413d5673fb99cb993b33f4bc09d6a82239f4840',
+ 'q-winterhold-woodworker-advanced-charcoal-parcel':'c39d9aeb843999b7beb1b35e4b1b2849c6bcb9452fee11d1716c677a2f75a0f6',
  'q-winterhold-woodworker-expert-parcel':'2b15efd43ad1a57ffa9519a592e41ee56062e220441bf7cdfd340bd1c359335b',
- 'q-winterhold-woodworker-master-parcel':'22941c4af6bd41eb6aa96c9f29085ea2605fdd89157f091d562305d1e9e5c184',
+ 'q-winterhold-woodworker-master-charcoal-parcel':'871497fa81b6059a848fff092cbea12b2ac78915e7aa0d1ffbd03b83558af572',
  'q-winterhold-tailor-novice-parcel':'4ddea61b68bc9451d942295376ebd20082dc472aa12f5e046cc9960548bf58c8',
  'q-winterhold-tailor-advanced-parcel':'1e25774626e32469e0dae4cf4e949f279d1d6e9f1839ac48a4753a7d7f5fb5e7',
  'q-winterhold-tailor-expert-parcel':'8322953574b8161b13669df1e8f973f9009418f806681e9ecf4ea8b3b8aa0518',

@@ -126,7 +126,10 @@ foreach ($rel in @(
     'Data\Platform\thornswood-session.txt',
     'Data\Platform\menu-music-duck.txt',
     'Data\Platform\overlay-boot.count',
-    'Data\Platform\thornswood-voice.log'
+    'Data\Platform\thornswood-voice.log',
+    # What somebody set in QuickLoot's menu, and its saved presets (#4511).
+    'Data\SKSE\Plugins\QuickLootIE\DefaultConfig.json',
+    'Data\SKSE\Plugins\QuickLootIE\SortPresets\Mine.json'
 )) {
     Yes "$rel is one machine's own" (Test-ShipMachine $rel)
     # A runtime path is listed as removed and taken off every install, which
@@ -135,6 +138,7 @@ foreach ($rel in @(
 }
 # Matched exactly, so a file of ours that merely sits beside one is not caught.
 Yes 'a different ini in the same folder still ships' (-not (Test-ShipMachine 'Data\SKSE\Plugins\ThornswoodExtra.ini'))
+Yes 'QuickLoot''s own config, which is ours, still ships' (-not (Test-ShipMachine 'Data\SKSE\Plugins\QuickLootIE.json'))
 
 # ---- the voice join token, which nine packs carried --------------------------
 #

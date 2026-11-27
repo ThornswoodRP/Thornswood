@@ -448,9 +448,19 @@ function pick(tracesFile, treeFile, commit, gate) {
   change: each reads the build, which is of the old inputs, and a changed
   input beside it, so one that holds a table to its source fails until the
   box builds the new one. The map says so for a harness it traced. For one
-  it cannot clear (always run, or not in the map) its own text decides:
-  naming a file the build writes. The merge release runs them all over the
-  merge's own build before anything carries it.
+  it cannot clear (always run, or not in the map) its own text decides,
+  with the text of each file of this repository it requires: naming a
+  file the build writes, or a folder the build writes into that git holds
+  nothing in. The merge release runs them all over the merge's own build
+  before anything carries it.
+
+  The files it requires count because a harness reads the build through
+  them. test-merchant-role-stage.js reads the tables through
+  tests/gamemode-tables.js, which loads scripts/dev/GamemodeTables.js, and
+  only that one names game/gamemode-tables. It did not pass when main's map
+  was traced, so the map could not clear it, and on its own text it ran over
+  the old build in the queue and stopped there on commission rows that build
+  did not have yet.
 
   writes: the files and folders the build writes; inputs: the paths its key
   is made of (scripts/mods/ContentPaths.ps1), a folder for all under it. The
@@ -471,6 +481,30 @@ function contentChecks(map, gate, files, writes) {
   return select({ map: map, gate: gate, changes: writtenFiles(writes, files).map(p => ({ status: 'M', path: p })), baseFiles: files, headFiles: files });
 }
 function harnessFile(name) { return name.indexOf('/') >= 0 ? path.join(REPO, name) : path.join(REPO, 'tests', name); }
+// A harness's file and every file of this repository it requires, by a
+// relative require, and each of theirs: the files that say what it reads.
+function requiredFiles(file) {
+  const seen = [], todo = [path.resolve(file)];
+  const root = path.resolve(REPO) + path.sep;
+  while (todo.length && seen.length < 200) {
+    const f = todo.shift();
+    if (seen.indexOf(f) >= 0) { continue; }
+    let text;
+    try { text = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+    seen.push(f);
+    if (!/\.(c|m)?js$/i.test(f)) { continue; }
+    const re = /require\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g;
+    let r;
+    while ((r = re.exec(text))) {
+      const to = path.resolve(path.dirname(f), r[1]);
+      const hit = [to, to + '.js', path.join(to, 'index.js')].find(x => { try { return fs.statSync(x).isFile(); } catch (e) { return false; } });
+      // Code only: a data file a harness requires is what it reads, not what
+      // says where it reads, and plugin names stand in its rows.
+      if (hit && hit.startsWith(root) && /\.(c|m)?js$/i.test(hit) && seen.indexOf(hit) < 0) { todo.push(hit); }
+    }
+  }
+  return seen.length ? seen : [path.resolve(file)];
+}
 function staleChecks(map, gate, base, head, writes, inputs) {
   const files = [...head.keys()];
   const checks = contentChecks(map, gate, files, writes);
@@ -478,17 +512,28 @@ function staleChecks(map, gate, base, head, writes, inputs) {
   const out = { run: [], why: {}, changed: changed.length };
   if (!changed.length) { return out; }
   const reach = select({ map: map, gate: checks.run, changes: changed, baseFiles: [...base.keys()], headFiles: files });
-  const marks = writes.map(w => (path.extname(w) ? path.basename(w) : w));
+  // A folder the build writes into and git holds nothing in, such as
+  // game/gamemode-tables, is all build: a harness that names it reads the
+  // build though it names no one file in it. test-5191-gamemode-tables.js
+  // lists that folder and holds it to the gamemode's table() calls, so a
+  // pull request that adds a table failed it over the old build (#6893).
+  const folders = [...new Set(writes.filter(w => path.extname(w)).map(w => w.split('/').slice(0, -1).join('/')))]
+    .filter(d => d && !files.some(f => lower(f).startsWith(lower(d) + '/')));
+  const marks = writes.map(w => (path.extname(w) ? path.basename(w) : w)).concat(folders);
   for (const n of checks.run) {
     const h = map && map.harnesses ? map.harnesses[n] : null;
     if (h && !h.always) {
       if (reach.run.indexOf(n) >= 0) { out.run.push(n); out.why[n] = checks.why[n] + ', and ' + reach.why[n]; }
       continue;
     }
-    let text = '';
-    try { text = fs.readFileSync(harnessFile(n), 'utf8'); } catch (e) { text = ''; }
-    const m = marks.find(k => text.indexOf(k) >= 0 || text.indexOf(k.split('/').join('\\')) >= 0);
-    if (m) { out.run.push(n); out.why[n] = (h ? 'the map cannot clear it (' + h.always + ')' : 'not in the read map') + ', and it names ' + m + ', which the build writes'; }
+    let m = null, by = '';
+    for (const f of requiredFiles(harnessFile(n))) {
+      let text = '';
+      try { text = fs.readFileSync(f, 'utf8'); } catch (e) { text = ''; }
+      m = marks.find(k => text.indexOf(k) >= 0 || text.indexOf(k.split('/').join('\\')) >= 0);
+      if (m) { by = f === path.resolve(harnessFile(n)) ? '' : ' through ' + path.relative(REPO, f).split(path.sep).join('/'); break; }
+    }
+    if (m) { out.run.push(n); out.why[n] = (h ? 'the map cannot clear it (' + h.always + ')' : 'not in the read map') + ', and it names ' + m + by + ', which the build writes'; }
   }
   return out;
 }
