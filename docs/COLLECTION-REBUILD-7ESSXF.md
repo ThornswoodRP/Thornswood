@@ -24,8 +24,11 @@ record says about its own day.
     ship as Thornswood's until Thornswood builds them itself (#1259). They
     are listed in `scripts/release/built-until-1259.txt`.
 - `Fix-QuickLoot.ps1`, `Enable-MCM.ps1` and `Add-McmShortcut.ps1` are retired
-  (#1179): each stops with a message and installs nothing. There is nothing
-  left to check before running them.
+  (#1179): each stops with a message and installs nothing, and the
+  collection's load order and mod list now do what they did. They are in
+  `scripts/oneoff` since #5892, and nothing on the rebuild needs them, so the
+  record's section asking to check them before running is gone from this
+  page.
 - The launcher's `Firewall.cs` is no longer in the tree (#911). What the
   record says about NirnLab UI Platform holds for `launcher/app/OwnGame.cs`
   only.
@@ -114,36 +117,6 @@ is already collection-driven and self-correcting.
 - The `OwnGame` foreign and skip rules (`launcher/app/OwnGame.cs`) and
   `Firewall.cs` (no longer in the tree) treatment of NirnLab UI Platform are unchanged. NirnLab is a
   standing question for the owners and this PR does not settle it.
-
-## Ship-PC operator scripts to review against 7essxf (not changed here)
-
-These live under `scripts/mods` and are run by hand on the shipping machine, not
-carried in the installer, so they cannot put a duplicate patch into a fresh
-installer. They were workarounds for MCM Helper's load-order and light-flag
-state before the collection carried it with load-order rules, and they should be
-checked against the live 7essxf collection before being run or retired. They are
-left in place here because whether each is still needed depends on how 7essxf
-bakes MCM Helper's flags and rules, which cannot be read from a cloud runner:
-
-- `Fix-QuickLoot.ps1` (retired since, #1179) inserts `MCMHelper.esp` into the server list after
-  `SkyUI_SE.esp`, which is `MCMHelper.esp`'s own master and so the earliest
-  place the entry is legal: the server's reader refuses a plugin whose masters
-  are absent. The default anchor was `SunHelmDiseases.esp` until the SunHelm
-  removal (issue #480) left that plugin in no load order, and the script would
-  have stopped on it. It still stops when the master is not in the list, with
-  a message naming what to run first. Its premise ("MCMHelper.esp is not ESL
-  flagged, so it takes a real index") is the pre-light state; confirm against
-  7essxf.
-- `Enable-MCM.ps1` (retired since, #1179) clears `SkyUI_SE.esp`'s light flag so `MCMHelper.esp` can take
-  a normal index server side. Confirm whether 7essxf already carries MCM Helper
-  in its load-order rules before running.
-- `Add-McmShortcut.ps1` (retired since, #1179) installs MCM Shortcut NG (Nexus 169548) by hand. This mod
-  is not in the 7essxf checklist, so unlike the two above it is not obviously
-  superseded; leave it until the owners decide whether MCM Shortcut belongs in
-  the collection.
-
-Run `scripts/mods/Check-CollectionRules.ps1` on the ship PC to see what the
-7essxf collection's plugin rules actually hold before deciding on any of these.
 
 ## On the ship PC, after this lands
 
