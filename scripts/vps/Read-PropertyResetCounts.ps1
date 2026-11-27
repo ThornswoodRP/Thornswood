@@ -1,3 +1,9 @@
+<#
+.SYNOPSIS
+  Runs the source-pinned property-item count preview for the gate's fixed target.
+.DESCRIPTION
+  The gate fixes the target and checkout. No caller-selected paths are forwarded.
+#>
 #Requires -Version 7.0
 [CmdletBinding()]
 param([Parameter(Mandatory)][ValidateSet('dev', 'main')][string]$Server)

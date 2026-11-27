@@ -1,8 +1,12 @@
-#Requires -Version 7.0
-<# Counts only, for #7070. Does not stop/start services or change a world/private store.
-   Ordinary use borrows an existing target hold and requires the game already stopped.
-   The fixture route accepts only a nonce-bound disposable MongoDB data directory.
+<#
+.SYNOPSIS
+  Counts candidate property items in a stopped, held server's saved world.
+.DESCRIPTION
+  Counts only, for #7070. Does not stop/start services or change a world/private store.
+  Ordinary use borrows an existing target hold and requires the game already stopped.
+  The fixture route accepts only a nonce-bound disposable MongoDB data directory.
 #>
+#Requires -Version 7.0
 [CmdletBinding(DefaultParameterSetName = 'Server')]
 param(
   [Parameter(Mandatory, ParameterSetName = 'Server')]

@@ -171,6 +171,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/NpcReset.ps1](ops/NpcReset.ps1) | The box half of Reset-Npcs.ps1 (#4595): which saved change forms are NPCs, and moving those aside so each NPC starts again from its plugin record. |
 | [ops/Publish-Discord.ps1](ops/Publish-Discord.ps1) | Posts the newest release into the Discord #news channel. |
 | [ops/Read-Board.ps1](ops/Read-Board.ps1) | Reads the whole board, every card's Status and Order, into board.json, from a machine that has gh and no board token: a cloud Claude thread (#3192). |
+| [ops/Read-PropertyResetPreview.ps1](ops/Read-PropertyResetPreview.ps1) | Counts candidate property items in a stopped, held server's saved world. |
 | [ops/Release-List.ps1](ops/Release-List.ps1) | The release list a game server lets go of at its next start (#2351), as Reset-Character.ps1, Wipe-Saves.ps1 (#2668) and New-Character.ps1 (#2673) write it. |
 | [ops/Reset-Appearance.ps1](ops/Reset-Appearance.ps1) | Puts a character back into the race menu without deleting them. |
 | [ops/Reset-Character.ps1](ops/Reset-Character.ps1) | Throws away the character on the server so the next launch runs creation from the top. |
@@ -347,6 +348,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [vps/Read-Load.ps1](vps/Read-Load.ps1) | Says which service is using the box, from the record vps-load.ps1 keeps on it. |
 | [vps/Read-MiningLines.ps1](vps/Read-MiningLines.ps1) | Prints what thornswood-front.js wrote about mining in the sessions people really played. |
 | [vps/Read-Online.ps1](vps/Read-Online.ps1) | Says how many people are on each game server, live and dev, from the online.json each server announces on its resources port (3000 live, 7788 dev), the same file Restart-Server.ps1 and the launcher read. |
+| [vps/Read-PropertyResetCounts.ps1](vps/Read-PropertyResetCounts.ps1) | Runs the source-pinned property-item count preview for the gate's fixed target. |
 | [vps/Read-RideLines.ps1](vps/Read-RideLines.ps1) | Prints what reached the box when people pressed E on a carriage or ferry driver in the games they really played. |
 | [vps/Read-ServerHolders.ps1](vps/Read-ServerHolders.ps1) | Says what has a game server's folder open right now, while the server runs, and every process of that server's task with it, so that what an install has to stop before it moves the folder aside is a measurement and not a guess. |
 | [vps/Rehearse-OnBox.ps1](vps/Rehearse-OnBox.ps1) | The monthly restore rehearsal (#5020, #5175), run on the box from the cloud through the deploy gate's Rehearse-Restore verb, with a bot loading the character (#5196) where a person used to load it on One. |
