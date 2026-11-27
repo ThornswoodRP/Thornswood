@@ -33,8 +33,17 @@ const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..', '..');
 function read(f) { return fs.readFileSync(path.join(ROOT, 'site', 'public', f), 'utf8').split('\r\n').join('\n'); }
-const HTML = read('index.html').replace(/<!--[\s\S]*?-->/g, '');
-const CSS = read('hub.css').replace(/\/\*[\s\S]*?\*\//g, '');
+// The page and the stylesheet with their comments left out, cut at each
+// opener and its closer rather than by a pattern.
+function uncomment(text, open, close) {
+  return text.split(open).map((part, i) => {
+    if (i === 0) return part;
+    const end = part.indexOf(close);
+    return end < 0 ? '' : part.slice(end + close.length);
+  }).join('');
+}
+const HTML = uncomment(read('index.html'), '<!--', '-->');
+const CSS = uncomment(read('hub.css'), '/*', '*/');
 const HUB_JS = read('hub.js');
 
 let pass = 0, fail = 0;
@@ -157,4 +166,4 @@ function follow(p) {
 
 console.log('');
 console.log(pass + ' passed, ' + fail + ' failed');
-process.exit(fail ? 1 : 0);
+process.exitCode = fail ? 1 : 0;
