@@ -48,6 +48,7 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Repo = Split-Path -Parent (Split-Path -Parent $Here)
 $App = Join-Path $Repo 'launcher/app'
+. (Join-Path $Repo (Join-Path 'tests' 'Launcher-Csc.ps1'))   # the compiler the build runs (#2821, #4823)
 
 $script:pass = 0
 $script:fail = 0
@@ -339,11 +340,16 @@ $all = (@($usings.Split("`n") + $wUsings) | Where-Object { $_ } | Sort-Object -U
 $source = $all + "`n" + $stubs + "`n" + $wBody + "`n" + $model
 
 $built = $false
-try {
-    Add-Type -TypeDefinition $source -Language CSharp
-    $built = $true
-} catch {
-    Write-Host ('      ' + $_.Exception.Message)
+Yes 'the .NET SDK the launcher builds with is on this machine' (Test-Path -LiteralPath $LauncherDotnet)
+if (Test-Path -LiteralPath $LauncherDotnet) {
+    try {
+        # The project's compiler and packages. The stand-ins above take the
+        # place of Avalonia's own types of the same names in this build.
+        $null = Add-LauncherType -Source $source
+        $built = $true
+    } catch {
+        Write-Host ('      ' + $_.Exception.Message)
+    }
 }
 Yes 'the real Waiting.cs, RunScan, RunScanAsync and the start''s own methods build against the stand-ins' $built
 
