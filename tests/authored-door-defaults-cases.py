@@ -44,7 +44,7 @@ RULES = {'protectedCells': {'200:Skyrim.esm': 'Creation'},
 def activation_world(change=None):
     rows = {
         0x101: [(b'XAPD', b'\1'), (b'XAPR', PACK(0x401, 0x3f800000)),
-                (b'XAPR', PACK(0x402, 0x40000000))],
+                (b'XAPR', PACK(0x402, 0x40000000)), (b'XACT', PACK(0x00000009))],
         0x102: [(b'XLOC', bytes(20)), (b'XAPD', b'\1')],
         0x103: [(b'XAPD', b'\0')],
         0x104: [(b'XLOC', bytes(20)), (b'XAPD', b'\0')],
@@ -94,6 +94,23 @@ class Defaults(unittest.TestCase):
         numbers.masters = ['skyrim.esm']
         with self.assertRaisesRegex(SystemExit, 'ZZZZ'):
             L.authored_doors.copy_pairs(plugins[0], [(b'ZZZZ', PACK(0x900))], numbers)
+
+    def test_xact_is_an_unchanged_uint32_action_flag_not_a_form_id(self):
+        plugins, _ = world()
+        class NoFormIds:
+            def one(self, *args):
+                raise AssertionError('XACT action bits must never be renumbered as a reference')
+        for value in (0, 1, 2, 4, 8, 15, 0x01000001, 0xffffffff):
+            with self.subTest(value=value):
+                pairs = [(b'XAPD', b'\1'), (b'XACT', PACK(value)), (b'DATA', bytes(24))]
+                self.assertEqual(L.authored_doors.copy_pairs(plugins[0], pairs, NoFormIds()),
+                                 [(b'XAPD', b'\0'), (b'XACT', PACK(value)), (b'DATA', bytes(24))])
+
+    def test_unknown_xact_sizes_still_refuse(self):
+        plugins, _ = world()
+        for size in (0, 1, 2, 3, 5, 8):
+            with self.subTest(size=size), self.assertRaisesRegex(SystemExit, 'XACT'):
+                L.authored_doors.copy_pairs(plugins[0], [(b'XACT', bytes(size))], None)
 
     def test_copy_clears_parent_only_flag_and_preserves_link_ordinals_and_delay(self):
         plugins, _ = world()
@@ -189,6 +206,7 @@ class Defaults(unittest.TestCase):
         self.assertEqual([pair for pair in L.subrecords(final.data(ref)) if pair[0] in (b'XAPD', b'XAPR')],
                          [(b'XAPD', b'\0'), (b'XAPR', PACK(0x401, 0x3f800000)),
                           (b'XAPR', PACK(0x402, 0x40000000))])
+        self.assertEqual(dict(L.subrecords(final.data(ref)))[b'XACT'], PACK(0x00000009))
         for fid in (0x103, 0x105, 0x201, 0x301):
             actual, original = winners[b'REFR', ('skyrim.esm', fid)], source_win[b'REFR', ('skyrim.esm', fid)]
             self.assertEqual((actual.pi, actual.fid, actual.off), (original.pi, original.fid, original.off))
