@@ -71,6 +71,7 @@ class Eligibility(unittest.TestCase):
 
     def test_standalone_exterior_gate_is_claimable(self):
         self.assertIn('103:Skyrim.esm', self.mapped())
+        self.assertEqual(self.tables['BUILDING_NAME'][self.mapped()['103:Skyrim.esm']], 'Gate at Room 100')
 
     def test_exterior_pairs_share_one_site_each_without_claiming_public_cell(self):
         m = self.mapped()
@@ -132,7 +133,7 @@ class Eligibility(unittest.TestCase):
                                 capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         counts = json.loads(result.stdout)
-        self.assertEqual(counts, {'claims': 4, 'refusedHijacks': 4, 'passableLeaves': 6})
+        self.assertEqual(counts, {'claims': 4, 'refusedHijacks': 4, 'passableLeaves': 6, 'embassyRestart': True})
 
 
 if __name__ == '__main__':

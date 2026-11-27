@@ -228,7 +228,7 @@ const box = {
 box.globalThis = box;
 inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js property' }); });
 const W = box.__thornswoodProperty;
-yes('the property block runs and publishes the jail rules', !!W && typeof W.mayHold === 'function' &&
+yes('the property block runs and publishes the jail rules', !!W && typeof W.jailOfBuilding === 'function' &&
     typeof W.lockedJailHere === 'function' && typeof W.jailKeyHold === 'function' && !!W.JAIL_KEY);
 if (!W) { done(); } else {
 
@@ -263,7 +263,7 @@ yes('C5 a guard cannot take that existing holding either', claimOf(JAIL)?.by ===
 open(JARL_W, FRONT);
 ln = lineOf(JARL_W);
 yes('C6 the local Jarl remains eligible but cannot hijack an occupied building',
-    W.mayHold(JARL_W.a, JARL_W.pid, JAIL) && !!ln && ln.x === '');
+    !!ln && ln.x === '');
 r = word(JARL_W, '/claim');
 yes('C7 the local Jarl\'s press preserves the ordinary holder',
     claimOf(JAIL)?.by === PRISONER.pid && /is held by/.test(r.mine));

@@ -69,7 +69,8 @@ def expand(cells, placed, buildings, by_door, names, way_out, policy, markers=()
             c = cells[site]
             names.setdefault(site, c.get('name') or c.get('edid') or 'A room')
         else:
-            names.setdefault(site, 'A gate')
+            labels = sorted({c['name'] for c in (cell, far_cell) if c and c.get('name')})
+            names.setdefault(site, 'Gate at ' + ' / '.join(labels) if labels else 'A gate')
         sites.setdefault(site, {'kind': kind, 'name': names[site], 'passageOnly': True})
         # All existing meaningful ingress locks retain their old WAY_OUT value.
         # Newly admitted leaves must not acquire a trapping lock by accident.
