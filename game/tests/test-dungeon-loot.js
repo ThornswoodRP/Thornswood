@@ -413,5 +413,26 @@ if (block) {
   yes('a hunter carcass hands nothing', wolfRig.given.length === 0);
 }
 
+// The burial set is dungeon only (Patrick, 26 October 2026, #4676): its four
+// Skyforge armour recipes are cuts since the first pass, which every recipe
+// build applies (game/tests/test-1714-cut-file.js), the maker check exempts
+// the four pieces with the set's reason, and the loot page says so. The cut
+// files themselves are the content build's to write, and a checkout may hold
+// an older laid copy, so this reads what writes them.
+{
+  const REPO = path.join(__dirname, '..', '..');
+  const writer = fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Write-CutItems.js'), 'utf8');
+  const waiting = JSON.parse(fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Check-Makers.waiting.json'), 'utf8'));
+  const page = fs.readFileSync(path.join(REPO, 'docs', 'systems', 'dungeon-loot.md'), 'utf8');
+  const BURIAL = ['f46cc:Skyrim.esm', 'f46cd:Skyrim.esm', 'f46cf:Skyrim.esm', 'f46d0:Skyrim.esm'];
+  const PIECES = ['18388:Skyrim.esm', '56a9d:Skyrim.esm', '56a9e:Skyrim.esm', '56b17:Skyrim.esm'];
+  yes('the four Skyforge burial armour recipes are cuts since the first pass, with the set\'s reason (#4676)',
+    BURIAL.every(function (id) { return writer.indexOf("'" + id + "': BURIAL_SET") >= 0; }) && /const BURIAL_SET = 'The Ancient Nord burial set/.test(writer));
+  yes('the maker check exempts the four pieces as the burial set (#4676)', PIECES.every(function (d) {
+    return (waiting.exempt || []).some(function (e) { return e.desc === d && /burial set is found in a dungeon/.test(e.why); });
+  }));
+  yes('the loot page says the burial set is dungeon only (#4676)', /burial set is dungeon only: no bench makes any of it/.test(page.replace(/\s+/g, ' ')));
+}
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exitCode = 1;

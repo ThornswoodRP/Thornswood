@@ -658,6 +658,9 @@ person(srv, OUT, 13, 'smith', 'platewright', function (s) {
       set: function (v) { n._text = String(v); n.children = []; }
     });
     n.appendChild = function (c) { n.children.push(c); return c; };
+    n.attrs = {};
+    n.setAttribute = function (k, v) { n.attrs[k] = String(v); };
+    n.removeAttribute = function (k) { delete n.attrs[k]; };
     n.querySelector = function (sel) { return (n._q && n._q[sel]) || node('div'); };
     return n;
   }

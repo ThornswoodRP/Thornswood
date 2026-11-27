@@ -47,7 +47,7 @@ if (-not $title.StartsWith('The engine pin moves to')) { Stop-Here "$EnginePinBr
 $open = Invoke-Gh @('api', "repos/$repo/pulls?state=open&head=$($owner):$([uri]::EscapeDataString($EnginePinBranch))")
 if ($open.Code -ne 0) { Stop-Here "the open pull requests could not be read: $($open.Text)" }
 $prs = @($open.Text | ConvertFrom-Json | ForEach-Object { $_ })
-$file = Join-Path ([IO.Path]::GetTempPath()) ('engine-pin-pr-' + [Guid]::NewGuid().ToString('N') + '.json')
+$file = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('engine-pin-pr-' + [Guid]::NewGuid().ToString('N') + '.json')
 [IO.File]::WriteAllText($file, (([ordered]@{ title = $title; body = $body } | ConvertTo-Json -Compress)), (New-Object Text.UTF8Encoding($false)))
 try {
     if ($prs.Count) {

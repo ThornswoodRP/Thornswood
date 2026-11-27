@@ -289,7 +289,8 @@ function Get-ContentList([switch]$Stale) {
     # What a build holds: the plugin, the catalogue built in the order before
     # the chain (Build-ContentOnBox.ps1), and every file the chain writes.
     $writes = @('game/content/Thornswood-Content.esp', 'game/data/npc-population.json') + @($c.Writes)
-    $tmp = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
+    $tmp = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('run-gate-content-' + [Guid]::NewGuid().ToString('N').Substring(0, 12)) })
+    $null = New-Item -ItemType Directory -Force -Path $tmp
     $gateFile = Join-Path $tmp 'content-gate.txt'
     $writesFile = Join-Path $tmp 'content-writes.txt'
     $inputsFile = Join-Path $tmp 'content-inputs.txt'

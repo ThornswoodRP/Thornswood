@@ -128,7 +128,12 @@ yes('the panel says what its Close button does, in closeWord', !!P.closeWord);
 yes('and presses it in closeButton, which asks twice', !!P.quit && P.quit.indexOf('function closeButton()') >= 0);
 
 function el() {
-  const e = { textContent: '', className: '', style: { display: '' } };
+  // Confirm says aria-disabled while it is off (#4474), so the stand-in
+  // keeps attributes as the page's elements do.
+  const e = { textContent: '', className: '', style: { display: '' }, attrs: {} };
+  e.setAttribute = function (k, v) { e.attrs[k] = String(v); };
+  e.removeAttribute = function (k) { delete e.attrs[k]; };
+  e.getAttribute = function (k) { return Object.prototype.hasOwnProperty.call(e.attrs, k) ? e.attrs[k] : null; };
   return e;
 }
 
