@@ -11566,6 +11566,16 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
     log(actorId.toString(16), 'was refused', desc, '(' + (row && row.name || 'recipe') + '):', refusal);
     return false;
   }
+  // The trade's tool (#3162), asked now the way mp.onCraft asks it, so a
+  // missing tool is said before the wait and not when it is over (#6804).
+  const toolKey = row && typeof row === 'object' ? benchToolKey(row) : null;
+  const noTool = toolKey ? toolGate(actorId, toolKey) : null;
+  if (noTool) {
+    notify(actorId, noTool);
+    say(actorId, noTool);
+    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', toolFor(toolKey).name);
+    return false;
+  }
   const size = craftSize(row, workbenchId);
   mp.set(actorId, 'craftWork', { ms: CRAFT_WORK_MS[size] });
 

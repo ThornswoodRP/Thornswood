@@ -76,6 +76,9 @@ const box = {
   craftRow: function (desc) { return Object.prototype.hasOwnProperty.call(RECIPES, desc) ? RECIPES[desc] : null; },
   // Permission outcomes run through the real gate in test-4911-craft-preflight.
   craftAnswer: function () { return {refusal:null}; },
+  // So do the trade's tools, asked before the wait too (#3162, #6804).
+  benchToolKey: function () { return null; },
+  toolGate: function () { return null; },
   recipeSetInGame: function (out, bench, inputs) { return (inputs && inputs.setInGame) ? SET_IN_GAME : null; },
   unfitToMake: function () { return box.unfit; },
   notify: function (id, text) { box.notes.push(text); },

@@ -27,8 +27,12 @@ const cases = [
   {label:'old moved ID', desc:'231c6:Hothtrooper44_ArmorCompilation.esp',
     prof:'tailor',half:'haberdasher',bench:moved['231c6:Hothtrooper44_ArmorCompilation.esp'].from,
     reason:/not made at this bench/},
+  // Since #7184 the Eyepatch lists its Leather Strips, not the gold every
+  // game takes out, so it is novice work; its refusal is the missing shears,
+  // which only a recipe the server took for the Eyepatch gets (an unknown one
+  // is told it takes different materials, as above).
   {label:'recosted recipe', desc:'286a:Hothtrooper44_ArmorCompilation.esp',
-    prof:'tailor',half:'haberdasher',remapped:true,reason:/Advanced Haberdasher/,
+    prof:'tailor',half:'haberdasher',remapped:true,reason:/pair of shears/,
     inputs:recosted['286a:Hothtrooper44_ArmorCompilation.esp'].inputs.filter(x => x[2]).map(x => ({item:x[0],count:x[2]}))},
   {label:'moved recipe', desc:'231c6:Hothtrooper44_ArmorCompilation.esp',
     // Linen now has its novice supplier; Troll Fat sets this row's Advanced rung.
