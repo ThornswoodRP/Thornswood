@@ -52,7 +52,12 @@ function Send-FeedStore($channel, $dir, $files) {
                 $params.Url = 'https://example.invalid/collection'; $field = 'CollectionUrl'; $expected = $params.Url
             }
             if ($case -eq 'no-push') { $params.NoPush = $true }
-            $log = (& (Join-Path $ops "$name.ps1") @params 6>&1 | Out-String)
+            # Each setter runs in its own pwsh, so its exit code is its own: run in
+            # this process, a script that ends without exit leaves the last case's
+            # $LASTEXITCODE standing.
+            $argv = @('-NoProfile', '-File', (Join-Path $ops "$name.ps1"))
+            foreach ($k in $params.Keys) { if ($params[$k] -is [bool]) { $argv += "-$k" } else { $argv += "-$k"; $argv += [string]$params[$k] } }
+            $log = (& pwsh @argv 2>&1 | Out-String)
             $rc = $LASTEXITCODE
             $calls = (Get-Content -LiteralPath $trace -Raw).Trim()
             $claim = $log -match 'picks (this|it) up|site serves it now'
