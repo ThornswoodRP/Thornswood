@@ -34,7 +34,11 @@
   its run deletes the copy before it runs (Send-Script.ps1, #3059), while the
   value still goes on standard input: never on a command line and never in a
   file. Standard input reaches the box whole only up to about 8 KB, measured
-  21 Oct 2026, so a value over 8,000 bytes is refused before anything is sent. Watch-Services.ps1 -Webhook has sent
+  21 Oct 2026, so its line is held to 8,000 bytes with its line end. The
+  value goes as base64, four characters for every three bytes, so the longest
+  value that goes is 5,997 bytes of UTF-8 ($ThornswoodSecretLimit, worked out
+  from Send-Script.ps1's line limit), and a longer one is refused before
+  anything is sent (#4253). Watch-Services.ps1 -Webhook has sent
   the alerts webhook this way since 28 September.
 
   Measured on this machine on 29 September, in Windows PowerShell 5.1 and in
@@ -47,6 +51,12 @@
 
 # How a script goes to the VPS at all: Send-Script.ps1 (issue #1070).
 . (Join-Path $PSScriptRoot 'Send-Script.ps1')
+
+# The longest value that goes, in bytes of UTF-8 (#4253). Its line on standard
+# input is base64, four characters for every three bytes, then CR LF, and
+# Send-Script.ps1 holds that line to $ThornswoodStdinLimit: 8,000 there is
+# 5,997 here.
+$ThornswoodSecretLimit = [int]([Math]::Floor(($ThornswoodStdinLimit - 2) / 4) * 3)
 
 # The first thing the far side runs: one line of standard input, anything that
 # is not base64 dropped (a byte order mark or a stray CR), decoded as UTF-8.
@@ -85,6 +95,10 @@ function Invoke-ThornswoodSecretRemote {
     # before the secret goes anywhere, rather than quietly overridden.
     $weak = @($SshArgs | Where-Object { $_ -match '(?i)StrictHostKeyChecking\s*=\s*(?!yes\b)' })
     if ($weak.Count) { throw ('ssh options with host key checking turned down (' + ($weak -join ', ') + '). A secret goes only to the box whose key is pinned. Nothing was sent.') }
+    # Measured on the value, so the refusal says the size the caller can act
+    # on, never the base64 line's. The value itself is never in the message.
+    $size = [Text.Encoding]::UTF8.GetByteCount($Secret)
+    if ($size -gt $ThornswoodSecretLimit) { $Secret = $null; throw ('the value is ' + $size + ' bytes, over the ' + $ThornswoodSecretLimit + ' that fit on one line of standard input to the box (Send-Secret.ps1, #4253). Nothing was sent.') }
     $full = (Get-ThornswoodSecretPrelude) + "`r`n" + $Script
     $wire = ConvertTo-ThornswoodSecretWire $Secret
     $Secret = $null
