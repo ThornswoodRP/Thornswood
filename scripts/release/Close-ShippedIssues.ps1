@@ -45,6 +45,9 @@
   of which a main Ship could close.
 
   WHAT STAYS OPEN, each said by number:
+    - an issue with done-on-merge's comment whose card is not in Merged or
+      Done (#4289): the board did not move it, or someone moved it back, and
+      only a person can tell which, so it is named with its card's Status;
     - an issue whose merge the shipped commit does not contain: its fix is not
       on the main server yet, so the next main Ship that carries it closes it.
       That merge has to be on main, though: one that is not, such as an id from
@@ -297,6 +300,38 @@ if ($byHandOnly.Count) {
     Say ("  {0} more open issue(s) with a Fixed by line, which the board does not put in Done" -f $byHandOnly.Count) 'DarkGray'
 }
 
+# A merge's done-on-merge comment whose card never reached Merged (#4289).
+# board.yml moves the card when it reads the merged test task, and when that
+# run is refused or dropped the comment is there and the card is not, so a
+# read of Merged and Done alone passed the issue over without a word. The
+# card may also have been moved back on purpose, a fix that did not hold, so
+# each one is named and left open for a person: its card's Status and the
+# comment are both there to read. Found with the issue search on the
+# comment's footer, and held to a comment that really is done-on-merge's.
+$offCard = New-Object System.Collections.Generic.List[string]
+$q = [uri]::EscapeDataString(('repo:{0} is:issue is:open in:comments "{1}"' -f $GitHubRepo, 'Done on merge'))
+$cardOf = @{}
+foreach ($it in @($board.items)) { if ($it.kind -eq 'Issue' -and [string]$it.repo -eq $GitHubRepo -and $null -ne $it.number) { $cardOf[[int]$it.number] = [string]$it.status } }
+for ($page = 1; $page -le 10; $page++) {
+    try { $found = Invoke-GitHub 'GET' ("search/issues?q=$q&per_page=100&page=$page") $null }
+    catch { Stop-Here "GitHub's issue search for the merges' done comments did not answer, so nothing was closed: $($_.Exception.Message)" }
+    $items = @(if ($found -and $found.PSObject.Properties['items']) { $found.items })
+    foreach ($it in $items) {
+        if ($it.PSObject.Properties['pull_request'] -and $it.pull_request) { continue }
+        $num = [int]$it.number
+        if ($seen.Contains($num)) { continue }
+        try { $cs = @(Get-Comments $num) }
+        catch { Stop-Here "the comments of #$num could not be read, so nothing was closed: $($_.Exception.Message)" }
+        # Not $robot: PowerShell names are not case sensitive, and $Robot is the bot's login.
+        $merged = @($cs | Where-Object { [string]$_.user.login -eq $Robot -and ([string]$_.body).Contains($Footer) -and ([string]$_.body) -match $MergedLine }) | Select-Object -Last 1
+        if (-not $merged) { continue }
+        [void]$seen.Add($num)
+        $offCard.Add(('#{0} ({1}, pull request #{2})' -f $num, $(if ($cardOf.ContainsKey($num)) { $cardOf[$num] } else { 'not on the board' }), [regex]::Match([string]$merged.body, $MergedLine).Groups[1].Value))
+    }
+    if ($items.Count -lt 100) { break }
+}
+if ($offCard.Count) { Say ("  {0} open issue(s) with a merge's done comment whose card is not in Merged or Done" -f $offCard.Count) 'Yellow' }
+
 # ------------------------------------------------------------ each issue
 Head 'Each issue'
 $closed = New-Object System.Collections.Generic.List[string]
@@ -442,6 +477,7 @@ Line $verb $closed 'Green'
 Line $(if ($Dev) { 'Not written, not carried or for main' } else { 'Stay open, their merge is not in this release' }) $notCarried 'DarkGray'
 Line 'Stay open, in Done with no test task from a merge to close them with' $noTask 'DarkGray'
 Line 'Stay open, their box step has no output on them yet' $waitBox 'DarkGray'
+Line 'Left open, a merge''s done comment is on them but their card is not in Merged or Done: move the card to Merged for the next release, or back to work if the fix did not hold' $offCard 'Yellow'
 if ($trouble.Count) {
     Line 'Stopped, the lines above say why' $trouble 'Red'
     Say ("  .\scripts\release\Close-ShippedIssues.ps1 -Commit {0}{1}   runs it again; it does only what is still to do" -f $shipped, $(if ($Dev) { ' -Dev -Build ' + $Build } else { '' })) 'Yellow'

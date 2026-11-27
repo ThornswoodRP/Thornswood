@@ -50,6 +50,8 @@
    11. with -Dev and a dev release's name (#5199), a carried Dev block with
        no Dev test task after its merge is written with its Build: line
        naming that release, a Main one waits, and nothing is closed;
+   14. an open issue with a merge's done comment whose card is not in Merged
+       or Done is named with its card and left open (#4289);
    13. an open issue with a person's "Fixed by" line is closed when the
        release carries its merge even though the board does not have its
        card in Done (#5185 put only merged test tasks there), found through
@@ -342,6 +344,37 @@ try {
     Yes '13 and it says how many the board did not have in Done' ($r.Out -match '2 more open issue\(s\) with a Fixed by line')
     $r = Run @() @{ $search = [ordered]@{ total_count = 1; items = @([ordered]@{ number = 30 }) }; (Page 30) = @((Hand $mergeA 3340)) } @($search)
     Yes '13 a search GitHub refuses is a stop that closes nothing' ($r.Code -eq 1 -and $r.Writes.Count -eq 0 -and $r.Out -match 'issue search for the Fixed by lines did not answer')
+    $script:boardFile = $keepBoard
+
+    # ---- 14: a merge's done comment whose card never reached Merged (#4289) ----
+    # board.yml moves the card when it reads the merged test task; when that
+    # run is refused or dropped the comment is there and the card is not. The
+    # card may also have been moved back on purpose, so each is named with its
+    # Status and left open, never closed and never passed over without a word.
+    $doneSearch = 'GET search/issues?q=' + [uri]::EscapeDataString(('repo:{0} is:issue is:open in:comments "Done on merge"' -f $Slug)) + '&per_page=100&page=1'
+    $keepBoard = $script:boardFile
+    $script:boardFile = Join-Path $work 'board-40.json'
+    [IO.File]::WriteAllText($script:boardFile, ([ordered]@{ read_at = '2026-11-27T20:00:00Z'; items = @((Card 40 'In Progress'), (Card 43 'Merged')) } | ConvertTo-Json -Depth 6))
+    $off = @{
+        $doneSearch = [ordered]@{ total_count = 5; items = @([ordered]@{ number = 40 }, [ordered]@{ number = 41 }, [ordered]@{ number = 42 }, [ordered]@{ number = 43 }, [ordered]@{ number = 44; pull_request = [ordered]@{ url = 'a pull request' } }) }
+        (Page 40) = @((Robot $mergeA 3350))
+        (Page 41) = @((Person 'looking at it'), (Robot $mergeB 3351))
+        (Page 42) = @((Person 'The bot wrote "Done on merge" on the other one, not here.'))
+        (Page 43) = @((Robot $mergeA 3353))
+    }
+    $r = Run @() $off
+    $w = $r.Writes
+    Yes ("14 a run that finds done comments off the Merged column passes (exit {0})" -f $r.Code) ($r.Code -eq 0)
+    Yes '14 it asks the issue search for the open issues with a merge''s done comment' (@($r.Calls | Where-Object { $_ -like "$doneSearch *" }).Count -eq 1)
+    Yes '14 #40 (In Progress) and #41 (not on the board) are named with their card and pull request, and left open' (
+        $r.Out -match "Left open, a merge's done comment is on them but their card is not in Merged or Done[^\n]*\(2\): #40 \(In Progress, pull request #3350\) #41 \(not on the board, pull request #3351\)" -and
+        @($w | Where-Object { $_ -match '/issues/4[01][ /]' }).Count -eq 0)
+    Yes '14 #42, a person''s words that only quote the footer, is named nowhere' (@($w | Where-Object { $_ -match '/issues/42[ /]' }).Count -eq 0 -and $r.Out -notmatch '#42\b')
+    Yes '14 #43, in Merged and found by the search too, is closed once and not named as left open' (
+        @($w | Where-Object { $_ -like "PATCH repos/$Slug/issues/43 *" }).Count -eq 1 -and $r.Out -notmatch '#43 \(')
+    Yes '14 #44, a pull request, is not read' (@($r.Calls | Where-Object { $_ -match '/issues/44[ /]' }).Count -eq 0)
+    $r = Run @() @{ $doneSearch = [ordered]@{ total_count = 1; items = @([ordered]@{ number = 40 }) }; (Page 40) = @((Robot $mergeA 3350)) } @($doneSearch)
+    Yes '14 a search GitHub refuses is a stop that closes nothing' ($r.Code -eq 1 -and $r.Writes.Count -eq 0 -and $r.Out -match 'issue search for the merges'' done comments did not answer')
     $script:boardFile = $keepBoard
 
     # ---- 11: a dev release (-Dev, #5199) ---------------------------------------
