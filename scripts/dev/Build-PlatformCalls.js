@@ -82,7 +82,9 @@ function platformCalls(fork, commit) {
 
   const sorted = {};
   for (const k of Object.keys(sources).sort()) { sorted[k] = sources[k]; }
-  return { sources: sorted, names: [...names].sort() };
+  // The commit goes in with the names, so a record whose forkCommit moved
+  // without them being read again says so (#7090).
+  return { commit: full, sources: sorted, names: [...names].sort() };
 }
 
 module.exports = { platformCalls };

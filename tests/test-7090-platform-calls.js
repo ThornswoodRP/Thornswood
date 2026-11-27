@@ -10,8 +10,9 @@
 // harnesses and threw in the game. The same check found two more on main
 // on 27 Nov 2026: the front set the field of view with Game.setCameraFOV and
 // the mark plugin read a cell's editor id with Utility.getFormEditorID, and
-// the pinned fork has neither (setCameraFOV is a console command there, not
-// a call), so both only ever took their "this build has none" branch.
+// the fork pinned then had neither (setCameraFOV was a console command there,
+// not a call; fork commit d1de964d has since added it, #7200), so both only
+// ever took their "this build has none" branch.
 // tests/test-3126-settings.js held the field of view against a stand-in
 // Game that had setCameraFOV.
 //
@@ -60,6 +61,10 @@ yes('  read from the typings, the .psc natives, the platform\'s C++ and the Worl
        Object.keys(pc.sources).some((f) => /skyrim_platform\/[^/]+\.cpp$/.test(f)) &&
        Object.keys(pc.sources).some((f) => /^skymp5-client\/src\/view\//.test(f))));
 yes('  of the commit the server is built from', front.forkCommit === (server.source && server.source.commit));
+// A pin move merged into a branch that already had platformCalls moves
+// forkCommit and leaves the names of the older commit, which the gate cannot
+// see without the fork; the names carry their own commit so it can.
+yes('  and the names were read at that same commit, not an older pin\'s', pc.commit === front.forkCommit);
 
 // What a set of sources calls that is in none of the three.
 function misses(files) {
