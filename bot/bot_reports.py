@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import traceback
 
 import discord
@@ -245,7 +246,9 @@ def report_text(row):
         acct = str(row.get('discordId') or '')
         return ('**%s reported %s on the site**%s.\n%s%s'
                 % (by or 'Somebody', clean(row.get('about'), 60) or 'somebody',
-                   (' (Discord <@%s>)' % acct) if acct.isdigit() else '',
+                   # ASCII digits alone (#7417): str.isdigit takes digits of
+                   # other scripts too, and a mention of those is no Discord account.
+                   (' (Discord <@%s>)' % acct) if re.fullmatch(r'[0-9]+', acct) else '',
                    clean(row.get('title'), 200) or '(no title)',
                    ('\n' + detail) if detail else ''))
 

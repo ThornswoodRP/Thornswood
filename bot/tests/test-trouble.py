@@ -22,7 +22,9 @@ client and the channels are stand-ins that record what would have been sent.
 
 Then when it goes (#3942): with its session's row in trouble.json, which the
 site keeps exactly as long as the session's logs, and the posts made before
-that, found once in the channel.
+that, found once in the channel. A post in a channel Discord says is gone
+goes off the list, and one in a channel out of reach stays and is said once
+(#4944).
 
 Read only. Never connects to anything.
 """
@@ -254,13 +256,32 @@ class Room(object):
         return gen()
 
 
+class NoAccess(object):
+    status = 403
+    reason = 'Forbidden'
+
+
 class Bot(object):
     def __init__(self, room):
         self.room = room
         self.user = type('U', (), {'id': BOT_ID})()
+        self.fetched = []
+        self.hidden = set()
+        self.back = set()
 
     def get_channel(self, cid):
         return self.room if cid == self.room.id else None
+
+    async def fetch_channel(self, cid):
+        # A channel the cache misses (#4944): one Discord has deleted is
+        # NotFound, one the bot may not see is Forbidden, and one that comes
+        # back into reach is the room.
+        self.fetched.append(cid)
+        if cid in self.back:
+            return self.room
+        if cid in self.hidden:
+            raise discord.Forbidden(NoAccess(), 'Missing Access')
+        raise discord.NotFound(Gone(), 'Unknown Channel')
 
 
 def row(sid, name, line):
@@ -337,6 +358,48 @@ try:
     yes('B5 and not again', 5 in room.msgs)
     got = run(bot.trouble_forget([], posts2))
     yes('B6 an old post written down goes when its row goes, like a new one', got == (1, 0) and 1 not in room.msgs)
+
+    # A post in a channel that is gone, or out of reach (#4944). get_channel
+    # misses both, which used to keep the post forever and log a line every
+    # pass (every 120 s).
+    said = []
+    keep_log = bot.log
+    bot.log = lambda *a: said.append(' '.join(str(x) for x in a))
+    try:
+        posts3 = os.path.join(scratch, 'trouble-posts-3.json')
+        GONE, HIDDEN = 7001, 7002
+        bot.client.hidden.add(HIDDEN)
+        json.dump({'posts': {'s-gone': {'channel': GONE, 'message': 11},
+                             's-gone-2': {'channel': GONE, 'message': 12},
+                             's-hid': {'channel': HIDDEN, 'message': 21},
+                             's-hid-2': {'channel': HIDDEN, 'message': 22}}},
+                  open(posts3, 'w', encoding='utf-8'))
+        got = run(bot.trouble_forget([], posts3))
+        left = json.load(open(posts3, encoding='utf-8'))['posts']
+        yes('G1 a channel Discord says is gone takes its posts off the list', 's-gone' not in left and 's-gone-2' not in left)
+        yes('G2 a channel only out of reach keeps its posts for the next pass', sorted(left) == ['s-hid', 's-hid-2'] and got == (0, 2))
+        yes('G3 Discord is asked about each channel once a pass, not once a post',
+            sorted(bot.client.fetched) == [GONE, HIDDEN])
+        out_of_reach = [l for l in said if str(HIDDEN) in l]
+        yes('G4 the channel out of reach is said once, with Discord\'s reason',
+            len(out_of_reach) == 1 and 'Forbidden' in out_of_reach[0])
+        for n in range(3):
+            got = run(bot.trouble_forget([], posts3))
+        yes('G5 and not again on the passes after it, while its posts stay',
+            len([l for l in said if str(HIDDEN) in l]) == 1 and got == (0, 2)
+            and sorted(json.load(open(posts3, encoding='utf-8'))['posts']) == ['s-hid', 's-hid-2'])
+        yes('G6 the gone channel is not asked about again: its posts are off the list',
+            bot.client.fetched.count(GONE) == 1)
+        # Back in reach: the posts are deleted (already gone from the room, so
+        # taken off the list), and that it is in reach again is said.
+        bot.client.back.add(HIDDEN)
+        got = run(bot.trouble_forget([], posts3))
+        yes('G7 a channel back in reach has its posts dealt with, and says so',
+            json.load(open(posts3, encoding='utf-8'))['posts'] == {}
+            and any('in reach again' in l and str(HIDDEN) in l for l in said))
+        yes('G8 no line names what a post said, only ids', not any('Aela' in l or 'Brynjolf' in l for l in said))
+    finally:
+        bot.log = keep_log
 finally:
     bot.client, bot.TROUBLE_ID = keep
 

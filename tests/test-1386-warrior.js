@@ -1269,6 +1269,33 @@ const settingsPage = fs.readFileSync(path.join(root, 'game', 'ui', 'thornswood-s
   yes('OnHit is registered once, through guard()', reg.length === 1 && reg[0].indexOf("guard('onPapyrusEvent:OnHit', function") !== -1);
   const body = slice(gm, "mp['onPapyrusEvent:OnHit'] = guard(", '\n});');
   yes('and it never answers false', !!body && !/\breturn\s+false\b/.test(body));
+  // Each block's call is on its own (#4789): every call in the handler sits
+  // inside a try, and a maneuvers block that throws still lets the injury
+  // block see the hit.
+  const calls = (body || '').match(/\b(?:wear\.onHit|pk\.hit|college\.hit|mv\.hit|hurt\.hit|hurt\.blow)\(/g) || [];
+  const tried = (body || '').match(/try \{ (?:wear\.onHit|pk\.hit|college\.hit|mv\.hit|hurt\.hit|hurt\.blow)\(/g) || [];
+  yes('every block\'s call in the OnHit handler is wrapped on its own (#4789)', calls.length === 6 && tried.length === 6);
+  const realMv = box.__thornswoodManeuvers.hit, realHurt = box.__thornswoodHurt;
+  const saw = [];
+  box.__thornswoodManeuvers.hit = function () { throw new Error('a maneuvers fault'); };
+  box.__thornswoodHurt = {
+    hit: function (t) { saw.push('hit ' + t); },
+    blow: function (t) { saw.push('blow ' + t); }
+  };
+  const logged = [];
+  const realLog = box.log;
+  box.log = function () { logged.push(Array.prototype.join.call(arguments, ' ')); };
+  let threw = false;
+  try {
+    box.mp['onPapyrusEvent:OnHit'](0xff000001, { type: 'form', desc: '14' }, { type: 'espm', desc: '1f4:Skyrim.esm' }, null, false, false, false, false);
+  } catch (e) { threw = true; }
+  box.__thornswoodManeuvers.hit = realMv;
+  box.__thornswoodHurt = realHurt;
+  box.log = realLog;
+  yes('a maneuvers block that throws still lets the injury block see the hit (#4789)',
+    !threw && saw.join(',') === 'hit ' + 0xff000001 + ',blow ' + 0xff000001);
+  yes('and the throw is logged as the maneuvers\' own (#4789)',
+    logged.length === 1 && logged[0].indexOf('maneuvers: the hit threw:') === 0 && logged[0].indexOf('a maneuvers fault') !== -1);
 }
 
 // --------------------------------------- a restart while Rush runs (#1642) --

@@ -956,10 +956,15 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
   if (college && college.hit) {
     try { college.hit(targetId, aggressor, source); } catch (e) { log('college: the hit threw:', e); }
   }
+  // The maneuvers (#1386), on their own like the three above: before #4789
+  // this was the one call left bare, so a throw here took the two injury
+  // calls below with it, and the guard logged the whole hit as failed.
   var mv = globalThis.__thornswoodManeuvers;
-  if (mv && mv.hit) { mv.hit(targetId, aggressor, source, power, blocked); }
+  if (mv && mv.hit) {
+    try { mv.hit(targetId, aggressor, source, power, blocked); } catch (e) { log('maneuvers: the hit threw:', e); }
+  }
   // A healing spell landing on somebody's wounds (#1383), in the injury and
-  // disease block. On its own, so the two above cannot stop it.
+  // disease block. On its own, so none of the calls above can stop it.
   var hurt = globalThis.__thornswoodHurt;
   if (hurt && hurt.hit) {
     try { hurt.hit(targetId, aggressor, source); } catch (e) { log('injury: the hit threw:', e); }

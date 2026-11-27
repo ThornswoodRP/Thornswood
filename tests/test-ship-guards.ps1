@@ -85,6 +85,9 @@ function Find-If([string]$condition, [int]$after, [string]$mark) {
 }
 
 $script:dryBefore = Find-If '$DryRun' $src.IndexOf('$dryKeep = @()') '$dryKeep +='
+# The dry run keeps its copies in a scratch folder from Get-ScratchDir.ps1
+# beside Ship.ps1 (#4264); lifted out of Ship.ps1, the block names that folder.
+$script:dryBefore = $script:dryBefore.Replace('$PSScriptRoot', "'" + (Split-Path -Parent $ShipPath).Replace("'", "''") + "'")
 $script:dryAfter  = Find-If '$DryRun' $src.IndexOf("& (Join-Path `$Here 'Publish-Update.ps1') @pubArgs") 'foreach ($k in $dryKeep)'
 $script:guard     = Find-If '$GameDir' 0 "Join-Path `$Here '..\..\game\plugins'"
 # Until #4825 Ship wrote the number into Updater.cs (Write-UpdaterCs) and
@@ -121,6 +124,7 @@ function Source-Print {
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-ship-guards-' + [Guid]::NewGuid().ToString('N'))
 $oldAppData = $env:LOCALAPPDATA
+$oldScratch = $env:THORNSWOOD_SCRATCH_ROOT
 try {
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     # This machine's working copies of the feeds (Feed-Store.ps1, #907).
@@ -130,6 +134,8 @@ try {
     New-Item -ItemType Directory -Path $script:rel, $script:relDev, $state -Force | Out-Null
     # Pending notes and the working copies of the feed and baseline are all under LOCALAPPDATA.
     $env:LOCALAPPDATA = Join-Path $work 'appdata'
+    # and the dry run's copies in this run's own folder, not the checkout's temps
+    $env:THORNSWOOD_SCRATCH_ROOT = Join-Path $work 'scratch'
     [IO.File]::WriteAllText((Join-Path $script:relDev 'version.json'), '{"launcherVersion":"1.1.67","packs":[]}')
 
     $sourceWas = Source-Print
@@ -224,6 +230,7 @@ try {
 }
 finally {
     $env:LOCALAPPDATA = $oldAppData
+    $env:THORNSWOOD_SCRATCH_ROOT = $oldScratch
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 

@@ -24,8 +24,11 @@
   worse than the last good one, which Pages keeps serving.
 
   WHAT IT LEAVES TO THE SITE. Everything that is not only words: the News,
-  Gallery, Roadmap, Downloads, Report and Known Issues pages, the hub, the APIs, the feeds
-  and the files. _redirects sends each of those to thornswood.net. _headers
+  Gallery, Roadmap, Report and Known Issues pages, the hub, the APIs, the feeds
+  and the files. And the pages behind the age gate (AGE_PAGES in
+  site/lib/pages.js: Downloads and How to join), which the site sends as the
+  gate or the page by the browser's cookie (#4330, #5624), and a plain file
+  cannot read a cookie. _redirects sends each of those to thornswood.net. _headers
   gives each page the security headers the site sent with it, and asks search
   engines not to index the copy, whose pages name thornswood.net as theirs.
 
@@ -43,7 +46,8 @@ const REPO = path.join(__dirname, '..', '..');
 const APP = path.join(REPO, 'site');
 const LIVE = process.env.THORNSWOOD_PAGES_LIVE || 'https://thornswood.net';
 // Pages served by the box, and how the copy sends people there.
-const TO_SITE = ['/news', '/gallery', '/roadmap', '/downloads', '/report', '/known', '/hub', '/hub/*',
+// AGE_PAGES, read from site/lib/pages.js below, join them.
+const TO_SITE = ['/news', '/gallery', '/roadmap', '/report', '/known', '/hub', '/hub/*',
                  '/api/*', '/feed/*', '/feed-dev/*', '/file/*', '/auth/*', '/sitemap.xml'];
 // The headers of each page that are the site's and say nothing about the request.
 const KEEP_HEADERS = ['content-security-policy', 'referrer-policy', 'x-content-type-options',
@@ -105,8 +109,14 @@ async function main() {
   if (!md) fail('site/lib/pages.js has no MD_PAGES list');
   // Known Issues is written from the issue board the bot keeps on the box,
   // which the repository holds no live copy of, so it stays the site's.
-  const pages = ['/'].concat((md[1].match(/'\/[a-z-]+'/g) || []).map((s) => s.slice(1, -1)))
-    .filter((p) => p !== '/known');
+  const routes = (list) => (list.match(/'\/[a-z-]+'/g) || []).map((s) => s.slice(1, -1));
+  const age = /const AGE_PAGES = \[([^\]]*)\]/.exec(src);
+  if (!age) fail('site/lib/pages.js has no AGE_PAGES list');
+  const gated = routes(age[1]);
+  const toSite = TO_SITE.concat(gated.filter((p) => TO_SITE.indexOf(p) < 0));
+  // The gated pages go to the site, above, so they are not copied either.
+  const pages = ['/'].concat(routes(md[1]))
+    .filter((p) => p !== '/known' && gated.indexOf(p) < 0);
 
   const pub = await getJson(LIVE + '/api/public?galleryLimit=0');
   if (pub.why) fail(pub.why);
@@ -168,7 +178,7 @@ async function main() {
     headers += '/*\n  X-Robots-Tag: noindex\n';
     fs.writeFileSync(path.join(outDir, '_headers'), headers);
     fs.writeFileSync(path.join(outDir, '_redirects'),
-      TO_SITE.map((p) => p + ' ' + LIVE + (p.endsWith('/*') ? p.slice(0, -1) + ':splat' : p) + ' 302').join('\n') + '\n');
+      toSite.map((p) => p + ' ' + LIVE + (p.endsWith('/*') ? p.slice(0, -1) + ':splat' : p) + ' 302').join('\n') + '\n');
     console.log('Export-Pages: ' + pages.length + ' pages written to ' + outDir + ' (' +
                 (pub.body.open ? 'open' : 'alpha') + ' wording)');
   } finally {
