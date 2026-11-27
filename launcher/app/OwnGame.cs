@@ -473,11 +473,11 @@ namespace Thornswood
             }
             string steam = "";
             try { steam = Steam.SkyrimPath(); } catch { /* no Steam copy: "" is the answer, and WhyNot says so */ }
-            if (steam.Length > 0 && HasRecord(steam))
-            {
-                Chosen(steam, "Vortex's record is in the Steam copy");
-                return steam;
-            }
+            // The Steam copy is one of the folders Find looks at, and comes
+            // first among those holding Thornswood's collection. It is no
+            // longer taken for having a record at all: a record of another
+            // server's collection there would win over the folder that holds
+            // Thornswood's (#6229).
             string why = null, found = "";
             try { found = Find(out why); }
             catch (Exception ex) { Swallow.Note("OwnGame.DeploysInto, looking through Steam's libraries for Vortex's folder", ex); }
@@ -486,6 +486,7 @@ namespace Thornswood
                 Chosen(found, why);
                 return found;
             }
+            if (why != null) Said("No folder Vortex deploys into was taken: " + why + ".");
             return steam;
         }
 
@@ -507,17 +508,19 @@ namespace Thornswood
         /// method: Data\vortex.deployment.json.
         ///
         /// Every folder directly under each library's steamapps\common is
-        /// looked at, not only Skyrim Special Edition. A Steam copy of Skyrim
-        /// Special Edition comes first when more than one has a record, and
-        /// otherwise the most recently written record wins.
+        /// looked at, not only Skyrim Special Edition, and the one taken is
+        /// one whose record names Thornswood's collection (#6229). Until 27
+        /// November the most recently written record won: a tester with five
+        /// Skyrim copies, other servers' among them, had the launcher go from
+        /// "Skyrim Special Edition - Thornswood" to "DEAEDRIC ONLINE" 16
+        /// seconds apart while Vortex deployed, because Thornswood's record
+        /// was being rewritten, and the refresh then found 67 of Thornswood's
+        /// 100 plugins missing from the other server's folder. See Choose.
         /// </summary>
         static string Find(out string why)
         {
-            why = null;
-            string best = "";
-            long bestAt = -1;
-            bool bestSteam = false;
-            int count = 0;
+            List<string> want = ShippedPlugins();
+            var looked = new List<DeployRecord>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (string lib in Steam.Libraries())
             {
@@ -530,26 +533,139 @@ namespace Thornswood
                     try { full = Path.GetFullPath(d).TrimEnd('\\'); } catch { continue; }
                     if (!seen.Add(full)) continue;
                     if (!File.Exists(Path.Combine(full, "SkyrimSE.exe")) || !HasRecord(full)) continue;
-                    count++;
-                    bool steam = Steam.IsSkyrimCopy(full);
-                    long at = 0;
-                    try { at = File.GetLastWriteTimeUtc(Path.Combine(full, "Data\\vortex.deployment.json")).Ticks; } catch { /* unreadable: counts as the oldest record */ }
-                    if (best.Length == 0 || (steam && !bestSteam) || (steam == bestSteam && at > bestAt))
-                    {
-                        best = full;
-                        bestAt = at;
-                        bestSteam = steam;
-                    }
+                    DeployRecord r = ReadRecord(full, Path.Combine(full, "Data\\vortex.deployment.json"), want);
+                    if (r == null) continue;
+                    r.Steam = Steam.IsSkyrimCopy(full);
+                    looked.Add(r);
                 }
             }
-            if (best.Length == 0) return "";
-            if (count == 1)
-                why = "found in Steam's libraries, the one folder there with Vortex's record in it";
-            else if (bestSteam)
-                why = "found in Steam's libraries; " + count + " folders there have Vortex's record, and a Steam copy of Skyrim Special Edition comes first";
-            else
-                why = "found in Steam's libraries; " + count + " folders there have Vortex's record and none is a Steam copy of Skyrim Special Edition, so the newest record wins";
-            return best;
+            return Choose(looked, want.Count, out why);
+        }
+
+        /// <summary>
+        /// One folder with Vortex's record in it, as Find read it: how many
+        /// of Thornswood's plugins the record names, when it was written, and
+        /// why it could not be read when it could not (Named is then -1).
+        /// </summary>
+        internal sealed class DeployRecord
+        {
+            public string Folder = "";
+            public bool Steam;
+            public int Named = -1;
+            public long At;
+            public string Unreadable;
+        }
+
+        /// <summary>
+        /// Which of the folders Find looked at Vortex deploys Thornswood
+        /// into, or "" when none of them holds its collection, with why in
+        /// both cases. A folder holds it when its record names so many of the
+        /// <paramref name="wanted"/> shipped plugins that the rest is a gap
+        /// and not another collection (NotThisCollection, the test the
+        /// refresh uses). Among those, the Steam copy comes first, then the
+        /// record that names the most, then the newest. A record that could
+        /// not be read is said as unreadable and never taken, and never
+        /// counted as a folder with nothing in it. With no shipped list yet
+        /// (wanted 0) every readable record holds it, which is the rule this
+        /// had before the list was read (#6229).
+        /// </summary>
+        internal static string Choose(List<DeployRecord> looked, int wanted, out string why)
+        {
+            why = null;
+            DeployRecord best = null, closest = null;
+            var unreadable = new List<string>();
+            int holding = 0;
+            foreach (DeployRecord r in looked)
+            {
+                if (r.Unreadable != null) { unreadable.Add(r.Folder + " (" + r.Unreadable + ")"); continue; }
+                if (wanted > 0 && NotThisCollection(wanted - r.Named, wanted))
+                {
+                    if (closest == null || r.Named > closest.Named) closest = r;
+                    continue;
+                }
+                holding++;
+                if (best == null || (r.Steam && !best.Steam) ||
+                    (r.Steam == best.Steam && (r.Named > best.Named || (r.Named == best.Named && r.At > best.At))))
+                    best = r;
+            }
+            string cannot = unreadable.Count == 0 ? "" :
+                "; Vortex's record could not be read in " + string.Join(", ", unreadable) +
+                ", so whether " + (unreadable.Count == 1 ? "that folder holds" : "those folders hold") + " it cannot be told yet";
+            string of = wanted > 0 ? " of Thornswood's " + wanted + " plugins" : "";
+            if (best != null)
+            {
+                why = "found in Steam's libraries, where Vortex's record in it names " + best.Named + of;
+                if (holding > 1)
+                    why += "; " + holding + " folders there hold Thornswood's collection, and " +
+                           (best.Steam ? "a Steam copy of Skyrim Special Edition comes first" : "this record names the most, or names as many and is the newest");
+                if (closest != null)
+                    why += "; " + closest.Folder + " has Vortex's record of another collection, naming " + closest.Named + of;
+                why += cannot;
+                return best.Folder;
+            }
+            if (looked.Count == 0) return "";
+            why = looked.Count + (looked.Count == 1 ? " folder" : " folders") + " in Steam's libraries " +
+                  (looked.Count == 1 ? "has" : "have") + " Vortex's record and none holds Thornswood's collection";
+            if (closest != null) why += ": the most, in " + closest.Folder + ", names " + closest.Named + of;
+            why += cannot;
+            return "";
+        }
+
+        static readonly object deployReadLock = new object();
+        static readonly Dictionary<string, KeyValuePair<string, DeployRecord>> deployRead =
+            new Dictionary<string, KeyValuePair<string, DeployRecord>>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Vortex's record at <paramref name="path"/>, the one in
+        /// <paramref name="folder"/>, read for Find: null when it is not
+        /// there, Unreadable set when it is there and cannot be read whole.
+        /// Read with every share Vortex may hold it with, and once for each
+        /// time and size it is written at, since DeploysInto is asked on
+        /// every scan and a record can run to megabytes.
+        /// </summary>
+        internal static DeployRecord ReadRecord(string folder, string path, List<string> want)
+        {
+            var r = new DeployRecord { Folder = folder };
+            long size;
+            try
+            {
+                var fi = new FileInfo(path);
+                if (!fi.Exists) return null;
+                r.At = fi.LastWriteTimeUtc.Ticks;
+                size = fi.Length;
+            }
+            catch (Exception ex) { r.Unreadable = Failure.Why("Vortex's record", ex); return r; }
+            string stamp = r.At + "|" + size + "|" + string.Join("|", want);
+            lock (deployReadLock)
+            {
+                KeyValuePair<string, DeployRecord> had;
+                if (deployRead.TryGetValue(path, out had) && had.Key == stamp) return had.Value;
+            }
+            string text;
+            try
+            {
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var sr = new StreamReader(fs)) text = sr.ReadToEnd();
+            }
+            catch (FileNotFoundException) { return null; }
+            catch (DirectoryNotFoundException) { return null; }
+            catch (Exception ex) { r.Unreadable = Failure.Why("Vortex's record", ex); return r; }
+            // A record Vortex is writing ends before its closing brace, and
+            // what it names so far is not what it holds.
+            string t = text.TrimEnd();
+            if (!t.TrimStart('\uFEFF').TrimStart().StartsWith("{") || !t.EndsWith("}"))
+            {
+                r.Unreadable = "it is not whole, as a record Vortex is still writing is not";
+                return r;
+            }
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Match m in RelPath.Matches(text))
+                names.Add(Unescape(m.Groups[1].Value).Replace('/', '\\').TrimStart('\\'));
+            int named = 0;
+            foreach (string p in want) if (names.Contains(p)) named++;
+            r.Named = named;
+            lock (deployReadLock) { deployRead[path] = new KeyValuePair<string, DeployRecord>(stamp, r); }
+            return r;
         }
 
         static readonly object chosenLock = new object();
@@ -2143,7 +2259,16 @@ namespace Thornswood
             try
             {
                 // Mod Organizer 2's profile, once the mods come from there (#6244).
-                string tw = FromMods ? Path.Combine(ModsFolder, "profiles", "Thornswood") : Checks.VortexProfileDir("Thornswood");
+                // Vortex's state that cannot be read is said as that, not as
+                // a profile that is not there (#6229).
+                string tw;
+                try { tw = FromMods ? Path.Combine(ModsFolder, "profiles", "Thornswood") : Checks.VortexProfileDir("Thornswood"); }
+                catch (Exception ex)
+                {
+                    LauncherLog.Line("OwnGame: which Vortex profile is Thornswood's could not be told from Vortex's state (" + Failure.Why("Vortex's state", ex) +
+                                     "), which is not the same as there being none; leaving Profile\\OwnGame plugin list alone until it can be read.");
+                    return;
+                }
                 string livePlugins = Path.Combine(Paths.WinLocalAD, "plugins.txt");
                 if (tw == null)
                 {
