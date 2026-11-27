@@ -87,7 +87,9 @@ $read = $submit.IndexOf('File.ReadAllBytes(')
 $post = $submit.IndexOf('Discord.PostBytes(')
 Yes '2. it asks GalleryAlt.Clean before it reads the file or sends anything' ($clean -ge 0 -and $read -gt $clean -and $post -gt $clean)
 Yes '2. and returns its sentence when the description is refused' ($submit -match 'GalleryAlt\.Clean\(alt, out \w+\);\s*if \(\w+ == null\) return \w+;')
-Yes '2. the cleaned description goes to the site as alt' ($submit -match '"&alt=" \+ Uri\.EscapeDataString\(')
+# The address is built by SubmitUrl since #4701, which put the sign-in in a header.
+Yes '2. the cleaned description goes to the site as alt' ($submit -match 'SubmitUrl\(offered, who, remark, described\)' -and
+    (Body $gallery 'internal static string SubmitUrl(') -match '"&alt=" \+ Uri\.EscapeDataString\(alt\)')
 Yes '2. no other Submit sends a picture without one' (([regex]::Matches($gallery, 'public static string Submit\(')).Count -eq 1)
 
 # ------------------------------------------------- 3. the Gallery page
