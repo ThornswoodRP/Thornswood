@@ -9,7 +9,7 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { fillCreditsCommits, fillLoreLine, fillPage, pageHtml,
+module.exports = { fillCreditsCommits, fillLoreLine, fillPage, noComments, pageHtml,
   pageMarkdown, readLines, roadmapBoard };
 
 const fs     = require('fs');
@@ -371,10 +371,25 @@ function pageMarkdown(name) {
 // status lines. The file's own comment says its rules, and
 // site\tests\test-3147-lines.js holds them, so nothing here checks a line again.
 // ==== thornswood lines ====
+/* The text with its HTML comments out (#5641). One pass of the pattern
+   below can leave a new "<!--" behind: taking "<!--x-->" out of
+   "<!<!--x-->--" joins the two halves into one. So the pass runs until
+   nothing changes, and an opener left with no "-->" after it hides the rest
+   of the text, as it does where the file is shown, so a note left open is
+   never read as a line. The harnesses strip with this one too
+   (tests/html-comments.js); Go.ps1 and tests/test-3656-public-words.py
+   carry the same steps, and tests/test-5641-comment-strips.js holds them
+   to it. */
+function noComments(text) {
+  let out = String(text == null ? '' : text), was;
+  do { was = out; out = out.replace(/<!--[\s\S]*?-->/g, ''); } while (out !== was);
+  const open = out.indexOf('<!--');
+  return open < 0 ? out : out.slice(0, open);
+}
 function parseLines(md) {
   const out = { hints: [], lore: [] };
   let list = null, last = null;
-  String(md == null ? '' : md).replace(/<!--[\s\S]*?-->/g, '').split(/\r?\n/).forEach(function (l) {
+  noComments(md).split(/\r?\n/).forEach(function (l) {
     const head = /^##\s+(.*?)\s*$/.exec(l);
     if (head) {
       list = /^hints$/i.test(head[1]) ? 'hints' : /^lore lines$/i.test(head[1]) ? 'lore' : null;

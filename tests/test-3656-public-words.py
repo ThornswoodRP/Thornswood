@@ -104,11 +104,23 @@ try:
 finally:
     C.CHANGES[key] = saved
 
+def no_comments(text):
+    """The text with its HTML comments out, as noComments in site/lib/pages.js
+    does it (#5641): the pass runs until nothing changes, since one pass can
+    join two halves into a new opener, and an opener with no end hides the
+    rest."""
+    was = None
+    while was != text:
+        was, text = text, re.sub(r'<!--[\s\S]*?-->', '', text)
+    open_at = text.find('<!--')
+    return text if open_at < 0 else text[:open_at]
+
+
 SITE = ROOT / 'site' / 'data' / 'site'
 pages = sorted(p for p in SITE.glob('*.md') if p.name != 'lines.md')
 numbered = []
 for p in pages:
-    text = re.sub(r'<!--[\s\S]*?-->', '', p.read_text(encoding='utf-8'))
+    text = no_comments(p.read_text(encoding='utf-8'))
     for n, line in enumerate(text.splitlines(), 1):
         if re.search(r'#\d', line):
             numbered.append('%s: %s' % (p.name, line.strip()))

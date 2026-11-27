@@ -52,6 +52,7 @@
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
+const { noComments } = require('./html-comments');
 
 const REPO = path.resolve(__dirname, '..');
 const PROJECT = path.join('launcher', 'app', 'Thornswood.csproj');
@@ -67,13 +68,12 @@ function yes(what, cond) {
 // none) is returned with version '' so the caller can say so.
 function packages(text) {
   const out = [];
-  // A comment is cut until none is left, so one written inside another
-  // cannot leave a reference that is not really there.
-  let noComments = text, before;
-  do { before = noComments; noComments = noComments.replace(/<!--[\s\S]*?-->/g, ''); } while (noComments !== before);
+  // Comments are cut the way the site cuts them (#5641), so one written
+  // inside another cannot leave a reference that is not really there.
+  const bare = noComments(text);
   const re = /<PackageReference\b([^>]*?)\/?>/g;
   let m;
-  while ((m = re.exec(noComments)) !== null) {
+  while ((m = re.exec(bare)) !== null) {
     const name = /\bInclude="([^"]+)"/.exec(m[1]);
     const ver = /\bVersion="([^"]+)"/.exec(m[1]);
     if (!name) { continue; }
