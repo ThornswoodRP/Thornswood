@@ -133,7 +133,9 @@
     remembered, and every offset below was checked against a record:
       byte 0     the operator in the top three bits, the flags in the low
                  five. 0x04 in the flags means the comparison value is a GLOB
-                 form id rather than a number. Operator 0 is ==, 1 is !=, 2 is
+                 form id rather than a number, and 0x01 joins the condition
+                 to the next one by OR; each row's needs keep it (#4224).
+                 Operator 0 is ==, 1 is !=, 2 is
                  >, 3 is >=, 4 is <, 5 is <=.
       bytes 4-7  the comparison value, a float.
       bytes 8-9  the function index, a uint16. Bytes 10 and 11 are padding and
@@ -3505,6 +3507,9 @@ function ConditionRead($cond, $masters, [string]$plugin) {
         Param = $what; ParamType = $whatType; ParamDesc = $whatDesc
         ServerSees = $serverSees
         Tomes = $tomes
+        # Joined to the next condition by OR (#4224): the OR flag, the low bit
+        # of the operator byte, which the game reads that way.
+        Or = [bool]$cond.Or
     }
 }
 
@@ -3553,15 +3558,65 @@ function PerkDropsOf($r) {
     return $drop
 }
 
-# Can a new character get past every condition on a row. No condition at all
-# is the plain yes. Under TOMES_TEACH_STAFF_SPELLS a HasSpell whose spell a
-# tome teaches is also a yes, because the tome is how the spell is learned.
+# A row's needs in their OR groups (#4224). A condition with its OR flag set
+# is joined to the next one by OR, so a run of them, ended by one without the
+# flag, is one group, and the groups are joined by AND: "this race or that
+# race or a finished quest" is one group of three, any one of which will do.
+# That is how the game reads a condition list, and how PerkDropsOf and
+# Build-LastPlugin.py take a perk's group off. A flag on the last condition
+# has nothing to join and ends the last group.
+function NeedGroupsOf($needs) {
+    $groups = New-Object 'System.Collections.Generic.List[object]'
+    $group = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($n in @($needs)) {
+        $group.Add($n)
+        if (-not $n.Or) { $groups.Add($group.ToArray()); $group.Clear() }
+    }
+    if ($group.Count -gt 0) { $groups.Add($group.ToArray()) }
+    return ,$groups.ToArray()
+}
+
+# Can a new character get past one condition. Under TOMES_TEACH_STAFF_SPELLS a
+# HasSpell whose spell a tome teaches is a yes, because the tome is how the
+# spell is learned. Anything else is a no.
+function NeedIsReachable($n) {
+    return [bool]($TOMES_TEACH_STAFF_SPELLS -and $n.Func -eq $CONDITION_HAS_SPELL -and @($n.Tomes).Count -gt 0)
+}
+
+# Can a new character get past every condition on a row: every OR group has
+# at least one condition they can get past. No condition at all is the plain
+# yes.
 function NeedsAreReachable($needs) {
-    foreach ($n in $needs) {
-        if ($TOMES_TEACH_STAFF_SPELLS -and $n.Func -eq $CONDITION_HAS_SPELL -and @($n.Tomes).Count -gt 0) { continue }
-        return $false
+    foreach ($g in (NeedGroupsOf $needs)) {
+        $any = $false
+        foreach ($n in $g) { if (NeedIsReachable $n) { $any = $true; break } }
+        if (-not $any) { return $false }
     }
     return $true
+}
+
+# Whether a row cannot be made without a vanilla perk: one of its OR groups is
+# nothing but perk tests. A perk test OR'd with anything else is a way in that
+# needs no perk, so it does not hold the row behind one (#4224).
+function NeedsAreBehindPerk($needs) {
+    foreach ($g in (NeedGroupsOf $needs)) {
+        $allPerk = $true
+        foreach ($n in $g) { if ($n.Func -ne $CONDITION_VANILLA_PERK) { $allPerk = $false; break } }
+        if ($allPerk) { return $true }
+    }
+    return $false
+}
+
+# What a row asks for, in words: each OR group's conditions joined by "or",
+# the groups by "and".
+function NeedsText($needs) {
+    $parts = @()
+    foreach ($g in (NeedGroupsOf $needs)) {
+        $t = @($g | ForEach-Object { $_.Text }) -join ' or '
+        if (@($g).Count -gt 1) { $t = '(' + $t + ')' }
+        $parts += $t
+    }
+    return ($parts -join ' and ')
 }
 
 # The spell a row's HasSpell names, or '' when it has none.
@@ -3900,10 +3955,9 @@ foreach ($desc in $recipes.Keys) {
         if ($perkDrops.ContainsKey($at)) { continue }
         $needs.Add((ConditionRead $c $r.CondMasters $r.CondIn))
     }
-    $behindPerk = $false
+    $behindPerk = NeedsAreBehindPerk $needs
     $serverChecks = 0
     foreach ($n in $needs) {
-        if ($n.Func -eq $CONDITION_VANILLA_PERK) { $behindPerk = $true }
         if ($n.ServerSees) { $serverChecks++ }
     }
 
@@ -5442,9 +5496,7 @@ foreach ($p in $PROFESSIONS.Keys) {
                 $held++
                 if ($shown -ge $THIN_HALF_LINES) { continue }
                 $shown++
-                $what = @()
-                foreach ($nd in $row.Needs) { $what += $nd.Text }
-                Loud ("  {0} makes {1} and wants {2}" -f $row.Edid, $row.OutName, ($what -join ' and '))
+                Loud ("  {0} makes {1} and wants {2}" -f $row.Edid, $row.OutName, (NeedsText $row.Needs))
             }
             if ($held -gt $shown) { Loud ("  and {0} more, all of them in recipes.json with what each one wants" -f ($held - $shown)) }
         }
@@ -5636,7 +5688,7 @@ $doc.Add('  "rungsNobodyCanGatherFor": ' + (JsonStr 'on a half: a rung that hold
 $doc.Add('  "rankedByInputCost": ' + (JsonStr 'on each half: how many of its rows the input cost rule could answer for and how many fell back to price, counted BEFORE any second rule ran. Where the half also carries a secondRule field, that rule then re-ranked every row of it, so read rankFrom on the row for what actually decided it.') + ',')
 $doc.Add('  "family": ' + (JsonStr 'what kind of thing the row makes, which is how the recipe book in the K panel groups a half''s work. Read off the output record and nothing else: a keyword that names a kind, which is a weapon type keyword, one of the five armour slot keywords, a clothing slot keyword or a Gourmet food type keyword. An output carrying exactly one of those takes its name from it. An output carrying two names neither, because the Cloaks&Capes cloaks carry a helmet or cuirass slot beside a necklace slot and a cloak is none of those, so two kinds falls through with no kind at all to the record''s own type: AMMO is arrows and bolts, ARMO is other armour and clothing, and so on. familyFrom on every row says which of the three readings answered. classes.md sets none of this and names no families at all, so the groups and their words are knobs at the top of the script: FAMILY_ARMOR_SLOTS, FAMILY_KEYWORD_PREFIXES, FAMILY_KEYWORD_NOT, FAMILY_NAMES, FAMILY_BY_TYPE, FAMILY_OTHERWISE and FAMILY_SHARE_TO_WARN.') + ',')
 $doc.Add('  "sisterHalf": ' + (JsonStr 'classes.md gives you the novice work of the other half of your own profession for nothing, and no further than novice. The gate can answer that because every row carries a rank.') + ',')
-$doc.Add('  "needs": ' + (JsonStr 'the recipe''s own conditions, read out of its CTDA subrecords. An empty list means anybody standing at the bench can make it. serverSees false means the fork has no function for that condition and the server answers True, so the only thing enforcing it is the crafting menu on the machine in front of the person, which hides the recipe rather than refusing it.') + ',')
+$doc.Add('  "needs": ' + (JsonStr 'the recipe''s own conditions, read out of its CTDA subrecords. An empty list means anybody standing at the bench can make it. serverSees false means the fork has no function for that condition and the server answers True, so the only thing enforcing it is the crafting menu on the machine in front of the person, which hides the recipe rather than refusing it. or true means the condition is joined to the next one by OR: a run of them, ended by one with or false, is one group, any one of which will do, and every group is needed, which is how the game reads them (#4224).') + ',')
 $doc.Add('  "default": ' + (JsonStr 'a recipe id this table does not carry is one nobody owns, and anybody may make it') + ',')
 $doc.Add('  "movedFrom": ' + (JsonStr 'on a row its mod put at a bench its trade does not work at (TRADE_BENCHES, #3120): the bench keyword the mod put it at, and movedFromName its editor id. bench and benchName are where it is made now, its trade''s home bench. scripts\mods\Build-LastPlugin.py carries the move in Thornswood-Last.esp, or hands it to each person''s game for a plugin it never copies from.') + ',')
 $doc.Add('  "wonBy": ' + (JsonStr 'the plugin whose copy of the recipe the game uses, the last in the load order to carry it, beside plugin, the file it belongs to, on an owned row and an unowned one. They differ for a recipe a mod overrides, and scripts\dev\Build-Recost.py reads both, as scripts\mods\Build-LastPlugin.py does, to tell a recipe Thornswood-Last.esp never copies (#6726): Hothtrooper44_ArmorCompilation.esp wins da0c03:Update.esm.') + ',')
@@ -5787,9 +5839,11 @@ foreach ($desc in $owned.Keys) {
                 foreach ($tm in @($nd.Tomes)) { $tomeBits += (JsonStr $tm) }
                 $spellTxt = ', "ofDesc": ' + (JsonStr $nd.ParamDesc) + ', "taughtBy": [' + ($tomeBits -join ', ') + ']'
             }
+            $orTxt = 'false'
+            if ($nd.Or) { $orTxt = 'true' }
             $bits += ('{ "asks": ' + (JsonStr $nd.Text) + ', "function": ' + $nd.Func +
                       ', "of": ' + (JsonStr $nd.Param) + ', "ofType": ' + (JsonStr $nd.ParamType) +
-                      ', "serverSees": ' + $sees + $spellTxt + ' }')
+                      ', "serverSees": ' + $sees + ', "or": ' + $orTxt + $spellTxt + ' }')
         }
         $needsTxt = '[' + ($bits -join ', ') + ']'
     }
