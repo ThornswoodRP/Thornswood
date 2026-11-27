@@ -1,17 +1,23 @@
 <#
 .SYNOPSIS
-  The four script texts that run on the box (issue #2899), for Run-OnBox.ps1 and the others below: the run (Get-ThornswoodOnBoxScript), and the keeper that makes the run's folder and removes it, in three parts (its hold, keep and end scripts).
+  The six script texts that run on the box (issue #2899), for Run-OnBox.ps1 and the others below: the run (Get-ThornswoodOnBoxScript) and its two limited parts, and the keeper that makes the run's folder and removes it, in three parts (its hold, keep and end scripts).
 
 .DESCRIPTION
-  The four script texts that run on the box (issue #2899), for Run-OnBox.ps1
-  and the others below: the run (Get-ThornswoodOnBoxScript), and the keeper
-  that makes the run's folder and removes it, in three parts (its hold, keep
-  and end scripts). Kept apart so tests\test-2899-run-on-box.ps1 runs the same
-  text under PowerShell 7, as the box does, against a stand-in folder.
+  The six script texts that run on the box (issue #2899), for Run-OnBox.ps1
+  and the others below: the run (Get-ThornswoodOnBoxScript) and, for a run as
+  the box's limited account (#6879), its start and its task
+  (Get-ThornswoodOnBoxLimitedStartScript, Get-ThornswoodOnBoxLimitedScript),
+  and the keeper that makes the run's folder and removes it, in three parts
+  (its hold, keep and end scripts). Kept apart so
+  tests\test-2899-run-on-box.ps1 runs the same text under PowerShell 7, as
+  the box does, against a stand-in folder.
 
-  Besides the functions it sets three variables: $ThornswoodGameArchiveStore,
+  Besides the functions it sets six variables: $ThornswoodGameArchiveStore,
   the box's folder of Skyrim's own archives, $ThornswoodGameArchives, the
-  archives in it, and $ThornswoodScriptPack, the script pack beside them.
+  archives in it, and $ThornswoodScriptPack, the script pack beside them; and
+  for the limited run $ThornswoodLimitedTask, its task's name,
+  $ThornswoodLimitedMinutes, its time limit, and $ThornswoodLimitedNeverReach,
+  what its fail-safe reads besides the services' own list.
   Dot-sourced by Run-OnBox.ps1 and Send-GameArchives.ps1 in scripts\mods,
   Backup-Server.ps1 in scripts\vps and LastPluginOnBox.ps1 in scripts\deploy.
 
@@ -276,7 +282,7 @@ if (Test-Path -LiteralPath $store) {
 }
 $limitedPs = (Get-Process -Id $PID).Path
 $old = @(Get-ScheduledTask -TaskName $limitedTask -ErrorAction SilentlyContinue)
-foreach ($o in $old) { try { Stop-ScheduledTask -InputObject $o } catch { }; Unregister-ScheduledTask -InputObject $o -Confirm:$false; 'limited   took away the task a run before this one left' }
+foreach ($o in $old) { try { Stop-ScheduledTask -InputObject $o } catch { <# one not running cannot be stopped; it is taken away next #> }; Unregister-ScheduledTask -InputObject $o -Confirm:$false; 'limited   took away the task a run before this one left' }
 $limitedEnded = $false
 $limitedResult = $null
 $limitedWhy = ''
@@ -286,7 +292,7 @@ try {
   $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes __MINUTES__) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Priority 7
   $null = Register-ScheduledTask -TaskName $limitedTask -Action $action -Principal $principal -Settings $settings -Description 'One run of a content tool of a commit not on main yet, as the limited account (scripts/mods/OnBox.ps1, #6879). Made and taken away by the run.' -Force
   $mapped = ''
-  try { $mapped = (New-Object Security.Principal.NTAccount('NT TASK', $limitedTask)).Translate([Security.Principal.SecurityIdentifier]).Value } catch { }
+  try { $mapped = (New-Object Security.Principal.NTAccount('NT TASK', $limitedTask)).Translate([Security.Principal.SecurityIdentifier]).Value } catch { <# not mapped: the line below says so and nothing runs #> }
   if ($mapped -ne $limitedSid) { $limitedWhy = 'Windows gave the task the SID ' + $mapped + ', not ' + $limitedSid + ', which the folder''s rules name, so nothing ran.' }
   else {
     $started = Get-Date
@@ -303,8 +309,8 @@ try {
     $limitedResult = '0x{0:x}' -f [int64]$i.LastTaskResult
   }
 } finally {
-  try { Stop-ScheduledTask -TaskName $limitedTask -ErrorAction SilentlyContinue } catch { }
-  try { Unregister-ScheduledTask -TaskName $limitedTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }
+  try { Stop-ScheduledTask -TaskName $limitedTask -ErrorAction SilentlyContinue } catch { <# it has ended already #> }
+  try { Unregister-ScheduledTask -TaskName $limitedTask -Confirm:$false -ErrorAction SilentlyContinue } catch { <# never registered: the run stopped before it #> }
 }
 if ($limitedWhy) { 'STOP. ' + $limitedWhy; exit 2 }
 if (-not $limitedEnded) { 'STOP. the limited run had not ended after __MINUTES__ minutes and was stopped, so nothing came back.'; exit 2 }
