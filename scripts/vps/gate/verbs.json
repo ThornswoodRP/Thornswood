@@ -65,6 +65,7 @@
         "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
@@ -631,6 +632,7 @@
         "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
@@ -715,6 +717,7 @@
         "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
@@ -797,6 +800,7 @@
         "scripts/deploy/ServerOrder.ps1",
         "scripts/deploy/ServerReadyWait.ps1",
         "scripts/deploy/ServerSettings.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/deploy/StopAndMove.ps1",
         "scripts/deploy/Swap.ps1",
         "scripts/dev/bsa.py",
@@ -962,6 +966,7 @@
         "scripts/deploy/Artifact.ps1",
         "scripts/deploy/CollectionPlugins.ps1",
         "scripts/deploy/CollectionStore.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/dev/Build-CastTable.py",
         "scripts/dev/Build-DoorTable.py",
         "scripts/dev/Build-NpcPopulation.py",
@@ -1014,13 +1019,16 @@
       "out": "-Out",
       "params": {
         "Server": "^(dev|main)$",
-        "Stations": "switch"
+        "Stations": "switch",
+        "Queued": "^[0-9a-f]{40}$",
+        "Limited": "switch"
       }
     },
     "List-GameData": {
       "script": "scripts/mods/List-GameDataOnBox.ps1",
       "reads": [
         "scripts/deploy/Artifact.ps1",
+        "scripts/deploy/ServiceAccount.ps1",
         "scripts/dev/Build-DoorTable.py",
         "scripts/dev/List-KillMoveIdles.py",
         "scripts/dev/List-ToolRecords.py",
