@@ -104,7 +104,7 @@ collection's mods are marked adult, and Nexus hides the collection until you
 turn on adult content in your Nexus Mods settings. In some countries Nexus
 asks you to verify your age first. Second, on a free account Vortex opens
 each file's page on Nexus and you press **Slow download** there, once for
-each file: 121 files, from 112 mods. A Premium account downloads them without
+each file: 120 files, from 111 mods. A Premium account downloads them without
 pressing anything.
 
 After that, Vortex takes it from there: it makes a profile for Thornswood,

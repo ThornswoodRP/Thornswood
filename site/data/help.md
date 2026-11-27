@@ -50,7 +50,7 @@ Skyrim the way it was.
    marked adult, so first turn on adult content in your Nexus Mods settings,
    or Nexus shows the collection as hidden. On a free account Vortex opens
    each file's page on Nexus and you press **Slow download** there, once for
-   each file: 121 files, from 112 mods.
+   each file: 120 files, from 111 mods.
 4. Press **Connect Discord** at the bottom of the launcher's left sidebar,
    above Settings. Your browser opens, you say yes, and it closes itself. You
    never do this again.
