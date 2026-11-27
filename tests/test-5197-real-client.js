@@ -952,7 +952,29 @@ foreach ($scan in @(1,23,36)) {
   const tt = JSON.parse(read(path.join('tests', 'real-client', 'test-tasks.json'))).steps;
   const cut = dev.findIndex(function (x) { return x.do === 'shot' && x.name === 'in-world'; });
   yes('test-tasks.json joins the world with dev-release.json\'s own steps', cut > 0 && JSON.stringify(tt.slice(0, cut + 1)) === JSON.stringify(dev.slice(0, cut + 1)));
-  yes('  and every step after that carries its test task, but the end', tt.slice(cut + 1, -1).every(function (x) { return x.task !== undefined; }) && tt[tt.length - 1].do === 'end');
+  const firstTidy = tt.findIndex(function (x) { return x.tidy === true; });
+  const tasksEnd = firstTidy > 0 ? firstTidy : tt.length - 1;
+  yes('  and every step after that carries its test task, but the tidy steps and the end', tt.slice(cut + 1, tasksEnd).every(function (x) { return x.task !== undefined; }) &&
+      tt.slice(tasksEnd, -1).every(function (x) { return x.tidy === true && x.task === undefined; }) && tt[tt.length - 1].do === 'end');
+  // The journal tasks (2135, 5429, 2563) press what the panel draws, so
+  // every id and button they name is one thornswood-journal.js makes, J is
+  // the front's journal key, and the limits they check are the panel's.
+  const jsOf = function (task) { return tt.filter(function (x) { return x.task === task && x.do === 'page'; }).map(function (x) { return x.js; }).join('\n'); };
+  const jr = read(path.join('game', 'ui', 'thornswood-journal.js'));
+  const front = read(path.join('game', 'plugins', 'thornswood-front.js'));
+  const jAll = [2135, 5429, 2563].map(jsOf).join('\n') + tt.filter(function (x) { return x.tidy; }).map(function (x) { return x.js; }).join('\n');
+  const ids = (jAll.match(/#ts-journal-[a-z]+/g) || []).filter(function (v, i, a) { return a.indexOf(v) === i; });
+  yes('  its journal steps name only ids the journal panel makes', ids.length >= 4 && /var ID = 'ts-journal';/.test(jr) &&
+      ids.every(function (id) { return jr.indexOf("ID + '-" + id.slice(12)) >= 0; }));
+  const verbs = (jAll.match(/act\('[a-z]+'\)/g) || []).map(function (v) { return v.slice(5, -2); });
+  yes('  and only its buttons', verbs.length >= 3 && verbs.every(function (v) { return jr.indexOf('data-do="' + v + '"') >= 0; }) &&
+      /data-new="1"/.test(jr) && /data-book="/.test(jr) && /data-page="/.test(jr));
+  yes('  J is the journal key they press', tt.filter(function (x) { return [2135, 5429, 2563].indexOf(x.task) >= 0 && x.do === 'key'; }).every(function (x) { return x.code === 36; }) &&
+      /iniNumber\(ini, 'JournalKey', 36\)/.test(front));
+  yes('  a page holds 4,000 characters, as the long-page task checks', /var PAGE_CHARS = 4000;/.test(jr) && /maxLength!==4000/.test(jsOf(2563)));
+  yes('  and the presses of New are judged after the panel\'s wait for an answer', /var NEW_WAIT_MS = 3000;/.test(jr) &&
+      tt.filter(function (x) { return x.task === 2135 && x.for === 'time'; }).every(function (x) { return x.ms > 3000; }));
+  yes('  every page step\'s script parses', tt.every(function (x) { if (x.do !== 'page') { return true; } try { new Function('return ' + x.js); return true; } catch (e) { return false; } }));
   const tp = read(path.join('game', 'gamemode', 'teleport.ts'));
   yes('  its dice check reads the lines the server writes', /rwho \+ ' rolls ' \+ rsides \+ ': ' \+ total/.test(tp) && /rwho \+ ' rolls ' \+ rcount \+ 'x' \+ rsides \+ ': ' \+ rolls\.join\(' \+ '\) \+ ' = ' \+ total/.test(tp) && /'The number is the sides: /.test(tp));
 }
