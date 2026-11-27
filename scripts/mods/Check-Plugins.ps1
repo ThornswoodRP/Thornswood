@@ -8,8 +8,8 @@
   Exit 0 when both enable the same plugins. Exit 1 when either enables one the
   other does not, or when either list cannot be found or read (#4760).
   -Live and -Reference name the two lists. Left off, they are the game's own
-  plugins.txt under LOCALAPPDATA and the first Thornswood\Profile\Default\
-  plugins.txt on a fixed drive, as before.
+  plugins.txt under LOCALAPPDATA and Profile\Default\plugins.txt in the
+  launcher install, which Where.ps1 Install finds (#3003, #5626).
 #>
 param(
   [string]$Live = '',
@@ -19,13 +19,7 @@ param(
 if (-not $Live) { $Live = Join-Path $env:LOCALAPPDATA (Join-Path 'Skyrim Special Edition' 'plugins.txt') }
 
 $ref = $Reference
-if (-not $ref) {
-  foreach ($d in [IO.DriveInfo]::GetDrives()) {
-    if ($d.DriveType -ne 'Fixed' -or -not $d.IsReady) { continue }
-    $t = Join-Path $d.RootDirectory.FullName (Join-Path 'Thornswood' (Join-Path 'Profile' (Join-Path 'Default' 'plugins.txt')))
-    if (Test-Path -LiteralPath $t) { $ref = $t; break }
-  }
-}
+if (-not $ref) { $ref = Join-Path ([string](& (Join-Path $PSScriptRoot '..\release\Where.ps1') Install)) 'Profile\Default\plugins.txt' }
 
 # How many of the two lists could not be found or read. Either one missing
 # makes the other's whole list look EXTRA or MISSING, which is no comparison.
