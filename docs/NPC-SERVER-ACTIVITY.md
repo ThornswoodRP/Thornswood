@@ -94,8 +94,15 @@ its timers and the minute line's count of each run at about 2.5 s of the
 
 ## Walking
 
-Movement follows walkable triangles in the local region. It retains the saved
-height above the navigation surface and crosses only verified reciprocal edges.
+Movement follows walkable triangles in the local region, on the navigation
+surface, and crosses only verified reciprocal edges. Each game moves a server's
+NPC with translateTo, which neither falls nor collides, so the height the server
+sends is the height everybody sees. A walker found above or below its navmesh,
+where it was placed or where something moved it, is set down onto it where it
+stands, as the game drops a placed actor onto the floor (#6474: until 27 Nov
+2026 a walker kept its placement's height over the navmesh wherever it walked,
+and floated up to 96 units above the ground). The minute report's heights line
+says how far off each was found and how many stand off it now.
 Missing or corrupt geometry, an unsuitable saved position, or a displacement
 outside the prepared region pauses activity. The NPC remains loaded and owned by
 the server. A reliable stopped snapshot prevents continued walking extrapolation.
