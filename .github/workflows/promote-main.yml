@@ -9,8 +9,10 @@
 # Release with its signed manifest, and a Deployment of it to Dev that ended
 # in success. The second job is in the Main environment, so it waits until
 # Patrick approves it ("Review deployments" on the run); nothing runs before
-# that, and a rejection ends it. Once approved it makes a Deployment to Main
-# naming the Release and this run, and the box deploy agent puts that same
+# that, and a rejection ends it. Once approved the next job puts the
+# Release's collection revision on main's collection (MAIN'S COLLECTION,
+# below), and the last makes a Deployment to Main naming the Release and this
+# run, and the box deploy agent puts that same
 # Release on the live server: the files dev ran, byte for byte, held to the
 # same signature (docs/DEPLOY-AGENT.md, "Main").
 #
@@ -37,6 +39,15 @@
 # Thornswood-Setup.exe. A package already out is checked and left as it is.
 # A build made before 8 Nov 2026 kept its package as an artifact instead, so
 # it cannot take one to main: promote a newer build.
+#
+# MAIN'S COLLECTION (#7193). A merged mod change publishes to the Dev
+# collection, so Vortex offers main's testers only the revision main runs.
+# Once Patrick approves, and before main's launchers or the live server are
+# told of the Release, the collection job copies each revision the main
+# collection does not have yet, up to the one the Release runs, from Dev
+# (Promote-Collection.ps1, in the desk environment with the Nexus key, from
+# the build's own commit). A Release from before the Dev collection copies
+# nothing.
 #
 # Main goes back the same way: promote the Release main ran before. That puts
 # the server back; main's launchers keep the newer package, because Velopack
@@ -157,15 +168,68 @@ jobs:
           }
 
   promote:
-    name: Put it on main, once Patrick approves
+    name: Wait for Patrick's approval
     needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Patrick is the Main environment's only required reviewer: this job
+    # waits for him, and nothing after it runs until he approves.
+    environment: Main
+    permissions: {}
+    steps:
+      - name: Approved
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+        run: Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "**$($env:TAG)** was approved for main."
+
+  collection:
+    name: Put its collection revision on main's collection
+    needs: [check, promote]
+    # Windows for 7-Zip and the Nexus scripts, as nexus-run.yml.
+    runs-on: windows-latest
+    timeout-minutes: 60
+    # The Nexus key is the desk environment's, which only main may use.
+    environment: desk
+    permissions:
+      contents: read
+    steps:
+      # The build's own commit, so its records name the collections the
+      # Release was built on. The history without the files' old contents,
+      # so Nexus.ps1 can work out the launcher's number it sends.
+      - name: Check out the build's commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check.outputs.commit }}
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Copy each revision main's collection lacks from Dev
+        shell: pwsh -NoProfile -NonInteractive -Command ". '{0}'"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          THORNSWOOD_NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = $env:GITHUB_REPOSITORY
+          $raw = gh api "repos/$repo/releases/tags/$($env:TAG)"
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the Release $($env:TAG) could not be read"; exit 1 }
+          $asset = @((($raw -join "`n") | ConvertFrom-Json).assets | Where-Object name -eq 'manifest.json')[0]
+          $file = Join-Path $env:RUNNER_TEMP 'manifest.json'
+          gh api -H 'Accept: application/octet-stream' "repos/$repo/releases/assets/$($asset.id)" > $file
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::the manifest of $($env:TAG) could not be read"; exit 1 }
+          & (Join-Path $env:GITHUB_WORKSPACE 'scripts/release/Promote-Collection.ps1') -Manifest $file
+          exit $LASTEXITCODE
+
+  deploy:
+    name: Put it on main
+    needs: [check, collection]
     runs-on: ubuntu-latest
     # The live server taking it is at most 15 minutes of this (The live
     # server ran it, below).
     timeout-minutes: 30
-    # Patrick is the Main environment's only required reviewer: this job
-    # waits for him and runs only once he approves.
-    environment: Main
     # contents: write and packages: read only for main's launcher package:
     # the package merge-release.yml kept, and the Release it goes out on.
     permissions:

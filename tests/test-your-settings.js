@@ -31,6 +31,8 @@ function clone(o) { return JSON.parse(JSON.stringify(o)); }
 yes('the launcher\'s choices are a name the site keeps', ys.nameOk('launcher.json'));
 yes('so are Thornswood.ini, the emote slots and the intro', ys.nameOk('game/Thornswood.ini') &&
     ys.nameOk('game/thornswood-emote-slots.json') && ys.nameOk('game/thornswood-intro.txt'));
+yes('so is QuickLoot\'s own file (#4511)', ys.nameOk('game/quickloot.json'));
+yes('and SkyUI\'s favourite groups (#4511)', ys.nameOk('game/favourite-groups.json'));
 yes('and a mod menu\'s file', ys.nameOk('mcm/SkyUI (SE).ini') && ys.nameOk("mcm/Someone's Mod.ini"));
 yes('a screen or graphics file is not', !ys.nameOk('game/Skyrim.ini') && !ys.nameOk('game/SkyrimPrefs.ini'));
 yes('nor a path out of the folder', !ys.nameOk('mcm/../launcher.json') && !ys.nameOk('mcm/a/b.ini') && !ys.nameOk('../x'));

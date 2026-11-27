@@ -40,8 +40,8 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-// Not keys: a port, a switch and a number of seconds.
-const NOT_KEYS = ['VoicePort', 'Microphone', 'ChatFade', 'NeedsBars', 'Fov'];
+// Not keys: a port, a switch, a number of seconds and a text size.
+const NOT_KEYS = ['VoicePort', 'Microphone', 'ChatFade', 'NeedsBars', 'Fov', 'TextSize'];
 
 const template = {};
 {

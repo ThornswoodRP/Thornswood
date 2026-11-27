@@ -407,6 +407,20 @@
   let CHAT_FADE = chatFadeOf(ini);
   let NEEDS_BARS = needsBarsOf(ini);
   /*
+    How big every panel's words are, in percent (#4474), from the Settings
+    panel in the game (TextSize in Thornswood.ini). It goes to the page as
+    window.THORNSWOOD.textSize, where thornswood-scale.js scales every panel
+    by the screen and then by this. Anything that is not one of the choices
+    is 100, as Skyrim draws them now.
+  */
+  const TEXT_SIZE_CHOICES = [100, 115, 130, 150];
+  function textSizeOf(text) {
+    const m = text.match(/^\s*TextSize\s*=\s*(\d+)\s*$/im);
+    const v = m ? Number(m[1]) : 100;
+    return TEXT_SIZE_CHOICES.indexOf(v) >= 0 ? v : 100;
+  }
+  let TEXT_SIZE = textSizeOf(ini);
+  /*
     Where voice lives: https://thornswood.net/voice, or /voice-dev on the dev
     build. Written by the launcher at every Play, the same way VoicePort is,
     and always https since #1304, when the raw port it used to fall back to
@@ -607,6 +621,7 @@
     SKILLS_KEY = iniNumber(ini, 'SkillsKey', SETTINGS_KEYS.SkillsKey);
     CHAT_FADE = chatFadeOf(ini);
     NEEDS_BARS = needsBarsOf(ini);
+    TEXT_SIZE = textSizeOf(ini);
     PARTY_KEY = iniNumber(ini, 'PartyKey', SETTINGS_KEYS.PartyKey);
     JOURNAL_KEY = iniNumber(ini, 'JournalKey', SETTINGS_KEYS.JournalKey);
     FRIEND_KEY = iniNumber(ini, 'FriendKey', SETTINGS_KEYS.FriendKey);
@@ -1542,7 +1557,7 @@
     // Idempotent, so a page the silence watch reloaded gets all of it back.
     T.js('try{if(!window.thornswoodNet){window.THORNSWOOD=' + JSON.stringify({
       host: HOST, port: VOICE_PORT, profileId: lineId, name: '', token: tok, base: VOICE_URL, socket: VOICE_SOCKET_URL,
-      chatFade: CHAT_FADE, needsBars: NEEDS_BARS
+      chatFade: CHAT_FADE, needsBars: NEEDS_BARS, textSize: TEXT_SIZE
     }) + ';}}catch(e){}');
     inject('thornswood-chat.js');
     // rejoinAs only takes the token while the connection is already this
@@ -8799,6 +8814,88 @@
   }));
   // ---------------------------------------------- end mod settings menus
 
+  // ---------------------------------------------- QuickLoot's own file (#4511)
+  /*
+    QUICKLOOT'S MENU IS KEPT IN THE FILE QUICKLOOT ITSELF READS.
+
+    QuickLoot IE keeps every option of its menu in its script (QLIE_ShowInCombat,
+    the window, the columns, the keys) and nowhere else, except one file of its
+    own: Data\SKSE\Plugins\QuickLootIE\DefaultConfig.json, its ConfigPath. It
+    reads that file at the start of every session, which does run here
+    (QuickLootIE.log: OnConfigInit, then ImportSettings), and it writes it only
+    from its Export settings button. So nobody's file existed, the import found
+    nothing and loaded the defaults, and every change was gone next time.
+    Measured 26 Nov 2026 from its compiled scripts.
+
+    SO WHEN THE JOURNAL CLOSES, where its menu lives, the file is written the
+    way that button writes it: QuickLootIEMCM's five ExportSettings_ steps with
+    its own ConfigPath, one after another, then JsonUtil.Save. Not
+    ExportSettings itself, which ends in a message box. The steps are the
+    script's own Papyrus, which callNative cannot run, so runScriptFunction
+    (engine fork, Thornswood #4511) runs them and says when each returned.
+
+    NOT BEFORE ITS OWN IMPORT. OnConfigInit sets IsInitialLoad to False once it
+    has read the file; a journal closed before that would write the defaults
+    over what was kept. So nothing is written while IsInitialLoad is not False.
+
+    The launcher keeps the file with the person's settings on thornswood.net
+    (YourSettings.cs), the way it keeps the MCM Helper menus' files.
+  */
+  const QLIE_PLUGIN = 'QuickLootIE.esp';
+  const QLIE_QUEST = 0x1;          // MCMQuickLootIE, the quest the menu is on
+  const QLIE_SCRIPT = 'QuickLootIEMCM';
+  const QLIE_STEPS = ['ExportSettings_General', 'ExportSettings_Display', 'ExportSettings_Sorting',
+                      'ExportSettings_Controls', 'ExportSettings_Compatibility'];
+  let qlieQuestId = 0;
+  let qlieWriting = false;
+  let qlieAgain = false;
+
+  function qlieQuest() {
+    if (qlieQuestId) { return qlieQuestId; }
+    try {
+      const form = sp.Game.getFormFromFile(QLIE_QUEST, QLIE_PLUGIN);
+      qlieQuestId = form ? form.getFormID() : 0;
+    } catch (e) { qlieQuestId = 0; }
+    return qlieQuestId;
+  }
+
+  function qlieDone(why) {
+    qlieWriting = false;
+    log('quickloot settings: ' + (why || 'written'));
+    if (qlieAgain) { qlieAgain = false; qlieWrite(); }
+  }
+
+  function qlieWrite() {
+    if (qlieWriting) { qlieAgain = true; return; }
+    const quest = qlieQuest();
+    if (!quest) { return; }
+    if (sp.getScriptProperty(quest, QLIE_SCRIPT, 'IsInitialLoad') !== false) { return; }
+    const file = sp.getScriptProperty(quest, QLIE_SCRIPT, 'ConfigPath');
+    if (typeof file !== 'string' || !file) { log('quickloot settings: its menu has no ConfigPath'); return; }
+    qlieWriting = true;
+    let i = 0;
+    // Each step starts when the one before it has returned; any throw ends
+    // the run with what it said, so the next close can write again.
+    const next = (ran) => {
+      try {
+        if (!ran) { qlieDone(QLIE_STEPS[i - 1] + ' did not run, so nothing was saved'); return; }
+        if (i < QLIE_STEPS.length) {
+          sp.runScriptFunction(quest, QLIE_SCRIPT, QLIE_STEPS[i++], [file])
+            .then(next, (err) => qlieDone(QLIE_STEPS[i - 1] + ' failed, so nothing was saved: ' + err));
+          return;
+        }
+        const saved = !!sp.callNative('JsonUtil', 'Save', undefined, file, false);
+        qlieDone(saved ? '' : 'JsonUtil.Save did not write ' + file);
+      } catch (e) { qlieDone('stopped: ' + (e && e.message ? e.message : e)); }
+    };
+    next(true);
+  }
+
+  sp.on('menuClose', guard('quickloot settings close', (e) => {
+    if (e && e.name === JOURNAL_MENU) { qlieWrite(); }
+  }));
+  // ---------------------------------------------- end QuickLoot's own file
+
   /*
     / OPENS THE CHAT WITH A SLASH IN IT, AND ONLY THE CHAT.
 
@@ -9054,11 +9151,39 @@
   }
 
   // except: the menu that is closing right now, which is not in the way.
+  // What the panel waited on is said once a wait (#4581): no press on a
+  // driver from 15 to 27 November opened it, and the log said nothing after
+  // "asked the server where driver ... goes".
+  let rideWaitSaid = '';
   function rideOpenIfFree(except) {
     if (rideState !== 'waiting') { return; }
-    if (!rideInReach()) { rideState = ''; return; }
-    if (busyMenuOpenNow(except)) { return; }
+    if (!rideInReach()) {
+      rideState = '';
+      say('the ride panel is not opened: driver ' + (rideDriver >>> 0).toString(16) + ' is out of reach (' + rideApart() + ')');
+      return;
+    }
+    const busy = busyMenuOpenNow(except);
+    if (busy) {
+      if (rideWaitSaid !== busy) { rideWaitSaid = busy; say('the ride panel waits for the ' + busy + ' to close'); }
+      return;
+    }
+    rideWaitSaid = '';
     T.js('try{window.thornswoodRide&&window.thornswoodRide.open();}catch(e){}');
+  }
+
+  // How far the driver pressed is, for the line above: a distance, or why none.
+  function rideApart() {
+    if (!rideDriver) { return 'no driver kept'; }
+    try {
+      const pc = sp.Game.getPlayer();
+      const ref = sp.ObjectReference.from(sp.Game.getFormEx(rideDriver));
+      if (!pc) { return 'no character'; }
+      if (!ref) { return 'he is not loaded'; }
+      const dx = pc.getPositionX() - ref.getPositionX();
+      const dy = pc.getPositionY() - ref.getPositionY();
+      const dz = pc.getPositionZ() - ref.getPositionZ();
+      return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz)) + ' apart, reach ' + RIDE_REACH;
+    } catch (err) { return 'unreadable: ' + err; }
   }
 
   function rideDriverIdSet() {
@@ -9552,7 +9677,7 @@
       T.js('window.THORNSWOOD=' + JSON.stringify({
         host: HOST, port: VOICE_PORT, profileId: PROFILE, name: sentName,
         token: '', base: VOICE_URL, socket: VOICE_SOCKET_URL,
-        chatFade: CHAT_FADE, needsBars: NEEDS_BARS
+        chatFade: CHAT_FADE, needsBars: NEEDS_BARS, textSize: TEXT_SIZE
       }) + ';');
       OVERLAYS.forEach(inject);
       // The token itself is never logged. It is what somebody would need to
@@ -10390,7 +10515,10 @@
       return;
     }
     // The ride panel (#1635): see THE RIDE PANEL WAITS above.
-    if (what === 'ride:wants') { rideState = 'waiting'; rideOpenIfFree(''); return; }
+    if (what === 'ride:wants') {
+      say('the server sent the ride panel for driver ' + (rideDriver >>> 0).toString(16));
+      rideState = 'waiting'; rideOpenIfFree(''); return;
+    }
     if (what === 'ride:opened') { rideState = 'up'; T.claimFocus('ride', true); return; }
     if (what === 'ride:closed') {
       T.claimFocus('ride', false);
@@ -11562,6 +11690,7 @@
     return {
       fov: { value: wantedFov || FOV_DEFAULT, min: FOV_MIN, max: FOV_MAX, def: FOV_DEFAULT },
       chatFade: CHAT_FADE, chatChoices: CHAT_FADE_CHOICES, needsBars: NEEDS_BARS,
+      textSize: TEXT_SIZE, textChoices: TEXT_SIZE_CHOICES,
       keys: keys, mods: modKeys(), said: said || ''
     };
   }
@@ -11575,8 +11704,10 @@
      chat page, which reads them off window.THORNSWOOD. */
   function chatSettingsToPage() {
     T.js('try{var c=window.THORNSWOOD=window.THORNSWOOD||{};c.chatFade=' + CHAT_FADE +
-         ';c.needsBars=' + NEEDS_BARS + ';window.thornswoodChat&&window.thornswoodChat.settings&&' +
-         'window.thornswoodChat.settings();}catch(e){}');
+         ';c.needsBars=' + NEEDS_BARS + ';c.textSize=' + TEXT_SIZE +
+         ';window.thornswoodChat&&window.thornswoodChat.settings&&' +
+         'window.thornswoodChat.settings();window.thornswoodScale&&window.thornswoodScale.settings&&' +
+         'window.thornswoodScale.settings();}catch(e){}');
   }
 
   /*
@@ -11640,6 +11771,11 @@
       if (CHAT_FADE_CHOICES.indexOf(v) < 0) { settingsToPage('That is not one of the choices.'); return; }
       value = v === 10 ? null : String(v);
       said = v === 0 ? 'The chat stays on screen all the time.' : 'The chat hides ' + v + ' seconds after its last line.';
+    } else if (name === 'TextSize') {
+      const v = Number(raw);
+      if (TEXT_SIZE_CHOICES.indexOf(v) < 0) { settingsToPage('That is not one of the choices.'); return; }
+      value = v === 100 ? null : String(v);
+      said = v === 100 ? 'Text at its usual size.' : 'Text at ' + v + ' percent.';
     } else if (name === 'NeedsBars') {
       const shown = String(raw) !== '0';
       value = shown ? null : '0';
@@ -11702,6 +11838,222 @@
       try { others[n](text); } catch (e) { log('settings: a plugin threw reading the new settings:', e); }
     }
   }
+
+  // ---------------------------------------------- SkyUI's favourite groups (#4511)
+  /*
+    SKYUI'S FAVOURITE GROUPS ARE KEPT, PER CHARACTER, ON THIS MACHINE.
+
+    SkyUI keeps its eight favourite groups only in SKI_FavoritesManager's
+    arrays (each group's 32 items and their item ids, in _items1 and
+    _itemIds1 for groups 1 to 4 and the "2" arrays for 5 to 8, and each
+    group's main hand, off hand and icon), and those live in the save. There
+    is no save here, so OnInit made them empty at every session's start and
+    every group was gone. Only the Favorites menu's own events fill them, and
+    no function of the script takes a whole group from outside. Measured
+    26 Nov 2026 from SKI_FavoritesManager.pex in SkyUI_SE.bsa.
+
+    SO WHEN THE FAVORITES MENU CLOSES, where groups are made, the arrays are
+    read (getScriptVariable, engine fork, Thornswood #4511) and written to
+    Data\Platform\thornswood-favourite-groups.json under this server and
+    character. At the next start, once OnInit has made the arrays and the
+    version update has made _itemInvalidFlags2, they are filled back
+    (setScriptVariable), and the menu sends them to its page when it opens,
+    as it does after a load. A character with nothing kept gets them empty,
+    which is also what a pick of another character at the choice puts back.
+
+    An item is kept as its plugin and the id inside it, so a change in the
+    load order does not point it at another record. Its item id is SKSE's,
+    the one the menu gave and EquipItemById takes, kept as it was given, as
+    a save keeps it. A form the game made this session (an 0xFF id) cannot
+    be found again and is left out with its id.
+
+    The launcher keeps the file with the person's settings on thornswood.net
+    (YourSettings.cs). The site refuses a file over 64 KB, so the characters
+    kept longest ago are left out first when the file would pass FAV_MOST.
+  */
+  const FAV_PLUGIN = 'SkyUI_SE.esp';
+  const FAV_QUEST = 0x82a;          // SKI_FavoritesManagerInstance
+  const FAV_SCRIPT = 'SKI_FavoritesManager';
+  const FAV_MENU = 'FavoritesMenu';
+  const FAV_FILE = 'Data/Platform/thornswood-favourite-groups.json';
+  const FAV_MOST = 48 * 1024;
+  const FAV_HALF = 128;
+  // Each group's own form and item id: main hand, off hand, icon.
+  const FAV_HANDS = [['main', '_groupMainHandItems', '_groupMainHandItemIds'],
+                     ['off', '_groupOffHandItems', '_groupOffHandItemIds'],
+                     ['icon', '_groupIconItems', '_groupIconItemIds']];
+  let favQuestId = 0;
+  let favFor = '';              // whose groups the script holds now
+  let favPutOk = false;         // and whether they were put back whole
+  let favWaitLogged = false;
+
+  function favQuest() {
+    if (favQuestId) { return favQuestId; }
+    try {
+      const form = sp.Game.getFormFromFile(FAV_QUEST, FAV_PLUGIN);
+      favQuestId = form ? form.getFormID() : 0;
+    } catch (e) { favQuestId = 0; }
+    return favQuestId;
+  }
+
+  function favKey() { return PROFILE ? HOST + '/' + PROFILE : ''; }
+
+  // A form as "<plugin>|<id inside it, hex>", or '' when it has none to keep.
+  function favFormKey(raw) {
+    if (!raw) { return ''; }
+    const form = sp.Form.from(raw);
+    const id = form ? form.getFormID() >>> 0 : 0;
+    if (!id) { return ''; }
+    const hi = id >>> 24;
+    if (hi === 0xff) { return ''; }
+    const file = hi === 0xfe ? sp.Game.getLightModName((id >>> 12) & 0xfff) : sp.Game.getModName(hi);
+    const local = hi === 0xfe ? (id & 0xfff) : (id & 0xffffff);
+    return file ? file + '|' + local.toString(16) : '';
+  }
+
+  function favForm(key) {
+    const bar = typeof key === 'string' ? key.lastIndexOf('|') : -1;
+    if (bar <= 0) { return null; }
+    const local = parseInt(key.slice(bar + 1), 16);
+    if (!(local > 0)) { return null; }
+    return sp.Game.getFormFromFile(local, key.slice(0, bar)) || null;
+  }
+
+  function favRead() {
+    try { return JSON.parse(require('fs').readFileSync(FAV_FILE, 'utf8')); } catch (e) { return null; }
+  }
+
+  // The arrays as they are now, or null while the script has not made them.
+  function favArrays(quest) {
+    const names = ['_items1', '_itemIds1', '_items2', '_itemIds2', '_itemInvalidFlags2'];
+    FAV_HANDS.forEach((h) => { names.push(h[1], h[2]); });
+    const out = {};
+    for (const n of names) {
+      const v = sp.getScriptVariable(quest, FAV_SCRIPT, n);
+      if (!Array.isArray(v)) { return null; }
+      out[n] = v;
+    }
+    return out;
+  }
+
+  // What is kept of one character: each filled slot, 0 to 255 over both
+  // halves, and each group's hands and icon, as [form, item id].
+  function favTake(a) {
+    const slots = {};
+    for (let i = 0; i < 2 * FAV_HALF; i++) {
+      const half = i < FAV_HALF ? '1' : '2';
+      const j = i % FAV_HALF;
+      const itemId = Number(a['_itemIds' + half][j]) | 0;
+      const form = itemId ? favFormKey(a['_items' + half][j]) : '';
+      if (itemId && form) { slots[i] = [form, itemId]; }
+    }
+    const kept = { saved: Date.now(), slots: slots };
+    FAV_HANDS.forEach((h) => {
+      const by = {};
+      for (let g = 0; g < 8; g++) {
+        const itemId = Number(a[h[2]][g]) | 0;
+        const form = itemId ? favFormKey(a[h[1]][g]) : '';
+        if (itemId && form) { by[g] = [form, itemId]; }
+      }
+      kept[h[0]] = by;
+    });
+    return kept;
+  }
+
+  function favSave() {
+    const key = favKey();
+    const quest = favQuest();
+    // Never before this character's groups were put back: the empty arrays
+    // of a fresh start would be written over what was kept.
+    if (!key || !quest || favFor !== key || !favPutOk) { return; }
+    const a = favArrays(quest);
+    if (!a) { log('favourite groups: the menu closed before SkyUI made its arrays, so nothing was kept'); return; }
+    const all = favRead() || {};
+    const chars = (all.characters && typeof all.characters === 'object') ? all.characters : {};
+    chars[key] = favTake(a);
+    // Newest first, and only as many as fit.
+    const order = Object.keys(chars).sort((x, y) => (Number(chars[y].saved) || 0) - (Number(chars[x].saved) || 0));
+    const out = { version: 1, characters: {} };
+    for (const k of order) {
+      out.characters[k] = chars[k];
+      if (JSON.stringify(out).length > FAV_MOST) { delete out.characters[k]; log('favourite groups: left out ' + k + ', kept longest ago, to stay under ' + FAV_MOST + ' bytes'); }
+    }
+    const fs = require('fs');
+    fs.writeFileSync(FAV_FILE + '.tmp', JSON.stringify(out));
+    fs.renameSync(FAV_FILE + '.tmp', FAV_FILE);
+    log('favourite groups: kept ' + Object.keys(chars[key].slots).length + ' items for ' + key);
+  }
+
+  // Puts this character's groups in the script's arrays, every value checked
+  // by setScriptVariable before any is written.
+  function favPut(quest, a, kept) {
+    const next = {};
+    ['1', '2'].forEach((half) => {
+      next['_items' + half] = a['_items' + half].map(() => null);
+      next['_itemIds' + half] = a['_itemIds' + half].map(() => 0);
+    });
+    let put = 0, lost = 0;
+    const slots = (kept && kept.slots) || {};
+    for (const s of Object.keys(slots)) {
+      const i = Number(s);
+      if (!(i >= 0 && i < 2 * FAV_HALF) || !Array.isArray(slots[s])) { continue; }
+      const form = favForm(slots[s][0]);
+      const itemId = Number(slots[s][1]) | 0;
+      if (!form || !itemId) { lost++; continue; }
+      const half = i < FAV_HALF ? '1' : '2';
+      next['_items' + half][i % FAV_HALF] = form;
+      next['_itemIds' + half][i % FAV_HALF] = itemId;
+      put++;
+    }
+    FAV_HANDS.forEach((h) => {
+      next[h[1]] = a[h[1]].map(() => null);
+      next[h[2]] = a[h[2]].map(() => 0);
+      const by = (kept && kept[h[0]]) || {};
+      for (let g = 0; g < 8; g++) {
+        if (!Array.isArray(by[g])) { continue; }
+        const form = favForm(by[g][0]);
+        const itemId = Number(by[g][1]) | 0;
+        if (form && itemId) { next[h[1]][g] = form; next[h[2]][g] = itemId; }
+      }
+    });
+    for (const n of Object.keys(next)) {
+      if (!sp.setScriptVariable(quest, FAV_SCRIPT, n, next[n])) { throw new Error('SkyUI has no ' + n); }
+    }
+    return { put: put, lost: lost };
+  }
+
+  // Once the script has made its arrays, and again after a pick of another
+  // character, its groups are this character's.
+  let favLook = 0;
+  sp.on('update', guard('favourite groups', () => {
+    const key = favKey();
+    if (!key || key === favFor || ++favLook % 30) { return; }
+    const quest = favQuest();
+    if (!quest) { return; }
+    const a = favArrays(quest);
+    if (!a) {
+      if (!favWaitLogged) { favWaitLogged = true; log('favourite groups: waiting for SkyUI to make its arrays'); }
+      return;
+    }
+    const all = favRead();
+    const kept = all && all.characters ? all.characters[key] : null;
+    // Looked at once for each character. One that could not be put back is
+    // never saved this session, so what was kept is not written over.
+    favFor = key;
+    favPutOk = false;
+    try {
+      const got = favPut(quest, a, kept);
+      favPutOk = true;
+      log('favourite groups: put back ' + got.put + ' items for ' + key + (got.lost ? ', ' + got.lost + ' whose record is not loaded left out' : ''));
+    } catch (err) {
+      log('favourite groups: could not put them back for ' + key + ', so none are kept this session: ' + (err && err.message ? err.message : err));
+    }
+  }));
+
+  sp.on('menuClose', guard('favourite groups close', (e) => {
+    if (e && e.name === FAV_MENU) { favSave(); }
+  }));
+  // ---------------------------------------------- end SkyUI's favourite groups
 
   /*
     Write the game's real load order to disk, once, on the first update.

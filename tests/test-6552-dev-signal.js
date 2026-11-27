@@ -81,7 +81,7 @@ check('both real front bootstrap objects pass the independent socket and origina
   for (const object of objects) {
     const cfg = vm.runInNewContext('(' + object + ')', { HOST: DEV.host, VOICE_PORT: DEV.port,
       PROFILE: 7, lineId: 7, sentName: 'Fixture', tok: '', VOICE_URL: 'https://thornswood.net/voice-dev',
-      VOICE_SOCKET_URL: DIRECT, CHAT_FADE: 1, NEEDS_BARS: true });
+      VOICE_SOCKET_URL: DIRECT, CHAT_FADE: 1, NEEDS_BARS: true, TEXT_SIZE: 100 });
     assert.strictEqual(cfg.socket, DIRECT); assert.strictEqual(cfg.base, 'https://thornswood.net/voice-dev');
   }
 });
