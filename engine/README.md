@@ -494,7 +494,7 @@ git update-index --cacheinfo 160000,<the fork commit>,engine/skymp
 git add records\server-build.json records\client-build.json records\client-licences.json records\client-licences
 ```
 
-`Get-EngineRecords.ps1` reads the log of the job that succeeded, holds the
+`Get-EngineRecords.ps1` reads the log of the Engine build job, holds the
 records to the length and sha256 the log gives, refuses anything but the
 four, and writes them only when both name the commit the index pins;
 `records\client-licences` is replaced whole. Then the commit in

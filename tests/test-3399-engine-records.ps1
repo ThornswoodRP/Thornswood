@@ -141,10 +141,17 @@ try {
     $gh = Join-Path $T 'gh'
     $null = New-Item -ItemType Directory -Force -Path $gh
     [IO.File]::WriteAllText((Join-Path $gh 'run.json'), '{"id":40400000000,"path":".github/workflows/engine.yml","status":"completed","conclusion":"success","html_url":"https://github.com/ThornswoodRP/Thornswood/actions/runs/40400000000"}', $utf8)
-    [IO.File]::WriteAllText((Join-Path $gh 'jobs.json'), '{"jobs":[{"id":111,"name":"Engine build","conclusion":"failure"},{"id":222,"name":"Engine build (VPS fallback)","conclusion":"success"},{"id":333,"name":"Wake the engine pin","conclusion":"success"}]}', $utf8)
+    # The jobs as GitHub reports them for a green engine.yml run since the
+    # VPS fallback went (#4983): run 45953186706 of 27 Nov 2026 has these two
+    # and no other (#4260). The fixture had a green run over a failed job,
+    # which GitHub never reports.
+    [IO.File]::WriteAllText((Join-Path $gh 'jobs.json'), '{"jobs":[{"id":222,"name":"Engine build","conclusion":"success"},{"id":333,"name":"Wake the engine pin","conclusion":"success"}]}', $utf8)
+    $fx = [IO.File]::ReadAllText((Join-Path $gh 'run.json')) | ConvertFrom-Json
+    $fxJobs = @(([IO.File]::ReadAllText((Join-Path $gh 'jobs.json')) | ConvertFrom-Json).jobs)
+    Yes '3. the fixture is a run GitHub could report: green, so every job in it succeeded (#4260)' ([string]$fx.conclusion -eq 'success' -and @($fxJobs | Where-Object { [string]$_.conclusion -ne 'success' }).Count -eq 0)
+    Yes '3.   with the jobs engine.yml has, and no other' ((@($fxJobs | ForEach-Object { [string]$_.name }) -join '|') -eq ((@([regex]::Matches(([IO.File]::ReadAllText((Join-Path $Here '.github/workflows/engine.yml')) -replace "`r`n", "`n"), '(?m)^  [a-z-]+:\n    name: (.+)$') | ForEach-Object { $_.Groups[1].Value.Trim() })) -join '|'))
     $logLines = @('2026-10-26T17:00:00.0000000Z Run .\scripts\release\EngineRecords.ps1') + @(Get-LogHandBackLines ('ENGINE' + '-RECORDS') $bundle | ForEach-Object { '2026-10-26T17:00:01.0000000Z ' + $_ })
     [IO.File]::WriteAllLines((Join-Path $gh 'log-222.txt'), [string[]]$logLines)
-    [IO.File]::WriteAllText((Join-Path $gh 'log-111.txt'), 'the hosted job, refused for billing', $utf8)
     $ghFake = Join-Path $T 'gh-stand-in.ps1'
     [IO.File]::WriteAllText($ghFake, @'
 $state = $env:TS_GH_STATE
@@ -189,7 +196,7 @@ if ($args[0] -eq 'api' -and $args[1] -match '^repos/ThornswoodRP/Thornswood/acti
     Yes ("3. with the pin moved, the records are written (exit {0})" -f $r.Code) ($r.Code -eq 0 -and $r.Out -match 'records of fork commit c1f2e448e9b9 are written' -and
         [IO.File]::ReadAllText((Join-Path $repo 'records/server-build.json')) -eq (Server-Record $commit) -and (Test-Path -LiteralPath (Join-Path $repo 'records/client-build.json')))
     Yes '3.   and the old licence text is gone' (-not (Test-Path -LiteralPath (Join-Path $repo 'records/client-licences/old-port.txt')) -and (Test-Path -LiteralPath (Join-Path $repo 'records/client-licences/zlib.txt')))
-    Yes '3.   read from the log of the Engine build job that succeeded' ([IO.File]::ReadAllText((Join-Path $gh 'calls.txt')) -match 'actions/jobs/222/logs' -and -not ([IO.File]::ReadAllText((Join-Path $gh 'calls.txt')) -match 'actions/jobs/111/logs'))
+    Yes '3.   read from the log of the Engine build job' ([IO.File]::ReadAllText((Join-Path $gh 'calls.txt')) -match 'actions/jobs/222/logs')
     Yes '3.   not the wake job that succeeded beside it (#5219)' (-not ([IO.File]::ReadAllText((Join-Path $gh 'calls.txt')) -match 'actions/jobs/333/logs'))
     Yes '3.   an older gh, with no such flag, is not given --allow-escape-sequences' ([IO.File]::ReadAllText((Join-Path $gh 'calls.txt')) -notmatch 'allow-escape-sequences')
     # #5202: engine-pin.yml stopped here on 31 Oct 2026, its runner's gh
