@@ -1,0 +1,52 @@
+# A probe, taken out again before the pull request (#6879): what
+# Get-ScheduledTask and Get-ScheduledTaskInfo give for a LOCAL SERVICE task
+# made as OnBox.ps1's limited run makes it, polled every two seconds through
+# its end, as run.ps1's wait loop does.
+name: Probe the limited task
+on:
+  push:
+    branches: [claude/project-thread-9zelrc-6879]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Poll a limited task through its end
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSVersionTable.PSVersion.ToString()
+          (Get-CimInstance Win32_OperatingSystem).Caption
+          'missing task, EAP Stop, no -ErrorAction:'
+          try { $x = Get-ScheduledTask -TaskName 'No Such Task Here'; '  did not throw; got ' + @($x).Count + ' object(s)' } catch { '  threw: ' + $_.Exception.Message }
+          $name = 'Thornswood Limited Build'
+          $ps = (Get-Process -Id $PID).Path
+          $dir = Join-Path $env:RUNNER_TEMP 'probe'; New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Set-Content -LiteralPath (Join-Path $dir 'w.ps1') -Value 'Start-Sleep -Seconds 10; exit 0'
+          $acl = Get-Acl $dir; $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule('NT AUTHORITY\LOCAL SERVICE', 'ReadAndExecute', 'ContainerInherit, ObjectInherit', 'None', 'Allow'))); Set-Acl $dir $acl
+          foreach ($round in 1, 2) {
+            $action = New-ScheduledTaskAction -Execute $ps -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path $dir 'w.ps1') + '"') -WorkingDirectory $dir
+            $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\LOCAL SERVICE' -LogonType ServiceAccount -RunLevel Limited -RequiredPrivilege 'SeChangeNotifyPrivilege' -ProcessTokenSidType Unrestricted
+            $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 40) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Priority 7
+            $null = Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Description 'probe' -Force
+            $started = Get-Date
+            Start-ScheduledTask -TaskName $name
+            "round $round started $($started.ToString('HH:mm:ss.fff'))"
+            for ($n = 0; $n -lt 12; $n++) {
+              Start-Sleep -Seconds 2
+              $errs = $null
+              $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue -ErrorVariable errs
+              $line = (Get-Date).ToString('HH:mm:ss.fff') + ' Get-ScheduledTask: ' + @($t).Count + ' object(s)' + $(if ($t) { ', state ' + [string]$t.State + ', path ' + $t.TaskPath } else { '' }) + $(if ($errs) { ', error: ' + ($errs | ForEach-Object { $_.FullyQualifiedErrorId + ' ' + $_.Exception.Message }) -join ' | ' } else { '' })
+              $line
+              try {
+                $i = Get-ScheduledTaskInfo -InputObject $t
+                '   info: LastRunTime ' + $i.LastRunTime.ToString('HH:mm:ss') + ', LastTaskResult 0x{0:x}' -f [int64]$i.LastTaskResult
+              } catch {
+                '   info THREW: ' + $_.FullyQualifiedErrorId + ' ' + $_.Exception.GetType().FullName + ': ' + $_.Exception.Message
+              }
+            }
+            Unregister-ScheduledTask -TaskName $name -Confirm:$false
+          }
+          Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-TaskScheduler/Operational'; StartTime = (Get-Date).AddMinutes(-5) } -ErrorAction SilentlyContinue | Where-Object Message -match $name | Sort-Object TimeCreated | ForEach-Object { $_.TimeCreated.ToString('HH:mm:ss.fff') + ' ' + $_.Id + ' ' + ($_.Message -split "`n")[0] }
