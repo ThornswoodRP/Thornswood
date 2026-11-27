@@ -927,7 +927,11 @@
   */
   function fit() {
     try {
-      var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      // The one rule every panel scales by, with the text size (#4474), when
+      // the page has it (thornswood-scale.js); this panel's own otherwise.
+      var s = window.thornswoodScale
+        ? window.thornswoodScale.scaleFor(window.innerWidth, window.innerHeight, 1120, 700)
+        : Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
       if (!isFinite(s) || s < 1) s = 1;
       elPanel.style.transformOrigin = 'center center';
       elPanel.style.transform = 'scale(' + Math.min(s, 2.4).toFixed(3) + ')';
@@ -4636,6 +4640,7 @@
     }
   };
 
+  api.fit = fit;
   window.thornswoodSkills = api;
   draw();
   tell('ready');
