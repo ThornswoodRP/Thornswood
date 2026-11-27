@@ -43,6 +43,36 @@
         "Match": "^[A-Za-z0-9][A-Za-z0-9 .,:_()#=-]{0,159}$"
       }
     },
+    "Read-PropertyResetCounts-Dev": {
+      "script": "scripts/vps/Read-PropertyResetCounts.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/ops/PropertyResetMongoPreview.js",
+        "scripts/ops/PropertyResetWorldPreview.js",
+        "scripts/ops/Read-PropertyResetPreview.ps1",
+        "scripts/vps/ServerHold.ps1"
+      ],
+      "timeoutMinutes": 5,
+      "build": true,
+      "fixed": ["-Server", "dev"],
+      "params": {}
+    },
+    "Read-PropertyResetCounts-Main": {
+      "script": "scripts/vps/Read-PropertyResetCounts.ps1",
+      "reads": [
+        "records/mongodb.json",
+        "scripts/deploy/ServerFolderTurn.ps1",
+        "scripts/ops/PropertyResetMongoPreview.js",
+        "scripts/ops/PropertyResetWorldPreview.js",
+        "scripts/ops/Read-PropertyResetPreview.ps1",
+        "scripts/vps/ServerHold.ps1"
+      ],
+      "timeoutMinutes": 5,
+      "build": true,
+      "fixed": ["-Server", "main"],
+      "params": {}
+    },
     "Deploy-DevGamemode": {
       "script": "scripts/deploy/Deploy-DevGamemode.ps1",
       "reads": [
