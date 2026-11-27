@@ -21,15 +21,16 @@
        the release parts (game\gamemode.js PARTS) whose registers it moves,
        which is every part but the merchants' and the saves (server-log.js's,
        and mod-settings.json stays)
-    R  a reset: the list names the characters it threw away by form id and
-       no profile, merges into a list waiting there with done cleared, goes
+    R  a reset of one character (#4173): the list names the character it
+       threw away by form id and no profile, and every other character stays, merges into a list waiting there with done cleared, goes
        in the server's privDir, and is not written when nobody was thrown
-       away; a list that names no profile has 'saves' done, the part that
+       away; a character not on the server stops it with nothing moved and
+       says which are there; a list that names no profile has 'saves' done, the part that
        acts only on profiles and that no server on this machine runs; a list
        there that is not one, or a server-settings.json that will not parse,
        stops the reset with nothing moved; a change form that will not parse
        is named and left where it is; a character whose id has a letter
-       (1f.json, #5168) is thrown away and named, and the world's own
+       (1f.json, #5168) is found, thrown away and named, and the world's own
        runtime forms (profileId -1) and a deleted slot stay
     W  a wipe: the list names every character in the world it set aside,
        carries the ids of the list it set aside (which stays as it was), is
@@ -43,8 +44,8 @@
        root's own port before it is stopped, waits for it to exit, runs the
        reset, starts the task and waits for both ports within the shared
        ceiling; this machine tries once from outside; nothing sleeps a fixed
-       time; settings that will not read, or name no port, stop it with
-       nothing stopped
+       time; settings that will not read, name no port, or name another
+       server, stop it with nothing stopped
     G  each list the scripts wrote is read by the gamemode's own release
        block: a reset's waits on every part (with no profile, all but the
        saves), a wipe's only on the merchants' (and the saves while it
@@ -135,8 +136,8 @@ $bodyAssign = @($R.ast.FindAll({ param($n) $n -is [System.Management.Automation.
 $resetBody = $null
 if ($bodyAssign.Count -eq 1) { $resetBody = & ([scriptblock]::Create($bodyAssign[0].Right.Extent.Text)) }
 Yes 'S9 the reset''s body carries the writer and asks it for a list with no profile and nothing carried' (
-    $resetBody -and $resetBody.StartsWith('param([string]$Root)') -and $resetBody.Contains('function Write-ThornswoodReleaseList') -and
-    $resetBody.Contains('$found = Get-ThornswoodCharacterIds $moved') -and
+    $resetBody -and $resetBody.StartsWith('param([string]$Root, [string]$Character, ') -and $resetBody.Contains('function Write-ThornswoodReleaseList') -and
+    $resetBody.Contains('$found = Get-ThornswoodCharacterIds @($to)') -and
     ([regex]::Matches($resetBody, 'Write-ThornswoodReleaseList -Root \$Root -Actors \$found\.ids\)\)')).Count -eq 1)
 
 # ---- B: the reset's stop and start (#2871) -----------------------------------
@@ -225,12 +226,14 @@ try {
     # ---- R: a reset ----------------------------------------------------------------
     $r1 = Server 'reset-merge' '{"privDir":"private"}'
     Put (Join-Path $r1 'private\deleted-characters.json') ('{"profiles":[6001],"actors":[' + $A9 + '],"done":{"farms":1,"property":2}}')
-    $x = RunBox $resetBody @('-Root', $r1)
+    $x = RunBox $resetBody @('-Root', $r1, '-Character', 'ff000a01')
     $l = ListOf (Join-Path $r1 'private\deleted-characters.json')
-    Yes ('R1 a reset throws the characters away and says it wrote the list (' + ($x.out -join ' / ') + ')') (
-        $x.code -eq 0 -and @($x.out | Where-Object { $_ -like 'release list: *3 character(s)*' }).Count -eq 1 -and
-        @(Get-ChildItem -LiteralPath (Join-Path $r1 'world\changeForms') -Filter '*.json' -File).Count -eq 1)
-    Yes ('R2 the list names the characters it threw away by form id, merged into the one waiting (' + (Ids $l.actors) + ')') ($l -and (Ids $l.actors) -eq "$A1,$A2,$A9")
+    Yes ('R1 a reset throws the one character away, keeps the others, and says it wrote the list (' + ($x.out -join ' / ') + ')') (
+        $x.code -eq 0 -and @($x.out | Where-Object { $_ -like 'release list: *2 character(s)*' }).Count -eq 1 -and
+        -not (Test-Path -LiteralPath (Join-Path $r1 'world\changeForms\0.json')) -and
+        (Test-Path -LiteralPath (Join-Path $r1 'world\changeForms\1.json')) -and
+        @(Get-ChildItem -LiteralPath (Join-Path $r1 'world\changeForms') -Filter '*.json' -File).Count -eq 3)
+    Yes ('R2 the list names the character it threw away by form id, merged into the one waiting (' + (Ids $l.actors) + ')') ($l -and (Ids $l.actors) -eq "$A1,$A9")
     Yes ('R3 it adds no profile: only the one already waiting is there (' + (Ids $l.profiles) + ')') ((Ids $l.profiles) -eq '6001')
     Yes 'R4 and done is cleared, so every part runs for the new ids' ($null -eq $l.done)
     Yes 'R5 the world object and a character with a plugin in its desc are not named' (
@@ -238,17 +241,17 @@ try {
     $lists.reset = [IO.File]::ReadAllText((Join-Path $r1 'private\deleted-characters.json'))
 
     $r2 = Server 'reset-fresh' '{"privDir":"secret"}'
-    $x = RunBox $resetBody @('-Root', $r2)
+    $x = RunBox $resetBody @('-Root', $r2, '-Character', 'a01')
     $file = Join-Path $r2 'secret\deleted-characters.json'
     $l = ListOf $file
     Yes 'R6 with no list there, the list goes in the server''s own privDir' ($x.code -eq 0 -and $l -and -not (Test-Path -LiteralPath (Join-Path $r2 'private\deleted-characters.json')))
-    Yes ('R7 and is exactly the characters, with no profile, and only saves done, which acts on profiles alone (' + [IO.File]::ReadAllText($file) + ')') (
-        [IO.File]::ReadAllText($file) -match ('^\{"profiles":\[\],"actors":\[' + $A1 + ',' + $A2 + '\],"done":\{"saves":[1-9][0-9]*\}\}$'))
+    Yes ('R7 and is exactly the character, with no profile, and only saves done, which acts on profiles alone (' + [IO.File]::ReadAllText($file) + ')') (
+        [IO.File]::ReadAllText($file) -match ('^\{"profiles":\[\],"actors":\[' + $A1 + '\],"done":\{"saves":[1-9][0-9]*\}\}$'))
     $lists.resetFresh = [IO.File]::ReadAllText($file)
 
     $r3 = Server 'reset-bad' '{}'
     Put (Join-Path $r3 'private\deleted-characters.json') '{"profiles":"nobody"}'
-    $x = RunBox $resetBody @('-Root', $r3)
+    $x = RunBox $resetBody @('-Root', $r3, '-Character', 'a01')
     Yes ('R8 a list there that is not one stops the reset (' + ($x.out -join ' / ') + ')') ($x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *not a list of deleted characters, so nothing was thrown away*' }).Count -eq 1)
     Yes 'R9 with nothing moved and the list left as it was' (
         @(Get-ChildItem -LiteralPath (Join-Path $r3 'world\changeForms') -Filter '*.json' -File).Count -eq 4 -and
@@ -257,11 +260,17 @@ try {
     $r4 = Join-Path $T 'reset-empty'
     Put (Join-Path $r4 'server-settings.json') '{}'
     Put (Join-Path $r4 'world\changeForms\13164_JKs Whiterun.esp.json') '{}'
-    $x = RunBox $resetBody @('-Root', $r4)
-    Yes 'R10 with nobody to throw away, no list is written' ($x.code -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $r4 'private\deleted-characters.json')))
+    $x = RunBox $resetBody @('-Root', $r4, '-Character', 'a01')
+    Yes ('R10 a character not on the server stops the reset, says so, and writes no list (' + ($x.out -join ' / ') + ')') (
+        $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. There is no character ff000a01 on this server: it has no characters.*' }).Count -eq 1 -and
+        -not (Test-Path -LiteralPath (Join-Path $r4 'private\deleted-characters.json')))
+    $x = RunBox $resetBody @('-Root', (Server 'reset-other' '{}'), '-Character', 'ff000a09')
+    Yes ('R10b and names the characters that are there, by id and name (' + ($x.out -join ' / ') + ')') (
+        $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. There is no character ff000a09 on this server: its characters are ff000a01 (A), ff000a02.*' }).Count -eq 1 -and
+        @(Get-ChildItem -LiteralPath (Join-Path $T 'reset-other\world\changeForms') -Filter '*.json' -File).Count -eq 4)
 
     $r5 = Server 'reset-badsettings' '{"privDir": '
-    $x = RunBox $resetBody @('-Root', $r5)
+    $x = RunBox $resetBody @('-Root', $r5, '-Character', 'a01')
     # Since #6237 it stops a step sooner, at finding the world, which the
     # same file says: neither where the world is nor where the list goes is
     # guessed.
@@ -272,24 +281,29 @@ try {
 
     # The box's stop and start, as far as it goes before anything is stopped.
     $b7 = Server 'run-badsettings' '{"port": '
-    $x = RunBox $resetRun @('-Root', $b7, '-Task', 'Thornswood test task that is not there')
+    $x = RunBox $resetRun @('-Root', $b7, '-Task', 'Thornswood test task that is not there', '-Server', 'dev', '-Character', 'a01')
     Yes ('B7 settings that will not read stop the box''s script before anything is stopped (' + ($x.out -join ' / ') + ')') (
         $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *server-settings.json will not read*Nothing was stopped or thrown away.' }).Count -eq 1 -and
         -not @($x.out | Where-Object { $_ -like 'stopped pid*' }).Count -and
         @(Get-ChildItem -LiteralPath (Join-Path $b7 'world\changeForms') -Filter '*.json' -File).Count -eq 4)
-    $b8 = Server 'run-noport' '{"privDir":"private"}'
-    $x = RunBox $resetRun @('-Root', $b8, '-Task', 'Thornswood test task that is not there')
+    $b8 = Server 'run-noport' '{"privDir":"private","thornswoodServer":"dev"}'
+    $x = RunBox $resetRun @('-Root', $b8, '-Task', 'Thornswood test task that is not there', '-Server', 'dev', '-Character', 'a01')
     Yes ('B8 settings that name no port stop it too: which server is not guessed (' + ($x.out -join ' / ') + ')') (
         $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *names no port*Nothing was stopped or thrown away.' }).Count -eq 1 -and
         @(Get-ChildItem -LiteralPath (Join-Path $b8 'world\changeForms') -Filter '*.json' -File).Count -eq 4)
+    $b8b = Server 'run-otherserver' '{"port":45777,"thornswoodServer":"main"}'
+    $x = RunBox $resetRun @('-Root', $b8b, '-Task', 'Thornswood test task that is not there', '-Server', 'dev', '-Character', 'a01')
+    Yes ('B8b settings that name another server stop it too: the folder is not taken to be the server named (' + ($x.out -join ' / ') + ')') (
+        $x.code -eq 1 -and @($x.out | Where-Object { $_ -like 'STOP. *says thornswoodServer is main, not dev. Nothing was stopped or thrown away.' }).Count -eq 1 -and
+        @(Get-ChildItem -LiteralPath (Join-Path $b8b 'world\changeForms') -Filter '*.json' -File).Count -eq 4)
 
     $r6 = Server 'reset-badform' '{}'
     Put (Join-Path $r6 'world\changeForms\3.json') '{"formDesc":"ff000a0'
-    $x = RunBox $resetBody @('-Root', $r6)
+    $x = RunBox $resetBody @('-Root', $r6, '-Character', 'a01')
     $l = ListOf (Join-Path $r6 'private\deleted-characters.json')
     Yes ('R12 a change form that will not parse is named and left where it is, and the others are still listed (' + ($x.out -join ' / ') + ')') (
         $x.code -eq 0 -and @($x.out | Where-Object { $_ -like '*3.json will not parse, so whether it is a character is not known; a reset leaves it where it is' }).Count -eq 1 -and
-        (Test-Path -LiteralPath (Join-Path $r6 'world\changeForms\3.json')) -and $l -and (Ids $l.actors) -eq "$A1,$A2")
+        (Test-Path -LiteralPath (Join-Path $r6 'world\changeForms\3.json')) -and $l -and (Ids $l.actors) -eq "$A1")
 
     # #5168: the engine names a runtime form's file by its local id in hex
     # (FormDesc::ToString, %x), so a character whose id has a letter is 1f.json,
@@ -300,15 +314,15 @@ try {
     Put (Join-Path $r7 'world\changeForms\b.json') ('{"formDesc":"b","profileId":-1}')
     Put (Join-Path $r7 'world\changeForms\10.json') ('{"formDesc":"10","profileId":-1}')
     Put (Join-Path $r7 'world\changeForms\c.json') ('{"formDesc":"c","profileId":-1,"isDeleted":true}')
-    $x = RunBox $resetBody @('-Root', $r7)
+    $x = RunBox $resetBody @('-Root', $r7, '-Character', 'ff00001f')
     $l = ListOf (Join-Path $r7 'private\deleted-characters.json')
     $left = @(Get-ChildItem -LiteralPath (Join-Path $r7 'world\changeForms') -Filter '*.json' -File | ForEach-Object { $_.Name } | Sort-Object)
     $binned = @(Get-ChildItem -LiteralPath (Join-Path $r7 'world\changeForms') -Directory -Filter '_discarded-*' | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -File } | ForEach-Object { $_.Name } | Sort-Object)
-    Yes ('R13 a character whose id has a letter is thrown away with the others (' + ($binned -join ',') + ')') (
-        $x.code -eq 0 -and ($binned -join ',') -eq '0.json,1.json,1f.json,2.json')
-    Yes ('R14 and is on the release list by its form id, 0xff00001f (' + (Ids $l.actors) + ')') ($l -and (Ids $l.actors) -eq "$A1f,$A1,$A2")
-    Yes ('R15 the world''s own runtime forms, digits or letters, and a deleted slot stay where they are (' + ($left -join ',') + ')') (
-        ($left -join ',') -eq '10.json,13164_JKs Whiterun.esp.json,b.json,c.json')
+    Yes ('R13 a character whose id has a letter is found and thrown away, alone (' + ($binned -join ',') + ')') (
+        $x.code -eq 0 -and ($binned -join ',') -eq '1f.json')
+    Yes ('R14 and is on the release list by its form id, 0xff00001f (' + (Ids $l.actors) + ')') ($l -and (Ids $l.actors) -eq "$A1f")
+    Yes ('R15 the other characters, the world''s own runtime forms, digits or letters, and a deleted slot stay where they are (' + ($left -join ',') + ')') (
+        ($left -join ',') -eq '0.json,1.json,10.json,13164_JKs Whiterun.esp.json,2.json,b.json,c.json')
 
     # ---- W: a wipe -----------------------------------------------------------------
     $stamp = '20261017-2100'
