@@ -599,6 +599,25 @@ async def post_test_task(guild, title, body, tag=TASK_POST_TAG, path=None):
     return thread, 'Posted: %s' % getattr(thread, 'mention', title)
 
 
+def task_post_refusal(e, name):
+    """
+    What /test-task tells the poster when Discord refuses the post (#4945).
+    Only a 403 is the bot's permissions in #name. A 429 or a 5xx is Discord
+    itself, so the permissions are fine and the poster tries again. Anything
+    else is Discord's own reason for refusing this post.
+    """
+    status = getattr(e, 'status', 0)
+    if status == 403:
+        return ('That did not go through. In #%s the bot needs View Channel, '
+                'Send Messages and Create Posts.' % name)
+    if status == 429 or status >= 500:
+        return ('That did not go through: Discord is having trouble right now. '
+                'Try /test-task again in a few minutes.')
+    why = ' '.join(str(getattr(e, 'text', '') or e).split())[:200]
+    return ('That did not go through. Discord refused the post: %s'
+            % (why or 'it gave no reason'))
+
+
 @tree.command(name='test-task',
               description='Post a test task: Main for testers (#test-tasks), '
                           'Dev for staff on dev. Owner, Dev, Lead GM.')
@@ -620,10 +639,9 @@ async def test_task_cmd(interaction: discord.Interaction, title: str,
     try:
         _, said = await post_test_task(interaction.guild, title, body, tag)
     except discord.HTTPException as e:
-        log('test task: Discord refused a post: %s' % getattr(e, 'text', e))
-        said = ('That did not go through. In #%s the bot needs View Channel, '
-                'Send Messages and Create Posts.'
-                % (DEV_TASKS_NAME if tag == 'Dev' else TASKS_NAME))
+        log('test task: Discord refused a post (%s): %s'
+            % (getattr(e, 'status', '?'), getattr(e, 'text', e)))
+        said = task_post_refusal(e, DEV_TASKS_NAME if tag == 'Dev' else TASKS_NAME)
     await interaction.followup.send(said, ephemeral=True)
 
 
