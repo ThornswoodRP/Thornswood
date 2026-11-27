@@ -2,11 +2,17 @@
   ServerSettings.ps1
 
   Which settings a game server install takes from the release, and which it
-  keeps from the server it replaces. Dot-sourced by Install-ThornswoodServer.ps1
-  (on the box, from beside it: Publish-Server.ps1 sends the two together),
-  Export-ServerPayload.ps1 and Deploy-Server.ps1. Deploy-Server also sends
-  this file's text to the box in front of $settingsCarryBlock, so the carry
-  is done there, against the file the running server has.
+  keeps from the server it replaces. Who takes it:
+    - dot-sourced by Install-ThornswoodServer.ps1 (on the box, from beside
+      it), Export-ServerPayload.ps1, Deploy-Server.ps1, Deploy-DevGamemode.ps1,
+      for its load order check, and Publish-Server.ps1, which with
+      -DropPlugins sends the names the way this file writes them;
+    - its text: Deploy-Server.ps1 also sends it to the box in front of
+      $settingsCarryBlock, $settingsStoreBlock or $settingsKeepBlock, so the
+      carry is done there, against the file the running server has;
+    - sent: Publish-Server.ps1 copies it to the box beside the installer,
+      which refuses to install without it.
+  tests\test-4678-header-callers.ps1 holds this list to the scripts.
 
   WHY, issue #1222. Dev rollout 6, 29 September: Publish-Server.ps1 -Channel
   dev unpacked the build's server-settings.json over the dev server's own,
