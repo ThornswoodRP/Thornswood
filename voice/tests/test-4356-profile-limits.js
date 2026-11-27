@@ -127,11 +127,13 @@ const slowed = (s) => s.got.some((m) => m.t === 'chat' && m.from === 0 && /^Slow
     const a2 = await join(4560, 'Aela');
     for (let i = 0; i < 3; i++) a1.send({ t: 'chat', text: 'first socket ' + i });
     for (let i = 0; i < 3; i++) a2.send({ t: 'chat', text: 'second socket ' + i });
-    await until(() => linesFrom(room, 4560).length >= 6 || slowed(a2), 3000);
+    await until(() => linesFrom(room, 4560).length >= 6 || slowed(a1) || slowed(a2), 3000);
     await wait(400);
     yes('six lines from two sockets of one profile: five reach the room (' + linesFrom(room, 4560).length + ')',
         linesFrom(room, 4560).length === 5, JSON.stringify(linesFrom(room, 4560)));
-    yes('and the socket whose line was held is told to slow down', slowed(a2));
+    // The two sockets' lines can reach the service in either order, so the
+    // one held is whichever sent last.
+    yes('and the socket whose line was held is told to slow down', slowed(a1) || slowed(a2));
 
     // ------------------------------------------------------------------ B --
     console.log('\nB. a reconnect inside the window does not refill it:');
