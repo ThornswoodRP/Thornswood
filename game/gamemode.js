@@ -1615,7 +1615,8 @@ function creditWork(actorId, key, n) {
     the plot, the river and the hunt all call it, and anything added later
     gets the same treatment for nothing.
 
-    No catch around it (#4955). A needs block that is not loaded yet, or a
+    No catch that goes on without it (#4955); the one below only names whose
+    work it was before it goes up (#6071). A needs block that is not loaded yet, or a
     hot reload mid-tick, is the check below: the work is still counted and
     there is nothing to charge it to. Everything worked() reaches either
     catches its own engine call or is arithmetic, and notify and say catch
@@ -1632,7 +1633,9 @@ function creditWork(actorId, key, n) {
       swing before that says nothing, which is the same rule the seam and
       the chopping block already follow.
     */
-    const tiredLine = needs.worked(actorId, key);
+    let tiredLine;
+    try { tiredLine = needs.worked(actorId, key); }
+    catch (e) { throw workStepThrew('the tiredness of', actorId, key, e); }
     if (tiredLine) {
       notify(actorId, tiredLine);
       say(actorId, tiredLine);
@@ -1659,17 +1662,26 @@ function creditWork(actorId, key, n) {
     listed together is a checkbox everybody ticks once and never thinks about
     again.
   */
+  /*
+    No empty catch around it (#6071), for the reason the tiredness above has
+    none (#4955): workBonus reaches partyNear, which catches each of its own
+    engine reads, and the rest is our own lookups and arithmetic. Until 27 Nov
+    2026 a throw here was swallowed, and that piece of work paid no party
+    bonus with nothing in the log. Now it goes up to the event's guard with
+    who and what work it was.
+  */
   let extra = 0;
-  try {
-    const soc = globalThis.__thornswoodSocial;
-    if (soc && soc.workBonus) {
-      const over = soc.workBonus(actorId) - 1;
-      if (over > 0) {
-        PARTY_BANK[actorId] = (PARTY_BANK[actorId] || 0) + over * pieces;
-        while (PARTY_BANK[actorId] >= 1) { PARTY_BANK[actorId] -= 1; extra++; }
-      }
+  const soc = globalThis.__thornswoodSocial;
+  if (soc && soc.workBonus) {
+    let bonus;
+    try { bonus = soc.workBonus(actorId); }
+    catch (e) { throw workStepThrew('the party bonus of', actorId, key, e); }
+    const over = bonus - 1;
+    if (over > 0) {
+      PARTY_BANK[actorId] = (PARTY_BANK[actorId] || 0) + over * pieces;
+      while (PARTY_BANK[actorId] >= 1) { PARTY_BANK[actorId] -= 1; extra++; }
     }
-  } catch (e) { }
+  }
 
   /*
     And an apprentice's work beside their master counts 1.5 times (#4562,
@@ -1705,6 +1717,14 @@ function creditWork(actorId, key, n) {
     log('could not count', key, 'work for', actorId.toString(16) + ':', e);
     return null;
   }
+}
+
+/* A throw from a step of creditWork, named for the person and the work
+   (#6071), so the event guard's log line says whose work it was. The
+   original stack is kept in the message. */
+function workStepThrew(step, actorId, key, e) {
+  return new Error(step + ' ' + Number(actorId).toString(16) + "'s " + key +
+    ' work threw: ' + (e && e.stack ? e.stack : String(e)));
 }
 
 /* What each character is owed of the party bonus, in fractions of a piece.
