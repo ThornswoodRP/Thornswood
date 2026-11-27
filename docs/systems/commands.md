@@ -170,7 +170,7 @@ These stay commands. How to run each one, with examples:
 | `/restart`, `/shutdown` | Nobody | Answers that restarts are not run from chat | `gamemode.js:word === '/restart'` | Nowhere |
 | `/close` (Discord), and the Close ticket button | Staff (`STAFF_ROLES`, by ID or name). For Faction Leader tickets, a role ID in `UPPER_STAFF_ROLES` also qualifies. Manage Threads alone does not qualify | Archives and locks a ticket from inside its own thread | `close_here`, `is_ticket_thread` and `can_close_ticket` in `bot/bot_tickets.py` | Discord's own command list |
 | `/test-task` (Discord) | Roles in `TEST_TASK_ROLES`, by ID or name (by default, Owner, Dev, and Lead Gamemaster or Lead GM) | Main (the default) goes to #test-tasks with the Main tag. Dev goes to the staff-only #dev-test-tasks with the Dev tag | `test_task_cmd` and `post_test_task` in `bot/bot_testing.py` | Discord's own command list |
-| `python bot.py --setup-channels [--apply]` (VPS, by hand) | Whoever runs it on the VPS | The one-time testing channel setup: #test-tasks to a forum, #test-results to #test-findings, #known-issues made; a preview without `--apply`, never twice | `channel_setup` in `bot/bot_testing.py` | `data\channel-setup.json` |
+| `python bot.py --setup-channels [--apply]` (VPS, by hand) | Whoever runs it on the VPS | The one-time testing channel setup: #test-tasks to a forum, the old results channel renamed #test-findings, #known-issues made; a preview without `--apply`, never twice | `channel_setup` in `bot/bot_testing.py` | `data\channel-setup.json` |
 
 ## Lines the game sends itself
 
