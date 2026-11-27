@@ -81,7 +81,9 @@ $parts[2] = ($parts[2] -split "`n" | Where-Object { $_ -match 'Regex RelPath' })
 # Public here, so the harness can hand records in.
 $parts[0] = $parts[0].Replace('internal sealed class DeployRecord', 'public sealed class DeployRecord')
 
-Add-Type -TypeDefinition @"
+# The compiler the launcher builds with (#4823), as every launcher harness does.
+. (Join-Path (Join-Path (Split-Path -Parent (Split-Path -Parent $Here)) 'tests') 'Launcher-Csc.ps1')
+$code = @"
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -99,6 +101,7 @@ $($parts -join "`n")
     }
 }
 "@
+[void](Add-LauncherType -Source $code)
 
 $G = [T6229.OwnGame]
 # A $null handed to a string parameter arrives as "", so a readable record

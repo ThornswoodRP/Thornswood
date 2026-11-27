@@ -647,8 +647,8 @@ namespace Thornswood
                 using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 using (var sr = new StreamReader(fs)) text = sr.ReadToEnd();
             }
-            catch (FileNotFoundException) { return null; }
-            catch (DirectoryNotFoundException) { return null; }
+            catch (FileNotFoundException) { return null; /* gone since it was looked at: no record, as Find counts it */ }
+            catch (DirectoryNotFoundException) { return null; /* its folder gone since: no record either */ }
             catch (Exception ex) { r.Unreadable = Failure.Why("Vortex's record", ex); return r; }
             // A record Vortex is writing ends before its closing brace, and
             // what it names so far is not what it holds.
@@ -2261,18 +2261,17 @@ namespace Thornswood
                 // Mod Organizer 2's profile, once the mods come from there (#6244).
                 // Vortex's state that cannot be read is said as that, not as
                 // a profile that is not there (#6229).
-                string tw;
+                string tw = null, notTold = null;
                 try { tw = FromMods ? Path.Combine(ModsFolder, "profiles", "Thornswood") : Checks.VortexProfileDir("Thornswood"); }
                 catch (Exception ex)
                 {
-                    LauncherLog.Line("OwnGame: which Vortex profile is Thornswood's could not be told from Vortex's state (" + Failure.Why("Vortex's state", ex) +
-                                     "), which is not the same as there being none; leaving Profile\\OwnGame plugin list alone until it can be read.");
-                    return;
+                    notTold = "OwnGame: which Vortex profile is Thornswood's could not be told from Vortex's state (" + Failure.Why("Vortex's state", ex) +
+                              "), which is not the same as there being none; leaving Profile\\OwnGame plugin list alone until it can be read.";
                 }
                 string livePlugins = Path.Combine(Paths.WinLocalAD, "plugins.txt");
                 if (tw == null)
                 {
-                    LauncherLog.Line("OwnGame: Vortex profile Thornswood was not found; leaving Profile\\OwnGame plugin list alone rather than copying Windows' live list from another profile.");
+                    LauncherLog.Line(notTold ?? "OwnGame: Vortex profile Thornswood was not found; leaving Profile\\OwnGame plugin list alone rather than copying Windows' live list from another profile.");
                 }
                 else
                 {
