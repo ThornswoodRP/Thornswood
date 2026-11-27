@@ -158,6 +158,25 @@
     {
       "note": "The forge shows its prices\n- EnvironmentOptions faulted, and ForgeTable is two humps.",
       "shape": [],
+      "words": [
+        "line 2 names something in the code (EnvironmentOptions): 'EnvironmentOptions faulted, and ForgeTable is two humps.'"
+      ]
+    },
+    {
+      "note": "The launcher starts again\n- CreateAsync no longer faults on start.",
+      "shape": [],
+      "words": [
+        "line 2 names something in the code (CreateAsync): 'CreateAsync no longer faults on start.'"
+      ]
+    },
+    {
+      "note": "Setup says the first build takes a few minutes\n- It builds Pandora and BodySlide, keeps QuickLoot's options, and Windows SmartScreen may ask first.",
+      "shape": [],
+      "words": []
+    },
+    {
+      "note": "The forge shows its prices\n- Whiterun and Riverwood keep their one-word names, and Skyrim is fine.",
+      "shape": [],
       "words": []
     },
     {
@@ -204,7 +223,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.2112, built...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.2112, built...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v2026.1101.2112, built...'"
       ]
     },
     {
@@ -213,7 +233,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.1724, built...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.1724, built...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v2026.1101.1724, built...'"
       ]
     },
     {
@@ -222,7 +243,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.16, built on GitH...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.16, built on GitH...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v1.2.16, built on GitH...'"
       ]
     },
     {
@@ -232,7 +254,8 @@
       ],
       "words": [
         "the title names a version; say what changed instead: 'Launcher exe and setup program for v1.2.15.1, built on Gi...'",
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.15.1, built on Gi...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.15.1, built on Gi...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v1.2.15.1, built on Gi...'"
       ]
     },
     {
@@ -241,7 +264,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.15, built on GitH...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.15, built on GitH...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v1.2.15, built on GitH...'"
       ]
     },
     {
@@ -251,7 +275,8 @@
       ],
       "words": [
         "the title names a version; say what changed instead: 'Launcher exe and setup program for v1.2.14.1, built on Gi...'",
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.14.1, built on Gi...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.14.1, built on Gi...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v1.2.14.1, built on Gi...'"
       ]
     },
     {
@@ -260,7 +285,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.14, built on GitH...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.14, built on GitH...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v1.2.14, built on GitH...'"
       ]
     },
     {
@@ -270,7 +296,8 @@
       ],
       "words": [
         "the title names a version; say what changed instead: 'Launcher exe and setup program for v1.2.13.1, built on Gi...'",
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.13.1, built on Gi...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.13.1, built on Gi...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v1.2.13.1, built on Gi...'"
       ]
     },
     {
@@ -279,7 +306,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.13, built on GitH...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.13, built on GitH...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v1.2.13, built on GitH...'"
       ]
     },
     {
@@ -288,7 +316,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.12, built on GitH...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v1.2.12, built on GitH...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v1.2.12, built on GitH...'"
       ]
     },
     {
@@ -421,7 +450,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.1609, built...'"
+        "the title names an issue or pull request; say what changed for the person instead: 'Launcher exe and setup program for v2026.1101.1609, built...'",
+        "the title names something in the code (ThornswoodRelease): 'Launcher exe and setup program for v2026.1101.1609, built...'"
       ]
     },
     {
@@ -458,7 +488,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.9, built from b1fd156b8038cca192...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.9, built from b1fd156b8038cca192...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.9, built from b1fd156b8038cca192...'"
       ]
     },
     {
@@ -467,7 +498,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.6, built from 3ea929607b5365b03c...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.6, built from 3ea929607b5365b03c...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.6, built from 3ea929607b5365b03c...'"
       ]
     },
     {
@@ -476,7 +508,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.32, built from a44de84750ac8f14f...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.32, built from a44de84750ac8f14f...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.32, built from a44de84750ac8f14f...'"
       ]
     },
     {
@@ -485,7 +518,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.28, built from fcb9d019b68b45c05...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.28, built from fcb9d019b68b45c05...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.28, built from fcb9d019b68b45c05...'"
       ]
     },
     {
@@ -494,7 +528,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.27, built from 4c9cef5eb877261af...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.27, built from 4c9cef5eb877261af...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.27, built from 4c9cef5eb877261af...'"
       ]
     },
     {
@@ -503,7 +538,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.24, built from 5c1427817365bb2b8...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.24, built from 5c1427817365bb2b8...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.24, built from 5c1427817365bb2b8...'"
       ]
     },
     {
@@ -512,7 +548,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.21, built from 4c21d1741b89e890c...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.21, built from 4c21d1741b89e890c...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.21, built from 4c21d1741b89e890c...'"
       ]
     },
     {
@@ -521,7 +558,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.19, built from ba5a0f60e2197eff0...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.19, built from ba5a0f60e2197eff0...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.19, built from ba5a0f60e2197eff0...'"
       ]
     },
     {
@@ -530,7 +568,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.18, built from 129ce827eef7de79c...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.18, built from 129ce827eef7de79c...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.18, built from 129ce827eef7de79c...'"
       ]
     },
     {
@@ -539,7 +578,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.17, built from 45698e1772bdd8ba7...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.17, built from 45698e1772bdd8ba7...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.17, built from 45698e1772bdd8ba7...'"
       ]
     },
     {
@@ -548,7 +588,8 @@
         "there is no detail line: at least one line starting with \"- \"."
       ],
       "words": [
-        "the title names a version; say what changed instead: 'The box deploy agent 1.0.11, built from faffd779c67d6b60c...'"
+        "the title names a version; say what changed instead: 'The box deploy agent 1.0.11, built from faffd779c67d6b60c...'",
+        "the title names something in the code (ThornswoodRelease): 'The box deploy agent 1.0.11, built from faffd779c67d6b60c...'"
       ]
     },
     {
@@ -598,28 +639,36 @@
       "shape": [
         "there is no detail line: at least one line starting with \"- \"."
       ],
-      "words": []
+      "words": [
+        "the title names something in the code (ThornswoodRelease): 'The gamemode and the server build at 97925885e24f0892e372...'"
+      ]
     },
     {
       "note": "The gamemode and the server build at c7d0b9856f587b17cc88a95082c87b2d68a68b18, signed with ThornswoodRelease, for the box deploy agent to put on the dev server. Not a release people install: the launcher and game files still go out with a Ship.",
       "shape": [
         "there is no detail line: at least one line starting with \"- \"."
       ],
-      "words": []
+      "words": [
+        "the title names something in the code (ThornswoodRelease): 'The gamemode and the server build at c7d0b9856f587b17cc88...'"
+      ]
     },
     {
       "note": "The gamemode and the server build at 31dbabcdae35dcced81a3fd2e2e89e48119fb61c, signed with ThornswoodRelease, for the box deploy agent to put on the dev server. Not a release people install: the launcher and game files still go out with a Ship.",
       "shape": [
         "there is no detail line: at least one line starting with \"- \"."
       ],
-      "words": []
+      "words": [
+        "the title names something in the code (ThornswoodRelease): 'The gamemode and the server build at 31dbabcdae35dcced81a...'"
+      ]
     },
     {
       "note": "The gamemode and the server build at 7c2140a8ae3fa7800a901855cbf10347be66c8a8, signed with ThornswoodRelease, for the box deploy agent to put on the dev server. Not a release people install: the launcher and game files still go out with a Ship.",
       "shape": [
         "there is no detail line: at least one line starting with \"- \"."
       ],
-      "words": []
+      "words": [
+        "the title names something in the code (ThornswoodRelease): 'The gamemode and the server build at 7c2140a8ae3fa7800a90...'"
+      ]
     },
     {
       "note": "The mods button opens Vortex at the server's revision\n- The button on the mods card now opens Vortex straight at the collection revision the server runs, with no web page in between.\n- When Vortex is done, the launcher scans and fixes by itself, so nobody has to press Scan and Fix.",
