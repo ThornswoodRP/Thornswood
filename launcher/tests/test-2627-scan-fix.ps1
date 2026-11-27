@@ -166,8 +166,8 @@ Yes 'and the update records what it tried when it failed' ($upd.Contains('update
 Yes 'a folder being prepared holds Fix after an update until it is ready, and its finish runs it' (
     $runFix -match 'if \(ownGameBusy && afterUpdate\) \{ fixWhenFolderReady = true;' -and
     $own -match '(?s)if \(fixWhenFolderReady\)\s*\{\s*fixWhenFolderReady = false;\s*(if \(fixWhenFolderReadyAfterVortex\) \{ fixWhenFolderReadyAfterVortex = false; RunFix\(false, true\); \}\s*else )?(if \(fixWhenFolderReadyAfterMake\) \{ fixWhenFolderReadyAfterMake = false; RunFix\(false, false, true\); \}\s*else )?RunFix\(true\);')
-Yes 'the first start of a new launcher runs that Fix, after the icon pass, in a folder of its own' (
-    $shell -match '(?s)if \(Velo\.Restarted\)\s*ThreadPool\.QueueUserWorkItem\(delegate\s*\{.*?moved = Icons\.Ensure\(true\);.*?if \(!Paths\.Collection\)\s*try \{ Dispatcher\.UIThread\.Post\(\(Action\)delegate \{ RunFix\(true\); \}\);')
+Yes 'the first start of a new launcher runs that Fix, after the icon pass, in a folder of its own, once the mod check on the way in is done (#4726)' (
+    $shell -match '(?s)startScanSeconds = scanClock\.Elapsed\.TotalSeconds;.*?if \(Velo\.Restarted\) AfterLauncherUpdate\(\);.*?static void AfterLauncherUpdate\(\)\s*\{\s*ThreadPool\.QueueUserWorkItem\(delegate\s*\{.*?moved = Icons\.Ensure\(true\);.*?if \(!Paths\.Collection\)\s*try \{ Dispatcher\.UIThread\.Post\(\(Action\)delegate \{ RunFix\(true\); \}\);')
 Yes 'Fix writes into the game folder with the folder to itself (OwnGame.Alone)' ($upkeep -match '(?s)OwnGame\.Alone\(delegate\s*\{.*?Verify\.Fix\(cfg, say, Updater\.ReleaseCopy\(cfg\)\).*?\}, delegate')
 Yes 'a game whose path cannot be read counts as ours only while our own file of that name runs (#2856)' (
     $checks -match '\(at == null && !OwnImageRunning\(n\)\)\) skip = true;')
