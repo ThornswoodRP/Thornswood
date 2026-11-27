@@ -29,9 +29,9 @@
     2. The wiring, read from the real files: the fill in the Primary theme's
        template in MainWindow.axaml, the timer and the fill in ShellProgress.cs,
        DrawStatus putting the words first and keeping the button off, and
-       every caller (Updater.Download, Sync, RunUpdate, the client repair,
-       OwnGame.Make and Refresh, StartOwnGame, Verify.Bytes) reporting and
-       closing what it opens.
+       every caller (the package's files, Sync, RunUpdate, the launcher's
+       download, the client repair, OwnGame.Make and Refresh, StartOwnGame,
+       Verify.Bytes) reporting and closing what it opens.
 
   Read only apart from its own temp folder, which it removes.
 #>
@@ -358,7 +358,7 @@ Yes 'ShellProgress.cs: redrawn when the window is resized' ($sp -match 'btnPlay\
 $shell = Read-Text (Join-Path $AppDir 'Shell.cs')
 $draw = Body $shell 'static bool DrawStatus()'
 Yes 'Shell.cs: WireProgress is called' ($shell -match 'WireProgress\(\);')
-Yes 'DrawStatus: the button is off while work runs' ($draw -match '!working &&')
+Yes 'DrawStatus: the button is off while work runs' ($draw -match 'btnPlay\.IsEnabled = [^;]*!working[ ;&]')
 $wAt = $draw.IndexOf('if (working && !playing)')
 Yes 'DrawStatus: the progress words come before every other reason' ($wAt -ge 0 -and $wAt -lt $draw.IndexOf('else if (ownGameBusy && !playing)') -and $wAt -lt $draw.IndexOf('else if (updatePending && !playing)'))
 Yes 'DrawStatus: with no work, the fill goes' ($draw -match 'if \(!working\) HidePlayFill\(\);')
@@ -366,24 +366,25 @@ Yes 'DrawStatus: PLAY is still the last word' ($draw -match 'btnPlay\.Content = 
 $heal = Body $shell 'static void HealClientBackground()'
 Yes 'the client repair opens the button before it starts and closes it in its finally' ($heal -match 'PlayProgress\.Begin\("Updating", 1\)' -and $heal -match 'finally\s*\{[^}]*PlayProgress\.End\(\);')
 
-$upd = Read-Text (Join-Path $AppDir 'Updater.cs')
-$dl = Body $upd 'static string Download(Config cfg'
-Yes 'Updater.Download reports each piece it reads' ($dl -match 'PlayProgress\.Part\(had, length\)' -and $dl -match 'PlayProgress\.PartDone\(\)')
-Yes 'Updater.Download reads the size the server gives' ($dl -match 'long length = res\.Content\.Headers\.ContentLength \?\? -1;')
-Yes 'Updater.Download no longer uses DownloadFile, and throws a half file away' ($dl -notmatch '\.DownloadFile\(' -and $dl -match 'File\.Delete\(tmp\)')
-Yes 'Updater.Download still checks the url and the checksum' ($dl -match 'CheckUrl\(url\)' -and $dl -match 'Checksum did not match')
+# Since #5796 an update is one Velopack package from GitHub (the launcher's
+# download, below) and the game files are taken out of it, each through
+# SyncPackage's PackageSource.Fetch: the old pack downloads of
+# Updater.Download are gone.
+$pkg = Read-Text (Join-Path $AppDir 'SyncPackage.cs')
+$take = Body $pkg 'public void Fetch(string sha, long bytes, string dest, Action<long> onBytes)'
+Yes 'a file taken out of the package reports its bytes as they are written' ($take -match 'to\.Write\(buf, 0, n\);\s*had \+= n;\s*if \(onBytes != null\) onBytes\(had\);')
+Yes '  through a .part it throws away when the checksum does not match' ($take -match 'string part = dest \+ "\.part";' -and $take -match '(?s)if \(!Matches\(part, bytes, sha\)\)\s*\{[^}]*File\.Delete\(part\)')
 
 $sync = Read-Text (Join-Path $AppDir 'Sync.cs')
 Yes 'Sync: checking the install counts every file' ($sync -match 'PlayProgress\.Files\("Checking files", \+\+looked, items\.Count\)')
 Yes 'Sync: the downloads report their bytes against the total' ($sync -match 'PlayProgress\.Bytes\("Updating", before \+ Math\.Min\(had, f\.Value\), total\)')
-Yes 'Sync: Transfer reports as it writes' ((Body $sync 'static void Transfer(') -match 'Http\.CopyBody\([^;]*n => onBytes\(had \+ n\)\);')
-Yes 'Sync: packs after a record without its files are planned as downloads' ($sync -match 'PlayProgress\.Plan\("Updating", count, "updates"\)')
+Yes 'Sync: putting the files in starts its own count' ((Body $sync 'public static void WriteSync(') -match 'PlayProgress\.Plan\("Updating", 0, "files"\);')
 
 $su = Read-Text (Join-Path $AppDir 'ShellUpdate.cs')
 # Since #2627 RunUpdate(after) does the work; Fix and, since #3201, Install
 # now call it with what to do once the update is in or has failed.
 $run = Body $su 'static async Task RunUpdateAsync(Action<bool> after)'
-Yes 'RunUpdate opens the button with one download per pack' ($run -match 'PlayProgress\.Begin\("Updating", downloads\)')
+Yes 'RunUpdate opens the button with its one download, the package' ($run -match 'PlayProgress\.Begin\("Updating", 1\)')
 $stages = Read-Text (Join-Path $AppDir 'UpdateStages.cs')
 # Since the launcher updates through Velopack (#4825), its download is
 # VeloUpdate.FetchLauncher, which FetchUpdate calls.
@@ -392,7 +393,11 @@ Yes 'the update''s download: the self-update is its own phase' (
     (Body $stages 'public static Fetched FetchUpdate(') -match 'FetchLauncher\(launcher, log\);' -and
     (Body $velo 'public static void FetchLauncher(') -match 'PlayProgress\.Plan\("Updating the launcher", 1, "updates"\);\s*PlayProgress\.Part\(0, size\);')
 Yes 'RunUpdate marks its thread second, so a folder being prepared keeps the button (#2210)' ($run -match 'PlayProgress\.Second\(true\);' -and $run -match 'finally \{ PlayProgress\.Second\(false\); \}')
-Yes 'RunUpdate closes it when it finishes and when it fails, before DrawStatus' (([regex]::Matches($run, 'PlayProgress\.End\(\);\s*((updatePending|updating) = false;\s*)*DrawStatus\(\)')).Count -eq 2)
+# Once the update is in, the launcher closes and Velopack starts the new one
+# (Velo.ExitApply), so only a failure hands the button back.
+Yes 'RunUpdate closes it when it fails, before DrawStatus, and closes the window when it is in' (
+    ([regex]::Matches($run, 'PlayProgress\.End\(\);\s*DrawStatus\(\)')).Count -eq 1 -and
+    $run -match 'Updater\.ApplyLauncher\(launcher\);' -and $run -match 'win\.Close\(\);')
 
 $sog = Read-Text (Join-Path $AppDir 'ShellOwnGame.cs')
 # The overload that does the work. Since #1584 StartOwnGame(make, loud) only
