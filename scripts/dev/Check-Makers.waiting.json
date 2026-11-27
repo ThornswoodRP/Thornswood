@@ -554,12 +554,6 @@
       "why": "Woodwright work with no recipe yet"
     },
     {
-      "desc": "a:Skyrim.esm",
-      "name": "lockpick",
-      "issue": "#4646",
-      "why": "Smith work with no recipe yet"
-    },
-    {
       "desc": "34c5e:Skyrim.esm",
       "name": "ale",
       "issue": "#4648",
