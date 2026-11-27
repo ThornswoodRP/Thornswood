@@ -119,6 +119,8 @@ $ShipMachineFiles = @(
     'Data\Platform\thornswood-forget.txt',
     # Whether this person turned the scroll in front of the choice off.
     'Data\Platform\thornswood-intro.txt',
+    # SkyUI's favourite groups, every character this machine played (#4511).
+    'Data\Platform\thornswood-favourite-groups.json',
     # The same list as a script beside the page (Chars.WriteCharacters), so
     # the choice draws before any plugin runs. Every profile id the install
     # owns, so never in a pack.
@@ -1123,6 +1125,12 @@ function Test-ShipBethesda([string]$rel) {
 #     repository nor the shipping machine's game today. A setting Thornswood
 #     wants everybody to have is Thornswood's own file (the Thornswood Content
 #     mod, or a launcher Enforce rule), never one machine's saved menu file.
+#   - What a person saved from QuickLoot's menu: everything under
+#     Data\SKSE\Plugins\QuickLootIE (its DefaultConfig.json, which the front
+#     plugin writes when the journal closes and QuickLoot reads back at each
+#     session's start, and the presets its buttons save, #4511). QuickLoot's
+#     archive puts nothing in that folder; its DLL's own config,
+#     Data\SKSE\Plugins\QuickLootIE.json, is ours and ships.
 #   - What a mod saves from the game itself: Engine Fixes' EngineFixes_SNCT.ini,
 #     the sound volumes, which its archive ships empty.
 #   - Saves and profiles: a Saves folder, *.ess and *.skse, and a Profile or
@@ -1173,6 +1181,7 @@ function Test-ShipOneMachine([string]$rel) {
     if ($leaf -like '*.vortex_backup') { return $true }
     if ($leaf -ieq 'imgui.ini' -or $leaf -like '*_ImGui.ini') { return $true }
     if ($rel.StartsWith('Data\MCM\Settings\', 'OrdinalIgnoreCase')) { return $true }
+    if ($rel.StartsWith('Data\SKSE\Plugins\QuickLootIE\', 'OrdinalIgnoreCase')) { return $true }
     if ($leaf -match '\.(ess|skse)$') { return $true }
     if ($rel -match '(^|\\)(Saves|ShaderCache)\\') { return $true }
     if ($rel -match '^(Profile|My Games)\\') { return $true }

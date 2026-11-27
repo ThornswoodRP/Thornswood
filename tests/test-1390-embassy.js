@@ -1,8 +1,8 @@
 // test-1390-embassy.js
 //
-// #1390. The embassy building is held by the Ambassador's office: /claim is
-// refused, a steward of Haafingar cannot evict it, and a deed presented at its
-// door is paper. The embassy roll is 20, of whom 6 may be marked armed; the
+// #1390. The embassy roll is independent of ordinary building ownership
+// (#7071): an empty warehouse may be claimed, and existing title is respected.
+// The embassy roll is 20, of whom 6 may be marked armed; the
 // 21st and the 7th armed are refused. The remnant roll is an application an
 // admin writes. /embassy and /remnant are staff commands only, and the person
 // a change is about is told in their own chat. Only those two rolls make the
@@ -279,7 +279,7 @@ if (block && RECIPES && ADMIN_ITEMS) {
         Array.isArray(doors.buildings[EMBASSY]) && doors.buildings[EMBASSY].length > 0);
     yes('B1 and it is the Abandoned Warehouse in Solitude, the answer suggested on #1390',
         NAMES[EMBASSY] === 'Abandoned Warehouse' && /^Solitude/.test(doors.cells[EMBASSY].edid));
-    yes('B1 its doors start held, with no command', env.E.holds(EMBASSY) && !env.E.holds(HOUSE) && !env.E.holds(''));
+    yes('B1 the embassy identity is exact and separate from property ownership', env.E.holds(EMBASSY) && !env.E.holds(HOUSE) && !env.E.holds(''));
     yes('B1 there is no command that moves it', !/'here'/.test(block) && !/designate/.test(block));
   }
 
@@ -294,26 +294,31 @@ if (block && RECIPES && ADMIN_ITEMS) {
     const touchedSrc = slice(gm, '  function noteDoor(actorId, doorDesc) {', '\n  }\n') +
                        slice(gm, '  function openedDoor(actorId, doorDesc) {', '\n  }\n');
     const lineSrc = slice(gm, '  function doorLine(actorId, profileId) {', '\n  }\n');
+    // A claim first asks whether the character holds a place of their own already (#6894).
+    const ownSrc = slice(gm, '  function ownClaimOf(profileId) {', '\n  }\n');
     yes('B2 claim, evict, the door press and the line at the door are in the property block',
-        !!claimSrc && !!evictSrc && !!touchedSrc && !!lineSrc);
-    function claimAt(building) {
+        !!claimSrc && !!evictSrc && !!touchedSrc && !!lineSrc && !!ownSrc);
+    function claimAt(building, held) {
       const told = [];
       const claims = {};
+      if (held) claims[building] = held;
       const fn = new Function('globalThis', 'here', 'holderOf', 'nameOf', 'mp', 'groundHere', 'claims', 'save', 'pushAll',
-        'giveDeed', 'plog', 'lapseDays', 'mayHold', 'jailOfBuilding', 'HOLD_TOWN', 'issueMaster', 'masterHandedLine',
-        'var deedCut = 0;\n' + claimSrc + '\nreturn claim;');
-      const claim = fn({ __thornswoodEmbassy: E }, function () { return building; }, function () { return null; },
+        'giveDeed', 'plog', 'lapseDays', 'issueMaster', 'masterHandedLine',
+        'var deedCut = 0;\n' + ownSrc + '\n' + claimSrc + '\nreturn claim;');
+      const claim = fn({ __thornswoodEmbassy: E }, function () { return building; }, function () { return claims[building] || null; },
         function (b) { return b; }, { get: function () { return { name: 'Bjorn' }; } }, function () { return null; },
         claims, function () { return true; }, function () { }, function () { return true; }, function () { }, function () { return 14; },
-        function () { return true; }, function () { return null; }, {},
         // The master key handed with the deed (#2254) is test-2254-master-key.js's; 0 here, none cut.
         function () { return 0; }, function () { return ''; });
       claim(0x14, 50, function (p, line) { told.push(line); });
       return { told: told.join(' '), claims: claims };
     }
     const atEmbassy = claimAt(EMBASSY);
-    yes('B2 /claim at the embassy answers that it is held', !atEmbassy.claims[EMBASSY] && atEmbassy.told === E.CLAIM_REFUSED &&
-        /held by the Ambassador's office/.test(atEmbassy.told));
+    yes('B2 /claim at an empty embassy creates an ordinary numbered holding',
+        atEmbassy.claims[EMBASSY]?.by === 50 && atEmbassy.claims[EMBASSY].deed === 1);
+    const ownedEmbassy = claimAt(EMBASSY, { by: 9, name: 'Existing holder' });
+    yes('B2 an existing embassy holder is still protected from another claimant',
+        ownedEmbassy.claims[EMBASSY]?.by === 9 && /is held by Existing holder/.test(ownedEmbassy.told));
     const atHouse = claimAt(HOUSE);
     yes('B2 and another door can be claimed with a numbered deed', atHouse.claims[HOUSE]?.deed === 1);
 
@@ -337,8 +342,7 @@ if (block && RECIPES && ADMIN_ITEMS) {
       return { told: told.join(' '), claims: claims };
     }
     const ev = evictAt(EMBASSY, null);
-    yes('B3 a steward of Haafingar cannot evict the embassy', ev.told === E.EVICT_REFUSED &&
-        /does not evict the Accord/.test(ev.told));
+    yes('B3 an unclaimed embassy has no synthetic office claim to evict', /Nobody holds/.test(ev.told));
     const leftover = evictAt(EMBASSY, { by: 9, name: 'Somebody' });
     yes('B3 a claim somebody made there before the embassy held it is still theirs, and a steward still ends it',
         !leftover.claims[EMBASSY] && /You end Somebody's claim/.test(leftover.told) && E.holds(EMBASSY));
@@ -350,14 +354,12 @@ if (block && RECIPES && ADMIN_ITEMS) {
       if (held) { claims[building] = held; }
       const fn = new Function('globalThis', 'buildingOf', 'g', 'mp', 'DOOR_PROPERTY', 'plog', 'push', 'holderOf', 'holdsDeed',
         'groundHere', 'claims', 'save', 'pushAll', 'nameOf', 'notify', 'say', 'refrIdOfDoor',
-        // Anybody may hold this building; a jail is #502's, in test-502-jail-rules.js.
-        'mayHold', 'issueMaster', 'masterHandedLine', 'recordWord', 'WORD_SAID', touchedSrc + '\nreturn openedDoor;');
+        'issueMaster', 'masterHandedLine', 'recordWord', 'WORD_SAID', touchedSrc + '\nreturn openedDoor;');
       const touched = fn({ __thornswoodEmbassy: E }, function () { return building; }, {},
         { get: function (id, p) { return p === 'profileId' ? 50 : { name: 'Thief' }; }, set: function () { } },
         'thornswoodDoor', function () { }, function () { }, function () { return claims[building] || null; }, function () { return true; },
         function () { return null; }, claims, function () { return true; }, function () { }, function (b) { return b; },
         function () { }, function () { }, function () { return 0; },
-        function () { return true; },
         // Master keys and the runner's notice are covered by their own harnesses.
         function () { return 0; }, function () { return ''; }, function () { return 'queued'; }, {});
       touched(0x14, 'door');
@@ -366,7 +368,7 @@ if (block && RECIPES && ADMIN_ITEMS) {
     yes('B4 a deed presented at the embassy door takes nothing', !deedAt(EMBASSY)[EMBASSY]);
     const held = { by: 9, name: 'Somebody', deed: 42 };
     const embassyClaim = deedAt(EMBASSY, { ...held })[EMBASSY];
-    yes('B4 a deed at the embassy leaves even a preexisting claim alone', JSON.stringify(embassyClaim) === JSON.stringify(held));
+    yes('B4 a valid deed transfers the actual embassy holding', embassyClaim?.by === 50 && embassyClaim.deed === held.deed);
     const transferred = deedAt(HOUSE, { ...held })[HOUSE];
     yes('B4 an active deed at another door still transfers its claim', transferred?.by === 50 && transferred.deed === held.deed);
     yes('B4 an old deed cannot restore an ended claim', !deedAt(HOUSE)[HOUSE]);
@@ -377,18 +379,17 @@ if (block && RECIPES && ADMIN_ITEMS) {
       const fn = new Function('globalThis', 'mp', 'DOOR_PROPERTY', 'DOOR_MEMORY_MS', 'buildingOf', 'holderOf', 'holdsDeed',
         'nameOf', 'doorsOf', 'idOf', 'DOOR_LINE_PROPERTY', 'plog', 'doorLineStamp',
         // No cell door at the embassy (#502).
-        'jailHoldOf', 'isGuard', 'cellLocked', 'mayHold', lineSrc + '\nreturn doorLine;');
+        'jailHoldOf', 'isGuard', 'cellLocked', lineSrc + '\nreturn doorLine;');
       const doorLine = fn({ __thornswoodEmbassy: E },
         { get: function () { return { door: 'door', at: Date.now() }; }, set: function (a, p, v) { line = v; } },
         'thornswoodDoor', 60000, function () { return building; }, function () { return held || null; },
         function () { return false; }, function (b) { return b; }, function () { return ['5cb0:The Great City of Solitude.esp']; },
         function () { return 0x5cb0; }, 'thornswoodDoorLine', function () { }, 0,
-        function () { return null; }, function () { return false; }, function () { return false; },
-        function () { return true; });
+        function () { return null; }, function () { return false; }, function () { return false; });
       doorLine(0x14, 50);
       return line;
     }
-    yes('B5 the embassy door offers nothing to claim', lineAt(EMBASSY, null).x === '');
+    yes('B5 an empty embassy offers an ordinary claim', lineAt(EMBASSY, null).x === 'claim');
     yes('B5 and any other door nobody holds offers the claim as before', lineAt(HOUSE, null).x === 'claim');
     yes('B5 a claim somebody made there before is still theirs to lock', lineAt(EMBASSY, { by: 50, locked: false }).x === 'lock');
   }

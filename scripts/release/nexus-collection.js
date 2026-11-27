@@ -31,11 +31,21 @@
 // archive hash, so retaining the old tag would accept the old file (#6449).
 // That is the whole of what Vortex records for a mod only when the
 // entry carries nothing worked out from the archive's contents. So it refuses
-// an entry that has hashes (the files Vortex checks after install), choices
-// (an installer's answers) or fileOverrides. Those need Vortex on One, where
+// an entry that has choices (an installer's answers) or fileOverrides, and
+// one with hashes (the files Vortex checks after install) unless the swap
+// gives "hashes" for the new archive. Those need Vortex on One, where
 // the collection is built from what is installed
 // (docs\COLLECTION-REVISION-2.md). Every refusal exits 1 with the reason on
 // stderr and writes nothing.
+//
+// A PATCHED ENTRY'S FILE LIST ON A MOVE (#6908). A patched entry lists the
+// files its archive installs (#6888), so a move of one gives "hashes": the
+// files the new archive installs, each with the md5 of the archive's copy,
+// which New-NexusRevision.ps1 lists by running its installer with the answers
+// records/collection.json keeps for the new file. The list takes the place
+// of the old one, held as -Replicate holds one: every path inside the mod,
+// each once, and every file the entry still patches in it. A list for an
+// entry that lists none is refused: that is -Replicate.
 //
 // PATCHES AND MOD RULES ON A MOVED ENTRY (#2793). Two things Vortex records
 // against the old archive can be carried to the new one, because what they
@@ -65,7 +75,8 @@
 //                "patchCrcs": { "Thornswood-Content.esp": "0A1B2C3D" },
 //                "dropPatches": ["Thornswood-Content.esp"] }]
 // fileExpression is needed only when a mod rule names the entry, patchCrcs
-// and dropPatches only when it carries patches.
+// and dropPatches only when it carries patches, hashes only when it lists
+// its files.
 // On stdout, one line per field changed: <entry name>\t<field>\t<was>\t<now>.
 //
 // ADDING A MOD (#2969). An entry with "add": true is a mod the revision does
@@ -357,7 +368,7 @@ function setMasterFlags(collection, swaps) {
   MASTER_FLAGS.set(collection, flags);
 }
 // An entry that only says something about the revision changes nothing by itself.
-function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'masterFlags' || k === 'page'); }
+function onlyContext(sw) { return !!sw && typeof sw === 'object' && Object.keys(sw).length > 0 && Object.keys(sw).every(k => k === 'unlisted' || k === 'masters' || k === 'masterFlags' || k === 'page' || k === 'dev'); }
 
 function setUnlisted(collection, swaps) {
   const set = new Set();
@@ -396,7 +407,14 @@ function applySwaps(collection, swaps) {
     const hits = collection.mods.filter(m => m.source && m.source.type === 'nexus' && String(m.source.modId) === String(sw.modId));
     if (hits.length !== 1) stop('The revision has ' + hits.length + ' entries for Nexus mod ' + sw.modId + ', so there is no one entry to change. ' + entriesNext(hits, 'A mod the revision does not carry goes in with -Add, a file naming it and its archive.', 'A mod with more than one entry is changed in Vortex on One.'));
     const e = hits[0];
-    const carried = ['hashes', 'choices', 'fileOverrides'].filter(k => {
+    // A patched entry lists the files its archive installs (#6888), and a
+    // move gives the new archive's list, made by the same installer with the
+    // answers the record keeps for the new file (#6908). Answers and
+    // fileOverrides on an entry with no list are still worked out in Vortex.
+    const listed = Array.isArray(e.hashes) && e.hashes.length > 0;
+    if (listed && sw.hashes === undefined) stop(e.name + ' lists the files its archive installs, and the move gives no list for the new one. .\\scripts\\release\\New-NexusRevision.ps1 -Mod ' + sw.modId + ' lists them; run the move through it.');
+    if (!listed && sw.hashes !== undefined) stop(e.name + ' lists no files of its own, so a move gives it none. A list for an entry is -Replicate, in a revision of its own.');
+    const carried = [...(listed ? [] : ['hashes']), 'choices', 'fileOverrides'].filter(k => {
       const v = e[k];
       if (v === undefined || v === null) return false;
       if (Array.isArray(v)) return v.length > 0;
@@ -418,6 +436,15 @@ function applySwaps(collection, swaps) {
       lines.push([e.name, label, String(was), String(val)].join('\t'));
     };
     movePatches(collection, e, sw, lines);
+    if (listed) {
+      // Held to the patches left once any are dropped: every file the entry
+      // still patches is in the new archive's list.
+      const bad = hashesProblem(e, sw.hashes);
+      if (bad) stop('The new file list for ' + e.name + ' has ' + bad + '.');
+      const was = e.hashes.length;
+      e.hashes = sw.hashes.map(h => ({ path: String(h.path), md5: String(h.md5) }));
+      lines.push([e.name, 'hashes', was + ' file' + (was === 1 ? '' : 's'), e.hashes.length + ' file' + (e.hashes.length === 1 ? '' : 's')].join('\t'));
+    }
     const tag = uniqueTag(collection);
     moveRules(collection, e, sw, lines, tag);
     set(e, 'version', String(sw.version), 'version');
@@ -940,9 +967,49 @@ function applyPage(collection, swaps) {
   collection.info.summary = text.summary;
   collection.info.description = text.description;
   collection.info.installInstructions = text.installInstructions;
+  // The collection's name and summary for its channel (#7193): Dev has a
+  // collection of its own, so its revisions go out named as Dev's, and a
+  // revision copied to main's collection goes out named as main's again.
+  if (text.name) collection.info.name = text.name;
+  if (entries[0].dev === true) {
+    if (!text.dev) stop('The page is sent to the Dev collection, and records/collection-page.json gives no "dev" name and summary for it.');
+    collection.info.name = text.dev.name;
+    collection.info.summary = text.dev.summary;
+  }
+}
+
+// A published revision copied into another collection (#7193): the same
+// archive and every entry as it is, with only the page's text, name and
+// summary for the collection it goes to. Anything else in info that would
+// change stops it.
+function copyRevision(collection, page, channel) {
+  if (!collection || !collection.info || !Array.isArray(collection.mods)) stop('collection.json has no info and mods, so it is not a collection Vortex wrote.');
+  if (channel !== 'main' && channel !== 'dev') stop('The channel a copy goes to is main or dev, not ' + channel + '.');
+  const before = JSON.stringify(Object.assign({}, collection, { info: null }));
+  const info = Object.assign({}, collection.info);
+  applyPage(collection, [{ page: page, dev: channel === 'dev' }]);
+  if (JSON.stringify(Object.assign({}, collection, { info: null })) !== before) stop('The copy changed more than the page.');
+  for (const k of Object.keys(Object.assign({}, info, collection.info))) {
+    if (['name', 'summary', 'description', 'installInstructions'].indexOf(k) >= 0) continue;
+    if (JSON.stringify(info[k]) !== JSON.stringify(collection.info[k])) stop('The copy changed info.' + k + ', which only the page may change.');
+  }
+  return collection;
 }
 
 function main(argv) {
+  if (argv[0] === '--copy') {
+    if (argv.length !== 6) stop('usage: nexus-collection.js --copy <collection.json> <page.json> <main|dev> <out collection.json> <out payload.json>');
+    let collection, page;
+    try { collection = JSON.parse(fs.readFileSync(argv[1], 'utf8')); }
+    catch (e) { stop(argv[1] + ' is not JSON this can read: ' + e.message); }
+    try { page = JSON.parse(fs.readFileSync(argv[2], 'utf8').replace(/^\ufeff/, '')); }
+    catch (e) { stop(argv[2] + ' is not JSON this can read: ' + e.message); }
+    copyRevision(collection, page, argv[3]);
+    fs.writeFileSync(argv[4], JSON.stringify(collection, undefined, 2));
+    fs.writeFileSync(argv[5], JSON.stringify(payloadOf(collection)));
+    process.stdout.write('copy\tname\t' + collection.info.name + '\n');
+    return;
+  }
   if (argv[0] === '--check-tags') {
     if (argv.length !== 4) stop('usage: nexus-collection.js --check-tags <published folder> <draft folder> <mod numbers>');
     const path = require('path');
@@ -983,4 +1050,4 @@ if (require.main === module) {
     process.exitCode = 1;
   }
 }
-module.exports = { payloadOf, applySwaps, applyAdd, applyPatch, applyReplicate, applyRule, applyRemove, applyPage, checkRefreshedTags, checkReplicated, checkRepairFiles, filterInfo, toV3CollectionPayload };
+module.exports = { payloadOf, copyRevision, applySwaps, applyAdd, applyPatch, applyReplicate, applyRule, applyRemove, applyPage, checkRefreshedTags, checkReplicated, checkRepairFiles, filterInfo, toV3CollectionPayload };

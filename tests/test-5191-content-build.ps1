@@ -48,6 +48,13 @@
       Last plugin of the build before. Rebuild-ContentTables.ps1 leaves the
       plugin out of their order on every build since 16 Nov 2026, so the
       switch is gone: asked for, it stops before any tool runs.
+  14. -Queued (#6879) builds a merge the queue holds: only the head of a
+      gh-readonly-queue/main/ branch, from that commit's own checkout, every
+      tool as the limited account, kept apart from main's builds; the gate's
+      checkout stays at main. A commit that heads no queue branch, and
+      -Queued with -Stations, stop before any tool runs. -Limited builds
+      main as the limited account, kept apart, and says whether it MATCHES
+      the administrator's build of the key.
   13. Every file of the build is the bytes git holds at the build's commit,
       not the checkout's copy: a file committed LF that the checkout holds
       CRLF (core.autocrlf, an eol rule added later) is kept and handed back
@@ -89,9 +96,10 @@ function TGit([string[]]$w) {
 # would into the checkout, from the commit's own source file.
 $runner = Join-Path $root 'runner.ps1'
 [IO.File]::WriteAllText($runner, @'
-param([Parameter(Position = 0)][string]$Script, [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Arguments, [string]$Server, [string]$Collection)
-$co = $env:TS5191_CHECKOUT
-Add-Content -LiteralPath $env:TS5191_CALLS -Value ("$Server $Script " + ($Arguments -join ' '))
+param([Parameter(Position = 0)][string]$Script, [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Arguments, [string]$Server, [string]$Collection, [string]$From, [switch]$Limited)
+$co = if ($From) { $From } else { $env:TS5191_CHECKOUT }
+Add-Content -LiteralPath $env:TS5191_CALLS -Value ($(if ($Limited) { 'limited ' } else { '' }) + "$Server $Script " + ($Arguments -join ' '))
+Add-Content -LiteralPath ($env:TS5191_CALLS + '.from') -Value $From
 Add-Content -LiteralPath ($env:TS5191_CALLS + '.store') -Value $Collection
 if ($env:TS5191_FAIL -and $Script -like "*$($env:TS5191_FAIL)*") { if ($env:TS5191_SAYS) { Write-Host 'a line before'; Write-Host ('STOP. ' + $env:TS5191_SAYS) -ForegroundColor Yellow; Write-Host 'the tool exited 3' }; exit 3 }
 if ($env:TS5191_THROW -and $Script -like "*$($env:TS5191_THROW)*") { throw "the stand-in threw before it reached the box for $Script" }
@@ -150,14 +158,16 @@ try {
     $env:TS5191_MOVED = 'the catalogue'
     $build = Join-Path $co 'scripts/mods/Build-ContentOnBox.ps1'
 
-    function Run([string]$Server = 'dev', [int]$Keep = 8, [switch]$Stations, [switch]$WithoutLast) {
-        foreach ($f in @($calls, ($calls + '.store'))) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
+    function Run([string]$Server = 'dev', [int]$Keep = 8, [switch]$Stations, [switch]$WithoutLast, [string]$Queued = '', [switch]$Limited) {
+        foreach ($f in @($calls, ($calls + '.store'), ($calls + '.from'))) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
         if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
         $more = @(); if ($Stations) { $more += '-Stations' }; if ($WithoutLast) { $more += '-WithoutLast' }
+        if ($Queued) { $more += @('-Queued', $Queued) }; if ($Limited) { $more += '-Limited' }
         $o = @(& pwsh -NoProfile -File $build -Server $Server -Out $out -Cache $cache -Keep $Keep -Runner $runner -Store $store @more 2>&1 | ForEach-Object { "$_" })
         $code = $LASTEXITCODE
         $asked = $(if (Test-Path -LiteralPath $calls) { @(Get-Content -LiteralPath $calls) } else { @() })
         $script:stores = $(if (Test-Path -LiteralPath ($calls + '.store')) { @(Get-Content -LiteralPath ($calls + '.store')) } else { @() })
+        $script:froms = $(if (Test-Path -LiteralPath ($calls + '.from')) { @(Get-Content -LiteralPath ($calls + '.from')) } else { @() })
         $key = @($o | Where-Object { $_ -match '^(BUILT|REUSED) ([0-9a-f]{64})$' } | ForEach-Object { $Matches[2] }) | Select-Object -First 1
         return [pscustomobject]@{ Code = $code; Text = ($o -join "`n"); Lines = $o; Calls = $asked; Key = $key }
     }
@@ -364,6 +374,54 @@ try {
     Yes '13   and the build keeps it LF, as git holds it, and hands it back LF' (
         (Test-Path -LiteralPath $k13) -and [IO.File]::ReadAllText($k13) -eq "a,b`nc,d`n" -and
         [IO.File]::ReadAllText((Join-Path $out 'docs/SPOTS.csv')) -eq "a,b`nc,d`n")
+    Fresh $rev4
+
+    # ---- 14. a merge the queue holds (#6879) ---------------------------------
+    # The queued commit is on a gh-readonly-queue/main/ branch of a stand-in
+    # GitHub; the gate's checkout stays at main.
+    $origin = Join-Path $root 'origin.git'
+    $null = & git init -q --bare $origin 2>&1
+    TGit @('remote', 'add', 'origin', $origin) | Out-Null
+    $main14 = (TGit @('rev-parse', 'HEAD')) -join ''
+    Put 'game/data/source.json' '{"v":9}'
+    TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'a queued change') | Out-Null
+    $queued = (TGit @('rev-parse', 'HEAD')) -join ''
+    TGit @('push', '-q', 'origin', ('HEAD:refs/heads/gh-readonly-queue/main/pr-7-' + $main14)) | Out-Null
+    Put 'game/data/source.json' '{"v":8}'
+    TGit @('-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '-q', '-am', 'never queued') | Out-Null
+    $unqueued = (TGit @('rev-parse', 'HEAD')) -join ''
+    Fresh $main14
+    $r14 = Run -Queued $queued
+    if ($r14.Code -ne 0) { Write-Host $r14.Text }
+    $k14 = Join-Path (Join-Path (Join-Path $cache 'queue-dev') $r14.Key) 'build.json'
+    Yes '14 a queued merge is built from its own commit and says so' ($r14.Code -eq 0 -and $r14.Key -and ($r14.Lines -contains "FROM $queued"))
+    Yes '14   every tool runs as the limited account, from the queued merge''s own checkout' (
+        $r14.Calls.Count -eq 3 -and -not @($r14.Calls | Where-Object { $_ -notlike 'limited dev *' }).Count -and
+        $script:froms.Count -eq 3 -and -not @($script:froms | Where-Object { $_ -notlike (Join-Path $co 'worktrees') + '*' }).Count)
+    Yes '14   it is kept apart from main''s builds, with the queued merge''s own plugin' (
+        (Test-Path -LiteralPath $k14) -and -not (Test-Path -LiteralPath (Join-Path (Join-Path $cache 'dev') $r14.Key)) -and
+        [IO.File]::ReadAllText((Join-Path $out 'game/content/Thornswood-Content.esp')) -eq 'plugin for dev from {"v":9}')
+    $rec14 = [IO.File]::ReadAllText($k14) | ConvertFrom-Json
+    Yes '14   its build.json says it was a queued merge, built limited' ($rec14.queued -eq $true -and $rec14.limited -eq $true -and $rec14.commit -eq $queued)
+    Yes '14   the gate''s checkout is left at main' (((TGit @('rev-parse', 'HEAD')) -join '') -eq $main14 -and [IO.File]::ReadAllText((Join-Path $co 'game/data/source.json')) -ne '{"v":9}')
+    Fresh $main14
+    $r14b = Run -Queued $unqueued
+    Yes '14 a commit that heads no branch of the queue is refused before any tool runs' ($r14b.Code -ne 0 -and $r14b.Text -match 'head of no branch of the merge queue' -and $r14b.Calls.Count -eq 0)
+    Fresh $main14
+    $r14c = Run -Queued $queued -Stations
+    Yes '14 -Queued with -Stations is refused before any tool runs' ($r14c.Code -ne 0 -and $r14c.Text -match 'do not go together' -and $r14c.Calls.Count -eq 0)
+    Fresh $main14
+    $r14d = Run -Limited
+    if ($r14d.Code -ne 0) { Write-Host $r14d.Text }
+    Yes '14 -Limited builds main as the limited account, kept apart, and holds it to the administrator''s build of the key' (
+        $r14d.Code -eq 0 -and -not @($r14d.Calls | Where-Object { $_ -notlike 'limited dev *' }).Count -and
+        (Test-Path -LiteralPath (Join-Path (Join-Path $cache 'limited-dev') $r14d.Key)) -and
+        ($r14d.Text -match "(MATCHES|DIFFERS from|no administrator's build of)"))
+    Fresh $main14
+    $r14e = Run
+    Fresh $main14
+    $r14f = Run -Limited
+    Yes '14   with the administrator''s build kept, the same files MATCH it' ($r14e.Code -eq 0 -and $r14f.Code -eq 0 -and $r14f.Key -eq $r14e.Key -and $r14f.Text -match 'MATCHES the administrator''s build')
     Fresh $rev4
 
     # ---- 9. records of two revisions ---------------------------------------

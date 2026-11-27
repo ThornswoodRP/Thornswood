@@ -21,7 +21,7 @@
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
@@ -220,6 +220,9 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // /stall open, and the panel's buttons send the rest. Never
                // typed, so not in PLAYER_WORDS.
                '/stall',
+               // The lock key at a water whose line offers a fish trap
+               // (#4655). Never typed, so not in PLAYER_WORDS.
+               '/trap',
                // The trade carts' panel, at a cart stop's crate, from Raid
                // cart on P, or on the Office page for staff (#3158). Never typed.
                '/cart',
@@ -239,8 +242,8 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
   /ooc, with /roll (#1639), and /needs, the needs bars as a line of text
   for somebody who hid them (Patrick, 11 October, #2267). Everything else
   anybody does is a key, a prompt or a panel, and the help panel names
-  those. /me, /do, /w, /s and /y are said by the voice service and never
-  reach this server, so they are named here and are not in WORDS. /need is
+  those. /me, /do, /w, /s, /y and /ooc are said by the voice service and
+  never reach this server (#4238), so they are named here and are not in WORDS. /need is
   /needs and is not named twice. docs/systems/commands.md has the same list.
 */
 // Not /plot, /plant or /claim: a farm is worked and claimed at the plot, and

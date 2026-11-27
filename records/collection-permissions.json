@@ -2,7 +2,7 @@
   "version": 1,
   "builtBy": "scripts/release/collection-permissions.js update",
   "collection": "7essxf",
-  "revision": 12,
+  "revision": 13,
   "mods": [
     {
       "modId": 198,
@@ -2151,38 +2151,6 @@
           "Author notes": "This author has not provided any additional notes regarding file permissions"
         },
         "version": "1.01.4"
-      }
-    },
-    {
-      "modId": 61719,
-      "name": "MCM Recorder",
-      "author": "MrowrPurr",
-      "files": [
-        {
-          "fileId": 258619,
-          "name": "MCM Recorder",
-          "version": "1.0.7"
-        }
-      ],
-      "plugins": [
-        "McmRecorder.esp"
-      ],
-      "page": "https://www.nexusmods.com/skyrimspecialedition/mods/61719?tab=description",
-      "reading": {
-        "read": "2026-10-27",
-        "by": "Local Desk on One (#3649)",
-        "collections": "allowed",
-        "terms": {
-          "Other user's assets": "Some assets in this file belong to other authors. You will need to seek permission from these authors before you can use their assets",
-          "Upload permission": "You can upload this file to other sites but you must credit me as the creator of the file",
-          "Modification permission": "You are allowed to modify my files and release bug fixes or improve on the features without permission from or credit to me",
-          "Conversion permission": "You can convert this file to work with other games as long as you credit me as the creator of the file",
-          "Asset use permission": "You are allowed to use the assets in this file without permission or crediting me",
-          "Asset use permission in mods/files that are being sold": "You are allowed to use the assets in this file in mods/files that are being sold, for money, on Steam Workshop or other platforms",
-          "Asset use permission in mods/files that earn donation points": "You are allowed to earn Donation Points for your mods if they use my assets",
-          "Author's notes (summary)": "Do not post translations; built-in translation support is coming."
-        },
-        "version": "1.0.7"
       }
     },
     {

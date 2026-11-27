@@ -45,8 +45,9 @@
           keeps the condition and nothing here watches drops any more.
     a craft. CraftEvent::OnFireSuccess takes away plain entries and adds a
           plain one. A temper is refused (recipelessCraft), so it is not a
-          way round this. Enchanting a piece that is not at 100% fails in
-          the engine, because the plain piece it asks to take is not there.
+          way round this. An enchantment takes the piece by its name and
+          the bench names the enchanted piece the same (#4608,
+          enchantedPiece in the bench block), so its condition goes with it.
   A trade was a third, and it was this file's: moveById in the trade block
   wrote a base and a count and nothing else. It moves a piece with its name
   now, and leaves every other stack's alone (#1594).

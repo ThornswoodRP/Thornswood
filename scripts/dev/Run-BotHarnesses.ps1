@@ -27,8 +27,8 @@ $Root = (Resolve-Path -LiteralPath $Root).Path
 $tests = @(Get-ChildItem -LiteralPath (Join-Path $Root 'bot/tests') -Filter 'test-*.py' -File | Sort-Object Name)
 if (-not $tests.Count) { throw 'no bot harnesses were found; refusing an empty pass' }
 $pythonCommand = Get-Command $Python -CommandType Application -ErrorAction Stop | Select-Object -First 1
-$scratchParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
-$scratch = Join-Path $scratchParent ('bot-harnesses-' + [Guid]::NewGuid().ToString('N'))
+$scratch = [IO.Path]::GetFullPath((& (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('bot-harnesses-' + [Guid]::NewGuid().ToString('N'))))
+$scratchParent = Split-Path -Parent $scratch
 $null = New-Item -ItemType Directory -Path $scratch
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $bad = 0

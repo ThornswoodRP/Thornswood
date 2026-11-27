@@ -41,7 +41,7 @@ namespace Thornswood
             // Bring it up to date from Vortex had a button of its own on
             // Diagnostics until 17 Oct (#2627). Scan finds a folder behind
             // Vortex and Fix brings it up to date, so the button went.
-            if (btnOwnGamePick != null) btnOwnGamePick.Click += delegate { PickVortexFolder(); };
+            if (btnOwnGamePick != null) btnOwnGamePick.Click += delegate { Begin(PickVortexFolder()); };
             if (btnOwnGameForget != null) btnOwnGameForget.Click += delegate { ForgetVortexFolder(); };
             if (panel != null) WhenShown(panel, DrawOwnGame);
 
@@ -145,8 +145,10 @@ namespace Thornswood
                 string refused = null;
                 // The first start in a folder just made runs Fix (#5937):
                 // what the install leaves to do all waits on the folder, and
-                // this is the first start that has it.
-                if (active) fixAfterMake = OwnGame.TakeFixAfterMake();
+                // this is the first start that has it. The note stays until
+                // that Fix ends (MakeFixEnded, #6086), so a launcher shut
+                // while it runs runs it again at the next start.
+                if (active) fixAfterMake = OwnGame.FixAfterMakeWaiting;
                 try
                 {
                     // Vortex deploying into a Thornswood folder is refused
@@ -568,13 +570,16 @@ namespace Thornswood
                             // launcher or restarts once at its end. An update
                             // already going in restarts the launcher itself
                             // once the folder is let go, and the note runs
-                            // Fix on the start after it instead.
+                            // Fix on the start after it instead. The note is
+                            // taken when this Fix ends (MakeFixEnded, #6086),
+                            // so the start after the one restart runs no
+                            // second Fix, and one after the launcher was shut
+                            // part way through runs it again.
                             if (updating)
                             {
                                 Log("The update going in restarts the launcher into the new folder, and Fix runs there.");
                                 return;
                             }
-                            OwnGame.TakeFixAfterMake();
                             restartAfterFirstFix = true;
                             RunFix(false, false, true);
                             return;
@@ -679,25 +684,30 @@ namespace Thornswood
         /// OwnGame.DeploysInto cannot find, because it is not in a Steam
         /// library. OwnGame.PointAt takes it only when it is a Skyrim Vortex has
         /// deployed into, and says what it did either way.
+        ///
+        /// The picker is Windows' own folder dialog, which Avalonia only offers
+        /// as a task, and this awaits it: the window's own loop carries on
+        /// while it is open. Until #4582 it was taken with Pump, a nested
+        /// MainLoop on the window's thread inside the button's click.
         /// </summary>
-        static void PickVortexFolder()
+        static async Task PickVortexFolder()
         {
             if (ownGameBusy) return;
             var pick = new FolderPickerOpenOptions();
             pick.Title = "Choose the Skyrim folder Vortex deploys into. In Vortex, Mods, Open, Open Game Folder opens it.";
             pick.AllowMultiple = false;
-            try
+            string start = OwnGame.DeploysInto(cfg);
+            if (start.Length > 0 && Directory.Exists(start))
             {
-                string start = OwnGame.DeploysInto(cfg);
-                if (start.Length > 0 && Directory.Exists(start))
-                    pick.SuggestedStartLocation = Pump(win.StorageProvider.TryGetFolderFromPathAsync(start));
+                // Only where the picker opens: one that cannot be had opens
+                // at the picker's own default, and the log says why.
+                try { pick.SuggestedStartLocation = await win.StorageProvider.TryGetFolderFromPathAsync(start); }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException)
+                {
+                    Swallow.Note("ShellOwnGame, where the folder picker opens (" + start + ")", ex);
+                }
             }
-            catch { /* only where the picker opens; it opens at its own default instead */ }
-            // The picker is Windows' own folder dialog, which Avalonia only
-            // offers as a task. Pump keeps the window's messages moving until
-            // it is answered, so this carries on from the next line the way
-            // the WinForms dialog's ShowDialog did.
-            IReadOnlyList<IStorageFolder> picked = Pump(win.StorageProvider.OpenFolderPickerAsync(pick));
+            IReadOnlyList<IStorageFolder> picked = await win.StorageProvider.OpenFolderPickerAsync(pick);
             string chosen = picked != null && picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
             if (string.IsNullOrEmpty(chosen)) return;
             bool ok;

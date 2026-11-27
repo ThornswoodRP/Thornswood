@@ -84,8 +84,9 @@ A swing of your own work also costs rest, by the rank you are climbing:
 Under 15 rest, crafting is refused. The class verbs still happen, and
 they still cost the rest.
 
-Work done while somebody from your party is in the same cell banks
-15% of a piece. At a whole piece it pays one extra. That is every
+Work done while somebody from your party is with you (the same
+building or cave, or outdoors near enough to be in your Near you
+list) banks 15% of a piece. At a whole piece it pays one extra. That is every
 seventh piece. Listed on a party and standing somewhere else pays
 nothing. See [People beside you](people.md).
 
@@ -348,8 +349,9 @@ name of the staff member who made it.
 ## Where this is
 
 The eight professions, the halves, the ladder with the count resetting,
-the sister half at novice, the bench table, the charcoal and the
-handle, each trade's tool, and the recipe lists are in the server. Smelting is a smith's
+the sister half at novice, the bench table, each trade's tool, and the
+recipe lists are in the server. The forge's charcoal and handle are
+ingredients on the recipes (#6726). Smelting is a smith's
 and tanning is the Platewright's, as above, and neither is one of the
 two outside trades. A master takes someone on in the sister half or
 in an outside trade from the look prompt, and either of them ends it on

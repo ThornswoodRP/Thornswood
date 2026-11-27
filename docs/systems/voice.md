@@ -91,7 +91,9 @@ Gamemaster, Dev, Loremaster, Moderator.
 
 `/silence` and the name, then the minutes if not 30 (a day at most)
 and why. Their voice, their local text, the words above their head,
-and the speaking mark stop for everybody. They are told how long. They
+and the speaking mark stop for everybody. They are told how long, and
+the microphone at the bottom of their screen says SILENCED and stays
+still while it lasts, push to talk held or not (#4773). They
 cannot lift it. `/unsilence` and the name, from any staff member but the one silenced,
 lifts it, and it lifts by itself when the minutes run out.
 
@@ -156,12 +158,12 @@ close that microphone and to hear nothing from them.
 Text mute is remembered on the character, and the chat service drops
 those lines for the person who turned them off. Hiding a name, and
 hiding every name, are remembered too, and the name tag is drawn
-clear. P lists Mute, Text, and Name for each friend, each person
+clear. P lists Mute voice, Hide text, and Hide name for each friend, each person
 near you and each person switched off, and Hide every name for the
 whole list. The buttons and L send the server the lines `/mute` and
 `/hidename` once were, and nobody is told to type them. The look-at
 prompt offers only the voice switch, on L, and the party rows on P
-have no switches yet; Text and Name for somebody who is not a friend
+have no switches yet; Hide text and Hide name for somebody who is not a friend
 are under Near you on P. Whether the prompt gets rows for them too is
 asked on #1628.
 

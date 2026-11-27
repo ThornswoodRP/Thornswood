@@ -189,8 +189,8 @@ function New-GitHubSigningToken {
     if (-not $answer -or -not $answer.value) { throw 'GitHub answered the request for a signing token with no token' }
     # Masked before anything could print it.
     Write-Host ('::add-mask::' + [string]$answer.value)
-    $dir = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
-    $file = Join-Path $dir ('azure-federated-token-' + [Guid]::NewGuid().ToString('N'))
+    $name = 'azure-federated-token-' + [Guid]::NewGuid().ToString('N')
+    $file = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP $name } else { & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') $name }
     [IO.File]::WriteAllText($file, [string]$answer.value)
     return $file
 }

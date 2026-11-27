@@ -40,7 +40,10 @@
 //      asked of GitHub; with no App it says how to make one; with one, a
 //      check says what differs and changes nothing, a run puts the labels
 //      right on the ops repository with an installation token for it alone,
-//      reads them back, and a second run changes nothing; runner 3's
+//      reads them back, and a second run changes nothing; when main's
+//      admin.js is not the one running (#4307), a run or check is 409 and
+//      changes and reads nothing else, and when main's cannot be read it is
+//      502; runner 3's
 //      thornswood-sign, whose record is gone (#4033), comes off; the records come
 //      from this repository's main through the App, with a read-only token
 //      for this repository alone, never from the caller; installation-repos
@@ -385,6 +388,18 @@ const ap = admin.planAbout(aboutRec(), { description: null, homepage: null }, []
 yes('an empty About box differs in all three parts', ap.length === 3 && ap.map(c => c.what).join(',') === 'description,website,topics');
 yes('topics in another order are the same', admin.planAbout(aboutRec(), { description: aboutReal.description, homepage: aboutReal.homepage }, aboutReal.topics.slice().reverse()).length === 0);
 
+// #4307: the id the service compares with main's is git's blob id of its own
+// file, the same with the CRLF a Windows checkout may write.
+{
+  const lf = fs.readFileSync(ADMIN).toString('latin1').replace(/\r\n/g, '\n');
+  const own = crypto.createHash('sha1').update('blob ' + Buffer.byteLength(lf, 'latin1') + '\0').update(Buffer.from(lf, 'latin1')).digest('hex');
+  yes('#4307 the service knows itself by git\'s blob id of admin.js (' + admin.OWN_SHA.slice(0, 12) + ')', admin.OWN_SHA === own);
+  const crlf = path.join(tmp, 'admin-crlf.js');
+  fs.writeFileSync(crlf, Buffer.from(lf.replace(/\n/g, '\r\n'), 'latin1'));
+  yes('  the same for a copy with CRLF line ends', admin.ownSha(crlf) === own);
+  yes('  and another for a file that differs by one byte', admin.blobSha(Buffer.from(lf + ' ', 'latin1')) !== own);
+}
+
 // ---- 4 and 5. the service, against a stand-in GitHub ---------------------------------
 const gh = {
   calls: [],
@@ -405,6 +420,9 @@ const gh = {
   aboutToken: 'ghs_' + crypto.randomBytes(16).toString('hex'),
   settingsToken: 'ghs_' + crypto.randomBytes(16).toString('hex'),
   installed: true,
+  // git's id for admin.js on main (#4307): this checkout's unless a case
+  // says main has another.
+  mainAdmin: null,
   repoToken: 'ghs_' + crypto.randomBytes(16).toString('hex'),
   installRepos: ['ThornswoodRP/Thornswood-Ops', 'ThornswoodRP/Thornswood'],
   conversion: null,
@@ -488,6 +506,11 @@ function standIn(req, res) {
     if ((P === '/repos/ThornswoodRP/Thornswood' || P === '/repos/ThornswoodRP/Thornswood/topics') && !asAbout()) return send(401, { message: 'Bad credentials' });
     if (P.startsWith('/repos/ThornswoodRP/Thornswood-Ops/actions/') && !asInst()) return send(401, { message: 'Bad credentials' });
     if (P.startsWith('/repos/ThornswoodRP/Thornswood/actions/') || P.startsWith('/repos/ThornswoodRP/Thornswood/environments/')) { if (req.headers.authorization !== 'Bearer ' + gh.settingsToken) return send(401, { message: 'Bad credentials' }); }
+    if (P === '/repos/ThornswoodRP/Thornswood/contents/scripts/vps/admin/admin.js') {
+      if (u.searchParams.get('ref') !== 'main') return send(404, { message: 'No commit found for the ref' });
+      if (gh.mainAdmin === 'gone') return send(404, { message: 'Not Found' });
+      return send(200, { type: 'file', path: 'scripts/vps/admin/admin.js', sha: gh.mainAdmin || admin.OWN_SHA });
+    }
     if (P === '/repos/ThornswoodRP/Thornswood/contents/records') {
       if (u.searchParams.get('ref') !== 'main') return send(404, { message: 'No commit found for the ref' });
       return send(200, Object.keys(gh.records).concat(['README.md']).map(n => ({ type: 'file', name: n })));
@@ -768,6 +791,37 @@ function start(stateDir, ghPort, more) {
     gh.calls = [];
     r = await ask4(bearer(sign(good())));
     yes('a second run changes nothing', r.status === 200 && r.json.changed === 0 && writes().length === 0);
+
+    // #4307: main's admin.js is not the one running. On 27 Oct 2026 the old
+    // code applied a new record and took thornswood-build off five runners.
+    // Here the records would put the build label on runner 4 if it ran.
+    const asked = (what) => gh.calls.some(c => what.test(c.path));
+    gh.records['build-runners.json'] = { label: 'thornswood-build', runners: [1, 2, 4] };
+    gh.mainAdmin = 'f'.repeat(40);
+    for (const [name, body] of [['a run', { what: 'runner-labels' }], ['a check', { what: 'runner-labels', check: true }], ['repo-about', { what: 'repo-about' }], ['repo-settings', { what: 'repo-settings', check: true }]]) {
+      gh.calls = [];
+      r = await ask4(bearer(sign(good())), body);
+      yes('#4307 ' + name + ' while main has another admin.js: 409, nothing changed or read but main\'s admin.js',
+        r.status === 409 && r.json.ok === false && r.json.changed === 0 && writes().length === 0 && !asked(/contents\/records|actions\/runners|\/topics|rulesets/) &&
+        gh.calls.some(c => c.path === '/repos/ThornswoodRP/Thornswood/contents/scripts/vps/admin/admin.js?ref=main' && c.auth === 'Bearer ' + gh.readToken));
+    }
+    yes('  and it says to install main\'s, naming both', r.json.lines.length === 1 && r.json.lines[0].includes(admin.OWN_SHA.slice(0, 12)) && r.json.lines[0].includes('ffffffffffff') && /Install-AdminService/.test(r.json.lines[0]));
+    yes('  runner 4 still has no build label', !labels('thornswood-vps-4').includes('thornswood-build'));
+    gh.mainAdmin = 'gone';
+    gh.calls = [];
+    r = await ask4(bearer(sign(good())));
+    yes('  when main\'s admin.js cannot be read it changes nothing either (502)', r.status === 502 && writes().length === 0 && !asked(/contents\/records|actions\/runners/) && /would not say which scripts\/vps\/admin\/admin\.js is on main/.test(r.text));
+    gh.calls = [];
+    r = await ask4(bearer(sign(good())), { what: 'settings' });
+    yes('  settings only reads, so it is still answered', r.status === 200);
+    gh.mainAdmin = null;
+    gh.calls = [];
+    r = await ask4(bearer(sign(good())));
+    yes('  and with main\'s admin.js running, the run goes on (1 changed)', r.status === 200 && r.json.changed === 1 && labels('thornswood-vps-4').includes('thornswood-build'));
+    gh.records['build-runners.json'] = { label: 'thornswood-build', runners: [1, 2] };
+    gh.calls = [];
+    r = await ask4(bearer(sign(good())));
+    yes('  (and back, 1 changed)', r.status === 200 && r.json.changed === 1 && !labels('thornswood-vps-4').includes('thornswood-build'));
     gh.calls = [];
     r = await ask4(bearer(sign(good())), { what: 'installation-repos', check: false });
     const repoTok = gh.calls.find(c => /access_tokens$/.test(c.path));

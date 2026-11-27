@@ -25,8 +25,8 @@ function rig(group=false){
   if(!ev.defaultPrevented&&key==='Enter')button.click();return ev;};
  return p;
 }
-// Member Remove remains a separate child: its name-only server route cannot
-// be replaced with a numeric target, and Invite does not require Read.
+// Member Remove below retains its name-only server route: it cannot be
+// replaced with a numeric target, and Invite does not require Read.
 const actions=[['dropbook',false,'/journal drop j'],['disband',true,'/book disband g']];
 for(const[verb,group,line]of actions){
  const p=rig(group),b=p.button(verb);b.click();
@@ -125,5 +125,66 @@ for(const[verb,group]of actions){
  yes('an update keeps the draft being written',p.doc.getElementById('ts-journal-text')===text&&text.value==='Private draft');
  b.click();
  yes('dropping a journal with an unsaved page asks first and sends nothing',p.sent.length===0&&!p.doc.getElementById('ts-journal-leave-choice').hidden);
+}
+// Group Remove keeps its name-only route and Invite permission even when
+// Read is absent. The confirmation binds the visible selector and book.
+function memberRig(read=true){
+ const p=rig(true);Object.assign(p.state.group.books[0],{owner:false,read});
+ if(!read)p.state.group.books[0].people=[];
+ p.feed();p.name=()=>p.doc.getElementById('ts-journal-gwho');p.name().value='Brenna';
+ p.release=(b,key)=>{const ev=p.fire(b,'keyup',key);if(key===' '&&!ev.defaultPrevented)b.click();};return p;
+}
+for(const read of [true,false]){
+ const p=memberRig(read),b=p.button('remove');b.click();
+ yes('member Remove first press sends nothing with Read='+read,p.sent.length===0);
+ yes('member Remove names the exact typed selector and group with Read='+read,/again/.test(b.textContent)&&b.textContent.includes('Brenna')&&b.textContent.includes('Our group'));
+ b.click();yes('member Remove second press sends the unchanged name-only route once with Read='+read,p.sent.length===1&&p.sent[0]==='/book member g remove | Brenna');
+}
+{
+ const p=memberRig(),b=p.button('remove');b.click();p.advance(5000);b.click();
+ yes('member Remove expires at the exact existing five-second boundary',p.sent.length===0&&/again/.test(b.textContent));
+ b.click();yes('member Remove still accepts a subsequent fresh confirmation',p.sent.length===1);
+}
+for(const key of ['Enter',' ']){
+ const p=memberRig(),b=p.button('remove');p.activate(b,key);const held=p.activate(b,key,true);
+ yes('member Remove held '+JSON.stringify(key)+' never supplies the second press',p.sent.length===0&&held.defaultPrevented);
+ p.release(b,key);yes('member Remove native key release cannot itself confirm',p.sent.length===0);
+ p.activate(b,key);p.release(b,key);
+ yes('member Remove a second released '+JSON.stringify(key)+' sends exactly once',p.sent.length===1&&p.sent[0]==='/book member g remove | Brenna');
+}
+{
+ const p=memberRig(),b=p.button('remove');b.click();p.name().value='Aldis';b.click();
+ yes('a changed selector without an input event cannot inherit the previous confirmation',p.sent.length===0&&b.textContent.includes('Aldis'));
+ b.click();yes('the newly named selector can be confirmed without rewriting it',p.sent.length===1&&p.sent[0]==='/book member g remove | Aldis');
+}
+{
+ const p=memberRig(),b=p.button('remove');b.click();p.name().value='Other';p.fire(p.name(),'input','');p.name().value='Brenna';p.fire(p.name(),'input','');b.click();
+ yes('editing away and back retires the old member confirmation',p.sent.length===0&&/again/.test(b.textContent));
+}
+{
+ const p=memberRig(),b=p.button('remove');b.click();p.fire(b,'keydown','Escape');
+ yes('Escape cancels member Remove without closing the journal or changing the selector',p.api.isOpen()&&p.name().value==='Brenna'&&!/again/.test(b.textContent)&&p.sent.length===0);
+ b.click();yes('the first press after Escape only arms again',p.sent.length===0);
+}
+{
+ const p=memberRig(),b=p.button('remove');b.click();p.api.close();p.api.open();p.name().value='Brenna';p.button('remove').click();
+ yes('close and reopen cannot inherit a member confirmation',p.sent.length===0);
+}
+{
+ const p=memberRig(),b=p.button('remove');b.click();p.state.group.books[0].people.push({name:'New member',role:'Member'});p.feed();p.button('remove').click();
+ yes('an authoritative book update retires member Remove before another press',p.sent.length===0);
+}
+{
+ const p=memberRig(),b=p.button('remove');b.click();const before=p.sent.length;
+ p.state.group.books[0].invite=false;p.feed();b.onclick.call(b);
+ yes('lost Invite cannot reuse a retained member Remove handler',p.sent.length===before&&!p.button('remove'));
+}
+{
+ const p=memberRig(),b=p.button('remove');b.click();p.state.group.books=[];p.feed();b.onclick.call(b);
+ yes('a withdrawn group cannot receive a retained member removal',p.sent.length===0);
+}
+for(const throws of [false,true]){
+ const p=memberRig(),b=p.button('remove');let attempts=0;p.win.thornswoodNet.say=()=>{attempts++;if(throws)throw Error('owned refusal');return false;};b.click();b.click();
+ yes('uncertain member removal preserves the selector and never retries, throws='+throws,attempts===1&&p.name().value==='Brenna'&&p.api.isOpen()&&!/again/.test(b.textContent));
 }
 console.log(pass+' passed, '+fail+' failed');process.exitCode=fail?1:0;

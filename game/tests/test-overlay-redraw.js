@@ -112,6 +112,9 @@ if (a >= 0 && b > a) {
     'var myMode = "ptt", micError = null;' +
     'Object.defineProperty(this, "x", { value: 1 });' +
     'var self = { get mic() { return st.mic; }, get talking() { return st.talking; } };' +
+    // The page's one test for a voice going out (#4773), as it reads here.
+    'function voiceOut() { return !!(self.mic && self.talking); }' +
+    'function selfHushed() { return false; }' +
     body.replace(/\bmic\b(?!Svg|Overlay|Error)/g, 'self.mic').replace(/\btalking\b/g, 'self.talking') +
     '\nreturn drawMic;');
   const drawMic = make(st, box);

@@ -47,8 +47,14 @@ function liftOn(first) {
 
 const came = lift('  function cameBack(now) {');
 const onLoad = liftOn("  sp.on('loadGame', guard('world load', () => {");
+const onPlace = liftOn("  sp.on('update', guard('place', () => {");
+// The ground under the feet and the place word the tick asks for (#4653).
+const groundAt = src.indexOf('  const SNOW_GROUND');
+const groundTo = src.indexOf('\n  }\n', src.indexOf('  function placeKind(')) + 4;
+const ground = groundAt >= 0 && groundTo > groundAt ? src.slice(groundAt, groundTo) : '';
 yes('cameBack is in the plugin', came !== null);
 yes('and the world load it waits on', onLoad !== null);
+yes('the place report samples the world', onPlace !== null);
 
 // The tick asks it on every frame after the first arrival, before anything
 // else the world frame does.
@@ -77,13 +83,19 @@ for (const [what, first] of ways) {
 }
 
 function game() {
+  const actorAtHearth = {
+    getPositionX: () => 0, getPositionY: () => 0, getPositionZ: () => 0,
+    isSwimming: () => false, getParentCell: () => null
+  };
   const g = {
     menus: { 'Main Menu': false, 'Loading Menu': false },
-    player: { id: 0x14 },
+    player: actorAtHearth,
     connected: true,
     choice: false,
     gone: 0,
     logs: [],
+    placeReports: [],
+    fireDistance: 125,
     world: { __thornswoodInWorld: true },
     clock: 1000000
   };
@@ -91,6 +103,8 @@ function game() {
   const sp = {
     on: function (name, fn) { handlers[name] = fn; },
     Game: { getPlayer: function () { return g.player; } },
+    Weather: { getCurrentWeather: () => null },
+    callNative: () => '',
     mpClientPlugin: { isConnected: function () { return g.connected; } }
   };
   const gameMenuOpen = function () {
@@ -102,10 +116,18 @@ function game() {
   const log = function () { g.logs.push(Array.prototype.join.call(arguments, ' ')); };
   const guard = function (name, fn) { return fn; };
   const clockDate = { now: function () { return g.clock; } };
-  const fn = new Function('sp', 'globalThis', 'gameMenuOpen', 'choiceUp', 'menuGone', 'log', 'guard', 'Date', 'PROFILE',
-    'let menuPhase = 0;\n' + 'let loadedOutOfWorld = 0;\n' + onLoad + '\n' + came +
+  const fn = new Function('sp', 'globalThis', 'gameMenuOpen', 'choiceUp', 'menuGone', 'log', 'guard', 'Date', 'PROFILE', 'tellServer', 'fireDistance',
+    'let menuPhase = 0;\nlet loadedOutOfWorld = 0;\n' +
+    'let placeAt = 0, placeSaid = "", placeFire = -1, placeBeat = 0, fireFlame = -1;\n' +
+    'const FIRE_INSIDE = 90, PLACE_FAST = 250, PLACE_SLOW = 1000, PLACE_BEAT = 30000;\n' +
+    'const say = () => {};\n' + ground + '\n' + onLoad + '\n' + came + '\n' + onPlace +
     '\nreturn { frame: cameBack, menuPhase: function () { return menuPhase; } };');
-  g.api = fn(sp, g.world, gameMenuOpen, choiceUp, menuGone, log, guard, clockDate, 7);
+  g.api = fn(sp, g.world, gameMenuOpen, choiceUp, menuGone, log, guard, clockDate, 7,
+    line => g.placeReports.push(line), () => g.fireDistance);
+  g.samplePlace = () => {
+    g.clock += 1000;
+    handlers.update();
+  };
   // Update frames: none while the main menu is up, as in the game.
   g.frames = function (n) {
     let any = false;
@@ -138,7 +160,7 @@ function game() {
   return g;
 }
 
-if (came && onLoad) {
+if (came && onLoad && onPlace) {
   // R1: in the world, a save something else loads is not an arrival.
   {
     const g = game();
@@ -223,6 +245,26 @@ if (came && onLoad) {
     g.player = { id: 0x14 };
     g.frames(1);
     yes('R7 then the character is there, and it is', g.world.__thornswoodInWorld === true);
+  }
+
+  // Keep the position, sky and fire identical across two connections.
+  // The new session needs the first report even though the text is the same.
+  {
+    const g = game();
+    g.samplePlace();
+    const report = g.placeReports[0];
+    yes('R8 the first world samples the nearby fire', report === '/place outdoors - 0 0 0 125');
+    g.leave();
+    g.pick();
+    g.fireDistance = 250;
+    g.samplePlace();
+    yes('R8 a world still waiting for confirmed arrival sends no place report', g.placeReports.length === 1);
+    g.frames(1);
+    g.fireDistance = 125;
+    g.samplePlace();
+    g.samplePlace();
+    yes('R8 the same place is reported once to the returned session',
+        g.placeReports.length === 2 && g.placeReports[1] === report);
   }
 }
 

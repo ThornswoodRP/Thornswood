@@ -37,7 +37,7 @@ public sealed partial class AgentTests
 
     /// <summary>A build as Build-Content keeps it: files\ at repository paths,
     /// and build.json naming each one's sha256.</summary>
-    static Dictionary<string, byte[]> KeepBuild(EnvConfig env, string key, string server = "dev", string commit = BuiltFrom)
+    static Dictionary<string, byte[]> KeepBuild(EnvConfig env, string key, string server = "dev", string commit = BuiltFrom, string root = "")
     {
         var files = new Dictionary<string, byte[]>
         {
@@ -45,7 +45,7 @@ public sealed partial class AgentTests
             ["game/data/last-plugin.recipe"] = B("recipe"),
             ["game/gamemode-tables/Recipes.json"] = B("{\"r\":1}"),
         };
-        var dir = Path.Combine(env.Root, server, key);
+        var dir = Path.Combine(env.Root, root == "" ? server : root, key);
         foreach (var (n, b) in files)
         {
             var p = Path.Combine(dir, "files", n.Replace('/', Path.DirectorySeparatorChar));
@@ -252,6 +252,107 @@ public sealed partial class AgentTests
         var id = gh.AddDeployment("Content", BuiltFrom, ContentPayload(KeyA));
         await a.Pass(ContentBuild.Kind, CancellationToken.None);
         Assert.Empty(gh.States(id));
+        Assert.Empty(gate.Asked);
+    }
+
+
+    // A MERGE THE QUEUE HOLDS (#6879): built by the gate as the limited
+    // account, kept apart and put on a draft no release takes.
+    const string Queued = "3333333333333333333333333333333333333333";
+
+    static string QueuedPayload(string key, string queued = Queued) => $"{{\"content\":\"{key}\",\"server\":\"dev\",\"commit\":\"{queued}\",\"queued\":\"{queued}\"}}";
+
+    static void BuildsQueued(FakeGate gate, string key, string commit = Queued) =>
+        gate.Answers[$"Build-Content -Server dev -Queued {Queued}"] = new GateRun(0, [$"inputs: 40 files at {commit}", $"BUILT {key}", $"FROM {commit}", "3 files"]);
+
+    [Fact]
+    public async Task AQueuedMergeIsBuiltAsTheLimitedAccountAndPutOnADraftOfItsOwn()
+    {
+        var (a, gh, gate, env) = MakeContent();
+        var files = KeepBuild(env, KeyA, commit: Queued, root: "queue-dev");
+        BuildsQueued(gate, KeyA);
+        var id = gh.AddDeployment("Content", BuiltFrom, QueuedPayload(KeyA));
+        await a.Pass(ContentBuild.Kind, CancellationToken.None);
+
+        HasContentStates(gh, id, "in_progress,success");
+        Assert.Equal([$"Build-Content -Server dev -Queued {Queued}"], gate.Asked);
+        Assert.Contains("queued merge 3333333", (string)gh.Last(id)!["description"]!);
+        var draft = Assert.Single(gh.DraftList);
+        Assert.Equal(ContentBuild.QueueTag("dev", KeyA), (string)draft["tag_name"]!);
+        Assert.DoesNotContain(gh.DraftList, d => ((string)d["tag_name"]!).StartsWith("content-dev-"));
+        using var z = new ZipArchive(new MemoryStream(gh.Uploaded[(long)draft["id"]!][ContentBuild.ZipName]));
+        Assert.Equal(files.Keys.Order(StringComparer.Ordinal), z.Entries.Select(e => e.FullName));
+    }
+
+    [Fact]
+    public async Task AQueuedBuildOfAnotherCommitOrKeyIsNeverPutUp()
+    {
+        var (a, gh, gate, env) = MakeContent();
+        KeepBuild(env, KeyB, commit: Queued, root: "queue-dev");
+        BuildsQueued(gate, KeyB);
+        var id = gh.AddDeployment("Content", BuiltFrom, QueuedPayload(KeyA));
+        await a.Pass(ContentBuild.Kind, CancellationToken.None);
+        HasContentStates(gh, id, "in_progress,failure");
+        Assert.Contains("not the queued merge 3333333's aaaaaaaaaaaa", (string)gh.Last(id)!["description"]!);
+        Assert.Empty(gh.DraftList);
+    }
+
+    [Fact]
+    public async Task AQueuedMergeIsNeverBuiltFromMainsKeptBuilds()
+    {
+        var (a, gh, gate, env) = MakeContent();
+        KeepBuild(env, KeyA, commit: Queued);
+        BuildsQueued(gate, KeyA);
+        var id = gh.AddDeployment("Content", BuiltFrom, QueuedPayload(KeyA));
+        await a.Pass(ContentBuild.Kind, CancellationToken.None);
+        HasContentStates(gh, id, "in_progress,failure");
+        Assert.Contains("has no build.json on the box", (string)gh.Last(id)!["description"]!);
+        Assert.Empty(gh.DraftList);
+    }
+
+    [Fact]
+    public async Task AnAskForMainNeverPassesOverAnOlderQueuedAsk()
+    {
+        var (a, gh, gate, env) = MakeContent();
+        KeepBuild(env, KeyA, commit: Queued, root: "queue-dev");
+        KeepBuild(env, KeyB);
+        BuildsQueued(gate, KeyA);
+        Builds(gate, KeyB);
+        var oldMain = gh.AddDeployment("Content", BuiltFrom, ContentPayload(KeyB));
+        var queued = gh.AddDeployment("Content", BuiltFrom, QueuedPayload(KeyA));
+        var main = gh.AddDeployment("Content", BuiltFrom, ContentPayload(KeyB));
+        await a.Pass(ContentBuild.Kind, CancellationToken.None);
+        HasContentStates(gh, oldMain, "inactive");
+        HasContentStates(gh, queued, "in_progress,success");
+        Assert.Empty(gh.States(main));
+        await a.Pass(ContentBuild.Kind, CancellationToken.None);
+        HasContentStates(gh, main, "in_progress,success");
+        Assert.Equal([$"Build-Content -Server dev -Queued {Queued}", "Build-Content -Server dev"], gate.Asked);
+    }
+
+    [Fact]
+    public async Task EveryQueuedAskIsBuiltOldestFirstAndNoneIsPassedOver()
+    {
+        var (a, gh, gate, env) = MakeContent();
+        KeepBuild(env, KeyA, commit: Queued, root: "queue-dev");
+        BuildsQueued(gate, KeyA);
+        var first = gh.AddDeployment("Content", BuiltFrom, QueuedPayload(KeyA));
+        var second = gh.AddDeployment("Content", BuiltFrom, QueuedPayload(KeyA));
+        await a.Pass(ContentBuild.Kind, CancellationToken.None);
+        HasContentStates(gh, first, "in_progress,success");
+        Assert.Empty(gh.States(second));
+        await a.Pass(ContentBuild.Kind, CancellationToken.None);
+        HasContentStates(gh, second, "in_progress,success");
+    }
+
+    [Fact]
+    public async Task AQueuedAskNamingNoCommitFailsAndRunsNothing()
+    {
+        var (a, gh, gate, _) = MakeContent();
+        var id = gh.AddDeployment("Content", BuiltFrom, QueuedPayload(KeyA, "main; Deploy-Server"));
+        await a.Pass(ContentBuild.Kind, CancellationToken.None);
+        HasContentStates(gh, id, "in_progress,failure");
+        Assert.Contains("is not a commit (40 hex)", (string)gh.Last(id)!["description"]!);
         Assert.Empty(gate.Asked);
     }
 

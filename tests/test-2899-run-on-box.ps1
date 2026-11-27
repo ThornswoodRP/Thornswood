@@ -50,6 +50,21 @@
      still holds the folder leaves it, says so, and the next keeper removes
      it once the run let go; the run refuses to start in a folder no keeper
      holds.
+  2b. The limited run (#6879, OnBox.ps1's THE LIMITED RUN): its text and
+     its wrapper are ASCII and parse; the fail-safe of the services reads
+     the places no service may read, the gate's folder among them, before
+     anything is laid out; the run's folder is SYSTEM's, the
+     Administrators' and the task's alone; the task is LOCAL SERVICE,
+     limited, with only SeChangeNotifyPrivilege, a SID of its own and a time
+     limit; the tool and Make-LastPlugin.py run only in the wrapper, which
+     puts itself in a job that ends what it starts; what it said and its zip
+     are read only as files of their own.
+  3c. On an elevated Windows runner, as the box's administrator is, the
+     limited run runs a tool as LOCAL SERVICE: it reads the store's
+     archives and cannot write one, cannot write outside the run's folder,
+     what it writes under game\ comes back with its exit code, a process it
+     started ends with the run, the task is gone afterwards, and the keeper
+     removes the folder. Elsewhere it says SKIP.
   4. scripts\mods\Send-GameArchives.ps1 refuses archives that are missing or
      not the bytes records\skyrim-files.json names, before it asks the box
      anything, and its far side text is ASCII and parses. Every file
@@ -241,6 +256,42 @@ Yes 'a plugin the build makes that the commit does not hold yet is left out of t
 Yes 'an error the run does not catch ends it on a STOP line (#6351)' ($far.Contains("trap { 'STOP. ' + `$_.Exception.Message"))
 $runSrc = Get-Content -LiteralPath $runOnBox -Raw
 Yes 'and Run-OnBox.ps1 hands that STOP line on when the run ends with no EXIT' ($runSrc.Contains("the run on the box stopped before the tool ended, so nothing was brought back: ") -and $runSrc.Contains("-Own `$own"))
+
+# ---- 2b. the limited run's text (#6879) -----------------------------------
+# A merge the queue holds runs its tools as the box's limited account
+# (OnBox.ps1, THE LIMITED RUN). Its texts are ASCII and parse, the fail-safe
+# runs before anything is laid out, and the tool runs only in the wrapper.
+$farLim = Get-ThornswoodOnBoxScript -Run 'C:\Windows\Temp\thornswood-onbox-test' -ServerRoot 'C:\Thornswood-Server-Dev' -Tool 'scripts/mods/Rebuild-ContentTables.ps1' -Arguments @('-Data', '{data}', '-PluginsTxt', '{plugins}') -Order @('Skyrim.esm') -Collection 'C:\c' -Limited
+$errs = $null
+[void][Management.Automation.Language.Parser]::ParseInput($farLim, [ref]$null, [ref]$errs)
+$wrap64 = [regex]::Match($farLim, "FromBase64String\('([A-Za-z0-9+/=]+)'\)").Groups[1].Value
+$wrapText = if ($wrap64) { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($wrap64)).TrimStart([char]0xFEFF) } else { '' }
+$errsW = $null
+[void][Management.Automation.Language.Parser]::ParseInput($wrapText, [ref]$null, [ref]$errsW)
+Yes '2b the limited run''s text and its wrapper are ASCII and parse' (
+    $wrapText -and -not ($farLim + $wrapText).ToCharArray().Where({ [int]$_ -gt 127 }, 'First') -and (-not $errs -or $errs.Count -eq 0) -and (-not $errsW -or $errsW.Count -eq 0))
+$limSid = Get-ThornswoodOnBoxLimitedSid
+Yes ('2b the task''s SID is the one Windows gives NT TASK\' + $ThornswoodLimitedTask + ': ' + $limSid) ($limSid -match '^S-1-5-87(-\d+){5}$' -and $farLim.Contains("`$limitedSid = '$limSid'"))
+Yes '2b the fail-safe reads the places no service may read, the gate''s folder among them, before the folder is laid out' (
+    $farLim.Contains('Test-ThornswoodServiceCannotReach -Paths (@(Get-ThornswoodServiceNeverReach) + @(''C:\Thornswood-Gate''') -and
+    $farLim.IndexOf('Test-ThornswoodServiceCannotReach -Paths') -lt $farLim.IndexOf('ExtractToDirectory') -and
+    $farLim.IndexOf('SetAccessRuleProtection($true, $false)') -lt $farLim.IndexOf('ExtractToDirectory'))
+Yes '2b the run''s folder is SYSTEM''s, the Administrators'' and the task''s, which may change what is in it, and its owner gets no say' (
+    $farLim.Contains("foreach (`$s in @('S-1-5-18', 'S-1-5-32-544'") -and $farLim.Contains('(Rule $limitedSid $fsr::Modify)') -and $farLim.Contains("(Rule 'S-1-3-4' `$fsr::ReadPermissions)"))
+Yes '2b the task is LOCAL SERVICE, limited, with only SeChangeNotifyPrivilege and a SID of its own, and a time limit' (
+    $farLim.Contains("-UserId 'NT AUTHORITY\LOCAL SERVICE' -LogonType ServiceAccount -RunLevel Limited -RequiredPrivilege 'SeChangeNotifyPrivilege' -ProcessTokenSidType Unrestricted") -and
+    $farLim.Contains("-ExecutionTimeLimit (New-TimeSpan -Minutes $ThornswoodLimitedMinutes)") -and $farLim.Contains('Unregister-ScheduledTask -TaskName $limitedTask'))
+Yes '2b the tool and Make-LastPlugin.py run in the wrapper only, never in the administrator''s part' (
+    -not $farLim.Contains('Start-Process -FilePath') -and -not $farLim.Contains('Make-LastPlugin.py') -and
+    $wrapText.Contains('Start-Process -FilePath $exe') -and $wrapText.Contains('Make-LastPlugin.py') -and $wrapText.Contains("'EXIT ' + `$code"))
+Yes '2b the wrapper puts itself in a job that ends what it starts, and says what it could not read' (
+    $wrapText.Contains('info.Basic.LimitFlags = 0x2000;') -and $wrapText.Contains('[ThornswoodLimitedJob]::Hold()') -and
+    $wrapText.IndexOf('[ThornswoodLimitedJob]::Hold()') -lt $wrapText.IndexOf('Start-Process') -and $wrapText.Contains('cannot be read by the limited account'))
+Yes '2b what the wrapper said and its zip are read only as files of their own, and a run with no EXIT stops' (
+    $farLim.Contains("foreach (`$n in 'said.txt', 'back.zip')") -and $farLim.Contains('$it.LinkType') -and $farLim.Contains('without saying how the tool ended'))
+Yes '2b the archives get a read rule for the task''s SID on the store''s own files' ($farLim.Contains('Get-ChildItem -LiteralPath $store -File -Recurse') -and $farLim.Contains('($fsr::ReadAndExecute -bor $fsr::Synchronize)'))
+Yes '2b a run that is not limited has none of it' (-not $farPs.Contains('limited') -and -not $farRec.Contains('Register-ScheduledTask'))
+Yes '2b Run-OnBox.ps1 runs a commit not on main from its own checkout, as the limited account' ($runSrc.Contains('-Limited:$Limited') -and $runSrc.Contains('if ($From) { $From }'))
 # A tool that ends other than 0 says why on a last STOP line of Run-OnBox's
 # own (#6351): its last STOP line, else the last line it printed, which for a
 # Python tool that died is its error. Add-ContentRecords.py's on 16 Nov 2026
@@ -572,6 +623,89 @@ exit 0
         $gone = Stop-Keeper $runKeeper
     } finally {
         if ($runKeeper -and -not $runKeeper.P.HasExited) { $runKeeper.P.Kill() }
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# ---- 3c. the limited run, as on the box (#6879) ---------------------------
+# On an elevated Windows runner, as the box's administrator is: the tool runs
+# as NT AUTHORITY\LOCAL SERVICE in the task, reads the archives the store
+# holds, cannot write outside the run's folder nor into an archive, what it
+# writes under game\ comes back, a process it starts ends with the run, and
+# the task is gone afterwards.
+$elevated = $OnWindows -and ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $OnWindows) {
+    Write-Host 'SKIP  the limited run as on the box: it registers a Windows task as LOCAL SERVICE, which only Windows has (the Windows runner runs it)'
+} elseif (-not $py) {
+    Write-Host 'SKIP  the limited run as on the box: no py on this machine (the Windows runner runs it)'
+} elseif (-not $elevated) {
+    Write-Host 'SKIP  the limited run as on the box: registering a task as LOCAL SERVICE needs an elevated PowerShell, as the box''s administrator is'
+} else {
+    $boxPs = Get-BoxPowerShell
+    $work = Join-Path ([IO.Path]::GetTempPath()) ('ts-2899l-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    $runKeeper = $null
+    try {
+        $server = Join-Path $work 'server'
+        $plugins = Join-Path $server 'plugins'
+        New-Item -ItemType Directory -Force -Path $plugins | Out-Null
+        [IO.File]::WriteAllText((Join-Path $plugins 'Skyrim.esm'), 'vanilla')
+        $store = Join-Path $work 'store'
+        New-Item -ItemType Directory -Force -Path $store | Out-Null
+        $archive = Join-Path $store 'Skyrim - Interface.bsa'
+        [IO.File]::WriteAllText($archive, 'archive bytes')
+        $roFile = Join-Path $work 'ro.ps1'
+        [IO.File]::WriteAllText($roFile, ((Get-ThornswoodArchiveReadOnlyScript) + "`r`nSet-ThornswoodArchiveReadOnly '" + $archive + "'`r`n'RO'"), (New-Object Text.UTF8Encoding($true)))
+        $null = & $boxPs -NoProfile -ExecutionPolicy Bypass -File $roFile 2>&1
+        $outside = Join-Path $work 'outside.txt'
+        $run = Join-Path $work 'thornswood-onbox-1a2b3c4d5e6f'
+        $runKeeper = Start-Keeper $run
+        $src = Join-Path $work 'src'
+        New-Item -ItemType Directory -Force -Path (Join-Path $src 'scripts\mods'), (Join-Path $src 'game\data') | Out-Null
+        [IO.File]::WriteAllText((Join-Path $src 'game\data\keep.json'), '{"a":1}')
+        [IO.File]::WriteAllText((Join-Path $src 'scripts\mods\t.py'), @'
+import os, subprocess, sys
+data, outside = sys.argv[2], sys.argv[3]
+print('ARCHIVE ' + open(os.path.join(data, 'Skyrim - Interface.bsa')).read())
+try:
+    open(os.path.join(data, 'Skyrim - Interface.bsa'), 'w').write('changed')
+    print('ARCHIVE WRITE went through')
+except OSError:
+    print('ARCHIVE WRITE refused')
+try:
+    open(outside, 'w').write('escaped')
+    print('OUTSIDE written')
+except OSError:
+    print('OUTSIDE refused')
+open(os.path.join('game', 'data', 'keep.json'), 'w').write('{"a":2}')
+subprocess.Popen([sys.executable, '-c', 'import sys, time; time.sleep(6); open(sys.argv[1], "w").write("late")', os.path.join(data, 'late.txt')])
+print('CHILD started')
+sys.exit(4)
+'@)
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::CreateFromDirectory($src, (Join-Path $run 'tools.zip'))
+        $text = Get-ThornswoodOnBoxScript -Run $run -ServerRoot $server -Tool 'scripts/mods/t.py' -Arguments @('--data', '{data}', $outside) -ArchiveStore $store -Limited
+        $file = Join-Path $work 'far.ps1'
+        [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding($true)))
+        $lines = @(& $boxPs -NoProfile -ExecutionPolicy Bypass -File $file 2>&1 | ForEach-Object { "$_".Trim() })
+        Write-Host '  the limited run said:'
+        foreach ($l in $lines) { Write-Host ('    ' + $l) }
+        if (@($lines | Where-Object { $_ -match 'cannot be read by the limited account' }).Count) {
+            Write-Host 'SKIP  the limited run as on the box: this runner''s Python is installed for one user, so the limited account cannot start it (the run said so, above)'
+        } else {
+            Yes '3c the tool runs as LOCAL SERVICE, in a job' (@($lines | Where-Object { $_ -match '^limited\s+as NT AUTHORITY\\LOCAL SERVICE, in a job' }).Count -eq 1)
+            Yes '3c it reads the archives the store holds, and cannot write one' (($lines -contains 'ARCHIVE archive bytes') -and ($lines -contains 'ARCHIVE WRITE refused') -and [IO.File]::ReadAllText($archive) -eq 'archive bytes')
+            Yes '3c it cannot write outside the run''s folder' (($lines -contains 'OUTSIDE refused') -and -not (Test-Path -LiteralPath $outside))
+            Yes '3c what it wrote under game\ comes back, with its exit code' (($lines -contains 'CHANGED game/data/keep.json') -and ($lines -contains 'EXIT 4') -and (Test-Path -LiteralPath (Join-Path $run 'back.zip')))
+            Start-Sleep -Seconds 8
+            Yes '3c a process it started ended with the run' (($lines -contains 'CHILD started') -and -not (Test-Path -LiteralPath (Join-Path $run 'data\late.txt')))
+            Yes '3c the task is gone once the run is over' (-not @(Get-ScheduledTask -TaskName $ThornswoodLimitedTask -ErrorAction SilentlyContinue).Count)
+        }
+        $gone = Stop-Keeper $runKeeper
+        $runKeeper = $null
+        Yes '3c the keeper removes the run''s folder, what the limited account made in it too' (($gone -contains ('GONE ' + $run)) -and -not (Test-Path -LiteralPath $run))
+    } finally {
+        if ($runKeeper -and -not $runKeeper.P.HasExited) { $runKeeper.P.Kill() }
+        try { Unregister-ScheduledTask -TaskName $ThornswoodLimitedTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
 }

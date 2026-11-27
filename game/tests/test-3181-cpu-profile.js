@@ -19,8 +19,8 @@
     6. a hot reload adding a second timer instead of replacing the first;
     7. an inspector port left open: the block must never call
        inspector.open.
-  About 15 seconds, most of it the five second check and two one second
-  samples.
+  About 3 seconds, most of it two one second samples: the harness fires the
+  block's five second timer itself.
 */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -44,13 +44,20 @@ fs.mkdirSync(data);
 fs.writeFileSync(path.join(scratch, 'server-settings.json'), JSON.stringify({ dataDir: data }));
 const said = [];
 const log = (...a) => said.push(a.map(String).join(' '));
+// The block's five second timer is kept here, not handed to the clock: the
+// harness fires it itself (tick), so a request is looked at when the harness
+// says, not when a busy runner gets round to the timer. On 27 Nov a queue
+// build ran this harness 22.2 s for 0.4 s of processor and the first tick came
+// after the old 7 second wait (#7282). The sampling itself still runs on the
+// real clock, since that is what is being tested.
 const timers = [];
 const sandbox = {
   require, log, console, JSON, Math, Date, Object, Number, String,
   setTimeout, clearTimeout,
-  setInterval: (fn, ms) => { const t = setInterval(fn, ms); timers.push(t); return t; },
-  clearInterval: t => { clearInterval(t); timers.splice(timers.indexOf(t), 1); }
+  setInterval: (fn, ms) => { const t = { fn, ms }; timers.push(t); return t; },
+  clearInterval: t => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); }
 };
+const tick = () => timers[0].fn();
 sandbox.globalThis = sandbox;
 const cwd = process.cwd();
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -71,11 +78,14 @@ function thornswoodBusyWork(ms) { const until = Date.now() + ms; let x = 0; whil
     vm.runInContext(block, sandbox, { filename: 'gamemode.js' });
     process.chdir(cwd);
     yes('a hot reload replaces it, not adds another', timers.length === 1);
+    yes('the timer looks every 5 seconds', timers[0].ms === 5000);
 
     const req = path.join(data, 'profile.json'), out = path.join(data, 'profiles');
+    // Read off the folder's listing, not by checking req and then writing it.
+    const requestLeft = () => fs.readdirSync(data).includes('profile.json');
     fs.writeFileSync(req, JSON.stringify({ seconds: 1 }));
-    const took = await until('picked up', () => !fs.existsSync(req), 7000);
-    yes('the request is picked up and deleted', took);
+    tick();
+    yes('the request is picked up and deleted', !requestLeft());
     const busy = setInterval(() => thornswoodBusyWork(40), 50);
     const wrote = await until('written', () => fs.existsSync(path.join(out, 'newest.txt')), 5000);
     clearInterval(busy);
@@ -92,22 +102,22 @@ function thornswoodBusyWork(ms) { const until = Date.now() + ms; let x = 0; whil
     }
 
     fs.writeFileSync(req, JSON.stringify({ seconds: 1 }));
-    await until('picked up', () => !fs.existsSync(req), 7000);
     const before = said.filter(l => /written to/.test(l)).length;
+    tick();
     await until('written again', () => said.filter(l => /written to/.test(l)).length > before, 5000);
     yes('a second run replaces the files, it does not add more', fs.readdirSync(out).sort().join(',') === 'newest.cpuprofile,newest.txt');
 
     fs.writeFileSync(req, '{not json');
     const n = said.filter(l => /sampling for/.test(l)).length;
-    await until('picked up', () => !fs.existsSync(req), 7000);
+    tick();
     await wait(300);
     yes('a request it cannot read is deleted and said, and fires nothing',
-      !fs.existsSync(req) && said.some(l => /cpu profile request was not readable/.test(l)) && said.filter(l => /sampling for/.test(l)).length === n);
+      !requestLeft() && said.some(l => /cpu profile request was not readable/.test(l)) && said.filter(l => /sampling for/.test(l)).length === n);
   } catch (e) {
     failed++; console.log('FAIL  it threw: ' + (e && e.stack || e));
   } finally {
     process.chdir(cwd);
-    for (const t of timers.slice()) clearInterval(t);
+    timers.length = 0;
     fs.rmSync(scratch, { recursive: true, force: true });
   }
   if (failed) console.log('the block said: ' + said.join(' | '));

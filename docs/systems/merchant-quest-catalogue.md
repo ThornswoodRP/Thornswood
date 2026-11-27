@@ -300,7 +300,12 @@ Further definitions need their own source evidence, reward/cadence review,
 bounded state, exact bindings and explicit pinned admission. All ten scarce-resource works and all seven retrievals have their bound specialists ([Appointed specialists for original work](merchant-legacy-offers.md)); aggregate authoring flags remain false. Existing
 accepted quests keep their original terms. Editing a draft or changing the
 aggregate flags does not enable another quest. Published definitions use
-stable hashes and IDs; changing an objective or reward needs a new ID.
+stable hashes and IDs; changing an objective or reward needs a new ID. A
+published definition whose goods nothing makes any more is retired: it
+comes off the activation manifest and the published list, and an accepted
+job of it is not finished. The four woodworker parcels that asked for
+Thornswood's Charcoal were retired that way when the kiln began making
+Skyrim's own Charcoal (#6726), and are offered again under new IDs.
 
 ## Commission persistence and admission
 

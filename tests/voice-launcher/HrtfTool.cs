@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace Thornswood
@@ -143,10 +145,14 @@ namespace Thornswood
         /*
           The data's build, timed on its own, then the mix as the speakers run
           it: everybody pushed 20 ms of audio, then 20 ms rendered, over and
-          over, timed on this one thread with nothing else to do, so the time
-          it takes is the CPU it costs. Once with everybody
-          talking (noise), once with everybody silent, against the same mix
-          with nobody in it.
+          over, on this one thread. Once with everybody talking (noise), once
+          with everybody silent, against the same mix with nobody in it.
+
+          The mix is timed on this thread's own CPU clock (ThreadClock), not a
+          wall clock (#5654). The gate runs several harnesses at once on the
+          same cores, and on a wall clock every moment this thread waits for a
+          core is charged to the people talking. waitChargedMs is what that
+          clock charges for a 200 ms sleep, which a wall clock charges in full.
         */
         static int Bench(int peers, double seconds)
         {
@@ -154,6 +160,10 @@ namespace Thornswood
             new HrtfDatabase(VoiceMix.Rate);
             double buildMs = sw.Elapsed.TotalMilliseconds;
             HrtfDatabase.Shared().Wait();
+
+            double before = ThreadClock.Ms();
+            System.Threading.Thread.Sleep(200);
+            double waitChargedMs = ThreadClock.Ms() - before;
 
             double Run(int count, bool talking)
             {
@@ -167,10 +177,11 @@ namespace Thornswood
                 var frame = new float[VoiceMix.Frame];
                 var stereo = new float[VoiceMix.Frame * 2];
                 int frames = (int)(seconds * 50);
+                double start = 0;
                 // Warm up, so the JIT and the jitter buffers are settled.
                 for (int f = 0; f < frames + 50; f++)
                 {
-                    if (f == 50) sw.Restart();
+                    if (f == 50) start = ThreadClock.Ms();
                     for (int p = 0; p < count; p++)
                     {
                         for (int i = 0; i < frame.Length; i++) frame[i] = talking ? (float)(rnd.NextDouble() * 0.2 - 0.1) : 0;
@@ -180,7 +191,7 @@ namespace Thornswood
                     if (f % 25 == 0) for (int p = 0; p < count; p++) mix.SetPosition(p, Math.Cos(p + f), 0.2, Math.Sin(p + f));
                     mix.Render(stereo, VoiceMix.Frame);
                 }
-                return sw.Elapsed.TotalMilliseconds / (frames * 20.0);
+                return (ThreadClock.Ms() - start) / (frames * 20.0);
             }
 
             double empty = Run(0, true);
@@ -190,11 +201,51 @@ namespace Thornswood
             {
                 { "buildMs", buildMs },
                 { "peers", peers },
+                { "clock", "thread" },
+                { "waitChargedMs", waitChargedMs },
                 { "coreShareEmpty", empty },
                 { "coreSharePerTalker", (talk - empty) / peers },
                 { "coreSharePerSilent", (quiet - empty) / peers },
             });
             return 0;
+        }
+    }
+
+    /*
+      The CPU time the calling thread itself has used, in milliseconds: the
+      time it ran, not the time it waited to run. Windows counts it in clock
+      ticks (about 15.6 ms), which over the bench's seconds is well under a
+      tenth of a percent of one core per person.
+    */
+    static class ThreadClock
+    {
+        const int ClockThreadCpuTime = 3;   // CLOCK_THREAD_CPUTIME_ID
+
+        // time is a struct timespec: seconds, then nanoseconds, two 64-bit
+        // longs on the 64-bit Linux the gate runs on.
+        [DllImport("libc", EntryPoint = "clock_gettime", SetLastError = true)]
+        static extern unsafe int ClockGetTime(int clock, long* time);
+
+        [DllImport("kernel32.dll")]
+        static extern IntPtr GetCurrentThread();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool GetThreadTimes(IntPtr thread, out long created, out long exited, out long kernel, out long user);
+
+        public static unsafe double Ms()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                if (!GetThreadTimes(GetCurrentThread(), out _, out _, out long kernel, out long user)) throw new Win32Exception();
+                return (kernel + user) / 10000.0;
+            }
+            if (OperatingSystem.IsLinux())
+            {
+                long* t = stackalloc long[2];
+                if (ClockGetTime(ClockThreadCpuTime, t) != 0) throw new Win32Exception();
+                return t[0] * 1000.0 + t[1] / 1e6;
+            }
+            throw new PlatformNotSupportedException("the bench reads a thread's CPU time on Windows and Linux only");
         }
     }
 }
