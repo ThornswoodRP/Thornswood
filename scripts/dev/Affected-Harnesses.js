@@ -450,8 +450,9 @@ function pick(tracesFile, treeFile, commit, gate) {
   box builds the new one. The map says so for a harness it traced. For one
   it cannot clear (always run, or not in the map) its own text decides:
   naming a file the build writes, or a folder the build writes into that
-  git holds nothing in. The merge release runs them all over the
-  merge's own build before anything carries it.
+  git holds nothing in. The merge queue runs them all over the box's build
+  of the queued merge before it lands (build.yml's queue jobs, #6879), and
+  the merge release over the merge's own build before anything carries it.
 
   writes: the files and folders the build writes; inputs: the paths its key
   is made of (scripts/mods/ContentPaths.ps1), a folder for all under it. The

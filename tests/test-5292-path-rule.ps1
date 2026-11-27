@@ -25,7 +25,11 @@
        and the launcher build passed and the gate, its Windows shares and
        since #5293 its Linux shares, each passed or were skipped because
        the pick said they had nothing to do; a skipped launcher build never
-       passes;
+       passes; and since #6879, in the merge queue, the queued merge's
+       content build passed, and when it said the merge needs them its
+       content checks' pick passed and each platform's shares passed or
+       were skipped because that pick gave them none, while on any other run
+       the build job is skipped;
     3. read from this repository: the launcher job's steps are exactly the
        one that says why there is nothing to build, which alone runs when
        the pick said launcher=false, on Linux, then the native launcher's
@@ -103,7 +107,7 @@ $code = ($checks -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
 Yes '  and none of its steps needs Windows: no Windows PowerShell, no MSBuild, no backslash path handed to node' ($code -notmatch 'shell: powershell|Find-MSBuild|\bmsbuild\b|node\s+\S*\\|Scripts\\python\.exe')
 Yes 'the pick runs Launcher-Reach.ps1 with the base, and hands on launcher=' ($pick -match '(?m)^      launcher: \$\{\{ steps\.reach\.outputs\.launcher \}\}$' -and $pick -match '(?m)^          ./scripts/dev/Launcher-Reach\.ps1 -Base \$env:BASE$' -and $pick -match '(?m)^          BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}$')
 $prResult = Get-Job $pr 'result'
-Yes 'Build check result needs the pick, the tree checks, the launcher build and the gate on both platforms' ($prResult -match '(?m)^    needs: \[pick, checks, launcher, gate, gate-linux, bot\]$')
+Yes 'Build check result needs the pick, the tree checks, the launcher build, the gate on both platforms and the queued merge''s content checks' ($prResult -match '(?m)^    needs: \[pick, checks, launcher, gate, gate-linux, bot, queue-content, queue-pick, queue-checks, queue-checks-linux\]$')
 
 # ---- 2. Build check result's script, run --------------------------------------
 $script = ''
@@ -142,6 +146,7 @@ else {
             @('a Linux share was cancelled', 'success', 'success', 'success', 'success', 'true', '[1]', 'cancelled', '[1]', 1))
         foreach ($c in $cases) {
             $env:BOT = 'success'
+            $env:EVENT = 'pull_request'; $env:QUEUE = 'skipped'
             $env:PICK = $c[1]; $env:CHECKS = $c[2]; $env:BUILD = $c[3]; $env:GATE = $c[4]; $env:REACHES_LAUNCHER = $c[5]; $env:SHARES = $c[6]; $env:GATE_LINUX = $c[7]; $env:LINUX_SHARES = $c[8]
             $null = & $bash $file 2>&1
             $rc = $LASTEXITCODE
@@ -156,8 +161,36 @@ else {
             $null = & $bash $file 2>&1
             Yes ("Build check result rejects bot result '{0}'" -f $state) ($LASTEXITCODE -ne 0)
         }
+        # #6879: the queued merge's content build and checks, with every
+        # other job green. Event, the build job, whether it said the merge
+        # needs its checks, their pick, Windows shares and their list, Linux
+        # shares and their list, then 0 to pass or 1 to fail.
+        $env:BOT = 'success'
+        $queue = @(
+            @('a pull request''s own run, where the queued build is skipped', 'pull_request', 'skipped', '', '', '', '', '', '', 0),
+            @('a pull request''s own run whose queued build ran (it never should)', 'pull_request', 'success', 'no', '', '', '', '', '', 1),
+            @('the queue, the inputs the newest kept build''s', 'merge_group', 'success', 'no', 'skipped', 'skipped', '', 'skipped', '', 0),
+            @('the queue, the box built the merge and every content check passed', 'merge_group', 'success', 'yes', 'success', 'success', '[1,2]', 'success', '[1]', 0),
+            @('the queue, the content checks had no Linux share', 'merge_group', 'success', 'yes', 'success', 'success', '[1]', 'skipped', '[]', 0),
+            @('the queue, the content checks had nothing to run', 'merge_group', 'success', 'yes', 'success', 'skipped', '[]', 'skipped', '[]', 0),
+            @('the queue, the box''s build failed or never came', 'merge_group', 'failure', '', 'skipped', 'skipped', '', 'skipped', '', 1),
+            @('the queue, the build job was cancelled', 'merge_group', 'cancelled', '', 'skipped', 'skipped', '', 'skipped', '', 1),
+            @('the queue, the build job skipped', 'merge_group', 'skipped', '', 'skipped', 'skipped', '', 'skipped', '', 1),
+            @('the queue, a content check failed on Windows', 'merge_group', 'success', 'yes', 'success', 'failure', '[1]', 'success', '[1]', 1),
+            @('the queue, a content check failed on Linux', 'merge_group', 'success', 'yes', 'success', 'success', '[1]', 'failure', '[1]', 1),
+            @('the queue, the content checks'' pick failed', 'merge_group', 'success', 'yes', 'failure', 'skipped', '', 'skipped', '', 1),
+            @('the queue, the Windows content checks skipped though the pick gave them shares', 'merge_group', 'success', 'yes', 'success', 'skipped', '[1]', 'success', '[1]', 1),
+            @('the queue, the Linux content checks skipped though the pick gave them shares', 'merge_group', 'success', 'yes', 'success', 'success', '[1]', 'skipped', '[1]', 1),
+            @('the queue, the Windows content checks were cancelled', 'merge_group', 'success', 'yes', 'success', 'cancelled', '[1]', 'success', '[1]', 1))
+        foreach ($c in $queue) {
+            $env:EVENT = $c[1]; $env:QUEUE = $c[2]; $env:QUEUE_NEEDED = $c[3]; $env:QUEUE_PICK = $c[4]
+            $env:QUEUE_CHECKS = $c[5]; $env:QUEUE_SHARES = $c[6]; $env:QUEUE_CHECKS_LINUX = $c[7]; $env:QUEUE_LINUX_SHARES = $c[8]
+            $null = & $bash $file 2>&1
+            $rc = $LASTEXITCODE
+            Yes ("Build check result: {0}: {1}" -f $c[0], $(if ($c[9] -eq 0) { 'passes' } else { 'fails' })) ($rc -eq $c[9])
+        }
     } finally {
-        foreach ($n in 'PICK', 'CHECKS', 'BUILD', 'GATE', 'REACHES_LAUNCHER', 'SHARES', 'GATE_LINUX', 'LINUX_SHARES', 'BOT') { Remove-Item -LiteralPath "Env:$n" -ErrorAction SilentlyContinue }
+        foreach ($n in 'PICK', 'CHECKS', 'BUILD', 'GATE', 'REACHES_LAUNCHER', 'SHARES', 'GATE_LINUX', 'LINUX_SHARES', 'BOT', 'EVENT', 'QUEUE', 'QUEUE_NEEDED', 'QUEUE_PICK', 'QUEUE_CHECKS', 'QUEUE_SHARES', 'QUEUE_CHECKS_LINUX', 'QUEUE_LINUX_SHARES') { Remove-Item -LiteralPath "Env:$n" -ErrorAction SilentlyContinue }
         Remove-Item -LiteralPath $scratch0 -Recurse -Force -ErrorAction SilentlyContinue
     }
 }

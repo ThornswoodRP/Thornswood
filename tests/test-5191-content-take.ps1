@@ -27,6 +27,12 @@
     3c. -Newest says SAME KEY or OTHER KEY against this checkout's inputs,
        with same=, key= and commit= for the gate's pick, and -BuildKey
        holds it to a key;
+    3q. -Queued, the merge queue's build (#6879): it takes the box's build
+       of main or of the queued commit at the same key, never a queue build
+       without -Queued; -Ask names the queued commit, or waits on an open
+       ask for the key instead of making a second; -WaitMinutes stops with
+       the agent's reason when the ask it waits on fails, and when one
+       says it built and no draft is there;
     3d. -Newest -Find names the newest build for actions/download-artifact,
        and in a workflow the script never downloads a build itself (#6359);
     7. every workflow lays the build with .github/actions/lay-content, which
@@ -152,6 +158,51 @@ try {
         (Sha ([IO.File]::ReadAllBytes((Join-Path $kept 'content-build.json')))) -eq (Sha ([IO.File]::ReadAllBytes((Join-Path $assets 'content-build.json')))))
     TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
     TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
+
+    # ------------------------------------------------ 3q. -Queued (#6879)
+    $qtag = "content-queue-dev-$key"
+    $deps = Join-Path $tmp 'deployments.json'
+    '[]' | Set-Content -LiteralPath $deps
+    '[]' | Set-Content -LiteralPath $rels
+    Remove-Item -LiteralPath $dep -Force -ErrorAction SilentlyContinue
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-Queued', '-Ask', '-DeploymentFile', $dep, '-DeploymentsFile', $deps, '-Output', '')
+    $d = if (Test-Path -LiteralPath $dep) { Get-Content -LiteralPath $dep -Raw | ConvertFrom-Json } else { $null }
+    Check '3q -Queued -Ask names the queued commit in its Deployment, still to main' ($r.Code -eq 0 -and $d -and $d.ref -ceq 'main' -and $d.environment -ceq 'Content' -and
+        $d.payload.queued -ceq $head -and $d.payload.content -ceq $key -and $d.payload.commit -ceq $head -and $d.description -match 'merge queue')
+    @(@{ id = 77; payload = @{ content = $key; server = 'dev'; commit = $head }; statuses = @() }) | ConvertTo-Json -Depth 5 -AsArray | Set-Content -LiteralPath $deps
+    Remove-Item -LiteralPath $dep -Force -ErrorAction SilentlyContinue
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-Queued', '-Ask', '-DeploymentFile', $dep, '-DeploymentsFile', $deps, '-Output', '')
+    Check '3q an open ask for the same inputs is waited on, not asked again' ($r.Code -eq 0 -and $r.Out -contains 'WAITING on deployment 77, an open ask for these inputs' -and -not (Test-Path -LiteralPath $dep))
+    @(@{ id = 77; payload = @{ content = $key; server = 'dev'; commit = $head }; statuses = @(@{ state = 'success'; description = 'built' }) }) | ConvertTo-Json -Depth 5 -AsArray | Set-Content -LiteralPath $deps
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-Queued', '-Ask', '-DeploymentFile', $dep, '-DeploymentsFile', $deps, '-Output', '')
+    Check '3q and an answered one is not open, so it asks' ($r.Code -eq 0 -and (Test-Path -LiteralPath $dep))
+    @(@{ id = 'asked'; payload = @{ content = $key; server = 'dev'; queued = $head }; statuses = @(@{ state = 'failure'; description = 'not built: STOP. the limited account cannot read python.exe' }) }) | ConvertTo-Json -Depth 5 -AsArray | Set-Content -LiteralPath $deps
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-Queued', '-Ask', '-DeploymentFile', $dep, '-DeploymentsFile', $deps, '-WaitMinutes', '1', '-PollSeconds', '0', '-Take', '-Output', '')
+    Check '3q -WaitMinutes stops at once with the agent''s reason when its ask fails' ($r.Code -eq 1 -and $r.Text -match "STOP\. the box did not build $($key.Substring(0, 12)) \(deployment asked\): not built: STOP\. the limited account cannot read python\.exe")
+    @(@{ id = 'asked'; payload = @{ content = $key; server = 'dev'; queued = $head }; statuses = @(@{ state = 'success'; description = 'built' }) }) | ConvertTo-Json -Depth 5 -AsArray | Set-Content -LiteralPath $deps
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-Queued', '-Ask', '-DeploymentFile', $dep, '-DeploymentsFile', $deps, '-WaitMinutes', '1', '-PollSeconds', '0', '-Take', '-Output', '')
+    Check '3q and when it says it built but neither draft is there' ($r.Code -eq 1 -and $r.Text -match "says the box built $($key.Substring(0, 12)), but neither content-dev-$key nor $qtag is a whole draft")
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-WaitMinutes', '1', '-Output', '')
+    Check '3q -WaitMinutes is for -Queued alone' ($r.Code -eq 1 -and $r.Text -match 'STOP\. -WaitMinutes and -DeploymentsFile are for -Queued')
+    $was = $tag; $tag = $qtag
+    $assets = Plant $built
+    $tag = $was
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-Output', '')
+    Check '3q without -Queued the merge queue''s build is never taken' ($r.Out -contains 'MISSING')
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-Queued', '-Output', $out)
+    Check '3q with -Queued the queued commit''s build of the key is found' ($r.Code -eq 0 -and $r.Out -contains "FOUND $qtag" -and (Get-Content -LiteralPath $out) -contains "tag=$qtag")
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-AssetDir', $assets, '-Queued', '-Ask', '-DeploymentsFile', $deps, '-WaitMinutes', '1', '-PollSeconds', '0', '-Take', '-Output', '')
+    $same = @($built.Keys | Where-Object { (Sha ([IO.File]::ReadAllBytes((Join-Path $repo $_)))) -ne (Sha $built[$_]) }).Count -eq 0
+    Check '3q and taken whole, held to the key, asking nothing' ($r.Code -eq 0 -and $same -and $r.Text -match "TOOK $key FROM $head" -and $r.Text -notmatch 'ASKED')
+    TGit $repo @('checkout', '--quiet', '--force', $head) | Out-Null
+    TGit $repo @('clean', '--quiet', '-fdx') | Out-Null
+    # The box's build of main at the same inputs is as good, and is read first.
+    $mainRels = @(Get-Content -LiteralPath $rels -Raw | ConvertFrom-Json)
+    $both = @($mainRels[0], [pscustomobject]@{ tag_name = $tag; draft = $true; assets = $mainRels[0].assets })
+    $both | ConvertTo-Json -Depth 5 -AsArray | Set-Content -LiteralPath $rels
+    $r = Run @('-Repo', $repo, '-ReleasesFile', $rels, '-Queued', '-Output', '')
+    Check '3q and the box''s build of main at the same inputs comes first' ($r.Code -eq 0 -and $r.Out -contains "FOUND $tag")
+    '[]' | Set-Content -LiteralPath $rels
 
     # ----------------------------------------------------- 3b. -Newest
     # Whatever its key: a pull request's checkout has inputs of its own.

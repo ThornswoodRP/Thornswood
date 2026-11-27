@@ -124,7 +124,7 @@ Then lay the content build over the clone. The content plugin and the tables rea
 pwsh scripts/release/Get-ContentBuild.ps1 -Newest
 ```
 
-It ends with `SAME KEY` when the build is of your clone's content inputs, or `OTHER KEY` when your clone changes one (a source, a builder or a script a builder loads). Run it again after every pull of main. With `OTHER KEY` a harness that holds a table to a source you changed holds it to the old table, and says nothing of your change until the box builds it; the gate leaves those out of a pull request's checks in the same way, and the merge release runs them over the new build.
+It ends with `SAME KEY` when the build is of your clone's content inputs, or `OTHER KEY` when your clone changes one (a source, a builder or a script a builder loads). Run it again after every pull of main. With `OTHER KEY` a harness that holds a table to a source you changed holds it to the old table, and says nothing of your change until the box builds it; the gate leaves those out of a pull request's checks in the same way, and the merge queue and then the merge release run them over the new build.
 
 From here on, the commands assume PowerShell is inside your clone.
 

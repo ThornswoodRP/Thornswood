@@ -74,10 +74,27 @@
   file only from a laid build of its own commit's key that still holds
   (New-ThornswoodArtifact -Content).
 
+  QUEUED (#6879, Patrick's A on 26 Nov 2026). In the merge queue's run the
+  checkout is the queue's own merge, a commit on a gh-readonly-queue/main/
+  branch that no merge release has built. -Queued finds its key's build
+  under either name: content-<server>-<key>, the box's build of main at the
+  same inputs, or content-queue-<server>-<key>, which the agent builds from
+  the queued commit itself as the limited account (Build-ContentOnBox.ps1
+  -Queued). With -Ask, when neither is there and no ask for the key is
+  still open (a merge release asks for main's own), it makes a Deployment
+  to Content whose payload names the queued commit; the agent answers asks
+  oldest first, and merge-release.yml starts nothing on their statuses.
+  -WaitMinutes then waits that long for either draft, and stops at once
+  when the Deployment it waits on fails, with the agent's reason. -Take
+  takes the one found, as above.
+
+      pwsh scripts/release/Get-ContentBuild.ps1 -Queued -Ask -WaitMinutes 45 -Take -Keep <folder>
+
   A test hands -ArtifactsFile (the list of artifacts) or -ArtifactDir (the
   two files) for -Newest, -ReleasesFile (the list of Releases) and -AssetDir (the two
   files) for GitHub, and -DeploymentFile, where -Ask writes what it would
-  send.
+  send; for -Queued, -DeploymentsFile (the Deployments to Content, each with
+  its statuses, read again at each look) and -PollSeconds.
 #>
 #Requires -Version 7
 [CmdletBinding()]
@@ -98,7 +115,11 @@ param(
     [string]$ArtifactsFile = '',
     [string]$ArtifactDir = '',
     [string]$BuildKey = '',
-    [string]$Kept = ''
+    [string]$Kept = '',
+    [switch]$Queued,
+    [ValidateRange(0, 120)][int]$WaitMinutes = 0,
+    [ValidateRange(0, 300)][int]$PollSeconds = 30,
+    [string]$DeploymentsFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -294,45 +315,151 @@ if ($Kept) {
     exit 0
 }
 
-try { $rels = @(Get-MergeReleaseList -Repo $GitHubRepo -ReleasesFile $ReleasesFile) } catch { Stop-Take $_.Exception.Message }
-$draft = @($rels | Where-Object { $_.draft -and [string]$_.tag_name -ceq $tag } | Select-Object -First 1)
-$zipAsset = if ($draft.Count) { @($draft[0].assets | Where-Object { $_.name -ceq 'content.zip' } | Select-Object -First 1) } else { @() }
-$recAsset = if ($draft.Count) { @($draft[0].assets | Where-Object { $_.name -ceq 'content-build.json' } | Select-Object -First 1) } else { @() }
+if (($WaitMinutes -or $DeploymentsFile) -and -not $Queued) { Stop-Take '-WaitMinutes and -DeploymentsFile are for -Queued, the merge queue''s build' }
+# The names a build of this key may be under: the box's build of main, and
+# for a queued merge (#6879) the box's build of that commit as the limited
+# account. Either is a build of these inputs, held to the key below.
+$tags = if ($Queued) { @($tag, "content-queue-$Server-$key") } else { @($tag) }
 
-if (-not ($zipAsset.Count -and $recAsset.Count)) {
+# The whole draft of the first name that has one: $null, or its tag and its
+# two files.
+function Find-ContentDraft {
+    try { $rels = @(Get-MergeReleaseList -Repo $GitHubRepo -ReleasesFile $ReleasesFile) } catch { Stop-Take $_.Exception.Message }
+    foreach ($t in $tags) {
+        $d = @($rels | Where-Object { $_.draft -and [string]$_.tag_name -ceq $t } | Select-Object -First 1)
+        if (-not $d.Count) { continue }
+        $z = @($d[0].assets | Where-Object { $_.name -ceq 'content.zip' } | Select-Object -First 1)
+        $r = @($d[0].assets | Where-Object { $_.name -ceq 'content-build.json' } | Select-Object -First 1)
+        if ($z.Count -and $r.Count) { return [pscustomobject]@{ Tag = $t; Zip = $z[0]; Rec = $r[0] } }
+    }
+    return $null
+}
+
+# The Deployments to Content, newest first, each with its statuses newest
+# first: GitHub's, or -DeploymentsFile's (read again at each look, so a test
+# can move it on).
+function Get-ContentAsks {
+    if ($DeploymentsFile) { return @([IO.File]::ReadAllText($DeploymentsFile) | ConvertFrom-Json) }
+    $raw = gh api "repos/$GitHubRepo/deployments?environment=Content&per_page=30"
+    if ($LASTEXITCODE -ne 0) { Stop-Take 'GitHub did not list the Deployments to Content' }
+    $out = @()
+    foreach ($d in @(($raw -join "`n") | ConvertFrom-Json)) {
+        $st = gh api "repos/$GitHubRepo/deployments/$($d.id)/statuses?per_page=10"
+        if ($LASTEXITCODE -ne 0) { Stop-Take "GitHub did not list the statuses of Deployment $($d.id)" }
+        $out += [pscustomobject]@{ id = $d.id; payload = $d.payload; statuses = @(($st -join "`n") | ConvertFrom-Json) }
+    }
+    return $out
+}
+function Get-AskPayload($d) {
+    $p = $d.payload
+    if ($p -is [string]) { try { $p = $p | ConvertFrom-Json } catch { $p = $null } }
+    return $p
+}
+# An ask still open: no status yet, or its newest is queued, pending or in
+# progress.
+function Test-AskOpen($d) {
+    $s = @($d.statuses)
+    return (-not $s.Count) -or ([string]$s[0].state -in @('queued', 'pending', 'in_progress'))
+}
+
+$found = Find-ContentDraft
+
+# Asks the agent for this key's build by a Deployment to Content; says the
+# Deployment's id ('asked' when -DeploymentFile takes what it would send).
+# To main, not the commit: the agent builds main as it is, and a Deployment
+# made with a branch keeps github.ref main for the run its status starts.
+# Kept as a record (not transient), never live. A queued merge's ask names
+# its commit (#6879): the agent builds that commit as the limited account
+# and keeps it as content-queue-, and merge-release.yml starts nothing on
+# its status.
+function New-ContentAsk {
+    $payload = [ordered]@{ content = $key; server = $Server; commit = $sha }
+    if ($Queued) { $payload['queued'] = $sha }
+    $body = [ordered]@{
+        ref                    = 'main'
+        environment            = 'Content'
+        task                   = 'deploy'
+        auto_merge             = $false
+        required_contexts      = @()
+        payload                = $payload
+        description            = $(if ($Queued) { "Build the content plugin and tables for the merge queue's $($sha.Substring(0, 7)) on the box" } else { "Build the content plugin and tables for $($sha.Substring(0, 7)) on the box" })
+        production_environment = $false
+        transient_environment  = $false
+    }
+    $json = $body | ConvertTo-Json -Depth 4 -Compress
+    if ($DeploymentFile) { [IO.File]::WriteAllText($DeploymentFile, $json); Write-Host "ASKED (written to $DeploymentFile)"; return 'asked' }
+    $f = New-TemporaryFile
+    try {
+        [IO.File]::WriteAllText($f.FullName, $json)
+        $id = gh api --method POST "repos/$GitHubRepo/deployments" --input $f.FullName --jq .id
+        if ($LASTEXITCODE -ne 0 -or -not $id) { Stop-Take 'the Deployment to Content could not be made' }
+    } finally { Remove-Item -LiteralPath $f.FullName -Force }
+    Write-Host "ASKED deployment $id"
+    Say-Output "deployment=$id"
+    if ($env:GITHUB_STEP_SUMMARY) {
+        $then = if ($Queued) { 'this run waits for it' } else { 'its status starts this release again' }
+        Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "The box has no content build for these inputs yet ($($key.Substring(0, 12))), so Deployment $id asks the deploy agent for one; $then."
+    }
+    return [string]$id
+}
+
+if (-not $found) {
     Write-Host 'MISSING'
     Say-Output 'found=no'
-    if ($Take) { Stop-Take "there is no whole draft $tag to take" }
-    if ($Ask) {
-        # To main, not the commit: the agent builds main as it is, and a
-        # Deployment made with a branch keeps github.ref main for the run
-        # its status starts. Kept as a record (not transient), never live.
-        $body = [ordered]@{
-            ref                    = 'main'
-            environment            = 'Content'
-            task                   = 'deploy'
-            auto_merge             = $false
-            required_contexts      = @()
-            payload                = [ordered]@{ content = $key; server = $Server; commit = $sha }
-            description            = "Build the content plugin and tables for $($sha.Substring(0, 7)) on the box"
-            production_environment = $false
-            transient_environment  = $false
-        }
-        $json = $body | ConvertTo-Json -Depth 4 -Compress
-        if ($DeploymentFile) { [IO.File]::WriteAllText($DeploymentFile, $json); Write-Host "ASKED (written to $DeploymentFile)"; exit 0 }
-        $f = New-TemporaryFile
-        try {
-            [IO.File]::WriteAllText($f.FullName, $json)
-            $id = gh api --method POST "repos/$GitHubRepo/deployments" --input $f.FullName --jq .id
-            if ($LASTEXITCODE -ne 0 -or -not $id) { Stop-Take 'the Deployment to Content could not be made' }
-        } finally { Remove-Item -LiteralPath $f.FullName -Force }
-        Write-Host "ASKED deployment $id"
-        if ($env:GITHUB_STEP_SUMMARY) { Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "The box has no content build for these inputs yet ($($key.Substring(0, 12))), so Deployment $id asks the deploy agent for one; its status starts this release again." }
+    $wait = $Queued -and $WaitMinutes
+    if ($Take -and -not $wait) { Stop-Take "there is no whole draft $($tags -join ' or ') to take" }
+    $waitOn = ''
+    $mine = $false
+    if ($Ask -and $Queued) {
+        # An open ask for the same inputs (a merge release's for main, or an
+        # earlier queue run's) is being answered already: wait on it, so the
+        # box does not build the same inputs twice.
+        $open = @(Get-ContentAsks | Where-Object { $p = Get-AskPayload $_; $p -and [string]$p.content -ceq $key -and [string]$p.server -ceq $Server -and (Test-AskOpen $_) } | Select-Object -First 1)
+        if ($open.Count) { $waitOn = [string]$open[0].id; Write-Host "WAITING on deployment $waitOn, an open ask for these inputs"; Say-Output "deployment=$waitOn" }
     }
-    exit 0
+    if ($Ask -and -not $waitOn) { $waitOn = New-ContentAsk; $mine = $true }
+    if (-not $wait) { exit 0 }
+
+    # ---- wait for the queued merge's build (#6879) ---------------------------
+    # The agent answers one ask at a time, oldest first, so a build may wait
+    # behind others; -WaitMinutes is the most this run gives it. Either
+    # draft ends the wait. Its own ask ending without a build ends it at
+    # once, with the agent's reason: nothing puts the draft up after that,
+    # and the queue drops the merge. Another's ask set aside (the agent
+    # answers only main's newest, docs/DEPLOY-AGENT.md) is followed by an
+    # ask of this run's own.
+    $until = (Get-Date).AddMinutes($WaitMinutes)
+    while (-not $found) {
+        if ((Get-Date) -ge $until) { Stop-Take "the box put up no build of $($key.Substring(0, 12)) in $WaitMinutes minutes ($($tags -join ' or ')), so the content checks of this merge cannot run" }
+        if ($PollSeconds) { Start-Sleep -Seconds $PollSeconds }
+        $found = Find-ContentDraft
+        if ($found -or -not $waitOn) { continue }
+        $d = @(Get-ContentAsks | Where-Object { [string]$_.id -eq $waitOn } | Select-Object -First 1)
+        if (-not ($d.Count -and @($d[0].statuses).Count)) { continue }
+        $st = @($d[0].statuses)[0]
+        $why = [string]$st.description
+        switch ([string]$st.state) {
+            { $_ -in @('failure', 'error') } { Stop-Take "the box did not build $($key.Substring(0, 12)) (deployment $waitOn): $why" }
+            'inactive' {
+                if ($mine -or -not $Ask) { Stop-Take "deployment $waitOn was set aside without a build: $why" }
+                Write-Host "deployment $waitOn was set aside ($why), so this run asks for its own"
+                $waitOn = New-ContentAsk; $mine = $true
+            }
+            'success' {
+                # Its success is set after the draft is up, so the draft is
+                # read once more before this says it is not there.
+                $found = Find-ContentDraft
+                if (-not $found) { Stop-Take "deployment $waitOn says the box built $($key.Substring(0, 12)), but neither $($tags -join ' nor ') is a whole draft" }
+            }
+        }
+    }
 }
+$tag = $found.Tag
+$zipAsset = @($found.Zip)
+$recAsset = @($found.Rec)
 Write-Host "FOUND $tag"
 Say-Output 'found=yes'
+Say-Output "tag=$tag"
 if (-not $Take) { exit 0 }
 
 # ---- take it ---------------------------------------------------------------

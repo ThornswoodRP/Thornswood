@@ -280,8 +280,10 @@ jobs:
   # carries it, in shares as the gate runs: a red one stops the release, and
   # the build is not kept as content-dev, so no checkout or pull request
   # lays a build whose checks failed. A pull request that changes a content
-  # input runs these here and not in its own checks, where only an older
-  # build is there to run them over (Run-Gate.ps1 -Content says why).
+  # input runs these in the merge queue over the box's build of the queued
+  # merge (build.yml's queue jobs, #6879) and here, and not in its own
+  # checks, where only an older build is there to run them over
+  # (Run-Gate.ps1 -Content says why).
   checks-pick:
     name: Pick the content checks
     needs: content

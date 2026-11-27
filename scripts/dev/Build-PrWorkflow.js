@@ -137,6 +137,15 @@ function build(src) {
     passed; any other skip, a failure or a cancel cannot merge. The tree
     checks and the complete bot suite (#5958) always run and must pass. The gate's Linux shares (#5293) the same
     way: skipped counts only when the pick gave none (linux_shares=[]).
+
+    THE QUEUED MERGE'S CONTENT CHECKS (#6879). In the merge queue, when the
+    merge's content inputs are not the newest kept build's, build.yml's
+    queue jobs have the box build the merge and run the content checks over
+    that build. Their job "queue-content" runs on a merge group alone, and
+    must pass there; skipped counts only on any other run. Its other jobs
+    run only when it says the merge needs them (needed=yes), and then the
+    pick must pass and each platform's shares pass, or be skipped only when
+    the pick gave that platform none.
   */
   if (/\n  result:\n/.test(body)) { fail('build.yml already has a job named result'); }
   body = body.replace(/\n*$/, '\n') + [
@@ -146,7 +155,7 @@ function build(src) {
     '  # Build-PrWorkflow.js, which says why.',
     '  result:',
     '    name: Build check result',
-    '    needs: [pick, checks, launcher, gate, gate-linux, bot]',
+    '    needs: [pick, checks, launcher, gate, gate-linux, bot, queue-content, queue-pick, queue-checks, queue-checks-linux]',
     '    if: ${{ !cancelled() }}',
     '    runs-on: ubuntu-latest',
     '    timeout-minutes: 5',
@@ -162,6 +171,14 @@ function build(src) {
     '          REACHES_LAUNCHER: ${{ needs.pick.outputs.launcher }}',
     '          SHARES: ${{ needs.pick.outputs.shares }}',
     '          LINUX_SHARES: ${{ needs.pick.outputs.linux_shares }}',
+    '          EVENT: ${{ github.event_name }}',
+    "          QUEUE: ${{ needs['queue-content'].result }}",
+    "          QUEUE_NEEDED: ${{ needs['queue-content'].outputs.needed }}",
+    "          QUEUE_PICK: ${{ needs['queue-pick'].result }}",
+    "          QUEUE_CHECKS: ${{ needs['queue-checks'].result }}",
+    "          QUEUE_CHECKS_LINUX: ${{ needs['queue-checks-linux'].result }}",
+    "          QUEUE_SHARES: ${{ needs['queue-pick'].outputs.shares }}",
+    "          QUEUE_LINUX_SHARES: ${{ needs['queue-pick'].outputs.linux_shares }}",
     '        run: |',
     '          echo "Pick the gate harnesses: $PICK"',
     '          echo "Tree checks: $CHECKS"',
@@ -180,8 +197,18 @@ function build(src) {
     '          if [ "$GATE_LINUX" != success ]; then',
     '            if [ "$GATE_LINUX" = skipped ] && [ "$PICK" = success ] && [ "$LINUX_SHARES" = "[]" ]; then echo "The gate on Linux was skipped: the change reaches no harness that runs there (#5293)"; else ok=0; fi',
     '          fi',
+    '          if [ "$EVENT" = merge_group ]; then',
+    '            echo "The queued merge\'s content build: $QUEUE (needed: $QUEUE_NEEDED)"',
+    '            [ "$QUEUE" = success ] || ok=0',
+    '            if [ "$QUEUE_NEEDED" = yes ]; then',
+    '              echo "Its content checks: pick $QUEUE_PICK, Windows $QUEUE_CHECKS (shares: $QUEUE_SHARES), Linux $QUEUE_CHECKS_LINUX (shares: $QUEUE_LINUX_SHARES)"',
+    '              [ "$QUEUE_PICK" = success ] || ok=0',
+    '              if [ "$QUEUE_CHECKS" != success ] && ! { [ "$QUEUE_CHECKS" = skipped ] && [ "$QUEUE_PICK" = success ] && [ "$QUEUE_SHARES" = "[]" ]; }; then ok=0; fi',
+    '              if [ "$QUEUE_CHECKS_LINUX" != success ] && ! { [ "$QUEUE_CHECKS_LINUX" = skipped ] && [ "$QUEUE_PICK" = success ] && [ "$QUEUE_LINUX_SHARES" = "[]" ]; }; then ok=0; fi',
+    '            fi',
+    '          elif [ "$QUEUE" != skipped ]; then ok=0; fi',
     '          if [ "$ok" = 1 ]; then exit 0; fi',
-    '          echo "::error::the pick, the tree checks, the bot harnesses, the launcher build or a share of the gate did not pass, so this pull request may not merge"',
+    '          echo "::error::the pick, the tree checks, the bot harnesses, the launcher build, a share of the gate or the queued merge\'s content checks did not pass, so this pull request may not merge"',
     '          exit 1',
     '',
   ].join('\n');

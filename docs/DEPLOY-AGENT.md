@@ -512,7 +512,8 @@ with `.github/actions/lay-content`, where GitHub's own download step takes
 it, never with the script's own download (#6359). A pull request
 whose content inputs are not that build's leaves out the content checks that
 read an input it changed, since they would hold its new sources to the old
-tables; the merge release runs them.
+tables; the merge queue runs them over the box's build of the queued merge,
+and the merge release over the merge's own (below).
 
 ### A merge the queue holds
 
@@ -545,6 +546,17 @@ one drops it from the queue.
 - `Build-Content -Limited` builds main the same way and says whether every
   file is the administrator's build of the same key (MATCHES or DIFFERS):
   how the limited run is measured on the box.
+- On GitHub the ask is the merge queue's own (build-pr.yml's merge_group
+  run, the jobs build.yml calls the queued merge's). When the merge's
+  content inputs are not the newest kept build's, `Get-ContentBuild.ps1
+  -Queued -Ask -WaitMinutes 18 -Take` takes main's draft of these inputs or
+  the queue's, asks for the queue's when neither is up and no ask for the
+  key is open, and waits for it. A failed or errored ask stops it at once,
+  and so does a success with no whole draft of the key. The content checks
+  then run over that build in shares, and "Build check result" passes only
+  when they do, so a red one drops the pull request from the queue. Main's
+  ruleset gives a merge group 30 minutes to answer; a new build took 7 on
+  27 Nov 2026 and the content checks after it 4 to 6.
 
 ## Release news
 

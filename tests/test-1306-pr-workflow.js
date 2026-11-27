@@ -2,6 +2,8 @@
 // file. Since #4983 (the repository is public and GitHub's runners are free)
 // every build runs there alone: no fallback on the box, no runner choice.
 // build-pr.yml is generated from build.yml and must match it.
+// #6879: in the merge queue the box builds a merge whose content inputs
+// are new, and the content checks run over that build before it lands.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -66,7 +68,7 @@ yes('no workflow runs a pull request on the VPS (' + (others.join(', ') || 'none
 // repository is public since 30 Oct, so it no longer waits for that.
 const result = /\n  result:\n([\s\S]*)$/.exec(code(pr));
 const rj = result ? result[1] : '';
-yes('a "Build check result" job needs the pick, the tree checks, the build and the gate\'s shares on both platforms (#3683, #5292, #5293)', /^    name: Build check result\n    needs: \[pick, checks, launcher, gate, gate-linux, bot\]\n/.test(rj));
+yes('a "Build check result" job needs the pick, the tree checks, the build, the gate\'s shares on both platforms and the queued merge\'s content checks (#3683, #5292, #5293, #6879)', /^    name: Build check result\n    needs: \[pick, checks, launcher, gate, gate-linux, bot, queue-content, queue-pick, queue-checks, queue-checks-linux\]\n/.test(rj));
 yes('  runs unless cancelled', /\n    if: \$\{\{ !cancelled\(\) \}\}\n/.test(rj));
 yes('  on GitHub\'s ubuntu-latest, never the box', /\n    runs-on: ubuntu-latest\n/.test(rj) && !/self-hosted|thornswood/.test(rj));
 yes('  with no checkout, action or secret: it reads only their results', !/uses:|secrets\.|checkout/.test(rj) &&
@@ -125,6 +127,36 @@ for (const [what, workflow] of [['main', build], ['pull request', pr], ['nightly
     yes('the bot job has no path-selection or conditional skip on a pull request',
       !/^    (needs|if):/m.test(bot));
   }
+}
+// #6879: in the merge queue the box builds a merge whose content inputs are
+// not the newest kept build's, and the content checks run over that build
+// before it lands. The token that may write Contents and Deployments is that
+// job's alone, and only a merge group's run starts it; what it waits for and
+// the checks after it fit in the time main's ruleset gives a merge group.
+{
+  const job = (t, name) => { const m = new RegExp('\\n  ' + name + ':\\n([\\s\\S]*?)(?=\\n  [a-z][\\w-]*:\\n|$)').exec(t); return m ? m[1] : ''; };
+  const qc = job(pr, 'queue-content');
+  yes('the merge queue asks the box for the queued merge\'s content build, on a merge group\'s run alone (#6879)',
+    /\n    if: \$\{\{ github\.event_name == 'merge_group' \}\}\n/.test(qc) &&
+    /Get-ContentBuild\.ps1 -Server dev -Queued -Ask -WaitMinutes \d+ -Take -Keep /.test(qc) &&
+    /if: \$\{\{ steps\.content\.outputs\.same == 'no' \}\}/.test(qc));
+  // Each job's own permissions block, read job by job.
+  const jobs = code(pr).split('\njobs:\n')[1] || '';
+  const writers = jobs.split(/\n(?=  [a-z][\w-]*:\n)/).filter(b => /^      (contents|deployments): write$/m.test(b)).map(b => /^\s*([a-z][\w-]*):/.exec(b)[1]);
+  yes('  and only that job holds a token that writes Contents or Deployments',
+    writers.join(',') === 'queue-content' && !/^  [a-z_]+:\s*write/m.test(code(pr).split('\njobs:\n')[0]));
+  const qp = job(pr, 'queue-pick'), qw = job(pr, 'queue-checks'), ql = job(pr, 'queue-checks-linux');
+  yes('  the content checks are picked over that build and run in shares on both platforms',
+    /Run-Gate\.ps1 -Pick \d+ -LinuxShares \d+ -Content/.test(qp) && /\n    if: \$\{\{ needs\['queue-content'\]\.outputs\.needed == 'yes' \}\}\n/.test(qp) &&
+    /name: content-queued/.test(qw) && /name: content-queued/.test(ql) && /runs-on: windows-latest/.test(qw) && /-Platform Linux/.test(ql));
+  const settings = read(path.join(REPO, 'records', 'github-repo-settings.json'));
+  const limit = +((/"check_response_timeout_minutes": (\d+)/.exec(settings) || [])[1] || 0);
+  const minutes = re => +((re.exec(qc) || [])[1] || 0);
+  const wait = minutes(/-WaitMinutes (\d+)/), job1 = minutes(/\n    timeout-minutes: (\d+)\n/);
+  const share = Math.max(+((/\n    timeout-minutes: (\d+)\n/.exec(qw) || [])[1] || 99), +((/\n    timeout-minutes: (\d+)\n/.exec(ql) || [])[1] || 99));
+  const budget = Math.max(+((/-BudgetSeconds (\d+)/.exec(qw) || [])[1] || 9999), +((/-BudgetSeconds (\d+)/.exec(ql) || [])[1] || 9999)) / 60;
+  yes('  its wait ends before its job\'s clock, each share\'s budget before its own, and the wait and a share\'s budget together inside the ' + limit + ' minutes main\'s ruleset gives a merge group',
+    limit > 0 && wait > 0 && wait < job1 && budget < share && wait + budget < limit);
 }
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exitCode = fail ? 1 : 0;
