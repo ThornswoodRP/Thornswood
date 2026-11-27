@@ -30,7 +30,8 @@
        an exclusive.
     E  Bodies: a camp bandit's pile is rolled at death and taken by the
        first search, said once, and a second search is silence (#5477). A
-       draugr whose roll was empty says so once. Standing back up clears it, and the next
+       draugr whose every roll missed still carries one common supply
+       (#6715) and says so once. Standing back up clears it, and the next
        life is a new roll. A person's body is not searched.
     F  A restart: the chest's rest and the searched body are as they were.
     Z  No handler threw, no engine call the engine does not have was made,
@@ -169,7 +170,7 @@ w.dice(null);
 const bandit = ledger().entries['15a56:Skyrim.esm'], draugr = ledger().entries['1006ac:Skyrim.esm'];
 yes('E1 each pile is rolled at the death and kept on that life (' + JSON.stringify([bandit, draugr]).slice(0, 160) + ')',
     !!bandit && bandit.kind === 'body' && bandit.camp === true && bandit.taken === false && bandit.gold >= 1 &&
-    !!draugr && draugr.kind === 'body' && draugr.camp === false && draugr.gold === 0 && draugr.items.length === 0);
+    !!draugr && draugr.kind === 'body' && draugr.camp === false && draugr.gold === 0 && draugr.items.length === 1);
 let m = w.heard(BOB).length;
 let gold = w.count(BOB, GOLD);
 w.activate(BANDIT, BOB);
@@ -180,7 +181,8 @@ w.activate(BANDIT, ALDIS);
 yes('E2 and Aldis\'s, after him, is silence', w.heardSince(ALDIS, m).length === 0 && ledger().entries['15a56:Skyrim.esm'].taken === true);
 m = w.heard(BOB).length;
 w.activate(DRAUGR, BOB);
-yes('E3 a draugr whose roll was empty says so, once in their chat (#5477) (' + w.heardSince(BOB, m).join(' | ') + ')', w.heardSince(BOB, m).join(' | ') === 'There is nothing on this body.');
+yes('E3 a draugr whose every roll missed still carries one common supply (#6715), said once in their chat (#5477) (' + w.heardSince(BOB, m).join(' | ') + ')',
+    w.heardSince(BOB, m).length === 1 && /^You take .+ off the body\.$/.test(w.heardSince(BOB, m)[0]));
 m = w.heard(BOB).length;
 w.activate(DRAUGR, BOB);
 yes('E3 and a second search is silence', w.heardSince(BOB, m).length === 0);

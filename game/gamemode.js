@@ -33691,6 +33691,15 @@ module.exports = {
     on that life until somebody searches it or the actor stands back up.
     A camp enemy carries a little. Anything good on any other body is rare.
     A person is not searched. A hunter carcass stays on the hunter path.
+
+    NO BODY IS EVER EMPTY (#6715). Patrick, 26 Nov 2026, after a tester
+    searched two bandits in Embershard Mine and was told both times that
+    there was nothing on the body: "nothing should ever drop nothing atleast
+    something small or common or whatever". The wild odds left about seven
+    bodies in ten with nothing at all, so a roll that comes up with no coin
+    and no item takes one common supply (the tier 1 list: a lockpick, salt,
+    bone meal, a strip of leather, bread and the like). The odds of anything
+    better are as they were.
   */
   var BODY_CAMP = { gold: 0.80, goldN: 6, minor: 0.65, decent: 0.08, good: 0.015, rare: 0.002 };
   var BODY_WILD = { gold: 0.20, goldN: 4, minor: 0.12, decent: 0.02, good: 0.005, rare: 0.0005 };
@@ -33802,6 +33811,7 @@ module.exports = {
     if (rng() < odds.decent) pushPick(items, pickWeighted(supplyExact(2), rng));
     if (rng() < odds.good) pushPick(items, pickWeighted(gearOrNovice(), rng));
     if (rng() < odds.rare) pushPick(items, pickWeighted(rarePile(), rng));
+    if (!gold && !items.length) pushPick(items, pickWeighted(supplyExact(1), rng));
     return { gold: gold, items: mergeItems(items), camp: !!camp };
   }
 
