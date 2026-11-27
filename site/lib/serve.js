@@ -1649,6 +1649,16 @@ async function handle(req, res) {
         pending.push(entry);
         if (!putJson(GPENDING, pending)) {
           console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'pending-write-failed' }));
+          /* Not on the queue, so it was never sent (#4403): its file and note
+             go now. Kept, it was on no list, so neither expirePending nor
+             pruneRemovedUploads ever reached it. A file that will not delete
+             is marked removed instead, and the hourly sweep deletes it and
+             its note once it can. */
+          const gone = deleteUpload(name);
+          const notes = jsonFile(UPMETA, {});
+          if (gone.ok) delete notes[name];
+          else notes[name] = Object.assign({}, notes[name] || {}, { removed: Date.now() });
+          if (!putJson(UPMETA, notes)) console.error('[thornswood-docs] gallery ' + JSON.stringify({ event: 'note-write-failed' }));
           return sendJson(res, 500, { ok: false, error: 'the site could not put that in the queue for staff. Try again in a minute.' });
         }
         sendJson(res, 200, { ok: true, name: name });
