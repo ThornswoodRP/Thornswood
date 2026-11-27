@@ -23,7 +23,10 @@
   With -All, the whole tree, as the nightly does.
 
   It never fails anything: findings are GitHub warnings (errors for
-  PSScriptAnalyzer's own Error severity) and it ends 0. A tool it could not
+  PSScriptAnalyzer's own Error severity and eslint's severity 2), written as
+  ::warning and ::error lines with the file and line, so a pull request shows
+  them on its files, and it ends 0. ruff writes those lines itself; eslint's
+  JSON and PSScriptAnalyzer's findings are turned into them here. A tool it could not
   fetch is a warning saying that linter did not run.
 
   tests\test-eslint-amp-path.ps1 runs the eslint part under a folder holding
@@ -123,7 +126,7 @@ Lint 'ruff' {
             }
             elseif (Get-Command uv -CommandType Application -ErrorAction SilentlyContinue) {
                 uv venv $d
-                uv pip install --quiet --require-hashes -r $req --python (Join-Path $d $bin)
+                uv pip install --quiet --only-binary :all: --require-hashes -r $req --python (Join-Path $d $bin)
             }
             else {
                 throw 'neither python nor uv found on PATH'
@@ -134,6 +137,11 @@ Lint 'ruff' {
     if (-not $py) { Write-Host '::warning::no ruff venv, ruff lint skipped (install python or uv)' }
     else { & $py -m ruff check --no-cache --config (Join-Path $Repo '.github\lint\ruff.toml') --exit-zero --output-format github @list }
 }
+
+# A workflow command's text and its file= property, escaped the way GitHub
+# reads them back: % and line ends in both, and , and : in a property.
+function Format-Data([string]$s) { return $s.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A') }
+function Format-Property([string]$s) { return (Format-Data $s).Replace(':', '%3A').Replace(',', '%2C') }
 
 # eslint: pinned by version only (no lockfile, no hash). node runs eslint.js
 # itself, not npm's eslint.cmd shim: cmd.exe reads the shim, whose
@@ -152,7 +160,21 @@ Lint 'eslint' {
             npm install --prefix $d --no-save --no-audit --no-fund --silent ('eslint@' + $EslintVersion)
         }
         if ($dir) {
-            & node (Join-Path $dir 'node_modules\eslint\bin\eslint.js') -c (Join-Path $Repo '.github\lint\eslint.config.mjs') --no-warn-ignored @list
+            # eslint 9 has no GitHub format of its own, so its JSON is turned
+            # into the same workflow lines ruff and PSScriptAnalyzer write
+            # (#4311): a finding eslint calls an error (severity 2, a file
+            # that does not parse) is ::error, the rest ::warning.
+            $json = (& node (Join-Path $dir 'node_modules\eslint\bin\eslint.js') -c (Join-Path $Repo '.github\lint\eslint.config.mjs') --no-warn-ignored -f json @list | Out-String)
+            $n = 0
+            foreach ($r in @($json | ConvertFrom-Json)) {
+                foreach ($m in @($r.messages)) {
+                    $n++
+                    $lvl = if ([int]$m.severity -ge 2) { 'error' } else { 'warning' }
+                    $rule = if ($m.ruleId) { [string]$m.ruleId } else { 'eslint' }
+                    Write-Host ("::{0} file={1},line={2},col={3}::{4}: {5}" -f $lvl, (Format-Property $r.filePath), [int]$m.line, [int]$m.column, $rule, (Format-Data ([string]$m.message)))
+                }
+            }
+            Write-Host ("eslint: {0} finding(s)" -f $n)
         } else { Write-Host "::warning::could not fetch eslint $EslintVersion, eslint lint skipped" }
     }
 }

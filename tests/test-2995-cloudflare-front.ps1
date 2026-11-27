@@ -139,6 +139,30 @@ try {
         Yes ("{0}: {1} by all three" -f $a, $(if ($want) { 'inside' } else { 'outside' })) (@($got | Where-Object { $_ -ne $want }).Count -eq 0)
     }
     Yes 'the VPS itself is outside, so a record pointing straight at it never passes for Cloudflare' (-not (Test-ThornswoodInRanges $VpsAddr $ranges))
+    # Entries that are not an address and a prefix length (#4580): each copy
+    # skips them, so none counts an address inside by them (the network's own
+    # address included, which a prefix past the size once matched whole, and
+    # one inside), and a good entry
+    # beside them still counts. Watch-Outside.ps1's once took a /0 as every
+    # address, a prefix past the size as a whole match, and threw on a prefix
+    # that is not a number.
+    $bad = @('0.0.0.0/0', '::/0', '203.0.113.0/33', '203.0.113.0/40', '2001:db8::/129', '203.0.113.0/x', '203.0.113.0/', '203.0.113/24', '203.0.113.0/-1', '203.0.113.0/24/1', ' 203.0.113.0/ 24')
+    foreach ($e in $bad) {
+        $got = @()
+        foreach ($copy in @({ Test-ThornswoodInRanges $args[0] $args[1] }, $wo, $bx)) {
+            foreach ($a in '203.0.113.0', '203.0.113.5', '2001:db8::') {
+                try { $got += [bool](& $copy $a @($e)) } catch { $got += ('threw: ' + $_.Exception.Message) }
+            }
+        }
+        Yes ("'{0}' is skipped by all three ({1})" -f $e, ($got -join ', ')) (@($got | Where-Object { $_ -ne $false }).Count -eq 0)
+    }
+    foreach ($a in '203.0.113.5', '2001:db8::5') {
+        $got = @()
+        foreach ($copy in @({ Test-ThornswoodInRanges $args[0] $args[1] }, $wo, $bx)) {
+            try { $got += [bool](& $copy $a (@($bad) + @('203.0.113.0/24', '2001:db8::/32'))) } catch { $got += ('threw: ' + $_.Exception.Message) }
+        }
+        Yes ("{0} is still inside a good entry listed after the bad ones, by all three ({1})" -f $a, ($got -join ', ')) (@($got | Where-Object { $_ -ne $true }).Count -eq 0)
+    }
 
     # ---- 4. the box half ---------------------------------------------------------
     Write-Host ''

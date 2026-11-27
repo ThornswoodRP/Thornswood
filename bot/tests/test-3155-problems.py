@@ -9,7 +9,8 @@ The game's problems come in through the site's inbox.json, kind 'problem';
 problems_once files each one on the board once, oldest first, and says it in
 the staff channel with its number. The Discord panel in #test-findings opens
 a form and files the issue itself. Checked here: the issue each makes (its
-title, the words exactly as typed and unable to ping or format anything, the
+title, the words exactly as typed and unable to ping or format anything,
+the name, server, character and cell as typed too (#5497), the
 session link, the labels that keep it off the public #known-issues), filing
 once and never twice across a stop, what a GitHub refusal does, who may use
 the panel and how often, and that the panel is wired in.
@@ -63,8 +64,8 @@ yes('what they said is in the body exactly once, inside a <pre> where GitHub lin
     '<pre>The door to the &lt;b&gt;inn&lt;/b&gt; &amp; cellar @everyone will not open after a /stuck ``` x</pre>' in body)
 yes('nothing they typed can close the block or become markup', body.count('<pre>') == 1 and body.count('</pre>') == 1 and '<b>' not in body)
 yes('it says who: the character, the profile and the Discord account',
-    '**Who:** Bjorn, profile 4242, Discord account 123456789012345678' in body)
-yes('where the game server had the character', '**Where:** Whiterun, The Bannered Mare, at 1.5, -20, 300.2' in body)
+    '**Who:** ` Bjorn, profile 4242, Discord account 123456789012345678 `' in body)
+yes('where the game server had the character', '**Where:** ` Whiterun, The Bannered Mare, at 1.5, -20, 300.2 `' in body)
 yes('when, on the twelve hour clock in UTC', '**When:** 26 Oct 2026, 11:40 AM UTC' in body)
 yes('the logs are a link to that game\'s session on the hub, never a copy',
     '(https://thornswood.net/sessions?find=s-abc_123)' in body and 'More details' in body)
@@ -90,8 +91,43 @@ yes('noon and midnight read 12', bot._when_text(1793016000000).endswith('12:00 P
 dt, db = bot.problem_issue_discord('Lydia', 99, 'Crash at the gate', '', 'dev', 1793012400000)
 yes('from Discord: the title, what went wrong, who and their sessions on the hub',
     dt == 'Crash at the gate' and '<pre>Crash at the gate</pre>' in db and
-    '**Who:** Lydia, Discord account 99' in db and 'sessions?find=99' in db and
-    '**Server:** dev' in db and 'nothing said' in db)
+    '**Who:** ` Lydia, Discord account 99 `' in db and 'sessions?find=99' in db and
+    '**Server:** ` dev `' in db and 'nothing said' in db)
+
+# The name, the server box, the character and the cell are typed too (#5497):
+# each goes in as typed, in a code span, so none can ping, link or show a
+# picture, and a backtick in one cannot close its span.
+NAME = '@EvilPatrick06 [x](https://e.test) `a`'
+SERVER = '@ThornswoodRP/staff <img src=x.png>'
+CODE = __import__('re').compile(r'(`+)(?!`).*?(?<!`)\1(?!`)')
+
+
+def outside(text):
+    """What GitHub would read as markdown: the body without its <pre>
+       blocks and its code spans."""
+    text = __import__('re').sub(r'<pre>.*?</pre>', '', text, flags=__import__('re').S)
+    return CODE.sub('', text)
+
+
+def bare(text):
+    return '@' not in text and 'e.test' not in text and '<img' not in text and '[x]' not in text
+
+
+_dt, xb = bot.problem_issue_discord(NAME, 99, 'Crash', 'At the gate', SERVER, 1793012400000)
+yes('from Discord, a name with a mention, a link and a backtick goes in as typed, in a span it cannot close',
+    '**Who:** `` @EvilPatrick06 [x](https://e.test) `a`, Discord account 99 ``' in xb)
+yes('and so does a server with a mention and a picture tag',
+    '**Server:** ` @ThornswoodRP/staff <img src=x.png> `' in xb)
+yes('and nothing typed is left where GitHub reads markdown', bare(outside(xb)))
+yes('a name over two lines stays on its own list line',
+    '**Who:** ` Ada Bo, Discord account 99 `' in
+    bot.problem_issue_discord('Ada\nBo', 99, 'Crash', '', 'dev', 1793012400000)[1])
+_gt, xg = bot.problem_issue(dict(row, by=NAME, cell=SERVER, profileId='<b>7</b>',
+                                 pos=['@x', 2, 3]))
+yes('from the game, the character, the profile, the cell and the place go in as typed too',
+    '**Who:** `` @EvilPatrick06 [x](https://e.test) `a`, profile <b>7</b>, Discord account 123456789012345678 ``' in xg
+    and '**Where:** ` @ThornswoodRP/staff <img src=x.png>, at @x, 2, 3 `' in xg)
+yes('and nothing typed is left where GitHub reads markdown', bare(outside(xg)) and '<b>' not in outside(xg))
 
 
 # ------------------------------------------------------------ filing --

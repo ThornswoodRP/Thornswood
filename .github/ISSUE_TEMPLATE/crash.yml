@@ -56,4 +56,14 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: In the folder you installed Thornswood to, the launcher writes Profile\launcher.log, and the install writes Profile\setup-log.txt. Drag the one for what crashed in here, or paste its last lines.
+      description: >-
+        If the game closed itself, the file that says why is its newest crash log: the newest crash-(date and time).log in Profile\MyGames\SKSE, in the folder you installed Thornswood to.
+        The game always runs from Thornswood's own Skyrim folder, so its crash logs are there and never in Windows' Documents folder.
+
+
+        If the launcher crashed, send Profile\launcher.log, and if the install did, Profile\setup-log.txt, both in the same folder.
+        Drag the one for what crashed in here, or paste its last lines.
+
+
+        The launcher's Diagnostics page shows the newest crash too, and Build the report there puts it in one zip with the launcher log and your settings.
+        That zip names your Discord account and your Windows user, so it goes in your ticket in the Discord, where only staff read it, not here: say here that you sent it.

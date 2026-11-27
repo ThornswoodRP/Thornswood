@@ -347,11 +347,16 @@ yes('every path a row names outside the repo is one a script uses, ' + placed + 
 // ----------------------------------------------------------- nothing is a value ---
 const shapes = [
   ['a Discord webhook address', /discord(?:app)?\.com\/api\/webhooks\//i],
-  ['a GitHub token', /\bgh[opsu]_[A-Za-z0-9]{10,}/],
+  ['a GitHub token', /\bgh[opsu]_[A-Za-z0-9]{10,}|\bghs_[0-9]{1,12}_[A-Za-z0-9_.-]{100,}/],
   ['a public or private SSH key', /ssh-(?:ed25519|rsa)\s+AAAA|-----BEGIN [A-Z ]*PRIVATE KEY-----/],
   ['a Discord id or any long number', /\b\d{17,}\b/],
   ['a key shaped run of letters and digits', /\b(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{24,}\b/]
 ];
+// An installation token of the shape GitHub gives since 2 Oct 2026: ghs_,
+// the App's id, an underscore and a JWT (#6188). Built here so this file
+// holds none.
+const installToken = 'ghs' + '_' + '1234567' + '_' + 'eyJ' + 'x'.repeat(120) + '.' + 'y'.repeat(300) + '.' + 'z-_'.repeat(20);
+yes('the GitHub token shape catches an installation token of GitHub\'s new shape', shapes[1][1].test(installToken));
 shapes.forEach(function (s) { yes('the section carries nothing that looks like ' + s[0], section.length > 0 && !s[1].test(section)); });
 
 // And the house rules for anything people read.

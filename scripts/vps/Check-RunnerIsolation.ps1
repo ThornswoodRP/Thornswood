@@ -20,6 +20,10 @@
   job that could land on the signing runner to main's code; no runner of
   the box signs since #4013, so there is none to hold.
 
+  What the facts do not hold is a risk, never ok (#4286): no runner at all,
+  a box runner the records number that is not there, a path not checked or
+  not read, an account with no SID (its groups and firewall rules unknown).
+
   Each row is ok, intentional (the record's reason), or risk. A risk row is
   a finding for the threat model in the ops repo's RUNNER-ISOLATION.md, not a change:
   this script never changes a runner, an ACL, a setting or a credential.
@@ -83,11 +87,15 @@ $r = Get-Content -LiteralPath $Record -Raw | ConvertFrom-Json
 # The labels records\<name>-runners.json give runners on the box by number:
 # the build runners' (#2994) and the pull request builds' (#4010). Each one
 # reaches the box.
+# Their numbers are the box runners the facts must hold (#4286).
+$boxNumbers = @()
 $boxLabels = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'records') -Filter '*-runners.json' | Sort-Object Name | ForEach-Object {
     $rr = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
     if (-not [string]$rr.label) { throw ('records\' + $_.Name + ' names no label, so a job on the runners it lists cannot be told from one that is not.') }
+    $script:boxNumbers += @($rr.runners | ForEach-Object { [int]$_ })
     if (@($rr.runners).Count) { [string]$rr.label }
 })
+$boxNumbers = @($boxNumbers | Sort-Object -Unique)
 if (-not ($boxLabels -contains 'thornswood-build')) { throw 'no records\*-runners.json names thornswood-build, so a job on the box''s build runners cannot be told from one that is not.' }
 $rows = New-Object System.Collections.Generic.List[object]
 function Row([string]$Area, [string]$Item, [string]$Expected, [string]$Actual, [bool]$Ok, [string]$Kind = 'risk') {
@@ -232,22 +240,43 @@ if ($f.github) {
 }
 
 # ---- runner accounts on the box ---------------------------------------------
-foreach ($ru in @($f.runner.runners)) {
+# What was not collected is a risk, never fine (#4286): a check that saw no
+# runner, no path or no account has shown nothing about it. Every runner the
+# records number must be in the facts, under the service name
+# Install-Runner.ps1 gives it (thornswood-vps, then thornswood-vps-<n>), and
+# facts with no runner at all are a risk even if the records number none.
+$facRunners = @($f.runner.runners | Where-Object { $_ })
+if (-not $facRunners.Count) { Row 'runner' 'runner services in the facts' 'at least one' 'none' $false }
+foreach ($n in $boxNumbers) {
+    $rn = 'thornswood-vps' + $(if ($n -gt 1) { '-' + $n } else { '' })
+    $hit = @($facRunners | Where-Object { ([string]$_.service) -like ('actions.runner.*.' + $rn) })
+    Row 'runner' "box runner $n ($rn)" 'in the facts' $(if ($hit.Count) { [string]$hit[0].service } else { 'not in the facts' }) ([bool]$hit.Count)
+}
+foreach ($ru in $facRunners) {
     $id = $ru.account
+    $noSid = -not [string]$ru.sid
+    Row 'account' "$id SID" 'the account translates to a SID' $(if ($noSid) { 'none' } else { 'known' }) (-not $noSid)
     $bad = @($ru.groups | Where-Object { $r.forbiddenGroups -contains $_ })
-    Row 'account' "$id groups" ('none of ' + ($r.forbiddenGroups -join ', ')) (@($ru.groups) -join ',') (-not $bad)
+    $unread = @($ru.groupsUnread | Where-Object { $r.forbiddenGroups -contains $_ })
+    Row 'account' "$id groups" ('none of ' + ($r.forbiddenGroups -join ', ')) ((@($ru.groups) -join ',') + $(if ($noSid) { '; not read, the account has no SID' } elseif ($unread.Count) { '; not read: ' + ($unread -join ', ') } else { '' })) (-not $bad -and -not $noSid -and -not $unread.Count)
+    # 'missing' is a path that does not exist on the box, which no one reaches.
+    # Anything else that is not rights ('not read', or no entry because the
+    # collector was not asked for the path) is unknown.
     foreach ($p in $r.noReach) {
         $x = $ru.reach.$p
-        if ($null -eq $x -or $x -is [string]) { Row 'reach' "$id $p" 'no read, no write' $(if ($x) { [string]$x } else { 'not checked' }) $true; continue }
+        if ($x -eq 'missing') { Row 'reach' "$id $p" 'no read, no write' 'missing' $true; continue }
+        if ($null -eq $x -or $x -is [string]) { Row 'reach' "$id $p" 'no read, no write' $(if ($x) { [string]$x } else { 'not checked' }) $false; continue }
         Row 'reach' "$id $p" 'no read, no write' ("read=" + $x.read + " write=" + $x.write) (-not $x.read -and -not $x.write)
     }
     foreach ($p in $r.writeOnly) {
         $x = $ru.reach.$p
-        if ($null -eq $x -or $x -is [string]) { continue }
+        if ($x -eq 'missing') { continue }
+        if ($null -eq $x -or $x -is [string]) { Row 'reach' "$id $p" 'write, no read' $(if ($x) { [string]$x } else { 'not checked' }) $false; continue }
         Row 'reach' "$id $p" 'write, no read' ("read=" + $x.read + " write=" + $x.write) (-not $x.read)
     }
     Row 'cleanup' "$id _work\_temp" "nothing older than $($r.tempMaxHours) h" ("$($ru.tempLeftFiles) files, oldest $($ru.tempOldestHours) h") (-not ($ru.tempLeftFiles -gt 0 -and [double]$ru.tempOldestHours -gt [double]$r.tempMaxHours))
-    Row 'network' "$id outbound" 'limited to GitHub, as Install-Runner -OffBox does' ("$($ru.firewallRules) firewall rules name the account") ([int]$ru.firewallRules -gt 0)
+    $fwKnown = -not $noSid -and $null -ne $ru.firewallRules
+    Row 'network' "$id outbound" 'limited to GitHub, as Install-Runner -OffBox does' $(if ($fwKnown) { "$($ru.firewallRules) firewall rules name the account" } else { 'not counted, the account has no SID' }) ($fwKnown -and [int]$ru.firewallRules -gt 0)
     Row 'credentials' "$id .credentials" 'readable by its own jobs (GitHub design)' $(if ($ru.hasCredentials) { 'present' } else { 'absent' }) $true
 }
 

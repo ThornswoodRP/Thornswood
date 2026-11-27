@@ -481,7 +481,7 @@ CONTENTS = (
     (r'(MISC ThornswoodMiscTool(Handle|Shears|Alembic|RuneKnife)|'
      r'COBJ ThornswoodRecipe(Tool(Handle|Shovel|Hammer|Shears|Alembic|RuneKnife|Ladle)|WeaponPickaxe|WeaponAxe|Lockpick))$',
      'own', 'tools and handles'),
-    (r'COBJ ThornswoodRecipeInstrument(Flute|Lute|Drum)$', 'own', 'instruments'),
+    (r'COBJ ThornswoodRecipeInstrument(Flute|Lute|Drum|Horn)$', 'own', 'instruments'),
     (r'BOOK ThornswoodBookDeed$', 'own', 'deeds'),
     (r'(MISC ThornswoodMisc(Master)?Key(Mold)?|COBJ ThornswoodRecipeKey(Mold)?)$', 'own', 'keys and molds'),
     (r'(MISC ThornswoodMisc(Pole\w+|FishTrap)|FLOR ThornswoodFish\w+|COBJ ThornswoodRecipe(Pole\w+|FishTrap))$',
@@ -1168,11 +1168,6 @@ RIVER_BUCKET = 0x5018031
 # block of gamemode.js). Where each one stands is game\data\station-sites.json,
 # kind study, measured by scripts\dev\Build-StationSites.py.
 STUDY_DESK = 0x5018032
-# THE INN'S COOKING POT (#6893): Skyrim's own CraftingCookingPotSm, the pot
-# every inn's cook already uses, placed in an inn that has no cooking station
-# where game\data\station-sites.json, kind cook, measures. It is a master's
-# record, so its form id here is Skyrim.esm's (master 0).
-INN_COOKPOT = 0x001010B3
 STUDY_DESK_MODEL = 'Furniture\\Noble\\NobleDesk01.nif'
 STUDY_DESK_BOUNDS = (-44, -49, 0, 44, 12, 63)
 
@@ -1403,6 +1398,18 @@ RECIPE_DRUM = 0x501B00A
 LOCKPICK = 0x0000000A     # Skyrim's Lockpick (MISC)
 RECIPE_LOCKPICK = 0x501B00B
 LOCKPICKS_MADE = 5
+
+# THE HORN (#7167). The emote wheel's Horn blows Skyrim's own war horn
+# (IdleBlowHornStormcloak), and nothing in the load order made one. Skyrim's
+# Nord War Horn is the instrument, as the flute, lute and drum are Skyrim's
+# own (THE INSTRUMENTS above), so the Woodwright makes it at the woodworking
+# bench with them: a horker tusk hollowed into the horn and a leather strap
+# to carry it. Measured on the box on 27 Nov 2026 (List-GameData -Lister
+# ToolRecords): the Nord War Horn is MISC 200b6 of Skyrim.esm, on
+# Clutter\WarHorns\NordWarHorn.nif, worth 70. Form id after the lockpick's.
+HORN = 0x000200B6         # Skyrim's Nord War Horn (MISC)
+HORKER_TUSK = 0x0003AD68  # Skyrim's Horker Tusk (MISC), a hunter's
+RECIPE_HORN = 0x501B00C
 
 # THE STATIONS.
 #
@@ -2006,6 +2013,9 @@ def thornswood_records(clam, scrap):
              LUTE, WOODWORKING_KEYWORD),
         cobj(RECIPE_DRUM, 'ThornswoodRecipeInstrumentDrum', [(FIREWOOD, 2), (LEATHER, 1), (LEATHER_STRIPS, 1)],
              DRUM, WOODWORKING_KEYWORD),
+        # Skyrim's own war horn (#7167), THE HORN above.
+        cobj(RECIPE_HORN, 'ThornswoodRecipeInstrumentHorn', [(HORKER_TUSK, 1), (LEATHER_STRIPS, 1)],
+             HORN, WOODWORKING_KEYWORD),
         # Skyrim's own lockpick (#4646), THE LOCKPICK above.
         cobj(RECIPE_LOCKPICK, 'ThornswoodRecipeLockpick', [(IRON_INGOT, 1)], LOCKPICK, FORGE_KEYWORD,
              makes=LOCKPICKS_MADE),
@@ -2212,7 +2222,7 @@ STATION_SITES = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__
                                               'game', 'data', 'station-sites.json'))
 STATION_NAMES = {KILN: 'charcoal kilns', SALT_QUARRY: 'salt quarries', BEEHIVE: 'beehives',
                  ALCHEMY_LAB: 'alchemy labs', WELL_BUCKET: 'well buckets', RIVER_BUCKET: 'water buckets',
-                 STUDY_DESK: 'study desks', INN_COOKPOT: 'inn cooking pots'}
+                 STUDY_DESK: 'study desks'}
 STATION_BASES = set(STATION_NAMES)
 QUEST_CONTENT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
                                              'game', 'data', 'quest-content.json'))
@@ -2940,9 +2950,7 @@ def main():
     want, want_cell, want_world = {}, {}, {}
     quest_doc = quest_content()
     quest_sites = quest_doc['sites']
-    # A site the server stands (#6893, standBy server) is in a cell this plugin
-    # cannot place into: the gamemode stands it, so it is not written here.
-    authored_sites = {n: r for n, r in sites['sites'].items() if r.get('standBy') != 'server'}
+    authored_sites = dict(sites['sites'])
     if set(authored_sites) & set(quest_sites):
         raise ValueError('A quest and a station share a site name')
     authored_sites.update(quest_sites)

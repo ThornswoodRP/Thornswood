@@ -74,7 +74,7 @@ function engine(count, options = {}) {
   const home = id => [100 + (id % 8) * 50, 100 + Math.floor(id / 8) * 50, height(id)];
   for (const id of ids) states.set(id, {pos:home(id), rot:[0,0,0], cellOrWorld:60, isDead:false, isDisabled:false,
     aggression:0, confidence:3, factions:[], combatTarget:0, canSwim:false, canFly:false, immobile:false,
-    meleeReach:128, meleeAllowance:32, isHuman:false});
+    aggroRadius:[0,0,0], meleeReach:128, meleeAllowance:32, isHuman:false});
   const data = {version:1, plugins:['Skyrim.esm'], keep:ids.map(id => [id.toString(16) + ':Skyrim.esm', 'a:Skyrim.esm',
     '3c:Skyrim.esm', home(id), 2048, 45, 'animal', 'farm', null, 1000, 'farm', options.ambush && options.ambush.includes(id) ? 2 : 0])};
   const native = {

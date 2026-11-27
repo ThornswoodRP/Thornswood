@@ -56,8 +56,8 @@
     '#' + ID + ' .name{flex:1;color:#f6e9c8}',
     '#' + ID + ' .cost{color:rgba(217,207,180,.75);font-size:16px}',
     '#' + ID + ' .ready{color:#8fb85e;font-size:16px;min-width:64px;text-align:right}',
-    '#' + ID + ' .wait{color:rgba(217,207,180,.55);font-size:16px;min-width:64px;text-align:right}',
-    '#' + ID + ' .foot{margin-top:8px;font-size:14px;color:rgba(217,207,180,.6);font-style:italic}'
+    '#' + ID + ' .wait{color:rgba(217,207,180,.7);font-size:16px;min-width:64px;text-align:right}',
+    '#' + ID + ' .foot{margin-top:8px;font-size:14px;color:rgba(217,207,180,.7);font-style:italic}'
   ].join('\n');
 
   function build() {

@@ -120,8 +120,7 @@ if ($Only) {
 $GameDir = Join-Path $Root 'Game'
 if (-not (Test-Path -LiteralPath $GameDir)) { Die "No build at $GameDir." }
 
-$work = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-packs'
-if (Test-Path $work) { Remove-Item $work -Recurse -Force }
+$work = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('thornswood-packs-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
 $null = New-Item -ItemType Directory -Force -Path $work
 
 # ------------------------------------------------------------ building ---
