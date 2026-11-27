@@ -16,6 +16,10 @@
       is none, never velopack or main, the two Velopack packages); and the
       Release before read from a planted list: drafts and other tags skipped,
       a manifest that names another tag refused.
+      Resolve-ContentBuiltCommit (#7050): a Content build's success releases
+      the merge the box built, named by its draft, when main moved on
+      during the build, and main as it is when the build is main's, reused
+      from older inputs, not held by main, or not named whole.
     - New-SignedManifest.ps1 -Add and -LauncherVersion: the parts it may add,
       each a list, refused for an unknown part, a missing file, two files of
       one name in a part or across parts, an agent Release, or a launcher
@@ -222,6 +226,43 @@ try {
         $wf -match '\[version\]\$was\.Version -lt \[version\]\$env:VERSION' -and
         [IO.File]::ReadAllText((Join-Path $Repo 'scripts/release/MergeRelease.ps1')) -match "Sort-Object \{ \`$_\.published_at \} -Descending")
 
+    # ---- which merge a finished content build releases (#7050) ---------------------
+    $asked = '1' * 40; $builtC = '2' * 40; $head = '3' * 40; $key = ('ab' * 32)
+    function CEv([string]$desc, $payload = $null, [string]$envName = 'Content', [string]$state = 'success') {
+        if ($null -eq $payload) { $payload = [pscustomobject]@{ content = $key; server = 'dev'; commit = $asked } }
+        [pscustomobject]@{ deployment = [pscustomobject]@{ environment = $envName; payload = $payload }; deployment_status = [pscustomobject]@{ state = $state; description = $desc } }
+    }
+    $cDraft = [pscustomobject]@{ tag_name = "content-dev-$key"; draft = $true; target_commitish = $builtC }
+    $order = @($asked, $builtC, $head)
+    $afterOk = { param($Base, $Commit) $order.IndexOf($Commit) -ge $order.IndexOf($Base) }
+    $desc = "built $($key.Substring(0, 12)) from $($builtC.Substring(0, 7))"
+    $r = Resolve-ContentBuiltCommit -Event (CEv $desc) -Head $head -Releases @($cDraft) -After $afterOk
+    Yes 'a Content build''s success releases the merge the box built, named whole by its draft, when main moved on during the build (#7050)' ($r.Commit -eq $builtC -and $r.Why -match 'main moved on')
+    $r = Resolve-ContentBuiltCommit -Event (CEv $desc ([pscustomobject]@{ content = $key; server = 'dev'; commit = $asked } | ConvertTo-Json -Compress)) -Head $head -Releases @($cDraft) -After $afterOk
+    Yes '  and so it does when GitHub hands the payload over as a string' ($r.Commit -eq $builtC)
+    $r = Resolve-ContentBuiltCommit -Event (CEv "built $($key.Substring(0, 12)) from 3333333") -Head $head -Releases @([pscustomobject]@{ tag_name = "content-dev-$key"; draft = $true; target_commitish = $head }) -After $afterOk
+    Yes '  and releases main as it is when the box built main as it is' ($r.Commit -eq $head)
+    $oldAfter = { param($Base, $Commit) if ($Base -eq $asked -and $Commit -eq $builtC) { $false } else { $true } }
+    $r = Resolve-ContentBuiltCommit -Event (CEv $desc) -Head $head -Releases @($cDraft) -After $oldAfter
+    Yes '  and never a build the box reused from before the commit that asked, which would put an older merge out' ($r.Commit -eq $head -and $r.Why -match 'from before')
+    $notHeld = { param($Base, $Commit) if ($Commit -eq $head) { $false } else { $true } }
+    $r = Resolve-ContentBuiltCommit -Event (CEv $desc) -Head $head -Releases @($cDraft) -After $notHeld
+    Yes '  nor one main does not hold' ($r.Commit -eq $head -and $r.Why -match 'does not hold')
+    $r = Resolve-ContentBuiltCommit -Event (CEv $desc) -Head $head -Releases @() -After $afterOk
+    Yes '  with no draft of the build it releases main as it is, and says why' ($r.Commit -eq $head -and $r.Why -match '0 drafts')
+    $r = Resolve-ContentBuiltCommit -Event (CEv "built $($key.Substring(0, 12)) from 4444444") -Head $head -Releases @($cDraft) -After $afterOk
+    Yes '  and so it does when the draft targets another commit than its status names' ($r.Commit -eq $head -and $r.Why -match 'not the 4444444')
+    $r = Resolve-ContentBuiltCommit -Event (CEv 'not built: Build-Content ended with exit 1') -Head $head -Releases @($cDraft) -After $afterOk
+    Yes '  and when the status names no build' ($r.Commit -eq $head -and $r.Why -match 'names no build')
+    $r = Resolve-ContentBuiltCommit -Event (CEv $desc $null 'Dev') -Head $head -Releases @($cDraft) -After $afterOk
+    Yes '  and a run a push or another Deployment started releases its own commit' ($r.Commit -eq $head -and $r.Why -match 'not started by a content build')
+    $r = Resolve-ContentBuiltCommit -Event ([pscustomobject]@{ ref = 'refs/heads/main' }) -Head $head -After $afterOk
+    Yes '  as does a push, whose event has no Deployment' ($r.Commit -eq $head)
+    $r = Resolve-ContentBuiltCommit -Event (CEv $desc ([pscustomobject]@{ content = $key; server = 'dev'; commit = 'nope' })) -Head $head -Releases @($cDraft) -After $afterOk
+    Yes '  and a Content Deployment that names no commit releases main as it is' ($r.Commit -eq $head)
+    $mainDraft = [pscustomobject]@{ tag_name = "content-main-$key"; draft = $true; target_commitish = $builtC }
+    $r = Resolve-ContentBuiltCommit -Event (CEv $desc) -Head $head -Releases @($mainDraft) -After $afterOk
+    Yes '  and only the draft of the Deployment''s own server names the build' ($r.Commit -eq $head)
     # ---- main's launcher package, for promote-main.yml (#5181) ---------------------
     Yes 'build tags order by their number' ((Get-MergeReleaseOrder 'build-1.3.27') -gt (Get-MergeReleaseOrder 'build-1.3.21') -and
         (Get-MergeReleaseOrder 'build-1.3.100') -gt (Get-MergeReleaseOrder 'build-1.3.99') -and (Get-MergeReleaseOrder 'main-build-1.3.21') -eq -1)
@@ -518,9 +559,9 @@ try {
     # Deployments.
     $newestStep = if ($newestAt -gt 0 -and $publishAt -gt $newestAt) { $wf.Substring($newestAt, $publishAt - $newestAt) } else { '' }
     Yes 'main''s newest merge is published' ($newestAt -gt 0 -and $publishAt -gt $newestAt -and
-        $wf.Contains('gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha') -and $wf.Contains("if ([string]`$head -eq `$env:GITHUB_SHA) { Add-Content -LiteralPath `$env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }") -and
+        $wf.Contains('gh api "repos/$($env:GITHUB_REPOSITORY)/commits/main" --jq .sha') -and $wf.Contains("if ([string]`$head -eq `$env:RELEASE_SHA) { Add-Content -LiteralPath `$env:GITHUB_OUTPUT -Value 'release=yes'; exit 0 }") -and
         ([regex]::Matches($wf, [regex]::Escape("if: `${{ steps.newest.outputs.release == 'yes'"))).Count -eq 5)
-    Yes '  and so is a merge main moved past, only when no workflow file differs between it and main, and fewer than 300 files do' ($newestStep.Contains('compare/$($env:GITHUB_SHA)...$head') -and
+    Yes '  and so is a merge main moved past, only when no workflow file differs between it and main, and fewer than 300 files do' ($newestStep.Contains('compare/$($env:RELEASE_SHA)...$head') -and
         $newestStep.Contains("Where-Object { `$_ -like '.github/workflows/*' }") -and $newestStep.Contains('if ($files.Count -lt 300 -and -not $flows.Count) {'))
     # A merge outside the paths above starts no run, so it cancels nothing and
     # releases nothing: the site fix #5451 was built and dropped that way on
@@ -552,7 +593,7 @@ try {
     }
     Yes 'the notes step''s script is found in merge-release.yml' ($step.Count -gt 3 -and ($step -join "`n").Contains('Collect-ReleaseNotes.ps1'))
     $pwsh = (Get-Process -Id $PID).Path
-    $stepEnv = 'RUNNER_TEMP', 'GITHUB_OUTPUT', 'GITHUB_SHA', 'GITHUB_REPOSITORY', 'SINCE', 'QUIET_NOTE'
+    $stepEnv = 'RUNNER_TEMP', 'GITHUB_OUTPUT', 'GITHUB_SHA', 'RELEASE_SHA', 'GITHUB_REPOSITORY', 'SINCE', 'QUIET_NOTE'
     $before = @{}; foreach ($v in $stepEnv) { $before[$v] = [Environment]::GetEnvironmentVariable($v) }
     foreach ($case in @(@{ Code = 0; Ok = $true; Says = 'a note' }, @{ Code = 3; Ok = $true; Says = 'nothing to tell' }, @{ Code = 2; Ok = $false; Says = 'a pull request with no line' }, @{ Code = 1; Ok = $false; Says = 'GitHub unread' })) {
         $w = Join-Path $tmp ('notes-step-' + $case.Code)
@@ -561,7 +602,7 @@ try {
         $out = Join-Path $w 'github-output'; Put $out ''
         $file = Join-Path $w 'step.ps1'
         Put $file ("`$ErrorActionPreference = 'stop'`n" + ($step -join "`n") + "`nif ((Test-Path -LiteralPath variable:\LASTEXITCODE)) { exit `$LASTEXITCODE }`n")
-        $env:RUNNER_TEMP = $rt; $env:GITHUB_OUTPUT = $out; $env:GITHUB_SHA = $commit; $env:GITHUB_REPOSITORY = 'ThornswoodRP/Thornswood'; $env:SINCE = ''
+        $env:RUNNER_TEMP = $rt; $env:GITHUB_OUTPUT = $out; $env:GITHUB_SHA = $commit; $env:RELEASE_SHA = $commit; $env:GITHUB_REPOSITORY = 'ThornswoodRP/Thornswood'; $env:SINCE = ''
         $env:QUIET_NOTE = 'Various bug fixes and improvements'
         Push-Location $w
         try { $null = & $pwsh -NoProfile -command ". '$file'" 2>&1; $code = $LASTEXITCODE } finally { Pop-Location }
@@ -611,7 +652,7 @@ try {
     $publishAt = $wf.IndexOf('- name: Publish the Release'); $keepAt = $wf.IndexOf('- name: Keep main''s package for the approval')
     Yes 'main''s package is attested and kept as a GitHub Package for the approval, once the Release is out, never published here (#5181, #3399)' ($keepAt -gt $publishAt -and $publishAt -gt 0 -and
         $wf.Contains('subject-path: ${{ steps.files.outputs.held_subjects }}') -and $wf -notmatch 'name: main-\$\{\{' -and
-        $wf.Contains('Push-MainPackage -Folder $env:HELD -Tag $env:TAG -Commit $env:GITHUB_SHA') -and $wf.Contains('HELD: ${{ steps.files.outputs.held }}') -and
+        $wf.Contains('Push-MainPackage -Folder $env:HELD -Tag $env:TAG -Commit $env:RELEASE_SHA') -and $wf.Contains('HELD: ${{ steps.files.outputs.held }}') -and
         $wf -match '(?m)^\s+packages: write\s*$' -and
         $wf.Contains("Get-ChildItem -LiteralPath (Join-Path `$env:DIR 'assets') -File"))
     Yes 'a merge packs main''s launcher again when its newest package has no main tag, and the parts step releases that launcher' (
@@ -620,7 +661,7 @@ try {
         $wf.IndexOf("if (`$env:LAUNCHER_REPACK -eq 'yes'") -lt $wf.IndexOf("`$velopack = `$(if (`$changed -contains 'launcher'"))
     $tagAt = $wf.IndexOf('- name: Tag main''s package for the approval (main-<tag>)')
     Yes '  and its tag main-<tag> is made on this merge as the package is kept, the tag promote-main.yml publishes on' ($tagAt -gt $keepAt -and $keepAt -gt 0 -and
-        $wf.Contains('-f "ref=refs/tags/main-$($env:TAG)" -f "sha=$($env:GITHUB_SHA)"') -and
+        $wf.Contains('-f "ref=refs/tags/main-$($env:TAG)" -f "sha=$($env:RELEASE_SHA)"') -and
         $wf.Substring($tagAt, 200).Contains("if: `${{ steps.newest.outputs.release == 'yes' && steps.files.outputs.held != '' }}"))
     Yes 'every file of the Release is attested, by a pinned action' ($wf -match 'uses: actions/attest-build-provenance@[0-9a-f]{40} # v' -and $wf.Contains('subject-path: ${{ steps.files.outputs.subjects }}') -and
         $wf -match '(?m)^\s+id-token: write\s*$' -and $wf -match '(?m)^\s+attestations: write\s*$')

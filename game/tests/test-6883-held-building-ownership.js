@@ -32,7 +32,7 @@ function lift(src, start, end) {
 
 // ------------------------------------------------------------ the server --
 {
-  const body = lift(prop, '  function shutFor(actorId, profileId) {', '\n    return { shut: shut, open: open, own: own };\n  }');
+  const body = lift(prop, '  function shutFor(actorId, profileId) {', '\n  }');
   yes('server: shutFor can be lifted out', !!body);
   if (body) {
     const make = new Function('claims', 'doorsOf', 'mayPass', 'wayOut', 'jailHoldOf', 'cellLists', 'idOf',
