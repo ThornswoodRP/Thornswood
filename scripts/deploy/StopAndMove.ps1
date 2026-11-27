@@ -4,13 +4,27 @@
   Stopping what runs from a folder, and then moving its files, on the box:
   each process waited for until it has exited, and each move tried once.
 
-  Its text goes in front of what runs on the box: Swap.ps1 puts it in front of
-  both swap blocks (Deploy-Server, Deploy-DevGamemode, Deploy-Docs,
-  Install-Voice, Install-Bot), Install-Bot in front of Bot-Service.ps1
-  wherever it sends that, and Install-Bridge in front of its swap.
-  Install-ThornswoodServer.ps1 loads it from beside itself, where
-  Publish-Server.ps1 sends it. Keep it ASCII: Windows PowerShell 5.1 on the box
-  reads a file with no byte order mark as ANSI.
+  Who takes it:
+    - its text, in front of what runs on the box. Swap.ps1 reads it into
+      $ThornswoodStopAndMoveText and puts it in front of both swap blocks, so
+      Deploy-Server.ps1, Deploy-DevGamemode.ps1, Deploy-Docs.ps1,
+      Install-Voice.ps1 and Install-Bot.ps1 take it there; Deploy-Docs.ps1,
+      Install-Voice.ps1 and Install-Bot.ps1 also put that text in front of
+      their own restart, remove and service blocks, Install-Bot.ps1 in front
+      of Bot-Service.ps1 wherever it sends that. Install-Bridge.ps1 and
+      Install-AdminService.ps1 read it and put it in front of their swap and
+      stop. Reset-Character.ps1, Reset-Npcs.ps1 and Move-World.ps1 read it and
+      join it into the script they run on the box;
+    - dot-sourced by Reset-Character.ps1, on this machine with -UseLocal, and
+      by Read-ServerHolders.ps1, on the box;
+    - a copy: Install-ThornswoodServer.ps1 carries a copy of what is below
+      this header, since every file Publish-Server.ps1 sends is a call in
+      records\remote-commands.json, and test-2928-stop-and-move.ps1 holds the
+      two the same.
+  tests\test-4678-header-callers.ps1 holds this list to the scripts.
+
+  Keep it ASCII: Windows PowerShell 5.1 on the box reads a file with no byte
+  order mark as ANSI.
 
   WHY, issue #2928. Until 20 Oct 2026 every swap stopped what was running and
   then renamed its files in a loop: ten tries half a second apart in Swap.ps1,
