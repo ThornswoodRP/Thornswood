@@ -72,6 +72,31 @@ Yes 'G3 an OR flag on the last condition ends the last group' ($g.Count -eq 2 -a
 Yes 'G4 no conditions are no groups' ((NeedGroupsOf @()).Count -eq 0)
 
 Write-Host ''
+Write-Host 'L. the collection the recipe builder creates:'
+$productionCases = @(
+    @{ Name = 'no conditions'; Needs = @(); Groups = 0; Reachable = $true; BehindPerk = $false; Text = '' },
+    @{ Name = 'one taught spell'; Needs = @((N 264 'HasSpell(Sparks) == 1' $false @('SpellTomeSparks'))); Groups = 1; Reachable = $true; BehindPerk = $false; Text = 'HasSpell(Sparks) == 1' },
+    @{ Name = 'an OR group and a perk'; Needs = @($dunmer, $nord, $quest, $perk); Groups = 2; Reachable = $false; BehindPerk = $true; Text = '(GetIsRace(DarkElfRace) == 1 or GetIsRace(NordRace) == 1 or GetStageDone(MQ101) == 1) and HasPerk(SteelSmithing) == 1' }
+)
+foreach ($case in $productionCases) {
+    # Match the builder, including New-Object: a constructor-created list does
+    # not expose the array-subexpression failure on the supported PowerShell.
+    $productionNeeds = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($need in $case.Needs) { $productionNeeds.Add($need) }
+    try {
+        $groups = NeedGroupsOf $productionNeeds
+        $reachable = NeedsAreReachable $productionNeeds
+        $behindPerk = NeedsAreBehindPerk $productionNeeds
+        $text = NeedsText $productionNeeds
+        Yes ('L ' + $case.Name) (
+            $groups.Count -eq $case.Groups -and $reachable -eq $case.Reachable -and
+            $behindPerk -eq $case.BehindPerk -and $text -eq $case.Text)
+    } catch {
+        Yes ('L ' + $case.Name + ': ' + $_.Exception.Message) $false
+    }
+}
+
+Write-Host ''
 Write-Host 'R. can a new character make it:'
 Yes 'R1 no condition at all: yes' (NeedsAreReachable @())
 Yes 'R2 a spell a tome teaches, or a race: yes, the tome is a way in' (NeedsAreReachable @($spell, (N 69 'GetIsRace(NordRace) == 1')))
