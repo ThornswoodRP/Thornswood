@@ -24,7 +24,10 @@
 // Patrick's: a workflow, the deploy gate, a verb list, a script a verb runs
 // or a file a verb reads from main to decide what it does on the box, such as
 // the keys Grant-BoxKey puts there (BOX_DIRS, VERB_LISTS, and the scripts and
-// 'reads' main's two verb lists name; #5726). A Claude session's
+// 'reads' main's two verb lists name; #5726), or a script that changes the
+// box itself over ssh or scp, as records/remote-commands.json maps it
+// (REMOTE_RECORD, #7443: Reset-Character.ps1, admin class, changed with no
+// card on #7439, as no verb names it). A Claude session's
 // (CLAUDE_BRANCH) counts as somebody else's here, though GitHub names
 // Patrick as its author: cloud threads open their pull requests with his
 // sign-in, and 17 that changed what runs on the box merged that way with no
@@ -60,6 +63,16 @@ const NOT_ITS_OWN = /queue.?cleared|roll.?back|time.?out|timed out|branch.?prote
 // says it reads (verbScripts reads both).
 const BOX_DIRS = ['.github/workflows/', 'scripts/vps/gate/'];
 const VERB_LISTS = ['scripts/vps/gate/verbs.json', 'scripts/release/nexus-verbs.json'];
+// Every call under scripts/ that reaches the box, with the class it needs
+// (#2182; tests/test-remote-command-map.ps1 keeps it in step with the code).
+// Two classes change nothing there: 'read-status' only reads, and a
+// 'transport' carries what its caller hands it, the caller being the row
+// that counts. Every other class, a new one too, changes the box: 'admin' is
+// work outside the gate verbs (installs, services, keys, secrets, and
+// scripts such as Reset-Character.ps1), the rest stage, swap, put back,
+// send the feed or start and stop a task.
+const REMOTE_RECORD = 'records/remote-commands.json';
+const CHANGES_NOTHING = ['read-status', 'transport'];
 const PATRICK = 'EvilPatrick06';
 const OUTSIDE_LABEL = 'outside work';
 // A Bot's branch, as the Bots' policy names it (Thornswood-Hermes
@@ -84,6 +97,29 @@ function verbScripts(root) {
     }
   }
   return out;
+}
+
+// The scripts the record names for a call that changes the box: each sends
+// its own work there over ssh or scp, so a change to one changes what is done
+// on the box the way a verb's script does, whether or not a verb names it
+// (#7443). A call with no class counts as one that changes it.
+function remoteScripts(root) {
+  const fs = require('fs');
+  const path = require('path');
+  const calls = JSON.parse(fs.readFileSync(path.join(root, REMOTE_RECORD), 'utf8')).calls;
+  if (!Array.isArray(calls) || !calls.length) throw new Error(REMOTE_RECORD + ' lists no calls');
+  const out = [];
+  for (const c of calls) {
+    if (!c || typeof c.script !== 'string' || !c.script) throw new Error(REMOTE_RECORD + ' has a call with no script');
+    if (CHANGES_NOTHING.indexOf(c.class) < 0 && out.indexOf(c.script) < 0) out.push(c.script);
+  }
+  return out;
+}
+
+// Everything whose change waits for Patrick's card: the verb lists' scripts
+// and reads, and the record's scripts that change the box.
+function boxScripts(root) {
+  return verbScripts(root).concat(remoteScripts(root));
 }
 
 // The files it changes that run on the box, or that a verb acts on there.
@@ -215,7 +251,7 @@ function github(token) {
   };
 }
 
-module.exports = { judge, sweep, verbScripts, boxFiles, HANDS_OFF, OUTSIDE_LABEL, NOT_ITS_OWN, BOX_DIRS, VERB_LISTS, BOT_BRANCH, QUERY, FILES, ENABLE };
+module.exports = { judge, sweep, verbScripts, remoteScripts, boxScripts, boxFiles, REMOTE_RECORD, CHANGES_NOTHING, HANDS_OFF, OUTSIDE_LABEL, NOT_ITS_OWN, BOX_DIRS, VERB_LISTS, BOT_BRANCH, QUERY, FILES, ENABLE };
 
 if (require.main === module) {
   const code = cli();
@@ -227,8 +263,8 @@ function cli() {
   const repo = process.env.REPO, token = process.env.GH_TOKEN;
   if (!repo || !token) { console.log('REPO and GH_TOKEN must be set'); return 2; }
   let scripts;
-  try { scripts = verbScripts(require('path').join(__dirname, '..', '..')); }
-  catch (e) { console.log('the verb lists could not be read, so nothing is put on: ' + e.message); return 1; }
+  try { scripts = boxScripts(require('path').join(__dirname, '..', '..')); }
+  catch (e) { console.log('the verb lists or ' + REMOTE_RECORD + ' could not be read, so nothing is put on: ' + e.message); return 1; }
   sweep(repo, github(token), (l) => console.log(l), { dryRun: process.argv.includes('--dry-run'), scripts })
     .then((code) => { process.exitCode = code; })
     .catch((e) => { console.log('the open pull requests could not be read: ' + e.message); process.exitCode = 1; });
