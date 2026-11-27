@@ -220,6 +220,9 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // /stall open, and the panel's buttons send the rest. Never
                // typed, so not in PLAYER_WORDS.
                '/stall',
+               // The lock key at a water whose line offers a fish trap
+               // (#4655). Never typed, so not in PLAYER_WORDS.
+               '/trap',
                // The trade carts' panel, at a cart stop's crate, from Raid
                // cart on P, or on the Office page for staff (#3158). Never typed.
                '/cart',

@@ -1316,6 +1316,17 @@
       return true;
     }
 
+    // The lock key at a water whose line offers a fish trap (#4655): set one
+    // or take it up. Never typed. The scripted activators block answers it.
+    if (word === '/trap') {
+      var trapsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTraps;
+      if (!trapsApi || !trapsApi.command) { toProfile(profileId, 'Fish traps are not running on this server.'); return true; }
+      if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
+      var trapSaid = trapsApi.command(parts, actorId);
+      if (trapSaid) { toProfile(profileId, trapSaid); }
+      return true;
+    }
+
     if (word === '/cart') {
       var cartsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTradeCarts;
       if (!cartsApi || !cartsApi.command) { toProfile(profileId, 'Trade carts are not running on this server.'); return true; }
