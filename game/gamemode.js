@@ -24231,10 +24231,10 @@ module.exports = {
       '      try {',
       '        var g = sp.ObjectReference.from(sp.Game.getFormEx(Number(k)));',
       '        if (!g) { continue; }',
-      '        var now2 = null; try { now2 = g.isLocked(); } catch (e2) { }',
-      '        if (now2 !== found[k]) { g.lock(found[k], false); }',
+      '        if (g.isLocked() !== found[k]) { g.lock(found[k], false); }',
       '        delete found[k];',
-      '      } catch (e) { }',
+      // A door that throws stays in found, so the heartbeat comes back to it.
+      '      } catch (e) { sp.printConsole("[thornswood] lock: could not put door " + k + " back: " + e); }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
       // The buildings this character holds (#6883): the front plugin makes
