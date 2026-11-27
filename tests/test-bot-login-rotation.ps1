@@ -330,6 +330,40 @@ if ($hs -ge 0 -and $he -gt $hs) {
         Yes 'a config.json that reads goes on' ($said -contains 'READ ON')
     } finally { Remove-Item -LiteralPath $headDir -Recurse -Force -ErrorAction SilentlyContinue }
 }
+# #6109: the read back of config.json on the box. Both writes before it leave
+# no byte order mark, so a mark there means something else wrote the file
+# while it ran. It used to print "Tell Claude." and restart the site on a
+# file the site cannot read. Now it names the next step, and the site is not
+# restarted, which the local side reads as a restart that did not happen.
+$bs = [Array]::IndexOf($ll, '# Read it back off the disk. What was in memory a second ago proves nothing.')
+$be = -1
+for ($i = [Math]::Max($bs, 0); $i -lt $ll.Count; $i++) { if ($ll[$i].StartsWith('`$back = ')) { $be = $i; break } }
+Yes 'found the read back of config.json in what Set-DiscordLogin.ps1 runs on the box' ($bs -ge 0 -and $be -gt $bs)
+if ($bs -ge 0 -and $be -gt $bs) {
+    $backDir = Join-Path $Scratch ('login-back-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $backDir | Out-Null
+    try {
+        $f = Join-Path $backDir 'config.json'
+        $readBack = [scriptblock]::Create(($ll[$bs..($be - 1)] -join "`r`n").Replace('`$', '$') + "`r`n" + '[pscustomobject]@{ Marked = $marked }')
+        [IO.File]::WriteAllBytes($f, [byte[]](239, 187, 191) + [Text.Encoding]::UTF8.GetBytes('{"discord":{}}'))
+        $out = @(& $readBack)
+        $lines = @($out | Where-Object { $_ -is [string] })
+        $state = @($out | Where-Object { $_ -isnot [string] })
+        $line = ($lines -join ' ')
+        Yes 'a mark on config.json after the write is said, with what to do next' (
+            $line -cmatch '^SITE NOT RESTARTED: ' -and $line -match 'run Set-DiscordLogin\.ps1 again')
+        Yes '  and it sends nobody to Claude' ($line -notmatch 'Claude')
+        Yes '  and the local side reads that line as a restart that did not happen' (Test-ThornswoodRestartLine $lines[0])
+        Yes '  and the read back knows the file is marked' ($state.Count -eq 1 -and $state[0].Marked -eq $true)
+        [IO.File]::WriteAllBytes($f, [Text.Encoding]::UTF8.GetBytes('{"discord":{}}'))
+        $out = @(& $readBack)
+        Yes 'a file with no mark says nothing about one' (
+            @($out | Where-Object { $_ -is [string] }).Count -eq 0 -and @($out | Where-Object { $_ -isnot [string] })[0].Marked -eq $false)
+    } finally { Remove-Item -LiteralPath $backDir -Recurse -Force -ErrorAction SilentlyContinue }
+}
+Yes 'Set-DiscordLogin.ps1 restarts the site only when config.json has no mark' (
+    @($ll | Where-Object { $_.Trim() -ceq 'if (-not `$marked) { Restart-ThornswoodSite -Root ''$rootWin'' -Task ''$Task'' }' }).Count -eq 1)
+Yes 'Set-DiscordLogin.ps1 tells nobody to tell Claude' (-not ([IO.File]::ReadAllText($login) -match 'Tell Claude'))
 $lt = [IO.File]::ReadAllText($login)
 Yes '  and Set-DiscordLogin.ps1 exits 1 on those lines, before its closing advice' ($lt.IndexOf("-like 'NOT WRITTEN:*'") -gt $lt.IndexOf('$wrote | ForEach-Object') -and $lt.IndexOf('The redirect in the Discord application') -gt $lt.IndexOf("-like 'NOT WRITTEN:*'"))
 Write-Host ''
