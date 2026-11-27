@@ -26,7 +26,10 @@
   (ReleaseRevision.ps1), which is the number every launcher holds Play to
   (#5767). Until 11 Nov that was the feed's, which only a Ship writes; nothing
   ships through a Ship any more, and revision 8 sat behind 7 on both feeds
-  from 8 to 11 Nov.
+  from 8 to 11 Nov. When records\collection.json names a Dev collection
+  (#7193), the newest is the Dev collection's, in the records' numbering
+  (plus dev.offset), and the main collection's newest is a fifth number, held
+  to the one main runs: Vortex offers main's testers that one.
 
   WHAT IT SAYS. Exit 0 when all four agree, 1 when they do not, with a line
   for each that is behind, 2 when one of them could not be read: a check that
@@ -81,8 +84,17 @@ function Get-RevisionState([string]$RepoDir) {
     $rec = $null
     try { $rec = Get-ShipRecordedCollectionRevision $RepoDir } catch { $unread += ('the record: ' + $_.Exception.Message) }
     $slug = if ($rec) { $rec.Slug } else { '7essxf' }
-    $nexus = 0; $main = 0; $dev = 0
-    try { $nexus = Read-RevisionNexus $slug } catch { $unread += ('Nexus: ' + ($_.Exception.Message -replace '\s+', ' ')) }
+    $devc = $null
+    try { $devc = Get-DevCollection $RepoDir } catch { $unread += ('the record: ' + $_.Exception.Message) }
+    $nexus = 0; $main = 0; $dev = 0; $mainNexus = 0
+    # With a Dev collection (#7193) the newest is Dev's, in the records'
+    # numbering, and the main collection's newest is held to what main runs:
+    # one ahead of it is a revision Vortex offers main's testers too soon.
+    if ($devc) {
+        try { $nexus = (Read-RevisionNexus $devc.Slug) + $devc.Offset } catch { $unread += ('Nexus, the Dev collection: ' + ($_.Exception.Message -replace '\s+', ' ')) }
+        try { $mainNexus = Read-RevisionNexus $slug } catch { $unread += ('Nexus, the main collection: ' + ($_.Exception.Message -replace '\s+', ' ')) }
+    }
+    else { try { $nexus = Read-RevisionNexus $slug } catch { $unread += ('Nexus: ' + ($_.Exception.Message -replace '\s+', ' ')) } }
     try { $main = Read-RevisionRelease 'main' } catch { $unread += ('main''s Release: ' + ($_.Exception.Message -replace '\s+', ' ')) }
     try { $dev = Read-RevisionRelease 'dev' } catch { $unread += ('dev''s Release: ' + ($_.Exception.Message -replace '\s+', ' ')) }
     $record = if ($rec) { [int]$rec.Revision } else { 0 }
@@ -91,8 +103,9 @@ function Get-RevisionState([string]$RepoDir) {
         if ($record -ne $nexus) { $behind += ("records\collection-plugins.json names revision {0}" -f $record) }
         if ($dev -ne $nexus) { $behind += ("the Release dev runs names revision {0}, so every dev launcher holds Play to it" -f $dev) }
         if ($main -ne $nexus) { $behind += ("the Release main runs names revision {0}, so every main launcher holds Play to it" -f $main) }
+        if ($devc -and $mainNexus -ne $main) { $behind += ("the main collection {0}'s newest revision is {1} and main runs {2}: promote-main.yml copies each revision there when main takes it (Copy-NexusRevision.ps1)" -f $slug, $mainNexus, $main) }
     }
-    return [pscustomobject]@{ Nexus = $nexus; Record = $record; Main = $main; Dev = $dev; Unread = @($unread); Behind = @($behind) }
+    return [pscustomobject]@{ Nexus = $nexus; Record = $record; Main = $main; Dev = $dev; MainNexus = $mainNexus; Unread = @($unread); Behind = @($behind) }
 }
 
 # Every open issue (not pull request) named for a revision rebuild, oldest

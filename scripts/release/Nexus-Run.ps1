@@ -211,8 +211,8 @@ if ($OnTheRunner) {
     }
     . (Join-Path $Here 'Nexus.ps1')
     $recipient = ([string]$env:NEXUS_RECIPIENT).Trim()
-    $base = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
-    $work = Join-Path $base ('thornswood-nexus-run-' + [Guid]::NewGuid().ToString('N'))
+    $name = 'thornswood-nexus-run-' + [Guid]::NewGuid().ToString('N')
+    $work = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP $name } else { & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') $name }
     $outDir = Join-Path $work 'out'
     $filesDir = Join-Path $outDir 'files'
     $outText = Join-Path $outDir 'output.txt'

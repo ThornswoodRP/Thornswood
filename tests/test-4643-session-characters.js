@@ -66,6 +66,12 @@ async function main() {
     'return async function (p, req, res) {\n' + block + '\nreturn null;\n};\n}');
   const ctx = {
     body: async (req) => req.text,
+    // The routes read their body with lib/http.js bodyObject (#4382): JSON, and an object.
+    bodyObject: async (req) => {
+      const v = JSON.parse(req.text);
+      if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+      return v;
+    },
     passBodyFailure: (e) => { throw e; },
     readTicket: (t) => (t === 'good' ? { d: '777', n: 'Aela' } : null),
     standingCached: async () => ({}),

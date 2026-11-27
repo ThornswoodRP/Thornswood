@@ -93,7 +93,7 @@ function Bytes-Equal([string]$a, [string]$b) {
 }
 
 $problems = @()
-$work = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-feed-move-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+$work = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('thornswood-feed-move-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 
 function Move-One([string]$ch, [string]$clone, [string]$branch) {

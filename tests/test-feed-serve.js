@@ -93,6 +93,14 @@ eval(grab('function cspFor('));
 const rangeSrc = grab('function rangeReply(');
 yes('server.js has rangeReply()', !!rangeSrc);
 if (rangeSrc) eval(rangeSrc);
+// version.json's 304 compares the tags weakly, over a list (noneMatch, #4923).
+const noneMatchSrc = grab('function noneMatch(');
+yes('server.js has noneMatch()', !!noneMatchSrc);
+eval(noneMatchSrc);
+// rangeReply and the routes send a file through streamFile, and ask isFile
+// whether there is one to send (#4402).
+const { pipeline } = require('stream');
+eval(grab('function isFile(') + '\n' + grab('function streamFile('));
 
 // The release copies block (#3686): the asset route asks it for a GitHub
 // Release copy first. GitHub is never asked here; it answers 404, as it does

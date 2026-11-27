@@ -222,7 +222,7 @@ check('a config.json with no MakeOwnGame reads as ticked: only an explicit false
 
 # Skyrim still running.
 check('Skyrim and the script extender loader are looked for', '"SkyrimSE", "skse64_loader"' in sky)
-check('the game is asked to close itself first', sky.find('CloseMainWindow') != -1 and sky.find('CloseMainWindow') < sky.find('askYesNo('))
+check('the game is asked before anything is sent to it (#4705)', sky.find('askYesNo(CloseRequestQuestion(') != -1 and sky.find('askYesNo(CloseRequestQuestion(') < sky.find('p.CloseMainWindow()'))
 check('every Kill sits after the Yes or No', sky.find('.Kill(') > sky.find('askYesNo(') > 0)
 check('No stops with nothing installed', 'Skyrim is still open, so nothing was installed and nothing was ' in sky)
 check('the question names what runs and what each answer does',
@@ -261,7 +261,7 @@ static class Driver
                 var c = new InstallChoice { Root = a[1], Package = a[2], SteamRoot = a[3], SteamGame = a[4], MakeOwnGame = a[5] == "1", VortexGame = a[6] };
                 var lines = new List<string>();
                 double last = -2;
-                var s = new InstallSteps(c, lines.Add, f => last = f);
+                var s = new InstallSteps(c, lines.Add, f => last = f, q => true);
                 try { s.Run(); w.WriteNull("stop"); }
                 catch (InstallStop e) { w.WriteString("stop", e.Message); }
                 w.WriteNumber("bad", s.Bad);

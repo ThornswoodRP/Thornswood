@@ -305,7 +305,7 @@ The short form of the rules. The same decisions, with the dates they were made, 
   rules too (#5183). All
   ~410 of them (tests/, bot, and voice), and a look for stray pull requests
   and branches run every night on GitHub's runner (.github/workflows/nightly.yml,
-  03:00 Mountain); a failure there opens an issue on the board, "Nightly
+  9:00 AM UTC, which is 2:00 AM Mountain in winter and 3:00 AM in summer); a failure there opens an issue on the board, "Nightly
   checks failed", and whoever broke it fixes it next. The harnesses run in
   shares, a job each on a runner of its own with 45 minutes of its own
   (`scripts\dev\Nightly-Harnesses.ps1`, #2357); a share that runs out of

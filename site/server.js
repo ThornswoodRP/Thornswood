@@ -60,7 +60,7 @@ require('./lib/news');
 require('./lib/limits');
 require('./lib/downloads');
 require('./lib/media');
-require('./lib/uploads');
+const { clearPartUploads } = require('./lib/uploads');
 const { heldBroken } = require('./lib/staff');
 require('./lib/auth');
 require('./lib/http');
@@ -92,6 +92,8 @@ function listenFailed(e) {
   process.exitCode = 1;
 }
 
+// Uploads cut off when the site last stopped (#4956), before any can arrive.
+clearPartUploads();
 applyDeletionRequests();
 
 http.createServer((req, res) => {

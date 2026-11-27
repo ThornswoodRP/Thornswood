@@ -14,13 +14,14 @@
 
     the rule    BeatProblem, the one function that decides, against a table
                 of heartbeats: fresh, hung, off Discord, never on Discord, a
-                new run that has not written yet, a file from before this
+                new run that has not written yet, no file, a file that cannot
+                be read
     the run     the real watcher, top to bottom, on a fake clock: a hung bot
                 is told about once, through the webhook because the bot
                 cannot post, is restarted by its service's name (#465), at
                 most three times an hour, and is said to be back once it
-                beats again. A bot with no heartbeat file is left to the
-                process check, as before
+                beats again. A bot with no heartbeat it can read, ten
+                minutes after it started, is down the same way (#4287)
     the bot     when a python with discord.py is on this machine, the real
                 bot.py writes a heartbeat and the real rule reads it
 
@@ -101,7 +102,29 @@ $running = @(@{ Id = 4242; Started = $at - 7200 })
 
 Yes 'fresh and on Discord is fine' ((BeatProblem (B ($at - 30) $true ($at - 30)) $running $at) -eq '')
 Yes 'no bot process is not this rule''s to judge: the process check has it' ((BeatProblem (B ($at - 5000) $false 0) @() $at) -eq '')
-Yes 'no heartbeat file is a bot from before this, and says nothing' ((BeatProblem $null $running $at) -eq '')
+# #4287: no heartbeat it can read is not a working bot. Every bot writes one
+# before it logs in, so past ten minutes from its start it is down.
+$r = BeatProblem $null $running $at
+Yes 'no heartbeat file two hours after it started is down' ($r -match '^Its python process has been running for 120 minutes and there is no heartbeat file, so it is stuck before it got going or cannot write the file$')
+Yes '  but two minutes after it started it may still be starting, and is fine' ((BeatProblem $null @(@{ Id = 4242; Started = $at - 120 }) $at) -eq '')
+Yes '  and a process Windows gave no start time for is not judged on its age' ((BeatProblem $null @(@{ Id = 4242; Started = 0 }) $at) -eq '')
+$bad = 'unreadable'
+$r = BeatProblem $bad $running $at
+Yes 'a heartbeat file that cannot be read, two hours in, is down' ($r -match '^Its python process has been running for 120 minutes and its heartbeat file cannot be read, so nothing says it is working$')
+Yes '  but not two minutes in' ((BeatProblem $bad @(@{ Id = 4242; Started = $at - 120 }) $at) -eq '')
+$rb = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-readbeat-' + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.json')
+try {
+    Yes 'ReadBeat gives nothing for no file' ($null -eq (ReadBeat $rb))
+    [IO.File]::WriteAllText($rb, '{"pid": 42, "writ')
+    Yes 'ReadBeat says a file cut short cannot be read' ((ReadBeat $rb) -eq 'unreadable')
+    [IO.File]::WriteAllText($rb, '[]')
+    Yes 'ReadBeat says JSON that is no heartbeat cannot be read' ((ReadBeat $rb) -eq 'unreadable')
+    [IO.File]::WriteAllText($rb, '"written"')
+    Yes 'ReadBeat says a JSON string cannot be read either' ((ReadBeat $rb) -eq 'unreadable')
+    [IO.File]::WriteAllText($rb, '{"pid": 42, "started": 1, "written": 2, "connected": true, "connected_at": 2, "last_event": 0}')
+    $rr = ReadBeat $rb
+    Yes 'ReadBeat reads a heartbeat' ([int64]$rr.written -eq 2 -and -not ($rr -is [string]))
+} finally { Remove-Item -LiteralPath $rb -Force -EA SilentlyContinue }
 $r = BeatProblem (B ($at - 660) $true ($at - 660)) $running $at
 Yes 'a heartbeat eleven minutes old is a hung bot' ($r -match '^Its python process is running, but its heartbeat stopped 11 minutes ago, so it is hung$')
 Yes 'nine minutes old is not yet' ((BeatProblem (B ($at - 540) $true ($at - 540)) $running $at) -eq '')
@@ -126,12 +149,20 @@ $words = @(
     (BeatProblem (B ($at - 660) $true ($at - 660) ($at - 7200) 4242 ($at - 700)) $running $at),
     (BeatProblem (B ($at - 20) $false ($at - 900)) $running $at),
     (BeatProblem (B ($at - 20) $false 0 ($at - 720)) @(@{ Id = 4242; Started = $at - 720 }) $at),
-    (BeatProblem $old @(@{ Id = 4242; Started = $at - 1200 }) $at))
+    (BeatProblem $old @(@{ Id = 4242; Started = $at - 1200 }) $at),
+    (BeatProblem $null $running $at),
+    (BeatProblem 'unreadable' $running $at))
 $bad = @($words | Where-Object { -not $_ -or $_ -match '[^\x00-\x7F]' -or $_ -match '(?i)\bplayers?\b' -or $_ -match '\.$' })
 Yes 'every reason is plain ASCII, never says player, and leaves the full stop to the message' ($bad.Count -eq 0)
 
 # ---- the whole watcher, on a fake clock ---------------------------------------
-$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'HeldProblem', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
+# Every probe and action test-watch-alerts.ps1 stands in for, so nothing here
+# asks the machine's own ports or ends a real task (#5898).
+$fake = @('Answers', 'SiteAnswers', 'BotAlive', 'BotProcs', 'HealthProblem', 'ReadyProblem', 'HeldProblem', 'EndTask', 'HowItEnded', 'ServiceProblem', 'BackupProblem', 'OffBoxProblem', 'CertProblem', 'PostWebhook', 'DiskNow')
+$alertsAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'test-watch-alerts.ps1'), [ref]$null, [ref]$null)
+$alertsFake = $alertsAst.Find({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and "$($n.Left)" -eq '$fake' }, $true)
+$notFaked = @(if ($alertsFake) { $alertsFake.Right.Expression.FindAll({ param($n) $n -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true) | ForEach-Object { $_.Value } | Where-Object { $fake -notcontains $_ } })
+Yes ('this stands in for every probe and action test-watch-alerts.ps1 does' + $(if ($notFaked.Count) { ', not ' + ($notFaked -join ', ') } else { '' })) ($alertsFake -and $notFaked.Count -eq 0)
 $body = @()
 foreach ($s in $inner.EndBlock.Statements) {
     if ($s -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $fake -contains $s.Name) { continue }
@@ -183,6 +214,10 @@ function SiteAnswers($url) { return $true }
 function BotAlive() { return $script:alive }
 function BotProcs() { if ($script:alive) { return @(@{ Id = 4242; Started = $script:procStart }) } return @() }
 function HealthProblem($url) { return '' }
+# The tunnel's /ready (#5334), which test-watch-alerts.ps1 holds; here it is fine.
+function ReadyProblem($url) { return '' }
+# Ending a task that runs and does not work, by its port's process: here it ends nothing real.
+function EndTask($task, $port) { $script:runs += ('end ' + $task); return ('ended ' + $task) }
 # The website's readiness (#4448), which test-4448-site-ready.ps1 holds; here it is fine.
 function HeldProblem($url) { return '' }
 function HowItEnded($task) { return '' }
@@ -295,12 +330,25 @@ try {
     Step 6
     Yes 'and nothing more' ($script:said.Count -eq 2 -and (BotRuns) -eq 1)
 
-    # -- a bot from before the heartbeat --------------------------------------------
-    Box 'old-bot'
-    $script:writes = $false
-    Step 24
-    Yes 'a bot that writes no heartbeat is left to the process check: nothing said' ($script:said.Count -eq 0 -and $script:runs.Count -eq 0)
-    Yes 'and the watcher writes no heartbeat of its own' (-not (Test-Path -LiteralPath $script:beatFile))
+    # -- a bot that never writes a heartbeat (#4287) ------------------------------
+    # Stuck before it got going: no heartbeat, and not on Discord to post.
+    Box 'no-beat'
+    $script:writes = $false; $script:onDiscord = $false; $script:restartHelps = $false; $script:procStart = Unix
+    Step 1
+    Yes 'a bot with no heartbeat five minutes after it started may still be starting: nothing said' ($script:said.Count -eq 0 -and $script:runs.Count -eq 0)
+    Step 2
+    Yes 'fifteen minutes in with no heartbeat it is down, and restarted by the service''s name' ((BotRuns) -eq 1)
+    Step 1
+    Yes '  said once, through the webhook, since the bot never posts it' ((Said 'The Discord bot is down\.\*\* Its python process has been running for 15 minutes and there is no heartbeat file') -eq 1 -and $script:said.Count -eq 1 -and (By 'hook') -eq 1)
+    Yes '  and the watcher writes no heartbeat of its own' (-not (Test-Path -LiteralPath $script:beatFile))
+    Step 11
+    Yes '  restarted no more than three times an hour while it still writes none' ((BotRuns) -le 3)
+
+    Box 'unreadable-beat'
+    $script:writes = $false; $script:onDiscord = $false
+    [IO.File]::WriteAllText($script:beatFile, '{"pid": 4242, "writ')
+    Step 1
+    Yes 'a heartbeat file that cannot be read, an hour after the bot started, is down, once' ((Said 'The Discord bot is down\.\*\* Its python process has been running for 65 minutes and its heartbeat file cannot be read') -eq 1 -and (BotRuns) -eq 1)
 
     # -- the process itself gone ------------------------------------------------------
     Box 'gone'

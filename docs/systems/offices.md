@@ -101,13 +101,12 @@ Dour Dungeon, Riften Jail, Windhelm Barracks, Cidhna Mine, Falkreath
 Jail, Morthal Jail, Dawnstar Jail, The Chill and The Bulwark Jail.
 Claiming the jail building does not touch its cells.
 
-The rest of the jail, as Patrick decided on 12 October (#502):
+Building ownership follows the general claim policy (#7071); the cell rules
+remain separate (#502):
 
-- Only the Jarl of a hold claims its jail building. Nobody else is
-  offered the claim at its door, and its deed presented by anybody else
-  claims nothing. A claim made on a jail before this rule, by anybody
-  but that hold's Jarl, ended once at the first server start with the
-  rule, and the server log names each.
+- A jail building is an ordinary claimable property. Its holder gains no
+  authority over actual cell locks: those remain controlled by that hold's
+  guards. Startup no longer removes an ordinary holder's claim.
 - There is no timer. Whoever is locked in stays until a guard of that
   hold unlocks the cell, or until they pick the lock, which is allowed.
 - The game's own jail keys open nothing: the world does not hand one

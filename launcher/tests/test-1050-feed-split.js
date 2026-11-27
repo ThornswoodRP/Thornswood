@@ -113,6 +113,11 @@ eval(grab('function send('));
 // send() and rangeReply() put each answer's nonce into the CSP (#3216).
 eval(grab('function cspFor('));
 eval(grab('function rangeReply('));
+// version.json and /watch compare the tags weakly, over a list (noneMatch, #4923).
+eval(grab('function noneMatch('));
+// The feed's assets are sent through streamFile, and found with isFile (#4402).
+const { pipeline } = require('stream');
+eval(grab('function isFile(') + '\n' + grab('function streamFile('));
 const verSrc = route('const feedVer = p.match(', "if (feedVer && req.method === 'GET')");
 const watchSrc = route('const feedWatch = p.match(', "if (feedWatch && req.method === 'GET')");
 const assetSrc = route('const feedAsset = p.match(', "if (feedAsset && req.method === 'GET')");
@@ -267,4 +272,11 @@ async function main() {
   console.log(pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;
 }
-main().catch((e) => { console.log('FAIL  the harness threw: ' + (e && e.stack)); process.exitCode = 1; });
+main().catch((e) => {
+  console.log('FAIL  the harness threw: ' + (e && e.stack));
+  process.exitCode = 1;
+  // A throw closes the server too, or the open listener keeps node alive
+  // until the gate kills it at 300 s.
+  server.close();
+  fs.rmSync(ROOT, { recursive: true, force: true });
+});

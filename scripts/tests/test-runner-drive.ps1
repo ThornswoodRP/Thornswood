@@ -19,7 +19,11 @@
     - the file's folder is locked to SYSTEM and Administrators, and the
       drive's root lets signed-in accounts look at it and nothing below;
     - it stops before anything when it is not run as administrator, and
-      -Remove stops while a runner service still runs from the drive.
+      -Remove stops while a runner service still runs from the drive;
+    - the drive's folder is its own (#4660): there is no -File, a folder
+      holding anything the script does not make is refused before it is
+      locked, and -Remove, run here on a scratch folder, deletes only the
+      drive's files, says what else it found and leaves the folder then.
   Reads only; nothing leaves this machine.
 #>
 [CmdletBinding()]
@@ -69,6 +73,48 @@ Yes 'the task runs at startup as SYSTEM' ($src -match 'New-ScheduledTaskTrigger 
 $iAdmin = $src.IndexOf('IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)'); $iFirst = $src.IndexOf('if ($Status)')
 Yes 'it stops before anything when not run as administrator' ($iAdmin -gt 0 -and $iAdmin -lt $iFirst)
 Yes '-Remove stops while a runner service still runs from the drive' ($src -match [regex]::Escape('runner services still run from'))
+
+# ---- #4660: the drive's folder is its own, and -Remove deletes only its files.
+$paramNames = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+Yes '#4660 there is no -File: the disk file''s folder cannot be one that holds anything else' ($paramNames -notcontains 'File')
+Yes '#4660 the folder is %ProgramData%\Thornswood-RunnerDrive, where Install-Runner.ps1 and Move-RunnersToDrive.ps1 read start.ps1' (
+    $src.Contains("`$Folder = Join-Path `$env:ProgramData 'Thornswood-RunnerDrive'") -and
+    ([IO.File]::ReadAllText([IO.Path]::Combine($Repo, 'scripts', 'deploy', 'Install-Runner.ps1'))).Contains("Join-Path `$env:ProgramData 'Thornswood-RunnerDrive\start.ps1'") -and
+    ([IO.File]::ReadAllText([IO.Path]::Combine($Repo, 'scripts', 'deploy', 'Move-RunnersToDrive.ps1'))).Contains("Join-Path `$env:ProgramData 'Thornswood-RunnerDrive\start.ps1'"))
+$iRefuse = $src.IndexOf('holds what this script does not make: '); $iLock = $src.IndexOf("icacls.exe `$Folder /inheritance:r")
+Yes '#4660 a folder holding anything else is refused before it is locked or anything made' ($iRefuse -gt 0 -and $iRefuse -lt $iLock -and $src.IndexOf('$null = New-Item -ItemType Directory -Path $Folder') -gt $iRefuse)
+Yes '#4660 -Remove deletes nothing by -Recurse' ($src -notmatch 'Remove-Item[^\r\n]*-Recurse')
+$oursAst = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -eq '$Ours' }, $true)
+Yes '#4660 it says what it makes ($Ours)' ($null -ne $oursAst)
+if ($oursAst) { . ([scriptblock]::Create($oursAst.Extent.Text)) }
+foreach ($name in 'Get-OthersIn', 'Remove-OurFiles') {
+    $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
+    Yes "#4660 it has $name" ($null -ne $fn)
+    if ($fn) { . ([scriptblock]::Create($fn.Extent.Text)) }
+}
+$scratch = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'ts-4660-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+try {
+    $d = [IO.Path]::Combine($scratch, 'Thornswood-RunnerDrive')
+    Yes '#4660 a folder not there yet holds nothing else' (@(Get-OthersIn $d).Count -eq 0)
+    $null = New-Item -ItemType Directory -Path $d -Force
+    foreach ($n in 'runners.vhdx', 'start.ps1', 'start.log') { Set-Content -LiteralPath ([IO.Path]::Combine($d, $n)) -Value 'x' }
+    Yes '#4660 one with only the drive''s files holds nothing else' (@(Get-OthersIn $d).Count -eq 0)
+    Set-Content -LiteralPath ([IO.Path]::Combine($d, 'games.vhdx')) -Value 'keep'
+    $null = New-Item -ItemType Directory -Path ([IO.Path]::Combine($d, 'images'))
+    $others = @(Get-OthersIn $d | Sort-Object)
+    Yes ('#4660 another disk file and a folder are named (' + ($others -join ', ') + ')') (($others -join ',') -eq 'games.vhdx,images')
+    $said = @(Remove-OurFiles $d)
+    $left = @(Get-ChildItem -LiteralPath $d -Force | ForEach-Object { $_.Name } | Sort-Object)
+    Yes ('#4660 -Remove deletes the drive''s three files and leaves the rest (' + ($left -join ', ') + ')') (($left -join ',') -eq 'games.vhdx,images')
+    Yes '#4660 and says what it left, keeping the folder' (@($said | Where-Object { $_ -like 'LEFT *' -and $_ -match 'games\.vhdx, images' }).Count -eq 1 -and (Test-Path -LiteralPath $d))
+    Remove-Item -LiteralPath ([IO.Path]::Combine($d, 'games.vhdx')) -Force
+    Remove-Item -LiteralPath ([IO.Path]::Combine($d, 'images')) -Force
+    Set-Content -LiteralPath ([IO.Path]::Combine($d, 'runners.vhdx')) -Value 'x'
+    $said = @(Remove-OurFiles $d)
+    Yes '#4660 with only its own files there, the folder goes too' (-not (Test-Path -LiteralPath $d) -and ($said -contains ('deleted ' + $d)))
+} finally {
+    if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force }
+}
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail)

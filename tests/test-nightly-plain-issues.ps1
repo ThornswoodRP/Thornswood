@@ -75,9 +75,9 @@ $fresh = $now.AddHours(-2).ToString('o')
 function Issue([int]$n, [string]$title, [string]$body, [string]$assoc = 'OWNER', [string]$type = 'User', [string]$at = $fresh) {
     [pscustomobject]@{ number = $n; title = $title; body = $body; created_at = $at; author_association = $assoc; user = [pscustomobject]@{ type = $type } }
 }
-function Comment([int]$n, [int]$id, [string]$body, [string]$assoc = 'OWNER', [string]$type = 'User', [string]$at = $fresh) {
+function Comment([int]$n, [int]$id, [string]$body, [string]$assoc = 'OWNER', [string]$type = 'User', [string]$at = $fresh, [string]$page = 'issues') {
     [pscustomobject]@{ id = $id; body = $body; created_at = $at; author_association = $assoc; user = [pscustomobject]@{ type = $type }
-        issue_url = "https://api.github.com/repos/x/y/issues/$n"; html_url = "https://github.com/x/y/issues/$n#issuecomment-$id" }
+        issue_url = "https://api.github.com/repos/x/y/issues/$n"; html_url = "https://github.com/x/y/$page/$n#issuecomment-$id" }
 }
 function RulesOf($found, [string]$where) { @($found.Found | Where-Object { $_.Where -eq $where } | ForEach-Object { $_.Rules }) -join '|' }
 
@@ -109,7 +109,10 @@ $script:Comments = @(
     (Comment 1 103 ("Test task: Forge lists each ingot once`nServer: Main`n" + ((1..10 | ForEach-Object { "$_. step $_" }) -join "`n"))),
     (Comment 1 104 'The Smeagle lane read this again.'),
     (Comment 1 105 $long 'NONE' 'Bot'),
-    (Comment 1 106 'Session: https://claude.ai/code/session_01ABC')
+    (Comment 1 106 'Session: https://claude.ai/code/session_01ABC'),
+    # A team comment on a pull request, long and with a lane in it: GitHub's
+    # issues/comments lists it beside the issues' comments (#4310).
+    (Comment 10 107 ("The Smeagle lane read this again.`n" + $long) 'OWNER' 'User' $fresh 'pull')
 )
 $f = Find-NotPlain -Now $now
 Yes 'a plain issue is not named' ((RulesOf $f 'issue #1') -eq '')
@@ -133,6 +136,8 @@ Yes 'a test task keeps its own shape' ((RulesOf $f 'https://github.com/x/y/issue
 Yes "a lane's name is named" ((RulesOf $f 'https://github.com/x/y/issues/1#issuecomment-104') -match 'byline')
 Yes "a bot's long text is not measured" ((RulesOf $f 'https://github.com/x/y/issues/1#issuecomment-105') -eq '')
 Yes 'a session link is named' ((RulesOf $f 'https://github.com/x/y/issues/1#issuecomment-106') -match 'agent footer')
+Yes 'a comment on a pull request is left out, as the pull request is (#4310)' (@($f.Found | Where-Object { $_.Where -like '*/pull/*' }).Count -eq 0 -and
+    $f.Comments -eq 6)
 
 # ---- 2. pages --------------------------------------------------------------------
 $script:Issues = @()

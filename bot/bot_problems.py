@@ -85,6 +85,20 @@ def _issue_text(v, n):
     return '<pre>' + v.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') + '</pre>'
 
 
+def _issue_words(v, n=None):
+    """Words somebody typed, inside a line of an issue, as typed: in a code
+       span, where GitHub reads no markdown or HTML and links no mention or
+       address (#5497). Every run of spaces and line breaks becomes one
+       space, so a list line stays one line, and the span's fence is one
+       backtick longer than any run of backticks in it, so nothing in it can
+       close the span."""
+    v = re.sub(r'\s+', ' ', str(v or '')).strip()
+    if n is not None:
+        v = v[:n].rstrip()
+    fence = '`' * (max([len(r) for r in re.findall(r'`+', v)] or [0]) + 1)
+    return '%s %s %s' % (fence, v, fence)
+
+
 def _issue_title(text):
     """The issue's title: the first words of what they said, cut at a word."""
     t = re.sub(r'\s+', ' ', str(text or '')).strip()
@@ -100,10 +114,12 @@ def problem_issue(row):
     server = 'the dev server' if row.get('server') == 'dev' else 'the main server'
     session = str(row.get('session') or '')
     pos = row.get('pos') if isinstance(row.get('pos'), list) else []
-    where = str(row.get('cell') or 'an unknown place')
+    # Every part of who and where came in with the row, so each goes in as
+    # typed (#5497), not as markdown that can ping, link or show a picture.
+    where = str(row.get('cell') or 'an unknown place')[:200]
     if len(pos) == 3:
-        where += ', at ' + ', '.join(str(x) for x in pos)
-    who = '%s, profile %s' % (str(row.get('by') or 'Somebody')[:60], row.get('profileId') or 'unknown')
+        where += ', at ' + ', '.join(str(x)[:30] for x in pos)
+    who = '%s, profile %s' % (str(row.get('by') or 'Somebody')[:60], str(row.get('profileId') or 'unknown')[:40])
     if str(row.get('discordId') or '').isdigit():
         who += ', Discord account %s' % row.get('discordId')
     if session:
@@ -121,7 +137,7 @@ def problem_issue(row):
             '- **Where:** %s (where the game server had the character)\n'
             '- **When:** %s\n'
             '- **Logs:** %s\n'
-            % (server, _issue_text(row.get('title'), 1000), who, where,
+            % (server, _issue_text(row.get('title'), 1000), _issue_words(who), _issue_words(where),
                _when_text(row.get('at')), logs))
     return _issue_title(row.get('title')), body
 
@@ -132,7 +148,7 @@ def problem_issue_discord(name, discord_id, what, doing, server, at_ms):
             'Read it, then give it its area and Main or Dev Findings, or close it.\n\n'
             '**What went wrong**\n%s\n\n'
             '**What they were doing, and where**\n%s\n\n'
-            '- **Who:** %s, Discord account %s\n'
+            '- **Who:** %s\n'
             '- **Server:** %s\n'
             '- **When:** %s\n'
             '- **Logs:** [their sessions](%s/sessions?find=%s) on the hub, newest first. A '
@@ -140,8 +156,8 @@ def problem_issue_discord(name, discord_id, what, doing, server, at_ms):
             'to the time above.\n'
             % (PROBLEM_CHANNEL, _issue_text(what, 1000),
                _issue_text(doing, 1000) if str(doing or '').strip() else 'nothing said',
-               str(name or 'Somebody')[:60], discord_id,
-               str(server or '').strip()[:40] or 'not said', _when_text(at_ms),
+               _issue_words('%s, Discord account %s' % (str(name or 'Somebody')[:60], discord_id)),
+               _issue_words(server, 40) if str(server or '').strip() else 'not said', _when_text(at_ms),
                SITE, urllib.parse.quote(str(discord_id))))
     return _issue_title(what), body
 
