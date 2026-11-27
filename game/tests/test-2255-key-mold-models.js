@@ -9,6 +9,7 @@
   stick of charcoal. They now wear vanilla meshes: the key Clutter\Key01.nif
   (what most of Skyrim.esm's keys use) and the mold Clutter\SilverMold01.nif
   (the Thieves Guild silver mold). The charcoal's MODT goes with its mesh.
+  Since #7171 the key is a KEYM, so it sorts under Keys; the mold stays a MISC.
 
   This reads the committed plugin with its own reader and proves the two
   records, then loads the tool as a module and checks the two it writes from
@@ -63,7 +64,7 @@ if (key && mold) {
   yes('R3 the key and the mold no longer look alike', z(key.subs.MODL) !== z(mold.subs.MODL));
   yes('R4 neither is the charcoal stick any more', !/Charcoal/i.test(z(key.subs.MODL)) && !/Charcoal/i.test(z(mold.subs.MODL)));
   yes('R5 neither carries the charcoal mesh\'s MODT', !key.subs.MODT && !mold.subs.MODT);
-  yes('R6 the key is still MISC "Key", 0 gold, weightless', key.tag === 'MISC' && z(key.subs.FULL) === 'Key' &&
+  yes('R6 the key is a KEYM "Key", 0 gold, weightless, so it sorts under Keys (#7171)', key.tag === 'KEYM' && z(key.subs.FULL) === 'Key' &&
       key.subs.DATA.readUInt32LE(0) === 0 && key.subs.DATA.readFloatLE(4) === 0);
   yes('R7 the mold is still MISC "Key Mold", 25 gold, 1 weight', mold.tag === 'MISC' && z(mold.subs.FULL) === 'Key Mold' &&
       mold.subs.DATA.readUInt32LE(0) === 25 && mold.subs.DATA.readFloatLE(4) === 1);

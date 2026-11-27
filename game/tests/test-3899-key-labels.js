@@ -175,7 +175,7 @@ function boot() {
       return online.filter(function (a) { return refs[a] && refs[a].worldOrCellDesc === cell; });
     },
     lookupEspmRecordById: function (id) {
-      return id === idOf(MASTER_DESC) ? { record: { type: 'MISC' } } : null;
+      return id === idOf(MASTER_DESC) ? { record: { type: 'KEYM' } } : null;
     }
   };
   function takeItem(actorId, desc, n) {

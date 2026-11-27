@@ -179,7 +179,7 @@ function boot() {
       return online.filter(function (a) { return refs[a] && refs[a].worldOrCellDesc === cell; });
     },
     // The master key record is in the server's content plugin.
-    lookupEspmRecordById: function (id) { return id === idOf(MASTER_DESC) ? { record: { type: 'MISC' } } : null; }
+    lookupEspmRecordById: function (id) { return id === idOf(MASTER_DESC) ? { record: { type: 'KEYM' } } : null; }
   };
   function takeItem(actorId, desc, n) {
     const baseId = idOf(desc);

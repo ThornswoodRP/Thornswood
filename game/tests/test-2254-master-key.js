@@ -6,7 +6,8 @@
 // re-cut from the mold for 2 iron ingots, the new one replacing the old.
 //
 // Part R reads the record in the committed content plugin with its own
-// reader: ThornswoodMiscMasterKey, a MISC on the key's mesh, and no recipe
+// reader: ThornswoodMiscMasterKey, a KEYM on the key's mesh (#7171: so it
+// sorts under Keys), and no recipe
 // anywhere makes it. Part A runs the REAL property block over a stand-in
 // server (packs, places, the people online, the engine's record lookup) and a
 // clock turned by hand: the claim, the door, the lock, the beds, a lapse, a
@@ -71,8 +72,8 @@ const z = (b) => b ? b.toString('latin1').replace(/\0+$/, '') : '';
 {
   const r = records(fs.readFileSync(ESP));
   const m = r[MASTER];
-  yes('R1 the plugin has ThornswoodMiscMasterKey at 0x50154E0, a MISC called Master Key',
-      !!m && m.tag === 'MISC' && z(m.subs.EDID) === 'ThornswoodMiscMasterKey' && z(m.subs.FULL) === 'Master Key');
+  yes('R1 the plugin has ThornswoodMiscMasterKey at 0x50154E0, a KEYM called Master Key',
+      !!m && m.tag === 'KEYM' && z(m.subs.EDID) === 'ThornswoodMiscMasterKey' && z(m.subs.FULL) === 'Master Key');
   yes('R2 on the key\'s own mesh, weightless and worth nothing, like the key',
       !!m && !!r[KEY] && z(m.subs.MODL) === z(r[KEY].subs.MODL) && z(m.subs.MODL) === 'Clutter\\Key01.nif' &&
       m.subs.DATA.readUInt32LE(0) === 0 && m.subs.DATA.readFloatLE(4) === 0);
@@ -82,7 +83,7 @@ const z = (b) => b ? b.toString('latin1').replace(/\0+$/, '') : '';
   yes('R3 no recipe makes one: it is handed at a claim and cut at a forge by the server', makers.length === 0);
   const tool = fs.readFileSync(path.join(ROOT, 'scripts', 'mods', 'Add-ContentRecords.py'), 'utf8');
   yes('R4 the content tool builds it, so the plugin is the tool\'s output',
-      /MASTER_KEY = 0x50154E0/.test(tool) && /misc\(MASTER_KEY, 'ThornswoodMiscMasterKey',/.test(tool));
+      /MASTER_KEY = 0x50154E0/.test(tool) && /key_record\(MASTER_KEY, 'ThornswoodMiscMasterKey',/.test(tool));
   yes('R5 and the gamemode names the same record', /var MASTER_KEY = '154e0:Thornswood-Content\.esp';/.test(gm));
 }
 
@@ -203,7 +204,7 @@ function boot() {
       return online.filter(function (a) { return refs[a] && refs[a].worldOrCellDesc === cell; });
     },
     lookupEspmRecordById: function (id) {
-      if (id === idOf(MASTER_DESC)) { return w.masterRecord ? { record: { type: 'MISC' } } : null; }
+      if (id === idOf(MASTER_DESC)) { return w.masterRecord ? { record: { type: 'KEYM' } } : null; }
       return null;
     }
   };
