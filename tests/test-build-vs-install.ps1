@@ -449,14 +449,15 @@ try {
     Yes 'T3 the install takes the exe from the folder the build wrote' (($calls.Count -eq 2) -and $calls[0].Dir -and ($calls[1].Dir -eq $calls[0].Dir) -and ($calls[0].Dir.TrimEnd('\') -ne (Join-Path $itRoot 'Launcher')))
     Yes 'T4 so the new exe ends up in the root, as it always did' (Test-Path -LiteralPath (Join-Path $itRoot 'Launcher\Thornswood.exe'))
 
-    # With Ship beside it and no -NoShip, Ship does both and this does neither.
+    # With Ship beside it and no -NoShip, it still builds and installs the
+    # launcher, as Ship sends none (#4825), and then publishes (#4427).
     Set-Content -LiteralPath (Join-Path $itRel 'Ship.ps1') -Value $stubShip -Encoding ASCII
     Remove-Item -LiteralPath $callLog -Force -ErrorAction SilentlyContinue
     $t = Invoke-Child $ps (Join-Path $itDev 'Install-Thornswood.ps1') @('-Root', $itRoot, '-Only', 'launcher', '-NoPause', '-Notes', 'test', '-Server', $itRoot, '-Client', $itRoot)
     $calls = @(Read-Log $callLog | ForEach-Object { Split-Call $_ })
     Yes "T5 without -NoShip it passes (exit $($t.Code))" ($t.Code -eq 0)
-    Yes 'T6 and hands the launcher to Ship alone, once' (($calls.Count -eq 1) -and ($calls[0].What -eq 'ship'))
-    Yes 'T7 and says so once, not once per launcher step' (([regex]::Matches($t.Out, 'built as part of publishing')).Count -eq 1)
+    Yes 'T6 and builds and installs the launcher, then hands Ship the publish, once' (($calls.Count -eq 3) -and ($calls[0].What -eq 'build') -and ($calls[1].What -eq 'install') -and ($calls[2].What -eq 'ship'))
+    Yes 'T7 and no longer says the launcher is built as part of publishing' (-not $t.Out.Contains('built as part of publishing'))
 
     # A stand-in Skyrim, a copy of ping.exe named SkyrimSE.exe as
     # scripts\tests\test-2233-inuse-image.ps1 makes, run from somewhere else and then

@@ -94,6 +94,20 @@ forms.forEach(function (f) {
   }
 });
 
+// The crash form says where the game's own crash log is, as the help page
+// does: crash-*.log in Profile\MyGames\SKSE under the install folder, where
+// the launcher reads it (launcher/app/Files.cs, SkseLogDir), and that the
+// launcher's report zip goes to a Discord ticket, not into a public issue
+// (#4288).
+{
+  const crash = read(DIR + '/crash.yml') || '';
+  const help = read('site/data/help.md') || '';
+  yes('crash.yml names the newest crash log and its folder, Profile\\MyGames\\SKSE, the one help.md names (#4288)',
+      /newest crash log/.test(crash) && /crash-\(date and time\)\.log in Profile\\MyGames\\SKSE/.test(crash) && /Profile\\MyGames\\SKSE\\/.test(help));
+  yes('  and says the launcher\'s Build the report zip goes in a ticket in the Discord, as help.md does (#4288)',
+      /Build the report/.test(crash) && /ticket in the Discord/.test(crash) && /ticket in the Discord/.test(help));
+}
+
 // ------------------------------------------------------------ the pull request template
 const tpl = read('.github/pull_request_template.md') || '';
 const cut = tpl.indexOf('## For the Thornswood team');

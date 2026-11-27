@@ -416,6 +416,57 @@ Yes 'the note says three hours is not yet a week' ($printed -match 'asks for a w
 Yes 'the note calls people people, by the house words' ($printed -notmatch '(?i)player')
 Yes 'the note carries no em dash' ($printed.IndexOf([char]0x2014) -lt 0)
 
+# ======================================= the reader, a header that changed ===
+Write-Host ''
+Write-Host '--- the reader, on an older record and a newer one with a service added' -ForegroundColor Cyan
+<#
+  When the collector's header changes, vps-load.ps1 moves the old record to
+  load.1.csv and starts load.csv with the new header. Read-Load.ps1 read the
+  services from the oldest line only, which is load.1.csv's, so a service
+  added since was left out until load.1.csv rolled away a week later.
+
+  The older file has every service but devvoice. The newer one, an hour on,
+  adds devvoice at a quarter of a core. Both lines carry the game server at
+  half a core, so both files are read.
+#>
+$oldCols = @($cols | Where-Object { $_ -notlike 'devvoice_*' })
+$t1 = New-Object DateTimeOffset(2026, 9, 27, 9, 0, 0, [TimeSpan]::FromHours(-6))
+function Line($cs, $t, [int]$k, [bool]$dv) {
+    $v = @{}
+    foreach ($c in $cs) { $v[$c] = '' }
+    $v['time'] = $t.ToString("yyyy-MM-dd'T'HH:mm:sszzz", $inv)
+    $v['cores'] = '5'
+    $v['idle_s'] = (1000000 + 4.25 * 300 * $k).ToString('0.00', $inv)
+    $v['mem_used_mb'] = '3000'; $v['mem_total_mb'] = '8192'; $v['disk_free_gb'] = '50.00'
+    $v['net_in_bytes'] = '1000'; $v['net_out_bytes'] = '1000'; $v['online'] = '1'
+    $v['game_pid'] = '100'; $v['game_cpu_s'] = (0.5 * 300 * $k).ToString('0.00', $inv)
+    $v['game_mem_mb'] = '2000'; $v['game_io_bytes'] = '0'
+    if ($dv) {
+        $v['devvoice_pid'] = '300'; $v['devvoice_cpu_s'] = (0.25 * 300 * $k).ToString('0.00', $inv)
+        $v['devvoice_mem_mb'] = '90'; $v['devvoice_io_bytes'] = '0'
+    }
+    return ((@($cs | ForEach-Object { $v[$_] })) -join ',')
+}
+$older = Join-Path $scratch 'load.1.csv'
+$newer = Join-Path $scratch 'load.csv'
+$o = @($oldCols -join ',')
+for ($k = 0; $k -le 2; $k++) { $o += (Line $oldCols $t1.AddMinutes(5 * $k) $k $false) }
+$nw = @($header)
+for ($k = 0; $k -le 2; $k++) { $nw += (Line $cols $t1.AddMinutes(60 + 5 * $k) (12 + $k) $true) }
+Set-Content -LiteralPath $older -Value $o -Encoding ASCII
+Set-Content -LiteralPath $newer -Value $nw -Encoding ASCII
+
+$both = & $reader -Path @($older, $newer) -PassThru
+$dvSvc = @($both.Services | Where-Object { $_.Name -eq 'devvoice' })
+$gmSvc = @($both.Services | Where-Object { $_.Name -eq 'game' })
+Yes ('it reads all 6 lines from the two files (got {0})' -f $both.Lines) ($both.Lines -eq 6)
+Yes ('the service only the newer header names is reported (' + (@($both.Services | ForEach-Object { $_.Name }) -join ', ') + ')') ($dvSvc.Count -eq 1)
+Yes ('at the quarter of a core it used (got {0})' -f $(if ($dvSvc.Count) { $dvSvc[0].CoresAvg })) ($dvSvc.Count -eq 1 -and (Near $dvSvc[0].CoresAvg 0.25 0.001))
+Yes ('up all the time it was recorded, not half (got {0})' -f $(if ($dvSvc.Count) { $dvSvc[0].Up })) ($dvSvc.Count -eq 1 -and (Near $dvSvc[0].Up 100 0.001))
+Yes 'and it was not restarted' ($dvSvc.Count -eq 1 -and $dvSvc[0].Restarts -eq 0)
+Yes ('the game server, in both headers, is still read across both (got {0})' -f $(if ($gmSvc.Count) { $gmSvc[0].CoresAvg })) ($gmSvc.Count -eq 1 -and (Near $gmSvc[0].CoresAvg 0.5 0.001) -and (Near $gmSvc[0].Up 100 0.001))
+Yes 'each service is named once' (@($both.Services | ForEach-Object { $_.Name } | Group-Object | Where-Object { $_.Count -gt 1 }).Count -eq 0)
+
 # ================================================================ the rest ===
 Write-Host ''
 Write-Host '--- the installer and Check-Load' -ForegroundColor Cyan
