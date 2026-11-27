@@ -74,7 +74,7 @@ function fixture(options = {}) {
   humanIds.forEach(id => states.set(id, actor(options.human && options.human[id])));
   let online = humanIds.slice();
   const originalIds = [...states.keys()], moved = new Set(), controlled = new Set();
-  const moves = [], attacks = [], attackAttempts = [], logs = [], controlEvents = [], snapshots = [], teleports = [];
+  const moves = [], setDowns = [], attacks = [], attackAttempts = [], logs = [], controlEvents = [], snapshots = [], teleports = [];
   const meshes = options.meshes || new Map([[60, square()]]);
   const navLookedUp = new Set();
   const budgetViolations = [];
@@ -183,9 +183,14 @@ function fixture(options = {}) {
       const nearby = online.some(h => states.get(h).cellOrWorld === state.cellOrWorld &&
         Math.hypot(...states.get(h).pos.map((v,i) => v-state.pos[i])) <= 4096);
       spend(nearby ? 'near' : 'background');
-      const lift = options.lifts && options.lifts[id] || 0;
+      // A walker found off its navmesh is set down onto it where it stands
+      // (#6474): a move in place, straight down or up onto the surface.
+      const setDown = speed === 0 && pos[0] === state.pos[0] && pos[1] === state.pos[1] &&
+        pos[2] !== state.pos[2] && contains(mesh, pos);
+      if (setDown) setDowns.push({id, from:state.pos.slice(), pos:pos.slice(), at:time});
+      const lift = 0;
       // Ids in options.free are held to their own test's rule instead.
-      if (!(options.free && options.free.has(id))) {
+      if (!setDown && !(options.free && options.free.has(id))) {
         assert.ok(contains(mesh, pos, lift), 'Movement stays in a walkable triangle');
         for (let fraction = 0; fraction <= 1; fraction += 0.1) {
           assert.ok(contains(mesh, state.pos.map((v,i) => v+(pos[i]-v)*fraction), lift),
@@ -254,7 +259,7 @@ function fixture(options = {}) {
   }
   function taskName(name) { task = name; }
   function stop() { runtime.stop(); assert.equal(pending.size, 0, 'Stop cancels every timer'); }
-  return {api, states, ids, moved, controlled, moves, attacks,attackAttempts,logs,controlEvents,mappingCalls,snapshots,teleports,writes,
+  return {api, states, ids, moved, controlled, moves, setDowns, attacks,attackAttempts,logs,controlEvents,mappingCalls,snapshots,teleports,writes,
     timers, policyEvents, loadedLookups:() => loadedLookups,
     addNpc(id, overrides = {}) {
       assert.ok(!states.has(id)); ids.push(id); states.set(id,actor(overrides));
@@ -592,14 +597,24 @@ test('A moving NPC becoming immobile publishes a reliable stop and resumes safel
   assert.ok(f.moves.slice(count).some(move => move.id === 1 && move.speed > 0));
   assert.ok(f.controlled.has(1)); f.stop();
 });
-for (const lift of [0,40]) {
-  test('Sloped navigation retains actor foot height with lift ' + lift, () => {
+// #6474: the game moves a server's NPC with translateTo, which neither falls
+// nor collides, so a walker kept at its placement's height over the navmesh
+// floated that far wherever it went. It is set down once and walks on it.
+for (const lift of [0,40,-30]) {
+  test('A walker placed ' + lift + ' units off its sloped navmesh is set down once and walks on it', () => {
     const mesh = geometry([[0,0,0],[600,0,120],[0,600,0],[600,600,120]],
       [[0,1,2],[1,3,2]]);
-    const f = fixture({count:1,meshes:new Map([[60,mesh]]),lifts:{1:lift},
+    const f = fixture({count:1,meshes:new Map([[60,mesh]]),
       npc:{1:{pos:[10,10,2+lift]}}});
-    f.advance(15000); assert.ok(f.moved.has(1)); assert.ok(f.controlled.has(1));
-    assert.ok(f.moves.every(m => Math.abs(m.pos[2]-m.pos[0]*0.2-lift) < 0.01));
+    f.advance(65000); assert.ok(f.moved.has(1)); assert.ok(f.controlled.has(1));
+    assert.ok(!f.logs.some(l => /activity unavailable/.test(l)),'Never stopped: '+f.logs.filter(l => /unavailable/.test(l)).join(' | '));
+    assert.equal(f.setDowns.length, lift ? 1 : 0, 'Set down once, and only when off it');
+    if (lift) assert.equal(JSON.stringify(f.setDowns[0].pos.map(v => Math.round(v*100)/100)), '[10,10,2]');
+    assert.ok(f.moves.every(m => Math.abs(m.pos[2]-m.pos[0]*0.2) < 0.01), 'Every move is on the surface');
+    const said = f.logs.filter(l => /NPC heights over their navmesh/.test(l)).pop() || '';
+    assert.ok(/1 walking, 0 off it now/.test(said), 'The heights line says none stands off it: ' + said);
+    if (lift > 16) assert.ok(/set down from above 16 units 1,/.test(said) && / 1 40 in /.test(said), said);
+    if (lift < -16) assert.ok(/below -16 1;/.test(said) && / 1 -30 in /.test(said), said);
     f.stop();
   });
 }
@@ -982,7 +997,7 @@ test('A raised NPC near the edge of its leash only steps where it would stand in
   const grid = geometry([[0,0,0],[100,0,0],[0,100,0],[100,100,0],[200,0,0],[200,100,0]],
     [[1,3,2],[1,4,3],[4,5,3]]);
   const home = [200/3,200/3,0];
-  const f = fixture({count:1,npc:{1:{pos:[200/3,200/3,60]}},lifts:{1:60},meshes:new Map([[60,grid]]),
+  const f = fixture({count:1,npc:{1:{pos:[200/3,200/3,60]}},meshes:new Map([[60,grid]]),
     population:homePolicy(home,60,80)});
   for (let i = 0; i < 4; i++) f.advance(15000);
   assert.ok(!f.logs.some(l => /activity unavailable/.test(l)),'Never stopped: '+f.logs.filter(l => /unavailable/.test(l)).join(' | '));

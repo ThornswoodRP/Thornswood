@@ -69321,7 +69321,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
   function emerge(h) {
     const {id,state,saved,bank,near}=h;
     const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node:near.node,
-      lift:near.pos[2]-npcSurface(near.node,near.pos),bank,approach:near.pos.slice(),
+      lift:liftOf(state,near.node,near.pos),bank,approach:near.pos.slice(),
       path:[],dwell:0,last:now(),sequence:saved && Number.isInteger(saved.sequence) ? saved.sequence : id%997,
       mode:'ambient',savedMode:'ambient',target:0,policy:policies.get(id)};
     actors.set(id,a);queue(a,now());indexActor(a);
@@ -69391,8 +69391,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
         // Set down beyond its leash at an earlier start (#2067).
         const policy=policies.get(id);
         if(outsideHome(policy,state.cellOrWorld,state.pos) && settleHome(id,bank,policy,state)) continue;
-        const surface=npcSurface(node,state.pos),lift=state.pos[2]-surface;
-        const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node,lift,bank,
+        const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node,lift:liftOf(state,node,state.pos),bank,
           path:[],dwell:0,last:now(),sequence:saved && Number.isInteger(saved.sequence) ? saved.sequence : id%997,
           mode:'ambient',savedMode:'ambient',target:0,policy:policies.get(id)};
         actors.set(id,a);queue(a,now());indexActor(a);
@@ -69425,6 +69424,29 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       }
     } catch(e) {report('NPC identity refresh failed: '+e);}
     schedule(discover,5000);
+  }
+  // A walker stands on its navmesh (#6474). The game puts an actor down on
+  // the floor under it, but each game moves a server's NPC with translateTo,
+  // which neither falls nor collides, so the height the server sends is the
+  // height it is seen at. Until 27 Nov 2026 a walker kept the height its
+  // placement had over its triangle wherever it walked, and the first Dev
+  // reading had 573 of 4,729 walkers more than 16 units above the navmesh
+  // and 51 more than 64 above, floating wherever they went. A swimmer keeps
+  // its height over the bed, which is where it swims.
+  function liftOf(s,node,pos) {
+    return s.swims ? pos[2]-npcSurface(node,pos) : 0;
+  }
+  // A walker found off its navmesh (placed above or below it, or moved there)
+  // is put down onto it where it stands, as the game drops a placed actor
+  // onto the floor. found keeps how far off it was, for the heights line.
+  function setDown(a,s) {
+    if(s.swims) return;
+    const floor=npcSurface(a.node,a.pos);
+    if(floor===null || Math.abs(a.pos[2]-floor)<=1) return;
+    const pos=[a.pos[0],a.pos[1],floor];
+    a.found=a.pos[2]-floor;
+    nativeCall('updateNpcMovement',a.id,pos,s.rot,0);
+    a.pos=pos;a.path=[];
   }
   // Where an actor stands over a navmesh point: its lift above the floor, and
   // a swimmer no higher than its depth. Home checks use this point, the one a
@@ -69557,8 +69579,9 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       const node=bank.ready && locate(bank,s.pos,s);
       if(!node) throw new Error('Displaced outside prepared local navigation');
       a.cell=s.cellOrWorld;a.bank=bank;a.node=node;a.pos=s.pos.slice();
-      a.lift=s.pos[2]-npcSurface(node,s.pos);a.path=[];a.target=0;indexActor(a);
+      a.lift=liftOf(s,node,s.pos);a.path=[];a.target=0;indexActor(a);
     }
+    setDown(a,s);
     // A swimmer aims at each point no higher than its depth (#2067).
     const aim=p=>s.swims ? [p[0],p[1],Math.min(p[2],s.swimTop)] : p;
     let target=0,targetState=null,retaliation=false;
@@ -69688,28 +69711,28 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
     }
   }
-  // How far above the navmesh each walking NPC is held (#6474). An NPC keeps
-  // the height its placement had over its navmesh triangle (lift) wherever
-  // it walks, and each game moves it there with translateTo, which neither
-  // falls nor collides, so a positive lift is how far it floats above the
-  // navmesh. Said when it changes, with the largest, to measure the reports
-  // of NPCs floating.
+  // How far off the navmesh each walking NPC was found before it was set
+  // down on it (#6474), and how many stand off it now, which is none once
+  // each has had its first step. Said when it changes, with the largest.
   let heightsLine='';
   function heightsReport() {
-    let walking=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
+    let walking=0,off=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
     for(const a of actors.values()) {
       if(!a.state || a.state.swims) continue;
       walking++;
-      if(a.lift>16) above16++;
-      if(a.lift>32) above32++;
-      if(a.lift>64) above64++;
-      if(a.lift<-16) below16++;
-      largest.push(a);
+      const floor=npcSurface(a.node,a.pos);
+      if(floor!==null && Math.abs(a.pos[2]-floor)>1) off++;
+      const found=a.found || 0;
+      if(found>16) above16++;
+      if(found>32) above32++;
+      if(found>64) above64++;
+      if(found<-16) below16++;
+      if(found) largest.push(a);
     }
-    largest.sort((x,y)=>Math.abs(y.lift)-Math.abs(x.lift));
-    const line='NPC heights over their navmesh: '+walking+' walking; above 16 units '+above16+', above 32 '+above32+
-      ', above 64 '+above64+', below -16 '+below16+'; largest '+
-      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.lift)+' in '+a.cell.toString(16)).join(', ');
+    largest.sort((x,y)=>Math.abs(y.found)-Math.abs(x.found));
+    const line='NPC heights over their navmesh: '+walking+' walking, '+off+' off it now; set down from above 16 units '+above16+
+      ', above 32 '+above32+', above 64 '+above64+', below -16 '+below16+'; largest '+
+      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.found)+' in '+a.cell.toString(16)).join(', ');
     if(line!==heightsLine) {report(line);heightsLine=line;}
   }
   function backgroundTick() {
@@ -69756,7 +69779,9 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
     const again=id=>{if(!preparing.includes(id)) preparing.push(id);};
     for(const [id,a] of actors) {
       const node=navigation.nodeAt(a.node);
-      if(node) {a.node=node;continue;}
+      // A walker carried from a load that kept its placement's height walks
+      // on the navmesh from its next step, as one taken on now does (#6474).
+      if(node) {a.node=node;if(a.state) a.lift=liftOf(a.state,node,a.pos);continue;}
       actors.delete(id);
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
       again(id);
