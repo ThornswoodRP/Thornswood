@@ -29,6 +29,7 @@ Scripts that build, verify and manage Thornswood's plugins, recipes and mod asse
 | [ContentPaths.ps1](ContentPaths.ps1) | What a content build on the box reads and writes, worked out from content-tables.json (#5191). |
 | [Find-MissingMasters.ps1](Find-MissingMasters.ps1) | Reads the TES4 header of every plugin in Data and reports any master that is no longer present. |
 | [Generated.ps1](Generated.ps1) | Shared helpers for building and checking Thornswood's animation and body files. |
+| [cistern_passage.py](cistern_passage.py) | Verifies the retired Cistern passage roles and dependencies before enabling its ordinary pair and disabling only the old Riften cover and hidden leaves. |
 | [last_recipe.py](last_recipe.py) | Recipe generator for Thornswood-Last.esp from installed plugins (#2791). |
 | [List-GameDataOnBox.ps1](List-GameDataOnBox.ps1) | The deploy gate's List-GameData verb: runs a read-only lister of the game's records against a server's plugins on the box (#5736). |
 | [List-SalvagedRecords.py](List-SalvagedRecords.py) | Writes content-salvaged.json tracking records remade from the salvaged plugin (#2553). |
