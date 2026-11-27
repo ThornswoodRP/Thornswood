@@ -35,6 +35,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const MENU_PHASE = require('./fixtures/menu-phase.js');  // setMenuPhase, #4616
 const CR = String.fromCharCode(13);
 const ROOT = path.join(__dirname, '..');
 function read(p) { return fs.readFileSync(path.join(ROOT, p), 'utf8').split(CR).join(''); }
@@ -105,7 +106,7 @@ function game() {
     }
   };
   vm.createContext(box);
-  vm.runInContext(check + '\n;globalThis.__api = { afkStillHere: afkStillHere, get askAt() { return afkAskAt; },' +
+  vm.runInContext(MENU_PHASE + check + '\n;globalThis.__api = { afkStillHere: afkStillHere, get askAt() { return afkAskAt; },' +
                   ' set outAsked(v) { afkOutAsked = v; }, get gone() { return afkGone; } };', box);
   g.box = box;
   g.api = box.globalThis.__api;
@@ -353,7 +354,7 @@ function server(settings) {
   };
   box.globalThis = box;
   vm.createContext(box);
-  vm.runInContext(blocks, box);
+  vm.runInContext(MENU_PHASE + blocks, box);
   r.box = box;
   r.seats = box.__thornswoodSeats;
   r.idle = box.__thornswoodIdle;
@@ -506,7 +507,7 @@ S = server(SEATS);
 S.fill(600, 3);
 S.pass(10 * MIN);
 const was = S.idle.state.by[600].last;
-vm.runInContext(blocks, S.box);
+vm.runInContext(MENU_PHASE + blocks, S.box);
 yes('a hot reload keeps everybody idle clock', S.box.__thornswoodIdle.state.by[600].last === was);
 
 // dispatch and the relay.

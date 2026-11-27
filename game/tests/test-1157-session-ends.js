@@ -38,6 +38,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const MENU_PHASE = require('../../tests/fixtures/menu-phase.js');  // setMenuPhase, #4616
 const CR = String.fromCharCode(13);
 const ROOT = path.join(__dirname, '..', '..');
 function read(p) { return fs.readFileSync(path.join(ROOT, p), 'utf8').split(CR).join(''); }
@@ -401,7 +402,7 @@ function game() {
     }
   };
   vm.createContext(box);
-  vm.runInContext(idle + '\n' + relog + '\n;globalThis.__api = { relogAs: relogAs,' +
+  vm.runInContext(MENU_PHASE + idle + '\n' + relog + '\n;globalThis.__api = { relogAs: relogAs,' +
                   ' set endAsked(v) { sessionEndAsked = v; }, get gone() { return afkGone; } };', box);
   g.box = box;
   g.api = box.globalThis.__api;

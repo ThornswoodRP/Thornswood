@@ -821,6 +821,22 @@
   const INTRO_FILE = 'Data/Platform/thornswood-intro.txt';
   const chooseAtMenu = !!((client.gameData || {}).chooseAtMenu);
   let menuPhase = 0;
+  /*
+    Every move of menuPhase goes through here, so skymp5-client knows when the
+    choice is held (#4616). Its BrowserService hid the page for the main menu,
+    where the choice is, again when the HUD closed on the way back to it, and
+    took the mouse off it on Escape and F6; this block used to put it back
+    four times a second. Now BrowserService reads __thornswoodChoiceHeld on
+    the shared globalThis and leaves the page alone while it is true: from
+    the start, and from a session ended back to the menu (backToChoice), until
+    a pick goes in or the world is up (9). Set before the choice is shown, so
+    the main menu that opens behind a session ended is already covered.
+  */
+  function setMenuPhase(p) {
+    menuPhase = p;
+    globalThis.__thornswoodChoiceHeld = chooseAtMenu && p !== 9;
+  }
+  setMenuPhase(0);
   let menuAt = 0;
   const loadedAt = Date.now();
   // The scroll setting as it stood when this start began, read once below.
@@ -1106,7 +1122,7 @@
     if (menuPhase === 0) {
       // 100 ms, was 600 (Djinn, 25 September: the still before the loop was up too long).
       if (now - loadedAt < 100) { return; }
-      if (!menuAgain && chosenOnDisk()) { menuPhase = 9; log('menu: a choice is already on disk for this session'); return; }
+      if (!menuAgain && chosenOnDisk()) { setMenuPhase(9); log('menu: a choice is already on disk for this session'); return; }
       // Read once, here, because menuWatch below needs it on every tick and
       // the page is not always the one that told us (menuWhere only reads it
       // when the page came up without the choice already drawn).
@@ -1116,10 +1132,10 @@
         sp.browser.setFocused(true);
       } catch (e) {
         log('menu: no browser backend:', e);
-        menuPhase = 9;
+        setMenuPhase(9);
         return;
       }
-      menuPhase = 1; menuAt = now; menuAsked = 0;
+      setMenuPhase(1); menuAt = now; menuAsked = 0;
       log('menu: showing the page and asking where it is');
       return;
     }
@@ -1162,32 +1178,8 @@
           menuReloads++;
           log('menu: the page went silent for six seconds, loading it again (' + menuReloads + ' of 3)');
           try { sp.browser.loadUrl(UI_URL); sp.browser.setVisible(true); sp.browser.setFocused(true); } catch (e) { }
-          menuPhase = 1; menuAt = now; menuAsked = 0; menuBeatAt = 0; menuLoaded = true;
+          setMenuPhase(1); menuAt = now; menuAsked = 0; menuBeatAt = 0; menuLoaded = true;
           return;
-        }
-      }
-
-      /*
-        Held up and held focused, four times a second, until the choice is
-        made. skymp5-client's BrowserService hides the browser for every
-        menu it calls bad, the main menu among them, and shows it again
-        only when none is open, which at the main menu is never; and its
-        Escape handler and login path both drop focus.
-      */
-      if (now - menuAt > 250) {
-        menuAt = now;
-        let vis = true, foc = true;
-        try { vis = !!sp.browser.isVisible(); } catch (e) { }
-        try { foc = !!sp.browser.isFocused(); } catch (e) { }
-        if (!vis) {
-          // NirnLab hiding also drops its real focus, while SkyrimPlatform's
-          // getter still reports the requested focus. Restore both together.
-          try { sp.browser.setVisible(true); sp.browser.setFocused(true); } catch (e) { }
-          if (!menuHidTold) { menuHidTold = true; log('menu: something hid the browser while the choice was up; shown again'); }
-        }
-        if (!foc) {
-          try { sp.browser.setFocused(true); } catch (e) { }
-          if (!menuBlurTold) { menuBlurTold = true; log('menu: something took the mouse off the page while the choice was up; taken back'); }
         }
       }
     }
@@ -1213,7 +1205,7 @@
       return;
     }
     if (has === 'select') {
-      menuPhase = 2; menuAt = Date.now(); menuBeatAt = Date.now();
+      setMenuPhase(2); menuAt = Date.now(); menuBeatAt = Date.now();
       log('menu: the page is ours and the choice is up');
       return;
     }
@@ -1228,7 +1220,7 @@
         log('menu: no character list on disk and no profile in the settings; the client will wait and then say so');
       }
       try { sp.browser.setFocused(false); } catch (e) { }
-      menuPhase = 9;
+      setMenuPhase(9);
       return;
     }
     try { if (readText(INTRO_FILE).trim() === 'off') { list.intro = false; } } catch (e) { }
@@ -1255,11 +1247,9 @@
     list.front = true;
     if (has !== 'list' || menuAgain) { T.js('window.THORNSWOOD_SELECT=' + JSON.stringify(list) + ';'); }
     inject('thornswood-select.js');
-    menuPhase = 2; menuAt = Date.now(); menuBeatAt = Date.now();
+    setMenuPhase(2); menuAt = Date.now(); menuBeatAt = Date.now();
     log('menu: the page is ours without the choice; put it in,', list.characters.length, 'character(s) listed');
   }
-  let menuHidTold = false;
-  let menuBlurTold = false;
   let menuBeatAt = 0;
   let menuReloads = 0;
   let menuGaveUp = false;
@@ -1272,7 +1262,7 @@
     } catch (e) {
       log('menu: could not write the choice for the launcher:', e);
     }
-    menuPhase = 9;
+    setMenuPhase(9);
     T.claimFocus('select', false);
     try { sp.browser.setFocused(false); } catch (e) { }
     // The page repeats its pick every two seconds until this says it heard,
@@ -1730,7 +1720,7 @@
          'for(var i=0;i<ids.length;i++){var n=document.getElementById(ids[i]);if(n&&n.parentNode){n.parentNode.removeChild(n);}}' +
          'window.thornswoodSelect=undefined;window.THORNSWOOD_SELECT=undefined;}catch(e){}');
     menuAgain = again;
-    menuPhase = 0; menuAt = Date.now(); menuAsked = 0; menuLoaded = false;
+    setMenuPhase(0); menuAt = Date.now(); menuAsked = 0; menuLoaded = false;
     menuBeatAt = 0; menuReloads = 0; menuGaveUp = false; menuChosenId = 0;
     relogAt = 0;
   }
@@ -9485,7 +9475,7 @@
     log('back in the world as profile', PROFILE, Math.round((now - loadedOutOfWorld) / 1000) + 's after it loaded');
     loadedOutOfWorld = 0;
     if (choiceUp()) { menuGone(); }
-    menuPhase = 9;
+    setMenuPhase(9);
     return true;
   }
 
@@ -9523,7 +9513,7 @@
       // not the same moment and is not a moment this file can be sure of.
       // A choice still up here was never made: see menuGone.
       if (choiceUp()) { menuGone(); }
-      menuPhase = 9;
+      setMenuPhase(9);
       phase = 1; at = now;
       try {
         sp.browser.loadUrl(UI_URL);

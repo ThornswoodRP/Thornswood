@@ -32,6 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const MENU_PHASE = require('./fixtures/menu-phase.js');  // setMenuPhase, #4616
 const CR = String.fromCharCode(13);
 const ROOT = path.join(__dirname, '..');
 function read(p) { return fs.readFileSync(path.join(ROOT, p), 'utf8').split(CR).join(''); }
@@ -122,7 +123,7 @@ function game(opts) {
     }
   };
   vm.createContext(box);
-  vm.runInContext(blocks + '\n;globalThis.__api = { press: function () { switchAsked = true; },' +
+  vm.runInContext(MENU_PHASE + blocks + '\n;globalThis.__api = { press: function () { switchAsked = true; },' +
                   ' get at() { return switchAt; }, get gone() { return afkGone; } };', box);
   g.box = box;
   g.api = box.globalThis.__api;
@@ -236,7 +237,7 @@ function picked(id, stored) {
     String: String, Number: Number, JSON: JSON
   };
   vm.createContext(box);
-  vm.runInContext(ppSrc + '\n' + pickedSrc + '\npickedAgain(' + id + ');', box);
+  vm.runInContext(MENU_PHASE + ppSrc + '\n' + pickedSrc + '\npickedAgain(' + id + ');', box);
   return g;
 }
 let p = picked(555, { pass: passFor(4242), key: 'k' });

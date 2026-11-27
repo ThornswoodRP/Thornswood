@@ -21,6 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const MENU_PHASE = require('../../tests/fixtures/menu-phase.js');  // setMenuPhase, #4616
 const CR = String.fromCharCode(13);
 const front = fs.readFileSync(path.join(__dirname, '..', '..', 'game', 'plugins', 'thornswood-front.js'), 'utf8').split(CR).join('');
 
@@ -46,7 +47,7 @@ function game(flag) {
   const g = { logs: [], js: [], net: { up: true, destroyed: 0, created: 0 } };
   const box = {
     Date: Date, String: String,
-    PROFILE: 4242, menuChosenId: 4242, menuAgain: null,
+    PROFILE: 4242, chooseAtMenu: true, menuChosenId: 4242, menuAgain: null,
     menuPhase: 9, menuAt: 0, menuAsked: 0, menuLoaded: true, menuBeatAt: 0, menuReloads: 0, menuGaveUp: false, relogAt: 5,
     globalThis: { __thornswoodLoadRefused: flag },
     log: function () { g.logs.push(Array.prototype.join.call(arguments, ' ')); },
@@ -57,7 +58,7 @@ function game(flag) {
     } }
   };
   vm.createContext(box);
-  vm.runInContext(lifted + '\n;globalThis.__api = { loadRefused: loadRefused, words: LOAD_REFUSED_WORDS };', box);
+  vm.runInContext(MENU_PHASE + lifted + '\n;globalThis.__api = { loadRefused: loadRefused, words: LOAD_REFUSED_WORDS };', box);
   g.box = box;
   g.api = box.globalThis.__api;
   return g;
@@ -80,6 +81,8 @@ const WHY = 'Form 0xFE029827 names light plugin 41 and the game listed 30';
   yes('the character choice comes back: the old page is taken off and the menu starts again',
       G.box.menuPhase === 0 && G.box.menuChosenId === 0 && G.box.menuLoaded === false && G.box.relogAt === 0 &&
       G.js.some(function (s) { return /"ts-select","ts-select-css","ts-thornswood-select-js"/.test(s); }));
+  yes('and the client is told the choice is held again, so the main menu behind it does not hide it (#4616)',
+      G.box.globalThis.__thornswoodChoiceHeld === true);
   yes('with the sentence for the page and the character that was picked',
       G.box.menuAgain && G.box.menuAgain.id === 4242 && G.box.menuAgain.ended === G.api.words);
   yes('the front log names the reason the game gave', G.logs.some(function (l) { return l.indexOf(WHY) >= 0 && /profile 4242/.test(l); }));

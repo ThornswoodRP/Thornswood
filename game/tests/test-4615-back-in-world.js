@@ -117,7 +117,7 @@ function game() {
   const guard = function (name, fn) { return fn; };
   const clockDate = { now: function () { return g.clock; } };
   const fn = new Function('sp', 'globalThis', 'gameMenuOpen', 'choiceUp', 'menuGone', 'log', 'guard', 'Date', 'PROFILE', 'tellServer', 'fireDistance',
-    'let menuPhase = 0;\nlet loadedOutOfWorld = 0;\n' +
+    'let menuPhase = 0;\nconst chooseAtMenu = true;\n' + require('../../tests/fixtures/menu-phase.js') + 'let loadedOutOfWorld = 0;\n' +
     'let placeAt = 0, placeSaid = "", placeFire = -1, placeBeat = 0, fireFlame = -1;\n' +
     'const FIRE_INSIDE = 90, PLACE_FAST = 250, PLACE_SLOW = 1000, PLACE_BEAT = 30000;\n' +
     'const say = () => {};\n' + ground + '\n' + onLoad + '\n' + came + '\n' + onPlace +
