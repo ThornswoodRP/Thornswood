@@ -475,7 +475,7 @@ let inventoryKey = null;
 let cameraWheelStart = null;
 let cameraWheelRequest = null;
 
-// #6593: an explicitly opted-in timed wait observes the first wheel attempts.
+// #6593: explicitly opted-in world/time waits observe the first wheel attempts.
 // No camera, position, input or control setter is called. Only local run receipts.
 // buttonEvent is delivered outside the update/Papyrus context, so its "before"
 // is the last update sample (with its age), not a synchronous camera read.
@@ -576,8 +576,12 @@ if (steps.some(s => s && s.cameraTrace === true)) {
     if (finished || failing) { return; }
     const step = steps[at];
     const timed = step && step.do === 'wait' && step.for === 'time' && Number.isFinite(step.ms) && step.ms > 0;
+    // The ordinary update observer above establishes inWorld. Capture its
+    // first ready update before tick passes this wait; loading time consumes
+    // neither camera reads nor the bounded trace window.
+    const worldReady = step && step.do === 'wait' && step.for === 'world' && inWorld;
     const wheelStep = step && step.do === 'wheel' && (step.delta === 120 || step.delta === -120);
-    if (!active && receipts < 63 && (!traceUntil || now < traceUntil) && !seen.has(at) && step && step.cameraTrace === true && (timed || wheelStep)) {
+    if (!active && receipts < 63 && (!traceUntil || now < traceUntil) && !seen.has(at) && step && step.cameraTrace === true && (timed || worldReady || wheelStep)) {
       seen.add(at);
       if (!traceUntil) { traceUntil = now + 30000; }
       active = { i: at, until: timed ? Math.min(now + step.ms, traceUntil) : traceUntil, last: sample(), pending: [] };
