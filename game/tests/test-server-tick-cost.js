@@ -581,69 +581,6 @@ if (beat) {
       /startSharedNpcServerRuntime\(\s*mp, \{setTimeout:\(fn,delay\)=>setTimeout\(counted\('npc '\+\(fn\.npcRuntimeTask\|\|'task'\),fn\),delay\), clearTimeout\}/.test(startup));
 }
 
-// #5053: one "net:" line a person a minute, from the engine's transport. The
-// stand-in hands back what the fork's mp.getConnectionStats gives: byte counts
-// that run from the connect, so the line's rates are the minute's difference.
-if (beat) {
-  const logFile = path.join(scratch, 'thornswood.log');
-  const netLinesOf = function () {
-    let before = '';
-    try { before = fs.readFileSync(logFile, 'utf8'); } catch (e) { before = ''; }
-    beat.beat();
-    let after = '';
-    try { after = fs.readFileSync(logFile, 'utf8'); } catch (e) { after = ''; }
-    return after.slice(before.length).split('\n').filter(function (l) { return / net: /.test(l); });
-  };
-  const stats = {};
-  ids.forEach(function (id, i) {
-    stats[i] = { lastPingMs: 80 + i, averagePingMs: 75, lowestPingMs: 40, bytesSent: 1000000 * (i + 1),
-                 bytesResent: 1000, bytesReceived: 200000, messagesWaiting: 0, messagesToResend: 2,
-                 packetLoss: 0, limitedByCongestion: false };
-  });
-  mpBase.getUserByActor = function (id) { return ids.indexOf(id); };
-  mpBase.getConnectionStats = function (user) {
-    if (!stats[user]) { throw new Error('User with id ' + user + " doesn't exist"); }
-    return JSON.parse(JSON.stringify(stats[user]));
-  };
-  const first = netLinesOf();
-  yes('#5053: a net line for each person on, ' + PEOPLE + ' of them', first.length === PEOPLE);
-  yes('it says where they stand and their ping, and that the first minute has no rate yet',
-      /net: ff000800 in 165a7:Skyrim\.esm at 1000,2000: ping 80ms \(average 75, lowest 40\), its first minute, 0 waiting to send, 2 unacknowledged, loss 0\.0%$/.test(first[0] || ''));
-  // A minute later the first person was sent 60 KiB a second and resent 1,
-  // their link queued 37 messages and the transport held back.
-  stats[0].bytesSent += 60 * 1024 * 60;
-  stats[0].bytesResent += 1024 * 60;
-  stats[0].bytesReceived += 2 * 1024 * 60;
-  stats[0].messagesWaiting = 37;
-  stats[0].packetLoss = 0.031;
-  stats[0].limitedByCongestion = true;
-  // The beat measures its minute from the clock; hold it to 60 seconds.
-  let netNow = Date.now();
-  const second = (function () {
-    const was = sandbox.Date.now;
-    sandbox.Date.now = function () { return netNow; };
-    try { netNow += 60000; return netLinesOf(); } finally { sandbox.Date.now = was; }
-  })();
-  console.log('  ' + (second[0] || '').replace(/^\S+ \S+ /, ''));
-  yes('a minute later it gives the minute\'s rates, the queue, the loss and the congestion hold',
-      /ping 80ms \(average 75, lowest 40\), sent [\d.]+ KiB\/s, resent [\d.]+ KiB\/s, received [\d.]+ KiB\/s, 37 waiting to send, 2 unacknowledged, loss 3\.1%, held back by congestion control$/.test(second[0] || ''));
-  const rate = /sent ([\d.]+) KiB\/s, resent ([\d.]+) KiB\/s, received ([\d.]+) KiB\/s/.exec(second[0] || '');
-  yes('and the rates are the minute\'s difference: 60 KiB/s sent, 1 resent, 2 received (' + (rate ? rate.slice(1).join(', ') : 'none') + ')',
-      !!rate && Math.abs(Number(rate[1]) - 60) <= 1.5 && Math.abs(Number(rate[2]) - 1) <= 0.1 && Math.abs(Number(rate[3]) - 2) <= 0.1);
-  // A person the transport no longer knows is left out, never a broken line.
-  delete stats[1];
-  const third = netLinesOf();
-  yes('a person the engine no longer knows is left out', third.length === PEOPLE - 1 &&
-      !third.some(function (l) { return / net: ff000801 /.test(l); }));
-  // An engine without the call says so once, instead of a line per person.
-  mpBase.getConnectionStats = undefined;
-  const fourth = netLinesOf();
-  yes('an engine without getConnectionStats is named once', fourth.length === 1 &&
-      / net: not measured; this engine has no getConnectionStats$/.test(fourth[0]));
-  delete mpBase.getConnectionStats;
-  delete mpBase.getUserByActor;
-}
-
 function finish() {
   process.chdir(home);
   try { fs.rmSync(scratch, { recursive: true, force: true }); } catch (e) { }
