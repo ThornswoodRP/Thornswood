@@ -74,6 +74,8 @@ try {
         $p = Join-Path $plant "records/$n"
         $j = [IO.File]::ReadAllText($p) | ConvertFrom-Json
         $j.forkCommit = $(if ($n -eq 'client-build.json') { $new.Substring(0, 8) } else { $new })
+        # The fork's skymp5-front changed too, so build.js has a new size and hash (#6200).
+        if ($n -eq 'front-build.json') { $j.files.'build.js'.sha256 = ('7' * 64); $j.files.'build.js'.bytes = 1234567 }
         [IO.File]::WriteAllText($p, ($j | ConvertTo-Json -Depth 10))
     }
     $named = @(Update-EnginePinText -Repo $plant -Check)
@@ -84,6 +86,8 @@ try {
     $after = [IO.File]::ReadAllText((Join-Path $plant 'THIRD-PARTY.md'))
     Yes '  THIRD-PARTY.md keeps its CR LF line ends' (-not ($after -replace "`r`n", '').Contains("`n"))
     Yes '  it names the new commit and the new SHA256' ($after.Contains($new) -and $after.Contains('5' * 64))
+    $frontBlock = [regex]::Match($after, '(?s)<!-- engine-pin:front -->(.*?)<!-- /engine-pin:front -->').Groups[1].Value
+    Yes '  and the new build.js by its size and hash, not the old ones' ($frontBlock.Contains('7' * 64) -and $frontBlock.Contains('Its build.js is 1,234,567') -and -not $frontBlock.Contains($facts.FrontJsSha256))
     Yes '  and no longer the old commit, apart from main''s' (-not $after.Contains($facts.Commit) -or $facts.Commit -eq $main)
     Yes '  main''s engine is kept' ((Get-EnginePinMain $plant) -eq $main)
     $outside = { param($t) ([regex]::Replace($t.Replace("`r`n", "`n"), '(?ms)^[ ]*<!-- engine-pin:(\w+) -->\n.*?^[ ]*<!-- /engine-pin:\1 -->', '')) }
