@@ -125,11 +125,15 @@ const policy = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'last-
 const blocked = new Set((policy.notCopiedFrom || []).map((r) => r.plugin.toLowerCase()));
 const carriedCobj = new Set((policy.notCopiedFrom || []).flatMap((r) => r.carried || []).map((c) => c.toLowerCase()));
 const ownerOf = (r) => r.recipe.split(':').slice(1).join(':').toLowerCase();
-yes('T9 no re-costed recipe is a plugin\'s the last plugin never copies from (#2454) unless the policy carries it; ' +
-    'those are under notCopied, each with why (' + (table.notCopied || []).length + ')',
-    blocked.size > 0 && table.recipes.every((r) => !blocked.has(ownerOf(r)) || carriedCobj.has(('COBJ ' + r.recipe).toLowerCase())) &&
+// The plugin whose copy the game uses (wonBy, #6726): a never-copied one that
+// wins a recipe somebody else owns keeps it out of the last plugin too.
+const wonBy = (r) => String((recipes[r.recipe] && recipes[r.recipe].wonBy) || ownerOf(r)).toLowerCase();
+const neverCopied = (r) => blocked.has(ownerOf(r)) || blocked.has(wonBy(r));
+yes('T9 no re-costed recipe is one the last plugin never copies (#2454), a never-copied plugin\'s own or one it wins, ' +
+    'unless the policy carries it; those are under notCopied, each with why (' + (table.notCopied || []).length + ')',
+    blocked.size > 0 && table.recipes.every((r) => !neverCopied(r) || carriedCobj.has(('COBJ ' + r.recipe).toLowerCase())) &&
     (table.notCopied || []).length === table.counts.notCopied &&
-    (table.notCopied || []).every((r) => blocked.has(ownerOf(r)) && /notCopiedFrom/.test(r.whyNot || '')));
+    (table.notCopied || []).every((r) => neverCopied(r) && /notCopiedFrom/.test(r.whyNot || '')));
 
 // ------------------------------------------------------- settles in one re-run
 // The box's chain starts from no recost.json: Build-Recost.py measures the

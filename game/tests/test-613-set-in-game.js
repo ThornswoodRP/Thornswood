@@ -10,8 +10,9 @@
 // What it holds, running the real functions out of game/gamemode.js over a
 // fake mp and a fake game:
 //
-//   - RECIPES_SET_IN_GAME is recost.json's notCopied, and every recipe of a
-//     never-copied plugin that burns a charcoal or takes a handle (#6726),
+//   - RECIPES_SET_IN_GAME is recost.json's notCopied, and every recipe a
+//     never-copied plugin owns or wins (wonBy in recipes.json) that burns a
+//     charcoal or takes a handle (#6726),
 //     with those on top, and Build-Recost.py --check says the block is what
 //     the rule gives;
 //   - handRecipeCounts hands every recipe's inputs once a load;
@@ -103,7 +104,14 @@ recost.notCopied.forEach(function (r) {
 });
 let fueled = 0;
 Object.keys(fuel.recipes).forEach(function (k) {
-  if (blocked.indexOf(k.split(':')[1].toLowerCase()) < 0 || carried.indexOf(('COBJ ' + k).toLowerCase()) >= 0) { return; }
+  // Never copied when the plugin that owns it or the one that wins it
+  // (wonBy) is one the policy never copies from, as Build-LastPlugin.py and
+  // Build-Recost.py both ask it: Update.esm owns da0c03 and Immersive
+  // Armors wins it.
+  const origin = k.split(':')[1];
+  const won = (recipes[k] && recipes[k].wonBy) || origin;
+  if ((blocked.indexOf(origin.toLowerCase()) < 0 && blocked.indexOf(won.toLowerCase()) < 0) ||
+      carried.indexOf(('COBJ ' + k).toLowerCase()) >= 0) { return; }
   fueled++;
   const w = want[k] || (want[k] = { out: recipes[k].out, bench: recipes[k].bench,
     inputs: recipes[k].inputItems.map(function (i) { return [i.item, i.count, i.count]; }) });
