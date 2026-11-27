@@ -1,7 +1,7 @@
 <#
-  test-4346-one-secret-reader.ps1
+  test-4346-secrets-one-reader.ps1
 
-      pwsh -NoProfile -File .\tests\test-4346-one-secret-reader.ps1
+      pwsh -NoProfile -File .\tests\test-4346-secrets-one-reader.ps1
 
   Every script that asks for a secret asks through Read-ThornswoodSecret
   (scripts\vps\Send-Secret.ps1), and nothing else calls a hidden prompt of

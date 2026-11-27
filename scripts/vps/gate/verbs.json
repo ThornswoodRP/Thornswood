@@ -357,6 +357,7 @@
       "reads": [
         "scripts/vps/Lock-Folder.ps1",
         "scripts/vps/Send-Script.ps1",
+        "scripts/vps/Send-Secret.ps1",
         "scripts/vps/ServerHold.ps1",
         "scripts/vps/Vps.ps1",
         "scripts/vps/vps-say-staff.ps1"
