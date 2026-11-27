@@ -39,8 +39,11 @@ scripts/tests/test-note-rules.ps1  own step in build.yml, "Check the writing rul
 test-2483-kept-npcs.js  needs the engine\skymp checkout, which a pull request build never has, so on the gate it only said SKIP; the nightly runs it in a step of its own (#3114)
 test-3683-launcher-advisories.js  needs the network to ask GitHub's advisory database or osv.dev, so it runs in the nightly checks only (#3683, #4092)
 test-bot-heartbeat.ps1  fails on main: its heartbeat cases fail on Windows (#7100)
+test-check-outside.ps1  fails on main: it walks an update feed and an AllowedHosts list no launcher has had since #5796 (#7114)
 test-check-words.ps1  own step in build.yml, "Check the writing rules"
 test-dev-news-refresh.ps1  fails on main: the publishing fixture leaves unexpected DEV marks (#6509)
+test-engine-at-fork-head.js  judges the fork's branch against the pin, which moves outside any pull request, so no pull request can make it pass; the nightly runs it (#7114)
+test-eslint-amp-path.ps1  fails on main on the gate: it needs eslint 9.39.5 in %TEMP%\herald-lint, which only harnesses.yml and the nightly install (#7114)
 test-feed-serve.js  fails on main: the launcher assertions look for conditional requests in Updater.cs (#6508)
 test-old-name-gone.js  own step in build.yml, "Check the old mod's name stays out"
 test-one-engine.js  own step in build.yml, "Check the engine is one commit"
@@ -48,5 +51,7 @@ test-publish-server-channel.ps1  fails on main: the fixture asks git for generat
 test-release-name.ps1  fails on main on Windows: its release record does not name a clean checkout of the commit it was built from (#5789)
 test-ship-check-words.ps1  own step in build.yml, "Check the writing rules"
 test-ship-launcher-temps.ps1  fails on main: Ship.ps1 no longer takes its launcher build folders from Get-ScratchDir.ps1 (#5761)
+test-staff-commands.js  fails on main on the gate: it needs a Python with the bot's libraries, which the gate's runners do not have (#7114)
+test-temp-short-path.ps1  fails on main on the gate: the Windows runner's work drive makes no 8.3 names (#7114)
 test-tools-retired.ps1  fails on main: git still tracks tools\DeployAgent and its tests, and a script builds a path into tools (#5170)
 voice/tests/test-turn-key.js  own step in build.yml, "Run the voice service's /health harness"

@@ -354,7 +354,7 @@ try {
     $layerFns = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Remove-EdgeInstall' }, $true))
     Yes '  and the real Remove-EdgeInstall adds --force-uninstall and waits for setup to end' ($layerFns.Count -eq 1 -and $layerFns[0].Extent.Text -match "' --force-uninstall'" -and $layerFns[0].Extent.Text -match '-Wait -PassThru')
     Yes '  the WebView2 Runtime not touched: its app id, its folder and its uninstall entry named nowhere, and Edge''s entry is Edge''s own' ($boxText -notmatch '(?i)F3017226-FE2A-4295-8BDF-00C3A9A7E4C5|EdgeWebView' -and
-        $boxText -match "(?m)^\`$EdgeUninstallKey = 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Microsoft Edge'$")
+        $boxText -match "(?m)^\`$EdgeUninstallKey = 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Microsoft Edge'\r?$")
     Yes '  the rollback armed with the old file, then the restart, in that order' ($global:Fake.rollback -eq $backups[0].FullName -and
         $global:Fake.restarts -eq 1 -and $global:Fake.log.IndexOf('Register-Rollback') -lt $global:Fake.log.IndexOf('Start-SshdRestart'))
     Yes '  Remote Desktop before sshd, so a restart that cut the session off would come last' ($global:Fake.log.IndexOf('Disable-TermService') -lt $global:Fake.log.IndexOf('Register-Rollback'))

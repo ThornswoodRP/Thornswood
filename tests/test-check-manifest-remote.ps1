@@ -114,9 +114,9 @@ function Invoke-ThornswoodRemote {
     # What to do next, for each result (#4803). Each one says the step, not
     # only the finding, and Fix is said as what Fix does: it copies back a
     # collection plugin Vortex has deployed or staged, takes Thornswood's own
-    # from the latest release, and puts the server's order into the list.
+    # from the release the launcher is on (#7048), and puts the server's order into the list.
     $deployed = 'copies back a collection plugin Vortex has deployed or staged'
-    $ours = 'takes Thornswood''s own plugins from the latest release'
+    $ours = 'takes Thornswood''s own plugins from the release the launcher is on'
     Reset
     Server 'Thornswood-Server' @()
     Server 'Thornswood-Server-Dev' @()
@@ -128,7 +128,7 @@ function Invoke-ThornswoodRemote {
     Reset
     Server 'Thornswood-Server' (@($order) + @('C.esp'))
     $r = Run @()
-    Yes 'next: a plugin the server wants that you lack says Fix takes ours from the latest release and copies back what Vortex has' ($r.Out -match 'Press Fix' -and $r.Out -match $ours -and $r.Out -match $deployed)
+    Yes 'next: a plugin the server wants that you lack says Fix takes ours from the release the launcher is on and copies back what Vortex has' ($r.Out -match 'Press Fix' -and $r.Out -match $ours -and $r.Out -match $deployed)
     Yes 'next:   and one Vortex has no copy of: Vortex, with the Thornswood profile active, Deploy' ($r.Out -match 'with the Thornswood profile active' -and $r.Out -match 'press Deploy')
     Server 'Thornswood-Server-Dev' (@($order) + @('C.esp'))
     $r = Run @('-Dev')

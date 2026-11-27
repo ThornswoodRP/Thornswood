@@ -12,9 +12,10 @@
   names, and checks that on a machine missing the tools it says so and builds
   nothing.
 
-  It also checks Publish-Update.ps1 hashes the launcher source from launcher\
-  (it read tools\ until the audit, and found nothing there after phase 7), and
-  that Check-VoiceInstall.ps1 no longer names one person's Downloads folder.
+  It also checks Publish-Update.ps1 no longer hashes the launcher source at
+  all (it read tools\ until the audit, then launcher\; since #4825 no launcher
+  goes on the feed, so its source is no part of a release), and that
+  Check-VoiceInstall.ps1 no longer names one person's Downloads folder.
 #>
 [CmdletBinding()]
 param()
@@ -209,7 +210,7 @@ Yes 'engine\README.md says a fork under a path with an & builds, and how' ($read
 
 # The audit's two leftovers.
 $pu = Get-Content -LiteralPath (Join-Path $root 'scripts\release\Publish-Update.ps1') -Raw
-Yes 'Publish-Update hashes the launcher source from launcher\' ($pu -match "\`$srcDir = Join-Path \`$RepoDir 'launcher'")
+Yes 'Publish-Update records no launcher source, which no release carries since #4825' ($pu -notmatch '\$srcDir\b' -and $pu -match '#4825')
 $cv = Get-Content -LiteralPath (Join-Path $root 'scripts\vps\Check-VoiceInstall.ps1') -Raw
 Yes 'Check-VoiceInstall reads Install-Voice beside it, not a Downloads folder' ($cv -notmatch 'Users\\[^\\]+\\Downloads' -and $cv.Contains("Join-Path `$PSScriptRoot '..\deploy\Install-Voice.ps1'"))
 

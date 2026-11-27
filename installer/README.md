@@ -86,7 +86,7 @@ is gone, or says another workflow than they give.
 | `launcher/tests/test-4696-reinstall-config.ps1` | Exercises setup's saved configuration and its folder choice across reinstalls | Pull request and nightly |
 | `launcher/tests/test-4697-setup-ownership.ps1` | Runs setup's copy stage and uninstall in scratch folders: a collision leaves the existing file alone, failed copies do not become owned, and the list keeps files from earlier setups and launcher updates | Pull request and nightly |
 | `launcher/tests/test-4702-whole-settings.ps1` | The setup's config.json, like the launcher's own settings, goes to a .new file first and is renamed over the old one in one step (InstallSteps.WriteJson), so a stopped install never leaves a short file | Pull request and nightly |
-| `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Nightly only |
+| `launcher/tests/test-downgrade-copy-order.js` | A Skyrim on the wrong build is not a failed install: InstallSteps counts it as next and sends the person to the launcher's Downgrade button | Pull request and nightly |
 | `launcher/tests/test-move.ps1` | The new launcher takes an older launcher's handover (InstallPlace.TakeHandover) only on its first start after Velopack's setup, before the install window would ask | Pull request and nightly |
 | `launcher/tests/test-own-folder-first.ps1` | Runs the real InstallSteps on a pretend Steam copy and package: with the own folder chosen nothing is written into the Steam copy and the files wait in `Profile\Payload`; not chosen, they go into the Steam copy with their list | Pull request and nightly |
 | `launcher/tests/test-prior-acceptance.ps1` | The terms, privacy policy and rules are asked again of an install made before they were recorded, with the pages and words InstallAgreements.cs and the install window use | Pull request and nightly |
@@ -97,10 +97,10 @@ is gone, or says another workflow than they give.
 | `test-4687-setup-plugin-list.ps1` | Runs the real Build-SetupFiles.ps1 against a stand-in site: a release that recorded no plugin list stops it before the package is built and signed, and one with both lists goes on | Pull request and nightly |
 | `test-4824-install.py` | Builds the install steps with the .NET SDK and runs them against stand-in folders in every shape, and holds the window and the agreements to their rules. Run it by hand for now: no workflow runs it (#5840) | No workflow |
 | `test-component-readmes.js` | This read me matches what is here: only `licences\` and this file in `installer\`, the join guide named, and the folder InstallPlace.cs falls back to | Pull request and nightly |
-| `test-repo-docs.js` | This read me says what a person reads before installing is the join guide on the site, and `READ ME FIRST.txt` stays gone | Nightly only |
+| `test-repo-docs.js` | This read me says what a person reads before installing is the join guide on the site, and `READ ME FIRST.txt` stays gone | Pull request and nightly |
 | `test-shortcut-icons.ps1` | Builds Icons.cs with InstallShortcut.cs: the shortcuts' icon file is named after the exe's own art and kept, so the desktop and Start menu shortcuts keep their icons | Pull request and nightly |
-| `test-source-notice.ps1` | The source notice the install hands over: `SOURCE CODE.txt`, and the GPL and AGPL texts byte for byte from `licences\`, as InstallSteps.cs copies them | Nightly only |
-| `test-source-offer.ps1` | InstallSteps.cs copies `SOURCE CODE.txt` and the GPL, AGPL and voice library texts and replaces `licences\` whole, and Build-SetupFiles.ps1 packs the names InstallSteps.LicenceFiles lists | Nightly only |
+| `test-source-notice.ps1` | The source notice the install hands over: `SOURCE CODE.txt`, and the GPL and AGPL texts byte for byte from `licences\`, as InstallSteps.cs copies them | Pull request and nightly |
+| `test-source-offer.ps1` | InstallSteps.cs copies `SOURCE CODE.txt` and the GPL, AGPL and voice library texts and replaces `licences\` whole, and Build-SetupFiles.ps1 packs the names InstallSteps.LicenceFiles lists | Pull request and nightly |
 | `test-third-party.js` | InstallSteps.LicenceFiles names every text in `licences\` and nothing else, Build-SetupFiles.ps1 packs them, and Uninstall.cs removes them | Pull request and nightly |
 | `test-voice-hrtf.js` | The voice's two HRTF licence texts are in `licences\` and on InstallSteps.LicenceFiles | Pull request and nightly |
 
