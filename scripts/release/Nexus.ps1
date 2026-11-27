@@ -56,8 +56,8 @@
       Invoke-NexusApi GET|POST|PATCH path [body]
                                           one request to the v3 API
       Invoke-NexusGraph query [variables] one request to the v2 GraphQL API
-      Set-NexusCollectionCategory id n    a collection's category, which a
-                                          publish needs
+      Edit-NexusCollection id fields      a collection's own category, summary
+                                          and description, which a publish needs
       Get-NexusArchiveFacts path          size and md5 of a local archive
       Send-NexusUpload facts              the whole upload: create, send,
                                           finalise, wait until it is available
@@ -283,17 +283,32 @@ function Invoke-NexusGraph([string]$Query, $Variables = $null, [string]$What = '
   return (Get-NexusField $j 'data')
 }
 
-# Nexus publishes no revision of a collection that has no category: the
-# Dev collection's first publish on 27 Nov 2026 was refused with
-# "CollectionRevision cannot be published without a category" (#7193). A
-# collection made with POST /v3/collections has none. This gives it one with
-# PATCH /v3/collections/<id> {"category_id": n}, editCollection in the v3
-# OpenAPI, which answers 204.
-function Set-NexusCollectionCategory([string]$CollectionId, [int]$CategoryId, [string]$What = '') {
+# Nexus publishes no revision of a collection whose own details are not
+# filled in (#7193). The Dev collection made with POST /v3/collections on
+# 27 Nov 2026 had no category, an empty summary and an empty description:
+# its first publish was refused with "CollectionRevision cannot be published
+# without a category", and once it had one, with "Collection metadata is
+# missing". A revision's collection.json carries its own name, summary and
+# description, but those are the revision's; the collection's are apart, and
+# only editCollection in the v3 OpenAPI sets them:
+# PATCH /v3/collections/<id> with any of name (3 to 36 characters), summary
+# (at most 255), description and category_id, which answers 204.
+function Edit-NexusCollection([string]$CollectionId, $Fields, [string]$What = '') {
   if ($CollectionId -notmatch '^[0-9]+$') { throw ('"' + $CollectionId + '" is not a collection id.') }
-  if ($CategoryId -lt 1) { throw ('' + $CategoryId + ' is not a collection category id.') }
-  if (-not $What) { $What = 'Giving collection ' + $CollectionId + ' category ' + $CategoryId }
-  [void](Invoke-NexusApi 'PATCH' ('/v3/collections/' + $CollectionId) ('{"category_id":' + $CategoryId + '}') $What)
+  $body = [ordered]@{}
+  foreach ($k in @($Fields.Keys)) {
+    $v = $Fields[$k]
+    switch ($k) {
+      'category_id' { if ([int]$v -lt 1) { throw ('' + $v + ' is not a collection category id.') }; $body.category_id = [int]$v }
+      'name' { $t = [string]$v; if ($t.Length -lt 3 -or $t.Length -gt 36) { throw ('A collection''s name has 3 to 36 characters, and "' + $t + '" has ' + $t.Length + '.') }; $body.name = $t }
+      'summary' { $t = [string]$v; if (-not $t.Trim() -or $t.Length -gt 255) { throw ('A collection''s summary has 1 to 255 characters, and this one has ' + $t.Length + '.') }; $body.summary = $t }
+      'description' { $t = [string]$v; if (-not $t.Trim()) { throw 'A collection''s description is not empty.' }; $body.description = $t }
+      default { throw ('A collection has no detail "' + $k + '" this sets.') }
+    }
+  }
+  if (-not $body.Count) { throw 'Nothing to set on the collection.' }
+  if (-not $What) { $What = 'Setting the ' + (@($body.Keys) -join ', ') + ' of collection ' + $CollectionId }
+  [void](Invoke-NexusApi 'PATCH' ('/v3/collections/' + $CollectionId) ($body | ConvertTo-Json -Compress) $What)
 }
 
 # ------------------------------------------------------------ the archive ---

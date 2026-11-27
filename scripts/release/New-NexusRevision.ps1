@@ -332,7 +332,9 @@
   With -Publish, for a collection that has no category: the collection whose
   category it is given first, since Nexus publishes no revision of a
   collection without one (#7193). The Dev collection made on 27 Nov 2026 had
-  none: -Slug <its slug> -Publish 1 -CategoryFrom 7essxf.
+  none: -Slug <its slug> -Publish 1 -CategoryFrom 7essxf. A collection with
+  an empty summary or description, which Nexus refuses too ("Collection
+  metadata is missing"), takes the draft's own with no parameter.
 
 .PARAMETER Discard
   Throws this revision number away, which has to be the draft, as DISCARDING
@@ -577,7 +579,7 @@ if ($CategoryFrom -and $CategoryFrom -notmatch '^[a-z0-9]+$') { Die ('-CategoryF
 [void](Step { Read-NexusKey })
 Say ('  key from ' + $script:NexusKeyFrom) 'DarkGray'
 
-$q = '{ collection(slug: "' + $Slug + '", domainName: "' + $Game + '") { id name category { id name } latestPublishedRevision { id revisionNumber } draftRevisionNumber } }'
+$q = '{ collection(slug: "' + $Slug + '", domainName: "' + $Game + '") { id name summary description category { id name } latestPublishedRevision { id revisionNumber } draftRevisionNumber } }'
 $col = Get-NexusField (Step { Invoke-NexusGraph $q $null ('Reading collection ' + $Slug) }) 'collection'
 $colId = [string](Get-NexusField $col 'id')
 if (-not $colId) { Die ('Nexus has no collection ' + $Slug + ' on ' + $Game + '.') }
@@ -627,17 +629,27 @@ if ($Publish) {
   $pjson = Join-Path (Join-Path $pscratch 'x') 'collection.json'
   if ($pr.Code -ne 0 -or -not (Test-Path -LiteralPath $pjson)) { Die ('Revision ' + $Publish + '''s archive holds no collection.json 7-Zip could take out: ' + $pr.Err.Trim()) }
   Test-ModPermissions $pnode.Source $pjson ('revision ' + $Publish)
+  # Nor of one with an empty summary or description ("Collection metadata is
+  # missing", #7193): a collection with none takes the draft's own.
+  $details = [ordered]@{}
+  if ($giveCat) { $details.category_id = $giveCat }
+  $dinfo = (Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($pjson)) ('revision ' + $Publish + '''s collection.json') }).info
+  if (-not ([string](Get-NexusField $col 'summary')).Trim()) { $details.summary = [string]$dinfo.summary }
+  if (-not ([string](Get-NexusField $col 'description')).Trim()) { $details.description = [string]$dinfo.description }
+  if (($details.Contains('summary') -and -not $details.summary.Trim()) -or ($details.Contains('description') -and -not $details.description.Trim())) { Die ('Collection ' + $Slug + ' has an empty summary or description, and revision ' + $Publish + ' carries none to give it, so Nexus would not publish it.') }
+  foreach ($k in @('summary', 'description')) { if ($details.Contains($k)) { Say ('  ' + $Slug + ' has no ' + $k + '; it takes revision ' + $Publish + '''s (' + $details[$k].Length + ' characters)') } }
   $mut = 'mutation publishRevision($revisionId: ID!) { publishRevision(revisionId: $revisionId) { success } }'
   if ($WhatIf) {
-    if ($giveCat) { Say ('  would send PATCH /v3/collections/' + $colId + '  {"category_id":' + $giveCat + '}') 'Yellow' }
+    if ($details.Count) { Say ('  would send PATCH /v3/collections/' + $colId + '  {' + ((@($details.Keys) | ForEach-Object { '"' + $_ + '"' }) -join ',') + '}' + $(if ($giveCat) { ', category_id ' + $giveCat } else { '' })) 'Yellow' }
     Say ('  would send the GraphQL mutation publishRevision(revisionId: "' + $revId + '")') 'Yellow'
     Write-Host ''; Say 'Nothing was written.' 'Green'
     if (-not $NoPause) { [void](Read-Host 'Enter to close') }
     exit 0
   }
-  if ($giveCat) {
-    Step { Set-NexusCollectionCategory $colId $giveCat ('Giving ' + $Slug + ' ' + $CategoryFrom + '''s category') }
-    $script:Done.Add($Slug + ' given ' + $CategoryFrom + '''s category "' + $giveCatName + '" (' + $giveCat + ')')
+  if ($details.Count) {
+    $named = (@($details.Keys) | ForEach-Object { $_ -replace '_id$', '' }) -join ', '
+    Step { Edit-NexusCollection $colId $details ('Giving ' + $Slug + ' its ' + $named) }
+    $script:Done.Add($Slug + ' given its ' + $named + $(if ($giveCat) { ' (' + $CategoryFrom + '''s category "' + $giveCatName + '")' } else { '' }))
   }
   $res = Step { Invoke-NexusGraph $mut ([ordered]@{ revisionId = $revId }) ('Publishing revision ' + $Publish) }
   if ((Get-NexusField (Get-NexusField $res 'publishRevision') 'success') -ne $true) { Die ('Nexus answered the publish of revision ' + $Publish + ' without saying it succeeded. Look at the collection''s page before running this again.') }

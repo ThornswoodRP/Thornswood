@@ -415,6 +415,14 @@ public sealed class BotPass(EnvConfig env, ITasks tasks)
         var newOrder = new JsonArray();
         foreach (var p in loads) newOrder.Add(Cache(p, "load order"));
         settings["loadOrder"] = newOrder;
+        // The plugins whose forms the Deployment's settings let go go with
+        // its order, so the copy loads dev's saves the way the server will.
+        if (staged != null && staged.TryGetValue(ServerOrder.Settings, out var stagedSettings))
+        {
+            var forget = JsonNode.Parse(File.ReadAllText(stagedSettings).TrimStart('\uFEFF'))?["forgetPlugins"];
+            if (forget is JsonArray) settings["forgetPlugins"] = forget.DeepClone();
+            else settings.Remove("forgetPlugins");
+        }
         if (settings["archives"] is JsonArray ar)
         {
             var newAr = new JsonArray();
