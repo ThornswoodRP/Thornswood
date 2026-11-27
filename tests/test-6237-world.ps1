@@ -163,7 +163,7 @@ db.changeForms.insertMany([
         $null = Shell $db 'db.dropDatabase(); db.changeForms.insertMany([{ formDesc: "a01", profileId: 5001, recType: 1, appearanceDump: { name: "A" } }, { formDesc: "13164:Skyrim.esm", profileId: -1, recType: 1 }, { formDesc: "a02", profileId: -1, recType: 1 }])'
         Settings $db
         $reset = Lift 'scripts/ops/Reset-Character.ps1' '$body'
-        $r = RunBody $reset @('-Root', $scratch)
+        $r = RunBody $reset @('-Root', $scratch, '-Character', 'ff000a01')
         $left = (Shell $db 'print(db.changeForms.find().sort({ formDesc: 1 }).toArray().map(d => d.formDesc).join(","))') -join ''
         Yes ('Reset-Character takes the character out of a MongoDB world and leaves the world''s own forms: ' + $left) ($r.Code -eq 0 -and $left.Trim() -eq '13164:Skyrim.esm,a02')
         $aside = @(Get-ChildItem -LiteralPath $scratch -Recurse -File -Filter 'a01.json' | Where-Object { $_.FullName -match '[\/]world-mongo-[0-9-]+[\/]changeForms[\/]_discarded-' })
