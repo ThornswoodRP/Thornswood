@@ -41,7 +41,7 @@ yes('its check keeps the name Launcher builds', /\n    name: Launcher builds\n/.
 // Linux, saying so. A failed pick still builds.
 yes('a pull request build has no "tested" job, and its launcher job always runs, on Windows unless the pick says the change cannot reach it (#3182, #5292)',
     !/\n  tested:\n|needs\.tested|needs: \[?tested/.test(code(pr)) && /\n  launcher:\n    name: Launcher builds\n    needs: pick\n    if: \$\{\{ !cancelled\(\) \}\}\n    runs-on: \$\{\{ needs\.pick\.outputs\.launcher == 'false' && 'ubuntu-24\.04-arm' \|\| 'windows-latest' \}\}\n/.test(pr));
-yes('  and the tree checks always run, on Linux (#5292)', /\n  checks:\n    name: Tree checks\n    runs-on: ubuntu-latest\n/.test(pr));
+yes('  and the tree checks always run, on Linux, once the pick laid their content build (#5292, #7115)', /\n  checks:\n    name: Tree checks\n    needs: pick\n    runs-on: ubuntu-latest\n/.test(pr));
 const prTree = (/\n  checks:\n[\s\S]*?(?=\n  \w[\w-]*:\n|$)/.exec(pr) || [''])[0];
 yes('PR role derivation checks can read the retained commit without persisting credentials',
     /persist-credentials: false\n\s+fetch-depth: 0\n\s+filter: blob:none/.test(prTree) &&
