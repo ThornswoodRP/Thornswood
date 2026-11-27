@@ -85,6 +85,25 @@ $VpsHost = 'no-such-box.invalid'
 $r = Get-ThornswoodPortTry $VpsHost $open
 Yes "a name that does not resolve was not tried, and says why ($r)" ($r -like 'not tried: *' -and $r.Length -gt 11)
 
+# A lookup slow to fail is not a silent port (#7423): the name is looked up
+# before the port is tried, outside its 5 s. A lookup that takes 6 s and
+# finds nothing is still "not tried", with the lookup's reason.
+$try = (Get-Command Get-ThornswoodPortTry).ScriptBlock.Ast
+$calls = @($try.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and $n.Member.Extent.Text -eq 'BeginConnect' }, $true))
+$lookup = @($try.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Resolve-ThornswoodAddress' }, $true))
+Yes 'the try looks the name up first, then connects to what it found, never to the name' (
+    $calls.Count -eq 1 -and $lookup.Count -eq 1 -and $lookup[0].Extent.StartOffset -lt $calls[0].Extent.StartOffset -and
+    $calls[0].Arguments[0].Extent.Text -notmatch '\$Address')
+function Resolve-ThornswoodAddress([string]$Address) {
+    Start-Sleep -Milliseconds 6000
+    throw [Net.Sockets.SocketException]::new(11001)
+}
+$watch.Restart()
+$r = Get-ThornswoodPortTry 'slow-to-fail.invalid' $open
+Yes "  a lookup that takes 6 s to find nothing is not tried, and says why ($r, $($watch.ElapsedMilliseconds) ms)" ($r -like 'not tried: *' -and $r.Length -gt 11 -and $r -notlike 'silent*')
+Remove-Item Function:\Resolve-ThornswoodAddress
+. (Join-Path $RepoPath 'scripts\vps\Vps.ps1')
+
 # ---- what it says, for each answer -----------------------------------------
 $start = $verify.IndexOf('$resPort = ')
 Yes 'the one try is Test-ThornswoodFromOutside $VpsHost $Port $resPort' ($start -gt 0 -and ([regex]::Matches($code, 'Test-ThornswoodFromOutside')).Count -eq 1 -and $verify.Contains('Test-ThornswoodFromOutside $VpsHost $Port $resPort'))
