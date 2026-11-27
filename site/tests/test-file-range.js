@@ -100,6 +100,8 @@ const SETUP_KINDS = { main: { name: 'Thornswood-Setup.exe' }, dev: { name: 'Thor
 eval(grab('function setupChannel('));
 function newestSetup() { return null; }
 
+// The static route's 304 compares the tags weakly, over a list (noneMatch, #4923).
+eval(grab('function noneMatch('));
 const rangeSrc = grab('function rangeReply(');
 yes('server.js has one range function, rangeReply()', !!rangeSrc);
 if (rangeSrc) eval(rangeSrc);

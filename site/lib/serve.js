@@ -47,7 +47,7 @@ const { ADMIN, ADMIN_DAYS, allowed, COOKIE, cookies, discordReady, endSignIn,
   standCache, standingCached, standingLate, standingsForDoor, SUBMIT_DOORS,
   SUBMIT_WAIT_MS, who, within } = require('./auth');
 const { ATTEMPT, ATTEMPT_MS, attemptCookie, attemptsSpent, body, BodyFailed, bodyObject,
-  crossSite, cspFor, isFile, keyInAddress, origin, passBodyFailure,
+  crossSite, cspFor, isFile, keyInAddress, noneMatch, origin, passBodyFailure,
   PERMISSIONS_POLICY, rangeReply, secureHere, send, sendJson, setCookie,
   streamFile, TYPES } = require('./http');
 const { LINKED, post } = require('./discord');
@@ -736,9 +736,7 @@ async function handle(req, res) {
        compresses has had it (Cloudflare marks it W/), and it is still this
        answer, so both match. */
     const tag = '"' + crypto.createHash('sha256').update(answer).digest('hex').slice(0, 16) + '"';
-    const asked = String(req.headers['if-none-match'] || '').split(',')
-      .map((t) => t.trim().replace(/^W\//, ''));
-    if (asked.indexOf(tag) >= 0) {
+    if (noneMatch(req.headers['if-none-match'], tag)) {
       res.writeHead(304, { 'etag': tag, 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
       return res.end();
     }
@@ -1245,7 +1243,7 @@ async function handle(req, res) {
       if (!/\.css$/i.test(name) &&
           rangeReply(req, res, file, fs.statSync(file).size, { 'content-type': type, 'cache-control': cache }, head)) return;
       const etag = '"' + (version || crypto.createHash('sha256').update(publicAssetBody(name)).digest('hex').slice(0, 16)) + '"';
-      if (String(req.headers['if-none-match'] || '') === etag) {
+      if (noneMatch(req.headers['if-none-match'], etag)) {
         res.writeHead(304, {
           'etag': etag,
           'cache-control': cache,
@@ -1347,7 +1345,8 @@ async function handle(req, res) {
     // feed's minLauncher reads it, the update fields alone (feedView, #1050).
     const view = feedView(feedVer[1], file);
     const vtag = view.tag;
-    if (String(req.headers['if-none-match'] || '') === vtag) {
+    // Weak and listed tags match too (noneMatch, #4923).
+    if (noneMatch(req.headers['if-none-match'], vtag)) {
       res.writeHead(304, {
         'etag': vtag,
         'cache-control': 'no-cache',
@@ -1370,7 +1369,7 @@ async function handle(req, res) {
   if (feedWatch && req.method === 'GET') {
     const channel = feedWatch[1];
     if (!feedFile(channel)) return send(res, 404, 'no such file', 'text/plain');
-    const have = String(req.headers['if-none-match'] || '');
+    const have = req.headers['if-none-match'];
     const WAIT_MS = 50000;
     const started = Date.now();
     const tick = () => {
@@ -1387,7 +1386,9 @@ async function handle(req, res) {
       }
       // The tag version.json answers with, split or whole (feedView, #1050).
       const tag = view.tag;
-      if (!have || have !== tag) {
+      // The same weak comparison as version.json's 304 (#4923): a launcher
+      // whose tag a proxy marked W/ waits, as one with the strong tag does.
+      if (!noneMatch(have, tag)) {
         if (res.headersSent) return;
         res.writeHead(200, {
           'content-type': 'application/json; charset=utf-8',

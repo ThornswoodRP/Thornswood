@@ -9,8 +9,8 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { body, bodyObject, crossSite, cspFor, isFile, passBodyFailure, rangeReply,
-  send, streamFile };
+module.exports = { body, bodyObject, crossSite, cspFor, isFile, noneMatch, passBodyFailure,
+  rangeReply, send, streamFile };
 
 const fs     = require('fs');
 const { pipeline } = require('stream');
@@ -18,6 +18,22 @@ const { versionAssets } = require('./public');
 const { ADMIN, COOKIE, cookies } = require('./auth');
 
 // ----------------------------------------------------------------- plumb --
+/*
+  noneMatch(header, tag): whether an If-None-Match header names this tag, so
+  the answer is a 304. RFC 9110 13.1.2: the header is a list, "*" matches any
+  answer, and the tags are compared weakly, with a W/ on either side not
+  counted. A proxy that compresses (Cloudflare) marks a strong tag weak, so a
+  browser asks with W/"..." or with a list, and an exact string match sent
+  the whole file again (#4923).
+*/
+function noneMatch(header, tag) {
+  const h = String(header || '').trim();
+  if (!h || !tag) return false;
+  if (h === '*') return true;
+  const want = String(tag).replace(/^W\//, '');
+  return (h.match(/(?:W\/)?"[^"]*"/g) || []).some((t) => t.slice(t.indexOf('"')) === want);
+}
+
 /* One CSP for every answer (#1474). home.html and the hub load CSS/JS as
    same-origin files, so style-src needs only 'self'. Keep this string in one
    place so send(), Range replies, and the request-level setHeader cannot
