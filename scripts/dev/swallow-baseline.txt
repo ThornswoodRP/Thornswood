@@ -357,7 +357,7 @@ game\gamemode\scripted-activators.ts 8
 game\gamemode\season.ts 5
 game\gamemode\server-manifest.ts 1
 game\gamemode\small-helpers.ts 5
-game\gamemode\social.ts 19
+game\gamemode\social.ts 18
 game\gamemode\spoilage.ts 12
 game\gamemode\spoils.ts 1
 game\gamemode\staff-crafting.ts 1

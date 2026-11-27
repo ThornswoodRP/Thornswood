@@ -140,7 +140,8 @@ wheel is a seat on the ground, by a fire or not: the server reads the
 last animation the game sent for the person, which ends the moment they
 stand up, walk or play anything else. The bard is read the same way,
 every 20 seconds: the wheel's lute, flute or drum with that instrument
-in the pack, or Sing. The logout fill is
+in the pack, or Sing. It helps people resting with the bard: in the same
+building or cave, or outdoors near enough to be in their Near you list. The logout fill is
 counted once, the first time the server reads your meters after you
 come back into the world, whatever reads them first. The server
 counts you as up then, not lying in the bed. Coming back from any

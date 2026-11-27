@@ -29,8 +29,9 @@ is gone. Friends, mutes, and journals are not.
 
 ## The bonus
 
-Work done while somebody from your party is in the same cell banks
-15% of that piece. At a whole piece it pays one extra. That is every
+Work done while somebody from your party is with you banks 15% of
+that piece. With you means in the same building or cave, or outdoors
+near enough to be in your Near you list. At a whole piece it pays one extra. That is every
 seventh piece when each piece is worth 1. A kill that is worth 4
 banks 0.6 of a piece.
 

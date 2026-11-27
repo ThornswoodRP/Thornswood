@@ -56322,7 +56322,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A bard playing where this person is resting.
 
     Grim's idea and Patrick's yes. Somebody counts as a bard for this when the
-    server has seen them playing, they are in the same cell, and it saw them
+    server has seen them playing, they are together (social's together(), #5046), and it saw them
     in the last few minutes. There is no bard profession in the rulebook to
     read, and inventing one here would be settling a design question that is
     Patrick's.
@@ -56385,19 +56385,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
   }
 
+  /* Within earshot means together, as the party bonus counts it (#5046):
+     the same interior, or outdoors within the Near you reach. The same cell
+     description alone was the whole worldspace outdoors. */
   function bardNear(actorId, savedOnly) {
-    var myCell = null;
-    try { myCell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return false; }
-    if (!myCell) { return false; }
+    var soc = g.__thornswoodSocial;
+    if (!soc || !soc.together) { return false; }
     var now = Date.now();
     for (var id in BARDS) {
       if (!Object.prototype.hasOwnProperty.call(BARDS, id)) { continue; }
       if (now - BARDS[id] > BARD_FOR) { if (!savedOnly) { delete BARDS[id]; } continue; }
       var who = Number(id);
       if (who === actorId) { continue; }
-      var theirs = null;
-      try { theirs = String(mp.get(who, 'worldOrCellDesc') || ''); } catch (e) { continue; }
-      if (theirs && theirs === myCell) { return true; }
+      if (soc.together(actorId, who)) { return true; }
     }
     return false;
   }
@@ -61828,19 +61828,38 @@ module.exports = {
     var pid = profileOf(actorId);
     var p = partyOf(pid);
     if (!p || p.members.length < 2) { return 0; }
-    var cell = '';
-    try { cell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return 0; }
-    if (!cell) { return 0; }
     var n = 0;
     for (var i = 0; i < p.members.length; i++) {
       if (p.members[i] === pid) { continue; }
       var them = actorForProfile(p.members[i]);
-      if (!them) { continue; }
-      try {
-        if (String(mp.get(them, 'worldOrCellDesc') || '') === cell) { n++; }
-      } catch (e) { }
+      if (them && together(actorId, them)) { n++; }
     }
     return n;
+  }
+
+  /*
+    Are these two people together (#5046): in the same interior, or outdoors
+    in the same worldspace and within nearReach of each other, the reach the
+    Near you list already uses for "near you". Until 27 Nov 2026 this was the
+    same cell description alone, and outdoors that is the whole worldspace:
+    two people a hold apart in Tamriel counted as together for the party's
+    work share, the party panel and a bard's rest bonus (needs block,
+    bardNear, which asks this).
+  */
+  function whereIs(actorId) {
+    return memo('w' + actorId, function () {
+      try {
+        return { cell: String(mp.get(actorId, 'worldOrCellDesc') || ''), pos: mp.get(actorId, 'pos') };
+      } catch (e) { return { cell: '', pos: null }; }
+    });
+  }
+  function together(a, b) {
+    var x = whereIs(a), y = whereIs(b);
+    if (!x.cell || x.cell !== y.cell) { return false; }
+    if (!WORLDSPACES.has(x.cell)) { return true; }
+    if (!x.pos || !y.pos) { return false; }
+    var dx = x.pos[0] - y.pos[0], dy = x.pos[1] - y.pos[1], dz = x.pos[2] - y.pos[2];
+    return dx * dx + dy * dy + dz * dz <= SOCIAL.nearReach * SOCIAL.nearReach;
   }
 
   /** The multiplier work credit is paid at, for somebody with their party. */
@@ -62363,7 +62382,7 @@ module.exports = {
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
     confirmPartyAction: confirmPartyAction,
-    partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
+    partyNear: partyNear, together: together, workBonus: workBonus, parties: parties, inParty: inParty,
     newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,
     view: view, push: push, tick: tick, nearTick: nearTick,
