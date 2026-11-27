@@ -81,7 +81,7 @@
   { "tool": "scripts/dev/Build-BuildingHolds.py", "data": "--data", "plugins": null,
     "reads": ["game/data/doors.json", "game/gamemode-tables/BUILDING_NAME.json", "game/data/data.json", "game/data/last-plugin.json"], "writes": ["game/data/building-holds.json", "game/gamemode-tables/BUILDING_HOLD.json"] },
   { "tool": "scripts/dev/Build-WoodworkingBenches.py", "data": "--data", "plugins": null,
-    "reads": ["game/data/last-plugin.json"], "writes": ["game/data/woodworking-benches.json", "game/gamemode-tables/WOODWORKING_BENCH_BASE.json", "game/gamemode-tables/WOODWORKING_BENCHES.json", "game/gamemode-tables/STATIONS_THE_SERVER_STANDS.json"] },
+    "reads": ["game/data/last-plugin.json"], "writes": ["game/data/woodworking-benches.json", "game/gamemode-tables/WOODWORKING_BENCH_BASE.json", "game/gamemode-tables/WOODWORKING_BENCHES.json"] },
   { "tool": "scripts/dev/Build-MarketStalls.py", "data": "--data", "plugins": null,
     "reads": ["game/data/last-plugin.json"], "writes": ["game/data/market-stalls.json"] },
   { "tool": "scripts/dev/Build-MarketStallTables.js", "data": null, "plugins": null,
