@@ -68,6 +68,7 @@ import gamemode_tables
 import own_plugins
 import riftweald
 import claimable_doors
+import claim_sites
 
 COMPRESSED = 0x00040000
 MASTERS = own_plugins.MASTERS
@@ -176,6 +177,13 @@ def walk(pl, doors, out, want_bases):
                 d = pl.desc(fid)
                 if d:
                     doors[d] = True
+            elif tag == b'FACT':
+                d = pl.desc(fid)
+                if d:
+                    marker = next((pl.desc(struct.unpack_from('<I', body)[0])
+                                   for st, body in subrecords(pl.data(p, size, flags))
+                                   if st == b'JAIL' and len(body) == 4), None)
+                    out.setdefault('jailMarkers', {})[d] = marker
             elif tag == b'CELL':
                 d = pl.desc(fid)
                 if d:
@@ -227,7 +235,7 @@ def walk(pl, doors, out, want_bases):
         if buf[p:p + 4] != b'GRUP':
             break
         label = buf[p + 8:p + 12]
-        if label in (b'DOOR', b'CELL', b'WRLD'):
+        if label in (b'DOOR', b'CELL', b'WRLD', b'FACT'):
             eat(p + 24, p + size, None, label)
         p += size
 
@@ -376,11 +384,6 @@ def main():
                 print('    %s' % cells.get(b, {}).get('edid', b))
                 break
 
-    if args.check:
-        print('')
-        print('  --check, so nothing was written.')
-        return 0
-
     # 74,161 cells were read and all but a few hundred are open ground with no
     # door in them. Only the ones a door stands in or opens into are kept, because
     # the rest cannot be looked up by anything this table is for and would be four
@@ -406,11 +409,6 @@ def main():
         'doors': placed,
         'buildings': {k: sorted(v) for k, v in buildings.items()},
     }
-    io.open(args.out, 'w', encoding='utf-8', newline='\n').write(
-        json.dumps(payload, indent=1, sort_keys=True))
-    print('')
-    print('  wrote %s (%s bytes)' % (args.out, format(os.path.getsize(args.out), ',')))
-
     # ------------------------------------------------ what the server carries
     #
     # doors.json is 900KB and most of it is for reading rather than for running.
@@ -479,6 +477,25 @@ def main():
                            and not open_ground_without(stands, b)):
             way_out[d] = 1
 
+    by_door, names, way_out, buildings, sites, added = claim_sites.expand(
+        cells, placed, buildings, by_door, names, way_out, policy,
+        {ref for ref in out.get('jailMarkers', {}).values() if ref})
+    payload['buildings'] = {site: sorted(refs) for site, refs in buildings.items()}
+    payload['sites'] = sites
+    payload['counts']['buildings'] = len(buildings)
+    payload['whatABuildingIs'] += (' Other placed doors are claimable sites too: an exterior '
+        'teleport pair shares its smallest reference identity, and a standalone exterior '
+        'gate owns only itself. Newly admitted ambiguous leaves stay passable.')
+    if args.check:
+        print('')
+        print('  --check, so nothing was written.')
+        return 0
+    io.open(args.out, 'w', encoding='utf-8', newline='\n').write(
+        json.dumps(payload, indent=1, sort_keys=True))
+    print('')
+    print('  wrote %s (%s bytes), including %d newly admitted claim leaves'
+          % (args.out, format(os.path.getsize(args.out), ','), len(added)))
+
     print('')
     print('What the server carries')
     print('  %s door(s) answer with a building, across %s building(s)'
@@ -496,7 +513,7 @@ def main():
 if __name__ == '__main__':
     try:
         sys.exit(main())
-    except own_plugins.Unreadable as exc:
+    except (own_plugins.Unreadable, ValueError) as exc:
         # Every plugin is read before anything is written.
         print('STOP. %s. Nothing was written.' % exc)
         sys.exit(1)

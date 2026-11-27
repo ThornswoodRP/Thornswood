@@ -23487,17 +23487,14 @@ module.exports = {
   }
 
   /*
-    THE REST OF THE JAIL RULES (#502). Patrick, 12 October: jails can be
-    claimed by the Jarl only, and the rest as written on the issue: no timer,
+    THE REST OF THE JAIL RULES (#502): no timer,
     release by that hold's guards, lockpicking allowed, the game's jail keys
     open nothing, /stuck does not move someone out of a locked cell, and
     dying in a cell wakes at a temple.
 
-    THE JARL ONLY. A jail building (JAIL_BUILDING, read out of the world with
-    the cells) is the Jarl of its hold's to claim, and nobody else's: claim()
-    refuses anybody else, the line under the crosshair offers nobody else the
-    claim, and a deed presented at its door by anybody else is paper. Read as
-    the Jarl of that jail's hold, because the office is of one hold.
+    A building containing cells is an ordinary claimable place (#7071).
+    Holding it grants no guard authority: its actual cell locks remain the
+    hold's guards' responsibility and are never overridden by a claim.
 
     THE GAME'S JAIL KEYS. Each cell door's lock names a key the game made
     (JAIL_KEY), and a key in somebody's pack opens that lock in their own
@@ -23524,12 +23521,6 @@ module.exports = {
   function jailOfBuilding(building) {
     var b = String(building || '');
     return Object.prototype.hasOwnProperty.call(JAIL_BUILDING, b) ? JAIL_BUILDING[b] : null;
-  }
-
-  /** May this person hold this building: anybody, but a jail is its hold's Jarl's alone. */
-  function mayHold(actorId, profileId, building) {
-    var jh = jailOfBuilding(building);
-    return !jh || isJarlOf(profileId, jh);
   }
 
   /** The hold whose cell door a key the game made opens, or null, by the key's descriptor. */
@@ -23902,11 +23893,6 @@ module.exports = {
     try { mine = Number(mp.get(actorId, 'profileId')) || 0; } catch (e) { mine = 0; }
     push(actorId, mine);
 
-    // The embassy is held by its office, not by a claim, so a deed presented
-    // at its door is paper (#1390, see the embassy and remnant block).
-    var accordHeld = globalThis.__thornswoodEmbassy;
-    if (accordHeld && accordHeld.holds(building)) { return; }
-
     var held = holderOf(building);
     try { mine = Number(mp.get(actorId, 'profileId')) || 0; } catch (e) { mine = 0; }
 
@@ -23942,14 +23928,7 @@ module.exports = {
       word deed.delayMinutes later, or when they are next in the world, and
       names nobody. See word to the holder.
     */
-    /*
-      A JAIL'S DEED IS PAPER IN ANY HAND BUT ITS JARL'S (#502): the jail is
-      claimed by the Jarl of its hold alone, and presenting its deed is a
-      claim like any other. The deed still opens the door it names, as a
-      deed does (mayPass).
-    */
-    if (mine && held && held.by !== mine && holdsDeed(actorId, building) &&
-        mayHold(actorId, mine, building)) {
+    if (mine && held && held.by !== mine && holdsDeed(actorId, building)) {
       var was = held.name;
       var now2 = Date.now();
       var who2 = 'somebody';
@@ -24107,14 +24086,8 @@ module.exports = {
       if (cid) { line.d.push((cid >>> 0).toString(16)); }
     } else if (building) {
       var held = holderOf(building);
-      // The embassy is held by its office, not by a claim, so its doors offer
-      // nothing to claim (#1390); claim() refuses the line if it comes anyway.
-      var accordLine = globalThis.__thornswoodEmbassy;
       if (!held) {
-        // A jail offers the claim to the Jarl of its hold alone (#502).
-        if (!(accordLine && accordLine.holds(building)) && mayHold(actorId, profileId, building)) {
-          line.x = 'claim';
-        }
+        line.x = 'claim';
       } else if ((profileId && held.by === profileId) || holdsDeed(actorId, building) ||
                  holdsMasterKey(actorId, building)) {
         line.x = held.locked ? 'unlock' : 'lock';
@@ -24224,19 +24197,6 @@ module.exports = {
     if (!building) {
       toProfile(profileId, 'Open the door of the building you mean first. That is how ' +
                            'the server knows which one it is.');
-      return true;
-    }
-    // embassy.md: the embassy doors start held, so a claim is refused (#1390).
-    var accordClaim = globalThis.__thornswoodEmbassy;
-    if (accordClaim && accordClaim.holds(building)) {
-      toProfile(profileId, accordClaim.CLAIM_REFUSED);
-      return true;
-    }
-    // A jail is the Jarl of its hold's alone (#502). See jailOfBuilding.
-    if (!mayHold(actorId, profileId, building)) {
-      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
-      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' +
-                           jailTown + ' claims it.');
       return true;
     }
     var held = holderOf(building);
@@ -31559,16 +31519,6 @@ module.exports = {
     }
     var held = holderOf(building);
     if (!held) {
-      /*
-        embassy.md: "A steward of Haafingar does not evict the Accord" (#1390).
-        A claim somebody made before the embassy held this door is still that
-        person's claim, and ending it below is still the steward's to do.
-      */
-      var accordEvict = globalThis.__thornswoodEmbassy;
-      if (accordEvict && accordEvict.holds(building)) {
-        toProfile(profileId, accordEvict.EVICT_REFUSED);
-        return true;
-      }
       toProfile(profileId, 'Nobody holds ' + nameOf(building) + '.');
       return true;
     }
@@ -31790,45 +31740,6 @@ module.exports = {
   }
 
   /*
-    THE JAIL RULE, APPLIED TO THE CLAIMS MADE BEFORE IT, ONCE (#502).
-
-    Patrick, 12 October evening: jail claims made before the jail rule end
-    once, and then the rule holds. Before #2497 anybody could claim a jail
-    building; since, only the Jarl of its hold may, and since #2551 the Jarl
-    is whoever holds that hold's Jarl role. So at the first server start with
-    the rule, every claim on a jail building whose holder is not that hold's
-    Jarl ends, each logged by building, holder and profile, and
-    steps.jailRule records that it ran, in the same save. With no such claim
-    nothing ends and the mark is still written. It runs here, after every
-    part of the register is read, because save() writes all of them, and it
-    never runs again: a claim after this is made under the rule.
-
-    The holder is read on record (__thornswoodOfficesOnRecord): at server
-    start nobody has sent a pass, and this is about a claim the server
-    already holds, not a press arriving now.
-  */
-  function endPreRuleJailClaims() {
-    if (steps.jailRule) { return 0; }
-    var ended = 0;
-    for (var b in claims) {
-      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
-      var hold = jailOfBuilding(b);
-      if (!hold) { continue; }
-      // The character that holds the hold's Jarl office (#2551), read on record.
-      if (officesOfProfile(claims[b].by, true).jarl.indexOf(hold) !== -1) { continue; }
-      plog('law: the jail rule ends', claims[b].name + '\'s claim (profile ' + claims[b].by + ') on',
-           nameOf(b) + ', made before only the Jarl of', hold, 'could hold it');
-      keepOwed(b, claims[b], Date.now());
-      delete claims[b];
-      ended++;
-    }
-    steps.jailRule = Date.now();
-    save();
-    plog('law: the jail rule was applied to the claims made before it once:', ended, 'claim(s) ended');
-    return ended;
-  }
-
-  /*
     WHAT A DELETED CHARACTER HELD, LET GO (#2351, Patrick's A of 16 October:
     "Delete-Person.ps1 writes a list, and the gamemode releases those entries
     at its next start"). Asked once, as this block loads and before
@@ -31985,7 +31896,6 @@ module.exports = {
 
   if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('property', release); }
   rolesRead();
-  endPreRuleJailClaims();
 
   ready();
   g.__thornswoodProperty = {
@@ -32020,12 +31930,12 @@ module.exports = {
     isJarl: isJarl, isJarlOf: isJarlOf, jarlHoldsOf: jarlHoldsOf, isCourtOf: isCourtOf,
     rolesRead: rolesRead, held: function () { return JSON.parse(JSON.stringify(law.held)); },
     isSteward: isSteward, isStewardOf: isStewardOf, stewardHoldsOf: stewardHoldsOf,
-    endPreRuleJailClaims: endPreRuleJailClaims, steps: function () { return Object.assign({}, steps); },
+    steps: function () { return Object.assign({}, steps); },
     // What a deleted character held, let go at server start (#2351).
     release: release,
     isGuard: isGuard, guardHoldsOf: guardHoldsOf, jailHoldOf: jailHoldOf, cellLocked: cellLocked,
     mayPassCell: mayPassCell, lockCell: lockCell,
-    jailOfBuilding: jailOfBuilding, mayHold: mayHold, jailKeyHold: jailKeyHold, lockedJailHere: lockedJailHere,
+    jailOfBuilding: jailOfBuilding, jailKeyHold: jailKeyHold, lockedJailHere: lockedJailHere,
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
@@ -32064,16 +31974,14 @@ module.exports = {
   docs/systems/embassy.md, thalmor.md, npcs.md and cut-items.md are the
   design. Every number here is one of theirs.
 
-  THE BUILDING. "The embassy doors start held by the Ambassador's office,
-  so the line at them offers nobody a claim. A steward of Haafingar does
-  not evict the Accord." The page calls it a warehouse in Solitude
+  THE BUILDING. The embassy roll names a warehouse in Solitude
   ("The Empire wanted the province and got a warehouse. This is that
   warehouse") and names none. EMBASSY_BUILDING is the answer suggested on
   #1390, the Abandoned Warehouse: the one warehouse in Solitude that is
   not a shop and not the East Empire Company's, which the trading company
   replaces. If Patrick names another building, that one line changes. The
-  property block asks holds() for the line at the door, before a claim and
-  an eviction, and before a deed presented at the door. It is not a hold:
+  property block uses ordinary saved ownership there (#7071); the embassy
+  identity does not manufacture a claim after a reset. It is not a hold:
   nothing here makes a box, a board, a ledger or a mint, and Solitude's box
   and board stay Haafingar's.
 
@@ -32129,10 +32037,6 @@ module.exports = {
 
   var ROLL_NAME = { embassy: 'the embassy roll', remnant: 'the Thalmor remnant roll' };
 
-  var CLAIM_REFUSED = 'The embassy is held by the Ambassador\'s office under the Accord. ' +
-                      'It cannot be claimed.';
-  var EVICT_REFUSED = 'The embassy is not a house of the hold. A steward of Haafingar ' +
-                      'does not evict the Accord.';
   var NOT_ADMIN = {
     embassy: 'Only an admin writes the embassy roll.',
     remnant: 'The remnant roll is an application. Only an admin writes it.'
@@ -32272,7 +32176,7 @@ module.exports = {
 
   // ------------------------------------------------------- what is asked --
 
-  /** True when this building is the embassy. Asked by the property block. */
+  /** Exact embassy identity; identifying a place does not manufacture title. */
   function holds(building) {
     return !!building && String(building) === EMBASSY_BUILDING;
   }
@@ -32550,7 +32454,6 @@ module.exports = {
     release: release,
     holds: holds, command: command, enter: enter, setArmed: setArmed, leave: leave,
     listing: listing, rolls: function () { return reg; },
-    CLAIM_REFUSED: CLAIM_REFUSED, EVICT_REFUSED: EVICT_REFUSED,
     EMBASSY_BUILDING: EMBASSY_BUILDING, ROLL_MOST: ROLL_MOST, ARMED_MOST: ARMED_MOST
   };
   g.__thornswoodRolls = { has: has };
