@@ -1,0 +1,59 @@
+# The engine pin only moves forward along the fork's thornswood/engine-changes
+# (#7100).
+#
+# WHY. Patrick, 27 Nov 2026: "we make changes and old ones get reverted". A
+# pin moved to a fork commit that is not ahead of the last pin, on
+# engine-changes (a pull request's branch, an older commit, a side line),
+# takes every fork fix merged after it out of the game without one line of
+# the fork changing. Measured that day, all 76 pin moves on main since 25 Sep
+# went forward along engine-changes, so none had: the pin robot
+# (engine-pin.yml) always takes the fork's head. A pin a pull request moves by
+# hand had nothing holding it.
+#
+# ON pull_request, NEVER pull_request_target (tests\test-1306-pr-workflow.js),
+# and on the merge queue's merge. It checks out nothing and runs no code of
+# the pull request's: gh reads the pin at the base and at the head
+# (engine/skymp in each tree) and asks GitHub's compare of the fork, with a
+# token that only reads.
+name: Engine pin moves forward
+on:
+  pull_request:
+    branches: [main]
+    paths: [engine/skymp]
+  merge_group:
+    types: [checks_requested]
+permissions: {}
+jobs:
+  forward:
+    name: The engine pin moves forward
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Hold the pin to the last one and to engine-changes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+        run: |
+          $fork = 'ThornswoodRP/skymp'
+          function Pin([string]$at) {
+            $p = gh api "repos/$env:REPO/contents/engine/skymp?ref=$at" --jq 'select(.type == "submodule") | .sha'
+            if ($LASTEXITCODE -ne 0 -or $p -notmatch '^[0-9a-f]{40}$') { Write-Host "::error::could not read engine/skymp at $at"; exit 1 }
+            $p
+          }
+          $was = Pin $env:BASE
+          $now = Pin $env:HEAD
+          if ($was -eq $now) { Write-Host "the pin is $($now.Substring(0, 8)) at the base and the head, so nothing moved"; exit 0 }
+          $move = gh api "repos/$fork/compare/$was...$now" --jq '.status + " " + (.behind_by | tostring)'
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::GitHub could not compare $was...$now in $fork"; exit 1 }
+          $on = gh api "repos/$fork/compare/thornswood%2Fengine-changes...$now" --jq '.status'
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::GitHub could not compare thornswood/engine-changes...$now in $fork"; exit 1 }
+          Write-Host "the pin moves $($was.Substring(0, 8)) -> $($now.Substring(0, 8)): $move against the old pin, $on against thornswood/engine-changes"
+          $bad = 0
+          if (-not $move.StartsWith('ahead ')) { Write-Host "::error file=engine/skymp::the new pin is not ahead of the old one ($move): fork commits the old pin had would leave the game"; $bad++ }
+          if ($on -ne 'behind' -and $on -ne 'identical') { Write-Host "::error file=engine/skymp::the new pin is not on thornswood/engine-changes ($on): pin a commit the fork has merged"; $bad++ }
+          exit $bad

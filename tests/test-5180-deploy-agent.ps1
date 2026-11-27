@@ -16,7 +16,7 @@
       the Release.
     - The gate has the verbs Deploy-Release (-Tag build-<...> and
       -Environment dev, site or discord only) and Install-DeployAgent
-      (-Status, -Pass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only). -Main
+      (-Status, -BotPass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only). -Main
       has agent.json name main (#5181) and -NoMain takes it off; with
       neither it is kept.
     - Deploy-Release.ps1 and Install-DeployAgent.ps1 send the box scripts that
@@ -122,7 +122,7 @@ try {
     Yes '  -Tag takes build-<...> and nothing else' (('build-20261101.12' -match $d.params.Tag) -and -not ('build-1; rm' -match $d.params.Tag) -and -not ('agent-v1.0.1' -match $d.params.Tag))
     $v = $verbs.verbs.'Install-DeployAgent'
     Yes 'the gate has Install-DeployAgent' ($null -ne $v -and $v.script -eq 'scripts/deploy/Install-DeployAgent.ps1')
-    Yes '  with -Status, -Pass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only, and -NoPause fixed' ((@($v.params.PSObject.Properties.Name) -join ',') -eq 'Status,Pass,Tag,NoBotPass,EndHung,Main,NoMain' -and (@($v.fixed) -join ',') -eq '-NoPause' -and
+    Yes '  with -Status, -BotPass, -Tag, -NoBotPass, -EndHung, -Main and -NoMain only, and -NoPause fixed' ((@($v.params.PSObject.Properties.Name) -join ',') -eq 'Status,BotPass,Tag,NoBotPass,EndHung,Main,NoMain' -and (@($v.fixed) -join ',') -eq '-NoPause' -and
         $v.params.NoBotPass -eq 'switch' -and $v.params.EndHung -eq 'switch' -and $v.params.Main -eq 'switch' -and $v.params.NoMain -eq 'switch')
     Yes '  -Tag takes agent-v<a.b.c> and nothing else' (('agent-v1.0.12' -match $v.params.Tag) -and -not ('agent-v1.0.12; rm' -match $v.params.Tag) -and -not ('build-1' -match $v.params.Tag))
 

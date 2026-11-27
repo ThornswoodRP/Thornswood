@@ -253,7 +253,7 @@
       "fixed": ["-NoPause"],
       "params": {
         "Status": "switch",
-        "Pass": "^[0-9]{8}-[0-9]{6}-[A-Za-z0-9-]{1,64}$",
+        "BotPass": "^[0-9]{8}-[0-9]{6}-[A-Za-z0-9-]{1,64}$",
         "Tag": "^agent-v[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,6}$",
         "NoBotPass": "switch",
         "EndHung": "switch",
