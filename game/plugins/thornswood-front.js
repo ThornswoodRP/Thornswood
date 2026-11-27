@@ -922,6 +922,23 @@
       menuAgain = null;
       return;
     }
+    /*
+      Or the world loaded after the pick (#7098). skymp5-client loads the
+      world with a save of its own only once it has taken a pick
+      (remoteServer.ts, while __thornswoodInWorld is down), so a load after
+      the pick is the client having taken it. The world flag alone said so
+      only once no menu was open, and creation is all menus: on main on
+      24 Nov the pick was said again every 2 s through creation, and at 90 s
+      the log said the client never took it, with the character already in
+      the creation hall. loadedOutOfWorld is the loadGame handler's, beside
+      the update tick.
+    */
+    if (loadedOutOfWorld && loadedOutOfWorld >= menuChosenAt) {
+      log('menu: the world loaded for profile', menuChosenId, 'so the client took the choice');
+      menuChosenId = 0;
+      menuAgain = null;
+      return;
+    }
     if (now - menuChosenAt > MENU_SAY_FOR) {
       if (!menuGiveUpTold) {
         menuGiveUpTold = true;
