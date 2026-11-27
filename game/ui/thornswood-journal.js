@@ -145,7 +145,7 @@
     '#' + ID + ' .main{overflow:auto;padding:18px 24px;font-size:17px}',
     '#' + ID + ' .foot{padding:12px 24px;border-top:1px solid rgba(198,170,109,.22);display:flex;gap:10px;',
     '  align-items:center;font-size:13.5px;font-style:italic;color:rgba(217,207,180,.7)}',
-    '#' + ID + ' h3{margin:14px 0 7px;padding-bottom:6px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' h3{margin:14px 0 7px;padding-bottom:6px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);font-weight:normal;border-bottom:1px solid rgba(198,170,109,.22)}',
     '#' + ID + ' h3:first-child{margin-top:0}',
     // The K panel's button at 11px rather than its 13px. Uppercase and spaced
@@ -163,9 +163,9 @@
     '  color:#f6e9c8;font-size:15px;letter-spacing:.02em;text-transform:none;white-space:normal}',
     '#' + ID + ' .item.sel{border-color:rgba(198,170,109,.55);background:rgba(120,94,44,.24);',
     '  box-shadow:inset 3px 0 0 0 #c6aa6d}',
-    '#' + ID + ' .item.go{text-align:center;font-size:11px;letter-spacing:.14em;text-transform:uppercase;',
+    '#' + ID + ' .item.go{text-align:center;font-size:12px;letter-spacing:.14em;text-transform:uppercase;',
     '  background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
-    '#' + ID + ' .item .c{float:right;color:rgba(217,207,180,.5);font-size:12px;font-style:italic}',
+    '#' + ID + ' .item .c{float:right;color:rgba(217,207,180,.7);font-size:12px;font-style:italic}',
     '#' + ID + ' button[data-page]{font-size:13.5px;letter-spacing:.02em;text-transform:none;color:#d9cfb4;',
     '  border-color:rgba(198,170,109,.30);background:rgba(0,0,0,.20)}',
     '#' + ID + ' button[data-page].go{border-color:#e9d19b;background:rgba(201,162,75,.20);color:#f6e9c8}',
@@ -178,9 +178,9 @@
     '#' + ID + ' textarea{min-height:300px;resize:vertical;line-height:1.55;font-size:15px}',
     '#' + ID + ' .bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}',
     '#' + ID + ' .bar .grow{flex:1}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:8px 2px;line-height:1.55}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:8px 2px;line-height:1.55}',
     '#' + ID + ' .read{white-space:pre-wrap;line-height:1.65;font-size:17px;color:#d9cfb4}',
-    '#' + ID + ' .from{color:rgba(217,207,180,.6);font-style:italic;font-size:12.5px;margin-bottom:10px}',
+    '#' + ID + ' .from{color:rgba(217,207,180,.7);font-style:italic;font-size:12.5px;margin-bottom:10px}',
     '#' + ID + ' .main b{font-weight:normal;font-size:16.5px;color:#f6e9c8}',
     // The K panel's scrollbars, the same rules scoped to this panel, so the
     // journal has them whether or not the K panel's page loaded first.
@@ -472,7 +472,7 @@
         html += '<button class="item' + (readingShared === j ? ' sel' : '') +
                 '" data-shared="' + j + '">' + esc(shared[j].title) +
                 '<span class="c">' + shared[j].pages.length + '</span>' +
-                '<div style="color:rgba(217,207,180,.6);font-size:12px;font-style:italic">from ' + esc(shared[j].from) + '</div></button>';
+                '<div style="color:rgba(217,207,180,.7);font-size:12px;font-style:italic">from ' + esc(shared[j].from) + '</div></button>';
       }
     }
     var group = data && data.group;
@@ -969,7 +969,7 @@
     }
 
     var friends = ((data && data.friends) || []).filter(function (f) { return true; });
-    var pick = '<select id="' + ID + '-who"><option value="">a friend...</option>';
+    var pick = '<select id="' + ID + '-who" aria-label="Friend to share with"><option value="">a friend...</option>';
     for (var f = 0; f < friends.length; f++) {
       var whoId = friends[f].p != null && friends[f].p !== '' ? String(friends[f].p) : friends[f].name;
       pick += '<option value="' + esc(whoId) + '">' + esc(friends[f].name) + '</option>';

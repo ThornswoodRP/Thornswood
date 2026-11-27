@@ -383,7 +383,7 @@
   function screenHtml() {
     var f = state.fov;
     var out = '<div class="group">Field of view</div>' +
-      '<div class="line"><input type="range" id="' + ID + '-fov" min="' + f.min + '" max="' + f.max +
+      '<div class="line"><input type="range" id="' + ID + '-fov" aria-label="Field of view" min="' + f.min + '" max="' + f.max +
       '" step="1" value="' + f.value + '"><span class="key" id="' + ID + '-fovnum">' + f.value + '</span>' +
       '<button id="' + ID + '-fovdef">Skyrim\'s own, ' + f.def + '</button></div>' +
       '<p class="note">How much of the world fits on screen, from ' + f.min + ' to ' + f.max + '. It changes as you let go.</p>';

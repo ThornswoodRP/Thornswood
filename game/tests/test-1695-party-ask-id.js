@@ -252,8 +252,8 @@ if (social && trade && branch && journal) {
     yes('P3 Remove first names her for confirmation and sends nothing', p.press('Remove', 102) === '');
     yes('P3 Remove beside her sends her profile id too', p.press('Remove', 102) === '/friend remove 102');
     yes('P4 Mute, Text and Name still send it',
-        p.press('Mute', 102) === '/mute 102' && p.press('Text', 102) === '/mute text 102' &&
-        p.press('Name', 102) === '/hidename 102');
+        p.press('Mute voice', 102) === '/mute 102' && p.press('Hide text', 102) === '/mute text 102' &&
+        p.press('Hide name', 102) === '/hidename 102');
     const rowButtons = p.buttons().filter(function (b) {
       return ['ask', 'mute', 'mtext', 'mname', 'drop'].indexOf(b.attrs['data-do']) !== -1;
     });
