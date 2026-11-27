@@ -1941,7 +1941,7 @@ function chopWood(actorId, refrId, fromSwing) {
   if (!addItem(actorId, ITEMS.firewood, yielded)) {
     swingEnd(actorId);
     return 'The block gives up firewood and there is nothing in this load order to ' +
-           'put in your hands. Say so in #bugs.';
+           'put in your hands. Post it in #test-findings in the Discord.';
   }
   /*
     The press is what starts a session, and the block is a FURN so Skyrim's own
