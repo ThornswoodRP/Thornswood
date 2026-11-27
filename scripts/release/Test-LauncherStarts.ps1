@@ -44,8 +44,8 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $Exe)) { Write-Host "FAIL  there is no launcher at $Exe"; exit 1 }
 $Exe = (Resolve-Path -LiteralPath $Exe).Path
 
-$temp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
-$root = Join-Path $temp ('launcher-starts-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+$name = 'launcher-starts-' + [Guid]::NewGuid().ToString('N').Substring(0, 12)
+$root = if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP $name } else { & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') $name }
 $profileDir = Join-Path $root 'Profile'
 $null = New-Item -ItemType Directory -Force -Path $profileDir
 $log = Join-Path $profileDir 'launcher.log'

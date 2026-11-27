@@ -100,7 +100,7 @@ static class InstallSizesDriver
     {
         var c = new InstallChoice { Root = a[0], Package = a[1], SteamRoot = a[2], SteamGame = a[3], MakeOwnGame = true };
         var lines = new List<string>();
-        var s = new InstallSteps(c, lines.Add, f => { });
+        var s = new InstallSteps(c, lines.Add, f => { }, q => true);
         var o = new MemoryStream();
         using (var w = new Utf8JsonWriter(o))
         {

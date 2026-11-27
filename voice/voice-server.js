@@ -2520,7 +2520,15 @@ function iceServers() {
   20 September.
 */
 const server = http.createServer((req, res) => {
-  if (req.method === 'POST' && req.url === '/positions') {
+  // The path, with any query string cut off. This has to happen before the
+  // comparisons below: the launcher once opened a page as /?profile=2&ptt=... and
+  // a plain req.url === '/' test does not match that, so the old code fell
+  // through to the file reader, asked the disk for a file named '/', and
+  // answered every single person with 'not found'.
+  // /positions is matched on it too, so every route is (#4383).
+  const route = (req.url || '/').split('?')[0];
+
+  if (req.method === 'POST' && route === '/positions') {
     // Loopback only. This is the gamemode talking to the service on the same
     // machine, and nothing outside has any business writing where people are.
     // The same test as the other gamemode routes, so a request Caddy carried
@@ -2559,13 +2567,6 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
-
-  // The path, with any query string cut off. This has to happen before the
-  // comparisons below: the launcher once opened a page as /?profile=2&ptt=... and
-  // a plain req.url === '/' test does not match that, so the old code fell
-  // through to the file reader, asked the disk for a file named '/', and
-  // answered every single person with 'not found'.
-  const route = (req.url || '/').split('?')[0];
 
   /*
     A token to join the room with.

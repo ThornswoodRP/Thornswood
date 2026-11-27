@@ -60,6 +60,20 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Run-RealClient.ps1 drives the real game, so it runs on Windows only.' }
 
+# Not from inside an app package's container (#5197). There a folder the
+# launcher moves under %LOCALAPPDATA% goes to that package's own store and
+# the real one stays, so Play cannot point Skyrim's folders at the build and
+# stops on "Could not redirect ... a folder is there again" (One, 26 and 27
+# Nov, runs started from the Claude app's Remote Control). Patrick chose on
+# 27 Nov that runs on One go only through the scheduled task, which runs
+# outside any app by design (q-5197-sandbox-exit, B).
+. (Join-Path $PSScriptRoot 'Get-AppContainerStore.ps1')
+$container = Get-AppContainerStore
+if ($container) {
+    throw ("This run is inside the app container of $container, where Windows keeps a folder moved under AppData\Local in that app's own store, so the launcher could not point Skyrim's folders at the build. " +
+           "Runs go through the scheduled task 'Thornswood real game run': scripts\dev\Watch-RealClient.ps1 -Now [-Steps <file>] asks it for one from here.")
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $where = Join-Path $repoRoot 'scripts\release\Where.ps1'
 if (-not $Root) { $Root = & $where Install }

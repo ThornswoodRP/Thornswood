@@ -87,6 +87,12 @@ const bansNow = () => ({ table: jsonFile(BANS, {}) || {}, broken: '' });
 const BANS_BROKEN_WHY = '';
 const readTicket = (t) => (String(t || '').startsWith('tk:') ? { d: String(t).slice(3), n: 'From the ticket' } : null);
 const body = async (req) => req.body;
+// What lib/http.js bodyObject does (#4382): JSON, and an object.
+const bodyObject = async (req) => {
+  const v = JSON.parse(req.body);
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+  return v;
+};
 const sendJson = (res, code, obj) => { res.code = code; res.obj = obj; return res; };
 const slotsFor = () => 2;
 // The account's characters stay on its list whatever else is cut (#5938).

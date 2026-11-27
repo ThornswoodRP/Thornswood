@@ -8,8 +8,9 @@ using System.Text;
 namespace Thornswood
 {
     /// <summary>
-    /// Wraps the two or three strings on this machine that are worth stealing:
-    /// the server password, the update token, and the Discord ticket.
+    /// Wraps the strings on this machine that are worth stealing: the Discord
+    /// ticket (Discord.cs) and the Nexus sign in (Nexus.cs). The server
+    /// password and the update token it once held are gone from the launcher.
     ///
     /// DPAPI with CurrentUser scope, which means Windows ties the ciphertext to
     /// this Windows account on this machine. Another account on the same PC
@@ -48,12 +49,12 @@ namespace Thornswood
             catch (Exception ex)
             {
                 // This used to hand the plain string back, so a machine where
-                // DPAPI refused wrote the password or the Discord ticket into
-                // its file in the clear, and nothing anywhere said so. A
+                // DPAPI refused wrote the secret into its file in the clear,
+                // and nothing anywhere said so. A
                 // secret this cannot encrypt is not stored at all: the line
                 // below says why and the throw stops the caller writing it.
-                // Both callers already catch and log (Config.Save,
-                // Discord.Save), so the launcher still starts and asks for
+                // Both callers already catch and say it (Discord.Save,
+                // Nexus.Write), so the launcher still starts and asks for
                 // the secret again. The line reads "Swallowed in" because
                 // that is Swallow's own wording; the exception goes on up.
                 Swallow.Note("Secrets.Protect, Windows would not encrypt a secret for this " +

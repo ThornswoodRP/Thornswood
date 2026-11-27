@@ -91,7 +91,6 @@ import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
-STATION_SITES = os.path.join(ROOT, 'game', 'data', 'station-sites.json')
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 import own_plugins  # noqa: E402
@@ -354,7 +353,7 @@ class World:
                         return
                 prev = refs.get(k)
                 refs[k] = dict(base=base, pos=list(pos[:3]), rot=list(pos[3:]), scale=scale, flags=flags,
-                               xesp=xesp, world=w, interior=interior, cell=cell, by=pl.name,
+                               xesp=xesp, world=w, interior=interior, by=pl.name,
                                touched=(prev['touched'] if prev else []) + [pl.name])
             pl.walk(visit, tops={b'WRLD', b'CELL'})
         return refs, navms
@@ -778,39 +777,6 @@ def main():
     }
     text = json.dumps(payload, indent=1, sort_keys=True) + '\n'
 
-    # THE STATIONS THE SERVER STANDS (#6893). game\\data\\station-sites.json
-    # measures every station; one in a cell the content plugin cannot place
-    # into (a cell of a plugin that is not one of its masters) says standBy
-    # server, and the server stands it at start the way it stands these
-    # benches, moved next to the room's furniture the row names. Held here to
-    # this load order on every build: that furniture still stands in that
-    # room, so the move has a reference there to go next to.
-    stood = {}
-    st = json.load(io.open(STATION_SITES, encoding='utf-8'))
-    server_rows = {n: r for n, r in st['sites'].items() if r.get('standBy') == 'server'}
-    want_by = {}
-    for n, r in server_rows.items():
-        f, h = r['beside'].split(':', 1)
-        want_by[(h.lower(), int(f, 16))] = n
-    beside, _ = world.refs(want_key=lambda k: k in want_by)
-    for k, n in sorted(want_by.items(), key=lambda x: x[1]):
-        r, row = beside.get(k), server_rows[n]
-        b = world.bases.get(r['base']) if r else None
-        cell = world.desc(r['cell']) if r and r['cell'] else ''
-        if (not r or not b or b[0] != 'FURN' or r['flags'] & (DELETED | DISABLED) or r['xesp'] or
-                not r['interior'] or cell != row['cell']):
-            fails.append('%s: the furniture %s the server stands its %s beside is not usable furniture in %s'
-                         % (n, row['beside'], row['kind'], row['cell']))
-            continue
-        stood[n] = {'where': row['where'], 'kind': row['kind'], 'base': row['base'], 'beside': row['beside'],
-                    'cell': row['cell'], 'pos': row['pos'], 'angle': row['angle']}
-    if fails:
-        print('')
-        for f in fails:
-            print('  ' + f)
-        print('%d station(s) the server stands failed; nothing was written.' % len(fails))
-        return 1
-
     # The gamemode says above its table() lines what these hold;
     # game\\data\\woodworking-benches.json says what was measured at each spot.
     tables = {
@@ -818,7 +784,6 @@ def main():
         'WOODWORKING_BENCHES': json.dumps(
             {site: {'where': v['where'], 'forge': v['forge'], 'cell': v['cell'], 'pos': v['pos'],
                     'angle': v['angle']} for site, v in sorted(rows.items())}, sort_keys=True),
-        'STATIONS_THE_SERVER_STANDS': json.dumps(stood, sort_keys=True),
     }
 
     if args.check:
@@ -838,8 +803,7 @@ def main():
     for name, t in tables.items():
         gamemode_tables.write(name, t, args.tables)
     print('')
-    print('wrote %s and the WOODWORKING_BENCH_BASE, WOODWORKING_BENCHES and STATIONS_THE_SERVER_STANDS tables, '
-          '%d bench(es), %d station(s) the server stands' % (args.out, len(rows), len(stood)))
+    print('wrote %s and the WOODWORKING_BENCH_BASE and WOODWORKING_BENCHES tables, %d bench(es)' % (args.out, len(rows)))
     return 0
 
 

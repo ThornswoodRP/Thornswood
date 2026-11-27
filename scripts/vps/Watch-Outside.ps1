@@ -430,20 +430,27 @@ function Check-Cert($S) {
 }
 
 # Whether an address is inside one of the ranges, each an address and a
-# prefix length. The same rule as scripts\vps\vps-web-firewall.ps1's, which
-# tests\test-2995-cloudflare-front.ps1 holds the two to.
+# prefix length. The same rule as scripts\vps\vps-web-firewall.ps1's and
+# scripts\deploy\CloudflareRanges.ps1's, which
+# tests\test-2995-cloudflare-front.ps1 holds the three to. An entry that is
+# not an address and a prefix length is skipped, as there (#4580): a prefix
+# that is not a number from 1 to the address's size, or an IPv4 part that is
+# not four dotted numbers. A /0 here once counted every address as inside,
+# so the dns check said a name pointing straight at the box was Cloudflare's.
 function Test-InRanges([string]$address, $ranges) {
   $ip = $null
   if (-not [Net.IPAddress]::TryParse($address, [ref]$ip)) { return $false }
   if ($ip.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetworkV6 -and $ip.IsIPv4MappedToIPv6) { $ip = $ip.MapToIPv4() }
   $b = $ip.GetAddressBytes()
   foreach ($t in @($ranges)) {
-    $parts = ('' + $t).Split('/')
+    $parts = ('' + $t).Trim().Split('/')
     $net = $null
-    if ($parts.Count -ne 2 -or -not [Net.IPAddress]::TryParse($parts[0], [ref]$net)) { continue }
+    if ($parts.Count -ne 2 -or $parts[1] -notmatch '^\d{1,3}$' -or -not [Net.IPAddress]::TryParse($parts[0], [ref]$net)) { continue }
+    if ($net.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork -and $parts[0] -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { continue }
     $rb = $net.GetAddressBytes()
-    if ($rb.Length -ne $b.Length) { continue }
     $left = [int]$parts[1]
+    if ($left -lt 1 -or $left -gt $rb.Length * 8) { continue }
+    if ($rb.Length -ne $b.Length) { continue }
     $same = $true
     for ($i = 0; $i -lt $b.Length -and $left -gt 0; $i++) {
       $take = [Math]::Min(8, $left)

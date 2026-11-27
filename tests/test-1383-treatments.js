@@ -295,6 +295,44 @@ if (HURT_SRC && P && WARRIOR_KILL) {
         !races.foxrace && !races.mudcrabrace && !races.nordrace);
   }
 
+  // ------------------------------------------------------- one line for one kind (#6616)
+  {
+    const r = rig();
+    const me = r.person(0x20, 'Ysolda');
+    const at = r.clock.now;
+    const bite = { k: 'bite', at: at, bleed: false };
+    r.mp.set(me, 'thornswoodHurt', { wounds: [bite, { k: 'cut', at: at, bleed: false }, bite, bite], ills: [], show: [] });
+    r.tick();
+    const show = r.mp.get(me, 'thornswoodHurt').show;
+    yes('three open bites and a cut are two lines, the bites counted, in the order they came (#6616)',
+        JSON.stringify(show) === JSON.stringify(['Open bite (3)', 'Open cut']));
+  }
+
+  // ------------------------------------------------------- the temple's wake (#6616, answer B)
+  {
+    const r = rig();
+    const me = r.person(0x21, 'Hulda');
+    const at = r.clock.now;
+    r.mp.set(me, 'thornswoodHurt', {
+      wounds: [
+        { k: 'cut', at: at, bleed: true },
+        { k: 'bite', at: at, bleed: false },
+        { k: 'burn', at: at, dealt: 40 },
+        { k: 'break', at: at, limb: 'leg', bleed: false },
+      ],
+      ills: [{ k: 'fever', at: at }],
+      crooked: { arm: at },
+      show: [],
+    });
+    r.H.died(me);
+    const rec = r.mp.get(me, 'thornswoodHurt');
+    yes('a death clears the cut, the bite and the burn, and keeps the broken leg (#6616)',
+        rec.wounds.length === 1 && rec.wounds[0].k === 'break' && rec.wounds[0].limb === 'leg');
+    yes('a death keeps the fever and the crooked arm (#6616)',
+        rec.ills.length === 1 && rec.ills[0].k === 'fever' && !!(rec.crooked && rec.crooked.arm));
+    yes('nothing bleeds after the wake (#6616)', rec.wounds.every(function (w) { return !w.bleed; }));
+  }
+
   // ------------------------------------------------------- the weapon kinds
   {
     const r = rig();

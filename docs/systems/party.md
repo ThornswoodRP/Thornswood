@@ -29,8 +29,9 @@ is gone. Friends, mutes, and journals are not.
 
 ## The bonus
 
-Work done while somebody from your party is in the same cell banks
-15% of that piece. At a whole piece it pays one extra. That is every
+Work done while somebody from your party is with you banks 15% of
+that piece. With you means in the same building or cave, or outdoors
+near enough to be in your Near you list. At a whole piece it pays one extra. That is every
 seventh piece when each piece is worth 1. A kill that is worth 4
 banks 0.6 of a piece.
 
@@ -68,8 +69,9 @@ the current party and confirm again. Nothing is retried for you.
 
 A party member's name is green above their head. They have a marker
 on your map, and an arrow on the strip under the compass with how far
-away they are. Green on the strip means the same room. Gold means
-somewhere else. The strip is this server's, not Skyrim's compass.
+away they are. In the same room, the strip says "same room" after
+the distance and the name is green. Gold means somewhere else. The
+strip is this server's, not Skyrim's compass.
 
 Hiding their name, on [Voice](voice.md), hides the green name. The
 marker and the arrow stay.

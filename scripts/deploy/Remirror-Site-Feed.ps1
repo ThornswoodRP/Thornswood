@@ -244,7 +244,7 @@ try {
 function Send-AssetBundle($items) {
   Add-Type -AssemblyName System.IO.Compression -ErrorAction SilentlyContinue
   Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-  $work = if ($WorkDir) { $WorkDir } else { [IO.Path]::GetTempPath() }
+  $work = if ($WorkDir) { $WorkDir } else { & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') 'remirror-site-feed' }
   New-Item -ItemType Directory -Force -Path $work | Out-Null
   $tag = [Guid]::NewGuid().ToString('N')
   $zipPath = Join-Path $work ("assets-$tag.zip")

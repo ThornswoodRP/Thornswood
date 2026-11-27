@@ -35,7 +35,7 @@ yes('mp.onCraft keeps the signature the other tests cut by', !!onCraft);
 yes('mp.onCraft asks the gem gate with the seventh argument before recipelessCraft',
   !!onCraft && /var inputs = arguments\[6\];/.test(onCraft) &&
   onCraft.indexOf('soulGemRefusal(actorId, inputs)') !== -1 &&
-  onCraft.indexOf('soulGemRefusal(actorId, inputs)') < onCraft.indexOf('return recipelessCraft(') &&
+  onCraft.indexOf('soulGemRefusal(actorId, inputs)') < onCraft.indexOf('= recipelessCraft(actorId, craftedItemBaseId') &&
   /if \(gemNo\) \{[\s\S]*?return false;/.test(onCraft));
 
 // Skyrim.esm records, editor ids as the CK has them.

@@ -3,7 +3,8 @@
   Runs one share of the test harnesses for the nightly checks, or the ones it is named, one at a time or a few side by side, each on a clock, and always ends by naming every harness that failed and the ten slowest, inside the time it is given.
 
 .DESCRIPTION
-  Run by .github/workflows/nightly.yml once for each of its harness jobs:
+  Run by .github/workflows/nightly.yml once for each of its harness jobs,
+  with two shares:
 
       .\scripts\dev\Nightly-Harnesses.ps1 -Shard 1 -Of 2
       .\scripts\dev\Nightly-Harnesses.ps1 -Shard 2 -Of 2
@@ -129,8 +130,9 @@
   Which share to run, from 1.
 
 .PARAMETER Of
-  How many shares there are. nightly.yml types the number into its -Of and
-  job name to match its shard list (#4298).
+  How many shares there are. nightly.yml passes its matrix's length
+  (strategy.job-total), and the matrix is the list its "shares" job makes,
+  so the shares are counted in one place (#4298).
 
 .PARAMETER BudgetSeconds
   How long this may take in all. A harness starts only when the time used so
@@ -238,8 +240,7 @@ function Get-RootEntries([string]$path) {
 }
 $rootBefore = Get-RootEntries $Root
 if (-not $OutDir) {
-    $base = $(if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() })
-    $OutDir = Join-Path $base ('harness-out-' + $Shard)
+    $OutDir = $(if ($env:RUNNER_TEMP) { Join-Path $env:RUNNER_TEMP ('harness-out-' + $Shard) } else { & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('harness-out-' + $Shard) })
 }
 if ($Summary -and -not $Report) { $Report = Join-Path $OutDir 'report.xml' }
 if ($Report) { $Report = [IO.Path]::GetFullPath($Report) }
