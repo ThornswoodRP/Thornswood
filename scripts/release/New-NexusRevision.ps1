@@ -328,6 +328,12 @@
   Publishes this revision number, which has to be the draft. Nothing else is
   done in that run.
 
+.PARAMETER CategoryFrom
+  With -Publish, for a collection that has no category: the collection whose
+  category it is given first, since Nexus publishes no revision of a
+  collection without one (#7193). The Dev collection made on 27 Nov 2026 had
+  none: -Slug <its slug> -Publish 1 -CategoryFrom 7essxf.
+
 .PARAMETER Discard
   Throws this revision number away, which has to be the draft, as DISCARDING
   A DRAFT above says. Nothing else is done in that run.
@@ -382,6 +388,7 @@ param(
   [string]$Slug = '7essxf',
   [string]$Game = 'skyrimspecialedition',
   [int]$Publish = 0,
+  [string]$CategoryFrom = '',
   [int]$Discard = 0,
   [string]$Permissions,
   [string]$CollectionRecord,
@@ -565,10 +572,12 @@ $Replicate = @($Replicate | ForEach-Object { ([string]$_).Split(',') } | ForEach
 if ($replicateRequested -and (-not $Replicate.Count -or @($Replicate | Where-Object { $_ -notmatch '^[1-9][0-9]{0,11}$' }).Count -or @($Replicate | Select-Object -Unique).Count -ne $Replicate.Count)) {
   Die '-Replicate needs a nonempty list of distinct positive Nexus file ids.'
 }
+if ($CategoryFrom -and -not $Publish) { Die '-CategoryFrom goes with -Publish: it gives a collection with no category one before its draft is published.' }
+if ($CategoryFrom -and $CategoryFrom -notmatch '^[a-z0-9]+$') { Die ('-CategoryFrom ' + $CategoryFrom + ' is not a collection slug.') }
 [void](Step { Read-NexusKey })
 Say ('  key from ' + $script:NexusKeyFrom) 'DarkGray'
 
-$q = '{ collection(slug: "' + $Slug + '", domainName: "' + $Game + '") { id name latestPublishedRevision { id revisionNumber } draftRevisionNumber } }'
+$q = '{ collection(slug: "' + $Slug + '", domainName: "' + $Game + '") { id name category { id name } latestPublishedRevision { id revisionNumber } draftRevisionNumber } }'
 $col = Get-NexusField (Step { Invoke-NexusGraph $q $null ('Reading collection ' + $Slug) }) 'collection'
 $colId = [string](Get-NexusField $col 'id')
 if (-not $colId) { Die ('Nexus has no collection ' + $Slug + ' on ' + $Game + '.') }
@@ -588,6 +597,18 @@ if ($Publish) {
   Say ('  revision ' + $Publish + ' is ' + $status + ' (id ' + $revId + ')')
   if ($status -ne 'draft') { Die ('Revision ' + $Publish + ' is ' + $status + ', not a draft, so there is nothing to publish.') }
   if ($Publish -le $latest) { Die ('Revision ' + $Publish + ' is not after the published revision ' + $latest + '.') }
+  # Nexus publishes no revision of a collection without a category (#7193).
+  $giveCat = 0; $giveCatName = ''
+  if (-not (Get-NexusField $col 'category')) {
+    if (-not $CategoryFrom) { Die ('Collection ' + $Slug + ' has no category, and Nexus publishes no revision of a collection without one. Run this again with -CategoryFrom <the collection whose category it takes>, such as -CategoryFrom 7essxf.') }
+    $cq = '{ collection(slug: "' + $CategoryFrom + '", domainName: "' + $Game + '") { id name category { id name } } }'
+    $cc = Get-NexusField (Get-NexusField (Step { Invoke-NexusGraph $cq $null ('Reading collection ' + $CategoryFrom) }) 'collection') 'category'
+    $giveCat = if ($cc) { [int](Get-NexusField $cc 'id') } else { 0 }
+    $giveCatName = if ($cc) { [string](Get-NexusField $cc 'name') } else { '' }
+    if ($giveCat -lt 1) { Die ('Collection ' + $CategoryFrom + ' has no category either, so ' + $Slug + ' cannot take one from it.') }
+    Say ('  ' + $Slug + ' has no category; it takes ' + $CategoryFrom + '''s, "' + $giveCatName + '" (' + $giveCat + ')')
+  }
+  elseif ($CategoryFrom) { Say ('  ' + $Slug + ' has a category already, so -CategoryFrom ' + $CategoryFrom + ' changes nothing') 'Yellow' }
   # The draft's own collection.json, the one Vortex installs, held to what
   # each mod's page allows before it goes public (#3649).
   $pnode = Get-Command node -ErrorAction SilentlyContinue
@@ -608,10 +629,15 @@ if ($Publish) {
   Test-ModPermissions $pnode.Source $pjson ('revision ' + $Publish)
   $mut = 'mutation publishRevision($revisionId: ID!) { publishRevision(revisionId: $revisionId) { success } }'
   if ($WhatIf) {
+    if ($giveCat) { Say ('  would send PATCH /v3/collections/' + $colId + '  {"category_id":' + $giveCat + '}') 'Yellow' }
     Say ('  would send the GraphQL mutation publishRevision(revisionId: "' + $revId + '")') 'Yellow'
     Write-Host ''; Say 'Nothing was written.' 'Green'
     if (-not $NoPause) { [void](Read-Host 'Enter to close') }
     exit 0
+  }
+  if ($giveCat) {
+    Step { Set-NexusCollectionCategory $colId $giveCat ('Giving ' + $Slug + ' ' + $CategoryFrom + '''s category') }
+    $script:Done.Add($Slug + ' given ' + $CategoryFrom + '''s category "' + $giveCatName + '" (' + $giveCat + ')')
   }
   $res = Step { Invoke-NexusGraph $mut ([ordered]@{ revisionId = $revId }) ('Publishing revision ' + $Publish) }
   if ((Get-NexusField (Get-NexusField $res 'publishRevision') 'success') -ne $true) { Die ('Nexus answered the publish of revision ' + $Publish + ' without saying it succeeded. Look at the collection''s page before running this again.') }
