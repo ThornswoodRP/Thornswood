@@ -2110,7 +2110,7 @@ namespace Thornswood
             {
                 Directory.CreateDirectory(Paths.LocalAD);
                 // Not from a shipped list that switches nothing on (#6327).
-                bool listUsable = Verify.ShippedListProblem() == null;
+                bool listUsable = LoadOrder.SwitchesAnyOn(Path.Combine(Paths.Golden, "plugins.txt"));
                 foreach (string n in new string[] { "plugins.txt", "loadorder.txt" })
                 {
                     string shipped = Path.Combine(Paths.Golden, n);

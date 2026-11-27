@@ -481,7 +481,7 @@ namespace Thornswood
             string golden = Path.Combine(Paths.Golden, "plugins.txt");
             if (!File.Exists(golden))
                 return "This build has no plugin list of its own (Profile\\Default\\plugins.txt), so there is nothing to hold your load order against.";
-            if (Enabled(golden).Count == 0)
+            if (!LoadOrder.SwitchesAnyOn(golden))
                 return "This build's plugin list (Profile\\Default\\plugins.txt) switches no plugin on, so there is nothing to hold your load order against.";
             return null;
         }
