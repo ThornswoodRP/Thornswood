@@ -28,7 +28,9 @@
   and mp.onCraft's seventh argument names an input that came off a named
   stack; inputRefusal below refuses any named input that is not food
   carrying its days, so a worn sword (85%), a house's mold or a woven
-  garment is still never spent by a craft, as it never could be.
+  garment is still never spent by a craft, as it never could be. The one
+  exception is the piece an enchantment goes on, which comes back with the
+  same name (#4608).
 
   WHICH FOOD SPOILS AND HOW FAST is FOOD_GROUPS.spoil
   (game/data/food-groups.json): days by group (raw meat and fish, and the
@@ -358,11 +360,40 @@
     }
 
     /*
+      THE CLOCK AND THE GOODS, WRITTEN AS ONE (#5284). They are two writes,
+      and before #5284 the goods went first and a refused clock was dropped
+      in an empty catch, so the next look took the same days off the food
+      again and nothing said so. Now the clock goes first: a refused clock
+      changes nothing, and the next look takes the days once. Goods refused
+      after it put the clock back as it was, so again the next look takes
+      the days once. Each refusal is logged; only a clock refused twice in a
+      row, once forward and once back, leaves the days untaken, and that
+      is logged too.
+    */
+    function commit(id, kind, was, clock, before, after) {
+      var setClock = kind === 'pack' ? api.setPackClock : api.setChestClock;
+      var hex = Number(id).toString(16);
+      try { setClock(id, clock); } catch (e) {
+        api.log('spoilage: could not move the ' + kind + ' clock of', hex + ':', e);
+        return false;
+      }
+      if (same(after, before) || api.setInventory(id, after)) { return true; }
+      try { setClock(id, was); } catch (e2) {
+        api.log('spoilage: could not put back the ' + kind + ' clock of', hex, 'after its goods were refused, so',
+                'these days are not taken:', e2);
+        return false;
+      }
+      api.log('spoilage: the goods of', hex, 'were refused; the ' + kind + ' clock is as it was');
+      return false;
+    }
+
+    /*
       ONE LOOK AT AN ONLINE PACK. The time since the last look is added to
       the pack's own clock unless it is more than GAP_MS (time away), each
       whole day of it comes off every piece that spoils, and plain food is
-      named. The clock moves only once the pack is written, so a write that
-      fails is tried again on the next look with nothing lost.
+      named. The clock and the pack are written as one (commit, above), so a
+      write that fails is tried again on the next look with nothing lost
+      and nothing taken twice.
     */
     function pass(actorId, now) {
       var entries = api.inventory(actorId);
@@ -378,10 +409,7 @@
       var turned = Math.floor(ms / DAY_MS);
       ms -= turned * DAY_MS;
       var res = aged(entries, turned);
-      if (!same(res.entries, entries) && !api.setInventory(actorId, res.entries)) {
-        return null;
-      }
-      try { api.setPackClock(actorId, { at: now, ms: ms }); } catch (e) { }
+      if (!commit(actorId, 'pack', clock, { at: now, ms: ms }, entries, res.entries)) { return null; }
       var line = goneLine(res.gone, '');
       if (line) {
         api.say(actorId, 'Your ' + line);
@@ -407,10 +435,7 @@
       var from = clock && Number(clock.at) > 0 ? Math.max(0, Number(clock.days) || 0) : days;
       var time = storageTime(containerId, at, from, now);
       var res = aged(entries, time.turned);
-      if (!same(res.entries, entries) && !api.setInventory(containerId, res.entries)) {
-        return null;
-      }
-      try { api.setChestClock(containerId, { at: at, days: days }); } catch (e) { }
+      if (!commit(containerId, 'chest', clock, { at: at, days: days }, entries, res.entries)) { return null; }
       var line = goneLine(res.gone, 'this chest');
       if (line && openerId) {
         api.say(openerId, 'The ' + line);
@@ -462,12 +487,17 @@
       piece's condition, a house's mold, a woven garment's mark and a dye
       each sit on a name too, and a craft that took one would give back a
       plain piece (a free repair) or lose what the name said.
+
+      except is the one input that is let through by name (#4608): the piece
+      an enchantment goes on, which the bench gives back carrying the same
+      name (enchantedPiece in the bench block), so nothing the name said is
+      lost and nothing is repaired.
     */
-    function inputRefusal(inputs) {
+    function inputRefusal(inputs, except) {
       if (!Array.isArray(inputs)) { return ''; }
       for (var i = 0; i < inputs.length; i++) {
         var input = inputs[i];
-        if (!input || !input.name) { continue; }
+        if (!input || !input.name || input === except) { continue; }
         var entry = { baseId: Number(input.baseId) || 0, name: String(input.name) };
         if (ownName(entry)) { continue; }
         return 'Your ' + entry.name + ' cannot go into that. Keep it, or use a plain one.';

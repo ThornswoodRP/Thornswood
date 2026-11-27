@@ -98,6 +98,12 @@ in a container of its own. Ordinary iron, steel, and the
 rest of the gear list above are created by the chest, and the burial
 set is created only from this list.
 
+The Ancient Nord burial set is dungeon only: no bench makes any of it
+(Patrick, 26 October 2026, #4676). Its weapons and amulet have no
+recipe, and its helmet, armour, boots and gauntlets, which Skyrim makes
+at the Skyforge, are in the cut file
+([Cut items](cut-items.md)).
+
 ## Mines
 
 A mine is on the chest table only when the population catalogue gives

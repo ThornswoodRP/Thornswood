@@ -33,7 +33,8 @@ row.
 
 There are sixteen factions, each with a Leader role in Discord (the
 faction's short name and "Leader", such as Companions Leader) and a
-member role the Leader gives from the faction panel in #seats. The
+member role the Leader gives from the faction panel in that faction's
+own seats channel, such as #companions-seats. The
 names live in `bot/factions.json`, and each one's place in 4E 252 is
 in `lore/factions.md`. Applying is Apply: Faction Leader in Discord.
 Accepting one gives that faction's Leader role, which is already
@@ -195,8 +196,10 @@ Someone with the Prices permission stands at that hold's notice
 board, which is the drop box, and submits a copy of the list. The book stays in the journal. A later
 submission from the same book replaces the earlier one in that hold.
 Each hold keeps its own copy. The average of those copies is what
-that hold's traders would charge. Traders do not yet buy and sell
-from a purse the server tracks.
+that hold's traders would charge. Each trader buys and sells from
+their own purse, so they buy only as much as their gold covers: see
+[The trader's purse](merchants-guild.md#the-traders-purse) on the
+Merchant's Guild page.
 
 Staff seats read Owner, Gamemaster, Dev, Loremaster, and Moderator
 off the Discord account. Business Owner and the faction Leader roles

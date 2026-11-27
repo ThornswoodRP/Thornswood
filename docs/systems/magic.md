@@ -33,8 +33,11 @@ spells. They are outlaws, and Talos is lawful. See
 
 Three gates, all of them, whether you pick it on K or read a tome:
 
-1. A spell point. A mage earns them by rank: 2 to start, +1 at
-   advanced, +1 at expert, +2 at master. Anybody else earns 1 with
+1. A spell point. A mage starts with 2 and earns more with each rank
+   in each of their schools: +1 at advanced, +1 at expert, +2 at
+   master. With both starting schools at master that is 10, and 14
+   once the third school is master too, before any semester at the
+   College. Anybody else earns 1 with
    a semester at the College, and each spell also takes one of the
    2 places a master gave them.
 2. Your rank in that school is at least the spell's rank. Apprentice

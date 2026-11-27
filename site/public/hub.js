@@ -156,6 +156,16 @@ document.addEventListener('click', function (e) {
   var a = e.target.closest ? e.target.closest('a') : null;
   if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey) return;
   var href = a.getAttribute('href') || '';
+  /* The skip link (#4368). In the page, not by the address: a #main there
+     is a popstate, which go() takes as a page change and draws again. So
+     focus goes where a tab change puts it, the page's heading, which a
+     screen reader reads out, and to main itself on a page that has none. */
+  if (href === '#main') {
+    e.preventDefault();
+    var h = el('page').querySelector('h1');
+    (h || document.querySelector('main')).focus();
+    return;
+  }
   if (!/^\//.test(href) || /^\/(file|up|api|auth)\//.test(href)) return;
   var clean = href.split('?')[0].replace(/\/+$/, '').toLowerCase() || '/';
   if (!ROUTES[clean]) return;

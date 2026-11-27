@@ -15,7 +15,9 @@
     - the grants on a scratch folder are what the header says, and the
       fail-safe finds a folder Users may read and passes a locked one;
     - the server's installer carries an exact copy of the functions, and
-      the Caddyfile keeps Caddy's certificates beside it.
+      the Caddyfile keeps Caddy's certificates beside it;
+    - the header names every script that copies or sends the functions
+      (#4340).
   The principal and the scratch folders need Windows (ScheduledTasks and NTFS
   rules) and say SKIP off it; the rest reads text and runs anywhere. A few
   seconds.
@@ -267,6 +269,25 @@ if ($OnWindows) {
 } else {
     Write-Host 'SKIP  the grants and the fail-safe on scratch folders: they are NTFS rules, read and written with Get-Acl and icacls, which only Windows has'
 }
+
+# ---- who else carries the functions (#4340) ------------------------------------
+# The header names the two scripts that carry a copy and the scripts that send
+# the functions as text. Both lists are held to the scripts that really do it,
+# so the next editor of a function reads where else it goes.
+$hdr = [regex]::Match((Text $lib).Replace("`r`n", "`n"), '(?s)WHO ELSE CARRIES THEM\.(.*?)So a change to a function here').Groups[1].Value
+$cut = $hdr.IndexOf('send the functions as text')
+$named = { param([string]$t) @([regex]::Matches($t, '(?m)^\s+(scripts\\\S+\.ps1)\s*$') | ForEach-Object { $_.Groups[1].Value.Replace('\', '/') } | Sort-Object) }
+$namedCopies = if ($cut -gt 0) { & $named $hdr.Substring(0, $cut) } else { @() }
+$namedSenders = if ($cut -gt 0) { & $named $hdr.Substring($cut) } else { @() }
+$scripts = @(Get-ChildItem -LiteralPath (Join-Path $Repo 'scripts') -Recurse -File -Filter '*.ps1' |
+    Where-Object { $_.FullName -ne (Resolve-Path -LiteralPath $lib).Path -and $_.FullName -notmatch '[\\/]scripts[\\/]tests[\\/]' })
+$rel = { param($f) [IO.Path]::GetRelativePath($Repo, $f.FullName).Replace('\', '/') }
+$realCopies = @($scripts | Where-Object { (Text $_.FullName).Contains('# ---- ServiceAccount.ps1 (copy) ----') } | ForEach-Object { & $rel $_ } | Sort-Object)
+$realSenders = @($scripts | Where-Object { (Text $_.FullName) -match '(?m)^(?!\s*#).*\(Get-ThornswoodServiceAccountScript\)' } | ForEach-Object { & $rel $_ } | Sort-Object)
+Yes ("ServiceAccount.ps1's header names every script that carries a copy, and only those ({0})" -f ($realCopies -join ', ')) (
+    $realCopies.Count -gt 0 -and ($namedCopies -join ',') -eq ($realCopies -join ','))
+Yes ("  and every script that sends the functions as text, and only those ({0})" -f $realSenders.Count) (
+    $realSenders.Count -gt 0 -and ($namedSenders -join ',') -eq ($realSenders -join ','))
 
 Write-Host ''
 Write-Host "$script:pass passed, $script:fail failed"

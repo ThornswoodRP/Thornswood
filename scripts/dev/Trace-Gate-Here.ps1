@@ -59,7 +59,7 @@ foreach ($k in $vars.Keys) {
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$vars[$k]))
     $pre += '$' + $k + " = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + $b64 + "'))`r`n"
 }
-$dir = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-trace-step-' + [Guid]::NewGuid().ToString('N'))
+$dir = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('thornswood-trace-step-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $dir
 $script = Join-Path $dir ('Trace-Gate-Box-' + $Mode + '.ps1')
 try {

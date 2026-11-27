@@ -29,6 +29,14 @@ const fid=desc=>0x05000000+parseInt(desc.split(':')[0],16),text=b=>b.toString('u
 assert.equal(doc.version,1);assert.equal(doc.items.length,7);assert.equal(Object.keys(doc.sites).length,9);
 const sealedCase=doc.items.find(r=>r.key==='case'),dispatch=doc.items.find(r=>r.key==='dispatch');
 assert.equal(dispatch.model,sealedCase.model,'dispatch is the same kind of sealed case');
+// The token table on docs/systems/merchant-quest-content.md names each
+// token's reference and model source as this data does (#4225: the page once
+// gave the dispatch the seal's parchment).
+{
+ const page=fs.readFileSync(path.join(root,'docs/systems/merchant-quest-content.md'),'utf8');
+ const rows=new Map([...page.matchAll(/^\| ([^|]+?) \| `([^`]+)` \| [^|`]*`([^`]+)` \|$/gm)].map(m=>[m[1],{ref:m[2],source:m[3]}]));
+ for(const row of doc.items)assert.deepEqual(rows.get(row.name),{ref:row.ref,source:row.modelSource},'the page\'s token table row for '+row.name);
+}
 assert.deepEqual(dispatch.bounds,sealedCase.bounds);
 for(const [i,row] of doc.items.entries()) {
  assert.equal(fid(row.ref),0x05017000+i);const r=records.get(fid(row.ref));assert(r,'missing '+row.ref);assert.equal(r.tag,'MISC');assert.equal(r.flags,0);
@@ -57,7 +65,7 @@ for(const [i,key] of expectedKeys.entries()) {
 // Every old station and every new quest placement is accounted for. An extra
 // accidental placement cannot hide behind filtering to the station bases.
 const stations=JSON.parse(fs.readFileSync(path.join(root,'game/data/station-sites.json'),'utf8')).sites;
-const expected=new Set(Object.values(stations).filter(r=>r.standBy!=='server').concat(Object.values(doc.sites)).map(r=>fid(r.ref)));
+const expected=new Set(Object.values(stations).concat(Object.values(doc.sites)).map(r=>fid(r.ref)));
 assert.deepEqual(new Set([...records].filter(([,r])=>r.tag==='REFR').map(([id])=>id)),expected);
 // Content can precede its runtime release. The newly placed FLOR markers
 // must not become ordinary unbounded fishing while that controller is absent.

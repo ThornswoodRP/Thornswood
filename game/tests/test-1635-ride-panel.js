@@ -426,10 +426,11 @@ function pageRig() {
   yes('the panel\'s state, its three hooks and its four messages are where this expects them', !!state && !!hooks && !!msgs);
   const sm = /const SELF_OPENING_MENUS = (\[[\s\S]*?\]);/.exec(front);
   if (state && hooks && msgs && sm) {
-    const g = { now: 1000, menus: [], js: [], claims: {}, handlers: {}, me: [0, 0, 0], him: [100, 0, 0], loaded: true };
+    const g = { now: 1000, menus: [], js: [], claims: {}, handlers: {}, me: [0, 0, 0], him: [100, 0, 0], loaded: true, said: [] };
     const box = {
       Date: { now: function () { return g.now; } }, Math: Math,
       guard: function (n, fn) { return fn; },
+      say: function (t) { g.said.push(t); },
       SELF_OPENING_MENUS: new Function('return ' + sm[1])(),
       busyMenuOpenNow: function (except) {
         for (let i = 0; i < g.menus.length; i++) { if (g.menus[i] !== except) { return g.menus[i]; } }
@@ -469,6 +470,12 @@ function pageRig() {
     R.msg('ride:wants');
     yes('while the mod\'s conversation is open, the panel waits and takes nothing', opens() === 0 && R.state === 'waiting' &&
       !g.claims.ride);
+    // What the panel waited on is said (#4581), once a wait.
+    yes('the log says the server sent the panel, and what it waits for (' + g.said.join(' | ') + ')',
+      g.said.indexOf('the server sent the ride panel for driver 1234') === 0 &&
+      g.said.indexOf('the ride panel waits for the Dialogue Menu to close') === 1 && g.said.length === 2);
+    fire('menuClose', { name: 'Cursor Menu' });
+    yes('  and says the wait once, however many menus close meanwhile', g.said.length === 2);
     fire('menuClose', { name: 'Dialogue Menu' });
     yes('and opens when the conversation closes', opens() === 1);
     g.menus = [];
@@ -511,10 +518,14 @@ function pageRig() {
     g.me = [900, 0, 0];
     R.msg('ride:wants');
     yes('a view that arrives once you have walked off opens nothing', opens() === 3 && R.state === '');
+    yes('  and the log says he was out of reach, and how far (' + g.said[g.said.length - 1] + ')',
+      g.said[g.said.length - 1] === 'the ride panel is not opened: driver 1234 is out of reach (800 apart, reach 400)');
     g.me = [0, 0, 0];
     g.loaded = false;
     R.msg('ride:wants');
     yes('nor one for a driver this game no longer has', opens() === 3 && R.state === '');
+    yes('  and the log says he is not loaded (' + g.said[g.said.length - 1] + ')',
+      g.said[g.said.length - 1] === 'the ride panel is not opened: driver 1234 is out of reach (he is not loaded)');
   }
 }
 

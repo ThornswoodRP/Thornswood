@@ -10,7 +10,7 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { andList, forMode, notAcceptedYet };
+module.exports = { andList, forMode, notAcceptedYet, whereJsonBreaks };
 
 const fs     = require('fs');
 const path   = require('path');
@@ -98,10 +98,11 @@ let onDisk = null;
    configured from the outside and holding nothing. Strip it, and remember
    whether the read actually worked. */
 let cfgBroken = null;
+let cfgText = '';
 let fileHadPassword = false;
 try {
-  const parsedCfg = JSON.parse(
-    fs.readFileSync(CFGFILE, 'utf8').replace(/^\uFEFF/, ''));
+  cfgText = fs.readFileSync(CFGFILE, 'utf8').replace(/^\uFEFF/, '');
+  const parsedCfg = JSON.parse(cfgText);
   if (parsedCfg && typeof parsedCfg === 'object' && !Array.isArray(parsedCfg) &&
       typeof parsedCfg.password === 'string' && parsedCfg.password.length > 0) {
     fileHadPassword = true;
@@ -110,6 +111,93 @@ try {
   cfg = Object.assign(cfg, copyOf(parsedCfg));
 } catch (e) {
   if (fs.existsSync(CFGFILE)) cfgBroken = e;
+}
+/* Where a JSON text stops being JSON: the offset of the first character
+   JSON.parse refuses, the text's length when it ends too soon, or -1 when it
+   is whole. The site says this, and never the parse error's message, for
+   config.json (#5891): a newer Node puts a piece of the text near the fault
+   in that message ("Unexpected token 's', "{"clientSecret": s..." is not
+   valid JSON"), and some of its messages give no place at all, while
+   config.json holds the Discord client secret, the bot token, botKey and
+   the cookie secret. It reads the grammar JSON.parse reads. */
+function whereJsonBreaks(text) {
+  const t = String(text);
+  let i = 0;
+  const ws = () => { while (i < t.length && ' \t\n\r'.indexOf(t[i]) >= 0) i++; };
+  const fail = () => { throw i; };
+  const word = (w) => { for (const c of w) { if (t[i] !== c) fail(); i++; } };
+  const digits = () => { const at = i; while (i < t.length && t[i] >= '0' && t[i] <= '9') i++; if (i === at) fail(); };
+  function str() {
+    i++;
+    for (;;) {
+      if (i >= t.length) fail();
+      const c = t[i];
+      if (c === '"') { i++; return; }
+      if (c < ' ') fail();
+      if (c === '\\') {
+        i++;
+        if (i >= t.length) fail();
+        if ('"\\/bfnrt'.indexOf(t[i]) >= 0) i++;
+        else if (t[i] === 'u') {
+          i++;
+          for (let k = 0; k < 4; k++) { if (i >= t.length || !/[0-9a-fA-F]/.test(t[i])) fail(); i++; }
+        } else fail();
+      } else i++;
+    }
+  }
+  function value() {
+    ws();
+    const c = t[i];
+    if (c === '{') {
+      i++; ws();
+      if (t[i] === '}') { i++; return; }
+      for (;;) {
+        ws();
+        if (t[i] !== '"') fail();
+        str(); ws();
+        if (t[i] !== ':') fail();
+        i++; value(); ws();
+        if (t[i] === ',') { i++; continue; }
+        if (t[i] === '}') { i++; return; }
+        fail();
+      }
+    }
+    if (c === '[') {
+      i++; ws();
+      if (t[i] === ']') { i++; return; }
+      for (;;) {
+        value(); ws();
+        if (t[i] === ',') { i++; continue; }
+        if (t[i] === ']') { i++; return; }
+        fail();
+      }
+    }
+    if (c === '"') return str();
+    if (c === 't') return word('true');
+    if (c === 'f') return word('false');
+    if (c === 'n') return word('null');
+    if (c === '-' || (c >= '0' && c <= '9')) {
+      if (t[i] === '-') i++;
+      if (t[i] === '0') i++; else digits();
+      if (t[i] === '.') { i++; digits(); }
+      if (t[i] === 'e' || t[i] === 'E') { i++; if (t[i] === '+' || t[i] === '-') i++; digits(); }
+      return;
+    }
+    fail();
+  }
+  try { value(); ws(); if (i < t.length) fail(); return -1; }
+  catch (at) { if (typeof at === 'number') return Math.min(at, t.length); throw at; }
+}
+/* The broken-config line: the error's name and where in the file it broke,
+   by line and column, and never its message. */
+function brokenAt(e, text) {
+  const name = (e && (e.code || e.name)) || 'an error';
+  const at = whereJsonBreaks(text);
+  if (at < 0) return name + ', at a place the site could not find (the text is not printed, as it holds secrets)';
+  const before = text.slice(0, at).split('\n');
+  const where = at >= text.length ? 'it ends too soon, at line ' : 'at line ';
+  return name + ', ' + where + before.length + ' column ' + (before[before.length - 1].length + 1) +
+    ' (the text is not printed, as it holds secrets)';
 }
 /* Saves the keys made into config.json as onDisk holds it, and nothing else
    of cfg. onDisk takes them only once the file has them, so a key that could
@@ -200,7 +288,7 @@ if (!fileHadPassword) {
 if (cfgBroken) {
   console.error('[thornswood] config.json is on disk but will not parse, so ' +
                 'NOTHING in it is being used and it has been left untouched:');
-  console.error('[thornswood]   ' + cfgBroken.message);
+  console.error('[thornswood]   ' + brokenAt(cfgBroken, cfgText));
   // A throwaway one, so cookies still cannot be forged while it is broken.
   // Not written anywhere, so a restart invalidates every session, which is
   // the correct amount of unpleasant.

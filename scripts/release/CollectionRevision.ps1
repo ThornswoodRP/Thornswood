@@ -37,6 +37,14 @@
   Check-CollectionRevisions.ps1 holds Nexus, the record and both feeds to each
   other every hour, and files the rebuild on the board when they part.
 
+  Since #7193 a merged mod change publishes to the Dev collection that
+  records\collection.json's dev names, and main's promotion copies the
+  revision to the main collection, so Vortex offers main's testers only the
+  revision main runs. Every number here stays the main collection's: the
+  newest is Dev's newest plus dev.offset (Get-NewestRecordedRevision), and
+  a release names Dev's own number beside it (New-SignedManifest.ps1's
+  devCollection).
+
   Dot-sourced by Ship-Rules.ps1; defines functions and
   nothing else. Runs in PowerShell 7.
 #>
@@ -119,12 +127,44 @@ function Get-ShipFeedMoveRevision([string]$RepoDir, [int]$Built, [string]$Path) 
 # $Published is what Nexus says, for a harness; left at 0 it is asked of
 # Nexus through NexusPublished.ps1 beside this file. A Nexus that does not
 # answer is a reason too: nothing then says the record is the newest.
+# The Dev collection records\collection.json names (#7193), as { Slug;
+# Offset }, or $null when it names none. Dev's revision n is the records'
+# revision n + Offset: the records, the load order and every Release keep
+# the main collection's numbers, and a merged mod change publishes to Dev.
+# Throws on a dev that is not a slug and a whole offset.
+function Get-DevCollection([string]$RepoDir) {
+    $p = Join-Path (Join-Path $RepoDir 'records') 'collection.json'
+    if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { return $null }
+    $doc = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $p).Path) | ConvertFrom-Json
+    if (-not $doc.PSObject.Properties['dev']) { return $null }
+    $slug = [string]$doc.dev.collection
+    $off = $doc.dev.offset
+    if ($slug -notmatch '^[a-z0-9]+$' -or -not ($off -is [int] -or $off -is [long]) -or $off -lt 0) {
+        throw "records\collection.json's dev names no Dev collection slug and whole offset, so which Nexus revision is the records' newest is not known."
+    }
+    return [pscustomobject]@{ Slug = $slug; Offset = [int]$off }
+}
+
+# The newest revision published, in the records' numbering: the Dev
+# collection's newest plus its offset when the records name one (a merged
+# mod change publishes there first), else the collection's own newest.
+function Get-NewestRecordedRevision([string]$RepoDir, [string]$Slug) {
+    $dev = Get-DevCollection $RepoDir
+    if ($dev) { return ([int](& (Join-Path $PSScriptRoot 'NexusPublished.ps1') -Slug $dev.Slug) + $dev.Offset) }
+    return [int](& (Join-Path $PSScriptRoot 'NexusPublished.ps1') -Slug $Slug)
+}
+
 function Get-ShipNewestRevisionProblem([string]$RepoDir, [int]$Published = 0, [string]$Path) {
     try { $rec = Get-ShipRecordedCollectionRevision $RepoDir $Path }
     catch { return $_.Exception.Message }
+    $dev = $null
+    try { $dev = Get-DevCollection $RepoDir } catch { return $_.Exception.Message }
     if ($Published -le 0) {
-        try { $Published = [int](& (Join-Path $PSScriptRoot 'NexusPublished.ps1') -Slug $rec.Slug) }
-        catch { return ("Nexus did not say which revision of collection $($rec.Slug) is the newest published one (" + ($_.Exception.Message -replace '\s+', ' ') + "), so nothing says this release is built on it. Run it again once Nexus answers. Nothing was built or published.") }
+        try { $Published = Get-NewestRecordedRevision $RepoDir $rec.Slug }
+        catch { return ("Nexus did not say which revision of collection $(if ($dev) { $dev.Slug } else { $rec.Slug }) is the newest published one (" + ($_.Exception.Message -replace '\s+', ' ') + "), so nothing says this release is built on it. Run it again once Nexus answers. Nothing was built or published.") }
+    }
+    if ($dev -and $Published -lt $rec.Revision) {
+        return "records\collection-plugins.json is on collection revision $($rec.Revision), the Dev collection $($dev.Slug)'s revision $($rec.Revision - $dev.Offset), and the newest revision published there is $($Published - $dev.Offset), so nobody can install the revision this release would name. Publish it there (scripts\release\New-NexusRevision.ps1 -Slug $($dev.Slug) -Publish $($rec.Revision - $dev.Offset)) first. Nothing was built or published."
     }
     if ($Published -gt $rec.Revision) {
         return "Collection revision $Published is published on Nexus and records\collection-plugins.json is still on $($rec.Revision), so this release would be built on revision $($rec.Revision) and tell every launcher it is current. Record revision $Published (scripts\mods\New-CollectionPluginRecord.ps1) in its own pull request, rebuild dev on it, then main, and Ship after that. Nothing was built or published."

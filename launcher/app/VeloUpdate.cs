@@ -106,7 +106,15 @@ namespace Thornswood
             if (on != null)
             {
                 string recordSaid;
-                ServerCollectionRevision = VeloRecord.Get(on, out recordSaid).CollectionRevision;
+                VeloRecord.Manifest record = VeloRecord.Get(on, out recordSaid);
+                ServerRecordRevision = record.CollectionRevision;
+                // Dev's servers run a revision of the Dev collection (#7193),
+                // so a dev install is held to and sent to that one; main's,
+                // and any Release from before it, to the main collection.
+                VeloRecord.ChannelCollection devc = record.DevCollection;
+                bool devOwn = channel == "dev" && devc != null && devc.Revision > 0 && Checks.IsSlug(devc.Slug);
+                ServerCollectionSlug = devOwn ? devc.Slug : "";
+                ServerCollectionRevision = devOwn ? devc.Revision : record.CollectionRevision;
                 ChannelOn = on;
             }
             if (info == null)

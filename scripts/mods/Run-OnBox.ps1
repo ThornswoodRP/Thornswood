@@ -185,7 +185,7 @@ Say ('artifact ' + (Format-ThornswoodArtifact $artifact)) 'DarkGray'
 
 # Not named like the box's run folders, so a run on a machine whose temp
 # folder is C:\Windows\Temp is never taken for one of them.
-$local = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-runonbox-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+$local = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('thornswood-runonbox-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
 New-Item -ItemType Directory -Force -Path $local | Out-Null
 $box = $null
 $code = 1

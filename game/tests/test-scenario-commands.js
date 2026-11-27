@@ -32,7 +32,7 @@
     Z  No handler threw, no engine call the engine does not have was made,
        and no timer threw.
 
-  /ooc and /roll are the chat scenario's; the staff commands and what they
+  /roll is the chat scenario's and /ooc the voice service's; the staff commands and what they
   do are the staff block's and tests/test-staff-commands.js's; each button
   that sends a line is its own system's scenario.
 
