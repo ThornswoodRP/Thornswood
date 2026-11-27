@@ -1842,10 +1842,15 @@
       // and expensive. Failing that way round is the right one: a door that
       // is not locked is a house anybody can walk into.
       '    var sp = ctx.sp;',
+      // Only undo locks this script put on an unlocked ordinary claim door.
+      // The jail list and a lock already present in the game are not ours.
+      '    var claimShut = Array.isArray(v.claimShut) ? new Set(v.claimShut) : null;',
+      '    var applied = st && claimShut ? (st.thornswoodClaimLocks || (st.thornswoodClaimLocks = {})) : null;',
       // Remember which form ids property wants shut (#615), published for
       // anything on the client that asks whether a door is property's to hold.
       '    var shutMap = {};',
       '    for (var i = 0; i < v.shut.length; i++) {',
+      '      shutMap[v.shut[i]] = true;',
       '      try {',
       '        var r = sp.ObjectReference.from(sp.Game.getFormEx(v.shut[i]));',
       // A door in a cell nobody has loaded does not resolve, and there is
@@ -1858,20 +1863,35 @@
       // is a stutter on each heartbeat. If isLocked cannot be read the door
       // is locked anyway, so this fails shut.
       '        if (r) { var was = null; try { was = r.isLocked(); } catch (e2) { }',
-      '          if (was !== true) { r.lock(true, false); } }',
-      '        shutMap[v.shut[i]] = true;',
+      '          if (was !== true) {',
+      '            r.lock(true, false);',
+      '            if (was === false && applied && claimShut.has(v.shut[i])) { applied[v.shut[i]] = true; }',
+      '          } }',
       '      } catch (e) { }',
       '    }',
-      '    for (var j = 0; j < (v.open || []).length; j++) {',
+      // A claim removed from the register no longer contributes an open
+      // entry. Restore the lock we applied once its reference is available.
+      '    var open = (v.open || []).slice();',
+      '    if (applied) {',
+      '      Object.keys(applied).forEach(function (key) {',
+      '        var id = Number(key);',
+      '        if (shutMap[id]) {',
+      '          if (!claimShut.has(id)) { delete applied[id]; }',
+      '        } else if (open.indexOf(id) < 0) { open.push(id); }',
+      '      });',
+      '    }',
+      '    for (var j = 0; j < open.length; j++) {',
       '      try {',
-      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(v.open[j]));',
+      '        var door = open[j];',
+      '        var o = sp.ObjectReference.from(sp.Game.getFormEx(door));',
       // OFF THE PUBLISHED LIST BEFORE IT OPENS (#2680). The front plugin
       // reads a door on __thornswoodPropertyShut that opens as a pick, so
       // a door this script opens is taken off the list first.
-      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[v.open[j]]; } } catch (e3) { }',
+      '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[door]; } } catch (e3) { }',
       '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) { }',
-      '          if (shut !== false) { o.lock(false, false); } }',
-      '        delete shutMap[v.open[j]];',
+      '          if (shut !== false) { o.lock(false, false); }',
+      '          if (applied) { delete applied[door]; } }',
+      '        delete shutMap[door];',
       '      } catch (e) { }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
@@ -2198,6 +2218,7 @@
         (pass || wayOut(doors[i]) ? open : shut).push(id);
       }
     }
+    var claimShut = shut.slice();
     cellLists(profileId, shut, open);
     /*
       AND THE BUILDINGS THIS CHARACTER HOLDS, as their interior cells (#6883),
@@ -2213,7 +2234,7 @@
         if (cid) { own.push(cid); }
       }
     }
-    return { shut: shut, open: open, own: own };
+    return { shut: shut, open: open, own: own, claimShut: claimShut };
   }
 
   /*
