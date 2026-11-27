@@ -936,7 +936,10 @@ namespace Thornswood
             try { waited = OwnGame.Refresh(s.Cfg, null); } catch (Exception ex) { Console.WriteLine("      Refresh said: " + ex.Message); }
             Yes(n + "synced by an older launcher: the refresh takes nothing out without the release's list, and says it waits for it",
                 waited != null && File.Exists(Path.Combine(own, Hand[0])) && Text(Path.Combine(own, shipped)) == "TS-SHIPPED" &&
-                waited.IndexOf("checked this install against its release", StringComparison.Ordinal) >= 0 && Clean(waited));
+                waited.IndexOf("once this install keeps its release's list of files", StringComparison.Ordinal) >= 0 && Clean(waited));
+            // No update reaches a launcher setup did not install, so it says to install with setup (#5795).
+            Yes(n + "synced by an older launcher: and says setup brings the list, not an update",
+                waited != null && waited.IndexOf("install Thornswood into this folder with its setup", StringComparison.Ordinal) >= 0);
             Yes(n + "synced by an older launcher: and does not ask again until the list is here", !OwnGame.NeedsRefresh(s.Cfg));
 
             // The check against the release keeps its list (Sync.cs).
@@ -1097,7 +1100,10 @@ Yes ('nothing in the launcher sets Paths.Game but Paths.Init (' + ($setters -joi
 $paths = [IO.File]::ReadAllText((Join-Path $App 'Paths.cs'))
 Yes 'Paths.Init points Game at Payload when the folder was chosen and not made' ($paths -match 'Game\s+= !Collection \? own : OwnFirst \? Payload : steam;')
 $ownSrc = [IO.File]::ReadAllText((Join-Path $App 'OwnGame.cs'))
-Yes 'a folder is not made while an install an older launcher synced has not kept its release''s file list (#1232)' ($ownSrc -match '(?s)if \(!made\)\s*\{.*?if \(!OursKnown\(\)\)\s*return "Thornswood is checking this install against its release first')
+Yes 'a folder is not made while an install an older launcher synced has not kept its release''s file list (#1232)' ($ownSrc -match '(?s)if \(!made\)\s*\{.*?if \(!OursKnown\(\)\)\s*return "An older launcher synced this install to a release without keeping')
+Yes '  and it says to install with setup, which no update replaces, never to wait for one (#5795)' (
+    $ownSrc -match '(?s)if \(!OursKnown\(\)\)\s*return "[^;]*ListNeedsSetup \+ " Then make the folder\.";' -and $ownSrc -notmatch 'Let the update finish, then make the folder' -and
+    (Get-Content -Raw (Join-Path $App 'OwnGameKinds.cs')) -match 'const string ListNeedsSetup =\s*"This launcher was not installed by Thornswood''s setup, so no update brings that list: install Thornswood into this folder with its setup')
 $syncSrc = [IO.File]::ReadAllText((Join-Path $App 'Sync.cs'))
 # Since #5608 every sync is of a launcher package, and every one keeps the
 # list; an install whose list is not the one of the release it says it is on

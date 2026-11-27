@@ -761,10 +761,13 @@ namespace Thornswood
                 // Make takes Thornswood's own files from the Steam copy by
                 // Thornswood's records, the release's file list among them
                 // (#1232). An install an older launcher synced has not kept
-                // that list until it is checked against its release again.
+                // that list. Since #6457 a launcher setup installed reads it
+                // from its installed package, so this is a launcher setup did
+                // not install, which no update reaches: until 27 Nov this said
+                // to let an update finish, and none was coming (#5795).
                 if (!OursKnown())
-                    return "Thornswood is checking this install against its release first, which tells it which files in the Steam copy are Thornswood's own. " +
-                           "Let the update finish, then make the folder.";
+                    return "An older launcher synced this install to a release without keeping that release's list of files, so Thornswood cannot tell its own files in the Steam copy from mods put there by hand. " +
+                           ListNeedsSetup + " Then make the folder.";
             }
             // This install's own folder or any other Thornswood folder (#2210).
             string thornswood = ThornswoodSource(cfg, src);
@@ -1869,8 +1872,8 @@ namespace Thornswood
                        (stuck.Count == 1 ? "it" : "them") + " open (" + Some(stuck) + "); the launcher tries again the next time it starts.";
             if (unsorted > 0)
                 own += " " + unsorted.ToString("n0") + (unsorted == 1 ? " file" : " files") + " in Thornswood's folder came in from the Steam copy and " + (unsorted == 1 ? "is" : "are") +
-                       " not Skyrim's own or Vortex's. Whether " + (unsorted == 1 ? "it is" : "they are") + " Thornswood's is known once the launcher has checked this install against its release, " +
-                       "and the next start after that takes out any that are not.";
+                       " not Skyrim's own or Vortex's. Whether " + (unsorted == 1 ? "it is" : "they are") + " Thornswood's is known once this install keeps its release's list of files. " +
+                       ListNeedsSetup + " The next start after that takes out any that are not.";
             // These used to say the files were shared "with the Steam copy".
             // Measured on One (#2210), the other name was another folder's: the
             // dev install's game folder that Vortex deployed into, and a

@@ -573,13 +573,23 @@ namespace Thornswood
         /// <summary>
         /// Every record of Thornswood's own files is on this machine, so a
         /// file on none of them is not Thornswood's. Not so only on an install
-        /// a launcher from before #1232 synced to a release record, until the
-        /// next check against that release keeps its list (Sync.cs).
+        /// a launcher from before #1232 synced to a release record, run by a
+        /// launcher Thornswood's setup did not install: one setup installed
+        /// reads the list from its installed package (Updater.ReleaseFilesKnown,
+        /// #6457), and every update or repair keeps it.
         /// </summary>
         static bool OursKnown()
         {
             return Updater.ReleaseFilesKnown();
         }
+
+        /// <summary>
+        /// What puts that right (#5795). No update reaches a launcher setup
+        /// did not install, and setup's install reads the list from its
+        /// package, so the words say to install with setup, never to wait.
+        /// </summary>
+        const string ListNeedsSetup =
+            "This launcher was not installed by Thornswood's setup, so no update brings that list: install Thornswood into this folder with its setup, which checks the install against its package.";
 
         /// <summary>
         /// The folder has files not yet sorted into the three kinds, or not
