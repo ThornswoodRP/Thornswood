@@ -216,6 +216,25 @@ try {
     $out = Invoke-ThornswoodSecretRemote -Target 'tester@box.invalid' -Script $probe -Secret ''
     Yes 'empty: the far side sees an empty value' (@($out | Where-Object { "$_" -eq 'EMPTY' }).Count -eq 1)
 
+    # ---- 4b. the longest value that goes, and one byte more (#4253): the
+    # 8,000 byte line on standard input is base64 of the value plus CR LF.
+    Yes 'the value limit is 5,997 bytes, worked out from the 8,000 byte line' ($ThornswoodSecretLimit -eq 5997)
+    $ScCalls.Clear()
+    $most = 'v' * 5997
+    $out = Invoke-ThornswoodSecretRemote -Target 'tester@box.invalid' -Script $probe -Secret $most
+    Yes 'a value of 5,997 bytes arrives whole' ((Said $out 'HASH') -eq (Hash $most))
+    $ScCalls.Clear()
+    $over = ''
+    try { $null = Invoke-ThornswoodSecretRemote -Target 'tester@box.invalid' -Script $probe -Secret ($most + 'v') } catch { $over = $_.Exception.Message }
+    Write-Host "      $over"
+    Yes 'a value of 5,998 bytes is refused, and nothing went to ssh or scp' ($over -ne '' -and $ScCalls.Count -eq 0)
+    Yes 'and the refusal gives the value''s size and the limit, never the value' ($over.Contains('5998 bytes') -and $over.Contains('5997') -and -not $over.Contains($most))
+    $ScCalls.Clear()
+    $wide = ([string][char]0xE9) * 2999
+    $over = ''
+    try { $null = Invoke-ThornswoodSecretRemote -Target 'tester@box.invalid' -Script $probe -Secret $wide } catch { $over = $_.Exception.Message }
+    Yes 'the size is bytes of UTF-8, so 2,999 accented letters (5,998 bytes) are refused too' ($over.Contains('5998 bytes') -and $ScCalls.Count -eq 0)
+
     # ---- 5. a JSON payload, the shape Install-Bot and Set-DiscordLogin send
     $ScCalls.Clear()
     $tok = 'part1.' + [Guid]::NewGuid().ToString('N') + '.part3'
