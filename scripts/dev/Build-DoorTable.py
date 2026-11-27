@@ -248,10 +248,7 @@ def main():
         policy = json.load(fh)
     defaults = policy.get('authoredDoorDefaults')
     order = own_plugins.load_order(args.plugins)
-    if defaults:
-        if not order or order[-1].lower() != LAST_PLUGIN.lower():
-            raise SystemExit('STOP. Default door locks require the freshly built Last plugin at the end of the order.')
-    else:
+    if not defaults:
         order = [n for n in order if n.lower() != LAST_PLUGIN.lower()]
     missing = [n for n in order if not os.path.isfile(own_plugins.plugin_path(args.data, n))]
     if missing:
@@ -291,6 +288,8 @@ def main():
     # reading the pre-Last load order with the individual planned overrides.
     gates = list((policy.get('gatesUnlocked') or {}).get('gates', []))
     if defaults:
+        if not order or order[-1].lower() != LAST_PLUGIN.lower():
+            raise SystemExit('STOP. Default door locks require the freshly built Last plugin at the end of the order.')
         # The compiler has already selected, written and verified the native
         # door overrides. The table reads those same winning records.
         manifest_path = os.path.join(os.path.dirname(args.policy), 'last-plugin.json')

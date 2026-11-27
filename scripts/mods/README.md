@@ -8,6 +8,7 @@ Scripts that build, verify and manage Thornswood's plugins, recipes and mod asse
 | [Audit-ArmorSlots.py](Audit-ArmorSlots.py) | Reads armor records straight out of plugins and reports conflicting biped slots that cause unequipping. |
 | [Audit-ModMenus.js](Audit-ModMenus.js) | Audits mod settings menu persistence across MCM Helper ini files, global variables and scripts. |
 | [Audit-Mods.ps1](Audit-Mods.ps1) | Measures the build and says which parts carry a plugin and which are pure assets. |
+| [authored_doors.py](authored_doors.py) | Selects and verifies the default door overrides that Thornswood-Last.esp applies. |
 | [Build-ContentOnBox.ps1](Build-ContentOnBox.ps1) | The deploy gate's Build-Content verb: builds content plugin and tables on the VPS box (#5191). |
 | [Build-Generated.ps1](Build-Generated.ps1) | Builds Thornswood's animation and body files with Pandora Behaviour Engine+ and BodySlide. |
 | [Build-LastPlugin.py](Build-LastPlugin.py) | Builds Thornswood-Last.esp from the installed plugins and repository tables (#2468). |
