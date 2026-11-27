@@ -70,4 +70,4 @@ yes('New-NexusRevision.ps1 reads the archive of a mod taken out that has no list
 });
 
 console.log(failed ? failed + ' failed' : 'all passed');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;
