@@ -40762,7 +40762,10 @@ return module.exports;
                        reads it) raised by the tree's Clarity, as the client
                        raises it.
     Overcharge         Every fifth spell of yours that takes health takes as
-                       much again. And every fifth spell of yours that holds
+                       much again, counted by the cast (THE CASTS THAT TAKE
+                       HEALTH, below): every hit of that cast, on everybody
+                       it catches and for as long as it is held, is double,
+                       and no hit of the four before it is (#4788). And every fifth spell of yours that holds
                        (one you cast and let go, with an effect that lasts a
                        time and none that takes health: a ward of flesh, a
                        light, a fear) holds twice as long. A spell's effects
@@ -40975,7 +40978,8 @@ return module.exports;
       font   actor -> { until }            a Font of Magic that is running
       troll  actor -> { at, said }         Troll's Blood's second, and its fight
       ley    actor -> when Leyline Attunement last gave
-      spells actor -> how many spells of theirs have landed towards Overcharge
+      spells actor -> how many casts of theirs that take health, towards Overcharge
+      charged actor -> { spell: true } the spells whose last cast was the fifth
       holding actor -> how many casts of theirs that hold, towards Overcharge
       sb     'target:caster:spell' -> when a concentration spell last gave
       blow   actor -> { by, at }           whose blow, when this block's write killed
@@ -40983,9 +40987,10 @@ return module.exports;
   var ST = g.__thornswoodPerkState;
   if (!ST || typeof ST !== 'object') {
     ST = g.__thornswoodPerkState = { held: {}, last: {}, fight: {}, font: {}, troll: {}, ley: {},
-                                     spells: {}, holding: {}, sb: {}, blow: {} };
+                                     spells: {}, holding: {}, charged: {}, sb: {}, blow: {} };
   }
   if (!ST.holding || typeof ST.holding !== 'object') { ST.holding = {}; }
+  if (!ST.charged || typeof ST.charged !== 'object') { ST.charged = {}; }
 
   function heldOf(id, t) {
     var c = ST.held[id];
@@ -41220,6 +41225,53 @@ return module.exports;
   }
 
   /*
+    THE CASTS THAT TAKE HEALTH (Overcharge's first half, #4788). A spell (SPIT
+    type 0) with an effect that takes health, by the same test as above. It
+    counts once a cast, from mp.onSpellCast: a stream like Flames sends its
+    cast once when it starts and lands a hit every moment it is held, and a
+    spell with an area lands one hit on each person it catches, so counting
+    hits doubled those far more often than one spell in five.
+  */
+  var hurtsCache = {};
+  function takesHealth(id) {
+    if (!id) { return false; }
+    if (has(hurtsCache, id)) { return hurtsCache[id]; }
+    var r = lookup(id);
+    var spit = typeOf(r) === 'SPEL' ? fieldOf(r, 'SPIT') : null;
+    var hurts = false;
+    var fields = (spit && u32(spit, 8) === 0 && r.record.fields) || [];
+    for (var i = 0; i < fields.length && !hurts; i++) {
+      var f = fields[i];
+      if (!f || String(f.type) !== 'EFID') { continue; }
+      var data = fieldOf(lookup(globalOf(r, u32(f.data, 0))), 'DATA');
+      if (((u32(data, 0) || 0) & DETRIMENTAL) && u32(data, 0x44) === HEALTH) { hurts = true; }
+    }
+    hurtsCache[id] = hurts;
+    return hurts;
+  }
+
+  /*
+    A cast that takes health. Each one is a new cast of that spell, so what
+    the last one of it was is let go first, whoever casts it. Then, for
+    somebody who holds Overcharge, it counts, and the fifth is charged: every
+    hit of that spell by them lands double until they cast it again.
+  */
+  function castHurts(by, id) {
+    if (ST.charged[by]) { delete ST.charged[by][id]; }
+    if (!heldOf(by, now()).overcharge) { return; }
+    var n = (ST.spells[by] || 0) + 1;
+    if (n >= PERKS.overcharge.inEvery) {
+      n = 0;
+      if (!ST.charged[by]) { ST.charged[by] = {}; }
+      ST.charged[by][id] = true;
+      fired(by, 'overcharge', '(' + hex(id) + ' lands double)');
+      tell(by, 'Overcharge: that spell lands double.');
+    }
+    ST.spells[by] = n;
+  }
+  function charged(by, id) { return !!(ST.charged[by] && ST.charged[by][id]); }
+
+  /*
     A cast, from mp.onSpellCast, before the engine sends it to anybody near.
     asked is how many times its usual time the caster's own machine gave its
     effects; the answer is what everybody else's machine gives them. Every
@@ -41234,7 +41286,9 @@ return module.exports;
   function cast(casterId, spellId, asked) {
     var by = Number(casterId) || 0;
     var id = Number(spellId) || 0;
-    if (!by || !id || !personOf(by) || !heldOf(by, now()).overcharge || !holdsLonger(id)) { return 1; }
+    if (!by || !id || !personOf(by)) { return 1; }
+    if (takesHealth(id)) { castHurts(by, id); return 1; }
+    if (!heldOf(by, now()).overcharge || !holdsLonger(id)) { return 1; }
     var longer = PERKS.overcharge.longer;
     var n = (ST.holding[by] || 0) + 1;
     if (n >= PERKS.overcharge.inEvery) {
@@ -41355,7 +41409,7 @@ return module.exports;
     var mine = heldOf(by, t);
     var e = { before: -1, after: null, by: by, identity: identity, more: 0, overcharge: false, aim: false };
     if (kind === 'melee' && power && !bash && mine.devastatingblow) { e.more = PERKS.devastatingblow.more; }
-    if (kind === 'spell' && mine.overcharge) { e.overcharge = true; }
+    if (kind === 'spell' && mine.overcharge && charged(by, idOfForm(source))) { e.overcharge = true; }
     if (kind === 'bow' && mine.lethalaim) { e.aim = true; }
     if (!e.more && !e.overcharge && !e.aim) { return; }
     e.target = targetLife(target);
@@ -41443,15 +41497,8 @@ return module.exports;
           }
         }
         if (e.overcharge) {
-          var n = (ST.spells[e.by] || 0) + 1;
-          if (n >= PERKS.overcharge.inEvery) {
-            n = 0;
-            change -= took * PERKS.overcharge.more;
-            killer = e;
-            fired(e.by, 'overcharge');
-            tell(e.by, 'Overcharge: that spell lands double.');
-          }
-          ST.spells[e.by] = n;
+          change -= took * PERKS.overcharge.more;
+          killer = e;
         }
       }
       if (h > 0 && change !== 0) { setHealth(target, h, change, killer); }
@@ -41703,7 +41750,7 @@ return module.exports;
     PERKS: PERKS, ORDER: ORDER, PROPERTY: PERK_PROPERTY, CRIT_LINE: CRIT_LINE, FIGHT_MS: FIGHT_MS,
     holds: holds, cheatDeath: cheatDeath, hit: hit, flush: flush, killerOf: killerOf, tick: tick,
     use: use, clocks: clocks, spendLine: spendLine, effects: effects, armourOf: armourOf,
-    lethalExtra: lethalExtra, readyAt: readyAt, fired: fired, cast: cast, holdsLonger: holdsLonger, state: ST
+    lethalExtra: lethalExtra, readyAt: readyAt, fired: fired, cast: cast, holdsLonger: holdsLonger, takesHealth: takesHealth, state: ST
   };
   console.log('[thornswood perks] ready: ' + ORDER.length + ' perks');
 })();
