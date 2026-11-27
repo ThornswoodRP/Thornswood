@@ -38,6 +38,9 @@ fs.cpSync(path.join(SITE, 'data'), path.join(work, 'data'), { recursive: true })
 fs.cpSync(path.join(SITE, 'public'), path.join(work, 'public'), { recursive: true });
 const log = console.log;
 console.log = () => {};                      // the copy's start-up lines
+// GitHub on a port nothing answers: loading the site's code asks it which
+// setup programs are published, and nothing here may leave the machine.
+process.env.THORNSWOOD_GITHUB_API = 'http://127.0.0.1:1';
 let limits;
 try { limits = require(path.join(work, 'lib', 'limits.js')); }
 finally { console.log = log; }
