@@ -39,7 +39,9 @@
 # and main's code is all that runs: an issues, workflow_run or manual run on
 # main reads this file and the script from main, never a branch's.
 #
-# WHERE IT RUNS. GitHub's ubuntu-latest. One issue is a few calls and a few
+# WHERE IT RUNS. GitHub's ubuntu-latest (#3685, #4266): an issue opened,
+# closed or labelled starts it, and anyone can open an issue on a public
+# repository, so it never reaches the box. One issue is a few calls and a few
 # seconds; all of them is about three calls an issue.
 name: Board from what GitHub knows
 run-name: ${{ github.event_name == 'issues' && format('Board for issue {0}', github.event.issue.number) || github.event_name == 'workflow_run' && format('Board for pull request event run {0}', github.event.workflow_run.id) || format('Board by hand ({0})', inputs.what) }}
