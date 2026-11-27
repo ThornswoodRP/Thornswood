@@ -291,11 +291,9 @@ if (-not $SkipInstall) {
   Write-Host '  ready'
 }
 
-$ss = Read-Host 'Bot token (paste it, it will not be shown)' -AsSecureString
-$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
-try { $tok = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr) }
-finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-$ss = $null
+# Read-ThornswoodSecret, which also takes the value piped in with no keyboard (#4346).
+. (Join-Path $Here '..\vps\Send-Secret.ps1')
+$tok = Read-ThornswoodSecret 'Bot token (paste it, it will not be shown)'
 if (-not $tok) { throw 'No token given.' }
 
 # Only for this process. Nothing is written down and nothing outlives the run.

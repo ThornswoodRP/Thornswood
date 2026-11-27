@@ -40,6 +40,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
+# Read-ThornswoodSecret, which also takes the value piped in with no keyboard (#4346).
+. (Join-Path $Here '..\vps\Send-Secret.ps1')
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $app = Join-Path $Here '..\..\bot\Build-Onboarding.py'
 if (-not (Test-Path -LiteralPath $app)) { throw "not found: $app" }
@@ -72,9 +74,7 @@ if ($Age) { $pass += '--age' }
 if ($Body) { $pass += '--body' }
 if ($Guild) { $pass += @('--guild', $Guild) }
 
-$ss = Read-Host 'Bot token (paste it, it will not be shown)' -AsSecureString
-$tok = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-         [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss))
+$tok = Read-ThornswoodSecret 'Bot token (paste it, it will not be shown)'
 if (-not $tok) { throw 'No token given.' }
 
 # Only for this process. Nothing is written down and nothing outlives the run.

@@ -16,10 +16,10 @@
   HOW. Rotate-BotToken.ps1, Set-DiscordLogin.ps1 and Install-Bot.ps1 -SetPing
   run whole from a scratch copy of scripts\, in a child pwsh. In the copy,
   Send-Secret.ps1 ends with stand-ins for the box: what is sent is recorded,
-  and the answer is what the case says the box answered. The prompt is stood
-  in too. A full Install-Bot run needs Python and a staged bot, so its ending
-  (from the file check to the end) is taken out of the real script and run
-  with what the settings step answered. Nothing leaves this machine, and the
+  and the answer is what the case says the box answered. What is typed comes
+  on the child's standard input. A full Install-Bot run needs Python and a
+  staged bot, so its ending (from the file check to the end) is taken out of
+  the real script and run with what the settings step answered. Nothing leaves this machine, and the
   token here is made up.
 #>
 [CmdletBinding()]
@@ -50,7 +50,6 @@ try {
     }
     $box = Join-Path $work 'box.txt'
     $sent = Join-Path $work 'sent.txt'
-    $answer = Join-Path $work 'answer.txt'
     $stand = @"
 
 # ---- stood in by test-4211-restart-checked.ps1: the box ----
@@ -65,35 +64,21 @@ function Get-ThornswoodVpsAddress { 'box.invalid' }
 "@
     $secretFile = Join-Path $work ('scripts' + $S + 'vps' + $S + 'Send-Secret.ps1')
     [IO.File]::AppendAllText($secretFile, $stand)
-    # The prompt hands back a BSTR, which these scripts read with
-    # PtrToStringAuto: UTF-16 on Windows, where they run, and UTF-8 elsewhere,
-    # where it reads one character of it. In the copy only, so the same
-    # answer arrives whole on a Linux runner too.
-    foreach ($rel in 'Rotate-BotToken.ps1', 'Install-Bot.ps1', 'Set-DiscordLogin.ps1') {
-        $p = Join-Path $work ('scripts' + $S + 'deploy' + $S + $rel)
-        [IO.File]::WriteAllText($p, [IO.File]::ReadAllText($p).Replace('Marshal]::PtrToStringAuto(', 'Marshal]::PtrToStringBSTR('))
-    }
-
-    # A child pwsh runs the real script from the copy, with the prompt stood in.
+    # A child pwsh runs the real script from the copy. What is typed comes on
+    # its standard input, which Read-ThornswoodSecret reads with no keyboard
+    # (#4346).
     function Run([string]$rel, [string[]]$lines, [string]$typed, [string]$argText) {
         Remove-Item -LiteralPath $sent -Force -EA SilentlyContinue
         [IO.File]::WriteAllLines($box, [string[]]@($lines))
-        [IO.File]::WriteAllText($answer, $typed)
         $target = Join-Path $work ($rel.Replace('/', $S))
         $runner = Join-Path $work 'run.ps1'
         [IO.File]::WriteAllText($runner, @"
 `$ErrorActionPreference = 'Stop'
-function Read-Host { param([Parameter(Position = 0)]`$Prompt, [switch]`$AsSecureString)
-  `$t = [IO.File]::ReadAllText('$answer')
-  if (-not `$AsSecureString) { return `$t }
-  `$s = New-Object Security.SecureString
-  foreach (`$ch in `$t.ToCharArray()) { `$s.AppendChar(`$ch) }
-  return `$s }
 `$global:LASTEXITCODE = 0
 & '$target' $argText
 exit `$LASTEXITCODE
 "@)
-        $out = @(& pwsh -NoProfile -File $runner 2>&1 | ForEach-Object { "$_" })
+        $out = @($typed | & pwsh -NoProfile -File $runner 2>&1 | ForEach-Object { "$_" })
         return [pscustomobject]@{ Code = $LASTEXITCODE; Text = ($out -join "`n"); Lines = $out }
     }
     function Failed($r, [string]$step) { @($r.Lines | Where-Object { $_ -match ('FAILED\s+' + [regex]::Escape($step)) }).Count -ge 1 }

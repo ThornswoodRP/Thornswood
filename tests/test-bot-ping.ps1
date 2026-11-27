@@ -55,7 +55,7 @@ Yes 'Install-Bot.ps1 parses' (@($errs).Count -eq 0)
 $text = [IO.File]::ReadAllText($install)
 Yes 'it has -SetPing' ($text -match '\[switch\]\$SetPing')
 Yes '-SetPing sends the address with Invoke-ThornswoodSecretRemote -Secret' ($text -match 'Invoke-ThornswoodSecretRemote[^\r\n]*-Secret \$pingUrl')
-Yes '-SetPing asks for it hidden' ($text -match "if \(\`$SetPing\) \{[\s\S]{0,600}Read-Host '  Paste it' -AsSecureString")
+Yes '-SetPing asks for it hidden, through Read-ThornswoodSecret (#4346)' ($text -match "if \(\`$SetPing\) \{[\s\S]{0,600}Read-ThornswoodSecret '  Paste it'")
 Yes 'a full run keeps settings it does not write, the ping address among them, and stops on a file it cannot read (#2711)' ($text -match '`\$env2 = Read-ThornswoodJsonFile `\$f' -and $text -match 'SETTINGS NOT WRITTEN: '' \+ `\$_\.Exception\.Message')
 
 . (Join-Path $PSScriptRoot 'Windows.ps1')
@@ -146,7 +146,12 @@ $service = 'ThornswoodBotTest' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
 function SetPing([string]$answer) {
     $ScAnswer.Value = $answer
     $ScCalls.Clear()
-    $out = @(& $install -SetPing -Vps 'box.invalid' -User 'tester' -Root ($botDir.Replace('\', '/')) -Service $service -NoPause *>&1 | ForEach-Object { "$_" })
+    # Read-ThornswoodSecret asks Read-Host at a keyboard and reads one line of
+    # standard input without one (#4346), so the answer is in both places.
+    $was = [Console]::In
+    [Console]::SetIn((New-Object IO.StringReader($answer)))
+    try { $out = @(& $install -SetPing -Vps 'box.invalid' -User 'tester' -Root ($botDir.Replace('\', '/')) -Service $service -NoPause *>&1 | ForEach-Object { "$_" }) }
+    finally { [Console]::SetIn($was) }
     return [pscustomobject]@{ Out = $out; Code = $LASTEXITCODE; Text = ($out -join "`n") }
 }
 

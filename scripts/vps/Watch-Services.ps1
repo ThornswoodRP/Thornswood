@@ -1307,10 +1307,9 @@ if ($SetWebhook) {
   Say '  In Discord: #staff-updates, Edit Channel, Integrations, Webhooks,' 'DarkGray'
   Say '  New Webhook, then Copy Webhook URL. Paste it below. It is not shown,' 'DarkGray'
   Say '  not printed and not kept on this machine.' 'DarkGray'
-  $sec = Read-Host '  Webhook address' -AsSecureString
-  $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
-  try { $url = ('' + [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)).Trim() }
-  finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+  # Read-ThornswoodSecret, which also takes the value piped in with no keyboard (#4346).
+  . (Join-Path $Here 'Send-Secret.ps1')
+  $url = ('' + (Read-ThornswoodSecret '  Webhook address')).Trim()
   if ($url -notmatch $hookRx) { Die 'That is not a Discord webhook address (https://discord.com/api/webhooks/...). Nothing was sent.' }
   # Before anything goes to the box: a webhook made in any other channel
   # would say the outages there while the bot says them in #staff-updates.

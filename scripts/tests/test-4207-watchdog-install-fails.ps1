@@ -14,8 +14,9 @@
   This runs the real script in a scratch copy of scripts\vps, with the files
   it loads for the box (Vps.ps1, Send-Script.ps1, Lock-Folder.ps1,
   ServerHold.ps1) replaced by stand-ins: the remote call answers with the
-  lines a case gives, the webhook prompt and Discord's answer are stood in
-  too, and nothing leaves this machine.
+  lines a case gives and Discord's answer is stood in too. The webhook comes
+  on standard input, through the real Send-Secret.ps1, as it does with no
+  keyboard (#4346). Nothing leaves this machine.
     1. -Install: a FAILED line ends 1, and never says it is watching
     2. -Install: nothing back from the box ends 1, and never says so either
     3. -Install: every step done ends 0, and says what it does from now on
@@ -49,16 +50,18 @@ try {
     $null = New-Item -ItemType Directory -Force -Path (Join-Path $work 'bot')
     Copy-Item -LiteralPath (Join-Path $src 'Watch-Services.ps1') -Destination $vps
     Copy-Item -LiteralPath (Join-Path $src 'vps-say-staff.ps1') -Destination $vps
+    # The real reader: the webhook comes on standard input, as it does with no
+    # keyboard (#4346).
+    Copy-Item -LiteralPath (Join-Path $src 'Send-Secret.ps1') -Destination $vps
     $utf8 = New-Object Text.UTF8Encoding $false
     $channel = '123456789012345678'
     [IO.File]::WriteAllText((Join-Path (Join-Path $work 'bot') 'staff-channel.txt'), $channel, $utf8)
-    # Functions shadow cmdlets of the same name, so the prompt and Discord's
-    # answer about where a webhook posts are stood in here too.
+    # Functions shadow cmdlets of the same name, so Discord's answer about
+    # where a webhook posts is stood in here too.
     [IO.File]::WriteAllText((Join-Path $vps 'Vps.ps1'), @"
 function Get-ThornswoodVpsUser { 'x' }
 function Get-ThornswoodVpsAddress { '127.0.0.1' }
 function Invoke-ThornswoodNative(`$c) { @((`$env:TS4207_SAYS -split '\|') | Where-Object { `$_ }) }
-function Read-Host { param([string]`$Prompt, [switch]`$AsSecureString) ConvertTo-SecureString 'https://discord.com/api/webhooks/1/abc' -AsPlainText -Force }
 function Invoke-RestMethod { [pscustomobject]@{ channel_id = '$channel' } }
 "@, $utf8)
     [IO.File]::WriteAllText((Join-Path $vps 'Send-Script.ps1'), @'
@@ -74,7 +77,7 @@ function Invoke-ThornswoodRemote {
     function Run([string]$switch, [string]$says) {
         $env:TS4207_SAYS = $says
         try {
-            $out = @(& $pwsh -NoProfile -File (Join-Path $vps 'Watch-Services.ps1') "-$switch" -NoPause -Vps 127.0.0.1 -User x 2>&1 | ForEach-Object { "$_" })
+            $out = @('https://discord.com/api/webhooks/1/abc' | & $pwsh -NoProfile -File (Join-Path $vps 'Watch-Services.ps1') "-$switch" -NoPause -Vps 127.0.0.1 -User x 2>&1 | ForEach-Object { "$_" })
             return [pscustomobject]@{ Code = $LASTEXITCODE; Said = ($out -join "`n") }
         } finally { Remove-Item Env:TS4207_SAYS -ErrorAction SilentlyContinue }
     }

@@ -258,10 +258,14 @@ $rot = CodeOf $rotate
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($rotate, [ref]$null, [ref]$null)
 $params = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
 Yes 'Rotate-BotToken.ps1 takes no token as a parameter' (@($params | Where-Object { $_ -match '(?i)token|secret' }).Count -eq 0)
-Yes 'Rotate-BotToken.ps1 asks for it with Read-Host -AsSecureString' ($rot -match "Read-Host\s+'[^']*'\s+-AsSecureString")
+# Through Read-ThornswoodSecret, hidden at a keyboard and one line of
+# standard input without one, where Read-Host -AsSecureString ended the run
+# silently (#4346).
+Yes 'Rotate-BotToken.ps1 asks for it with Read-ThornswoodSecret' ($rot -match "Read-ThornswoodSecret\s+'[^']*'" -and $rot -notmatch '-AsSecureString')
 $uses = @(($rot -split "`n") | Where-Object { $_ -match '\$token\b' } | ForEach-Object { $_.Trim() })
 $allowed = @(
-    '^try \{ \$token = \[Runtime\.InteropServices\.Marshal\]::PtrToStringAuto\(\$bstr\)\.Trim\(\) \}$',
+    '^\$token = \(Read-ThornswoodSecret ''  Paste it''\)\.Trim\(\)$',
+    '^if \(-not \$token\) \{ Die ''Nothing pasted, nothing sent\.'' \}$',
     '^\$app = Get-ThornswoodTokenApp \$token$',
     '^\$token = \$null$',
     # Issue #451: the token goes on ssh's standard input, as -Secret, and

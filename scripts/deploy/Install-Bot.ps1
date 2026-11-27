@@ -215,12 +215,8 @@ if ($SetPing) {
   Head 'The outside monitor''s ping address'
   Say '  From the monitor''s page for the bot check. Hidden while you paste it, never shown.' 'DarkGray'
   Say '  Type off instead to take it out, so the bot stops pinging.' 'DarkGray'
-  $ss = Read-Host '  Paste it' -AsSecureString
-  if (-not $ss -or $ss.Length -eq 0) { Die 'Nothing pasted, nothing sent.' }
-  $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
-  try { $pingUrl = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr).Trim() }
-  finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-  $ss = $null
+  $pingUrl = (Read-ThornswoodSecret '  Paste it').Trim()
+  if (-not $pingUrl) { Die 'Nothing pasted, nothing sent.' }
   if ($pingUrl -ne 'off') {
     $shape = $pingUrl -match '^https://[^\s/]+\.[^\s/]+/\S+$' -and $pingUrl.Length -le 400
     if (-not $shape) {
@@ -926,11 +922,7 @@ $token = ''
 if (-not $NoToken) {
   Head 'The bot token'
   Say '  Same one Apply-Discord.ps1 wants. Leave blank to keep what is up there.' 'DarkGray'
-  $ss = Read-Host '  Paste it' -AsSecureString
-  if ($ss -and $ss.Length -gt 0) {
-    $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-      [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)).Trim()
-  }
+  $token = (Read-ThornswoodSecret '  Paste it').Trim()
 }
 
 # A key the site can check, so /api/ticket is not open to whoever finds it.

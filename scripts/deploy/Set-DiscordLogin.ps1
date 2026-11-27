@@ -115,12 +115,7 @@ function Remote($script) {
   return Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script $script
 }
 
-function AskSecret($what) {
-  $ss = Read-Host $what -AsSecureString
-  if (-not $ss -or $ss.Length -eq 0) { return '' }
-  [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss))
-}
+function AskSecret($what) { Read-ThornswoodSecret $what }
 
 if ($NewPatreon) {
   Write-Host ''

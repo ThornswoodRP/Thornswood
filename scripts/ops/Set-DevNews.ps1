@@ -38,6 +38,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
+# Read-ThornswoodSecret, which also takes the value piped in with no keyboard (#4346).
+. (Join-Path $Here '..\vps\Send-Secret.ps1')
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 
 function Say($m, $c = 'Gray') { Write-Host "  $m" -ForegroundColor $c }
@@ -141,13 +143,8 @@ Say 'New Webhook, then Copy Webhook URL.' 'DarkGray'
 Say 'It is not printed back and it does not go into the repository.' 'DarkGray'
 Write-Host ''
 
-# -AsSecureString so it is not left in the console buffer or the history.
-$ss = Read-Host '  Paste it here' -AsSecureString
-$url = ''
-if ($ss -and $ss.Length -gt 0) {
-  $url = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-           [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)).Trim()
-}
+# Hidden, so it is not left in the console buffer or the history.
+$url = (Read-ThornswoodSecret '  Paste it here').Trim()
 if (-not $url) { Write-Host ''; Say 'Nothing pasted, nothing saved.' 'Yellow'; Done; exit 1 }
 
 if ($url -notmatch '^https://(discord|discordapp)\.com/api/webhooks/[0-9]{17,20}/[A-Za-z0-9._-]{40,}$') {
