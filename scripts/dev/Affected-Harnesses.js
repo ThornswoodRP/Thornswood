@@ -71,7 +71,11 @@ const FORCE = [
   // And one beside a product's harnesses, in its own tests folder (plan
   // line 42), should a product's harnesses ever share one of their own.
   [/^[^/]+\/tests\/(?!test-)[^/]+\.(ps1|psm1|js|cjs|mjs|py|c)$/, 'a test helper in a product\'s tests folder'],
-  [/^records\/build-runners\.json$/, 'the gate step reads it for its share of the cores'],
+  // Run-Gate.ps1's Get-MachineBuilds counts the runners build-runners.json
+  // lists on the box and, on One, the offBox runners every records\*-runners.json
+  // names for that machine, and the gate's share of the cores comes from that
+  // count. So every runner record forces, not only build-runners.json (#4293).
+  [/^records\/[^/]*-runners\.json$/, 'a runner record, which the gate step counts for its share of the cores'],
   [/^\.gitattributes$/, 'line endings of every file a Windows checkout writes'],
   [/^\.gitmodules$/, 'the submodules a checkout has'],
 ];

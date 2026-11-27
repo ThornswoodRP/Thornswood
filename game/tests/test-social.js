@@ -726,7 +726,7 @@ if (social && trade) {
   const run = new Function('sp', 'guard', 'globalThis', 'nearList', 'drawPrompt', 'say',
     // Nothing open: no panel claim and no menu (#1739 hides the prompt under
     // them; test-1739-look-covered.js has those cases).
-    'let nearAt=0, lookingAt="", lookingSig="", lookCover=""; const NEAR_EVERY=1; ' +
+    'let nearAt=0, lookingAt="", lookingCamera=-1, lookingSig="", lookCover=""; const NEAR_EVERY=1; ' +
     // The game's own prompt, written down per new look (#2473), is
     // game\tests\test-2473-look-prompt.js's.
     'function anyClaim() { return false; } function lookCoveredBy() { return ""; } ' +

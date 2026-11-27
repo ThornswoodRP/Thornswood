@@ -5606,6 +5606,7 @@
   const NEAR_EVERY = 320;
   let nearAt = 0;
   let lookingAt = '';      // the form id hex the prompt is currently drawn for
+  let lookingCamera = -1;  // the camera mode last recorded for that person
   let lookingSig = '';     // what the prompt says, so it is not redrawn per poll
 
   function nearList() {
@@ -5753,10 +5754,8 @@
     the two copies are the HUD and that widget, before anything is changed.
     It reads; it changes nothing.
   */
-  function gamePromptSaid(ref) {
+  function gamePromptSaid(ref, cam) {
     const bits = [];
-    let cam = -1;
-    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
     // SKSE's numbers: 0 first person, 8 and 9 the two third person states.
     bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
     const read = function (target) {
@@ -5878,9 +5877,15 @@
     const row = Object.prototype.hasOwnProperty.call(near, hex) ? near[hex] : null;
     if (!row) { lookingAt = ''; drawPrompt(null); return; }
 
-    if (hex !== lookingAt) {
+    let camera = -1;
+    try { camera = Number(sp.Game.getCameraState()); } catch (e) { camera = -1; }
+    if (!Number.isFinite(camera)) { camera = -1; }
+    // Both third-person states describe the same capture in #4584.
+    if (camera === 8) { camera = 9; }
+    if (hex !== lookingAt || camera !== lookingCamera) {
       lookingAt = hex;
-      say('looking at ' + row.n + ' (' + hex + ')' + gamePromptSaid(ref));
+      lookingCamera = camera;
+      say('looking at ' + row.n + ' (' + hex + ')' + gamePromptSaid(ref, camera));
     }
     const cover = lookCoveredBy();
     if (cover !== lookCover) {
