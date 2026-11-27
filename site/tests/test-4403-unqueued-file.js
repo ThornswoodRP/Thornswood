@@ -46,7 +46,23 @@ const UPDIR = path.join(dir, 'uploads');
 const PENDING = path.join(dir, 'data', 'gallery-pending.json');
 const REFUSE = path.join(dir, 'refuse.json');
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6360000002000154a24f0e0000000049454e44ae426082', 'hex');
-const memberCookie = () => 'tw=' + crypto.createHash('sha256').update('thornswood:' + PASSWORD).digest('hex');
+/* The hub's member cookie, from the site's own sign in with the password,
+   as the hub gets it. */
+let MEMBER = '';
+const memberCookie = () => MEMBER;
+function signIn(port) {
+  return new Promise((done, failed) => {
+    const text = JSON.stringify({ password: PASSWORD });
+    const req = http.request({ host: '127.0.0.1', port: port, method: 'POST', path: '/api/login', agent: false,
+      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(text), origin: 'http://127.0.0.1:' + port } }, (res) => {
+      res.resume();
+      const c = String((res.headers['set-cookie'] || []).find((x) => /^tw=/.test(x)) || '').split(';')[0];
+      if (res.statusCode === 200 && c) done(c); else failed(new Error('the hub sign in answered ' + res.statusCode));
+    });
+    req.on('error', failed);
+    req.end(text);
+  });
+}
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } };
 const notes = () => readJson(path.join(UPDIR, 'uploads.json')) || {};
 const queued = () => (readJson(PENDING) || []).map((x) => x.name);
@@ -114,6 +130,7 @@ function submit(name) {
     srv.stdout.on('data', (d) => { out += d; });
     srv.stderr.on('data', (d) => { out += d; });
     PORT = (await siteFiles.listening(srv)).port;
+    MEMBER = await signIn(PORT);
 
     console.log('A. the queue refused:');
     refusing({ save: ['gallery-pending.json'] });
