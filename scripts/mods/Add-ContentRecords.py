@@ -479,7 +479,7 @@ CONTENTS = (
     (r'ACTI ThornswoodDropBox$', 'own', 'drop boxes'),
     (r'(MISC ThornswoodCharcoalTier|COBJ ThornswoodRecipeCharcoalTier)\d$', 'own', 'charcoal'),
     (r'(MISC ThornswoodMiscTool(Handle|Shears|Alembic|RuneKnife)|'
-     r'COBJ ThornswoodRecipe(Tool(Handle|Shovel|Hammer|Shears|Alembic|RuneKnife|Ladle)|WeaponPickaxe|WeaponAxe))$',
+     r'COBJ ThornswoodRecipe(Tool(Handle|Shovel|Hammer|Shears|Alembic|RuneKnife|Ladle)|WeaponPickaxe|WeaponAxe|Lockpick))$',
      'own', 'tools and handles'),
     (r'COBJ ThornswoodRecipeInstrument(Flute|Lute|Drum)$', 'own', 'instruments'),
     (r'BOOK ThornswoodBookDeed$', 'own', 'deeds'),
@@ -1380,6 +1380,19 @@ RECIPE_FLUTE = 0x501B008
 RECIPE_LUTE = 0x501B009
 RECIPE_DRUM = 0x501B00A
 
+# THE LOCKPICK (#4646). Lockpicks came only from dungeon and body loot, the
+# most common thing it hands out, and no recipe made one
+# (docs/systems/who-makes-it.md). A smith forges a handful from one iron
+# ingot at the forge, with the forge's other small iron goods (the shears,
+# the key mold), as an Edgewright's work (records/recipe-owners.json). The
+# pick is Skyrim's own Lockpick record, as the instruments are Skyrim's own,
+# so a forged one is the same pick the loot hands out. One ingot makes
+# LOCKPICKS_MADE: a key mold takes the whole ingot for one, and a pick is a
+# bent sliver of it. Form id after the drum's.
+LOCKPICK = 0x0000000A     # Skyrim's Lockpick (MISC)
+RECIPE_LOCKPICK = 0x501B00B
+LOCKPICKS_MADE = 5
+
 # THE STATIONS.
 #
 # The charcoal kiln (charburner.md) is Skyrim's smelter marker furniture
@@ -1982,6 +1995,9 @@ def thornswood_records(clam, scrap):
              LUTE, WOODWORKING_KEYWORD),
         cobj(RECIPE_DRUM, 'ThornswoodRecipeInstrumentDrum', [(FIREWOOD, 2), (LEATHER, 1), (LEATHER_STRIPS, 1)],
              DRUM, WOODWORKING_KEYWORD),
+        # Skyrim's own lockpick (#4646), THE LOCKPICK above.
+        cobj(RECIPE_LOCKPICK, 'ThornswoodRecipeLockpick', [(IRON_INGOT, 1)], LOCKPICK, FORGE_KEYWORD,
+             makes=LOCKPICKS_MADE),
     ]
 
     def catch(fid, edid, name, produce):
