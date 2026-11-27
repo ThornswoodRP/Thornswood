@@ -286,6 +286,17 @@ namespace Thornswood
         /// </summary>
         public static int RepairConfigs() { return RepairConfigs(false); }
 
+        /// <summary>LoadOrder.SwitchesAnyOn, here too because Swap builds
+        /// alone in its harnesses: the list is there and has a line that
+        /// starts with *.</summary>
+        static bool SwitchesAnyOn(string file)
+        {
+            if (!File.Exists(file)) return false;
+            foreach (string raw in File.ReadAllLines(file))
+                if (raw.Trim().StartsWith("*")) return true;
+            return false;
+        }
+
         /// <param name="overwriteSettings">
         /// True only for the Fix button, where putting the originals back over
         /// someone's own settings is the whole point of pressing it.
@@ -304,6 +315,10 @@ namespace Thornswood
             if (Paths.Collection) return 0;
 
             if (!Directory.Exists(Paths.Golden)) return 0;
+            // A shipped list that switches nothing on is not put over the
+            // game's, or every plugin would be off (#6327). Scan says why
+            // (Verify.ShippedListProblem) and Play waits.
+            bool listUsable = SwitchesAnyOn(Path.Combine(Paths.Golden, "plugins.txt"));
             foreach (string f in Directory.GetFiles(Paths.Golden))
             {
                 string name = Path.GetFileName(f);
@@ -315,6 +330,7 @@ namespace Thornswood
                 for (int i = 0; i < Forced.Length; i++)
                     if (string.Equals(name, Forced[i], StringComparison.OrdinalIgnoreCase)) forced = true;
 
+                if (forced && !listUsable) continue;
                 if (!forced && !overwriteSettings && File.Exists(target)) continue;
 
                 File.Copy(f, target, true);
