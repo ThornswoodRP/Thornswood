@@ -68,11 +68,11 @@
     '  outline:1px solid rgba(198,170,109,.14);outline-offset:-6px;box-shadow:0 24px 80px rgba(0,0,0,.7)}',
     '#' + ID + ' h2{margin:0;padding:18px 24px 14px;font-size:26px;font-weight:normal;line-height:1.1;',
     '  color:#f6e9c8;border-bottom:1px solid rgba(198,170,109,.22);display:flex;align-items:baseline;gap:14px}',
-    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.6);font-style:italic}',
+    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.7);font-style:italic}',
     '#' + ID + ' .body{overflow-y:auto;padding:6px 24px 18px;font-size:16px}',
     '#' + ID + ' .foot{display:flex;justify-content:flex-end;gap:10px;padding:12px 24px;',
     '  border-top:1px solid rgba(198,170,109,.22)}',
-    '#' + ID + ' h3{margin:16px 0 8px;padding-bottom:6px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' h3{margin:16px 0 8px;padding-bottom:6px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);font-weight:normal;border-bottom:1px solid rgba(198,170,109,.22)}',
     '#' + ID + ' .row{display:flex;align-items:center;gap:12px;padding:8px 10px;flex-wrap:wrap;',
     '  border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);margin-bottom:8px}',
@@ -84,7 +84,7 @@
     '  padding:6px 12px;font-size:15px;line-height:20px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}',
     '#' + ID + ' button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
     '#' + ID + ' button[disabled]{opacity:.45;cursor:default}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' .said{border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);padding:8px 10px;margin:10px 0}',
     '#' + ID + ' input{font-family:inherit;font-size:16px;color:#d9cfb4;background:rgba(0,0,0,.25);',
@@ -130,7 +130,7 @@
       opts += '<option value="' + esc(found[i].base) + '">' + esc(found[i].name) + '</option>';
     }
     return '<input class="n" id="' + prefix + '-amt" aria-label="Price per item" placeholder="price">' +
-      '<select id="' + prefix + '-kind">' + opts + '</select>';
+      '<select id="' + prefix + '-kind" aria-label="Paid in">' + opts + '</select>';
   }
   function priceWords(prefix) {
     var amt = num(field(prefix + '-amt'));
@@ -142,9 +142,6 @@
 
   function draw() {
     if (!root) { return; }
-    var kept = {};
-    var inputs = root.querySelectorAll('input,select');
-    for (var q = 0; q < inputs.length; q++) { if (inputs[q].id) { kept[inputs[q].id] = inputs[q].value; } }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
     var d = data || {};
@@ -166,7 +163,7 @@
       for (var i = 0; i < lines.length; i++) {
         var l = lines[i];
         var p = ID + '-p' + l.n;
-        out += '<div class="row"><span class="nm">' + esc(l.count > 1 ? l.count + ' ' : '') + esc(l.what) +
+        out += '<div class="row" data-row-key="line:' + esc(l.n) + '"><span class="nm">' + esc(l.count > 1 ? l.count + ' ' : '') + esc(l.what) +
           ', ' + esc(l.words) + ' a piece</span><span class="tools">' + pricePicker(p, found) +
           '<button data-do="price" data-n="' + esc(l.n) + '">Set price</button>' +
           '<input class="n" id="' + ID + '-back-' + esc(l.n) + '" aria-label="Count to take back" placeholder="' + (l.count > 1 ? 'all' : '1') + '">' +
@@ -182,7 +179,7 @@
           opts += '<option value="' + esc(pack[k].base + ' ' + pack[k].nth) + '">' + esc(pack[k].what) +
             (pack[k].count > 1 ? ' (' + esc(pack[k].count) + ')' : '') + '</option>';
         }
-        out += '<div class="line"><select id="' + ID + '-slot">' + opts + '</select>' +
+        out += '<div class="line"><select id="' + ID + '-slot" aria-label="Item to lay out">' + opts + '</select>' +
           '<input class="n" id="' + ID + '-count" aria-label="Count to lay out" placeholder="1"></div>';
         out += '<div class="line">' + pricePicker(ID + '-lay', found) +
           '<span class="note">a piece</span><button class="go" data-do="lay">Lay it out</button></div>';
@@ -202,7 +199,7 @@
       if (!lines.length) { out += '<div class="none">Nothing laid out.</div>'; }
       for (var j = 0; j < lines.length; j++) {
         var w = lines[j];
-        out += '<div class="row"><span class="nm">' + esc(w.count > 1 ? w.count + ' ' : '') + esc(w.what) +
+        out += '<div class="row" data-row-key="line:' + esc(w.n) + '"><span class="nm">' + esc(w.count > 1 ? w.count + ' ' : '') + esc(w.what) +
           ', ' + esc(w.words) + ' a piece</span><span class="tools">' +
           (w.count > 1 ? '<input class="n" id="' + ID + '-buy-' + esc(w.n) + '" aria-label="Count to buy" placeholder="1">' : '') +
           '<button class="go" data-do="buy" data-n="' + esc(w.n) + '"' + (d.keeperHere ? '' : ' disabled') + '>Buy</button>' +
@@ -219,12 +216,8 @@
       }
     }
 
-    body.innerHTML = out;
-    for (var key in kept) {
-      if (!Object.prototype.hasOwnProperty.call(kept, key)) { continue; }
-      var el = document.getElementById(key);
-      if (el && kept[key]) { el.value = kept[key]; }
-    }
+    // In place, so what is being typed and its focus outlast the update (#4475).
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(body, out, (d.place || '') + (d.free ? ' free' : d.mine ? ' mine' : ' wares')); } else { body.innerHTML = out; }
     var buttons = body.querySelectorAll('button[data-do]');
     for (var b = 0; b < buttons.length; b++) { buttons[b].onclick = onDo; }
   }

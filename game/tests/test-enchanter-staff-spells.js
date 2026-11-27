@@ -464,6 +464,11 @@ const E1 = 0xff000111;
     });
     n.appendChild = function (c) { n.children.push(c); return c; };
     n.querySelector = function (sel) { return (n._q && n._q[sel]) || node('div'); };
+    // Confirm says aria-disabled while it is off (#4474).
+    n.attrs = {};
+    n.setAttribute = function (k, v) { n.attrs[k] = String(v); };
+    n.removeAttribute = function (k) { delete n.attrs[k]; };
+    n.getAttribute = function (k) { return Object.prototype.hasOwnProperty.call(n.attrs, k) ? n.attrs[k] : null; };
     return n;
   }
   const doc = {

@@ -83,11 +83,11 @@
     '  outline:1px solid rgba(198,170,109,.14);outline-offset:-6px;box-shadow:0 24px 80px rgba(0,0,0,.7)}',
     '#' + ID + ' h2{margin:0;padding:18px 24px 14px;font-size:26px;font-weight:normal;line-height:1.1;',
     '  color:#f6e9c8;border-bottom:1px solid rgba(198,170,109,.22);display:flex;align-items:baseline;gap:14px}',
-    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.6);font-style:italic}',
+    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.7);font-style:italic}',
     '#' + ID + ' .body{overflow-y:auto;padding:6px 24px 18px;font-size:16px}',
     '#' + ID + ' .foot{display:flex;justify-content:flex-end;gap:10px;padding:12px 24px;',
     '  border-top:1px solid rgba(198,170,109,.22)}',
-    '#' + ID + ' h3{margin:16px 0 8px;padding-bottom:6px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' h3{margin:16px 0 8px;padding-bottom:6px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);font-weight:normal;border-bottom:1px solid rgba(198,170,109,.22)}',
     '#' + ID + ' .row{display:flex;align-items:center;gap:12px;padding:8px 10px;',
     '  border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);margin-bottom:8px}',
@@ -98,8 +98,8 @@
     '  border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.25);color:#e9d19b;',
     '  padding:6px 12px;font-size:15px;line-height:20px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}',
     '#' + ID + ' button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
-    '#' + ID + ' button:disabled{background:rgba(0,0,0,.25);border-color:rgba(198,170,109,.25);color:rgba(217,207,180,.5);cursor:default}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
+    '#' + ID + ' button:disabled{background:rgba(0,0,0,.25);border-color:rgba(198,170,109,.25);color:rgba(217,207,180,.7);cursor:default}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' .said{border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);padding:8px 10px;margin:10px 0}',
     '#' + ID + ' input{font-family:inherit;font-size:16px;color:#d9cfb4;background:rgba(0,0,0,.25);',
@@ -148,16 +148,7 @@
   }
 
   function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
-  }
-
-  function drawContents() {
     if (!root) { return; }
-    var keptGold = field(ID + '-gold');
-    var keptFor = field(ID + '-for');
-    var keptCount = field(ID + '-count');
-    var keptSlot = field(ID + '-slot');
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
     var d = data || {};
@@ -175,7 +166,7 @@
     }
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
-      out += '<div class="row"><span class="nm">' + rowLine(r, officer) + '</span><span class="tools">';
+      out += '<div class="row" data-row-key="row:' + esc(r.n) + '"><span class="nm">' + rowLine(r, officer) + '</span><span class="tools">';
       if (r.count > 1) {
         out += '<input class="n" id="' + ID + '-take-' + esc(r.n) + '" aria-label="Count to take" placeholder="all">';
       }
@@ -201,7 +192,7 @@
         opts += '<option value="' + esc(pack[p].slot) + '">' + esc(pack[p].what) +
           (pack[p].count > 1 ? ' (' + esc(pack[p].count) + ')' : '') + '</option>';
       }
-      out += '<div class="line"><select id="' + ID + '-slot">' + opts + '</select>' +
+      out += '<div class="line"><select id="' + ID + '-slot" aria-label="Item to leave">' + opts + '</select>' +
         '<input class="n" id="' + ID + '-count" aria-label="Count to leave" placeholder="1">' +
         '<input class="who" id="' + ID + '-for" aria-label="Recipient" placeholder="who it is for"></div>';
       out += '<div class="line"><button class="go" data-do="leave">Leave it</button></div>';
@@ -230,15 +221,8 @@
       }
     }
 
-    body.innerHTML = out;
-    var g = document.getElementById(ID + '-gold');
-    if (g && keptGold) { g.value = keptGold; }
-    var f = document.getElementById(ID + '-for');
-    if (f && keptFor) { f.value = keptFor; }
-    var c = document.getElementById(ID + '-count');
-    if (c && keptCount) { c.value = keptCount; }
-    var s = document.getElementById(ID + '-slot');
-    if (s && keptSlot) { s.value = keptSlot; }
+    // In place, so what is being typed and its focus outlast the update (#4475).
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(body, out, d.hold || d.where || ''); } else { body.innerHTML = out; }
     var buttons = body.querySelectorAll('button[data-do]');
     for (var b = 0; b < buttons.length; b++) { buttons[b].onclick = onDo; }
   }

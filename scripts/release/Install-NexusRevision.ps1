@@ -54,6 +54,11 @@
          files.txt     every file placed: sha256, size, file id, path
          plugins.txt   the plugin order, in the shape LoadOrder.ps1 reads
          loadorder.txt the same names without stars
+         slidersets.json  each BodySlide slider set file placed under
+                       Data\CalienteTools\BodySlide\SliderSets: its path,
+                       sha256, size and file id, and each set's name,
+                       OutputPath, OutputFile and GenWeights. Metadata
+                       only; no .osp is kept (SliderSets.ps1, #5888)
        A folder that already holds a layout has its old files checked (each
        is still what files.txt says) and taken out first; one whose size and
        write time are still what placed.tsv recorded when it was placed is
@@ -76,14 +81,15 @@
   -WhatIf does steps 1 to 5: it downloads into the cache and works the whole
   layout out in the scratch folder, prints it, and changes nothing in -Game.
 
-  -Record <folder>, in place of -Game, does steps 1 to 5 and writes the four
-  records of step 6 into that folder, placing no file anywhere. Each mod's
+  -Record <folder>, in place of -Game, does steps 1 to 5 and writes the five
+  records of step 6 (layout.json, files.txt, plugins.txt, loadorder.txt and
+  slidersets.json) into that folder, placing no file anywhere. Each mod's
   unpacked copy is hashed and deleted as soon as it is worked out, so the
   scratch folder never holds more than one mod. This is how a revision is
   laid out without One (#2969). Since #2841 a cloud session holds no Nexus
   key, so it asks for it with
       pwsh scripts/release/Nexus-Run.ps1 -Line 'Install-NexusRevision -Revision 3'
-  which runs this on a box runner with the key and sends the four records
+  which runs this on a box runner with the key and sends the five records
   back. Off Windows, 7-Zip is the build Get-SevenZip.ps1 fetches and the
   cache is $XDG_CACHE_HOME/thornswood/nexus-cache (~/.cache when that is not
   set); every path in the records is the Windows path the layout has on One.
@@ -117,6 +123,18 @@
   and the modlist's sha256 is printed. This is how the launcher installs
   without Vortex: each Release carries the modlist and its hash.
 
+  -Scripts, with -Record, also writes scripts.json beside the record (#7000):
+  every compiled Papyrus script the layout places, loose in Data\Scripts or
+  inside an archive, with its path, sha256, Nexus file id, whether it is the
+  copy the game reads, and each call it makes to a native function, with
+  the function that calls it and the instruction it is at. A call the
+  collection cannot settle (no script of that type in it, such as the game's
+  own in Skyrim - Misc.bsa) is listed apart with why. Each mod's scripts are
+  read while it is unpacked (scripts\mods\Read-PexCalls.js, so node has to be
+  there), and no byte of a script is kept: names, instruction numbers, paths
+  and hashes only. This is what #5792 compares with the engine's own
+  functions to say which the server is missing (#5035).
+
   Needs PowerShell 7 (NexusLayout.cs reads JSON with System.Text.Json), 7-Zip
   (off Windows, 7-Zip's own build, which Get-SevenZip.ps1 fetches, because
   Ubuntu's cannot unpack the collection's RAR archives),
@@ -135,7 +153,7 @@
 
 .PARAMETER Record
   A folder for the layout's record (layout.json, files.txt, plugins.txt,
-  loadorder.txt), with no file laid out. In place of -Game.
+  loadorder.txt, slidersets.json), with no file laid out. In place of -Game.
 
 .PARAMETER KeepPlugins
   With -Record: keeps the plugins the layout places in <Record>\plugins,
@@ -145,12 +163,24 @@
   With -Record: writes thornswood.wabbajack beside the record, the revision
   as a Wabbajack modlist that installs a portable Mod Organizer 2 (#6244).
 
+.PARAMETER Scripts
+  With -Record: writes scripts.json beside the record, the native functions
+  every placed compiled script calls (#7000). Metadata only.
+
 .PARAMETER Mo2Record
   The record that pins Mod Organizer 2 for -Modlist. records\mo2.json unless
   said otherwise.
 
 .PARAMETER Slug
   The collection. 7essxf unless said otherwise.
+
+.PARAMETER RecordSlug
+  The collection the layout's records name, when the revision laid out is
+  the Dev collection's copy of a revision of it (#7193): records name every
+  revision as main's collection numbers it. Goes with -RecordRevision.
+
+.PARAMETER RecordRevision
+  The revision the layout's records name, with -RecordSlug.
 
 .PARAMETER GameDomain
   The game's domain on Nexus. skyrimspecialedition unless said otherwise.
@@ -174,8 +204,11 @@ param(
   [string]$Record,
   [switch]$KeepPlugins,
   [switch]$Modlist,
+  [switch]$Scripts,
   [string]$Mo2Record,
   [string]$Slug = '7essxf',
+  [string]$RecordSlug,
+  [int]$RecordRevision = 0,
   [string]$GameDomain = 'skyrimspecialedition',
   [string]$Cache,
   [switch]$WhatIf,
@@ -283,11 +316,13 @@ if ($WhatIf) { Say '  -WhatIf: downloads and works it all out, and changes nothi
 if ($Game -and $Record) { Die 'Give -Game to lay the revision out, or -Record to write only its record, not both.' }
 if ($KeepPlugins -and -not $Record) { Die '-KeepPlugins keeps the plugins beside a record, so it goes with -Record. With -Game every file is laid out already.' }
 if ($Modlist -and -not $Record) { Die '-Modlist writes the modlist beside a record, so it goes with -Record.' }
+if ($Scripts -and -not $Record) { Die '-Scripts writes scripts.json beside a record, so it goes with -Record.' }
+if ($Scripts -and -not (Get-Command node -ErrorAction SilentlyContinue)) { Die '-Scripts reads the compiled scripts with node (scripts\mods\Read-PexCalls.js). node is not on this machine.' }
 if ($KeepPlugins -and -not (Get-Command node -ErrorAction SilentlyContinue)) { Die '-KeepPlugins keeps the archives SkyUI''s menu check reads, and node says which those are (scripts\mods\Check-SkyUIMenus.js). node is not on this machine.' }
 if ($Record) {
   $Record = [IO.Path]::GetFullPath($Record).TrimEnd([IO.Path]::DirectorySeparatorChar)
   if ($WhatIf) { Die '-Record already changes nothing but its own folder; leave -WhatIf off.' }
-  if ((Test-Path -LiteralPath $Record) -and @(Get-ChildItem -LiteralPath $Record -Force | Where-Object { @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'plugins', 'menus', 'thornswood.wabbajack') -notcontains $_.Name }).Count) { Die ('-Record ' + $Record + ' holds more than a layout''s record. Give it a folder of its own.') }
+  if ((Test-Path -LiteralPath $Record) -and @(Get-ChildItem -LiteralPath $Record -Force | Where-Object { @('layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'slidersets.json', 'scripts.json', 'plugins', 'menus', 'thornswood.wabbajack') -notcontains $_.Name }).Count) { Die ('-Record ' + $Record + ' holds more than a layout''s record. Give it a folder of its own.') }
   if (Test-Path -LiteralPath (Join-Path $Record 'plugins')) {
     if (-not (Test-Path -LiteralPath (Join-Path $Record 'plugins') -PathType Container) -or @(Get-ChildItem -LiteralPath (Join-Path $Record 'plugins') -Force | Where-Object { $_.PSIsContainer -or $_.Name -notmatch '\.(esp|esm|esl)$' }).Count) { Die ('-Record ' + $Record + ' has a plugins entry that holds more than plugins. Give it a folder of its own.') }
   }
@@ -305,6 +340,8 @@ else {
   if ($env:APPDATA -and (Test-Under $Game (Join-Path $env:APPDATA 'Vortex'))) { Die ('-Game ' + $Game + ' is inside Vortex''s own folder.') }
 }
 if ($Slug -notmatch '^[a-z0-9]+$') { Die ('-Slug ' + $Slug + ' is not a collection slug.') }
+if ([bool]$RecordSlug -ne [bool]$RecordRevision) { Die '-RecordSlug and -RecordRevision go together: the collection and revision the layout''s records name.' }
+if ($RecordSlug -and $RecordSlug -notmatch '^[a-z0-9]+$') { Die ('-RecordSlug ' + $RecordSlug + ' is not a collection slug.') }
 if ($GameDomain -notmatch '^[a-z0-9]+$') { Die ('-GameDomain ' + $GameDomain + ' is not a game domain.') }
 if (-not $CollectionArchive -and $Revision -le 0) { Die 'Say which revision with -Revision, or give its archive with -CollectionArchive.' }
 if (-not $Cache) {
@@ -325,6 +362,7 @@ $skyrimRecord = Join-Path (Join-Path $Repo 'records') 'skyrim-files.json'
 if (-not (Test-Path -LiteralPath $skyrimRecord)) { Die ('records\skyrim-files.json is not in this checkout (' + $skyrimRecord + '), and it is what a FOMOD''s questions about the game are answered from.') }
 Step { Add-Type -LiteralPath @((Join-Path $Here 'NexusLayout.cs'), (Join-Path $Here 'WabbajackModlist.cs'), (Join-Path $Repo 'launcher\app\XxHash64.cs')) } | Out-Null
 . (Join-Path $Here 'HashStamps.ps1')
+. (Join-Path $Here 'SliderSets.ps1')
 if ($Modlist) {
   if (-not $Mo2Record) { $Mo2Record = Join-Path (Join-Path $Repo 'records') 'mo2.json' }
   $mo2 = Step { Get-Content -Raw -LiteralPath $Mo2Record | ConvertFrom-Json }
@@ -521,7 +559,15 @@ $script:Kept = @{}
 $script:KeptMenus = @{}
 # And with -Modlist what the modlist names each file by (#6244).
 $script:WjFiles = @{}
+# And the slider sets each BodySlide .osp holds, by its unpacked path, as
+# metadata only for slidersets.json (#5888). No .osp is kept.
+$script:SliderSetsRead = @{}
 $script:MenuCheck = Join-Path $PSScriptRoot '..\mods\Check-SkyUIMenus.js'
+# And with -Scripts what each compiled script calls, a line each, read while
+# its mod is unpacked (#7000). Metadata only.
+$script:PexCalls = Join-Path $PSScriptRoot '..\mods\Read-PexCalls.js'
+$script:ScriptReads = ''
+function Test-ScriptRel([string]$Rel) { return ($Rel -match '^(?i)Scripts\\[^\\]+\.pex$' -or $Rel -match '^(?i)[^\\]+\.bsa$') }
 function Test-MenuInputRel([string]$Rel) {
   return ($Rel -match '^(?i)Scripts\\ski_main\.pex$' -or $Rel -match '^(?i)Interface\\.+\.swf$' -or $Rel -match '^(?i)[^\\]+\.bsa$')
 }
@@ -573,6 +619,14 @@ foreach ($e in $col.Entries) {
     Say ('  ' + $e.Name + ': patched ' + $p.Key + ' (CRC-32 ' + $crc + ' -> ' + [Thornswood.Layout.NexusLayout]::Crc32Of($out) + ')') 'DarkGray'
   }
   foreach ($w in $plan.Warnings) { Say ('  ' + $e.Name + ': the installer says ' + $w) 'Yellow' }
+  # BodySlide's slider set files, read here in every mode: -Record takes the
+  # unpacked copy just below, and a patched .osp is read as it is placed.
+  if ($e.Type -ne 'dinput') {
+    foreach ($s in $plan.Files.Values) {
+      if (-not (Test-SliderSetRel $s.Rel)) { continue }
+      $script:SliderSetsRead[$s.Full] = Step { Read-SliderSetFile $s.Full $s.Rel }
+    }
+  }
   # -Record places nothing, so each file is measured now and the mod's
   # unpacked copy goes before the next is unpacked.
   if ($Record) {
@@ -589,6 +643,19 @@ foreach ($e in $col.Entries) {
         $wj.Add($one)
       }
       $script:WjFiles[$e.Index] = $wj
+    }
+    if ($Scripts) {
+      if (-not $script:ScriptReads) { $script:ScriptReads = Join-Path $script:Work 'script-reads.jsonl' }
+      # A dinput mod's paths are from the game folder, so its Data files are
+      # under Data\ (as the deployment places them).
+      $pexIn = @($plan.Files.Values | Where-Object { $dr = if ($e.Type -eq 'dinput') { if ($_.Rel -match '^(?i)Data\\(.+)$') { $Matches[1] } else { '' } } else { $_.Rel }; $dr -and (Test-ScriptRel $dr) } | ForEach-Object { $_.Full })
+      # A few at a time, so no command line gets too long for Windows.
+      for ($i = 0; $i -lt $pexIn.Count; $i += 40) {
+        $some = @($pexIn[$i..([Math]::Min($i + 39, $pexIn.Count - 1))])
+        $global:LASTEXITCODE = 0
+        $said = @(& node $script:PexCalls --read $script:ScriptReads @some)
+        if ($LASTEXITCODE -ne 0) { Die ($e.Say() + ': Read-PexCalls.js --read ended ' + $LASTEXITCODE + ' (' + ($said -join ' ') + '), so what its scripts call is not known.') }
+      }
     }
     if ($KeepPlugins -and $e.Type -ne 'dinput') {
       foreach ($s in $plan.Files.Values) {
@@ -733,6 +800,18 @@ foreach ($x in $placed) {
 $bytesAll = ($placed | Measure-Object -Property Size -Sum).Sum
 Say ('  ' + ([double]$bytesAll / 1GB).ToString('N2') + ' GB in all')
 
+# A mod's folder in the modlist (mods\<name>), from its name. Windows makes
+# no file or folder whose name is a device name (CON, PRN, AUX, NUL, COM1 to
+# COM9, LPT1 to LPT9), in any case and with any extension after it (#6342),
+# so such a name takes the same "Mod <file id>" as a name that strips to
+# nothing.
+function Get-ModlistFolderName([string]$Name, $FileId) {
+  $nm = (($Name -replace '[<>:"/\\|?*\x00-\x1f]', '') -replace '[. ]+$', '').Trim()
+  if ($nm -match '^(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]) *(\..*)?$') { $nm = '' }
+  if (-not $nm) { $nm = 'Mod ' + $FileId }
+  return $nm
+}
+
 # The record, the same whether it goes beside a layout or alone (-Record).
 # Paths sort by ordinal ignoring case and every line ends in CRLF, so One and
 # a cloud session write the same bytes for the same layout, and files.txt's
@@ -742,13 +821,19 @@ function Write-Crlf([string]$path, $list) { [IO.File]::WriteAllText($path, ((@($
 $sorted = New-Object 'System.Collections.Generic.List[object]'
 foreach ($x in $placed) { $sorted.Add($x) }
 $sorted.Sort([Comparison[object]] { param($a, $b) [StringComparer]::OrdinalIgnoreCase.Compare($a.Rel, $b.Rel) })
+# The collection and revision the records name: this one, or with
+# -RecordSlug and -RecordRevision the one it is the copy of. The Dev
+# collection's revisions are named in records as main's collection will
+# number them once a promotion copies them there (#7193).
+$nameSlug = if ($RecordSlug) { $RecordSlug } else { $Slug }
+$nameRev = if ($RecordRevision) { $RecordRevision } else { $Revision }
 $lines = New-Object System.Collections.Generic.List[string]
-$lines.Add('# Install-NexusRevision.ps1: collection ' + $Slug + ' revision ' + $Revision + '. sha256, size, Nexus file id, path in the game folder.')
+$lines.Add('# Install-NexusRevision.ps1: collection ' + $nameSlug + ' revision ' + $nameRev + '. sha256, size, Nexus file id, path in the game folder.')
 foreach ($x in $sorted) { $lines.Add($x.Sha256 + "`t" + $x.Size + "`t" + $col.Entries[$x.Entry].FileId + "`t" + $x.Rel) }
 $pl = New-Object System.Collections.Generic.List[string]
 $lo = New-Object System.Collections.Generic.List[string]
-$pl.Add('# Install-NexusRevision.ps1: collection ' + $Slug + ' revision ' + $Revision)
-$lo.Add('# Install-NexusRevision.ps1: collection ' + $Slug + ' revision ' + $Revision)
+$pl.Add('# Install-NexusRevision.ps1: collection ' + $nameSlug + ' revision ' + $nameRev)
+$lo.Add('# Install-NexusRevision.ps1: collection ' + $nameSlug + ' revision ' + $nameRev)
 foreach ($p in $order) { $pl.Add($(if ($p.Enabled) { '*' } else { '' }) + $p.Name); $lo.Add($p.Name) }
 $counts = @{}
 foreach ($x in $placed) { $counts[$x.Entry] = 1 + [int]$counts[$x.Entry] }
@@ -756,7 +841,7 @@ $layoutRecord = [ordered]@{
   schema     = 1
   made       = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
   tool       = 'scripts\release\Install-NexusRevision.ps1'
-  collection = [ordered]@{ slug = $Slug; domain = $GameDomain; name = $col.Name; revision = $Revision; revisionId = $revInfo.revisionId; status = $revInfo.status; archive = $revInfo.archive; archiveMd5 = $revInfo.archiveMd5; archiveSize = $revInfo.archiveSize }
+  collection = [ordered]@{ slug = $nameSlug; domain = $GameDomain; name = $col.Name; revision = $nameRev; revisionId = $revInfo.revisionId; status = $revInfo.status; archive = $revInfo.archive; archiveMd5 = $revInfo.archiveMd5; archiveSize = $revInfo.archiveSize }
   gameVersion = $world.GameVersion
   files      = $placed.Count
   bytes      = $bytesAll
@@ -770,12 +855,16 @@ $layoutRecord = [ordered]@{
   # list's order, are what a deployment is held to (Compare-NexusLayout.ps1).
   pluginRules = @($col.PluginRules | ForEach-Object { [ordered]@{ name = $_.Name; after = @($_.After | ForEach-Object { [string]$_ }) } })
 }
+# slidersets.json: each placed BodySlide slider set file, with files.txt's
+# sha256, and the sets it holds, metadata only (#5888, SliderSets.ps1).
+$sliderSetRecord = Step { New-SliderSetRecord $nameSlug $nameRev $placed $script:SliderSetsRead $col.Entries }
 function Write-LayoutRecord([string]$dir, [bool]$withFiles) {
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   if ($withFiles) { Write-Crlf (Join-Path $dir 'files.txt') $lines }
   Write-Crlf (Join-Path $dir 'plugins.txt') $pl
   Write-Crlf (Join-Path $dir 'loadorder.txt') $lo
   [IO.File]::WriteAllText((Join-Path $dir 'layout.json'), ($layoutRecord | ConvertTo-Json -Depth 6), $utf8)
+  [IO.File]::WriteAllText((Join-Path $dir 'slidersets.json'), ($sliderSetRecord | ConvertTo-Json -Depth 6), $utf8)
 }
 
 if ($Record) {
@@ -820,13 +909,35 @@ if ($Record) {
       $menuCount++
     }
   }
+  if ($Scripts) {
+    # The scripts the deployment places, the copy it keeps of each file, and
+    # the plugin order the game loads archives by.
+    Head 'The scripts'
+    $sp = [ordered]@{
+      collection = [ordered]@{ slug = $Slug; revision = $Revision }
+      plugins    = @($order | Where-Object { $_.Enabled } | ForEach-Object { $_.Name })
+      files      = @($placed | Where-Object { $_.Rel -match '^Data\\(.+)$' -and (Test-ScriptRel $Matches[1]) } | ForEach-Object {
+          $ce = $col.Entries[$_.Entry]
+          [ordered]@{ rel = $_.Rel; full = $_.Full; fileId = $ce.FileId; mod = $ce.Name }
+        })
+    }
+    $spPath = Join-Path $script:Work 'placed-scripts.json'
+    [IO.File]::WriteAllText($spPath, ($sp | ConvertTo-Json -Depth 5), $utf8)
+    if (-not $script:ScriptReads) { $script:ScriptReads = Join-Path $script:Work 'script-reads.jsonl'; [IO.File]::WriteAllText($script:ScriptReads, '') }
+    $scriptsPath = Join-Path $Record 'scripts.json'
+    $global:LASTEXITCODE = 0
+    $said = @(& node $script:PexCalls --record $script:ScriptReads --placed $spPath --out $scriptsPath)
+    if ($LASTEXITCODE -ne 0) { Die ('Read-PexCalls.js --record ended ' + $LASTEXITCODE + ': ' + ($said -join ' ')) }
+    Say ('  ' + ($said -join ' ')) 'Green'
+    Say ('  ' + $scriptsPath + ', ' + (Get-Item -LiteralPath $scriptsPath).Length + ' bytes')
+  }
   if ($Modlist) {
     Head 'The modlist'
     $wjPath = Join-Path $Record 'thornswood.wabbajack'
     $ml = New-Object Thornswood.Layout.Modlist
     $ml.Name = 'Thornswood'; $ml.Author = 'Thornswood'; $ml.Website = 'https://thornswood.net'
-    $ml.Description = 'The mods the Thornswood servers run: collection ' + $Slug + ', revision ' + $Revision + ', in a portable Mod Organizer 2.'
-    $ml.Version = [string]$Revision + '.0.0.0'
+    $ml.Description = 'The mods the Thornswood servers run: collection ' + $nameSlug + ', revision ' + $nameRev + ', in a portable Mod Organizer 2.'
+    $ml.Version = [string]$nameRev + '.0.0.0'
     # Mod Organizer 2 itself, from its own release on GitHub, held to the pin.
     $mo2Dir = Join-Path $Cache 'mo2'
     New-Item -ItemType Directory -Force -Path $mo2Dir | Out-Null
@@ -862,8 +973,7 @@ if ($Record) {
     $folders = @{}; $taken = @{}
     foreach ($plan in $plans) {
       $e = $plan.Entry
-      $nm = (($e.Name -replace '[<>:"/\\|?*\x00-\x1f]', '') -replace '[. ]+$', '').Trim()
-      if (-not $nm) { $nm = 'Mod ' + $e.FileId }
+      $nm = Get-ModlistFolderName $e.Name $e.FileId
       if ($taken.ContainsKey($nm.ToLowerInvariant())) { $nm = $nm + ' (' + $e.FileId + ')' }
       $taken[$nm.ToLowerInvariant()] = $true
       $folders[$e.Index] = $nm
@@ -924,11 +1034,12 @@ if ($Record) {
   Remove-Tree $script:Work; $script:Work = ''
   Head 'Done'
   Say ('  revision ' + $Revision + ' of ' + $Slug + ': ' + $placed.Count + ' files, ' + $order.Count + ' plugins, nothing placed') 'Green'
-  Say ('  ' + (Join-Path $Record 'layout.json') + ', files.txt, plugins.txt, loadorder.txt')
+  Say ('  ' + (Join-Path $Record 'layout.json') + ', files.txt, plugins.txt, loadorder.txt, slidersets.json')
   if ($KeepPlugins) {
     Say ('  and ' + $keptCount + ' plugins, the copies the layout places, in ' + (Join-Path $Record 'plugins'))
     Say ('  and ' + $menuCount + ' files SkyUI''s menu check reads, in ' + (Join-Path $Record 'menus'))
   }
+  if ($Scripts) { Say ('  and ' + (Join-Path $Record 'scripts.json') + ', the native functions the placed scripts call') }
   Say '  Next: for a draft, compare the layout with the collection record before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
   Write-Host ''
   if (-not $NoPause) { [void](Read-Host 'Enter to close') }
@@ -938,7 +1049,7 @@ if ($Record) {
 $recDir = Join-Path $Game 'Thornswood Layout'
 if ($WhatIf) {
   Head 'What it would do'
-  Say ('  place ' + $placed.Count + ' files in ' + $Game + ' and write ' + $recDir + '\layout.json, files.txt, plugins.txt and loadorder.txt')
+  Say ('  place ' + $placed.Count + ' files in ' + $Game + ' and write ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt and slidersets.json')
   Write-Host ''
   Say ('Nothing in ' + $Game + ' was changed.') 'Green'
   Remove-Tree $script:Work; $script:Work = ''
@@ -979,7 +1090,7 @@ foreach ($o in $old.Values) { $f = Join-Path $Game $o.Rel; if (Test-Path -Litera
 # A run cut part way through a copy leaves that file's .part (CopyWhole in
 # NexusLayout.cs, #4303); it is this script's own, for a name files.txt lists.
 foreach ($o in $old.Values) { $f = Join-Path $Game ($o.Rel + '.part'); if (Test-Path -LiteralPath $f -PathType Leaf) { [IO.File]::SetAttributes($f, [IO.FileAttributes]::Normal); [IO.File]::Delete($f) } }
-foreach ($n in 'layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'placed.tsv') { $f = Join-Path $recDir $n; if (Test-Path -LiteralPath $f) { [IO.File]::Delete($f) } }
+foreach ($n in 'layout.json', 'files.txt', 'plugins.txt', 'loadorder.txt', 'slidersets.json', 'placed.tsv') { $f = Join-Path $recDir $n; if (Test-Path -LiteralPath $f) { [IO.File]::Delete($f) } }
 # Folders the old layout left empty go too, deepest first; Data and the
 # game folder stay.
 foreach ($d in @($old.Values | ForEach-Object { Split-Path -Parent $_.Rel } | Where-Object { $_ } | Sort-Object -Unique | Sort-Object { $_.Length } -Descending)) {
@@ -995,7 +1106,7 @@ foreach ($d in @($old.Values | ForEach-Object { Split-Path -Parent $_.Rel } | Wh
 # leaves a record a run again can take out.
 New-Item -ItemType Directory -Force -Path $recDir | Out-Null
 $whole = $lines[0]
-$lines[0] = '# Install-NexusRevision.ps1: collection ' + $Slug + ' revision ' + $Revision + '. Being placed; layout.json is written when it is whole.'
+$lines[0] = '# Install-NexusRevision.ps1: collection ' + $nameSlug + ' revision ' + $nameRev + '. Being placed; layout.json is written when it is whole.'
 Write-Crlf $oldFiles $lines
 $script:Changed = 'In ' + $Game + ': the earlier layout is out and this one is part way in. Thornswood Layout\files.txt lists every file this run meant to place; run the same command again to put the rest in.'
 $linked = 0; $copied = 0
@@ -1025,7 +1136,7 @@ Remove-Tree $script:Work; $script:Work = ''
 
 Head 'Done'
 Say ('  revision ' + $Revision + ' of ' + $Slug + ': ' + $placed.Count + ' files (' + $linked + ' linked from the unpacked archives, ' + $copied + ' copied), ' + $order.Count + ' plugins') 'Green'
-Say ('  ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt')
+Say ('  ' + $recDir + '\layout.json, files.txt, plugins.txt, loadorder.txt, slidersets.json')
 Say '  Next: check a draft on Dev before publishing. For a new published revision, follow docs/COLLECTION-REVISIONS.md to update the records and rebuild content.'
 Write-Host ''
 if (-not $NoPause) { [void](Read-Host 'Enter to close') }

@@ -121,7 +121,7 @@ $cs = @(
 )
 $app = [IO.Path]::Combine($Repo, 'launcher', 'app')
 $exe = $null
-try { $exe = Build-LauncherCode -Exe -Source (($cs -join "`r`n") + "`r`n") -File (Join-Path $app 'Discord.cs'), (Join-Path $app 'Secrets.cs'), (Join-Path $app 'Swallow.cs'), (Join-Path $app 'Failure.cs'), (Join-Path $app 'Http.cs') }
+try { $exe = Build-LauncherCode -Exe -Source (($cs -join "`r`n") + "`r`n") -File (Join-Path $app 'Discord.cs'), (Join-Path $app 'Secrets.cs'), (Join-Path $app 'Swallow.cs'), (Join-Path $app 'Failure.cs'), (Join-Path $app 'Http.cs'), (Join-Path $app 'WholeFile.cs') }
 catch { ($_.Exception.Message -split "`n") | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
 Yes 'Discord.cs compiles with Forget under the .NET SDK the launcher builds with' ($null -ne $exe)
 if (-not $exe) { Done }

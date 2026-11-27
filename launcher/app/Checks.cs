@@ -150,7 +150,15 @@ namespace Thornswood
                 // Once the modlist installs into Mod Organizer 2 the revision
                 // is the one its last whole install put in (#6244), and
                 // Vortex's state is not read again.
-                if (OwnGame.FromMods) return OwnGame.ModsRevision();
+                // Its modlist names the revision in the records' numbering,
+                // main's; on the Dev collection (#7193) the revision this is
+                // held to is Dev's own, so it is given in Dev's numbering.
+                if (OwnGame.FromMods)
+                {
+                    int mods = OwnGame.ModsRevision();
+                    int offset = Updater.ServerRecordRevision > 0 && Updater.ServerCollectionRevision > 0 ? Updater.ServerRecordRevision - Updater.ServerCollectionRevision : 0;
+                    return mods > 0 ? mods - offset : mods;
+                }
                 string slug = CollectionSlug(cfg);
                 if (slug.Length == 0) return 0;
                 int fromState = CollectionRevisionFromState(slug);
@@ -233,21 +241,42 @@ namespace Thornswood
         /// The collection's slug out of its address, "7essxf" from
         /// .../collections/7essxf. Read from the config so a machine pointed at
         /// a different collection still answers about its own.
+        ///
+        /// A dev install whose config names the collection the launcher ships
+        /// with is on the Dev collection the signed record names instead
+        /// (Updater.ServerCollectionSlug, #7193), so every revision it is held
+        /// to, and every page and link it opens, is Dev's own.
         /// </summary>
         public static string CollectionSlug(Config cfg)
         {
             try
             {
-                string url = cfg == null ? "" : (cfg.CollectionUrl ?? "");
-                int at = url.LastIndexOf("/collections/", StringComparison.OrdinalIgnoreCase);
-                if (at < 0) return "";
-                string s = url.Substring(at + "/collections/".Length).Trim();
-                int q = s.IndexOfAny(new char[] { '/', '?', '#' });
-                if (q >= 0) s = s.Substring(0, q);
-                foreach (char c in s) { if (!char.IsLetterOrDigit(c)) return ""; }
+                string s = SlugIn(cfg == null ? "" : cfg.CollectionUrl);
+                string dev = Updater.ServerCollectionSlug ?? "";
+                if (dev.Length > 0 && IsSlug(dev) && string.Equals(s, SlugIn(Config.Collection), StringComparison.OrdinalIgnoreCase)) return dev;
                 return s;
             }
             catch { return ""; }
+        }
+
+        /// <summary>The slug in a collection's address, or "".</summary>
+        static string SlugIn(string url)
+        {
+            url = url ?? "";
+            int at = url.LastIndexOf("/collections/", StringComparison.OrdinalIgnoreCase);
+            if (at < 0) return "";
+            string s = url.Substring(at + "/collections/".Length).Trim();
+            int q = s.IndexOfAny(new char[] { '/', '?', '#' });
+            if (q >= 0) s = s.Substring(0, q);
+            return IsSlug(s) ? s : "";
+        }
+
+        /// <summary>Whether this is a collection's slug: letters and digits, at least one.</summary>
+        public static bool IsSlug(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            foreach (char c in s) { if (!char.IsLetterOrDigit(c)) return false; }
+            return true;
         }
 
         /// <summary>
@@ -410,45 +439,45 @@ namespace Thornswood
 
         /// <summary>
         /// Vortex profile folder named <paramref name="name"/> (default Thornswood),
-        /// or null. Same as Get-VortexProfileDir (#557).
+        /// or null when Vortex has no such profile. Same as Get-VortexProfileDir
+        /// (#557). Throws when Vortex's state cannot be read, which is not the
+        /// same answer: on 15 November a tester's log said "Vortex profile
+        /// Thornswood was not found" while this had swallowed "MANIFEST-000565
+        /// is being used by another process" from a Vortex that was deploying
+        /// (#6229).
         /// </summary>
         public static string VortexProfileDir(string name)
         {
-            try
+            if (string.IsNullOrEmpty(name)) name = "Thornswood";
+            string profilesRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Vortex\\skyrimse\\profiles");
+            if (!Directory.Exists(profilesRoot)) return null;
+            string stateDir = VortexStateDir();
+            if (File.Exists(Path.Combine(stateDir, "CURRENT")))
+                return VortexProfileState.Find(stateDir, profilesRoot, name);
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            if (Directory.Exists(stateDir))
             {
-                if (string.IsNullOrEmpty(name)) name = "Thornswood";
-                string profilesRoot = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Vortex\\skyrimse\\profiles");
-                if (!Directory.Exists(profilesRoot)) return null;
-                string stateDir = VortexStateDir();
-                if (File.Exists(Path.Combine(stateDir, "CURRENT")))
-                    return VortexProfileState.Find(stateDir, profilesRoot, name);
-                var ids = new HashSet<string>(StringComparer.Ordinal);
-                if (Directory.Exists(stateDir))
+                var pairRe = new Regex(
+                    "\"profileId\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"profileName\"\\s*:\\s*\"" +
+                    Regex.Escape(name) + "\"");
+                var pairRe2 = new Regex(
+                    "\"profileName\"\\s*:\\s*\"" + Regex.Escape(name) +
+                    "\"\\s*,\\s*\"profileId\"\\s*:\\s*\"([^\"]+)\"");
+                foreach (string f in Directory.GetFiles(stateDir))
                 {
-                    var pairRe = new Regex(
-                        "\"profileId\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"profileName\"\\s*:\\s*\"" +
-                        Regex.Escape(name) + "\"");
-                    var pairRe2 = new Regex(
-                        "\"profileName\"\\s*:\\s*\"" + Regex.Escape(name) +
-                        "\"\\s*,\\s*\"profileId\"\\s*:\\s*\"([^\"]+)\"");
-                    foreach (string f in Directory.GetFiles(stateDir))
-                    {
-                        string txt;
-                        try { txt = VortexStateText(f); } catch { continue; }
-                        foreach (Match m in pairRe.Matches(txt)) ids.Add(m.Groups[1].Value);
-                        foreach (Match m in pairRe2.Matches(txt)) ids.Add(m.Groups[1].Value);
-                    }
-                }
-                foreach (string id in ids)
-                {
-                    string p = Path.Combine(profilesRoot, id);
-                    if (File.Exists(Path.Combine(p, "plugins.txt"))) return p;
-                    if (Directory.Exists(p)) return p;
+                    string txt = VortexStateText(f);
+                    foreach (Match m in pairRe.Matches(txt)) ids.Add(m.Groups[1].Value);
+                    foreach (Match m in pairRe2.Matches(txt)) ids.Add(m.Groups[1].Value);
                 }
             }
-            catch (Exception ex) { Swallow.Note("Checks.VortexProfileDir", ex); }
+            foreach (string id in ids)
+            {
+                string p = Path.Combine(profilesRoot, id);
+                if (File.Exists(Path.Combine(p, "plugins.txt"))) return p;
+                if (Directory.Exists(p)) return p;
+            }
             return null;
         }
 
@@ -878,7 +907,14 @@ namespace Thornswood
             return (missing.Count > 0 && wrong.Count == 0) ? "Client files missing" : "Client files not this build's";
         }
 
-        public static List<Check> All(Config cfg)
+        /// <summary>
+        /// The rows. collectionRevision is the revision of the collection
+        /// Vortex installed, when the caller has already read it: DrawStatus
+        /// reads it once a draw and hands it in, so the Mods row and the card
+        /// above Play judge the same reading (#6944). Left at -1 it is read
+        /// here.
+        /// </summary>
+        public static List<Check> All(Config cfg, int collectionRevision = -1)
         {
             // The game these rows are about. With the own folder chosen and not
             // made yet (#1226) Paths.Game is Profile\Payload, Thornswood's own
@@ -919,7 +955,17 @@ namespace Thornswood
                 try { issues = Verify.Run(null); }
                 catch { issues = new List<Issue>(); }
             }
-            l.Add(ModsRow(plugins, issues));
+            // The collection revision, for the Mods row (#6944). Without it
+            // the row said "94 plugins" in green while Play was held for a
+            // collection one revision behind the server, and so did the Ready
+            // card: "Everything checks out" over UPDATE THE MODS FIRST.
+            int mine = 0;
+            if (!string.IsNullOrEmpty(cfg.CollectionUrl))
+            {
+                try { mine = collectionRevision < 0 ? CollectionRevision(cfg) : collectionRevision; }
+                catch (Exception ex) { Swallow.Note("Checks.All, collection revision", ex); }
+            }
+            l.Add(ModsRow(plugins, issues, mine));
             l.Add(ModListRow(issues));
 
             string[] foreign = ForeignClients();
@@ -944,8 +990,16 @@ namespace Thornswood
         /// list but not in Data (Verify FileMissing), because the Mods page
         /// is gone and "94 plugins" / "1 missing" without names was not enough.
         /// Falls back to the enabled-plugin count when nothing is missing.
+        ///
+        /// Then the collection revision (#6944): mine is the one Vortex
+        /// installed, and a full list of plugins from an older or newer
+        /// revision than the server's fails here, because Play is held for it
+        /// (Shell.CollectionProblem) and a green row beside a shut Play said
+        /// nothing was wrong. Only past MostPluginsWithoutCollection, where
+        /// Shell.CollectionProblem asks the revision too, so the row and the
+        /// card above Play give the same answer.
         /// </summary>
-        static Check ModsRow(int plugins, List<Issue> issues)
+        static Check ModsRow(int plugins, List<Issue> issues, int mine)
         {
             var missing = new List<string>();
             if (issues != null)
@@ -966,9 +1020,32 @@ namespace Thornswood
             if (missing.Count > 0)
                 return new Check("Mods", false, MissingDetail(missing))
                        { Problem = missing.Count == 1 ? "1 mod missing" : missing.Count + " mods missing" };
+            int wants = Updater.ServerCollectionRevision;
+            string off = plugins > MostPluginsWithoutCollection ? RevisionProblem(mine, wants) : "";
+            if (off == "stale")
+                return new Check("Mods", false, "revision " + mine + ", the server's is " + wants) { Problem = "Mods need updating" };
+            if (off == "ahead")
+                return new Check("Mods", false, "revision " + mine + ", the server's is " + wants) { Problem = "Mods ahead of the server" };
             if (plugins <= MostPluginsWithoutCollection)
                 return new Check("Mods", false, plugins + " plugins") { Problem = "Mods not installed" };
             return new Check("Mods", true, plugins + " plugins");
+        }
+
+        /// <summary>
+        /// Which way the collection revision installed here (mine) is off
+        /// from the one the server was built against (wants, #5767): "stale"
+        /// behind it, "ahead" in front of it, and "" when they match or either
+        /// reads as 0. The one comparison, for the Mods row and for
+        /// Shell.CollectionProblem, which holds Play on it (#6944).
+        /// </summary>
+        public static string RevisionProblem(int mine, int wants)
+        {
+            if (mine > 0 && wants > 0)
+            {
+                if (mine < wants) return "stale";
+                if (mine > wants) return "ahead";
+            }
+            return "";
         }
 
         /// <summary>

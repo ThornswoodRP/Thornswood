@@ -72,7 +72,7 @@ for(const boundary of ['stateRead','ownership','activityRead','rejectionOwnershi
   const timers={setTimeout(fn){pending.set(++serial,fn);return serial;},clearTimeout(id){pending.delete(id);}};
   function stopAt(name){if(name===boundary){runtime.stop();revoked=true;}}
   const api={makeProperty(){},getNpcAIState(){stopAt('stateRead');return {isHuman:false,cellOrWorld:60,pos:[0,0,0],rot:[0,0,0],
-      aggression:0,confidence:1,meleeReach:1,meleeAllowance:16,factions:[]};},
+      aggression:0,confidence:1,aggroRadius:[0,0,0],meleeReach:1,meleeAllowance:16,factions:[]};},
     setNpcServerControlled(){if(revoked)stale.push('ownership');stopAt(++ownershipCalls===1?'ownership':'rejectionOwnership');},
     get(){stopAt('activityRead');throw Error('activity read failed');},
     stopNpcMovement(){if(revoked)stale.push('movement');}};
@@ -100,7 +100,7 @@ for(const method of ['getNavmeshRecords','lookupEspmRecordById']) for(const boun
   let runtime,serial=0,revoked=false;const pending=new Map(),stale=[];
   const timers={setTimeout(fn){pending.set(++serial,fn);return serial;},clearTimeout(id){pending.delete(id);}};
   const api={makeProperty(){},getNpcAIState:()=>({isHuman:false,cellOrWorld:60,pos:[0,0,0],rot:[0,0,0],
-      aggression:0,confidence:1,meleeReach:1,meleeAllowance:16,factions:[]}),
+      aggression:0,confidence:1,aggroRadius:[0,0,0],meleeReach:1,meleeAllowance:16,factions:[]}),
     setNpcServerControlled(){if(revoked)stale.push('ownership');},get:()=>null,
     stopNpcMovement(){if(revoked)stale.push('movement');},getNavmeshRecords:()=>[1]};
   Object.defineProperty(api,method,{get(){
@@ -126,7 +126,7 @@ for(const merchant of [false,true]) {
   const api={makeProperty(){},getIdFromDesc:d=>parseInt(d,16),setNpcPlacementExclusions(){},
     getNpcAIState(){if(merchant && ++stateReads===2){runtime.stop();revoked=true;}
       return {isHuman:false,profileId:-1,cellOrWorld:60,pos:[0,0,0],rot:[0,0,0],
-        aggression:0,confidence:1,meleeReach:1,meleeAllowance:16,factions:[]};},
+        aggression:0,confidence:1,aggroRadius:[0,0,0],meleeReach:1,meleeAllowance:16,factions:[]};},
     getDescFromId(){if(!merchant){runtime.stop();revoked=true;}return '1:Skyrim.esm';},
     get(id,key){return key==='baseDesc'?'a:Skyrim.esm':null;},
     set(id,key){if(revoked)stale.push(key);},callPapyrusFunction(){if(revoked)stale.push('title');},
@@ -173,7 +173,7 @@ for(const merchant of [false,true]) {
   const timers={setTimeout(fn){pending.set(++serial,fn);return serial;},clearTimeout(id){pending.delete(id);}};
   const native={makeProperty(){},getNpcAIState(){assert.equal(this,native);seen.add('state');
       return {isHuman:false,cellOrWorld:60,pos:[0,0,0],rot:[0,0,0],
-        aggression:0,confidence:1,meleeReach:1,meleeAllowance:16,factions:[]};},
+        aggression:0,confidence:1,aggroRadius:[0,0,0],meleeReach:1,meleeAllowance:16,factions:[]};},
     setNpcServerControlled(){assert.equal(this,native);seen.add('ownership');},get(){assert.equal(this,native);seen.add('read');return null;}};
   for(const method of ['getNpcAIState','setNpcServerControlled','get'])
     Object.defineProperty(native[method],'apply',{get(){reads++;throw Error('untrusted apply getter');}});

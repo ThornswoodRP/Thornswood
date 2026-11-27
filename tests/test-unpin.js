@@ -76,8 +76,10 @@ const PIECES = {
   loadPart: 'function loadPart(key, fallback) {',
   save: 'function save(durable) {',
   takeGold: 'function takeGold(actorId, amount) {',
-  // A job's reward comes back to its poster on a take down (#2554).
-  payOut: 'function payOut(actorId, amount) {',
+  // A job's reward comes back to its poster on a take down (#2554), owed
+  // into their pack and paid on the server's tick (#4258).
+  profileOf: 'function profileOf(actorId) {',
+  onlineActorOf: 'function onlineActorOf(profileId) {',
   payHeld: 'function payHeld(hold, n, actorId) {',
   // The line a post arrives on: a title and a body (#2554).
   postWords: 'function postWords(line) {',
@@ -130,6 +132,8 @@ function engine(startGold) {
   return {
     mp: {
       get: function (actor, key) {
+        // All three are in the world, for the tick that pays what is owed (#4258).
+        if (actor === 0 && key === 'onlinePlayers') { return [ALICE, BOB, CYRUS].map(function (p) { return p.actor; }); }
         if (key === 'inventory') {
           return { entries: (packs[actor] || []).map(function (e) { return Object.assign({}, e); }) };
         }
@@ -162,6 +166,7 @@ function boot(dir, eng) {
     'var claims = {};',
     // The master key counter save() writes beside the claims (#2254).
     'var masterCut = 0;',
+    'var deedCut = 0;',
     // The holders' word save() writes beside them (#2680).
     'var wordBook = { list: [] };',
     // Rent still owed by somebody who no longer holds the place (#3893), written with them.
@@ -191,7 +196,7 @@ function boot(dir, eng) {
   // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
   body.push(require('./fixtures/pack-first').pieces(prop));
   body.push('return { post: post, board: board, take: take, dropJob: dropJob, wallOf: wallOf, ' +
-            'unpin: unpin, takedown: takedown, save: save, ' +
+            'unpin: unpin, takedown: takedown, save: save, packTick: packTick, ' +
             'notices: function () { return notices; }, ' +
             'funds: function () { return funds; } };');
   const pushed = [];
@@ -212,6 +217,7 @@ function boot(dir, eng) {
     else if (word === '/take') { api.take(parts, p.actor, p.pid, to); }
     else if (word === '/dropjob') { api.dropJob(parts, p.actor, p.pid, to); }
     else if (word === '/unpin') { api.unpin(parts, p.actor, p.pid, to); }
+    api.packTick();
     return told.join('\n');
   }
   api.say = say;

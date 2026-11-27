@@ -8,6 +8,7 @@ Scripts that build, verify and manage Thornswood's plugins, recipes and mod asse
 | [Audit-ArmorSlots.py](Audit-ArmorSlots.py) | Reads armor records straight out of plugins and reports conflicting biped slots that cause unequipping. |
 | [Audit-ModMenus.js](Audit-ModMenus.js) | Audits mod settings menu persistence across MCM Helper ini files, global variables and scripts. |
 | [Audit-Mods.ps1](Audit-Mods.ps1) | Measures the build and says which parts carry a plugin and which are pure assets. |
+| [authored_doors.py](authored_doors.py) | Selects and verifies the default door overrides that Thornswood-Last.esp applies. |
 | [Build-ContentOnBox.ps1](Build-ContentOnBox.ps1) | The deploy gate's Build-Content verb: builds content plugin and tables on the VPS box (#5191). |
 | [Build-Generated.ps1](Build-Generated.ps1) | Builds Thornswood's animation and body files with Pandora Behaviour Engine+ and BodySlide. |
 | [Build-LastPlugin.py](Build-LastPlugin.py) | Builds Thornswood-Last.esp from the installed plugins and repository tables (#2468). |
@@ -28,7 +29,9 @@ Scripts that build, verify and manage Thornswood's plugins, recipes and mod asse
 | [ContentPaths.ps1](ContentPaths.ps1) | What a content build on the box reads and writes, worked out from content-tables.json (#5191). |
 | [Find-MissingMasters.ps1](Find-MissingMasters.ps1) | Reads the TES4 header of every plugin in Data and reports any master that is no longer present. |
 | [Generated.ps1](Generated.ps1) | Shared helpers for building and checking Thornswood's animation and body files. |
+| [cistern_passage.py](cistern_passage.py) | Verifies the retired Cistern passage roles and dependencies before enabling its ordinary pair and disabling only the old Riften cover and hidden leaves. |
 | [last_recipe.py](last_recipe.py) | Recipe generator for Thornswood-Last.esp from installed plugins (#2791). |
+| [List-GameDataOnBox.ps1](List-GameDataOnBox.ps1) | The deploy gate's List-GameData verb: runs a read-only lister of the game's records against a server's plugins on the box (#5736). |
 | [List-SalvagedRecords.py](List-SalvagedRecords.py) | Writes content-salvaged.json tracking records remade from the salvaged plugin (#2553). |
 | [LoadOrder.ps1](LoadOrder.ps1) | The load order as the game counts it, and how to put a plugin list into the server's order. |
 | [Make-LastPlugin.py](Make-LastPlugin.py) | Makes Thornswood-Last.esp from its recipe on the box or client (#2791). |
@@ -36,6 +39,7 @@ Scripts that build, verify and manage Thornswood's plugins, recipes and mod asse
 | [New-ScriptPack.py](New-ScriptPack.py) | Packs Papyrus scripts from game and archives into papyrus-scripts.zip for the box (#3105). |
 | [OnBox.ps1](OnBox.ps1) | Helper scripts sent to the box by Run-OnBox.ps1 (#2899). |
 | [PluginRuleLoops.ps1](PluginRuleLoops.ps1) | The plugin rules of a collection that LOOT can never keep because of game load order constraints. |
+| [Read-PexCalls.js](Read-PexCalls.js) | Lists the native functions each compiled script of a collection layout calls, for Install-NexusRevision -Scripts (#7000). |
 | [Rebuild-ContentTables.ps1](Rebuild-ContentTables.ps1) | Rebuilds tables read out of load order plugins after content changes. |
 | [Run-OnBox.ps1](Run-OnBox.ps1) | Runs content tools on the VPS box and brings back generated files. |
 | [Send-GameArchives.ps1](Send-GameArchives.ps1) | Puts Skyrim game archives and string tables into the VPS store. |

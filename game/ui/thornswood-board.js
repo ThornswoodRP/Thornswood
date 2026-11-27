@@ -41,7 +41,8 @@
   var boardFieldError = null;
   var submissionDrafts = {
     letter: { revision: 0, values: { to: '', letter: '' } },
-    haul: { revision: 0, values: { pay: '', dest: '', haul: '' } }
+    haul: { revision: 0, values: { pay: '', dest: '', haul: '' } },
+    parcel: { revision: 0, values: { 'p-to': '', 'p-item': '', 'p-count': '', 'p-letter': '', 'p-pay': '' } }
   };
   var submissions = [], submissionOwner = null, submissionHold = null, submissionContext = 0;
   var submissionSaid = '', olderUnconfirmed = false;
@@ -113,13 +114,13 @@
     '  box-shadow:0 24px 80px rgba(0,0,0,.7);overflow:hidden}',
     '#' + ID + ' h2{margin:0;padding:18px 24px 14px;font-size:26px;font-weight:normal;line-height:1.1;',
     '  color:#f6e9c8;border-bottom:1px solid rgba(198,170,109,.22);display:flex;align-items:baseline;gap:14px}',
-    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.6);font-style:italic}',
+    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.7);font-style:italic}',
     '#' + ID + ' .body{overflow:auto;padding:16px 24px;display:block;',
     '  font-size:16px}',
     '#' + ID + ' .foot{padding:12px 24px;border-top:1px solid rgba(198,170,109,.22);',
     '  display:flex;gap:10px;align-items:center;justify-content:flex-end}',
     '#' + ID + ' .foot .make{margin-right:auto}',
-    '#' + ID + ' h3{margin:16px 0 8px;padding-bottom:6px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' h3{margin:16px 0 8px;padding-bottom:6px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);font-weight:normal;border-bottom:1px solid rgba(198,170,109,.22)}',
     '#' + ID + ' h3:first-child{margin-top:0}',
     '#' + ID + ' .row{display:flex;align-items:center;gap:10px;padding:10px 12px;flex-wrap:wrap;',
@@ -137,7 +138,7 @@
     '#' + ID + ' button[data-confirm]{max-width:100%;white-space:normal;overflow-wrap:anywhere}',
     '#' + ID + ' .action-status{flex:1;min-width:0;overflow-wrap:anywhere;color:#e9d19b}',
     '#' + ID + ' button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' .said{color:#e9d19b;font-size:14px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' .line{display:flex;gap:8px;align-items:center;margin-bottom:8px}',
@@ -206,7 +207,7 @@
   // and edit-back; direct DOM changes are read before sends and owner pushes.
   function rememberSubmissions(edited) {
     if (!root) return;
-    ['letter', 'haul'].forEach(function (kind) {
+    ['letter', 'haul', 'parcel'].forEach(function (kind) {
       var draft = submissionDrafts[kind], changed = false;
       Object.keys(draft.values).forEach(function (id) {
         var box = root.querySelector('#' + ID + '-' + id);
@@ -244,9 +245,9 @@
     if (hold !== submissionHold) { submissionContext++; submissionHold = hold; }
     var results = value && value.boardSubmissions && value.boardSubmissions.results;
     if (!owner || !Array.isArray(results) || results.length > 32) return;
-    var accepted = 0, kept = { letter: false, haul: false }, reset = { letter: false, haul: false };
+    var accepted = 0, kept = { letter: false, haul: false, parcel: false }, reset = { letter: false, haul: false, parcel: false };
     results.forEach(function (result) {
-      if (!result || result.status !== 'posted' || (result.kind !== 'letter' && result.kind !== 'haul') ||
+      if (!result || result.status !== 'posted' || (result.kind !== 'letter' && result.kind !== 'haul' && result.kind !== 'parcel') ||
           typeof result.id !== 'string' || !/^[0-9a-f]{32}$/.test(result.id) || typeof result.hold !== 'string') return;
       var at = -1;
       for (var i = 0; i < submissions.length; i++) {
@@ -274,7 +275,7 @@
       });
     });
     if (accepted) submissionSaid = (accepted === 1 ? 'The post was saved.' : 'The posts were saved.') +
-      (kept.letter || kept.haul ? ' Your newer draft is kept.' : '');
+      (kept.letter || kept.haul || kept.parcel ? ' Your newer draft is kept.' : '');
     showSubmissionStatus();
   }
 
@@ -382,14 +383,15 @@
   function isUp(b) {
     if (!pending) { return false; }
     if (pending.hold !== b.hold || draft.title !== pending.title || draft.body !== pending.body ||
-        draft.kind !== pending.kind || (pending.kind === 'job' && Number(draft.reward) !== pending.reward)) return false;
+        draft.kind !== pending.kind || (pending.kind !== 'notice' && Number(draft.reward) !== pending.reward)) return false;
     var wall = (b && b.wall) || [];
     for (var i = 0; i < wall.length; i++) {
       var r = wall[i];
       // Match the complete published text, not merely a newer same-title row.
       // An older accepted post must not erase what is being written now.
       if (r.mine && !r.letter && !r.haul && r.title === pending.title && r.text === pending.body &&
-          !!r.job === (pending.kind === 'job') && (!r.job || Number(r.reward) === pending.reward) &&
+          !!r.job === (pending.kind !== 'notice') && !!r.wanted === (pending.kind === 'wanted') &&
+          (!r.job || Number(r.reward) === pending.reward) &&
           Number(r.n) > pending.top) { return true; }
     }
     return false;
@@ -399,11 +401,6 @@
   function plain(row) { return !row.letter && !row.haul; }
 
   function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
-  }
-
-  function drawContents() {
     rememberSubmissions();
     resetTakedown();
     clearBoardFieldError();
@@ -415,7 +412,7 @@
     var b = data && data.board;
     if (!b || !b.here) {
       title.innerHTML = 'Notice board';
-      body.innerHTML = '<div class="none">Step up to the board.</div>';
+      put(body, '<div class="none">Step up to the board.</div>');
       formDrawn = false;
       if (make) { make.style.display = 'none'; }
       return;
@@ -444,12 +441,19 @@
       /*
         Take down stays on the row, for the poster and for a guard of this
         hold, who takes down any post on its board (#502). Pay the reward is
-        the poster's, once somebody has taken the job (#2554).
+        the poster's, once somebody has taken the job (#2554). A wanted
+        poster (#4565) is the law's: a guard of this hold confirms its
+        bounty, once somebody has taken it and that guard is not who took
+        it, and only a guard or the Jarl takes it down.
       */
-      if (plain(row) && row.job && row.mine && row.taken) {
+      if (plain(row) && row.job && !row.wanted && row.mine && row.taken) {
         tools += '<button class="go" data-do="paid" data-n="' + esc(row.n) + '">Pay the reward</button>';
       }
-      if ((row.mine && !(row.job && row.taken)) || (row.haul && b.steward) || b.guard) {
+      if (plain(row) && row.wanted && row.taken && !row.held && b.bountyGuard) {
+        tools += '<button class="go" data-do="paid" data-n="' + esc(row.n) + '">Confirm the bounty</button>';
+      }
+      if (row.wanted ? b.guard
+          : ((row.mine && !(row.job && row.taken)) || (row.haul && b.steward) || b.guard)) {
         tools += '<button data-do="unpin" data-n="' + esc(row.n) + '">Take down</button>';
       }
       if (row.held) {
@@ -458,7 +462,7 @@
       }
       var who = row.taken ? ', taken by ' + esc(row.taken) : '';
       if (!plain(row)) {
-        var kind = row.letter ? 'Letter' : 'Haul';
+        var kind = row.parcel ? 'Parcel' : row.letter ? 'Letter' : 'Haul';
         if (row.job && !row.taken && !row.mine) {
           tools = '<button class="go" data-do="take" data-n="' + esc(row.n) + '">Take</button>' + tools;
         }
@@ -469,7 +473,8 @@
       }
       var key = 'w' + row.n;
       var isOpen = !!opened[key];
-      var meta = (row.job ? 'Job, ' + esc(String(Number(row.reward) || 0)) + ' gold reward' : 'Notice') +
+      var meta = (row.wanted ? 'Wanted, ' + esc(String(Number(row.reward) || 0)) + ' gold bounty'
+        : row.job ? 'Job, ' + esc(String(Number(row.reward) || 0)) + ' gold reward' : 'Notice') +
         ', ' + esc(row.name) + (row.at ? ', ' + esc(when(row.at)) : '') + who;
       out += '<div class="row"><span class="nm open" data-do="open" data-key="' + key + '"><b>' + esc(row.n) +
         '.</b> ' + esc(row.title) + '<br><span class="meta">' + meta + '</span></span><span class="tools">' +
@@ -499,7 +504,7 @@
     if (!jobs.length) { out += '<div class="none">You have taken none.</div>'; }
     for (var j = 0; j < jobs.length; j++) {
       var mine = jobs[j];
-      var what = mine.letter ? 'Letter' : (mine.haul ? 'Haul' : 'Job');
+      var what = mine.parcel ? 'Parcel' : mine.letter ? 'Letter' : (mine.haul ? 'Haul' : (mine.wanted ? 'Wanted' : 'Job'));
       var jkey = 'j' + mine.hold + ':' + mine.n;
       var jopen = !!opened[jkey];
       var line = plain(mine)
@@ -536,6 +541,34 @@
       'when they hand it over. Up to 300 characters. Only the person it is for reads it. ' +
       'Taken down before then, the 15 comes back to you.</div>';
     /*
+      A PARCEL (#4560, docs/systems/noticeboards.md): a letter with one
+      stack from your pack in it, and a courier pay you name, at least the
+      server's parcelPayMin. The pack list is the server's; it checks the
+      stack, the count and the pay again when the parcel arrives.
+    */
+    var pack = b.pack || [];
+    var payMin = Number(b.parcelPayMin) || 15;
+    out += '<h3>Send a parcel</h3>';
+    if (!pack.length) {
+      out += '<div class="none">Nothing in your pack that can go in a parcel.</div>';
+    } else {
+      out += '<div class="line"><input id="' + ID + '-p-to" aria-label="Parcel recipient" maxlength="60" placeholder="who it is for"></div>';
+      out += '<div class="line"><select id="' + ID + '-p-item" aria-label="What goes in the parcel">';
+      for (var q = 0; q < pack.length; q++) {
+        out += '<option value="' + esc(pack[q].slot + ':' + pack[q].baseId) + '">' + esc(pack[q].what) +
+          (Number(pack[q].count) > 1 ? ' (' + esc(String(pack[q].count)) + ')' : '') + '</option>';
+      }
+      out += '</select><input class="pay" id="' + ID + '-p-count" aria-label="How many go in the parcel" placeholder="how many"></div>';
+      out += '<div class="line"><input id="' + ID + '-p-letter" aria-label="Parcel letter" maxlength="300" placeholder="a letter to go with it"></div>';
+      out += '<div class="line"><input class="pay" id="' + ID + '-p-pay" aria-label="Parcel courier pay in gold" placeholder="pay">' +
+        '<button class="go" data-do="parcel">Send the parcel</button></div>';
+      out += '<div class="said" id="' + ID + '-parcel-reason" role="status" aria-live="polite" style="display:none"></div>';
+      out += '<div class="note">20 gold for the board, and a courier pay you name, ' + esc(String(payMin)) +
+        ' or more, held for whoever carries it. What you pick leaves your pack with the gold and goes into ' +
+        'the pack of the person it is for when the courier hands it over. Only they read the letter. ' +
+        'Taken down before then, the pay comes back to you and what was in it waits in this hold\'s drop box for you.</div>';
+    }
+    /*
       A HAUL (#1393, docs/systems/trading-company.md): a job with a pay and a
       town it goes to. The towns are every board but this one, from the
       server.
@@ -544,7 +577,7 @@
     if (dests.length) {
       out += '<h3>Send a haul</h3>';
       out += '<div class="line"><input class="pay" id="' + ID + '-pay" aria-label="Haul pay in gold" placeholder="pay">' +
-        '<select id="' + ID + '-dest">';
+        '<select id="' + ID + '-dest" aria-label="Where the haul goes">';
       for (var d = 0; d < dests.length; d++) {
         out += '<option value="' + esc(dests[d].hold) + '">' + esc(dests[d].where) + '</option>';
       }
@@ -577,7 +610,7 @@
         '</span><span class="tools"><button class="go" data-do="submit" data-id="' +
         esc(lists[s].id) + '">Leave the list</button></span></div>';
     }
-    body.innerHTML = out;
+    put(body, out);
     var payBox = document.getElementById(ID + '-pay');
     var destBox = document.getElementById(ID + '-dest');
     var haulBox = document.getElementById(ID + '-haul');
@@ -591,7 +624,21 @@
     var letterBox = document.getElementById(ID + '-letter');
     if (toBox) toBox.value = submissionDrafts.letter.values.to;
     if (letterBox) letterBox.value = submissionDrafts.letter.values.letter;
+    Object.keys(submissionDrafts.parcel.values).forEach(function (id) {
+      var box = document.getElementById(ID + '-' + id);
+      if (!box) return;
+      if (id !== 'p-item' || submissionDrafts.parcel.values[id]) box.value = submissionDrafts.parcel.values[id];
+      // An item no longer in the pack leaves the first one picked, and the draft says so.
+      if (id === 'p-item' && box.selectedIndex < 0 && box.options.length) box.selectedIndex = 0;
+      submissionDrafts.parcel.values[id] = String(box.value || '');
+    });
     wire(body);
+  }
+
+  // In place, so what is being typed and its focus outlast the update (#4475).
+  function put(host, html) {
+    var b = data && data.board;
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, b && b.here ? b.hold : ''); } else { host.innerHTML = html; }
   }
 
   function wire(body) {
@@ -601,6 +648,11 @@
 
   /* What a post costs, said under the form for the kind picked. */
   function costLine() {
+    if (draft.kind === 'wanted') {
+      return 'A wanted poster is 30 gold for the board, and the bounty. The bounty is held until a guard of this ' +
+        'hold confirms it was earned, and then it goes to whoever took it. Only a guard or the Jarl takes a ' +
+        'wanted poster down, and then the bounty comes back to you. The 30 stays with the hold.';
+    }
     return draft.kind === 'job'
       ? 'A job is 30 gold for the board, and the reward. The reward is held until you say the job is done, ' +
         'with Pay the reward on it, and then it goes to whoever took it. Taken down before anybody takes ' +
@@ -619,7 +671,8 @@
     body.innerHTML =
       '<h3>Make a post</h3>' +
       '<div class="line"><button data-do="kind" data-kind="notice" id="' + ID + '-k-notice">Notice</button>' +
-      '<button data-do="kind" data-kind="job" id="' + ID + '-k-job">Job</button></div>' +
+      '<button data-do="kind" data-kind="job" id="' + ID + '-k-job">Job</button>' +
+      '<button data-do="kind" data-kind="wanted" id="' + ID + '-k-wanted">Wanted</button></div>' +
       '<div class="line"><input id="' + ID + '-title" aria-label="Post title" maxlength="' + TITLE_CHARS + '" placeholder="the title"></div>' +
       '<div class="line"><textarea id="' + ID + '-text" aria-label="Post text" maxlength="' + BODY_CHARS +
       '" placeholder="what it says"></textarea></div>' +
@@ -648,12 +701,15 @@
 
   function showKind() {
     var isJob = draft.kind === 'job';
+    var isWanted = draft.kind === 'wanted';
     var n = document.getElementById(ID + '-k-notice');
     var j = document.getElementById(ID + '-k-job');
-    if (n) { n.className = isJob ? '' : 'go'; }
+    var w = document.getElementById(ID + '-k-wanted');
+    if (n) { n.className = (isJob || isWanted) ? '' : 'go'; }
     if (j) { j.className = isJob ? 'go' : ''; }
+    if (w) { w.className = isWanted ? 'go' : ''; }
     var line = document.getElementById(ID + '-rewardline');
-    if (line) { line.style.display = isJob ? '' : 'none'; }
+    if (line) { line.style.display = (isJob || isWanted) ? '' : 'none'; }
     var cost = document.getElementById(ID + '-cost');
     if (cost) { cost.textContent = costLine(); }
     var told = document.getElementById(ID + '-said');
@@ -680,10 +736,11 @@
     if (!text.trim()) { say('Write what it says.'); return; }
     if (text.length > BODY_CHARS) { say('What it says is up to ' + BODY_CHARS + ' characters.'); return; }
     var rewardValue = 0;
-    if (draft.kind === 'job') {
+    if (draft.kind === 'job' || draft.kind === 'wanted') {
       var reward = draft.reward.trim();
       if (!/^\d+$/.test(reward) || !(Number(reward) > 0)) {
-        say('A job\'s reward is a whole number of gold, above nothing.');
+        say(draft.kind === 'wanted' ? 'A bounty is a whole number of gold, above nothing.'
+                                    : 'A job\'s reward is a whole number of gold, above nothing.');
         return;
       }
       rewardValue = Number(reward);
@@ -701,7 +758,8 @@
     if (verb === 'close') { close(); return; }
     if (verb === 'back') { composing = false; pending = null; said = ''; draw(); return; }
     if (verb === 'kind') {
-      draft.kind = this.getAttribute('data-kind') === 'job' ? 'job' : 'notice';
+      var picked = this.getAttribute('data-kind');
+      draft.kind = picked === 'job' || picked === 'wanted' ? picked : 'notice';
       showKind();
       return;
     }
@@ -733,6 +791,23 @@
           !needBoardField('dest', dest, 'Choose the haul destination.', 'haul-reason') ||
           !needBoardField('haul', what, 'Say what the haul carries.', 'haul-reason')) return;
       sendSubmission('haul', [pay, dest, what]);
+      return;
+    }
+    if (verb === 'parcel') {
+      if (!shown || !root.contains(this)) return;
+      clearBoardFieldError();
+      var pto = document.getElementById(ID + '-p-to').value;
+      var pwords = document.getElementById(ID + '-p-letter').value;
+      var item = field(ID + '-p-item').split(':');
+      var pcount = field(ID + '-p-count').replace(/[^0-9]/g, '') || '1';
+      var ppay = field(ID + '-p-pay').replace(/[^0-9]/g, '');
+      if (!needBoardField('p-to', pto.trim(), 'Say who the parcel is for.', 'parcel-reason') ||
+          !needBoardField('p-item', item.length === 2 ? item[0] : '', 'Pick what goes in the parcel.', 'parcel-reason') ||
+          !needBoardField('p-letter', pwords.trim(), 'Write a letter to go with it.', 'parcel-reason') ||
+          !needBoardField('p-pay', ppay, 'Enter the courier pay in gold.', 'parcel-reason')) return;
+      try { encodeURIComponent(pto); encodeURIComponent(pwords); }
+      catch (eParcel) { showBoardReason('parcel-reason', 'That parcel contains invalid text. Nothing was sent; keep your draft.'); return; }
+      sendSubmission('parcel', [pto, pwords, ppay, item[0], item[1], pcount]);
       return;
     }
     if (verb === 'done' && n) {

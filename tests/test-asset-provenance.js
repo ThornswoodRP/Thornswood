@@ -207,10 +207,13 @@ if (reg) {
     (reg.notInRepo || []).filter((a) => a.status === 'made-from-game' && a.record === 'scripts/release/Ship-Rules.ps1#ShipMadeFromGame')
       .reduce((n, a) => n + (Array.isArray(a.paths) ? a.paths.length : 0), 0) === 3 &&
     shipList(shipRules, 'ShipMadeFromGame').length === 3);
-  yes('the six menus the launcher makes from the collection\'s mods are registered, held out by the Ship-Rules.ps1 list (#3113, #3127)',
-    (reg.notInRepo || []).filter((a) => a.status === 'made-from-mods' && a.record === 'scripts/release/Ship-Rules.ps1#ShipMadeFromMods')
-      .reduce((n, a) => n + (Array.isArray(a.paths) ? a.paths.length : 0), 0) === 6 &&
-    shipList(shipRules, 'ShipMadeFromMods').length === 6);
+  const madeModMenus = (reg.notInRepo || [])
+    .filter((a) => a.status === 'made-from-mods' && a.record === 'scripts/release/Ship-Rules.ps1#ShipMadeFromMods')
+    .flatMap((a) => a.paths || []);
+  const shipModMenus = shipList(shipRules, 'ShipMadeFromMods');
+  yes('every menu made from the collection is registered and held out of packs',
+    shipModMenus.length === madeModMenus.length && new Set(madeModMenus).size === madeModMenus.length &&
+    shipModMenus.every((menu) => madeModMenus.includes(menu)) && madeModMenus.includes('Data\\Interface\\inventorymenu.swf'));
   yes('the animation and body files the launcher builds on each computer are registered, named by the Ship-Rules.ps1 lists that keep them out (#3715)',
     (reg.notInRepo || []).filter((a) => a.status === 'built-on-each-computer' && /^scripts\/release\/Ship-Rules\.ps1#ShipGenerated(BodyFiles|Patterns)$/.test(a.record || ''))
       .reduce((n, a) => n + (Array.isArray(a.paths) ? a.paths.length : 0), 0) ===

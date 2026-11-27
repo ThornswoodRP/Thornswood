@@ -17,6 +17,9 @@
      the site nor the hub names the board file, its save or its route.
   C. The one part of the boards that was still in use, the Patreon words
      Patrick pastes by hand (#998), lives in docs/PATREON.md, word for word.
+  D. The deploy: Deploy-Docs has no -Boards, no -Board and no step that
+     seeds a board on the box, the gate verb takes neither, the remote
+     command record has no row for that step, and the README names neither.
 
   Nothing leaves this machine. Scratch files go under THORNSWOOD_TEMP.
 */
@@ -144,6 +147,34 @@ function cookieFor(secret, id, name) {
       /A modded Skyrim roleplay server\. Fewer NPCs, more people who matter\./.test(pat) &&
       /Patreon pays for the server, the domain, and other expenses of keeping it running/.test(pat));
   yes('C2 and the three tiers', /Milk Drinker, \$3/.test(pat) && /Talos Worshiper, \$7/.test(pat) && /Thalmor Boot-Licker, \$15/.test(pat));
+
+  // ---------------------------------------------------- D. the deploy --
+  // Deploy-Docs still had -Boards, -Board and a seed step that put the
+  // repo's board.json up on every plain deploy. With that file gone, -Board
+  // threw reading it, -Boards forced a file no deploy sends, and the seed
+  // step never found a board to seed.
+  const deploy = read('scripts/deploy/Deploy-Docs.ps1') || '';
+  yes('D1 Deploy-Docs takes neither -Boards nor -Board',
+      deploy.length > 0 && !/\[switch\]\$Boards\b/.test(deploy) && !/\[string\[\]\]\$Board\b/.test(deploy) &&
+      !/\$Boards?\b/.test(deploy) && !/-Boards?\b/.test(deploy));
+  yes('D2 and has no step that seeds or replaces a board on the box',
+      !/board\.json/.test(deploy) && !/\$boardArgs|\$seedNames|\$boardOut|BOARD (REPLACED|KEPT|NOT REPLACED)/.test(deploy));
+  let verbs = null;
+  try { verbs = JSON.parse(read('scripts/vps/gate/verbs.json')); } catch (e) { }
+  const docsVerbs = [];
+  (function walk(v) {
+    if (!v || typeof v !== 'object') return;
+    if (v.params && typeof v.params === 'object' && 'SeedDocs' in v.params) docsVerbs.push(v);
+    Object.keys(v).forEach((k) => walk(v[k]));
+  })(verbs);
+  yes('D3 the gate verb that runs Deploy-Docs takes no Boards or Board (' + docsVerbs.length + ' found)',
+      docsVerbs.length > 0 && docsVerbs.every((v) => !('Boards' in v.params) && !('Board' in v.params)));
+  const record = read('records/remote-commands.json') || '';
+  yes('D4 the remote command record has no row for the board step',
+      record.length > 0 && !/\$boardOut/.test(record) && !/board\.json/.test(record));
+  const readme = read('site/README.md') || '';
+  yes('D5 the site README names no board switch', readme.length > 0 && !/`-Boards?\b/.test(readme));
+  yes('D6 the backup test names no -Boards', !/-Boards\b/.test(read('tests/test-docs-backup.ps1') || ''));
 
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exitCode = fail ? 1 : 0;

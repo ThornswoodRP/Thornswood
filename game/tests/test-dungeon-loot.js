@@ -358,8 +358,15 @@ if (block) {
   const campPile = api.rollBody(true, seqRng([0, 0, 0, 0, 0.99, 0.99, 0.99]));
   yes('a camp body can carry a little coin and a common supply',
     campPile.gold === 1 && campPile.items.length === 1 && campPile.items[0].name === 'lockpick');
-  const wildEmpty = api.rollBody(false, seqRng([0.99, 0.99, 0.99, 0.99, 0.99]));
-  yes('a wild body can be empty', wildEmpty.gold === 0 && wildEmpty.items.length === 0);
+  const wildEmpty = api.rollBody(false, seqRng([0.99, 0.99, 0.99, 0.99, 0.99, 0]));
+  yes('a wild body whose every roll misses still carries one common supply (#6715)',
+    wildEmpty.gold === 0 && wildEmpty.items.length === 1 && wildEmpty.items[0].name === 'lockpick');
+  let neverEmpty = true;
+  for (let n = 0; n < 2000 && neverEmpty; n++) {
+    const body = api.rollBody(n % 2 === 0, Math.random);
+    if (!body.gold && !body.items.length) neverEmpty = false;
+  }
+  yes('no body, camp or wild, ever rolls empty (2000 rolls)', neverEmpty);
   const wildGood = api.rollBody(false, seqRng([0.99, 0.99, 0.99, 0, 0, 0.99]));
   yes('a good find on a body is ordinary gear',
     wildGood.items.length === 1 && wildGood.items[0].name === 'iron sword');
@@ -387,10 +394,10 @@ if (block) {
   const wildRig = rig(function () { return 0.99; });
   wildRig.putActor(1, '371de:Skyrim.esm');
   wildRig.putBody(0x21, 'draugr:Skyrim.esm', dead);
-  yes('an empty body says there is nothing',
-    wildRig.onBody(1, 0x21) === 'There is nothing on this body.');
-  yes('an empty body hands nothing', wildRig.given.length === 0);
-  yes('a second search of an empty body is silence', wildRig.onBody(1, 0x21) === null);
+  const wildTaken = wildRig.onBody(1, 0x21);
+  yes('a wild body whose rolls all missed still hands over a common supply (#6715)',
+    !!wildTaken && wildTaken.indexOf('You take ') === 0 && wildRig.given.length > 0);
+  yes('a second search of it is silence', wildRig.onBody(1, 0x21) === null);
 
   const personRig = rig(function () { return 0; });
   personRig.putActor(1, '371de:Skyrim.esm');
@@ -404,6 +411,27 @@ if (block) {
   wolfRig.putBody(0x22, 'wolf:Skyrim.esm', dead);
   yes('a hunter carcass is not paid by the body table', wolfRig.onBody(1, 0x22) === null);
   yes('a hunter carcass hands nothing', wolfRig.given.length === 0);
+}
+
+// The burial set is dungeon only (Patrick, 26 October 2026, #4676): its four
+// Skyforge armour recipes are cuts since the first pass, which every recipe
+// build applies (game/tests/test-1714-cut-file.js), the maker check exempts
+// the four pieces with the set's reason, and the loot page says so. The cut
+// files themselves are the content build's to write, and a checkout may hold
+// an older laid copy, so this reads what writes them.
+{
+  const REPO = path.join(__dirname, '..', '..');
+  const writer = fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Write-CutItems.js'), 'utf8');
+  const waiting = JSON.parse(fs.readFileSync(path.join(REPO, 'scripts', 'dev', 'Check-Makers.waiting.json'), 'utf8'));
+  const page = fs.readFileSync(path.join(REPO, 'docs', 'systems', 'dungeon-loot.md'), 'utf8');
+  const BURIAL = ['f46cc:Skyrim.esm', 'f46cd:Skyrim.esm', 'f46cf:Skyrim.esm', 'f46d0:Skyrim.esm'];
+  const PIECES = ['18388:Skyrim.esm', '56a9d:Skyrim.esm', '56a9e:Skyrim.esm', '56b17:Skyrim.esm'];
+  yes('the four Skyforge burial armour recipes are cuts since the first pass, with the set\'s reason (#4676)',
+    BURIAL.every(function (id) { return writer.indexOf("'" + id + "': BURIAL_SET") >= 0; }) && /const BURIAL_SET = 'The Ancient Nord burial set/.test(writer));
+  yes('the maker check exempts the four pieces as the burial set (#4676)', PIECES.every(function (d) {
+    return (waiting.exempt || []).some(function (e) { return e.desc === d && /burial set is found in a dungeon/.test(e.why); });
+  }));
+  yes('the loot page says the burial set is dungeon only (#4676)', /burial set is dungeon only: no bench makes any of it/.test(page.replace(/\s+/g, ' ')));
 }
 
 console.log(pass + ' passed, ' + fail + ' failed');

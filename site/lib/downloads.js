@@ -216,9 +216,10 @@ function downloadsBody(d) {
   if (d.launcher) out += '<p>Launcher <strong>' + esc(d.launcher) + '</strong> is current.</p>';
 
   out += '<p class="lede">You need a legitimate copy of <strong>Skyrim Special ' +
-         'Edition</strong> on Steam, on build <strong>1.6.1170</strong> (if yours is ' +
-         'newer, the launcher has a button that puts it back; Steam does the download ' +
-         'under your own account), and ' +
+         'Edition</strong> on Steam, on any build (the server runs ' +
+         '<strong>1.6.1170</strong>, and on another build the launcher&rsquo;s ' +
+         'Downgrade button puts that build in Thornswood&rsquo;s own folder; Steam ' +
+         'does the download under your own account), and ' +
          '<strong>Vortex</strong> with a free Nexus Mods account, which is how the ' +
          'mods get to you.</p>' +
          '<p class="lede"><strong>Eighteen and over.</strong> Downloading or playing ' +
@@ -261,13 +262,13 @@ function downloadsBody(d) {
   }
 
   out += (d.open === true
-           ? '<h2>Join the Discord, then four steps</h2>' +
+           ? '<h2>Join the Discord, then five steps</h2>' +
              '<div class="steps">' +
              '<div class="step"><div><h3>Come into the Discord</h3>' +
                '<p>Anyone in the Discord can play. Read the <a href="/rules">rules</a>, ' +
                'because being there means accepting them. Your Discord account is what ' +
                'lets you through, so there is nothing else to sign up for.</p>'
-           : '<h2>Apply in Discord, then four steps</h2>' +
+           : '<h2>Apply in Discord, then five steps</h2>' +
              '<div class="steps">' +
              '<div class="step"><div><h3>Come into the Discord and apply</h3>' +
                '<p>The installer is open to anybody, and this is the step that unlocks ' +
@@ -304,6 +305,16 @@ function downloadsBody(d) {
            // the installer has no recorded version and the page says so.
            'says <a href="/credits#source">where their source code is</a>.</p>' +
            grab + '</div></div>' +
+         // The launcher's own order (launcher/app/InstallSteps.cs, #6102):
+         // the collection's card waits until Skyrim is on the server's
+         // build, so Downgrade is a step of its own before it (#4496).
+         '<div class="step"><div><h3>Downgrade, if your Skyrim is on another build</h3>' +
+           '<p>Open Thornswood from the desktop shortcut. If your Steam copy is on a ' +
+           'build other than 1.6.1170, which most copies are, a card on the front page ' +
+           'says so. Press Downgrade and Steam downloads that build under your own ' +
+           'account, into Thornswood&rsquo;s own folder. It is a few gigabytes. Your Steam ' +
+           'copy stays on the build it is on. Already on 1.6.1170? There is no card, ' +
+           'and you go straight on to the collection.</p></div></div>' +
          '<div class="step"><div><h3>Install the collection in Vortex</h3>' +
            '<p>Not optional. Without it you have a launcher and no mods, and the ' +
            'server turns you away when you press Play. The mods come from a ' +
@@ -318,8 +329,8 @@ function downloadsBody(d) {
            '<p>Some of the collection&rsquo;s mods are marked adult, so first turn on ' +
            'adult content in your Nexus Mods settings, or Nexus shows the collection ' +
            'as hidden. On a free account Vortex opens each file&rsquo;s page on Nexus ' +
-           'and you press Slow download there, once for each file: 121 files, from ' +
-           '112 mods. A Premium account downloads them without pressing anything.</p>' +
+           'and you press Slow download there, once for each file: 120 files, from ' +
+           '111 mods. A Premium account downloads them without pressing anything.</p>' +
            // The step said install the collection and never said where. The
            // address comes from version.json by way of the news feed, so there
            // is one copy of it and it cannot go stale here.

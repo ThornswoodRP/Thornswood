@@ -105,18 +105,18 @@
     '  box-shadow:0 24px 80px rgba(0,0,0,.7);overflow:hidden}',
     '#' + ID + ' h2{margin:0;padding:18px 24px 14px;font-size:26px;font-weight:normal;line-height:1.1;',
     '  color:#f6e9c8;border-bottom:1px solid rgba(198,170,109,.22);display:flex;align-items:baseline;gap:14px}',
-    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.6);font-style:italic}',
+    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.7);font-style:italic}',
     '#' + ID + ' .body{overflow:auto;padding:16px 24px;display:grid;grid-template-columns:minmax(0,1fr);gap:18px;',
     '  align-content:start;font-size:16px}',
     '#' + ID + ' .foot{padding:12px 24px;border-top:1px solid rgba(198,170,109,.22);',
     '  display:flex;gap:10px;align-items:center;font-size:13.5px;font-style:italic;color:rgba(217,207,180,.7)}',
-    '#' + ID + ' h3{margin:0 0 8px;padding-bottom:6px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' h3{margin:0 0 8px;padding-bottom:6px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);font-weight:normal;border-bottom:1px solid rgba(198,170,109,.22)}',
     '#' + ID + ' .row{display:flex;align-items:center;gap:10px;padding:10px 12px;flex-wrap:wrap;',
     '  border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);margin-bottom:8px}',
     '#' + ID + ' .row .nm{flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:17px}',
     '#' + ID + ' .tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:1 1 220px;min-width:0}',
-    '#' + ID + ' .kicker{display:block;font-size:11px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' .kicker{display:block;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);margin-bottom:4px}',
     // online or not, drawn as the K panel draws a pip: a square with a gold
     // hairline, lit green (the K panel's colour for what is yours) when on
@@ -127,7 +127,7 @@
     '  padding:6px 12px;font-size:15px;line-height:20px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}',
     '#' + ID + ' button[data-confirm]{max-width:100%;white-space:normal;overflow-wrap:anywhere}',
     '#' + ID + ' button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .ask{border:1px solid #e9d19b;background:rgba(201,162,75,.16);',
     '  padding:14px 16px;display:flex;gap:12px;align-items:center}',
     '#ts-ask{position:fixed;left:50%;top:16%;transform:translateX(-50%);z-index:2147483200;',
@@ -137,7 +137,7 @@
     '  outline:1px solid rgba(198,170,109,.14);outline-offset:4px;',
     '  box-shadow:0 24px 80px rgba(0,0,0,.7);padding:22px 26px;display:flex;gap:16px;align-items:center}',
     '#ts-ask .who{flex:1;font-size:20px;line-height:1.35;color:#f6e9c8}',
-    '#ts-ask .kicker{display:block;font-size:11px;letter-spacing:.24em;text-transform:uppercase;',
+    '#ts-ask .kicker{display:block;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);margin-bottom:6px}',
     '#ts-ask button{font-family:inherit;font-style:normal;font-weight:normal;cursor:pointer;',
     '  border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.25);color:#e9d19b;',
@@ -146,8 +146,8 @@
     '#' + ID + ' .ask .who{flex:1}',
     '#' + ID + ' .ask b{font-weight:normal;font-size:16.5px;color:#f6e9c8}',
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5}',
-    '#' + ID + ' .tag{font-size:11px;letter-spacing:.2em;text-transform:uppercase;white-space:nowrap;',
-    '  border:1px solid rgba(198,170,109,.30);padding:1px 6px;color:rgba(217,207,180,.5)}',
+    '#' + ID + ' .tag{font-size:12px;letter-spacing:.2em;text-transform:uppercase;white-space:nowrap;',
+    '  border:1px solid rgba(198,170,109,.30);padding:1px 6px;color:rgba(217,207,180,.7)}',
     '#' + ID + ' .tag.p{border-color:rgba(160,205,150,.85);color:#9fcf92}',
     '#' + ID + ' .tag.m{border-color:#d9a27a;color:#d9a27a}',
     // The K panel's scrollbars, the same rules scoped to this panel, so it
@@ -193,7 +193,7 @@
   // The window's look (#531): its Palatino, its parchment text, and for the
   // second line its faded parchment. It was Georgia and the To Do List web
   // page's greys, left behind when the windows were restyled on 24 Sep.
-  var STRIP_MUTED = 'rgba(217,207,180,.6)';
+  var STRIP_MUTED = 'rgba(217,207,180,.7)';
   var STRIP_CSS =
     'position:fixed;left:50%;top:76px;transform:translateX(-50%);' +
     'z-index:2147483400;pointer-events:none;' +
@@ -287,7 +287,7 @@
       bits.push(
         '<span style="margin:0 14px;color:' + (sameRoom ? '#9fcf92' : '#e9d19b') + '">' +
         '<span style="font-size:18px">' + arrowFor(rel) + '</span> ' +
-        name + ' <span style="color:' + STRIP_MUTED + ';font-size:13px">' + reads + '</span>' +
+        name + ' <span style="color:' + STRIP_MUTED + ';font-size:13px">' + reads + (sameRoom ? ', same room' : '') + '</span>' +
         '</span>');
     }
 
@@ -419,24 +419,27 @@
     return keyName ? 'Escape or ' + keyName + ' closes this.' : 'Escape closes this.';
   }
 
+  // The double quote too, since a request's key goes in an attribute, which
+  // is double quoted (#4475), and a group book's name can hold one.
   function esc(s) {
     return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // In place, so the focused control outlasts the update (#4475).
+  function put(host, html, subject) {
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, subject); } else { host.innerHTML = html; }
   }
 
   function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
-  }
-
-  function drawContents() {
     resetDestructive();
     if (!root) { return; }
     var body = root.querySelector('#' + ID + '-body');
     var sub = root.querySelector('#' + ID + '-sub');
     var foot = root.querySelector('#' + ID + '-foot');
     if (!data) {
-      body.innerHTML = '<div class="none">Waiting for the server.</div>';
+      put(body, '<div class="none">Waiting for the server.</div>');
       sub.textContent = '';
       foot.textContent = '';
       return;
@@ -452,7 +455,10 @@
         : (data.offer.kind === 'dye' ? 'offers to dye your hair with ' + esc(data.offer.about || 'a hair dye')
         : (data.offer.kind === 'book' ? 'invites you into ' + esc(data.offer.about || 'a group book')
                                             : 'is offering to trade'))));
-      html += '<div class="ask"><span class="who"><span class="kicker">Request</span><b>' + esc(data.offer.name) +
+      // Keyed by the request, so a new request gets new answer buttons and a
+      // press meant for the last one cannot answer this one (#4475).
+      html += '<div class="ask" data-row-key="' + esc(['offer', data.offer.kind, data.offer.from, data.offer.about || ''].join(':')) +
+              '"><span class="who"><span class="kicker">Request</span><b>' + esc(data.offer.name) +
               '</b> ' + what + '</span>' +
               '<button class="go" data-do="yes">Accept</button>' +
               '<button data-do="no">Refuse</button></div>';
@@ -510,13 +516,13 @@
                 '<span class="nm">' + esc(f.name) + '</span>' +
                 (f.party ? '<span class="tag p">party</span>' : '') +
                 (f.muted ? '<span class="tag m">muted</span>' : '') +
-                (f.textOff ? '<span class="tag m">text</span>' : '') +
-                (f.nameOff ? '<span class="tag m">name</span>' : '') +
+                (f.textOff ? '<span class="tag m">text hidden</span>' : '') +
+                (f.nameOff ? '<span class="tag m">name hidden</span>' : '') +
                 '<span class="tools">' +
                 (f.on && !f.party ? '<button data-do="ask" data-who="' + esc(friendId) + '">Ask to party</button>' : '') +
-                '<button data-do="mute" data-who="' + esc(friendId) + '">' + (f.muted ? 'Unmute' : 'Mute') + '</button>' +
-                '<button data-do="mtext" data-who="' + esc(friendId) + '">' + (f.textOff ? 'Read' : 'Text') + '</button>' +
-                '<button data-do="mname" data-who="' + esc(friendId) + '">' + (f.nameOff ? 'Show' : 'Name') + '</button>' +
+                '<button data-do="mute" data-who="' + esc(friendId) + '">' + (f.muted ? 'Unmute voice' : 'Mute voice') + '</button>' +
+                '<button data-do="mtext" data-who="' + esc(friendId) + '">' + (f.textOff ? 'Show text' : 'Hide text') + '</button>' +
+                '<button data-do="mname" data-who="' + esc(friendId) + '">' + (f.nameOff ? 'Show name' : 'Hide name') + '</button>' +
                 '<button data-do="drop" data-who="' + esc(friendId) + '">Remove</button>' +
                 '</span></div>';
       }
@@ -610,7 +616,7 @@
             'a change inside the game files rather than on this server.' +
             '</div></div>';
 
-    body.innerHTML = html;
+    put(body, html);
     sub.textContent = (data.friends ? data.friends.length : 0) + ' friend' +
                       ((data.friends && data.friends.length === 1) ? '' : 's');
     foot.textContent = closesLine();
@@ -697,11 +703,11 @@
     destructiveTimer = setTimeout(function () { if (destructiveArm === armed) resetDestructive(); }, 5000);
   }
 
-  /* Mute, Text and Name for one person, by profile id, the way a friend's are. */
+  /* Mute voice, Hide text and Hide name for one person, by profile id, the way a friend's are. */
   function switches(r) {
-    return '<button data-do="mute" data-who="' + esc(r.p) + '">' + (r.muted ? 'Unmute' : 'Mute') + '</button>' +
-           '<button data-do="mtext" data-who="' + esc(r.p) + '">' + (r.textOff ? 'Read' : 'Text') + '</button>' +
-           '<button data-do="mname" data-who="' + esc(r.p) + '">' + (r.nameOff ? 'Show' : 'Name') + '</button>';
+    return '<button data-do="mute" data-who="' + esc(r.p) + '">' + (r.muted ? 'Unmute voice' : 'Mute voice') + '</button>' +
+           '<button data-do="mtext" data-who="' + esc(r.p) + '">' + (r.textOff ? 'Show text' : 'Hide text') + '</button>' +
+           '<button data-do="mname" data-who="' + esc(r.p) + '">' + (r.nameOff ? 'Show name' : 'Hide name') + '</button>';
   }
 
   function offerWords(kind, about) {
@@ -804,13 +810,14 @@
       It comes from the plugin rather than from the server's own push to this
       page, because the plugin is already reading that property for the map
       markers and a page cannot read a plugin's variables. One source, two
-      uses.
+      uses. Only the strip reads it: the panel shows nothing of where
+      anybody is, so a move redraws the strip and leaves the panel alone
+      (#4475), where it used to be drawn again five times a second.
     */
     setWhere: function (list) {
       where = Array.isArray(list) ? list : [];
       ensureStrip();
       drawStrip();
-      if (shown) { draw(); }
     },
     /* For anybody checking whether the strip is doing anything. */
     strip: function () { return where.length; }

@@ -168,7 +168,7 @@ namespace Thornswood
 $driver = $driver.Replace('STANDING_GOES_HERE', $standing)
 
 $exe = $null
-try { $exe = Build-LauncherCode -File $DoorPath, $AskPath, (Join-Path (Split-Path -Parent $DoorPath) 'Failure.cs') -Source $driver -Exe }
+try { $exe = Build-LauncherCode -File $DoorPath, $AskPath, (Join-Path (Split-Path -Parent $DoorPath) 'Failure.cs'), (Join-Path (Split-Path -Parent $DoorPath) 'WholeFile.cs') -Source $driver -Exe }
 catch { Write-Host ('      ' + $_.Exception.Message) }
 Yes 'Door.cs builds the way the project builds it' ($null -ne $exe)
 if (-not $exe) { Done }

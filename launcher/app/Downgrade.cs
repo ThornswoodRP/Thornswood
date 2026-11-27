@@ -786,19 +786,28 @@ namespace Thornswood
             // type the command a second time onto the first one, and Steam ran
             // "download_depot ... 8442952117333549665download_depot ..." (Djinn,
             // 17 Sep). Select all, delete, then type.
+            //
+            // Steam is checked again before every step and before every
+            // character (#4700): a chat or the Friends list taking the front
+            // part way through would otherwise get the rest of the line and
+            // the Enters, and send them to a friend. A step that finds Steam
+            // gone stops there, with nothing more sent.
             Chord(VK_CONTROL, VK_A);
             Thread.Sleep(80);
+            if (!SteamInFront(h)) return false;
             Key(VK_BACK);
             Thread.Sleep(120);
-            Type(cmd);
+            if (!Type(h, cmd)) return false;
             Thread.Sleep(250);
             // Twice. Steam's console suggests commands as you type, and while a
             // suggestion is up the first Enter takes the suggestion instead of
             // running the line; that is how the command sat there typed and not
             // run. With no suggestion up, the second Enter runs an empty line,
             // which Steam ignores.
+            if (!SteamInFront(h)) return false;
             Key(VK_RETURN);
             Thread.Sleep(350);
+            if (!SteamInFront(h)) return false;
             Key(VK_RETURN);
             return true;
         }
@@ -989,7 +998,17 @@ namespace Thornswood
             return false;
         }
 
-        /// <summary>Steam's biggest visible top level window, drawn by steam or by steamwebhelper.</summary>
+        /// <summary>
+        /// Steam's main window: the one visible top level window drawn by
+        /// steam or steamwebhelper whose class is SDL_app and whose title is
+        /// exactly "Steam", as measured on 24 September. Zero when there is
+        /// none, and zero when there is more than one, because then nothing
+        /// says which of them is the console and keys sent to the other land
+        /// somewhere else (#4700). Until #4700 it took the biggest visible
+        /// Steam window, and a chat or the Friends list drawn bigger than the
+        /// main window won. The title is read here only to compare it, and
+        /// never logged (#3627).
+        /// </summary>
         static IntPtr MainWindow()
         {
             var pids = new HashSet<uint>();
@@ -999,8 +1018,13 @@ namespace Thornswood
             GCHandle handle = GCHandle.Alloc(search);
             try { unsafe { EnumWindows(&OnWindow, GCHandle.ToIntPtr(handle)); } }
             finally { handle.Free(); }
-            return search.Best;
+            return search.Matches == 1 ? search.Found : IntPtr.Zero;
         }
+
+        // What Steam's main window is called and what it is, measured on
+        // Patrick's machine on 24 September (SteamNames, above).
+        const string MainClass = "SDL_app";
+        const string MainTitle = "Steam";
 
         /// <summary>
         /// What MainWindow's walk over the windows has found so far. Windows
@@ -1011,8 +1035,8 @@ namespace Thornswood
         sealed class WindowSearch
         {
             public HashSet<uint> Pids;
-            public IntPtr Best;
-            public long BestArea;
+            public IntPtr Found;
+            public int Matches;
         }
 
         [UnmanagedCallersOnly]
@@ -1025,13 +1049,22 @@ namespace Thornswood
                 uint pid;
                 GetWindowThreadProcessId(h, out pid);
                 if (!s.Pids.Contains(pid)) return 1;
-                RECT r;
-                if (!GetWindowRect(h, out r)) return 1;
-                long area = (long)Math.Max(0, r.Right - r.Left) * Math.Max(0, r.Bottom - r.Top);
-                if (area > s.BestArea) { s.BestArea = area; s.Best = h; }
+                if (!IsMainWindow(h)) return 1;
+                s.Matches++;
+                s.Found = h;
             }
-            catch (Exception ex) { Swallow.Note("Downgrade.MainWindow, measuring window", ex); }
+            catch (Exception ex) { Swallow.Note("Downgrade.MainWindow, reading window", ex); }
             return 1;
+        }
+
+        /// <summary>The window's class is SDL_app and its title is exactly "Steam".</summary>
+        static unsafe bool IsMainWindow(IntPtr h)
+        {
+            char* b = stackalloc char[64];
+            int n = GetClassNameW(h, b, 64);
+            if (n <= 0 || new string(b, 0, n) != MainClass) return false;
+            n = GetWindowTextW(h, b, 64);
+            return n > 0 && new string(b, 0, n) == MainTitle;
         }
 
         /// <summary>
@@ -1637,6 +1670,8 @@ namespace Thornswood
 
         [LibraryImport("user32.dll")] private static unsafe partial int EnumWindows(delegate* unmanaged<IntPtr, IntPtr, int> cb, IntPtr lParam);
         [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool IsWindowVisible(IntPtr hWnd);
+        [LibraryImport("user32.dll")] private static unsafe partial int GetClassNameW(IntPtr hWnd, char* name, int max);
+        [LibraryImport("user32.dll")] private static unsafe partial int GetWindowTextW(IntPtr hWnd, char* text, int max);
         [LibraryImport("user32.dll")] private static partial uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
         [LibraryImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool GetWindowRect(IntPtr hWnd, out RECT rect);
         [LibraryImport("user32.dll")] private static partial IntPtr GetForegroundWindow();
@@ -1665,10 +1700,16 @@ namespace Thornswood
         [LibraryImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static partial bool GlobalUnlock(IntPtr mem);
         [LibraryImport("kernel32.dll")] private static partial IntPtr GlobalFree(IntPtr mem);
 
-        static void Type(string text)
+        /// <summary>
+        /// Types text one character at a time into <paramref name="h"/>,
+        /// checking before each that it is still in front. False, with the
+        /// rest not sent, as soon as it is not (#4700).
+        /// </summary>
+        static bool Type(IntPtr h, string text)
         {
             foreach (char c in text)
             {
+                if (!SteamInFront(h)) return false;
                 var down = new INPUT(); down.type = INPUT_KEYBOARD;
                 down.u.ki.wScan = c; down.u.ki.dwFlags = KEYEVENTF_UNICODE;
                 var up = new INPUT(); up.type = INPUT_KEYBOARD;
@@ -1676,6 +1717,7 @@ namespace Thornswood
                 SendInput(2, new[] { down, up }, Marshal.SizeOf<INPUT>());
                 Thread.Sleep(12);
             }
+            return true;
         }
 
         static void Key(ushort vk)

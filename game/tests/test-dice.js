@@ -115,7 +115,7 @@ function yes(what, cond) {
                    'var parts = ["/roll"].concat(spec ? [spec] : []);\n' +
                    branch.replace(/\n\s*return;\s*\n\s*\}\s*$/, '\n    }\n');
       const fn = new Function(
-        'spec', 'mp', 'toProfile', 'log', 'needCharacter', 'OOC_RANGE',
+        'spec', 'mp', 'toProfile', 'log', 'needCharacter', 'ROLL_RANGE',
         'ROLL_MAX_SIDES', 'ROLL_MAX_DICE', 'ROLL_DEFAULT_SIDES',
         'actorId', 'profileId', 'Math', 'isFinite', 'parseInt', 'String',
         body);

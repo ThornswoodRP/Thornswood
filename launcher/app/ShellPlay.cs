@@ -191,6 +191,21 @@ namespace Thornswood
                 // running while their screen says otherwise.
                 if (!await ClearStuckGame(true)) return;
 
+                // A real Skyrim settings folder and its backup both there
+                // (#4698): either can hold the person's saves, so Play waits
+                // for them to keep one, before anything is parked or moved.
+                List<string> twice = Swap.BothKept();
+                if (twice.Count > 0)
+                {
+                    string both = Swap.BothKeptSays(twice);
+                    Log("Not launching. Two copies of your Skyrim settings and saves are on this PC; Scan on the Diagnostics page names them.");
+                    await RunScanAsync(false);
+                    DrawStatus();
+                    ShowPage(PageDiag);
+                    Ask.Tell(both, "Thornswood", Ask.Icon.Warning);
+                    return;
+                }
+
                 // Skyrim's archives this folder shares with the Steam copy still
                 // hold 1.6.1170's bytes (#1217). The change time is all that is
                 // read unless it moved, so this is instant on an ordinary Play.
@@ -240,6 +255,29 @@ namespace Thornswood
                 }
                 if (blockers > 0)
                 {
+                    // The server already runs a newer Release's plugin of ours
+                    // (#7045): the box puts a Release's content plugin on its
+                    // server minutes after the Release is out, so the update
+                    // that carries it is asked for now and taken, rather than
+                    // sending anybody to a Fix that cannot have it.
+                    string ahead = null;
+                    await OffThread(delegate { ahead = Verify.ServerAheadOfRelease(found, Updater.ReleaseCopy(cfg)); });
+                    if (ahead != null)
+                    {
+                        await AskForServersRelease(ahead);
+                        if (pendingLauncher != null)
+                        {
+                            Log("Not launching yet. The server already runs launcher " + pendingLauncher.Version + "'s " + ahead +
+                                ", which this launcher, " + Updater.Version + ", does not have. Play works once that update is in.");
+                            if (cfg.AutoUpdate) UpdateBySelf();
+                            else Ask.Tell(
+                                "The server is already on launcher " + pendingLauncher.Version + ", and its " + ahead + " is not the one this launcher has, so the game would not match the server.\n\n" +
+                                "Press Install now on the card above Play, then Play.",
+                                "Thornswood", Ask.Icon.Warning);
+                            return;
+                        }
+                    }
+
                     Log("Not launching. " + blockers + " problem" + (blockers == 1 ? "" : "s") + " with your mod list would desync everyone.");
                     await RunScanAsync(false);
                     DrawStatus();
@@ -427,6 +465,9 @@ namespace Thornswood
                 MusicDecide();
                 headerVideoDecide();
                 GalleryDecide();
+                // Before Play turns off, so the window holds no button to give
+                // the keyboard back to when the game closes (#4550).
+                if (!win.FocusOffButtons()) LogOnly("The keyboard could not be moved off Play as the game started, so a key pressed as the game closes can press it.");
                 btnPlay.IsEnabled = false;
                 btnPlay.Content = "RUNNING";
                 btnQuitGame.IsVisible = true;

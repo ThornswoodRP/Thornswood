@@ -66,6 +66,9 @@ import sys
 import bsa
 import gamemode_tables
 import own_plugins
+import riftweald
+import claimable_doors
+import claim_sites
 
 COMPRESSED = 0x00040000
 MASTERS = own_plugins.MASTERS
@@ -174,6 +177,13 @@ def walk(pl, doors, out, want_bases):
                 d = pl.desc(fid)
                 if d:
                     doors[d] = True
+            elif tag == b'FACT':
+                d = pl.desc(fid)
+                if d:
+                    marker = next((pl.desc(struct.unpack_from('<I', body)[0])
+                                   for st, body in subrecords(pl.data(p, size, flags))
+                                   if st == b'JAIL' and len(body) == 4), None)
+                    out.setdefault('jailMarkers', {})[d] = marker
             elif tag == b'CELL':
                 d = pl.desc(fid)
                 if d:
@@ -225,7 +235,7 @@ def walk(pl, doors, out, want_bases):
         if buf[p:p + 4] != b'GRUP':
             break
         label = buf[p + 8:p + 12]
-        if label in (b'DOOR', b'CELL', b'WRLD'):
+        if label in (b'DOOR', b'CELL', b'WRLD', b'FACT'):
             eat(p + 24, p + size, None, label)
         p += size
 
@@ -242,10 +252,12 @@ def main():
     ap.add_argument('--check', action='store_true', help='say what it found, write nothing')
     args = ap.parse_args()
 
-    # Built before Thornswood-Last.esp (#5191), so that plugin is never read
-    # here, whether or not the order holds it: what it does to the doors is
-    # taken from the list it is made from, below.
-    order = [n for n in own_plugins.load_order(args.plugins) if n.lower() != LAST_PLUGIN.lower()]
+    with open(args.policy, encoding='utf-8') as fh:
+        policy = json.load(fh)
+    defaults = policy.get('authoredDoorDefaults')
+    order = own_plugins.load_order(args.plugins)
+    if not defaults:
+        order = [n for n in order if n.lower() != LAST_PLUGIN.lower()]
     missing = [n for n in order if not os.path.isfile(own_plugins.plugin_path(args.data, n))]
     if missing:
         print('STOP. %d plugin(s) are not in %s: %s'
@@ -280,31 +292,46 @@ def main():
 
     cells, placed = out['cells'], out['doors']
 
-    # The town gates (#2484) load unlocked: Thornswood-Last.esp carries each
-    # without its lock. This step is built before that plugin (#5191), so it
-    # takes them from the list the plugin is made from, the policy's
-    # gatesUnlocked, and not from the plugin. A gate no plugin places, or one
-    # some other plugin already opens, means the list is out of date, and
-    # stops the build.
-    with open(args.policy, encoding='utf-8') as fh:
-        policy = json.load(fh)
+    # The current table uses the compiled plugin. Older policies also support
+    # reading the pre-Last load order with the individual planned overrides.
     gates = list((policy.get('gatesUnlocked') or {}).get('gates', []))
-    opened = []
-    for g in gates:
-        row = placed.get(g)
-        if row is None:
-            print('STOP. no plugin places the town gate %s that %s names. Nothing was written.' % (g, args.policy))
-            return 1
-        if row.pop('lock', None) is not None:
-            opened.append(g)
-        else:
-            print('STOP. the town gate %s already has no lock; take it off gatesUnlocked in %s. Nothing was written.'
-                  % (g, args.policy))
-            return 1
+    if defaults:
+        if not order or order[-1].lower() != LAST_PLUGIN.lower():
+            raise SystemExit('STOP. Default door locks require the freshly built Last plugin at the end of the order.')
+        # The compiler has already selected, written and verified the native
+        # door overrides. The table reads those same winning records.
+        manifest_path = os.path.join(os.path.dirname(args.policy), 'last-plugin.json')
+        with open(manifest_path, encoding='utf-8') as fh:
+            defaults_manifest = json.load(fh)
+        opened = gates + [riftweald.DOOR] if riftweald.policy_refs(policy) else list(gates)
+        opened += defaults_manifest['authoredDoorsUnlocked']
+        for ref in opened:
+            if ref not in placed or placed[ref].get('lock'):
+                raise SystemExit('STOP. Compiled authored door %s is absent or still locked.' % ref)
+    else:
+        claimable_doors.table_apply(placed, policy)
+        if riftweald.policy_refs(policy):
+            riftweald.table_check(placed)
+            del placed[riftweald.DOOR]['lock']
+        opened = []
+        for g in gates:
+            row = placed.get(g)
+            if row is None:
+                print('STOP. no plugin places the town gate %s that %s names. Nothing was written.' % (g, args.policy))
+                return 1
+            if row.pop('lock', None) is not None:
+                opened.append(g)
+            else:
+                print('STOP. the town gate %s already has no lock; take it off gatesUnlocked in %s. Nothing was written.'
+                      % (g, args.policy))
+                return 1
     print('')
     print('The town gates')
-    print('  %d of %d unlocked from gatesUnlocked (#2484), as Thornswood-Last.esp loads them'
-          % (len(opened), len(gates)))
+    if defaults:
+        print('  %d authored locks removed, as Thornswood-Last.esp loads them' % len(opened))
+    else:
+        print('  %d of %d unlocked from gatesUnlocked (#2484), as Thornswood-Last.esp loads them' %
+              (len(opened), len(gates)))
 
     leads = {d: r for d, r in placed.items() if r.get('to')}
     locked = {d: r for d, r in leads.items() if r.get('lock')}
@@ -357,11 +384,6 @@ def main():
                 print('    %s' % cells.get(b, {}).get('edid', b))
                 break
 
-    if args.check:
-        print('')
-        print('  --check, so nothing was written.')
-        return 0
-
     # 74,161 cells were read and all but a few hundred are open ground with no
     # door in them. Only the ones a door stands in or opens into are kept, because
     # the rest cannot be looked up by anything this table is for and would be four
@@ -387,11 +409,6 @@ def main():
         'doors': placed,
         'buildings': {k: sorted(v) for k, v in buildings.items()},
     }
-    io.open(args.out, 'w', encoding='utf-8', newline='\n').write(
-        json.dumps(payload, indent=1, sort_keys=True))
-    print('')
-    print('  wrote %s (%s bytes)' % (args.out, format(os.path.getsize(args.out), ',')))
-
     # ------------------------------------------------ what the server carries
     #
     # doors.json is 900KB and most of it is for reading rather than for running.
@@ -460,6 +477,25 @@ def main():
                            and not open_ground_without(stands, b)):
             way_out[d] = 1
 
+    by_door, names, way_out, buildings, sites, added = claim_sites.expand(
+        cells, placed, buildings, by_door, names, way_out, policy,
+        {ref for ref in out.get('jailMarkers', {}).values() if ref})
+    payload['buildings'] = {site: sorted(refs) for site, refs in buildings.items()}
+    payload['sites'] = sites
+    payload['counts']['buildings'] = len(buildings)
+    payload['whatABuildingIs'] += (' Other placed doors are claimable sites too: an exterior '
+        'teleport pair shares its smallest reference identity, and a standalone exterior '
+        'gate owns only itself. Newly admitted ambiguous leaves stay passable.')
+    if args.check:
+        print('')
+        print('  --check, so nothing was written.')
+        return 0
+    io.open(args.out, 'w', encoding='utf-8', newline='\n').write(
+        json.dumps(payload, indent=1, sort_keys=True))
+    print('')
+    print('  wrote %s (%s bytes), including %d newly admitted claim leaves'
+          % (args.out, format(os.path.getsize(args.out), ','), len(added)))
+
     print('')
     print('What the server carries')
     print('  %s door(s) answer with a building, across %s building(s)'
@@ -477,7 +513,7 @@ def main():
 if __name__ == '__main__':
     try:
         sys.exit(main())
-    except own_plugins.Unreadable as exc:
+    except (own_plugins.Unreadable, ValueError) as exc:
         # Every plugin is read before anything is written.
         print('STOP. %s. Nothing was written.' % exc)
         sys.exit(1)

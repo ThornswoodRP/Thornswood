@@ -355,6 +355,15 @@ def arrival_number(guild, member):
     return n
 
 
+def welcome_file(png, name, number=None, alt=None):
+    """The drawn card as Discord takes it, with card.describe's words as its
+       image description so a screen reader hears who it is for and their
+       number (#4491). The join post here, backfill.py and redraw.py all
+       attach the card through this, so the three cannot say different
+       things."""
+    return discord.File(png, 'welcome.png', description=card.describe(name, number, alt))
+
+
 @client.event
 async def on_member_join(member):
     # First line in, before anything can go wrong, so the log can tell a join
@@ -390,7 +399,7 @@ async def on_member_join(member):
     line = '%s came up the road.' % member.mention
     try:
         if png is not None:
-            msg = await ch.send(line, file=discord.File(png, 'welcome.png'))
+            msg = await ch.send(line, file=welcome_file(png, name, number, member.name))
         else:
             msg = await ch.send(line)
         if linked:

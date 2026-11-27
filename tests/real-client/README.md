@@ -14,6 +14,12 @@ release: Play from the launcher, the scroll and the choice page, creation
 when the character is new, the world, our journal, the inventory and the
 game's menu, with a screenshot of each.
 
+The run plays its own character: the slot named Adventurer, the name
+creation gives it. It picks that slot by its name, never the slot the page
+picks by itself, which is the last played: on 26 Nov a run that took the
+page's pick joined as a person's own character. With no slot of that name the
+run stops at the choice page and says so.
+
 Creation comes only for a character the server has not got. The launcher
 keeps one list of characters for both servers, so a character made on main
 reads "not on this server" on dev, and playing it makes a new one there. The
@@ -30,15 +36,20 @@ already placed answers `placed`, and the shot and the trip are skipped.
 ## On your machine
 
 On a PC with an install whose Profile holds `dev-allowed.txt`, the launcher
-and the game closed, from the repository folder:
+and the game closed, and the PC signed in and not on the lock screen (the
+game reads keys only while its window is in front, and behind the lock
+screen no window is, so a locked PC stops the run before the launcher
+starts), from the repository folder:
 
 ```
 pwsh scripts\dev\Run-RealClient.ps1
 ```
 
 It writes `temp\real-client\<run>\`: `summary.md`, `run.log`, the plugin's
-`results.jsonl`, the launcher's log for the run and a `.png` for each
-screenshot. `-Root` names another install (the default is
+`results.jsonl`, the launcher's log for the run, a `.png` for each
+screenshot, and under `game\` the game's own logs that the run's game wrote
+(`skyrim-platform.log` with the plugins' Trace lines, and the Thornswood
+logs beside it), which the next game start writes over. `-Root` names another install (the default is
 the install `scripts\release\Where.ps1 Install` finds, with the launcher the
 setup put in `%LOCALAPPDATA%\Thornswood\current`), `-Steps` another list, and `-Publish` puts
 the run on a draft Release of its own, `real-client-<run>`, and a line on the
@@ -73,6 +84,23 @@ and then closes the launcher's window as a person does. A launcher ended by
 force puts nothing back. If either folder still points at the build after
 the run, the run fails and names it.
 
+## After each dev release, by itself
+
+On One, `pwsh scripts\dev\Watch-RealClient.ps1 -Install`, run once from
+`C:\Thornswood-Repo` as the person signed in, makes a task that looks every
+five minutes. It starts one run for the newest Dev Deployment that has
+succeeded and has no "Real game run:" line yet, from that Deployment's own
+commit, when no launcher or game is open, the PC is not on the lock screen
+and nobody has used the keyboard or mouse for ten minutes. Each Deployment is
+run once, pass or fail. The task runs the script from
+`worktrees\real-client-watcher`, which `-Install` makes and each look moves
+to origin/main first, so it never runs a stale copy from the shared clone.
+Every look is a line in `temp\real-client\watch.log` of the clone;
+`-Uninstall` takes the task and that worktree off. To run the newest
+Deployment at once, without the ten idle minutes, run
+`pwsh worktrees\real-client-watcher\scripts\dev\Watch-RealClient.ps1 -Now -Root C:\Thornswood`
+from the clone and keep off the keyboard and mouse while it runs.
+
 ## How a step is written
 
 One object per step, in order. Each takes `timeout` in milliseconds (30000
@@ -88,12 +116,123 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"wait",...,"skip":8}` | any wait with `skip` passes too when what it waits for does not come in its time, and the next 8 steps, which deal with it, are skipped. For what comes only sometimes, like creation. |
 | `{"do":"wait","for":"message","match":["thornswood-front","journal:opened"]}` | the page sent a message starting with those words since the step before this one started. |
 | `{"do":"key","code":36}` | Windows accepted a scan-code down, a 120 ms hold and a separate up, with game-window focus checks before and after (J is 36, I 23, Tab 15, Escape 1). A missing window, refused focus or incomplete input fails the step with its reason. |
-| `{"do":"key","code":36,"via":"game"}` | The same key tapped inside the game with SKSE's `Input.tapKey`, on the next update, with nothing asked of Windows. Windows gives the keyboard to nothing behind the lock screen, and One sits locked with nobody at it, so the dev release run sends its keys this way (26 Nov). The step after it must show the key worked. |
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
+| `{"do":"face","what":"bed"}` | (or `"door"`, or `"vein"`, an ore seam) the character stands beside the nearest bed in its cell, turned to it and looking down at it, in first person, as somebody walks up to use one. The spots on the bed's four sides, 45 units clear of its bounds, are tried nearest first, and the first from which the crosshair lands on the bed is kept; the note names the side and every side that did not see it. A bed is what `thornswood-front.js` clears the owner of (its `isBedRef`). No bed in the cell, or none of its sides seeing it, fails the step. |
+| `{"do":"equip","form":"0E3C16","give":"/give pickaxe","draw":true}` | the item is equipped from the pack, and drawn with `draw`. With none in the pack, `give` is said in chat once, so a run never piles up copies. |
+| `{"do":"sheathe"}` | the weapon is put away. |
+| `{"do":"key","code":56,"hold":2000,"with":[17]}` | keys held together: `with` go down first and come up last, all held `hold` ms (Alt with W, a sprint). |
+| `{"do":"watch","what":"jump","ms":1500,"label":"..."}` | a measurement from the start of the step before (its key) for `ms`: how far the character rose (`jump`, 20 units or more is a jump) or how many frames it was sprinting (`sprint`). It writes a `{"t":"watch",...}` line and passes either way. |
+| `{"do":"wait","for":"cell","name":"Bannered Mare"}` | the character is in a cell whose name holds that; with `"in": false`, in one whose name does not. With `"skip"` it passes over the trip to a place the character is in already. |
+| `{"do":"wait","for":"shut","menus":["InventoryMenu"]}` | none of those menus is open. |
+| `{"do":"wait","for":"crosshair","what":"bed"}` | a bed is under the crosshair, so the game shows its prompt. |
+| `{"do":"face","what":"driver","ref":"bbf6d:CFTO.esp"}` | the character stands 100 units out from the carriage or ferry driver whose placed reference that is, on the side it was on, turned to him and looking level. He is named by his reference because a driver stands outside, where the nearest person is as likely a guard. A driver not loaded near the character, or one `thornswood-front.js` does not take for a driver (its `isRideDriverRef`, the rule E on a driver goes by), fails the step. |
+| `{"do":"wait","for":"crosshair","what":"driver"}` | a driver is under the crosshair. |
+| `{"do":"wait","for":"running","ms":10000}` | the game kept sending updates for that long with no gap of a second, so the world was not paused (a menu that should leave the world running, #6408). |
+| `{"do":"wait","for":"time","ms":1500}` | that long has gone by. Only before a shot of something the game shows for a moment and gives no event for, like its message when a bed refuses. |
 | `{"do":"end"}` | always; the runner closes the game. |
+
+Any step may carry `"task": <issue>`, the test task it checks. A failing
+step of a task takes its `fail-<step>` screenshot and ends that task only:
+the run goes on at the next task's first step. Each task gets one results
+line, `{"t":"task","task":"6408","ok":true}`, or with `ok` false the step
+and why, and the run ends failed naming every failed task.
+A key step with `"ifMenu": [names]` is pressed only while one of those
+menus is open, and passes without a press otherwise. Every task but the
+first starts with Escape that way, a `shut` wait for the same menus and a
+page step that shuts our journal, so a task that failed with a menu up
+leaves the next one where it should start. The dev release run's steps
+after the world are tasks too (the journal, #1016; the inn bed, #6712; the
+inventory, #7008; the game's menu, #5197), so one part failing no longer
+stops the rest from running.
+`tests\real-client\test-tasks.json` is the list of test tasks one character
+checks alone; run it with `-Steps tests\real-client\test-tasks.json`.
+A step with `"tidy": true` and no task puts back what the tasks made (the
+journal tasks' scratch journals are thrown away), whether they passed or
+not; it comes after every task, and if it fails the run ends there.
+Its journal steps press the panel's buttons from a page step, as the click
+would, and leave the run's own journals apart from the character's by the
+ids it had before the first one.
+
+Sitting down and getting up are results lines of their own,
+`{"t":"furniture","enter":true,"bed":true,"ref":"..."}`, the character's
+only, so a run says whether it lay down in a bed (#6712). The list goes to
+the Bannered Mare with `/tp bannered`, sent once from a page step, which the
+run's account may run because it is on the dev list.
+
+Last before the end, test task #4581 presses E on a carriage driver: `/tp
+whiterun` to the start spot outside the gate, Bjorlam at the stables by his
+reference, E, then the server's answer (`ride:wants`) and the panel
+(`ride:opened`), its screenshot `ride-panel`, and Escape to close it. No ride
+is taken and no fare paid. The task's results line says whether E on a driver
+opens his stops, and the game's `thornswood-front.log` beside it has the
+press's own lines ("carriage and ferry drivers: ...", "asked the server where
+driver ... goes").
 
 `tests\test-5197-real-client.js` runs the plugin against a fake game and
 checks every list here only uses these steps.
+
+The two inventory key steps set `inventoryTrace` to record whether Skyrim
+reported the scripted keyboard down and up. The result records menu state
+and whether the game named the Inventory action. The Windows input receipt
+and the following inventory open or close check are reported separately.
+
+`camera-smoke.json` is a separate opt-in, local-only observation for the high
+view report (#6593). It is never part of the normal release run. Use matching
+runner/plugin bytes and an authorized test character. Run-RealClient selects
+Dev; this list adds no Main route or environment switch. It reuses the normal
+release run's entry steps and selects its existing named test character,
+Adventurer. Keep hands off the controls: after the in-world screenshot it
+requests one wheel detent forward and one backward, with a half-second pause
+between completed attempts. Each request must match its unused opted-in plan
+step. It never forces a camera or moves the actor.
+
+An opted-in timed wait or wheel step enables `camera-trace` result lines only
+while that step is active. Limits are thirty seconds from the first trace,
+eight wheel observations/requests and sixty-four receipts per run. Ordinary runs do not
+read camera state. `-Publish` is refused for any list with a camera trace:
+coordinates and screenshots remain local, with no GitHub upload. Do not attach
+these local results to a public issue. The existing dev permission and
+whose-game checks are preserved.
+
+The start sample includes actor XYZ, scale, cell/world, camera mode, browser
+focus, camera/looking controls, known menus and the last native owner target
+XYZ with its timestamp age and epoch. It copies no profile, name or inventory
+contents from the native diagnostic. Missing APIs or target data are `null`.
+`actorTargetZ` is reported only when the target location matches the actual
+world/cell; an old target is not a current walking destination. Read its age.
+
+A game mouse-wheel down records the preceding update sample, then the next
+update and a sample at least 250ms later. `beforeSampleAgeMs` makes the timing
+explicit: the first sample is not a synchronous pre-native-input measurement.
+`sameOwnerEpoch` compares process-local diagnostic epochs/location; it is not
+proof of persistent actor identity across client/controller recreation.
+`actorDeltaXYZ` is reported only within the same world/cell. Multiple attempts
+may overlap; their numbered receipts remain separate. A trace ending may
+truncate a late wheel's settled receipt. No game button event means no claim
+about whether a physical wheel was moved or swallowed before game input.
+
+The explicit `{"do":"wheel","delta":120,"cameraTrace":true}` step (or
+`delta:-120`) captures a before sample on update before asking Windows, then
+records the next update after its acknowledgment and another at least 250ms
+after the acknowledgment. These three `platform-request` receipts exist even
+when no game wheel event arrives. The Windows helper sends one wheel-only
+event after checking game focus, checks its insertion count and focus again,
+and never retries. A rejected acknowledgment fails the step after the after
+samples. An accepted acknowledgment passes delivery only; it does not prove
+Skyrim read it or changed view. A focus race between checks and insertion
+remains possible. Game wheel receipts and platform request receipts are
+separate observations and may describe the same physical input.
+`platformAckAt` is when the plugin consumed the runner's acknowledgment, not
+the exact Windows insertion time. Sampling and runner polling add latency.
+
+Stable actor XYZ while zoom changes the apparent height separates a view
+problem from actual actor movement. Changed actor Z must be investigated as
+movement. Camera mode alone cannot measure camera height: the pinned public
+API offers a screen projection and camera-state enum, but no camera world
+position getter, so camera XYZ/distance are explicitly unavailable. These
+receipts do not prove a camera displacement or a correction. Pair them with
+the local before/after screenshots and exact server/build/load route. A
+separately authorized Main observation is still needed for a Main report.
 
 The runner replies with the request number, `ok` and `note` in
 `thornswood-test-ack.txt`. Use the runner and plugin from the same checkout:
@@ -119,3 +258,37 @@ are unsupported and fail before any input is sent.
 
 PowerShell 7 must be available to run the harness regression test, including
 its fake Windows focus and input cases; missing PowerShell fails the test.
+
+## A minute in an ordinary seat
+
+`bench-seat.json` is a separate Dev acceptance fixture for #6621. It is not
+added to the automatic release run. It uses the canonical choice/world
+steps and inn trip, faces the closest free ordinary chair, bench or stool
+in that room, presses E once, observes sitting for a full minute and then
+uses one movement key to get up. Launch remains an explicitly coordinated
+real-game operation; preparing this file does not run it.
+
+`face` with `what: seat` reuses the bed tooling's bounds and side checks.
+It requires a named FURN seat, excludes beds and occupied furniture, and
+uses the pinned native `getWorkbenchType` value of zero to exclude crafting
+benches. A missing API, no valid seat or lost world is a verification error.
+`wait` with `for: furniture` and `enter: true` requires a new own event for
+that exact target after the normal key request, plus native sitting state.
+`wait` with `for: seated` requires a positive interval, the same event epoch
+and native sitting throughout, with no unobserved gap longer than a second.
+Entry and every hold sample require the exact native furniture reference.
+A null or different reference is a verification error even if sit state
+remains seated; this does not claim a transient null is a gameplay defect.
+`enter: false` requires the intentional exit's event, native standing and
+a cleared native furniture reference. The production controls fallback for
+a flickering furniture reference is unchanged.
+
+The run records its existing furniture lines and one bounded
+`seated-observation` receipt with the target, elapsed time, sample count and
+largest sample gap. Review `seat-entered` and `seat-after-minute` screenshots
+for the original standing-on-collision symptom: events/state alone do not
+prove the rendered pose. If the first-person view hides the body, visual
+acceptance needs an appropriate view or another observer. This fixture does not claim Rest recovery. The next
+phase needs a safe before/after Body Rest observation for the same character
+and session over the existing ten-minute recovery acceptance interval; it
+must not replace missing furniture events with a manufactured rest report.

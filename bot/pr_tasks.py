@@ -32,6 +32,16 @@ WHAT IT HOLDS, for each "Test task for #N" block in the body:
   - the body does not also say Closes, Fixes or Resolves #N, which closes
     the issue at the merge, before done-on-merge.yml can copy the task.
 
+KNOWN ISSUES (#7080), with an issue reader: each "Known issue for #N:
+<title>" block, with the lines under it, is held to the rules the bot posts a
+known issue with, and #N must be an open finding (Main Findings or Dev
+Findings). Every open finding the body names with Refs, Closes, Fixes or
+Resolves and no test task for needs one, or "Known issue for #N: unchanged",
+so a change says what it means for a problem testers still meet; Done on
+merge writes the block on the issue. The engine pin's own pull request
+(engine-pin/...) is not asked, using the requested pull request's verified
+same-repository head metadata, never a caller's HEAD_REF prefix.
+
 A TEST TASK IN ANOTHER SHAPE is refused too, when the body has no block:
 a heading or a line that starts "Test task", "Test tasks", "Main test
 task" or "Dev test task" ("## Test task (Dev)", "Main test task, for two
@@ -83,6 +93,7 @@ import urllib.request
 
 # done-on-merge.yml's three patterns, the same text in its PowerShell.
 START = re.compile(r'^\s*Test task for #(\d+)\s*:\s*(.+?)\s*$')
+KNOWN_START = re.compile(r'^\s*Known issue for #(\d+)\s*:\s*(.+?)\s*$')
 HEADING = re.compile(r'^\s*#{1,6}\s')
 RULE = re.compile(r'^\s*---\s*$')
 # PowerShell's '^\s*[\uD800-\uDBFF]' is a character past U+FFFF, the high
@@ -97,6 +108,16 @@ NONE = re.compile(r'\bnone\b', re.I)
 FENCE = re.compile(r'^\s*(```|~~~)')
 # What closes an issue at the merge (GitHub's closing keywords).
 CLOSES = re.compile(r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)\b', re.I)
+# Every issue a "Refs", "Closes", "Fixes" or "Resolves" line names, lists
+# ("Refs #1, #2") included.
+NAMES = re.compile(r'\b(?:refs?|close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+((?:#\d+\b[\s,]*(?:and\s+)?)+)', re.I)
+# A known issue the pull request leaves as it is says so.
+UNCHANGED = re.compile(r'^\s*unchanged\b', re.I)
+# What the bot keeps #known-issues from (bot_github.KNOWN_LABELS).
+FINDINGS = ('Dev Findings', 'Main Findings')
+# The engine pin's branch: its body carries the fork's pull requests, whose
+# changes are the fork's, and engine-pin.yml writes it.
+PIN_HEAD = 'engine-pin/'
 
 
 def blocks(body):
@@ -111,7 +132,8 @@ def blocks(body):
             cur = {'issue': int(m.group(1)), 'title': m.group(2), 'rest': []}
             out.append(cur)
             continue
-        if cur is not None and (HEADING.match(line) or RULE.match(line) or EMOJI.match(line)):
+        if cur is not None and (HEADING.match(line) or RULE.match(line) or EMOJI.match(line)
+                                or KNOWN_START.match(line)):
             cur = None
             continue
         if cur is not None:
@@ -120,6 +142,46 @@ def blocks(body):
         b['steps'] = '\n'.join(b.pop('rest')).strip()
         b['kind'] = 'Dev' if DEV_LINE.match(b['steps']) else 'Main'
     return out
+
+
+def known_blocks(body):
+    """Every "Known issue for #N: <title>" block in a pull request's body, in
+       order, as dicts of issue, title, text (the lines under it, trimmed)
+       and unchanged (its title says the known issue stays as it is, and
+       nothing is copied). It ends where a test task block does, or at the
+       next block of either kind (#7080)."""
+    out, cur = [], None
+    for line in str(body or '').replace('\r\n', '\n').split('\n'):
+        m = KNOWN_START.match(line)
+        if m:
+            cur = {'issue': int(m.group(1)), 'title': m.group(2), 'rest': []}
+            out.append(cur)
+            continue
+        if cur is not None and (HEADING.match(line) or RULE.match(line) or EMOJI.match(line)
+                                or START.match(line)):
+            cur = None
+            continue
+        if cur is not None:
+            cur['rest'].append(line)
+    for b in out:
+        b['text'] = '\n'.join(b.pop('rest')).strip()
+        b['unchanged'] = bool(UNCHANGED.match(b['title'])) and not b['text']
+    return out
+
+
+def named(body):
+    """The issue numbers the body names with Refs, Closes, Fixes or
+       Resolves, outside HTML comments, as a set."""
+    text = re.sub(r'<!--.*?(-->|$)', '', str(body or ''), flags=re.S)
+    out = set()
+    for m in NAMES.finditer(text):
+        out.update(int(n) for n in re.findall(r'#(\d+)', m.group(1)))
+    return out
+
+
+def known_comment_of(block):
+    """The "Known issue:" comment done-on-merge.yml writes for the block."""
+    return 'Known issue: ' + block['title'] + '\n' + block['text']
 
 
 def loose(body):
@@ -165,11 +227,12 @@ def _bot():
     os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
     # The four things read here, from the modules of the bot that have them
     # (#5357).
-    from bot_github import TASK_MARK  # noqa: E402
-    from bot_task_text import _all_marked  # noqa: E402
+    from bot_github import KNOWN_MARK, TASK_MARK  # noqa: E402
+    from bot_task_text import _all_marked, _marked  # noqa: E402
     from bot_post_rules import post_problems  # noqa: E402
     from bot_testing import TASK_BODY_ROOM  # noqa: E402
-    return types.SimpleNamespace(TASK_MARK=TASK_MARK, _all_marked=_all_marked,
+    return types.SimpleNamespace(TASK_MARK=TASK_MARK, KNOWN_MARK=KNOWN_MARK,
+                                 _all_marked=_all_marked, _marked=_marked,
                                  post_problems=post_problems,
                                  TASK_BODY_ROOM=TASK_BODY_ROOM)
 
@@ -220,6 +283,85 @@ def problems(body, read_issue=None, bot=None):
     return out, skipped
 
 
+def _finding(issue):
+    labels = {str(l.get('name') if isinstance(l, dict) else l) for l in (issue or {}).get('labels') or []}
+    return bool(labels & set(FINDINGS))
+
+
+def known_problems(body, read_issue=None, bot=None, head_ref=''):
+    """[(what, [rule broken, ...]), ...] for the known issues of a pull
+       request (#7080), and a list of what was not checked.
+
+       Each "Known issue for #N" block is held to the rules the bot posts a
+       known issue with (post_problems, channel 'known'), read back the way
+       the bot reads the comment done-on-merge.yml writes for it, and #N must
+       be an open finding, which is all the bot posts.
+
+       And every open finding the body names (Refs, Closes, Fixes, Resolves)
+       with no test task in the body needs a known issue block: what the
+       pull request changes about the problem testers still meet is said
+       with the change, so the post never falls behind it. On 26 Nov 2026
+       five of the sixteen open findings had no post at all and three said
+       what was true two weeks before. "Known issue for #N: unchanged", with
+       nothing under it, says it stays as it is. The engine pin's own pull
+       request (engine-pin/...) is not asked: it carries the fork's changes,
+       which are said where they were made. head_ref is verified PR context
+       from pr_context/_event_pr_head, never the caller's queue or branch hint."""
+    bot = bot or _bot()
+    out, skipped = [], []
+    kb = known_blocks(body)
+    tasks = {b['issue'] for b in blocks(body)}
+    seen = set()
+    for b in kb:
+        what = 'known issue for issue %d, "%s"' % (b['issue'], b['title'])
+        rules = []
+        if b['issue'] in seen:
+            rules.append('Duplicates: this pull request has another known issue for issue %d; '
+                         'the bot posts only the last, so write one.' % b['issue'])
+        seen.add(b['issue'])
+        issue = None
+        if read_issue is None:
+            if 'issues' not in skipped:
+                skipped.append('issues')
+        else:
+            issue = read_issue(b['issue'])
+        if not b['unchanged']:
+            # The issue as it will be at the merge: open, as the rules below
+            # hold it, whatever it is read as here.
+            stub = dict(issue or {}, number=b['issue'], state='open')
+            stub.setdefault('labels', [])
+            got = bot._marked(stub, [{'body': known_comment_of(b)}], bot.KNOWN_MARK)
+            title, text = (got[0], got[1]) if got else (b['title'], b['text'])
+            rules += list(bot.post_problems('known', title, text, issue=stub, written=True,
+                                            has_task=False, taken_titles=()))
+        if read_issue is not None:
+            if issue is None or issue.get('pull_request'):
+                rules.append('Issue: %d is not an issue of this repository.' % b['issue'])
+            elif str(issue.get('state')) != 'open':
+                rules.append('Issue: issue %d is closed, so it has no known issue to update.'
+                             % b['issue'])
+            elif not _finding(issue):
+                rules.append('Issue: issue %d is not labelled Main Findings or Dev Findings, '
+                             'and the bot posts known issues only for those.' % b['issue'])
+        out.append((what, rules))
+    if read_issue is None or str(head_ref or '').startswith(PIN_HEAD):
+        return out, skipped
+    have = tasks | {b['issue'] for b in kb}
+    for n in sorted(named(body) - have):
+        issue = read_issue(n)
+        if issue is None or issue.get('pull_request') or str(issue.get('state')) != 'open':
+            continue
+        if not _finding(issue):
+            continue
+        out.append(('open finding %d, which the body names' % n, [
+            'Known issues: issue %d is a finding people still meet, and this pull request '
+            'names it with no test task. Say what the change means for them: a "Known issue '
+            'for #%d: <title>" block with what happens, where, how to avoid it and what is '
+            'being done, which the merge writes on the issue for the bot to post; or "Known '
+            'issue for #%d: unchanged" when it stays as it is.' % (n, n, n)]))
+    return out, skipped
+
+
 def _get(token, path):
     """GET path of GitHub's REST API with token; None for 404 or 410."""
     req = urllib.request.Request(
@@ -241,21 +383,73 @@ def github_reader(repo, token):
     return lambda n: _get(token, 'repos/%s/issues/%d' % (repo, n))
 
 
-def pr_body(repo, token, number=None, head_ref=None):
-    """(body, what) of the pull request numbered number, or of the one open
-       pull request whose head is head_ref in repo; (None, why) when there is
-       none to read."""
+def _verified_pr_head(pr, repo, number):
+    """Only this requested PR's same-repository head can identify a pin."""
+    if (not isinstance(pr, dict) or not isinstance(number, int) or isinstance(number, bool)
+            or number <= 0 or pr.get('number') != number):
+        return ''
+    base, head = pr.get('base'), pr.get('head')
+    if not isinstance(base, dict) or not isinstance(head, dict):
+        return ''
+    for side in (base, head):
+        source = side.get('repo')
+        if not isinstance(source, dict) or str(source.get('full_name') or '').lower() != repo.lower():
+            return ''
+    ref = head.get('ref')
+    return ref if isinstance(ref, str) else ''
+
+
+def pr_context(repo, token, number=None, head_ref=None):
+    """(body, what, verified head) from one requested PR response.
+       A queue's synthetic ref is a selector, never the actual PR's head."""
     if number:
-        pr = _get(token, 'repos/%s/pulls/%d' % (repo, int(number)))
+        number = int(number)
+        pr = _get(token, 'repos/%s/pulls/%d' % (repo, number))
         if pr is None:
-            return None, 'there is no pull request %s' % number
-        return str(pr.get('body') or ''), 'pull request %s' % number
-    owner = repo.split('/')[0]
-    got = _get(token, 'repos/%s/pulls?state=open&per_page=10&head=%s'
-               % (repo, urllib.parse.quote('%s:%s' % (owner, head_ref), safe=''))) or []
-    if len(got) != 1:
-        return None, '%d open pull requests have %s as their head' % (len(got), head_ref)
-    return str(got[0].get('body') or ''), 'pull request %s' % got[0].get('number')
+            return None, 'there is no pull request %s' % number, ''
+        if not isinstance(pr, dict) or pr.get('number') != number:
+            raise ValueError('the pull request response does not match the requested number')
+    else:
+        owner = repo.split('/')[0]
+        got = _get(token, 'repos/%s/pulls?state=open&per_page=10&head=%s'
+                   % (repo, urllib.parse.quote('%s:%s' % (owner, head_ref), safe=''))) or []
+        if len(got) != 1:
+            return None, '%d open pull requests have %s as their head' % (len(got), head_ref), ''
+        pr = got[0]
+        if not isinstance(pr, dict):
+            raise ValueError('the pull request response is not an object')
+        number = pr.get('number')
+        head = pr.get('head')
+        if not isinstance(head, dict):
+            head = {}
+        if head.get('ref') is not None and head.get('ref') != head_ref:
+            raise ValueError('the pull request response does not match the requested head')
+    return str(pr.get('body') or ''), 'pull request %s' % number, _verified_pr_head(pr, repo, number)
+
+
+def pr_body(repo, token, number=None, head_ref=None):
+    """The existing (body, what) interface; provenance stays in pr_context."""
+    body, what, _head = pr_context(repo, token, number, head_ref)
+    return body, what
+
+
+def _event_pr_head(repo, number, body):
+    """Keep first-event body validation local; decline unverified context."""
+    path = os.environ.get('GITHUB_EVENT_PATH', '')
+    if not path or not number or not repo:
+        return ''
+    try:
+        with open(path, encoding='utf-8') as f:
+            event = json.load(f)
+        if not isinstance(event, dict) or event.get('number') != int(number):
+            return ''
+        pr = event.get('pull_request')
+        if not isinstance(pr, dict) or str(pr.get('body') or '') != body:
+            return ''
+        return _verified_pr_head(pr, repo, int(number))
+    except (OSError, ValueError):
+        # Missing or invalid metadata grants no exception to the ordinary gate.
+        return ''
 
 
 def from_event():
@@ -279,6 +473,7 @@ def main(argv):
     repo = os.environ.get('GITHUB_REPOSITORY', '').strip()
     number = os.environ.get('PR_NUMBER', '').strip()
     head_ref = os.environ.get('HEAD_REF', '').strip()
+    verified_head = ''
     if '--file' in argv:
         with open(argv[argv.index('--file') + 1], encoding='utf-8-sig') as f:
             body = f.read()
@@ -287,10 +482,11 @@ def main(argv):
         # a GitHub error on that read was this required check failing the
         # pull request, as the newest run on its head, over one that passed.
         body = os.environ.get('PR_EVENT_BODY', '')
+        verified_head = _event_pr_head(repo, number, body)
         print('reading the body the pull_request event carries, of pull request %s' % (number or '?'))
     elif token and repo and (number or head_ref):
         try:
-            body, what = pr_body(repo, token, number, head_ref)
+            body, what, verified_head = pr_context(repo, token, number, head_ref)
         except (urllib.error.URLError, OSError, ValueError) as e:
             print('FAIL  the pull request could not be read from GitHub, so nothing was checked: %s' % e)
             return 1
@@ -303,8 +499,26 @@ def main(argv):
     reader = github_reader(repo, token) if token and repo else None
     try:
         results, skipped = problems(body, reader)
+        known, kskipped = known_problems(body, reader, head_ref=verified_head)
     except (urllib.error.URLError, OSError, ValueError) as e:
         print('FAIL  an issue the body names could not be read from GitHub, so the check did not finish: %s' % e)
+        return 1
+    kbad = 0
+    for what, rules in known:
+        if rules:
+            kbad += 1
+            print('FAIL  ' + what)
+            for r in rules:
+                print('        ' + r)
+                if os.environ.get('GITHUB_ACTIONS') == 'true':
+                    print('::error title=Known issue::' + r)
+        else:
+            print('PASS  ' + what)
+    if kbad:
+        print('\n%d known issue(s) break a rule. Edit the pull request body; this check runs '
+              'again on the edit. docs/guide/the-board.md, "Test tasks and known issues", has '
+              'the shapes.' % kbad)
+    if kbad and not results:
         return 1
     if not results:
         stray = loose(body)
@@ -320,7 +534,7 @@ def main(argv):
         if stray:
             return 1
         print('PASS  no "Test task for #N:" line in the body, so there is nothing to check')
-        return 0
+        return 1 if kbad else 0
     bad = 0
     for b, rules in results:
         what = '%s test task for issue %d, "%s"' % (b['kind'], b['issue'], b['title'])
@@ -341,7 +555,7 @@ def main(argv):
               'issues", has the shapes.' % (bad, len(results)))
         return 1
     print('\nevery test task in the body passes the bot\'s rules')
-    return 0
+    return 1 if kbad else 0
 
 
 if __name__ == '__main__':

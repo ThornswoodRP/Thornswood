@@ -83,9 +83,16 @@ namespace Thornswood.Tests
             // launcher\tests\test-4459-setup-keys.ps1: the install window
             // worked from the keyboard, and nothing else.
             if (argv.Length > 1 && argv[1] == "setup-keys") return SetupKeys.Run();
+            // launcher\tests\test-4550-play-after-quit.ps1: a key as the game
+            // closes does not press Play, and nothing else. The repository is
+            // the third argument, for the source the harness also reads.
+            if (argv.Length > 2 && argv[1] == "play-after-quit") return PlayAfterQuit.Run(argv[2]);
             // launcher\tests\test-4693-setup-reader.ps1: the install window as
             // a screen reader finds it, and nothing else.
             if (argv.Length > 1 && argv[1] == "setup-reader") return SetupReader.Run();
+            // launcher\tests\test-4708-disabled-tooltips.ps1: a greyed
+            // control's tooltip shows when hovered, and nothing else.
+            if (argv.Length > 1 && argv[1] == "disabled-tips") return DisabledTips.Run();
 
             MainWindow win = null;
             Check("the window is made from its markup", () => win = new MainWindow());

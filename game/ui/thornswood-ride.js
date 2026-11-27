@@ -69,7 +69,7 @@
     '  box-shadow:0 24px 80px rgba(0,0,0,.7);overflow:hidden}',
     '#' + ID + ' h2{margin:0;padding:18px 24px 14px;font-size:26px;font-weight:normal;line-height:1.1;',
     '  color:#f6e9c8;border-bottom:1px solid rgba(198,170,109,.22);display:flex;align-items:baseline;gap:14px}',
-    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.6);font-style:italic}',
+    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.7);font-style:italic}',
     '#' + ID + ' .body{overflow:auto;padding:16px 24px;display:block;font-size:16px}',
     '#' + ID + ' .foot{padding:12px 24px;border-top:1px solid rgba(198,170,109,.22);',
     '  display:flex;gap:10px;align-items:center;justify-content:flex-end}',
@@ -84,7 +84,7 @@
     '#' + ID + ' button:disabled{opacity:.45}',
     '#' + ID + ' .said{color:#f6e9c8;padding:8px 12px;margin-bottom:12px;',
     '  border:1px solid rgba(198,170,109,.42);background:rgba(0,0,0,.30)}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' ::-webkit-scrollbar{width:10px;height:10px}',
     '#' + ID + ' ::-webkit-scrollbar-track{background:rgba(0,0,0,.25)}',
@@ -111,12 +111,12 @@
     if (foot) { foot.onclick = function () { close(); }; }
   }
 
-  function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
+  // In place, so the focused control outlasts the update (#4475).
+  function put(host, html, subject) {
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, subject); } else { host.innerHTML = html; }
   }
 
-  function drawContents() {
+  function draw() {
     if (!root) { return; }
     var title = root.querySelector('h2');
     var body = root.querySelector('.body');
@@ -128,13 +128,13 @@
     var stops = d.stops || [];
     if (!stops.length) { out += '<div class="none">This driver goes nowhere from here.</div>'; }
     for (var i = 0; i < stops.length; i++) {
-      out += '<div class="row"><span class="nm">' + esc(stops[i].name) + '</span>' +
+      out += '<div class="row" data-row-key="' + esc(stops[i].name) + '"><span class="nm">' + esc(stops[i].name) + '</span>' +
         '<span class="fare">' + esc(stops[i].fare) + ' gold</span>' +
         '<button class="go" data-focus-key="' + esc(stops[i].name) + '" data-n="' + i + '">Ride</button></div>';
     }
     out += '<div class="note">The fare goes into ' + esc(d.ledger || 'the hold') + '\'s drop box. ' +
       'If the gold is not in your pack, you do not move and nothing is taken.</div>';
-    body.innerHTML = out;
+    put(body, out, d.driver || '');
     var buttons = body.querySelectorAll('button[data-n]');
     for (var b = 0; b < buttons.length; b++) { buttons[b].onclick = onRide; }
   }

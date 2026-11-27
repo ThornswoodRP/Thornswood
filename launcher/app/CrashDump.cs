@@ -68,12 +68,6 @@ namespace Thornswood
         /// </summary>
         public const int Keep = 2;
 
-        /// <summary>What the setting tells people before they tick it.</summary>
-        public const string SizeNote =
-            "A snapshot is a copy of everything in the game's memory at the moment it crashed. " +
-            "One can be 9 GB or more, and writing it takes a minute or two. Each is kept until staff have looked at that crash, two at most. " +
-            "It stays on this PC and nothing sends it anywhere. Leave this off unless somebody looking into a crash asks for one.";
-
         public static string Ini { get { return Path.Combine(Paths.Game, "Data\\SKSE\\Plugins\\CrashLogger.ini"); } }
         static string Dll { get { return Path.Combine(Paths.Game, "Data\\SKSE\\Plugins\\CrashLogger.dll"); } }
 

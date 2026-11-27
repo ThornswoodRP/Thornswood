@@ -1,6 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const trading = require('../../game/merchant-trading.js');
+require('./test-4617-trader-refusals');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const mode = require('../../tests/gamemode-tables.js').joined(fs.readFileSync(path.join(__dirname,'../../game/gamemode.js'),'utf8'));
 const lookupSource = mode.slice(mode.indexOf('  function findIn('),mode.indexOf('  function findBeast('));
@@ -39,15 +40,18 @@ function worldOf(native) {
   const inv = { 10: { 15: 40, 100: 8, 101: 2 } };
   const records = new Map();
   const live=new Map(),saved=new Map();
+  // A runtime form id is 0xff000000 and its local hex, and its formDesc is that hex alone (#2870);
+  // the small ids here stand for their own local hex.
+  const local=id=>(id>0xff000000?id-0xff000000:id).toString(16);
   return {
     actors, inv, records,
     // A character is a runtime form (formDesc its local hex alone, #2870); a merchant is placed.
-    actor(id) { return actors[id] ? {desc:id.toString(16)+(actors[id].profileId>0?'':':Skyrim.esm'),lifeGeneration:0,runtimeIdentity:'100',isDead:false,isDisabled:false,...actors[id]} : null; },
+    actor(id) { return actors[id] ? {desc:local(id)+(actors[id].profileId>0?'':':Skyrim.esm'),lifeGeneration:0,runtimeIdentity:'100',isDead:false,isDisabled:false,...actors[id]} : null; },
     carry(id, baseId) { return (inv[id] && inv[id][baseId]) || 0; },
     save() { for (const [id,receipt] of live) saved.set(id,receipt); },
     transfer: {
       available() { return native.on; }, validate() {return true;},
-      identity(id) { const a=actors[id]; return a && a.profileId>0 ? {desc:id.toString(16),profileId:a.profileId} : null; },
+      identity(id) { const a=actors[id]; return a && a.profileId>0 ? {desc:local(id),profileId:a.profileId} : null; },
       resolve(desc) { return parseInt(desc.split(':')[0],16); },
       inventory(id) { return {entries:Object.entries(inv[id]).filter(([,count])=>count>0).map(([baseId,count])=>({baseId:Number(baseId),count}))}; },
       receipt(id) { return live.get(id) || "null"; }, saved(id) { return saved.get(id) || "null"; },
@@ -56,7 +60,7 @@ function worldOf(native) {
         if (native.fail === 'refuse') return false;
         if (receipt!==(live.get(id) || "null") || JSON.stringify(this.inventory(id))!==JSON.stringify(expected) || profile!==actors[id].profileId) return false;
         inv[id]={}; for(const row of next.entries) inv[id][row.baseId]=(inv[id][row.baseId] || 0)+row.count;
-        live.set(id,JSON.stringify({actor:id.toString(16)+(actors[id].profileId>0?'':':Skyrim.esm'),profile,sequence}));
+        live.set(id,JSON.stringify({actor:local(id)+(actors[id].profileId>0?'':':Skyrim.esm'),profile,sequence}));
         if (native.fail!=='stuck') saved.set(id,live.get(id));
         return true;
       }

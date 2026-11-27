@@ -1,5 +1,29 @@
 # The test harnesses
 
+Run `node tests/test-7071-claim-eligibility.js` for the real door compiler's
+general claim-site rule over synthetic plugins: stable existing holdings,
+exterior pairs, standalone gates, exact protected doors and safe passage.
+`node game/tests/test-502-jail-rules.js`, `node game/tests/test-502-jail-cells.js`
+and `node game/tests/test-scenario-offices.js` retain actual guard-cell controls
+while ordinary ownership no longer depends on a Jarl office.
+
+Run `node game/tests/test-7071-riften-gate-claim.js` for claiming Riften's
+existing gates from either side, the normal deed and holder flow, safe inside
+egress, active guard cell controls and unrelated door mappings. It executes the actual
+door-map and property sources against an isolated engine and storage fixture.
+
+Run `python tests/claimable-door-unlocks-cases.py` for the four individually
+reviewed authored-lock records. These controls use synthetic plugin fixtures,
+the actual door-table builder, record reader/writer and recipe reconstruction.
+They do not open an installed game. A full content build must still pass the
+exact source/record/dependency guards before the change can be released.
+
+Run `python tests/riftweald-unlock-cases.py` for the exact Riftweald door and
+bolt record controls. It uses synthetic plugins, the real record writer and
+reader, and the real door-table builder; no installed game or native build is
+needed. The real content build must separately pass the strict winning-record
+guards before this change can be accepted for release.
+
 ## What they are
 
 Every `test-*.js` and `test-*.ps1` here checks one thing the scripts, the
@@ -339,4 +363,6 @@ to Chrome's own: the driver's `--hrtf` tool renders a signal through it, and
 `tests\chrome-audio.js` renders the same signal through a PannerNode in a
 headless Chrome over the DevTools protocol, with node's own WebSocket and no
 packages. `chrome-audio.js` finds Chrome on its own (CHROME names one); with
-none on the machine those checks say SKIP.
+none on the machine those checks say SKIP. Its cost check reads the bench
+thread's own CPU clock, not a wall clock, so other harnesses busy on the same
+cores don't count against the mix (#5654).

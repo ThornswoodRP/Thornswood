@@ -16,7 +16,9 @@ const expected='/board-unpin-v1 '+JSON.stringify(['windhelm',1,1000]);
 }
 {
  const p=rig(),b=p.button();b.click();p.advance(5000);b.click();yes('five-second expiry makes the next press only arm again',p.sent.length===0);
- const stale=b.onclick;p.feed();stale.call(b);yes('owner redraw retires detached handlers',p.sent.length===0);p.button().click();p.api.close();p.api.open();p.button().click();yes('close and reopen retire prior confirmation',p.sent.length===0);
+ // The button is kept through an update (#4475); the update is what retires the arm.
+ p.advance(5000);b.click();p.feed();b.click();yes('an owner update between the presses retires the arm',p.sent.length===0);
+ p.feed();p.button().click();p.api.close();p.api.open();p.button().click();yes('close and reopen retire prior confirmation',p.sent.length===0);
 }
 for(const change of [s=>s.board.hold='whiterun',s=>s.board.wall[0].at++,s=>s.board.wall[0].title='Replacement',s=>s.board.here=false,s=>s.board.wall[0].mine=false,s=>s.me=2000]){
  const p=rig(),b=p.button();b.click();change(p.state);p.feed();b.onclick.call(b);yes('changed board/row/owner authority refuses an old confirmation',p.sent.length===0);

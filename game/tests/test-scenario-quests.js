@@ -132,7 +132,7 @@ yes('E2 45 gold is made, and the trader\'s purse is not touched (' + (w.count(BR
 yes('E3 the work rests for 6 hours (' + quest(BRENNA, 'camp').state + ', ' + quest(BRENNA, 'camp').waitMinutes + ' minutes)',
   quest(BRENNA, 'camp').state === 'cooldown' && quest(BRENNA, 'camp').waitMinutes === 360);
 answer = say(BRENNA, '/merchant quest take camp @0');
-yes('E4 taking it again is refused (' + answer + ')', answer === 'This work is still resting.');
+yes('E4 taking it again is refused (' + answer + ')', /^This work is still resting\. Come back in \d+ minutes?\.$/.test(answer));
 
 // -------------------------------------------------------------- F. leave it --
 w.respawn(BANDITS[3]);

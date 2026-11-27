@@ -64,7 +64,7 @@ function dlStep() {
     .map(function (s) { return s.slice(1, -1); }).join('').replace(/<[^>]*>/g, ' ').replace(/&rsquo;/g, '\'').replace(/\s+/g, ' ');
 }
 const steps = [
-  ['join.md, 3. Install the collection in Vortex', section(join, '## 3. Install the collection in Vortex')],
+  ['join.md, 4. Install the collection in Vortex', section(join, '## 4. Install the collection in Vortex')],
   ['help.md, Installing it the first time', section(help, '## Installing it the first time')],
   ['the Downloads page, Install the collection in Vortex', dlStep()]
 ];

@@ -743,6 +743,14 @@
       // at creation. The panel draws these as placed rather than spent, and
       // nothing takes one back out.
       placed: s.placed || {},
+      /*
+        What each class, profession, half and school places (#7168), the
+        table progression's place() reads, sent only while creating. Then a
+        class and a profession are the panel's until Confirm, so the panel adds
+        up what its own picks will place and the tree shows them before the
+        server has them. In the world every pick is already sent and in tree.
+      */
+      placing: creating && P.TUNING ? P.TUNING.placed : undefined,
       points: s.points || 0,
       perks: P.perks(s),
       /*
@@ -1953,7 +1961,7 @@
     */
     if (word === '/plant' || word === '/claim' || word === '/plot' ||
         word === '/deed' || word === '/deeds' || word === '/lock' ||
-        word === '/unlock' || word === '/mold' || word === '/moldhere' || word === '/key' ||
+        word === '/unlock' || word === '/mold' || word === '/moldhere' || word === '/doorlook' || word === '/key' ||
         word === '/companyterms' ||
         word === '/office' || word === '/evict' || word === '/dropbox' ||
         word === '/rent' || word === '/sleephere' || word === '/notice' || word === '/job' ||

@@ -31,9 +31,14 @@ namespace Thornswood.DeployAgent;
 /// the Release commit's records/collection-plugins.json names: on the server
 /// already, or copied from the box's store of that revision
 /// (CollectionStore.ps1 fills it, C:\Thornswood-Deploys\collection). A
-/// plugin the order leaves out is refused: records/collection-dropped.json
-/// says which a revision may drop and why their forms can go, and the gate's
-/// Deploy-DevGamemode -LoadOrder -FromRecord is what reads it.</summary>
+/// plugin the order leaves out goes only when the Release commit's
+/// records/collection-dropped.json names it for the revision that commit's
+/// record is, with why its forms can go, the same rule the gate's
+/// Deploy-DevGamemode -LoadOrder -FromRecord and Deploy-Server hold to
+/// (Test-ThornswoodLoadOrderDrop). Any other is refused. Before 27 Nov 2026
+/// every drop was refused here, so the first Release of a revision that took
+/// a plugin out (13, without McmRecorder.esp) could reach neither server: the
+/// gate's order move runs only after a Deployment is in.</summary>
 public static class ServerOrder
 {
     /// <summary>The catalogue table in the Release's gamemode-tables.zip.</summary>
@@ -41,6 +46,8 @@ public static class ServerOrder
     /// <summary>The collection record a plugin the order adds is held to.</summary>
     public const string Record = "records/collection-plugins.json";
     public const string Settings = "server-settings.json";
+    /// <summary>The plugins a collection revision takes out, and why.</summary>
+    public const string DroppedRecord = "records/collection-dropped.json";
 
     /// <summary>The order the Release's tables name, or null when they carry
     /// no catalogue (a Release from before #6182 had it in gamemode.js, made
@@ -103,6 +110,32 @@ public static class ServerOrder
         return new Collection(slug, rev, rows);
     }
 
+    /// <summary>The plugins the Release commit's records/collection-dropped.json
+    /// lets a server stop loading: those it names, each with why, when it is
+    /// for the collection and revision of that commit's record, and none when
+    /// it is for another revision or there is no such file (null).</summary>
+    public static HashSet<string> MayDrop(byte[]? dropped, Collection record)
+    {
+        var o = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (dropped == null) return o;
+        using var d = JsonDocument.Parse(dropped);
+        var r = d.RootElement;
+        if (r.ValueKind != JsonValueKind.Object) throw new InvalidDataException($"{DroppedRecord} is not an object");
+        var slug = r.TryGetProperty("collection", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() ?? "" : "";
+        var rev = r.TryGetProperty("revision", out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var n) ? n : 0;
+        if (slug != record.Slug || rev != record.Revision) return o;
+        if (!r.TryGetProperty("dropped", out var ds) || ds.ValueKind != JsonValueKind.Array) throw new InvalidDataException($"{DroppedRecord} has no dropped list");
+        foreach (var x in ds.EnumerateArray())
+        {
+            var name = x.ValueKind == JsonValueKind.Object && x.TryGetProperty("name", out var nv) && nv.ValueKind == JsonValueKind.String ? nv.GetString() ?? "" : "";
+            var why = x.ValueKind == JsonValueKind.Object && x.TryGetProperty("why", out var wv) && wv.ValueKind == JsonValueKind.String ? wv.GetString() ?? "" : "";
+            if (name == "" || name.IndexOfAny(['/', '\\', ':']) >= 0 || name is "." or ".." || why.Trim() == "")
+                throw new InvalidDataException($"{DroppedRecord} has a row without a plugin's file name and why it can go");
+            o.Add(name);
+        }
+        return o;
+    }
+
     /// <summary>What a move puts in: Files, by their path under the server's
     /// root (server-settings.json with the new loadOrder, and plugins/X for
     /// each plugin copied from the store), to the staged file; Entries, the
@@ -126,8 +159,9 @@ public static class ServerOrder
     /// does not hold at the record's bytes, from the store. ours are the
     /// plugins the Release itself puts in (ServerPlugins), which the record
     /// does not hold. Throws InvalidDataException with the reason when the
-    /// order cannot be the server's, having touched nothing of the server.</summary>
-    public static Move Stage(string root, IReadOnlyList<string> want, Collection record, string storeRoot, string stage, IReadOnlyCollection<string> ours, Action<string> log)
+    /// order cannot be the server's, having touched nothing of the server.
+    /// mayDrop are the plugins the order may leave out (MayDrop).</summary>
+    public static Move Stage(string root, IReadOnlyList<string> want, Collection record, string storeRoot, string stage, IReadOnlyCollection<string> ours, Action<string> log, IReadOnlyCollection<string>? mayDrop = null)
     {
         // Every name is joined to a folder below, so each has to be a plain
         // file name: Of holds a Release's to that, and so does any caller.
@@ -139,8 +173,12 @@ public static class ServerOrder
             ?? throw new InvalidDataException("the server's server-settings.json is not an object");
         var entries = Entries(settings);
         var dropped = Dropped(entries, want);
-        if (dropped.Count > 0)
-            throw new InvalidDataException($"the Release's order leaves out {string.Join(", ", dropped)}, which the server loads; a plugin a collection revision takes out goes through records/collection-dropped.json and the gate's Deploy-DevGamemode -LoadOrder -FromRecord");
+        var let = mayDrop ?? Array.Empty<string>();
+        var refused = dropped.Where(x => !let.Contains(x, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (refused.Count > 0)
+            throw new InvalidDataException($"the Release's order leaves out {string.Join(", ", refused)}, which the server loads; a plugin a collection revision takes out is named, with why its forms can go, in {DroppedRecord} for {record.Slug} revision {record.Revision}");
+        foreach (var x in dropped.Except(refused, StringComparer.OrdinalIgnoreCase))
+            log($"load order: {x} leaves the server's order: {DroppedRecord} takes it out with {record.Slug} revision {record.Revision}");
         var have = entries.ToDictionary(NameOf, e => e, StringComparer.OrdinalIgnoreCase);
         var plugins = Path.Combine(root, ServerPlugins.Dir);
         // A new entry is written the way the server's entries for its plugins
@@ -179,6 +217,30 @@ public static class ServerOrder
             log($"load order: {n} from the box's store of {record.Slug} revision {record.Revision}, {row.Size:N0} bytes, sha256 {row.Sha256[..12]}");
         }
         settings["loadOrder"] = new JsonArray(newEntries.Select(x => (JsonNode)JsonValue.Create(x)!).ToArray());
+        // A plugin the record lets go is one whose forms can go, and the
+        // engine is told so by forgetPlugins: a save that still names one of
+        // its forms (an item, a head part) then loads without it, where it
+        // otherwise stops the server, "X is 827:McmRecorder.esp, but
+        // McmRecorder.esp is not in the server's load order" (main, build-
+        // 1.3.136, 27 Nov 2026). The names stay there once written, since a
+        // save not loaded yet may still name them, and a plugin the order
+        // loads again leaves it: the engine refuses one it loads.
+        var forget = settings["forgetPlugins"] is JsonArray fa
+            ? fa.Select(x => x?.GetValue<string>() ?? "").Where(x => x != "").ToList()
+            : new List<string>();
+        foreach (var x in dropped.Except(refused, StringComparer.OrdinalIgnoreCase))
+            if (!forget.Contains(x, StringComparer.OrdinalIgnoreCase))
+            {
+                forget.Add(x);
+                log($"load order: {x} goes in forgetPlugins, so a save that names one of its forms loads without it");
+            }
+        foreach (var x in forget.Where(x => want.Contains(x, StringComparer.OrdinalIgnoreCase)).ToList())
+        {
+            forget.Remove(x);
+            log($"load order: {x} leaves forgetPlugins, since the order loads it again");
+        }
+        if (forget.Count > 0) settings["forgetPlugins"] = new JsonArray(forget.Select(x => (JsonNode)JsonValue.Create(x)!).ToArray());
+        else settings.Remove("forgetPlugins");
         var staged = Path.Combine(stage, Settings);
         Directory.CreateDirectory(stage);
         Files.WriteWhole(staged, JsonSerializer.SerializeToUtf8Bytes(settings, new JsonSerializerOptions { WriteIndented = true }));

@@ -26,6 +26,8 @@
 // SkyrimPlatform that refuses game calls outside update exactly the way the
 // fork does, and looks at what reached the corner of the screen.
 //
+// S8 (#4774): the quit runs once per outage, and not again an hour later.
+//
 // Read only.
 const REPO_DIR = require('path').join(__dirname, '..', '..'); // this harness is in game\tests\, the repository is two folders up
 const fs = require('fs');
@@ -342,6 +344,47 @@ if (ready) {
         counts.join(',') === '5,4,3,2,1');
     yes('S7 and nothing was refused, because all of it ran in update',
         h.refused.length === 0);
+  }
+
+  // S8 (#4774): the quit is once per outage. It used to push its own start an
+  // hour ahead, so an hour later the countdown ran again and quit again.
+  {
+    const h = harness();
+    h.run(30000);
+    h.answer = DOWN;
+    h.run(h.every * (h.strikesToLeave + 1) + 6000);
+    yes('S8 the outage quit once', h.quits.length === 1);
+    const n = h.screen.length;
+    // Past the old hour, at the menu, with the server down and then up.
+    h.run(3700000, 100);
+    h.answer = UP;
+    h.run(60000, 100);
+    h.answer = DOWN;
+    h.run(h.every * (h.strikesToLeave + 1) + 6000, 100);
+    yes('S8 THE BUG: an hour later at the menu it does not quit again',
+        h.quits.length === 1);
+    yes('S8 and draws no second countdown', h.screen.length === n);
+    // In a world again: the check is back, and a new outage is its own.
+    h.world.__thornswoodInWorld = true;
+    h.answer = UP;
+    h.run(60000);
+    yes('S8 back in a world, the server is watched again',
+        h.logs.join('\n').indexOf('watching the server again') !== -1);
+    yes('S8 and a server that answers puts nobody out', h.quits.length === 1);
+    const before = h.screen.length;
+    h.answer = DOWN;
+    h.run(h.every * (h.strikesToLeave + 1) + 6000);
+    yes('S8 a new outage in the new world quits once more', h.quits.length === 2);
+    const again = h.screen.slice(before).map(function (s) {
+      const m = s.text.match(/in (\d+)$/);
+      return m ? Number(m[1]) : -1;
+    });
+    yes('S8 with its own five second countdown', again.join(',') === '5,4,3,2,1');
+    yes('S8 which says again that the connection was lost',
+        h.screen.length > before &&
+        h.screen[before].text.indexOf('connection to the server was lost') !== -1);
+    yes('S8 and closes the new connection before the menu',
+        h.closed.filter(function (c) { return c > h.quits[0] && c < h.quits[1]; }).length >= 1);
   }
 }
 

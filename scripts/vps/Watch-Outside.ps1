@@ -680,7 +680,7 @@ function Paths($dir) {
     Outages = (Join-Path $dir 'outages.txt'); Due = (Join-Path $dir 'due.txt')
     Alerts = (Join-Path $dir 'alerts.jsonl'); Sent = (Join-Path $dir 'alerts-sent.txt')
     Log = (Join-Path $dir 'watch.log'); Last = (Join-Path $dir 'last-check.txt')
-    Asking = (Join-Path $dir 'asking.txt')
+    Asking = (Join-Path $dir 'asking.txt'); Dropped = (Join-Path $dir 'alerts-dropped.txt')
   }
 }
 $hookRx = '^https://((ptb|canary)\.)?discord(app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$'
@@ -844,20 +844,35 @@ function Read-Ids($path, $into) {
 }
 
 # Post whatever has not gone and is under a day old. A failure is noted
-# once, on the first run that tries.
+# once, on the first run that tries. Returns what this pass could not hand
+# to Discord (Failed, ids still in the outbox) and what it gave up on
+# (Dropped, ids a day old that were never posted, each said once and kept in
+# alerts-dropped.txt so it is said only once). The run's exit code is made
+# from these (Get-RunCode, #4218): until then a missing or refused webhook
+# and a dropped alert left every run green, so an outage found here could
+# reach nobody and nothing showed it.
 function Deliver($P) {
-  if (-not (Test-Path -LiteralPath $P.Alerts)) { return }
+  $v = @{ Failed = @(); Dropped = @() }
+  if (-not (Test-Path -LiteralPath $P.Alerts)) { return $v }
   $sent = @{}
   Read-Ids $P.Sent $sent
+  $gone = @{}
+  Read-Ids $P.Dropped $gone
   $nowUnix = UnixTime (Get-Now)
   $due = @()
   foreach ($line in (Get-Content -LiteralPath $P.Alerts -Encoding UTF8 -EA SilentlyContinue)) {
     $a = $null
     try { $a = ConvertFrom-Json $line } catch { continue }
     if (-not $a -or -not $a.id -or -not $a.text) { continue }
-    if ($sent.ContainsKey($a.id)) { continue }
+    if ($sent.ContainsKey($a.id) -or $gone.ContainsKey($a.id)) { continue }
     $age = $nowUnix - [int64]$a.at
-    if ($age -gt $alertMaxAge) { continue }
+    if ($age -gt $alertMaxAge) {
+      $gone[$a.id] = $true
+      Add-Content -LiteralPath $P.Dropped -Value $a.id -Encoding ASCII
+      Note $P ('dropped ' + $a.id + ': it could not be posted within a day, so nobody was told')
+      $v.Dropped += ('' + $a.id)
+      continue
+    }
     $sent[$a.id] = $true
     $due += @{ Id = '' + $a.id; Text = '' + $a.text; First = ($age -lt 60) }
   }
@@ -865,16 +880,40 @@ function Deliver($P) {
   foreach ($a in $due) {
     if (-not $url) {
       if ($a.First) { Note $P ('no webhook is set here (WATCH_WEBHOOK), so ' + $a.Id + ' waits') }
+      $v.Failed += $a.Id
       continue
     }
     $w = Send-Webhook $url $a.Text
     if ($w -eq '') {
       Add-Content -LiteralPath $P.Sent -Value $a.Id -Encoding ASCII
       Note $P ('posted ' + $a.Id)
-    } elseif ($a.First) {
-      Note $P ('could not post ' + $a.Id + ': ' + $w + '. It is tried again every run for a day.')
+    } else {
+      if ($a.First) { Note $P ('could not post ' + $a.Id + ': ' + $w + '. It is tried again every run for a day.') }
+      $v.Failed += $a.Id
     }
   }
+  return $v
+}
+
+# What the run's delivery came to: the ids the last pass could not post, and
+# every id dropped in the run.
+$script:Undelivered = @()
+$script:DroppedIds = @()
+
+# The run's exit code: 1 when a message is still not with staff at its end
+# or one was dropped, so the run shows red where somebody looks (#4218).
+# Names only ids, which are public like every Note.
+function Get-RunCode {
+  $code = 0
+  if (@($script:Undelivered).Count) {
+    Write-Host ('  NOT DELIVERED ' + @($script:Undelivered).Count + ' message(s) to staff did not reach Discord: ' + (@($script:Undelivered) -join ', ') + '. They wait in the outbox and are tried again every run for a day.')
+    $code = 1
+  }
+  if (@($script:DroppedIds).Count) {
+    Write-Host ('  DROPPED ' + @($script:DroppedIds).Count + ' message(s) to staff were never posted and are a day old: ' + (@($script:DroppedIds) -join ', ') + '.')
+    $code = 1
+  }
+  return $code
 }
 
 function Trim-Files($P) {
@@ -890,7 +929,7 @@ function Trim-Files($P) {
       [IO.File]::WriteAllText($P.Alerts, $(if ($keep.Count) { ($keep -join "`r`n") + "`r`n" } else { '' }), (New-Object Text.UTF8Encoding($false)))
     }
   }
-  foreach ($f in @($P.Log, $P.Sent)) {
+  foreach ($f in @($P.Log, $P.Sent, $P.Dropped)) {
     if (-not (Test-Path -LiteralPath $f)) { continue }
     $all = @(Get-Content -LiteralPath $f -EA SilentlyContinue)
     if ($all.Count -gt 2000) { Set-Content -LiteralPath $f -Value ($all[-1000..-1]) -Encoding UTF8 }
@@ -943,7 +982,9 @@ function Invoke-Watch($S, $P, [switch]$Remember) {
   if ($Remember) {
     Save-Outages $P $o
     Save-Due $P $due
-    Deliver $P
+    $d = Deliver $P
+    $script:Undelivered = @($d.Failed)
+    $script:DroppedIds = @(@($script:DroppedIds) + @($d.Dropped))
     Trim-Files $P
   }
   return $seen
@@ -1099,14 +1140,15 @@ if ($Run) {
   if ($For -gt 0) {
     $made = Invoke-WatchFor $S $P $For
     Write-Host ('  ' + $made + ' passes, one every ' + $S.Minutes + ' minutes by the clock')
-    exit 0
+    exit (Get-RunCode)
   }
   $seen = Invoke-Watch $S $P -Remember
   if ($null -eq $seen) { exit 0 }
   Write-Results $seen
-  # What is wrong goes to Discord. The run itself fails only when the watcher
-  # does, so a failed run means the watcher needs a look.
-  exit 0
+  # What is wrong goes to Discord. The run itself fails when the watcher
+  # does, and a message it could not hand to staff, or one it dropped, is
+  # the watcher failing (#4218), so a failed run means the watcher needs a look.
+  exit (Get-RunCode)
 }
 
 Write-Host ''

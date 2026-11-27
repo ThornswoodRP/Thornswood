@@ -18,7 +18,9 @@
   values since #3113 (SkyUI's config.txt and itemcard.swf, SkyHUD's
   hudmenu.swf, moreHUD's AHZHudInfo.swf twice), and SkyUI's quest_journal.swf
   with no saving, loading, help or Creation Club since #3127, from the recipes
-  in FromGameModMenus.cs that scripts\mods\Build-ModMenus.py writes: they are
+  in FromGameModMenus.cs that scripts\mods\Build-ModMenus.py writes. SkyUI's
+  inventory recipe uses the same process to close with its mapped key (#7008),
+  and RaceMenu's racesex_menu.swf has one page of sliders (#7087). They are
   their authors' files, made from the mods' own archives in -Data.
 
   Reads the archives and writes nothing, unless -Out names a folder to write
@@ -27,7 +29,7 @@
 
 .PARAMETER Data
   The game's Data folder, whose Skyrim - Interface.bsa and Skyrim - Meshes0.bsa
-  and Meshes1.bsa are read, and SkyUI_SE.bsa, SkyHUD.bsa and AHZmoreHUD.bsa. Default Game\Data in the install Where.ps1
+  and Meshes1.bsa are read, and SkyUI_SE.bsa, SkyHUD.bsa, AHZmoreHUD.bsa and RaceMenu.bsa. Default Game\Data in the install Where.ps1
   Install finds (C:\Thornswood on most machines).
 
 .PARAMETER Out

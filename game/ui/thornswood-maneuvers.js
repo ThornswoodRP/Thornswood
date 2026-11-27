@@ -56,8 +56,8 @@
     '#' + ID + ' .name{flex:1;color:#f6e9c8}',
     '#' + ID + ' .cost{color:rgba(217,207,180,.75);font-size:16px}',
     '#' + ID + ' .ready{color:#8fb85e;font-size:16px;min-width:64px;text-align:right}',
-    '#' + ID + ' .wait{color:rgba(217,207,180,.55);font-size:16px;min-width:64px;text-align:right}',
-    '#' + ID + ' .foot{margin-top:8px;font-size:14px;color:rgba(217,207,180,.6);font-style:italic}'
+    '#' + ID + ' .wait{color:rgba(217,207,180,.7);font-size:16px;min-width:64px;text-align:right}',
+    '#' + ID + ' .foot{margin-top:8px;font-size:14px;color:rgba(217,207,180,.7);font-style:italic}'
   ].join('\n');
 
   function build() {
@@ -94,12 +94,12 @@
     return root;
   }
 
-  function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
+  // In place, so the focused control outlasts the update (#4475).
+  function put(host, html, subject) {
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, subject); } else { host.innerHTML = html; }
   }
 
-  function drawContents() {
+  function draw() {
     build();
     var html = '<div class="title" id="' + ID + '-title">Maneuvers</div>';
     for (var i = 0; i < rows.length; i++) {
@@ -113,7 +113,7 @@
     }
     html += '<div class="foot">A number or a click starts one. ' +
       (keyName ? esc(keyName) + ' or ' : '') + 'Escape closes this.</div>';
-    root.innerHTML = html;
+    put(root, html);
   }
 
   function pick(n) {

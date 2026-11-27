@@ -292,9 +292,24 @@ namespace Thornswood
                 "Fix said what stopped the build: put that right in Vortex, deploy, then press Scan.", false));
         }
 
-        /// <summary>Windows' Skyrim folders still pointed at Thornswood while Skyrim is not running.</summary>
+        /// <summary>
+        /// Windows' Skyrim folders still pointed at Thornswood while Skyrim is
+        /// not running, and a real folder with its backup beside it (#4698),
+        /// which Play refuses until the person keeps one: Fix has no right
+        /// answer there, so it is not Fixable.
+        /// </summary>
         static void WindowsFolders(List<Issue> l)
         {
+            List<string> twice = Swap.BothKept();
+            if (twice.Count > 0)
+            {
+                var pairs = new List<string>();
+                foreach (string win in twice) pairs.Add(win + " and " + win + ".st-backup");
+                l.Add(Issue.Of(IssueKind.BothFolders,
+                    "Two copies of your Skyrim settings and saves are on this PC: " + string.Join("; ", pairs) +
+                    ". Either can hold saves the other does not, so the launcher will not choose between them, and Play waits.", null,
+                    "Keep the one you want under the name without .st-backup, move the other out of that folder, then press Scan.", true));
+            }
             if (!Swap.LeftRedirected() || Checks.GameRunning()) return;
             l.Add(Issue.Of(IssueKind.WindowsFolders, "Windows' Skyrim settings and saves folders are still pointed at Thornswood, though Skyrim is not running, which is what a game that fell over leaves behind.",
                 "Fix puts them back.", "Windows would not let go of one of them: restart the PC, then press Fix again.", false));

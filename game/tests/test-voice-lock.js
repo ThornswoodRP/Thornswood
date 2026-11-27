@@ -1,6 +1,7 @@
 // test-voice-lock.js
 //
-// O locks the microphone open until it is pressed again.
+// O locks the microphone open until it is pressed again, and not while a game
+// menu that takes keys is open, such as the name box in creation (#4799).
 //
 // Patrick, 27 September: "I want a key you can press that will lock voice so
 // like when a bard sings they don't have to hold the key down or put
@@ -46,7 +47,8 @@ function rig(opt) {
     on: function (n, f) { (w.handlers[n] = w.handlers[n] || []).push(f); },
     Debug: { notification: function (t) { w.notes.push(t); } }
   };
-  globalThis.Thornswood = { isTyping: function () { return !!opt.typing; } };
+  globalThis.Thornswood = { isTyping: function () { return !!opt.typing; },
+    keyboardMenu: function () { return opt.menu || ''; } };
   const body =
     'let PTT_KEY = 47, MODE_KEY = 48, LOCK_KEY = ' + (opt.lock || 24) + ';\n' +
     'let phase = 1, myMode = "local", pttHeld = false, voiceLocked = false, lastPttWritten = "";\n' +
@@ -109,6 +111,32 @@ if (handler && letter && send && now) {
     yes('and a v typed into the box does not start it again', !w.talking());
     w.key(47, false);
     opt.typing = false;
+  }
+  {
+    // #4799: an O typed into the race menu's name box, and a B.
+    const opt = { menu: 'RaceSex Menu' };
+    const w = rig(opt);
+    w.tap(24);
+    yes('an O typed into the name box does not lock the microphone', w.files.length === 0 && w.notes.length === 0);
+    w.tap(48);
+    yes('and a B there does not step the voice mode', w.files.length === 0);
+    w.key(47, true);
+    yes('V held over a menu is still talking', w.talking());
+    w.key(47, false);
+    opt.menu = '';
+    w.tap(24);
+    yes('back in the world, O locks it again', w.talking() && /Microphone locked open/.test(w.notes[0] || ''));
+    w.tap(24);
+  }
+  {
+    // A key up while a menu is open still goes through: the lock and mode act
+    // on the way down only, so a key up changes nothing either way.
+    const opt = {};
+    const w = rig(opt);
+    w.key(24, true);
+    opt.menu = 'InventoryMenu';
+    w.key(24, false);
+    yes('a lock pressed in the world and let go in a menu stays locked', w.talking());
   }
   {
     const w = rig({ lock: 59 });

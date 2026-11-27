@@ -10,7 +10,7 @@
 // lifted out of the site with stand-ins for the files, Discord and the reply,
 // the way test-play-characters.js runs /api/play/characters. Then reads the
 // launcher: YourSettings.cs puts the files in place before the game starts,
-// sends them back when it closes, keeps the microphone's line on the PC, and
+// sends them back when it closes, and
 // asks only for names the site keeps.
 //
 // Read only. Nothing here touches settings.json.
@@ -31,6 +31,8 @@ function clone(o) { return JSON.parse(JSON.stringify(o)); }
 yes('the launcher\'s choices are a name the site keeps', ys.nameOk('launcher.json'));
 yes('so are Thornswood.ini, the emote slots and the intro', ys.nameOk('game/Thornswood.ini') &&
     ys.nameOk('game/thornswood-emote-slots.json') && ys.nameOk('game/thornswood-intro.txt'));
+yes('so is QuickLoot\'s own file (#4511)', ys.nameOk('game/quickloot.json'));
+yes('and SkyUI\'s favourite groups (#4511)', ys.nameOk('game/favourite-groups.json'));
 yes('and a mod menu\'s file', ys.nameOk('mcm/SkyUI (SE).ini') && ys.nameOk("mcm/Someone's Mod.ini"));
 yes('a screen or graphics file is not', !ys.nameOk('game/Skyrim.ini') && !ys.nameOk('game/SkyrimPrefs.ini'));
 yes('nor a path out of the folder', !ys.nameOk('mcm/../launcher.json') && !ys.nameOk('mcm/a/b.ini') && !ys.nameOk('../x'));
@@ -99,6 +101,12 @@ async function ask(files, ticket, req, standing, writes) {
     yourSettings: ys, SETTINGS: ys.SETTINGS, chars: require('../site/lib/characters'),
     sendJson: function (r, c, o) { sent = { code: c, obj: o }; return sent; }
   };
+  // The routes read their body with lib/http.js bodyObject (#4382): JSON, and an object.
+  if (env.body && !env.bodyObject) env.bodyObject = async function () {
+    const v = JSON.parse(await env.body.apply(null, arguments));
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+    return v;
+  };
   const names = Object.keys(env);
   await new AsyncFunction(names.join(','), route + '\nreturn null;').apply(null, names.map((n) => env[n]));
   return sent;
@@ -165,14 +173,16 @@ async function ask(files, ticket, req, standing, writes) {
       allowed.length === 7 && tries.every((f) => launcherOk(f) === ys.nameOk('mcm/' + f)));
   yes('and leaves one the site would refuse on the PC, saying so', /if \(MenuFileOk\(n\)\) all\["mcm\/" \+ n\] = f;/.test(cs));
   yes('no screen or graphics file is among them', !/Skyrim(Prefs|Custom)?\.ini/i.test(cs.replace(/\/\/.*$/gm, '')));
-  yes('the microphone\'s line stays on the PC', /MachineLines\s*=\s*\{\s*"MicrophoneName"\s*\}/.test(cs) &&
-      /files\[kv\.Key\]\s*=\s*Strip\(/.test(cs));
+  // #4667: the microphone's line was the one kept on the PC. The launcher is
+  // the one voice client, so Mics writes no such line and nothing is held back.
+  yes('no line is held back from the site any more, the microphone being the launcher\'s alone',
+      !/MachineLines|Strip\(/.test(cs) && /files\[kv\.Key\]\s*=\s*File\.ReadAllText\(kv\.Value\);/.test(cs));
   yes('the launcher\'s choices are sent one at a time, newest last', /static void SendPending\(\)/.test(cs) &&
       /if \(sending\) return;/.test(cs));
 
   const play = read('ShellPlay.cs');
   const putAt = play.indexOf('YourSettings.PutInPlace()');
-  yes('Play puts the account\'s settings in place before the microphone is written', putAt >= 0 &&
+  yes('Play puts the account\'s settings in place before the voice address is written', putAt >= 0 &&
       play.indexOf('Mics.Apply(cfg)') > putAt);
   const shell = read('Shell.cs');
   yes('the launcher sends them back once the game has closed', /YourSettings\.SendBack\(\)/.test(shell));

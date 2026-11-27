@@ -58,6 +58,7 @@
   var at = 0;
   var sent = false;
   var asking = 0;        // the profile id a delete is being confirmed for, or 0
+  var askedAt = 0;       // when the confirm strip went up
 
   function tell(what) {
     try { window.skyrimPlatform.sendMessage('thornswood-front', 'select:' + what); } catch (e) { }
@@ -97,7 +98,7 @@
     '#ts-select .head{padding:32px 44px 20px;border-bottom:1px solid rgba(198,170,109,.3);display:flex;align-items:flex-end;justify-content:space-between}',
     '#ts-select .eyebrow{font-size:13px;letter-spacing:.42em;text-transform:uppercase;color:#c6aa6d;margin-bottom:10px}',
     '#ts-select .title{font-size:42px;color:#f6e9c8;line-height:1.05}',
-    '#ts-select .count{font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:rgba(198,170,109,.7);padding-bottom:8px}',
+    '#ts-select .count{font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:rgba(198,170,109,.85);padding-bottom:8px}',
     '#ts-select .list{padding:22px 44px 8px;overflow:auto;display:grid;gap:14px}',
     /*
       Scrollbars, for this page and for the window it sits in. The browser's
@@ -120,7 +121,7 @@
     '#ts-select .slot.at::before{background:#e9d19b}',
     '#ts-select .slot.empty{border-style:dashed;background:rgba(0,0,0,.18)}',
     '#ts-select .slot.empty.at{background:rgba(120,94,44,.22)}',
-    '#ts-select .slotno{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:rgba(198,170,109,.7);margin-bottom:8px;display:flex;gap:14px}',
+    '#ts-select .slotno{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:rgba(198,170,109,.85);margin-bottom:8px;display:flex;gap:14px}',
     '#ts-select .slotno .tag{color:#e9d19b}',
     '#ts-select .slotno .tag.gone{color:#f6c9b0}',
     '#ts-select .slot.gone{border-style:dashed}',
@@ -129,18 +130,18 @@
     '#ts-select .name{font-size:32px;color:#f6e9c8;line-height:1.1;padding-right:56px}',
     '#ts-select .name.faint{color:rgba(246,233,200,.62);font-style:italic}',
     '#ts-select .stats{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:18px;margin-top:14px}',
-    '#ts-select .stat .k{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:rgba(198,170,109,.65);margin-bottom:4px}',
+    '#ts-select .stat .k{font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:rgba(198,170,109,.85);margin-bottom:4px}',
     '#ts-select .stat .v{font-size:17px;color:#e4d9bf}',
-    '#ts-select .stat .v.dim{color:rgba(228,217,191,.5)}',
+    '#ts-select .stat .v.dim{color:rgba(228,217,191,.7)}',
     '#ts-select .make{font-size:26px;color:#e9d19b;margin-top:2px}',
-    '#ts-select .sub{font-size:15px;line-height:1.5;color:rgba(228,217,191,.6);margin-top:8px;max-width:720px}',
+    '#ts-select .sub{font-size:15px;line-height:1.5;color:rgba(228,217,191,.7);margin-top:8px;max-width:720px}',
     // the delete icon and the confirm strip
     '#ts-select .bin{position:absolute;right:16px;top:16px;width:48px;height:48px;display:grid;place-items:center;border:1px solid rgba(198,170,109,.25);',
-    'color:rgba(228,217,191,.55)}',
+    'color:rgba(228,217,191,.7)}',
     '#ts-select .bin svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}',
     '#ts-select .confirm{position:absolute;inset:0;background:rgba(40,12,10,.96);display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 30px}',
     '#ts-select .confirm .q{font-size:18px;color:#f6e9c8;line-height:1.4}',
-    '#ts-select .confirm .q small{display:block;font-size:13.5px;color:rgba(228,217,191,.6);margin-top:4px}',
+    '#ts-select .confirm .q small{display:block;font-size:13.5px;color:rgba(228,217,191,.7);margin-top:4px}',
     '#ts-select .confirm .b{display:flex;gap:10px}',
     '#ts-select .btn2{border:1px solid rgba(198,170,109,.6);padding:10px 22px;font-size:13px;letter-spacing:.2em;text-transform:uppercase;',
     'color:#e9d19b;background:rgba(0,0,0,.3);white-space:nowrap}',
@@ -148,7 +149,7 @@
     // the foot
     '#ts-select .foot{padding:16px 44px 30px}',
     '#ts-select .status{font-size:15px;color:rgba(228,217,191,.7);min-height:1.5em;margin-bottom:12px;text-align:center}',
-    '#ts-select .hint{font-size:13px;color:rgba(228,217,191,.45);margin-top:4px;text-align:center;letter-spacing:.06em}',
+    '#ts-select .hint{font-size:13px;color:rgba(228,217,191,.7);margin-top:4px;text-align:center;letter-spacing:.06em}',
     // The line at the menu while the world is full (#481): the place, big, in
     // place of the slots, which cannot be played until it is their turn.
     '#ts-select .line{display:none;text-align:center;padding:34px 44px 10px}',
@@ -171,8 +172,8 @@
     '#ts-select .quit{opacity:.72}',
     // Show the sealed scroll next time: an inked tick box, quieter than Close the game.
     '#ts-select .backrow{display:flex;justify-content:center;margin-top:16px;margin-bottom:4px}',
-    '#ts-select .backbox{display:inline-flex;align-items:center;gap:9px;padding:5px 13px 5px 10px;background:rgba(0,0,0,.62);',
-    'border:1px solid rgba(150,82,64,.32);font-style:italic;font-size:14px;letter-spacing:.02em;color:#a2584a;',
+    '#ts-select .backbox{display:inline-flex;align-items:center;gap:9px;padding:5px 13px 5px 10px;background:rgba(0,0,0,.88);',
+    'border:1px solid rgba(150,82,64,.32);font-style:italic;font-size:14px;letter-spacing:.02em;color:#cc7864;',
     'text-shadow:0 1px 0 rgba(0,0,0,.8)}',
     '#ts-select .backbox input{-webkit-appearance:none;appearance:none;flex:none;width:15px;height:15px;margin:0;',
     'border:1.5px solid rgba(162,88,74,.7);border-radius:1px 3px 1px 3px;background:rgba(0,0,0,.45)}',
@@ -709,7 +710,7 @@
         bin.title = 'Forget this character';
         bin.innerHTML = BIN;
         bin.onmousedown = function (ev) { downOn = 'bin'; downSlot = i; if (ev.stopPropagation) ev.stopPropagation(); };
-        bin.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); ask(i, e.id); };
+        bin.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); ask(i, e.id, 'the bin'); };
         card.appendChild(bin);
         if (asking === e.id) {
           var strip = el('div', 'confirm');
@@ -719,10 +720,10 @@
           var b = el('div', 'b');
           var yes = el('div', 'btn2 danger', 'Forget');
           yes.onmousedown = function (ev) { downOn = 'confirm'; downSlot = i; if (ev.stopPropagation) ev.stopPropagation(); };
-          yes.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); forget(e.id); };
+          yes.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); answered('confirmed by the Forget button'); forget(e.id); };
           var no2 = el('div', 'btn2', 'Keep');
           no2.onmousedown = function (ev) { downOn = 'confirm'; downSlot = i; if (ev.stopPropagation) ev.stopPropagation(); };
-          no2.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); asking = 0; draw(); };
+          no2.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); answered('kept, by the Keep button'); asking = 0; draw(); };
           b.appendChild(yes); b.appendChild(no2);
           strip.appendChild(b);
           strip.onmousedown = function (ev) { downOn = 'confirm'; downSlot = i; if (ev.stopPropagation) ev.stopPropagation(); };
@@ -745,7 +746,7 @@
         var was = downOn, wasSlot = downSlot;
         downOn = ''; downSlot = -1;
         if (was === 'confirm') { return; }
-        if (was === 'bin') { ask(wasSlot < 0 ? i : wasSlot, null); return; }
+        if (was === 'bin') { ask(wasSlot < 0 ? i : wasSlot, null, 'the bin, the click landing on the card'); return; }
         at = i; asking = 0; draw(); play();
       };
       elList.appendChild(card);
@@ -754,14 +755,35 @@
   }
 
   /* Put the confirm strip up on a slot, by index, and by id when it is known. */
-  function ask(i, id) {
+  function ask(i, id, how) {
     var list = slots();
     if (i < 0 || i >= list.length) return;
     var e = list[i];
     if (!e || !e.c) return;
     at = i;
     asking = id === null || id === undefined ? Number(e.c.profileId) || 0 : id;
+    askedHow(how);
     draw();
+  }
+
+  /*
+    HOW A FORGET WAS ASKED AND ANSWERED (#7099). A main session's front log
+    had "forgetting character" and, two seconds later, a pick of a new one,
+    and nothing said which key or click put the confirm strip up or which
+    answered it. Enter plays the lit slot and also answers the strip, so a
+    Delete or a bin press nobody meant, and an Enter meant for playing, is
+    one way it could go; a deliberate forget is another. These two lines go
+    to the front log ("choice page: asked to forget, by ..." and "choice
+    page: the ask to forget was ...") with the time between them, so the
+    next one says which. Neither starts "forget ", which is the forget itself.
+  */
+  function askedHow(how) {
+    askedAt = Date.now();
+    tell('asked to forget, by ' + how);
+  }
+  function answered(how) {
+    tell('the ask to forget was ' + how + ', ' + (askedAt ? (Date.now() - askedAt) + ' ms after it was asked' : 'with no ask seen'));
+    askedAt = 0;
   }
 
   function forget(id) {
@@ -822,8 +844,11 @@
   /* Their turn: Join now, with the seconds the server holds the seat. */
   function turn(secs) {
     var until = Date.now() + Math.max(0, Number(secs) || 60) * 1000;
+    var first = !turnUntil;
     if (!turnUntil || until < turnUntil) turnUntil = until;   // the server's clock wins
     root.className = 'waiting turn';
+    // The one thing to do now has the keyboard, so Enter joins (#4475).
+    if (first && elTurn) elTurn.focus();
     elPlace.textContent = 'It is your turn';
     function tick() {
       var left = Math.ceil((turnUntil - Date.now()) / 1000);
@@ -1098,8 +1123,21 @@
     }
     if (keyAct(ev.key)) ev.preventDefault();
   }
+  /*
+    IN LINE, THE KEYS ARE THE BUTTONS' (#4475). The slots are hidden while
+    somebody waits, so Enter and Space go to the button that has focus, Join
+    now or Choose another character, the way a click does. Enter used to be
+    taken for playing the hidden lit slot, which does nothing once a pick is
+    in, so neither button could be pressed from the keyboard. They still
+    pass the window check above like every other key here.
+  */
+  function lineButton() {
+    var b = document.activeElement;
+    return waiting && b && b.tagName === 'BUTTON' && root.contains(b) ? b : null;
+  }
   /* Whether this page has anything bound to the key at all. */
   function keyActs(key) {
+    if (waiting) return (key === 'Enter' || key === ' ') && !!lineButton();
     if (asking) return key === 'Escape' || key === 'Enter';
     return key === 'ArrowDown' || key === 'ArrowUp' || key === 'Enter' ||
            key === 'Delete' || /^[1-9]$/.test(key);
@@ -1112,11 +1150,16 @@
       key = key.key;
     }
     if (introPhase) return introAct(key);
+    if (waiting) {
+      var press = (key === 'Enter' || key === ' ') && lineButton();
+      if (press) press.click();
+      return !!press;
+    }
     var list = slots();
     var n = list.length;
     if (asking) {
-      if (key === 'Escape') { asking = 0; draw(); return true; }
-      if (key === 'Enter') { forget(asking); return true; }
+      if (key === 'Escape') { answered('kept, by Escape'); asking = 0; draw(); return true; }
+      if (key === 'Enter') { answered('confirmed by Enter'); forget(asking); return true; }
       return false;
     }
     if (key === 'ArrowDown') { at = n ? (at + 1) % n : 0; draw(); return true; }
@@ -1124,7 +1167,7 @@
     if (key === 'Enter') { play(); return true; }
     if (key === 'Delete') {
       var e = list[at];
-      if (e && e.c) { asking = e.id; draw(); }
+      if (e && e.c) { asking = e.id; askedHow('the Delete key'); draw(); }
       return true;
     }
     if (/^[1-9]$/.test(key)) {

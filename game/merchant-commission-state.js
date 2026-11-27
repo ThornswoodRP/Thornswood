@@ -118,7 +118,7 @@ function reserve(raw,human,id,terms,at) {
     !integer(terms.unit,0,MAX_GOLD)||!integer(terms.count,1,100000)||!integer(terms.unit*terms.count,0,MAX_GOLD)))return {ok:false,why:'price'};
  const gold=bundle?terms.goods.reduce((sum,row)=>sum+row.count*row.unit,0):terms.unit*terms.count;
  if(owns(next.held,name))return {ok:false,why:'open'};
- if(owns(next.cool,name))return {ok:false,why:'cooldown'};
+ if(owns(next.cool,name))return {ok:false,why:'cooldown',waitMinutes:Math.ceil((cooldownWait(next.cool[name])-at+cooldownAt(next.cool[name]))/60000)};
  if(Object.keys(next.held).length>=MAX_HELD||Object.keys(next.cool).length+Object.keys(next.held).length>=MAX_COOL)return {ok:false,why:'capacity'};
  if(next.serial===Number.MAX_SAFE_INTEGER)return {ok:false,why:'counter'};
  const token=++next.serial;

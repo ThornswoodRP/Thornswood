@@ -33,9 +33,7 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-// Since #502 the act also asks mayHold: a jail is its hold's Jarl's alone.
-const START = '    if (mine && holdsDeed(actorId, building) && (!held || held.by !== mine) &&\n' +
-              '        mayHold(actorId, mine, building)) {';
+const START = '    if (mine && held && held.by !== mine && holdsDeed(actorId, building)) {';
 const END = '\n    }\n';
 const a = src.indexOf(START);
 const b = a < 0 ? -1 : src.indexOf(END, a);
@@ -61,7 +59,7 @@ function press(opts) {
 
   const fn = new Function(
     'mine', 'actorId', 'building', 'held', 'claims', 'holdsDeed', 'holderOf',
-    'nameOf', 'groundHere', 'save', 'pushAll', 'plog', 'notify', 'say', 'mp', 'mayHold',
+    'nameOf', 'save', 'pushAll', 'plog', 'notify', 'say', 'mp',
     'issueMaster', 'masterHandedLine', 'recordWord', 'WORD_SAID',
     block + '\nreturn { moved: false, claims: claims };');
 
@@ -70,13 +68,11 @@ function press(opts) {
     function () { return !!opts.hasDeed; },
     function () { return opts.held || null; },
     function () { return 'Breezehome'; },
-    function () { return opts.groundNow || null; },
     function () { }, function () { },
     function () { logs.push(Array.prototype.join.call(arguments, ' ')); },
     function (id, m) { said.push(m); },
     function (id, m) { said.push(m); },
     { get: function () { return { name: opts.who || 'Somebody' }; } },
-    function () { return opts.mayHold !== false; },
     // The master key (#2254): the new holder is handed their own. 0 is a
     // server whose plugin has no master key record yet.
     function (to, b, held) {
@@ -96,7 +92,7 @@ function press(opts) {
 if (block !== null) {
   const ALICE = 101, BOB = 202;
   const alicesHouse = { by: ALICE, name: 'Alice', at: 1, touched: 1,
-                        locked: true, ground: 'the field' };
+                        locked: true, ground: 'the field', deed: 17 };
 
   // S1: THE WHOLE POINT. Bob has Alice's deed and opens her door. It is his.
   {
@@ -113,13 +109,12 @@ if (block !== null) {
         r.words[0].holder === ALICE && r.words[0].by === BOB);
   }
 
-  // S1j: A JAIL'S DEED IS PAPER (#502). Patrick, 12 Oct: a jail is claimed
-  //      by the Jarl of its hold alone, so its deed in anybody else's hand
-  //      claims nothing at its door.
+  // S1j: Ordinary title is independent of an office (#7071); actual guard
+  //      cell permissions remain in the separate jail-cell controls.
   {
-    const r = press({ mine: BOB, who: 'Bob', hasDeed: true, held: alicesHouse, mayHold: false });
-    yes('S1j a jail\'s deed presented by somebody who may not hold it takes nothing',
-        r.claim && r.claim.by === ALICE && r.said.length === 0);
+    const r = press({ mine: BOB, who: 'Bob', hasDeed: true, held: alicesHouse });
+    yes('S1j a valid ordinary deed is honored without a Jarl office',
+        r.claim && r.claim.by === BOB && r.said.length > 0);
   }
 
   // S1b (#2254): the new holder is handed a master key of their own, and the
@@ -151,15 +146,14 @@ if (block !== null) {
     const r = press({ mine: BOB, hasDeed: true, held: alicesHouse });
     yes('S3 the ground is kept from the old record',
         r.claim.ground === 'the field');
+    yes('S3 the deed keeps the same number on transfer', r.claim.deed === alicesHouse.deed);
   }
 
-  // S4: an unheld building with a deed in hand is taken the same way. A deed
-  //     can outlive a lapsed claim, and it should still open the door to it.
+  // S4: a deed can remain in a pack after its claim ends.
   {
     const r = press({ mine: BOB, who: 'Bob', hasDeed: true, held: null });
-    yes('S4 a deed to nobody\'s house still takes it', r.claim && r.claim.by === BOB);
-    yes('S4 and nobody is named as the loser',
-        r.said.length > 0 && r.said[0].indexOf('no longer') === -1);
+    yes('S4 an ended deed leaves an unclaimed house available', !r.claim);
+    yes('S4 and nobody is told the claim changed', r.said.length === 0);
   }
 
   // S5: NOTHING HAPPENS WITHOUT THE DEED. This is the half that keeps a house
@@ -193,7 +187,8 @@ if (block !== null) {
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/\/\/[^\n]*/g, ' ');
   yes('the rule is reached before the once-an-hour touch write',
-      code.indexOf('holdsDeed(actorId, building) && (!held || held.by !== mine)') <
+      code.indexOf(START.split('\n')[0]) >= 0 &&
+      code.indexOf(START.split('\n')[0]) <
       code.indexOf('held.touched = Date.now()'));
   yes('and it speaks through the two the rest of the file uses',
       /notify\(actorId, told\)/.test(code) && /say\(actorId, told\)/.test(code));

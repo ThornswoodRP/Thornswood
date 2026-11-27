@@ -117,13 +117,16 @@ test('editing a different input does not steal the active field reason', () => {
   p.field('ginvite').value = 'Brenna'; p.fire(p.field('ginvite'), 'input', '');
   assert.equal(field.getAttribute('aria-invalid'), 'true'); assert(field.validationMessage);
 });
-test('redraw retires the reason and detached handlers cannot validate the replacement view', () => {
+// The field and its button are kept through an update (#4475): the update
+// retires the old reason, and a press after it checks the field as it is now.
+test('an update retires the reason, and a later press checks the field again', () => {
   const p = rig(), field = p.field('gline'), button = p.doc.querySelector('[data-g="say"]');
   p.press(button); button.focus(); p.api.setData(p.state); p.prepare();
   assert.equal(field.validationMessage, ''); assert.equal(field.getAttribute('aria-invalid'), null);
+  assert.equal(p.field('gline'), field); assert.equal(p.doc.querySelector('[data-g="say"]'), button);
   button.onclick.call(button); assert.equal(p.sent.length, 0);
-  assert.equal(p.doc.getElementById('ts-journal-field-reason').textContent, '');
-  assert.equal(p.field('gline').getAttribute('aria-invalid'), null);
+  assert.equal(p.doc.getElementById('ts-journal-field-reason').textContent, 'Write a message first.');
+  assert.equal(field.getAttribute('aria-invalid'), 'true');
 });
 test('close and reopen retire validation without inheriting its prior field reference', () => {
   const p = rig(), field = p.field('gline'), button = p.doc.querySelector('[data-g="say"]'); p.press(button);

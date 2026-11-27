@@ -105,6 +105,7 @@ namespace Thornswood
         public const string MadeFromGame = "made-from-game";
         public const string Generated = "generated";
         public const string WindowsFolders = "windows-folders";
+        public const string BothFolders = "windows-folders-twice";
         public const string Icon = "shortcut-icon";
         public const string Client = "client";
         public const string Steam = "steam";
@@ -205,15 +206,26 @@ namespace Thornswood
             // Paths.Live is already the right file for both shapes of install.
             string live = Path.Combine(Paths.Live, "plugins.txt");
 
-            if (!File.Exists(golden))
+            // No list to hold the order against, or one that switches nothing
+            // on (#6327). Until 27 Nov a missing list was one issue that did
+            // not block, and the return skipped the server order, the bytes
+            // and the other servers' clients, so Play went ahead with any
+            // load order and the Mod list row said it matched. An empty list
+            // called every plugin not part of this build, and Fix then copied
+            // it over the live one and switched everything off. Either way
+            // nothing here can say whether this machine matches the server,
+            // so Play waits, and Fix writes nothing from it (SettleLoadOrder).
+            string shipped = ShippedListProblem();
+            if (shipped != null)
             {
-                issues.Add(Issue.Of(IssueKind.Plugins, "This build shipped without a reference plugin list, so there is nothing to compare against.",
-                                    null, "The next update carries one. Fix cannot make it up.", false));
+                issues.Add(Issue.Of(IssueKind.Plugins, shipped, null, NoShippedList, true));
+                Remember(issues, cfg);
                 return issues;
             }
             if (!File.Exists(live))
             {
                 issues.Add(Issue.Of(IssueKind.Plugins, "Your plugins.txt is missing.", "Fix puts the shipped one back.", Retry, true));
+                Remember(issues, cfg);
                 return issues;
             }
 
@@ -427,9 +439,20 @@ namespace Thornswood
                 try { issues.AddRange(Bytes(cfg)); } catch (Exception ex) { Swallow.Note("Verify.Run, Bytes", ex); }
             }
 
-            // Only a server-aware Run is remembered as the shared truth. A
-            // local-only Run(null) from Checks.All must not overwrite a Scan,
-            // or the checklist drifts from the card on the next redraw.
+            Remember(issues, cfg);
+            return issues;
+        }
+
+        /// <summary>
+        /// Keeps a Run's issues as LastIssues, which the Mods and Mod list
+        /// rows read. Only a server-aware Run is remembered as the shared
+        /// truth. A local-only Run(null) from Checks.All must not overwrite a
+        /// Scan, or the checklist drifts from the card on the next redraw.
+        /// Every return of Run comes through here: until 27 Nov the early
+        /// ones did not, so the rows kept an older Run's answer (#6327).
+        /// </summary>
+        static void Remember(List<Issue> issues, Config cfg)
+        {
             if (cfg != null)
             {
                 LastIssues = issues;
@@ -440,7 +463,27 @@ namespace Thornswood
                 LastIssues = issues;
                 LastUsedServer = false;
             }
-            return issues;
+        }
+
+        const string NoShippedList = "Play waits for a release that carries the list, because without it nothing can say whether your load order is the server's. Fix does not make one up.";
+
+        /// <summary>
+        /// What is wrong with the plugin list this build shipped,
+        /// Profile\Default\plugins.txt, or null when it is there and switches
+        /// at least one plugin on (#6327). That list is the reference Scan
+        /// holds the live one against and the one Fix and every update write
+        /// into the game's, so a missing one leaves nothing to compare, and
+        /// an empty one, or one of comments alone, would switch every plugin
+        /// off wherever it was copied.
+        /// </summary>
+        public static string ShippedListProblem()
+        {
+            string golden = Path.Combine(Paths.Golden, "plugins.txt");
+            if (!File.Exists(golden))
+                return "This build has no plugin list of its own (Profile\\Default\\plugins.txt), so there is nothing to hold your load order against.";
+            if (!LoadOrder.SwitchesAnyOn(golden))
+                return "This build's plugin list (Profile\\Default\\plugins.txt) switches no plugin on, so there is nothing to hold your load order against.";
+            return null;
         }
 
         // ------------------------------------------------------------ bytes
@@ -716,8 +759,13 @@ namespace Thornswood
         /// <summary>A plugin of the collection that is not in the game folder and Vortex has no copy of.</summary>
         const string VortexDeploys = "Vortex has to deploy it: in Vortex, enable the Thornswood profile and press Deploy, or install the collection if you have not, then press Scan.";
 
-        /// <summary>A plugin of ours whose server copy the release does not have (#3386).</summary>
-        const string NotInRelease = "Fix takes Thornswood's own plugins from the latest release, and that release does not have the copy the server runs yet, or could not be reached. The next update brings it: take it when it is waiting, then press Scan.";
+        /// <summary>
+        /// A plugin of ours whose server copy this install's release does not
+        /// have (#3386). Said after Fix has asked GitHub for the channel's
+        /// Release at that moment (#7045), so it says what that ask found
+        /// rather than "the latest release", which it never read.
+        /// </summary>
+        const string NotInRelease = "Fix takes Thornswood's own plugins from the release this launcher is on, and it does not have the copy the server runs. Fix asked GitHub for this channel's newest release just now: when one is waiting it is on the card above Play, and Install now brings the server's copy; when none is, the server runs a copy no release has, and staff deploy the server again.";
 
         /// <summary>Thornswood-Last.esp made from this release's recipe, and the server holding another (#2791).</summary>
         const string OtherBuild = "The server and this release are of two builds: take the update when one is waiting; when none is, the server is behind, and staff deploy it again.";
@@ -1154,6 +1202,46 @@ namespace Thornswood
         }
 
         /// <summary>
+        /// The plugin of ours, among <paramref name="issues"/>, that the
+        /// server runs and this install's release does not carry (#7045), or
+        /// null: a line whose answer is NotInRelease, held to the release's
+        /// own copy where the line is about bytes. Such a server is on a newer Release than this launcher:
+        /// the box deploy agent puts a Release's own Thornswood-Content.esp
+        /// on its server a few minutes after the Release is published
+        /// (#6176), and an open launcher had only its half hourly check to
+        /// learn of that Release. So Play and Fix refused, and Fix said the
+        /// release "does not have the copy the server runs yet", while the
+        /// Release that has it was already on GitHub (Patrick, 26 Nov,
+        /// 4:40 PM: build-1.3.134's content plugin on Dev, launcher 1.3.132).
+        /// The caller asks the channel for that Release before it decides
+        /// (Shell.AskForServersRelease). A copy the release does carry is
+        /// Fix's to put in, and is not named here.
+        /// </summary>
+        /// <param name="release">Thornswood's own plugins from the installed
+        /// launcher's package (Updater.ReleaseCopy), as Fix is given them.
+        /// Null when Velopack did not install this launcher, which has no
+        /// channel to ask.</param>
+        public static string ServerAheadOfRelease(List<Issue> issues, Func<string, byte[]> release)
+        {
+            if (issues == null || release == null) return null;
+            foreach (Issue i in issues)
+            {
+                if (i == null || i.WhatWill != NotInRelease) continue;
+                // The order's line: the server has a plugin of ours in a place
+                // where this release's list has none (OrderWhatWill).
+                if (string.IsNullOrEmpty(i.Plugin) || i.WantSize <= 0) return string.IsNullOrEmpty(i.Plugin) ? "a plugin of Thornswood's" : i.Plugin;
+                byte[] bytes;
+                try { bytes = release(i.Plugin); }
+                catch (Exception ex) { Swallow.Note("Verify.ServerAheadOfRelease, the release's copy of " + i.Plugin, ex); continue; }
+                if (bytes == null) return i.Plugin;
+                int crc;
+                using (var ms = new MemoryStream(bytes)) crc = Crc32Of(ms);
+                if (bytes.LongLength != i.WantSize || crc != i.WantCrc) return i.Plugin;
+            }
+            return null;
+        }
+
+        /// <summary>
         /// The release's copy of one plugin of ours, written over the file
         /// that is here, when it is the copy the server runs (#3386).
         /// Written into the existing file rather than swapped for a new one, so
@@ -1290,6 +1378,11 @@ namespace Thornswood
         /// </summary>
         public static int SettleLoadOrder()
         {
+            // A list that is missing or switches nothing on is never written
+            // over the game's (#6327): an empty one there turned every plugin
+            // off. Its loadorder.txt goes with it, since the two are one order.
+            // Scan says why (ShippedListProblem) and Play waits.
+            if (ShippedListProblem() != null) return 0;
             int n = 0;
             foreach (string f in new string[] { "plugins.txt", "loadorder.txt" })
             {

@@ -367,8 +367,9 @@ function claimed() { return W.claims()[HOUSE]; }
 {
   // Eve steals the deed and walks in (the door is unlocked for this).
   lock(HULDA, false);
-  drop(HULDA, 'Deed to Honeyside');
-  give(EVE, DEED_DESC, 1, 'Deed to Honeyside');
+  const deed = W.deedLabel(HOUSE, claimed().deed);
+  drop(HULDA, deed);
+  give(EVE, DEED_DESC, 1, deed);
   atDoor(EVE);
   yes('T1 the deed takes the house', claimed().by === EVE.pid);
   yes('T1 and Hulda\'s master key stops opening it', W.holdsMasterKey(HULDA.a, HOUSE) === false);

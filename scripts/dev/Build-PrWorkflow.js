@@ -73,12 +73,17 @@ function build(src) {
   const tested = /\n  # ALREADY TESTED \(#3182[\s\S]*?\n  tested:\n[\s\S]*?\n\n(?=  # )/.exec(body);
   if (!tested) { fail('build.yml no longer has its "tested" job before the gate and launcher jobs'); }
   body = body.replace(tested[0], '\n');
-  // The pick, tree checks and bot harnesses wait for it in build.yml (#5292, #5958),
-  // the gate's shares wait for it and the pick (#5183), and the launcher job
-  // waits for it and the pick's path rule (#5292).
+  // The pick and bot harnesses wait for it in build.yml (#5292, #5958),
+  // the gate's shares and the tree checks wait for it and the pick (#5183,
+  // #7115), and the launcher job waits for it and the pick's path rule (#5292).
   const waits = "    needs: tested\n    if: ${{ !cancelled() && needs.tested.outputs.run == '' }}\n";
-  if (body.split(waits).length !== 4) { fail('build.yml no longer has the tested condition on exactly the pick, tree checks and bot jobs'); }
+  if (body.split(waits).length !== 3) { fail('build.yml no longer has the tested condition on exactly the pick and bot jobs'); }
   body = body.split(waits).join('');
+  // The tree checks lay the build the pick laid (#7115), so they run once
+  // the pick passed, as they do on main.
+  const treeWaits = "    needs: [tested, pick]\n    if: ${{ !cancelled() && needs.tested.outputs.run == '' && needs.pick.result == 'success' }}\n";
+  if (body.split(treeWaits).length !== 2) { fail('build.yml no longer has the tree checks waiting for the tested and pick jobs, and running only when the pick passed'); }
+  body = body.replace(treeWaits, "    needs: pick\n");
   const shareWaits = "    needs: [tested, pick]\n    if: ${{ !cancelled() && needs.tested.outputs.run == '' && needs.pick.result == 'success' && needs.pick.outputs.shares != '[]' }}\n";
   if (body.split(shareWaits).length !== 2) { fail('build.yml no longer has the gate\'s shares waiting for the tested and pick jobs, and skipped when the pick gave none'); }
   body = body.replace(shareWaits, "    needs: pick\n    if: ${{ needs.pick.outputs.shares != '[]' }}\n");

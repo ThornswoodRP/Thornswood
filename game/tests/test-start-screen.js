@@ -164,7 +164,7 @@ if (KEYS) {
     const st = { now: 10000, told: [], played: 0, timers: [], drawn: 0, forgot: 0, moved: false };
     const clock = { now: function () { return st.now; } };
     const make = new Function('root', 'introKey', 'slots', 'draw', 'play', 'forget', 'tell', 'Date', 'setTimeout', 'clearTimeout', 'st', 'frontHere',
-      'var moved = false, asking = 0, at = 0, introPhase = 0;\n' + KEYS + '\n' +
+      'var moved = false, asking = 0, at = 0, introPhase = 0, waiting = false;\n' + KEYS + '\n' +
       'return { onKey: onKey, keys: keysSay, at: function () { return at; }, asking: function () { return asking; } };');
     const api = make({ className: '' }, function () { return false; },
       function () { return [{ id: 1, c: 1 }, { id: 2, c: 1 }]; },

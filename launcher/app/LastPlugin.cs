@@ -39,7 +39,6 @@ namespace Thornswood
     {
         public const string Name = "Thornswood-Last.esp";
         public const string File = "Data\\Thornswood-Last.esp";
-        public const string RecipeFile = "Data\\Thornswood-Last.recipe";
         const string RecipeName = "Thornswood-Last.recipe";
 
         static readonly byte[] Magic = { (byte)'T', (byte)'S', (byte)'L', (byte)'R', 1 };

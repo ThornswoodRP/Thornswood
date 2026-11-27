@@ -2216,12 +2216,7 @@ namespace Thornswood
         {
             if (shot == null || shot.Image == null) return;
             if (galleryImage != null)
-            {
-                galleryImage.Stretch = Stretch.UniformToFill;
-                galleryImage.HorizontalAlignment = HorizontalAlignment.Stretch;
-                galleryImage.VerticalAlignment = VerticalAlignment.Stretch;
                 galleryImage.Source = shot.Image;
-            }
             if (galleryBy != null)
                 galleryBy.Text = (shot.By != null && shot.By.Length > 0)
                     ? "By " + shot.By
@@ -2794,7 +2789,16 @@ namespace Thornswood
             // every time it checks, it should just update in place if numbers
             // change". Only a row whose text or colour actually differs is
             // touched now, so an unchanged pass moves nothing on screen.
-            List<Check> checks = Checks.All(cfg);
+            //
+            // The build and the collection revision come first, so the rows
+            // judge the same reading the card above Play does (#6944): the
+            // Mods row fails for a collection behind or ahead of the server,
+            // which holds Play, and the Ready card says so. The comment where
+            // they are used, below, says why each is read the way it is.
+            bool wrongBuild = Downgrade.Needed(cfg);
+            // One current observation per draw, with no stale cache between draws.
+            int collectionRevision = updateBar != null && btnInstallNow != null && !wrongBuild ? Checks.CollectionRevision(cfg) : 0;
+            List<Check> checks = Checks.All(cfg, collectionRevision);
             bool all = true;
             var blocking = new List<Check>();
             foreach (Check c in checks)
@@ -2861,9 +2865,9 @@ namespace Thornswood
             // moved on after Thornswood's own folder was made no longer brings
             // the card up: the folder holds 1.6.1170 itself and follows Vortex
             // whatever build the Steam copy is on.
-            bool wrongBuild = Downgrade.Needed(cfg);
-            // One current observation per draw, with no stale cache between draws.
-            int collectionRevision = updateBar != null && btnInstallNow != null && !wrongBuild ? Checks.CollectionRevision(cfg) : 0;
+            //
+            // wrongBuild and collectionRevision are read at the top, before the
+            // rows (#6944).
             if (updateBar != null && btnInstallNow != null && ModsMissing(collectionRevision) && !wrongBuild)
             {
                 ShowCollectionBar(collectionRevision);
@@ -2922,6 +2926,7 @@ namespace Thornswood
             // Vortex (ShellVortexWatch.cs, #5136), which draws it again only
             // when Vortex's answer moves away from this.
             collectionDrawn = CollectionKey(collectionRevision, CollectionProblem(collectionRevision));
+            SayCollectionHold(collectionRevision);
 
             // Wrong Skyrim build: the one thing on this page with a button that
             // fixes it. Below the update bar in priority, because an update can
@@ -4653,16 +4658,14 @@ namespace Thornswood
                 // and ahead are different problems and get different words:
                 // behind means update, ahead means the server has not caught
                 // up with you yet and Play will refuse you on the load order.
+                //
+                // The comparison is Checks.RevisionProblem, which the Mods row
+                // makes too (#6944), so the row cannot be green while this
+                // holds Play.
                 int mine = revision < 0 ? Checks.CollectionRevision(cfg) : revision;
-                int wants = Updater.ServerCollectionRevision;
-                if (mine > 0 && wants > 0)
-                {
-                    if (mine < wants) return "stale";
-                    if (mine > wants) return "ahead";
-                }
+                return Checks.RevisionProblem(mine, Updater.ServerCollectionRevision);
             }
             catch { return ""; }
-            return "";
         }
 
         static bool ModsMissing(int revision = -1)
@@ -4868,11 +4871,14 @@ namespace Thornswood
         /// "the collection is not installed yet" for all three cases, which
         /// was wrong for a copy behind the server and for one ahead of it.
         /// </summary>
-        static string[] CollectionWait()
+        static string[] CollectionWait(int revision = -1)
         {
-            int mine = 0;
-            try { mine = Checks.CollectionRevision(cfg); }
-            catch (Exception ex) { Swallow.Note("Shell.CollectionWait", ex); }
+            int mine = revision < 0 ? 0 : revision;
+            if (revision < 0)
+            {
+                try { mine = Checks.CollectionRevision(cfg); }
+                catch (Exception ex) { Swallow.Note("Shell.CollectionWait", ex); }
+            }
             int wants = Updater.ServerCollectionRevision;
             string problem = CollectionProblem(mine);
             if (problem == "stale")
@@ -4882,6 +4888,47 @@ namespace Thornswood
                 return new[] { "The collection here is on revision " + mine + ", ahead of the server's " + wants + ".",
                                "for the server to be rebuilt on revision " + mine };
             return new[] { "The collection is not installed yet.", "for it to be installed" };
+        }
+
+        /// <summary>
+        /// What launcher.log last said about Play waiting on the mods (#6944):
+        /// the wait it named (CollectionKey and the server's revision), or ""
+        /// when it named none or said the wait was over.
+        /// </summary>
+        static string collectionHoldSaid = "";
+
+        /// <summary>
+        /// launcher.log's account of Play waiting on the mods (#6944): a line
+        /// when the wait starts, saying why and what it waits for; another when
+        /// either revision moves while it waits; and one when it ends.
+        ///
+        /// Play is held on collectionBarUp (DrawStatus), and nothing wrote
+        /// that down. On 26 Nov, on One, Play said UPDATE THE MODS FIRST for
+        /// 15 minutes, with Vortex on revision 11 and the server on 12, and
+        /// launcher.log had no line that said Play was held or why, so the log
+        /// alone could not explain the wait. DrawStatus calls this on every
+        /// draw, with its one reading of the revision, and it writes only when
+        /// what it would say changes.
+        ///
+        /// It replaces the line VortexChanged wrote when the revision moved
+        /// and the card stayed up, which said the same thing from one of the
+        /// ways the wait can change.
+        /// </summary>
+        static void SayCollectionHold(int revision)
+        {
+            int wants = Updater.ServerCollectionRevision;
+            string now = collectionBarUp ? CollectionKey(revision, CollectionProblem(revision)) + "|" + wants : "";
+            if (now == collectionHoldSaid) return;
+            collectionHoldSaid = now;
+            if (now.Length > 0)
+            {
+                string[] wait = CollectionWait(revision);
+                LogOnly(wait[0] + " Play waits " + wait[1] + ".");
+                return;
+            }
+            LogOnly(revision > 0 && revision == wants
+                ? "Play no longer waits on the mods: the collection here is on revision " + revision + ", the one the server was built against."
+                : "Play no longer waits on the mods.");
         }
 
         /// <summary>What Play says when a press reaches it with the collection card up (#4115).</summary>

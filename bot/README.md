@@ -131,8 +131,9 @@ so the two cannot disagree.
 
 ### The holds
 
-`#choose-your-hold` in In Character has the bot's hold buttons and, under
-them, the office panel, where a Jarl gives and takes their hold's Court,
+`#choose-your-hold` in In Character has the bot's hold buttons, where a
+Member opens as many holds as they like and presses one again to close it
+(#7053), and, under them, the office panel, where a Jarl gives and takes their hold's Court,
 Steward and Guards (#2551). Each hold then has a category of its own:
 `#<hold>-announcements`, the hold's hall, `#<hold>-court`, `#<hold>-guard`
 and a `<Hold> Court` voice room. A hold's Citizen role opens its category.
@@ -539,7 +540,7 @@ two different servers stitched together.
 | Patreon | Patreon gives and takes it, never made here |
 | Playtester | Plays the main build. Opens the Discord past Information |
 | Thalmor Boot-Licker, Talos Worshiper, Milk Drinker | The three Patreon tiers |
-| Citizen of *hold* | Where your character lives |
+| Citizen of *hold* | Opens that hold's channels. Picked in `#choose-your-hold`, as many as somebody wants (#7053); not where a character lives in the game |
 | *Hold* Court, Steward of *hold*, Guard of *hold* | The offices that hold's Jarl gives (#2551): an officer at its drop box; its Steward; its Guards. Three for each of the nine holds and Raven Rock, never hoisted, so they never show as a group of their own. In the game one character of the account holds each |
 | *Faction*, *Faction* Officer | A faction's members and its Officers, which its Leader gives and takes |
 | Business Owner | Owns a business book in the game. Support gives it |

@@ -50,18 +50,37 @@ param(
     [int]$Minutes = 20,
     [int]$PlayMinutes = 15,
     [switch]$Publish,
+    # The Dev Deployment the run is for, which the watcher names: the run
+    # goes on that one, not on whichever is newest when it ends, as a dev
+    # release can land while a run is going. Left out, the newest.
+    [string]$Deployment = '',
     [string]$Repo = 'ThornswoodRP/Thornswood'
 )
 
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Run-RealClient.ps1 drives the real game, so it runs on Windows only.' }
 
+# Not from inside an app package's container (#5197). There a folder the
+# launcher moves under %LOCALAPPDATA% goes to that package's own store and
+# the real one stays, so Play cannot point Skyrim's folders at the build and
+# stops on "Could not redirect ... a folder is there again" (One, 26 and 27
+# Nov, runs started from the Claude app's Remote Control). Patrick chose on
+# 27 Nov that runs on One go only through the scheduled task, which runs
+# outside any app by design (q-5197-sandbox-exit, B).
+. (Join-Path $PSScriptRoot 'Get-AppContainerStore.ps1')
+$container = Get-AppContainerStore
+if ($container) {
+    throw ("This run is inside the app container of $container, where Windows keeps a folder moved under AppData\Local in that app's own store, so the launcher could not point Skyrim's folders at the build. " +
+           "Runs go through the scheduled task 'Thornswood real game run': scripts\dev\Watch-RealClient.ps1 -Now [-Steps <file>] asks it for one from here.")
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $where = Join-Path $repoRoot 'scripts\release\Where.ps1'
 if (-not $Root) { $Root = & $where Install }
 $Root = $Root.TrimEnd('\')
 if (-not $Steps) { $Steps = Join-Path $repoRoot 'tests\real-client\dev-release.json' }
-$runId = (Get-Date).ToString('yyyyMMdd-HHmmss')
+$runStarted = Get-Date
+$runId = $runStarted.ToString('yyyyMMdd-HHmmss')
 if (-not $Out) { $Out = Join-Path $repoRoot ('temp\real-client\' + $runId) }
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 
@@ -279,6 +298,15 @@ namespace ThornswoodRealClient {
       return SendInput(1, i, Marshal.SizeOf(typeof(INPUT)));
     }
 
+    // A single signed WHEEL_DELTA. Called only by the explicit local trace.
+    public static uint SendWheel(int delta) {
+      INPUT[] i = new INPUT[1];
+      i[0].type = 0;
+      i[0].u.mi.mouseData = unchecked((uint)delta);
+      i[0].u.mi.dwFlags = 0x0800; // MOUSEEVENTF_WHEEL
+      return SendInput(1, i, Marshal.SizeOf(typeof(INPUT)));
+    }
+
     // The game window's picture, the game and our page over it. PrintWindow
     // with PW_RENDERFULLCONTENT asks the window for its own frame, which
     // works for a DirectX window behind another one; the screen is copied
@@ -322,15 +350,21 @@ function Get-GameProcess {
     Get-Process -Name SkyrimSE -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
-function Invoke-GameKey([IntPtr]$handle, $code) {
+# $code is the key; $with are keys held down with it, pressed first and let
+# go last (W under Alt, for a sprint); $holdMs is how long they are all held.
+function Invoke-GameKey([IntPtr]$handle, $code, [int]$holdMs = 120, $with = @()) {
     # These plans use ordinary set-1 make codes. Extended/E1 keys require
     # another encoding; refuse them instead of silently sending another key.
-    $scan = 0
-    if (-not [int]::TryParse([string]$code, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$scan) -or
-        $scan -lt 1 -or $scan -gt 0x7f) {
-        return @{ ok = $false; note = "unsupported non-extended scan code $code" }
+    $codes = @()
+    foreach ($c in @(@($with | Where-Object { $null -ne $_ }) + @($code))) {
+        $scan = 0
+        if (-not [int]::TryParse([string]$c, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$scan) -or
+            $scan -lt 1 -or $scan -gt 0x7f) {
+            return @{ ok = $false; note = "unsupported non-extended scan code $c" }
+        }
+        $codes += [uint16]$scan
     }
-    $code = [uint16]$scan
+    if ($holdMs -lt 120 -or $holdMs -gt 10000) { return @{ ok = $false; note = "a hold of $holdMs ms is outside 120 to 10000" } }
     if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         if (-not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
@@ -343,38 +377,76 @@ function Invoke-GameKey([IntPtr]$handle, $code) {
         return @{ ok = $false; note = 'the game window does not have the keyboard; no input sent; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho() }
     }
     $why = ''
+    $pressed = @()
     try {
-        $down = [ThornswoodRealClient.Win]::SendScan($code, $false)
-        if ($down -ne 1) { $why = "SendInput sent $down of 1 key-down events" }
-        else {
-            # A human-length tap, below key-repeat delay. The pinned engine's
-            # DInputHook samples GetDeviceState for its CEF listener: down+up
-            # in one SendInput can be gone before that snapshot, even though
-            # native buffered menus saw it (b0b869cb, main.cpp MyInputListener).
-            Start-Sleep -Milliseconds 120
+        foreach ($k in $codes) {
+            # Counted before it is sent: a down that failed or threw may still
+            # have reached Windows, so it is released all the same.
+            $pressed += $k
+            $down = [ThornswoodRealClient.Win]::SendScan($k, $false)
+            if ($down -ne 1) { $why = "SendInput sent $down of 1 key-down events" + $(if ($codes.Count -gt 1) { " for $k" } else { '' }); break }
+        }
+        if (-not $why) {
+            # A human-length tap, below key-repeat delay, unless the step
+            # asks for a hold. The pinned engine's DInputHook samples
+            # GetDeviceState for its CEF listener: down+up in one SendInput
+            # can be gone before that snapshot, even though native buffered
+            # menus saw it (b0b869cb, main.cpp MyInputListener).
+            Start-Sleep -Milliseconds $holdMs
             if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
                 $why = 'the game window lost the keyboard during input; in front: ' + [ThornswoodRealClient.Win]::ForegroundWho()
             }
         }
     } catch { $why = 'the key press failed: ' + $_.Exception.Message }
     finally {
-        # Release even if down, the hold, or the focus check failed. This is
-        # cleanup, including after focus loss; no second key-down is tried.
-        try {
-            $up = [ThornswoodRealClient.Win]::SendScan($code, $true)
-            if ($up -ne 1) { $why += "; SendInput sent $up of 1 key-up events" }
-        } catch { $why += '; the key release failed: ' + $_.Exception.Message }
+        # Release every key that was sent down, last first, even if a down, the
+        # hold, or the focus check failed. This is cleanup, including after
+        # focus loss; no second key-down is tried.
+        for ($i = $pressed.Count - 1; $i -ge 0; $i--) {
+            try {
+                $up = [ThornswoodRealClient.Win]::SendScan($pressed[$i], $true)
+                if ($up -ne 1) { $why += "; SendInput sent $up of 1 key-up events" + $(if ($codes.Count -gt 1) { " for $($pressed[$i])" } else { '' }) }
+            } catch { $why += '; the key release failed: ' + $_.Exception.Message }
+        }
     }
     if ($why) { return @{ ok = $false; note = $why.TrimStart(';', ' ') } }
     if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
         return @{ ok = $false; note = 'the game window lost the keyboard during input' }
     }
-    return @{ ok = $true; note = 'key-down, held 120 ms, key-up; game window focused' }
+    $what = if ($codes.Count -gt 1) { 'keys ' + ($codes -join '+') } else { 'key-down' }
+    return @{ ok = $true; note = "$what, held $holdMs ms, key-up; game window focused" }
+}
+
+function Invoke-GameWheel([IntPtr]$handle, $delta) {
+    $amount = 0
+    if (-not [int]::TryParse([string]$delta, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$amount) -or
+        ($amount -ne 120 -and $amount -ne -120)) {
+        return @{ ok = $false; note = 'unsupported wheel delta; only one signed detent is allowed' }
+    }
+    if ($handle -eq [IntPtr]::Zero) { return @{ ok = $false; note = 'no game window' } }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle -and
+        -not [ThornswoodRealClient.Win]::SetForegroundWindow($handle)) {
+        return @{ ok = $false; note = 'Windows refused game focus; no wheel sent' }
+    }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        return @{ ok = $false; note = 'the game window is not in front; no wheel sent' }
+    }
+    try { $sent = [ThornswoodRealClient.Win]::SendWheel($amount) }
+    catch { return @{ ok = $false; note = 'the wheel input failed' } }
+    if ($sent -ne 1) { return @{ ok = $false; note = 'SendInput did not accept one wheel event' } }
+    if ([ThornswoodRealClient.Win]::GetForegroundWindow() -ne $handle) {
+        return @{ ok = $false; note = 'the game window lost focus during wheel input' }
+    }
+    return @{ ok = $true; note = 'one wheel event accepted by Windows; game handling is unconfirmed' }
 }
 
 # ---------------------------------------------------------------- the run --
 $stepsJson = Get-Content -LiteralPath $Steps -Raw | ConvertFrom-Json
+if ($Publish -and @($stepsJson.steps | Where-Object { $_.cameraTrace -eq $true }).Count) {
+    throw 'Camera trace stays local; -Publish cannot be used with cameraTrace steps.'
+}
 $run = [ordered]@{ id = $runId; steps = $stepsJson.steps }
+$wheelRequests = [Collections.Generic.HashSet[int]]::new()
 foreach ($f in @($resultsFile, $ackFile)) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } }
 [IO.File]::WriteAllText($runFile, ($run | ConvertTo-Json -Depth 8))
 [IO.File]::WriteAllText($ackFile, '0')
@@ -447,6 +519,17 @@ try {
         Set-RunChannel ([ordered]@{ Channel = 'dev'; UpdateBranch = 'dev'; ServerPort = '7787'; VoicePort = '7789'; VoiceUrl = (Get-DevVoiceUrl $leftOn.VoiceUrl) })
         $switched = $true
         Say "The install was on the $($leftOn.UpdateBranch) channel; put it on dev for the run, as the launcher's Server card does. It goes back when the run ends."
+    }
+    # The game reads the keyboard only while its window is the one in front,
+    # and behind the lock screen no window of the session is: the 12:41 PM
+    # run on 26 Nov failed its first key with LockApp in front, and a key
+    # tapped inside the game at 2:09 PM was dropped as the game saw itself
+    # minimised. LogonUI runs in a session only while it is locked or at the
+    # sign-in screen. So a locked PC is said at once, on the Deployment, and
+    # the launcher is not started for a run that cannot press a key.
+    $mySession = (Get-Process -Id $PID).SessionId
+    if (@(Get-Process -Name LogonUI -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySession }).Count) {
+        throw 'This PC is on the lock screen, and Windows gives the keyboard to no window behind it, so the run did not start the game.'
     }
     $launcher = Start-Process -FilePath $launcherExe -WorkingDirectory (Split-Path $launcherExe) -PassThru
     Say "Started the launcher, process $($launcher.Id)"
@@ -572,6 +655,8 @@ try {
                 'step' { Say ('step ' + $o.i + ' ' + $o.do + ': ' + ($(if ($o.ok) { 'pass' } else { 'FAIL' })) + ' in ' + $o.ms + ' ms ' + $o.note) }
                 'menu' { Say ('menu ' + $o.name + ($(if ($o.open) { ' opened' } else { ' closed' }))) }
                 'start' { Say "The plugin took the run ($($o.steps) steps)" }
+                'task' { Say ('test task #' + $o.task + ': ' + ($(if ($o.ok) { 'passed' } else { 'FAILED at step ' + $o.step + ', ' + $o.note }))) }
+                'furniture' { Say ($(if ($o.enter) { 'sat down at ' } else { 'got up from ' }) + $o.ref + ($(if ($o.bed) { ' (a bed)' } else { '' }))) }
                 'done' { $result = $(if ($o.ok) { 'passed' } else { 'failed' }); $note = "$($o.passed) of $($o.steps) steps passed. $($o.note)" }
                 'ask' {
                     $proc = Get-GameProcess
@@ -583,10 +668,25 @@ try {
                         Say "shot $name ($how)"
                     } elseif ($o.do -eq 'key') {
                         $handle = if ($proc) { $proc.MainWindowHandle } else { [IntPtr]::Zero }
-                        $delivery = Invoke-GameKey $handle $o.arg
+                        # A held key comes as { code, hold, with }; a tap as its code.
+                        $delivery = if ($o.arg -is [int] -or $o.arg -is [long] -or $o.arg -is [string]) { Invoke-GameKey $handle $o.arg }
+                                    else { Invoke-GameKey $handle $o.arg.code ([int]$o.arg.hold) @($o.arg.with) }
                         $reply.ok = $delivery.ok
                         $reply.note = $delivery.note
-                        Say "key $($o.arg): $($delivery.note) (ok=$($delivery.ok))"
+                        Say "key $(($o.arg | ConvertTo-Json -Compress)): $($delivery.note) (ok=$($delivery.ok))"
+                    } elseif ($o.do -eq 'wheel') {
+                        $handle = if ($proc) { $proc.MainWindowHandle } else { [IntPtr]::Zero }
+                        $wheelIndex = 0
+                        $validWheel = $o.run -ceq $runId -and [int]::TryParse([string]$o.i, [ref]$wheelIndex) -and
+                            $wheelIndex -ge 0 -and $wheelIndex -lt $stepsJson.steps.Count
+                        $plannedWheel = if ($validWheel) { $stepsJson.steps[$wheelIndex] } else { $null }
+                        if ($plannedWheel -and $plannedWheel.do -eq 'wheel' -and $plannedWheel.cameraTrace -eq $true -and
+                            $plannedWheel.delta -ceq $o.arg -and $wheelRequests.Count -lt 8 -and $wheelRequests.Add($wheelIndex)) {
+                            $delivery = Invoke-GameWheel $handle $o.arg
+                        } else { $delivery = @{ ok = $false; note = 'wheel request does not match an unused opted-in plan step' } }
+                        $reply.ok = $delivery.ok
+                        $reply.note = $delivery.note
+                        Say "wheel $($o.arg): $($delivery.note) (ok=$($delivery.ok))"
                     } elseif ($o.do -eq 'end') { $ended = $true }
                     [IO.File]::WriteAllText($ackFile, ($reply | ConvertTo-Json -Compress))
                 }
@@ -661,6 +761,26 @@ if (Test-Path -LiteralPath $launcherLog) {
         [IO.File]::WriteAllText((Join-Path $Out 'launcher.log'), $sr.ReadToEnd())
     } finally { $fs.Dispose() }
 }
+# The game's own logs (skyrim-platform.log, which carries the plugins' Trace
+# lines, and the Thornswood logs beside it) are written over at the next game
+# start, so a run that kept only the launcher's lost them to whoever played
+# next (26 Nov: #6619 needed a run's "Owner outfit" lines and none were left).
+# Those this run's game wrote are kept, under game\. The game writes them in
+# the install's own My Games, or in Windows' when the install plays the
+# collection's game (the launcher's Files.SkseLogDir).
+$mine = @(foreach ($skseLogs in @((Join-Path $Root 'Profile\MyGames\SKSE'), (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'My Games\Skyrim Special Edition\SKSE'))) {
+    if (Test-Path -LiteralPath $skseLogs) { Get-ChildItem -LiteralPath $skseLogs -Filter '*.log' -File | Where-Object { $_.LastWriteTime -ge $runStarted } }
+})
+$mine = @($mine | Sort-Object Name -Unique)
+if ($mine.Count) {
+    $gameOut = Join-Path $Out 'game'
+    New-Item -ItemType Directory -Force -Path $gameOut | Out-Null
+    foreach ($f in $mine) {
+        $fs = [IO.File]::Open($f.FullName, 'Open', 'Read', 'ReadWrite')
+        try { $sr = New-Object IO.StreamReader($fs); [IO.File]::WriteAllText((Join-Path $gameOut $f.Name), $sr.ReadToEnd()) } finally { $fs.Dispose() }
+    }
+    Say ('Kept the game''s logs: ' + (($mine | ForEach-Object { $_.Name }) -join ', ') + '.')
+}
 
 if ($pluginOff) { $note = ($note + ' (' + $pluginOff + ')').Trim() }
 $summary = @(
@@ -677,7 +797,12 @@ $summary = @(
 Say "Result: $result. $note"
 
 if ($Publish) {
-    $dep = gh api "repos/$Repo/deployments?environment=Dev&per_page=1" | ConvertFrom-Json | Select-Object -First 1
+    if ($Deployment) {
+        $dep = gh api "repos/$Repo/deployments/$Deployment" | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0) { throw "Could not read Deployment $Deployment to put the run on." }
+    } else {
+        $dep = gh api "repos/$Repo/deployments?environment=Dev&per_page=1" | ConvertFrom-Json | Select-Object -First 1
+    }
     if (-not $dep -or -not $dep.payload.release) { throw 'No Dev Deployment with a release to put the run on.' }
     $tag = $dep.payload.release
     $zip = Join-Path (Split-Path $Out) ("real-client-$runId.zip")

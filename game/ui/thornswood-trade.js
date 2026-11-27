@@ -32,8 +32,8 @@
   var root = null;
   var filter = '';
   var cat = '';
-  // Counts typed into a row, kept across a redraw so a server push does not
-  // wipe the box while somebody is still deciding how many to offer.
+  // Counts typed into a row, kept for the piece while Find or a category
+  // hides its row, so it is still there when the row comes back.
   var typed = {};
   var goldDraft = null;
   var sessionId = '';
@@ -99,14 +99,14 @@
     '#' + ID + ' .col{overflow:auto;padding:14px 16px;border-right:1px solid rgba(198,170,109,.22);',
     '  font-size:16px}',
     '#' + ID + ' .col:last-child{border-right:none}',
-    '#' + ID + ' h3{margin:0 0 9px;padding-bottom:6px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' h3{margin:0 0 9px;padding-bottom:6px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);font-weight:normal;border-bottom:1px solid rgba(198,170,109,.22)}',
     '#' + ID + ' .line{display:flex;align-items:stretch;gap:8px;padding:10px 12px;flex-wrap:wrap;',
     '  border:1px solid rgba(198,170,109,.30);background:rgba(0,0,0,.20);margin-bottom:8px}',
     '#' + ID + ' .top{display:flex;align-items:center;gap:10px;flex:1 1 100%;min-width:0}',
     '#' + ID + ' .acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}',
     '#' + ID + ' .line .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:17px}',
-    '#' + ID + ' .line .c{color:rgba(217,207,180,.66);font-variant-numeric:tabular-nums;font-size:16px}',
+    '#' + ID + ' .line .c{color:rgba(217,207,180,.7);font-variant-numeric:tabular-nums;font-size:16px}',
     '#' + ID + ' .qty{width:88px;margin:0;flex:none}',
     '#' + ID + ' button{font-family:inherit;font-style:normal;font-weight:normal;cursor:pointer;',
     '  border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.25);color:#e9d19b;',
@@ -117,7 +117,7 @@
     '#' + ID + ' input{font-family:inherit;font-size:16px;line-height:22px;color:#f6e9c8;background:rgba(0,0,0,.35);',
     '  border:1px solid rgba(198,170,109,.30);padding:8px 10px;width:100%;margin-bottom:9px}',
     '#' + ID + ' input:focus{border-color:rgba(198,170,109,.55)}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px;line-height:1.5}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:6px 2px;line-height:1.5}',
     '#' + ID + ' .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}',
     '#' + ID + ' .chips button.on{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
     '#' + ID + ' .cat{margin:12px 0 6px;font-size:15px;letter-spacing:.16em;text-transform:uppercase;',
@@ -127,7 +127,7 @@
     '#' + ID + ' .ok{color:#9fcf92}',
     '#' + ID + ' .sale{padding:10px 12px;margin-bottom:10px;line-height:1.5;',
     '  border:1px solid rgba(198,170,109,.55);background:rgba(0,0,0,.20)}',
-    '#' + ID + ' .wait{color:rgba(217,207,180,.6)}',
+    '#' + ID + ' .wait{color:rgba(217,207,180,.7)}',
     '#' + ID + ' .foot{padding:12px 20px;border-top:1px solid rgba(198,170,109,.22);display:flex;gap:12px;',
     '  align-items:center;font-size:13.5px;font-style:italic;color:rgba(217,207,180,.7)}',
     // The K panel's scrollbars, the same rules scoped to this window, so it
@@ -195,32 +195,6 @@
   // Text and double-quoted HTML attributes have different escaping rules.
   function attr(s) { return esc(s).replace(/"/g, '&quot;'); }
 
-  function editing() {
-    var field = document.activeElement;
-    if (!field || !root.contains(field) || field.tagName !== 'INPUT') return null;
-    return { id: field.id, side: field.getAttribute('data-side'), piece: field.getAttribute('data-for'),
-      start: field.selectionStart, end: field.selectionEnd, direction: field.selectionDirection };
-  }
-
-  function restoreEditing(saved) {
-    if (!saved) return;
-    var field = null;
-    if (saved.id === ID + '-gold' || saved.id === ID + '-find') field = root.querySelector('#' + saved.id);
-    else {
-      var fields = root.querySelectorAll('input[data-for]');
-      for (var i = 0; i < fields.length; i++) {
-        if (fields[i].getAttribute('data-side') === saved.side && fields[i].getAttribute('data-for') === saved.piece) {
-          field = fields[i]; break;
-        }
-      }
-    }
-    if (!field) return;
-    field.focus({ preventScroll: true });
-    if (typeof saved.start === 'number' && typeof saved.end === 'number' && field.setSelectionRange) {
-      field.setSelectionRange(saved.start, saved.end, saved.direction);
-    }
-  }
-
   function submitGold(value) {
     var draft = goldDraft, sentSession = sessionId;
     if (net('/trade gold ' + value)) {
@@ -271,7 +245,6 @@
 
   function draw() {
     if (!root || !data) { return; }
-    var saved = editing();
     root.querySelector('#' + ID + '-title').textContent = data.sale
       ? (data.sale.mine ? 'Buying for the company from ' + (data.them || 'somebody')
                         : 'Selling out of Skyrim to ' + (data.them || 'somebody'))
@@ -323,7 +296,7 @@
           var it = rows[r];
           var itRef = attr(ref(it));
           var addKey = 'add:' + ref(it);
-          ph += '<div class="line"><div class="top"><span class="nm">' + esc(it.n) + '</span>' +
+          ph += '<div class="line" data-row-key="' + attr(addKey) + '"><div class="top"><span class="nm">' + esc(it.n) + '</span>' +
                 '<span class="c">' + it.c + '</span></div><div class="acts">' +
                 '<input class="qty" data-side="add" data-for="' + itRef + '" aria-label="Count to offer" placeholder="How many" value="' + attr(typed[addKey] || '') + '">' +
                 '<button data-qty="' + itRef + '">Add</button>' +
@@ -335,7 +308,7 @@
         }
       }
     }
-    pack.innerHTML = ph;
+    put(pack, ph);
 
     var mine = root.querySelector('#' + ID + '-mine');
     var mh = '<h3>You are offering ' + (data.iAgreed ? '<span class="ok">&#10003; agreed</span>' : '') + '</h3>' +
@@ -345,7 +318,7 @@
       var mineRow = data.mine[j];
       var mineRef = attr(ref(mineRow));
       var remKey = 'rem:' + ref(mineRow);
-      mh += '<div class="line"><div class="top"><span class="nm">' + esc(mineRow.n) + '</span>' +
+      mh += '<div class="line" data-row-key="' + attr(remKey) + '"><div class="top"><span class="nm">' + esc(mineRow.n) + '</span>' +
             '<span class="c">' + mineRow.c + '</span></div><div class="acts">' +
             '<input class="qty" data-side="rem" data-for="' + mineRef + '" aria-label="Count to take back" placeholder="How many" value="' + attr(typed[remKey] || '') + '">' +
             '<button data-take="' + mineRef + '">Take</button>' +
@@ -357,7 +330,7 @@
           '<button data-do="gold">Set</button>' +
           '<button data-do="goldall">All</button>' +
           '<button data-do="goldclear">None</button></div>';
-    mine.innerHTML = mh;
+    put(mine, mh);
 
     var theirs = root.querySelector('#' + ID + '-theirs');
     var th = '<h3>' + esc(data.them) + ' is offering ' +
@@ -370,7 +343,7 @@
     if (data.theirGold) {
       th += '<div class="line"><div class="top"><span class="nm">gold</span><span class="c">' + data.theirGold + '</span></div></div>';
     }
-    theirs.innerHTML = th;
+    put(theirs, th);
 
     var offerVersion = data.offerVersion;
     var versioned = typeof offerVersion === 'string' && /^[0-9a-f]{48}$/.test(offerVersion);
@@ -391,18 +364,7 @@
 
     var find = root.querySelector('#' + ID + '-find');
     if (find) {
-      find.oninput = function () {
-        var start = this.selectionStart, end = this.selectionEnd;
-        filter = this.value;
-        draw();
-        var field = root.querySelector('#' + ID + '-find');
-        if (field) {
-          field.focus();
-          if (typeof start === 'number' && typeof end === 'number' && field.setSelectionRange) {
-            field.setSelectionRange(start, end);
-          }
-        }
-      };
+      find.oninput = function () { filter = this.value; draw(); };
     }
     var chips = pack.querySelectorAll('button[data-cat]');
     for (var ci = 0; ci < chips.length; ci++) {
@@ -410,7 +372,31 @@
     }
     wire(pack); wire(mine);
     root.querySelector('#' + ID + '-gold').oninput = function () { goldDraft = this.value; };
-    restoreEditing(saved);
+    showDrafts();
+  }
+
+  /*
+    What each box holds is this page's to say: what is typed and not yet
+    sent, or else what the server says. A box kept through an update keeps
+    whatever was in it, so it is told here, and only when it differs, so
+    the caret stays where it was.
+  */
+  function showDrafts() {
+    var gold = root.querySelector('#' + ID + '-gold');
+    setValue(gold, goldDraft === null ? String(data.myGold || 0) : goldDraft);
+    setValue(root.querySelector('#' + ID + '-find'), filter);
+    var boxes = root.querySelectorAll('input[data-for]');
+    for (var i = 0; i < boxes.length; i++) {
+      setValue(boxes[i], typed[(boxes[i].getAttribute('data-side') || 'add') + ':' + boxes[i].getAttribute('data-for')] || '');
+    }
+  }
+  function setValue(box, value) {
+    if (box && box.value !== value) { box.value = value; }
+  }
+
+  // In place, so a count being typed and its focus outlast the update (#4475).
+  function put(host, html) {
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, sessionId); } else { host.innerHTML = html; }
   }
 
   function readQty(where, name) {

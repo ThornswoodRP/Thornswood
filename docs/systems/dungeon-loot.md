@@ -98,6 +98,12 @@ in a container of its own. Ordinary iron, steel, and the
 rest of the gear list above are created by the chest, and the burial
 set is created only from this list.
 
+The Ancient Nord burial set is dungeon only: no bench makes any of it
+(Patrick, 26 October 2026, #4676). Its weapons and amulet have no
+recipe, and its helmet, armour, boots and gauntlets, which Skyrim makes
+at the Skyforge, are in the cut file
+([Cut items](cut-items.md)).
+
 ## Mines
 
 A mine is on the chest table only when the population catalogue gives
@@ -122,9 +128,13 @@ Every dead body that is not a person, and not a hunter carcass, can
 be searched. The pile is rolled when that actor dies and stays on
 that life. The first person to search it takes what is there. If the
 death was missed, the search rolls it then. Standing back up clears
-it, so the next life is a new roll. An empty roll is still kept, so
-the body is not rolled again: the first search says there is nothing,
-and a later search is silence.
+it, so the next life is a new roll. A later search of the same life
+is silence.
+
+No body is ever empty (Patrick, 26 Nov 2026: "nothing should ever drop
+nothing atleast something small or common or whatever"). A roll that
+comes up with no gold and nothing else takes one common supply, so
+every first search hands something over.
 
 A bandit camp enemy or a giant camp enemy carries a little:
 
@@ -134,7 +144,8 @@ A bandit camp enemy or a giant camp enemy carries a little:
 - 15 in 1000, ordinary gear up to steel, or a novice tome
 - 2 in 1000, a master tome or a burial piece
 
-Any other dead body is stingy. Anything good on it is rare:
+Any other dead body is stingy, and when none of these comes up it
+carries one common supply. Anything good on it is rare:
 
 - 20 in 100, 1 to 4 gold
 - 12 in 100, one common supply

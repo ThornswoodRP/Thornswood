@@ -863,7 +863,8 @@ namespace Thornswood
                     o.WriteTo(w);
                 // UTF-8 with no byte order mark: the game stops dead on one,
                 // and the launcher's Config reads it either way.
-                File.WriteAllBytes(path, ms.ToArray());
+                // Whole or not at all (#4702), as the launcher's own Save.
+                WholeFile.Write(path, ms.ToArray());
             }
         }
 
@@ -1000,15 +1001,28 @@ namespace Thornswood
             Say("  " + step++ + ". Install the collection in Vortex from the card the launcher shows, and switch to the profile it makes. The script extender and the address library come with it.");
             Say("  " + step++ + ". Press Connect Discord at the bottom of the left sidebar.");
             Say("  " + step + ". Press Play.");
+            // The animation and body files take minutes to build, the first
+            // time only, and were said nowhere in this window (#6339): Play
+            // needs Thornswood's own folder (OwnGameRequired), and the files
+            // are built in it, either after the launcher makes it by itself or
+            // at the first Play, which asks to make it (GeneratedHere.Ensure).
+            Say("");
             if (choice.MakeOwnGame)
             {
-                Say("");
                 Say("Once Vortex has deployed it, the launcher makes Thornswood's own");
                 Say("Skyrim folder by itself, then makes the rest from your game:");
                 Say("Thornswood-Last.esp, the plugin order, and the animation and body");
                 Say("files, which Pandora and BodySlide build in their own windows.");
+                Say("That takes a few minutes, the first time only.");
                 Say("Then it takes a newer launcher if there is one and restarts once.");
                 Say("Nothing needs a press of Fix.");
+            }
+            else
+            {
+                Say("The first Play asks to make Thornswood's own Skyrim folder, then");
+                Say("builds the animation and body files from your game, which Pandora");
+                Say("and BodySlide do in their own windows. That takes a few minutes,");
+                Say("the first time only.");
             }
             if (ownFirst || madeOwn) Say("Nothing was written into your Steam copy of Skyrim.");
             if (madeOwn) Say("Thornswood's own folder was updated in place.");

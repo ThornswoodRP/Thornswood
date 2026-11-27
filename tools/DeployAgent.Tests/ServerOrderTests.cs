@@ -127,6 +127,81 @@ public sealed partial class AgentTests
         Assert.Equal("// old gamemode\r\n", s.Read("gamemode.js"));
     }
 
+    static byte[] DroppedRecord(int revision, string name, string why) => B(new JsonObject
+    {
+        ["version"] = 1, ["collection"] = "7essxf", ["revision"] = revision,
+        ["dropped"] = new JsonArray(new JsonObject { ["name"] = name, ["mod"] = 1, ["why"] = why }),
+    }.ToJsonString());
+
+    // A revision that takes a plugin out (#4069): the Release commit's
+    // records/collection-dropped.json names it for that commit's revision,
+    // so the order may leave it out, and no other (27 Nov 2026: revision 13
+    // took McmRecorder.esp out, and every drop had been refused).
+    [Fact]
+    public async Task APluginTheRevisionTakesOutLeavesTheOrder()
+    {
+        var (a, gh, s, _, _, seen) = MakeOrder();
+        gh.Contents[ServerOrder.DroppedRecord + "@" + Commit] = DroppedRecord(8, "Thornswood.esp", "its forms are its menu");
+        BotRelease(gh, "build-5", "// new gamemode\n", tables: new() { [ServerOrder.Table] = Catalogue("Skyrim.esm", Eyes) });
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-5\"}");
+        await a.Pass("dev", default);
+        HasStates(gh, s, id, "in_progress,success");
+        var log = s.Read(Path.Combine("data", $"deploy-{id}.log"));
+        Assert.Contains("Thornswood.esp leaves the server's order: records/collection-dropped.json takes it out with 7essxf revision 8", log);
+        Assert.Equal(new[] { "Skyrim.esm", Eyes }, OrderOf(s).Select(ServerOrder.NameOf));
+        Assert.Equal(new[] { "Skyrim.esm", Eyes }, seen()!["loadOrder"]!.AsArray().Select(x => ServerOrder.NameOf(x!.GetValue<string>())));
+        Assert.Equal("// new gamemode\n", s.Read("gamemode.js"));
+        // The engine is told its forms can go, so a save naming one loads.
+        Assert.Contains("Thornswood.esp goes in forgetPlugins", log);
+        Assert.Equal(new[] { "Thornswood.esp" }, ForgetOf(s));
+        Assert.Equal(new[] { "Thornswood.esp" }, seen()!["forgetPlugins"]!.AsArray().Select(x => x!.GetValue<string>()));
+    }
+
+    static List<string> ForgetOf(FakeServer s) =>
+        JsonNode.Parse(s.Read("server-settings.json"))!["forgetPlugins"] is JsonArray a ? a.Select(x => x!.GetValue<string>()).ToList() : new();
+
+    [Fact]
+    public void ForgetPluginsKeepsWhatWasForgottenAndLetsGoOfWhatLoadsAgain()
+    {
+        var root = Temp(); var stage = Temp(); var store = Temp();
+        Directory.CreateDirectory(Path.Combine(root, ServerPlugins.Dir));
+        foreach (var n in new[] { "Skyrim.esm", "A.esp", "B.esp" }) File.WriteAllBytes(Path.Combine(root, ServerPlugins.Dir, n), B("plugin " + n));
+        File.WriteAllText(Path.Combine(root, ServerOrder.Settings), new JsonObject
+        {
+            ["loadOrder"] = new JsonArray("Skyrim.esm", "A.esp", "B.esp"),
+            ["forgetPlugins"] = new JsonArray("Old.esp", "A.esp"),
+        }.ToJsonString());
+        var record = ServerOrder.ReadRecord(CollectionRecord(("Skyrim.esm", B("plugin Skyrim.esm")), ("A.esp", B("plugin A.esp")), ("B.esp", B("plugin B.esp"))));
+        var lines = new List<string>();
+        var move = ServerOrder.Stage(root, new[] { "Skyrim.esm", "A.esp" }, record, store, stage, Array.Empty<string>(), lines.Add, new[] { "B.esp" });
+        var staged = JsonNode.Parse(File.ReadAllText(move.Files[ServerOrder.Settings]))!;
+        Assert.Equal(new[] { "Old.esp", "B.esp" }, staged["forgetPlugins"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Contains(lines, l => l.Contains("A.esp leaves forgetPlugins"));
+    }
+
+    [Theory]
+    [InlineData("another revision")]
+    [InlineData("no why")]
+    public async Task ADropTheRecordDoesNotLetGoLeavesItAsItWas(string how)
+    {
+        var (a, gh, s, _, _, seen) = MakeOrder();
+        var before = s.Read("server-settings.json");
+        gh.Contents[ServerOrder.DroppedRecord + "@" + Commit] = how == "another revision"
+            ? DroppedRecord(7, "Thornswood.esp", "its forms are its menu")
+            : DroppedRecord(8, "Thornswood.esp", " ");
+        BotRelease(gh, "build-6", "// new gamemode\n", tables: new() { [ServerOrder.Table] = Catalogue("Skyrim.esm", Eyes) });
+        var id = gh.AddDeployment("Dev", Commit, "{\"release\":\"build-6\"}");
+        await a.Pass("dev", default);
+        var last = gh.Last(id)!;
+        Assert.Equal("failure", (string)last["state"]!);
+        Assert.StartsWith("not applied: the load order: ", (string)last["description"]!);
+        Assert.Contains(how == "another revision" ? "leaves out Thornswood.esp, which the server loads" : "without a plugin's file name and why it can go",
+            s.Read(Path.Combine("data", $"deploy-{id}.log")));
+        Assert.Null(seen());
+        Assert.Equal(before, s.Read("server-settings.json"));
+        Assert.Equal("// old gamemode\r\n", s.Read("gamemode.js"));
+    }
+
     [Fact]
     public async Task ARecordThatCannotBeReadIsAnErrorAndNothingMoves()
     {

@@ -2,8 +2,8 @@
 /*
   test-502-jail-rules.js
 
-  #502. Patrick, 12 October: jails can be claimed by the Jarl only, and the
-  rest of the jail rules as written on the issue: no timer, release by that
+  #502 retains the cell rules, while #7071 makes the building an ordinary
+  claim: no timer, release by that
   hold's guards, lockpicking allowed, the game's jail keys open nothing,
   /stuck does not move someone out of a locked cell, dying in a cell wakes
   at a temple.
@@ -13,10 +13,10 @@
   Whiterun and a prisoner, each office by its Discord role since #2551 (the
   door hands the block the roles as __thornswoodOffices). The real spoils block, the real stuck block and
   the real respawn resolver run beside it. It checks:
-    - the tables: each hold's jail building and the keys the game made for
-      the cells, and game/data/jails.json saying the same;
-    - the claim: only the Jarl of the jail's hold is offered it, may make it,
-      or takes it by presenting its deed; a house anywhere is as it was;
+    - the tables: each hold's jail building and the compiled cell defaults,
+      and game/data/jails.json saying the same;
+    - ordinary ownership and valid deed transfers grant no guard authority;
+      a house anywhere is as it was, and startup preserves existing claims;
     - the keys: none lies on the floor (#3077) and a press on one is not
       refused, one in a chest is taken out with the swords, any other key is
       untouched;
@@ -71,6 +71,7 @@ const JAIL_DOOR = table('  var', 'JAIL_DOOR');
 const JAIL_NAME = table('  var', 'JAIL_NAME');
 const JAIL_BUILDING = table('  var', 'JAIL_BUILDING');
 const JAIL_KEY = table('  var', 'JAIL_KEY');
+const JAIL_SHUT = table('  var', 'JAIL_SHUT');
 const DATA = table('const', 'DATA');
 yes('the jail building and jail key tables are in the generated block', !!JAIL_BUILDING && !!JAIL_KEY && !!DATA);
 if (!JAIL_BUILDING || !JAIL_KEY || !JAIL_DOOR || !BUILDING_BY_DOOR) { done(); } else {
@@ -89,20 +90,35 @@ let jails = null;
 try { jails = JSON.parse(read(path.join(REPO_DIR, 'game', 'data', 'jails.json'))); } catch (e) { jails = null; }
 const keysJson = {};
 const cellsJson = {};
+const shutJson = {};
 if (jails && jails.jails) {
   Object.keys(jails.jails).forEach(function (h) {
     cellsJson[jails.jails[h].cell] = h;
     const ds = jails.jails[h].doors || {};
-    Object.keys(ds).forEach(function (d) { if (ds[d].lock && ds[d].lock.key) { keysJson[ds[d].lock.key] = h; } });
+    Object.keys(ds).forEach(function (d) {
+      const lock = ds[d].lock;
+      if (lock) shutJson[d] = true;
+      if (lock && lock.key) keysJson[lock.key] = h;
+    });
   });
 }
 yes('T3 game/data/jails.json names the same buildings', JSON.stringify(Object.keys(cellsJson).sort()) ===
     JSON.stringify(Object.keys(JAIL_BUILDING).sort()) &&
     Object.keys(cellsJson).every(function (c) { return cellsJson[c] === JAIL_BUILDING[c]; }));
 yes('T4 and every key a cell door\'s lock names is a jail key, to its hold (' + Object.keys(JAIL_KEY).length + ')',
-    Object.keys(keysJson).length > 0 && JSON.stringify(Object.keys(keysJson).sort()) === JSON.stringify(Object.keys(JAIL_KEY).sort()) &&
+    JSON.stringify(Object.keys(keysJson).sort()) === JSON.stringify(Object.keys(JAIL_KEY).sort()) &&
     Object.keys(keysJson).every(function (k) { return keysJson[k] === JAIL_KEY[k]; }));
-yes('T5 Whiterun\'s own jail key is among them', JAIL_KEY['5aec4:Skyrim.esm'] === 'whiterun');
+const last = JSON.parse(read(path.join(REPO_DIR, 'game', 'data', 'last-plugin.json')));
+if (Object.hasOwn(last, 'authoredDoorsUnlocked')) {
+  yes('T5 the compiled cell doors have no authored locks or keys', !!JAIL_SHUT &&
+      Object.keys(shutJson).length === 0 && Object.keys(JAIL_SHUT).length === 0 &&
+      Object.keys(JAIL_KEY).length === 0);
+} else {
+  // A source PR can be checked against a previously published content build.
+  // Keep checking its known legacy lock before the new compiler has run.
+  yes('T5 the previous content still identifies Whiterun\'s old jail key',
+      JAIL_KEY['5aec4:Skyrim.esm'] === 'whiterun');
+}
 
 // ============================================================== the server
 const clock = { t: Date.UTC(2026, 9, 12, 20, 0, 0) };
@@ -212,7 +228,7 @@ const box = {
 box.globalThis = box;
 inDir(function () { vm.runInNewContext(propBlock, box, { filename: 'gamemode.js property' }); });
 const W = box.__thornswoodProperty;
-yes('the property block runs and publishes the jail rules', !!W && typeof W.mayHold === 'function' &&
+yes('the property block runs and publishes the jail rules', !!W && typeof W.jailOfBuilding === 'function' &&
     typeof W.lockedJailHere === 'function' && typeof W.jailKeyHold === 'function' && !!W.JAIL_KEY);
 if (!W) { done(); } else {
 
@@ -233,34 +249,34 @@ yes('C1 Dragonsreach Dungeon is Whiterun\'s jail, and a house is no jail',
     W.jailOfBuilding(JAIL) === 'whiterun' && W.jailOfBuilding(HOUSE) === null);
 open(PRISONER, FRONT);
 let ln = lineOf(PRISONER);
-yes('C2 at the jail\'s door somebody who is not its Jarl is offered no claim', !!ln && ln.x === '');
+yes('C2 the ordinary jail building offers a claim to someone without an office', !!ln && ln.x === 'claim');
 let r = word(PRISONER, '/claim');
-yes('C3 and a claim that comes anyway is refused, and says whose it is: "' + r.mine + '"',
-    !claimOf(JAIL) && r.mine === 'Dragonsreach Dungeon is Whiterun\'s jail. Only the Jarl of Whiterun claims it.');
+yes('C3 the ordinary character claims the building through the real route',
+    claimOf(JAIL)?.by === PRISONER.pid && /^You claim Dragonsreach Dungeon\./.test(r.mine));
 open(JARL_R, FRONT);
 r = word(JARL_R, '/claim');
-yes('C4 so is the Jarl of another hold: "' + r.mine + '"', !claimOf(JAIL) && lineOf(JARL_R).x === '' &&
-    /Only the Jarl of Whiterun claims it/.test(r.mine));
+yes('C4 another hold\'s Jarl cannot take an existing holding without its deed',
+    claimOf(JAIL)?.by === PRISONER.pid && lineOf(JARL_R).x === '' && /is held by/.test(r.mine));
 open(GUARD_W, FRONT);
 r = word(GUARD_W, '/claim');
-yes('C5 and a guard of the hold', !claimOf(JAIL) && lineOf(GUARD_W).x === '');
+yes('C5 a guard cannot take that existing holding either', claimOf(JAIL)?.by === PRISONER.pid && lineOf(GUARD_W).x === '');
 open(JARL_W, FRONT);
 ln = lineOf(JARL_W);
-yes('C6 the Jarl of Whiterun is offered it', !!ln && ln.x === 'claim');
+yes('C6 the local Jarl remains eligible but cannot hijack an occupied building',
+    !!ln && ln.x === '');
 r = word(JARL_W, '/claim');
-yes('C7 and claims it, and gets its deed: "' + r.mine.slice(0, 60) + '"',
-    !!claimOf(JAIL) && claimOf(JAIL).by === JARL_W.pid && /^You claim Dragonsreach Dungeon\./.test(r.mine));
+yes('C7 the local Jarl\'s press preserves the ordinary holder',
+    claimOf(JAIL)?.by === PRISONER.pid && /is held by/.test(r.mine));
 // The deed passes to somebody else's pack and is presented at the door.
-const deed = refs[JARL_W.a].inventory.entries.filter(function (e) { return e.name === 'Deed to Dragonsreach Dungeon, Whiterun'; })[0];
-yes('C8 the deed is in the Jarl\'s pack', !!deed);
+const deed = refs[PRISONER.a].inventory.entries.find(function (e) { return e.name === 'Deed to Dragonsreach Dungeon, Whiterun (deed 1)'; });
+yes('C8 the deed is in the actual holder\'s pack', !!deed);
 if (deed) {
-  refs[PRISONER.a].inventory.entries.push(JSON.parse(JSON.stringify(deed)));
   refs[JARL_R.a].inventory.entries.push(JSON.parse(JSON.stringify(deed)));
 }
 open(PRISONER, FRONT);
 open(JARL_R, FRONT);
-yes('C9 the jail\'s deed presented at its door by anybody but its Jarl claims nothing',
-    claimOf(JAIL).by === JARL_W.pid && !logged.some(function (l) { return /presented the deed at Dragonsreach/.test(l); }));
+yes('C9 presenting the valid deed transfers the ordinary holding regardless of Jarl office',
+    claimOf(JAIL)?.by === JARL_R.pid && logged.some(function (l) { return /presented the deed at Dragonsreach/.test(l); }));
 // A house is the same as ever: anybody claims it.
 open(PRISONER, HOUSE_DOOR);
 r = word(PRISONER, '/claim');
@@ -349,7 +365,7 @@ const KEY_W = idOf('5aec4:Skyrim.esm');   // WhiterunJailKey
 const KEY_HOUSE = idOf('1234:Skyrim.esm');
 const SWORD = idOf('12eb7:Skyrim.esm');
 const CHEST = 0x000a0001;
-Object.keys(JAIL_KEY).forEach(function (k) { kinds[idOf(k)] = 'KEYM'; });
+kinds[KEY_W] = 'KEYM';
 kinds[KEY_HOUSE] = 'KEYM';
 kinds[SWORD] = 'WEAP';
 kinds[0x0000000f] = 'MISC';
@@ -364,9 +380,9 @@ vm.runInNewContext(spoilsBlock, kbox, { filename: 'gamemode.js spoils' });
 const spoils = kbox.__thornswoodSpoils;
 // The world hands no jail key out, so the spoils block keeps no list of them:
 // no chest holds one the world put there (#3078) and none lies on the floor
-// (#3077). The keys stay in JAIL_KEY for the doors.
+// (#3077). A carried old key is still an ordinary item to this block.
 yes('K1 the spoils block keeps no jail key list, because nothing in the world hands one out',
-    spoils.isJailKey === undefined && !/JAIL_KEY/.test(spoilsBlock) && Object.keys(JAIL_KEY).length > 0);
+    spoils.isJailKey === undefined && !/JAIL_KEY/.test(spoilsBlock));
 // No jail key lies where the game put it: Thornswood-Last.esp switches every
 // placed item off (#3077), so the block answers no press on a floor key.
 yes('K2 a press on a key is never refused by the spoils block, a jail key or any other (#3077)',
@@ -409,10 +425,9 @@ if (arrivalSrc) {
   yes('D2 the six holds with a temple of their own wake there', own.length === 6);
 }
 
-// ------------------------- P. claims on a jail made before the rule end, once
+// ------------------------- P. ordinary claims survive the retired jail sweep
 /*
-  Patrick, 12 October evening: jail claims made before the jail rule end once
-  if there are any, and then the rule holds. A fresh server folder holds
+  #7071 retires the older whole-building admission rule. A fresh folder holds
   property.json as an older server left it: a claim on Dragonsreach Dungeon by
   somebody who is not Whiterun's Jarl, one on Riften Jail by Riften's Jarl
   (by the Jarl of Riften role, read on record: nobody has sent a pass at a
@@ -445,18 +460,15 @@ const before = { claims: {
 fs.writeFileSync(path.join(old, 'private', 'property.json'), JSON.stringify(before));
 let run1 = startOn(old);
 const reg1 = JSON.parse(fs.readFileSync(path.join(old, 'private', 'property.json'), 'utf8'));
-yes('P1 at the first start, the claim on a jail by somebody who is not its hold\'s Jarl ends',
-    !!run1.W && !run1.W.claims()[JAIL] && !reg1.claims[JAIL]);
+yes('P1 startup preserves an existing ordinary jail-building claim and its lock',
+    !!run1.W && run1.W.claims()[JAIL]?.by === 909 && reg1.claims[JAIL]?.by === 909 && reg1.claims[JAIL].locked);
 yes('P2 the Jarl\'s claim on their own jail, and a house, are kept',
     !!reg1.claims[RIFTEN_JAIL] && reg1.claims[RIFTEN_JAIL].by === 502 && !!reg1.claims[HOUSE]);
-yes('P3 the log names the holder, the profile and the jail, and counts what ended',
-    run1.logged.some(function (l) { return /law: the jail rule ends Erik's claim \(profile 909\) on Dragonsreach Dungeon, made before only the Jarl of whiterun could hold it/.test(l); }) &&
-    run1.logged.some(function (l) { return /applied to the claims made before it once: 1 claim\(s\) ended/.test(l); }));
-// boxes is the steward-marked chest, retired by #2298: a register written
-// before then still has it, and it is simply not written again.
-yes('P4 the register records that it ran, and keeps every other part it holds, but not the retired boxes',
-    Number(reg1.steps && reg1.steps.jailRule) > 0 && reg1.boxes === undefined &&
-    reg1.funds && reg1.funds.whiterun === 77);
+yes('P3 the retired jail-claim sweep never runs or logs a claim ending',
+    !run1.logged.some(function (l) { return /the jail rule/.test(l); }));
+// Retiring this sweep must not cause an unrelated whole-register rewrite.
+yes('P4 retiring the sweep does not rewrite unrelated register contents at startup',
+    JSON.stringify(reg1) === JSON.stringify(before) && reg1.funds.whiterun === 77);
 // A claim on a jail somehow in the register after that (written by hand, say) is not touched again.
 reg1.claims[JAIL] = { by: 909, name: 'Erik', at: clock.t, touched: clock.t, locked: false };
 fs.writeFileSync(path.join(old, 'private', 'property.json'), JSON.stringify(reg1));
@@ -471,15 +483,10 @@ fs.writeFileSync(path.join(clean, 'private', 'property.json'), JSON.stringify({ 
   [HOUSE]: { by: 909, name: 'Erik', at: clock.t, touched: clock.t, locked: false } } }));
 const run3 = startOn(clean);
 const reg3 = JSON.parse(fs.readFileSync(path.join(clean, 'private', 'property.json'), 'utf8'));
-yes('P6 with no claim on a jail nothing ends, and the mark is written',
-    !!reg3.claims[HOUSE] && Number(reg3.steps && reg3.steps.jailRule) > 0 &&
-    run3.logged.some(function (l) { return /once: 0 claim\(s\) ended/.test(l); }));
-yes('P7 the step is no timer: the function has no clock in it and is called once, at load',
-    (function () {
-      const fn = slice(propBlock, '  function endPreRuleJailClaims() {', '\n  }\n') || '';
-      return !!fn && !/setTimeout|setInterval/.test(fn) &&
-        propBlock.split('endPreRuleJailClaims();').length === 2;
-    }()));
+yes('P6 with no jail claim a house remains, without writing a retired sweep marker',
+    !!reg3.claims[HOUSE] && !reg3.steps?.jailRule && !run3.logged.some(function (l) { return /the jail rule/.test(l); }));
+yes('P7 no startup function remains that deletes ordinary jail holdings',
+    !propBlock.includes('endPreRuleJailClaims'));
 
 done();
 }}}

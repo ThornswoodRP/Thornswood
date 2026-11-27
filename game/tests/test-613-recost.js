@@ -106,15 +106,20 @@ const coinRows = Object.keys(recipes).filter((k) => rule.benches.indexOf(putAt(r
 const coinTable = table.recipes.filter((r) => r.inputs.some((i) => i.item === 'f:Skyrim.esm'));
 const coinHeld = (table.notCopied || []).filter((r) => r.inputs.some((i) => i.item === 'f:Skyrim.esm'));
 const coinCarried = coinTable.filter((r) => recipes[r.recipe] && !charges(recipes[r.recipe]) && carried(r, recipes[r.recipe]));
+// A never-copied plugin's row is listed as each game asks it once the recipe
+// table reads notCopied too (#4625); a table built before that still lists
+// its coins.
+const heldCarried = coinHeld.filter((r) => recipes[r.recipe] && !charges(recipes[r.recipe]) && carried(r, recipes[r.recipe]));
 const coinListed = new Set(coinTable.concat(coinHeld).map((r) => r.recipe));
 yes('T7 every forge recipe that charges gold coins has them taken out, and nothing else of it changes unless ' +
     'its peers say so (q-3115 B; ' + coinTable.length + ' taken out, ' + coinCarried.length +
-    ' of them already by Thornswood-Last.esp, ' + coinHeld.length + ' a never-copied plugin\'s, ' +
+    ' of them already by Thornswood-Last.esp, ' + coinHeld.length + ' a never-copied plugin\'s (' +
+    heldCarried.length + ' listed as each game asks them), ' +
     coinRows.length + ' still charging)',
     (rule.notMaterial || []).join() === 'f:Skyrim.esm' && coinRows.length + coinCarried.length > 0 &&
     coinRows.every((k) => coinListed.has(k)) &&
-    coinRows.length + coinCarried.length === coinTable.length + coinHeld.length &&
-    coinHeld.every((r) => recipes[r.recipe] && charges(recipes[r.recipe])) &&
+    coinRows.length + coinCarried.length + heldCarried.length === coinTable.length + coinHeld.length &&
+    coinHeld.every((r) => recipes[r.recipe] && (charges(recipes[r.recipe]) || heldCarried.indexOf(r) >= 0)) &&
     table.counts.coinsTakenOut === coinTable.length &&
     coinTable.every((r) => r.why.indexOf('coins') >= 0 && r.inputs.every((i) => i.item === 'f:Skyrim.esm' ? i.to === 0
       : (r.why.indexOf('peers') >= 0 || i.to === i.count))));
@@ -125,11 +130,15 @@ const policy = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'last-
 const blocked = new Set((policy.notCopiedFrom || []).map((r) => r.plugin.toLowerCase()));
 const carriedCobj = new Set((policy.notCopiedFrom || []).flatMap((r) => r.carried || []).map((c) => c.toLowerCase()));
 const ownerOf = (r) => r.recipe.split(':').slice(1).join(':').toLowerCase();
-yes('T9 no re-costed recipe is a plugin\'s the last plugin never copies from (#2454) unless the policy carries it; ' +
-    'those are under notCopied, each with why (' + (table.notCopied || []).length + ')',
-    blocked.size > 0 && table.recipes.every((r) => !blocked.has(ownerOf(r)) || carriedCobj.has(('COBJ ' + r.recipe).toLowerCase())) &&
+// The plugin whose copy the game uses (wonBy, #6726): a never-copied one that
+// wins a recipe somebody else owns keeps it out of the last plugin too.
+const wonBy = (r) => String((recipes[r.recipe] && recipes[r.recipe].wonBy) || ownerOf(r)).toLowerCase();
+const neverCopied = (r) => blocked.has(ownerOf(r)) || blocked.has(wonBy(r));
+yes('T9 no re-costed recipe is one the last plugin never copies (#2454), a never-copied plugin\'s own or one it wins, ' +
+    'unless the policy carries it; those are under notCopied, each with why (' + (table.notCopied || []).length + ')',
+    blocked.size > 0 && table.recipes.every((r) => !neverCopied(r) || carriedCobj.has(('COBJ ' + r.recipe).toLowerCase())) &&
     (table.notCopied || []).length === table.counts.notCopied &&
-    (table.notCopied || []).every((r) => blocked.has(ownerOf(r)) && /notCopiedFrom/.test(r.whyNot || '')));
+    (table.notCopied || []).every((r) => neverCopied(r) && /notCopiedFrom/.test(r.whyNot || '')));
 
 // ------------------------------------------------------- settles in one re-run
 // The box's chain starts from no recost.json: Build-Recost.py measures the

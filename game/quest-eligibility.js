@@ -60,40 +60,49 @@ function createQuestEligibility(source) {
     }
     return Object.freeze(out);
   }
-  function allows(gate, state) {
+  function check(gate, state) {
+    function missing(detail) { return {ok:false, why:'eligibility', detail:detail}; }
+    function title(key) { return key.charAt(0).toUpperCase() + key.slice(1); }
     try {
       gate = validate(gate);
-      if (gate.open === true) return true;
+      if (gate.open === true) return {ok:true};
       var standing = field(state, 'ranks');
-      if (field(state, 'v') !== 1 || !record(standing)) return false;
+      if (field(state, 'v') !== 1 || !record(standing)) return missing();
       function hasRank(key) {
         var index = ranks.indexOf(field(standing, key));
         return index >= 0 && index >= ranks.indexOf(gate.rank);
       }
+      function rankOf(name) { return missing('This work requires ' + title(gate.rank) + ' standing in ' + name + '.'); }
       if (field(gate, 'classKey') !== undefined) {
-        return field(state, 'cls') === gate.classKey && hasRank(gate.classKey);
+        var cls = table.classes[gate.classKey].name || title(gate.classKey);
+        if (field(state, 'cls') !== gate.classKey) return missing('This work requires the ' + cls + ' class.');
+        return hasRank(gate.classKey) ? {ok:true} : rankOf(cls);
       }
-      if (field(state, 'prof') !== gate.profession) return false;
+      var profession = table.professions[gate.profession], name = profession.name || title(gate.profession);
+      if (field(state, 'prof') !== gate.profession) return missing('This work requires the ' + name + ' profession.');
       if (gate.profession !== 'mage') {
-        var halves = Object.keys(table.professions[gate.profession].halves);
-        return field(gate, 'half') !== undefined ? hasRank(gate.half) : halves.some(hasRank);
+        var halves = Object.keys(profession.halves);
+        var qualified = field(gate, 'half') !== undefined ? hasRank(gate.half) : halves.some(hasRank);
+        return qualified ? {ok:true} : rankOf(gate.half ? profession.halves[gate.half] : name);
       }
       var schools = strings(field(state, 'schools'));
-      if (!schools || schools.some(function (s) {return table.schools.indexOf(s) < 0;})) return false;
+      if (!schools || schools.some(function (s) {return table.schools.indexOf(s) < 0;})) return missing();
       var selected = field(gate, 'school') !== undefined ? [gate.school] : schools;
-      return selected.some(function (school) {
-        if (schools.indexOf(school) < 0 || !hasRank(school)) return false;
-        if (gate.rank !== 'master') return true;
-        var known = strings(field(field(state, 'spells'), 'known'));
-        var master = field(field(table.spells, school), 'master');
-        return !!known && Array.isArray(master) && known.some(function (name) {
-          var desc = field(spellIds, name);
-          return typeof name === 'string' && master.indexOf(name) >= 0 && typeof desc === 'string' &&
-            /^[0-9a-f]{1,6}:[^:\r\n]+\.(?:esm|esp|esl)$/i.test(desc);
-        });
+      var ranked = selected.some(function (school) { return schools.indexOf(school) >= 0 && hasRank(school); });
+      if (!ranked) return rankOf(gate.school ? title(gate.school) : 'a school of magic');
+      if (gate.rank !== 'master') return {ok:true};
+      // A master gate names exactly one school. Its mastered spell is required as well as the saved rank.
+      var known = strings(field(field(state, 'spells'), 'known'));
+      var master = field(field(table.spells, gate.school), 'master');
+      var mastered = !!known && Array.isArray(master) && known.some(function (spell) {
+        var desc = field(spellIds, spell);
+        return master.indexOf(spell) >= 0 && typeof desc === 'string' &&
+          /^[0-9a-f]{1,6}:[^:\r\n]+\.(?:esm|esp|esl)$/i.test(desc);
       });
-    } catch (error) { return false; }
+      return mastered ? {ok:true} : missing('This work requires a Master ' + title(gate.school) + ' spell.');
+    } catch (error) { return missing(); }
   }
-  return Object.freeze({validate: validate, allows: allows});
+  function allows(gate, state) { return check(gate,state).ok; }
+  return Object.freeze({validate: validate, allows: allows, check: check});
 }
 module.exports = {createQuestEligibility: createQuestEligibility};

@@ -145,8 +145,6 @@ function world() {
     who: function (id) { return 'p' + id; },
     online: function () { return W.online; },
     count: function (id, desc) { return (W.actors[id].pack[desc] || 0); },
-    take: function (id, desc) { if (!(W.actors[id].pack[desc] > 0)) { return false; } W.actors[id].pack[desc]--; return true; },
-    give: function (id, desc) { W.actors[id].pack[desc] = (W.actors[id].pack[desc] || 0) + 1; return true; },
     baseRefusal: function () { return W.refuse; },
     place: function (base) {
       if (W.throwPlace) { throw new Error('no'); }
@@ -194,6 +192,13 @@ function world() {
         }
       }
       return null;
+    },
+    putOne: function (entries, desc) {
+      for (let i = 0; i < entries.length; i++) {
+        if (entries[i].baseId === desc) { entries[i].count++; return { entries: entries, taken: [] }; }
+      }
+      entries.push({ baseId: desc, count: 1 });
+      return { entries: entries, taken: [] };
     },
     actorOf: function (desc) { return W.mp.getIdFromDesc(desc); }
   };

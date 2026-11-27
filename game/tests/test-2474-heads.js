@@ -214,7 +214,8 @@ function constLine(src, name) {
   yes('no mode is the party\'s green, which is the name\'s alone',
       ['whisper', 'local', 'yell'].every(k => marks[k].join(',') !== eval(PARTY).join(',')));
   yes('the microphone takes the mode\'s colour while you speak',
-      /var colour = live \? modeOf\(myMode\)\.colour/.test(voice));
+      // After the states that override it (a silence #4773, a silent microphone #6470).
+      /var colour = [^;]*\blive \? modeOf\(myMode\)\.colour/.test(voice));
 
   // Live: the page sends the list on every position tick, and only people
   // inside the distance of the mode they speak in.

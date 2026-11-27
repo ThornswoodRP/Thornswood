@@ -78,6 +78,9 @@ $ValueShapes = @(
     ('[MNO][A-Za-z0-9_-]{23,27}' + '\.' + '[A-Za-z0-9_-]{6}' + '\.' + '[A-Za-z0-9_-]{27,40}'),
     ('discord(app)?\.com/api/' + 'webhooks/\d{15,}/[A-Za-z0-9_-]{40,}'),
     ('\bgh[pousr]' + '_[A-Za-z0-9]{30,}'),
+    # GitHub's installation token since 2 Oct 2026: ghs_, the App's id, an
+    # underscore and a JWT (#6188).
+    ('\bghs' + '_[0-9]{1,12}_[A-Za-z0-9_.-]{100,}'),
     ('github' + '_pat_[A-Za-z0-9_]{40,}'),
     ('-----BEGIN [A-Z ]*PRIVATE ' + 'KEY-----')
 )
@@ -287,6 +290,7 @@ Invoke-ThornswoodSecretRemote -Target $t -SshArgs $ssh -Secret $x -Script "`$p =
 & ssh $target "set TOKEN=$token&& run.cmd"
 '@
         'a literal bot token on an ssh line' = ("& ssh host `"echo " + 'MTIz' + 'NDU2Nzg5MDEyMzQ1Njc4OTAx' + '.' + 'GaBcDe' + '.' + ('x' * 32) + "`"")
+        'a literal GitHub installation token of the new shape on an ssh line (#6188)' = ("& ssh host `"echo " + 'ghs' + '_' + '1234567' + '_' + 'eyJ' + ('x' * 120) + '.' + ('y' * 300) + '.' + ('z-_' * 20) + "`"")
     }
     $n = 0
     foreach ($k in $controls.Keys) {

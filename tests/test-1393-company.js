@@ -84,7 +84,7 @@ function fn(name) {
   return b < 0 ? null : prop.slice(a + 1, b + 4);
 }
 
-const NAMES = ['takeGold', 'payOut', 'payHeld', 'sealed', 'nameIs', 'postWords', 'post', 'board', 'take',
+const NAMES = ['takeGold', 'payHeld', 'sealed', 'nameIs', 'postWords', 'post', 'board', 'take',
                'jobsOf', 'dropJob', 'takedown', 'unpin', 'postLetter', 'deliver', 'letterReach',
                'boardHere', 'nearestBoard', 'wallOf', 'boardPanel', 'boardsView', 'moveBoard', 'command',
                'noticeHolds', 'heldOn', 'mayWithdraw', 'withdraw',
@@ -242,10 +242,10 @@ function boot(reg, w, opts) {
   NAMES.forEach(function (n) { body.push(lifted[n]); });
   // A post takes out of the pack through packFirst (#4901): tests/fixtures/pack-first.js.
   body.push(PACK_FIRST.pieces(prop));
-  body.push('return { boards: boards, funds: function () { return funds; }, notices: function () { return notices; }, ' +
+  body.push('return { packTick: packTick, boards: boards, funds: function () { return funds; }, notices: function () { return notices; }, ' +
             'command: command, boardPanel: boardPanel, boardsView: boardsView, ' +
             'deposit: deposit, withdraw: withdraw, mayWithdraw: mayWithdraw, ' +
-            'heldOn: heldOn, haulTenth: haulTenth, haulTick: haulTick, saleCuts: saleCuts, inCompany: inCompany };');
+            'heldOn: heldOn, haulTenth: haulTenth, haulTick: function () { haulTick(); packTick(); }, saleCuts: saleCuts, inCompany: inCompany };');
   const make = new Function('reg', 'mp', 'plog', 'loadPart', 'PASSAGES', 'g', 'isSteward', 'say', 'notify', body.join('\n'));
   const api = make(reg, w.mp, function () { },
                    function (key, fallback) {
@@ -266,6 +266,8 @@ function boot(reg, w, opts) {
       if (pid === p.pid) { said.push(m); }
     };
     const answered = api.command(parts[0].toLowerCase(), parts, p.actor, p.pid, to);
+    // What a word owes into a pack lands on the server's next tick (#4258).
+    api.packTick();
     return answered ? said.join('\n') : null;
   };
   /* /yes or /no through the chat block's real branch, as handle() hands it on. */
@@ -317,9 +319,10 @@ attempt('withdraw', function () {
   const w = world();
   const reg = {};
   const s = boot(reg, w);
-  yes('L1 deposit puts coin on, and withdraw takes it off and saves',
+  // withdraw leaves the write to its caller, which writes it with what the gold went to (#4258).
+  yes('L1 deposit puts coin on and saves, and withdraw takes it off and leaves the write to its caller',
       s.deposit('whiterun', 100, 'test') === true && s.withdraw('whiterun', 30, 'test') === true &&
-      s.funds().whiterun === 70 && reg.funds.whiterun === 70);
+      s.funds().whiterun === 70 && reg.funds.whiterun === 100);
   yes('L2 the ledger cannot go below nothing', s.withdraw('whiterun', 71, 'x') === false && s.funds().whiterun === 70);
   yes('L3 withdraw refuses nothing, less than nothing, part of a coin, and words',
       s.withdraw('whiterun', 0, 'x') === false && s.withdraw('whiterun', -5, 'x') === false &&

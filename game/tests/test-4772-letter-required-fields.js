@@ -34,7 +34,8 @@ for(const kind of ['prior','newer','cleared']){
 for(const mode of ['redraw','close','compose']){
  const p=rig(),f=p.field('letter');f.value='';p.press(p.button());const old=p.button(),handler=old.onclick;
  test(mode+' starts with installed letter validation',()=>assert(f.validity.customError));if(mode==='redraw')p.feed();else if(mode==='close')p.api.close();else p.press(p.button('compose'));
- if(p.field('letter'))p.field('letter').value='A new draft';test(mode+' retires old validation and stale handler',()=>{assert.equal(f.validity.customError,false);assert.equal(f.getAttribute('aria-invalid'),null);const count=p.sent.length;handler.call(old);assert.equal(p.sent.length,count);});
+ if(p.field('letter'))p.field('letter').value='A new draft';test(mode+' retires old validation and '+(mode==='redraw'?'keeps the live letter button (#4475)':'stale handler'),()=>{assert.equal(f.validity.customError,false);assert.equal(f.getAttribute('aria-invalid'),null);const count=p.sent.length;handler.call(old);
+  if(mode==='redraw'){assert.equal(p.button(),old);assert.equal(p.sent.length,count+1);}else assert.equal(p.sent.length,count);});
 }
 {
  const p=rig();p.field('letter').value='';p.press(p.button());const letter=p.field('letter'),old=p.field('letter-reason');p.field('haul').value='';p.press(p.button('haul'));

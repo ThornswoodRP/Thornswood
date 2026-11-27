@@ -88,7 +88,7 @@ namespace Thornswood
         {
             try
             {
-                if (allowed) { Directory.CreateDirectory(Folder); File.WriteAllText(DevFile, "yes"); }
+                if (allowed) { Directory.CreateDirectory(Folder); WholeFile.WriteText(DevFile, "yes"); }
                 else if (File.Exists(DevFile)) File.Delete(DevFile);
             }
             catch (Exception ex) { Swallow.Note("Discord.NoteDev", ex); }
@@ -298,11 +298,14 @@ namespace Thornswood
         /// Every file this account leaves in folder: the sign-in ticket, the
         /// name and picture kept beside it, the site's last staff answer and
         /// the door's last yes or no. Forget deletes them, and an uninstall
-        /// removes them with the rest of Profile (#3679).
+        /// removes them with the rest of Profile (#3679). Each comes with the
+        /// .new it is written under first (WholeFile, #4702): a launcher
+        /// stopped mid-save leaves one, and a forgotten ticket must not stay
+        /// behind under that name.
         /// </summary>
         public static string[] AccountFiles(string folder)
         {
-            return new string[]
+            string[] files =
             {
                 Path.Combine(folder, TicketName),
                 Path.Combine(folder, NameName),
@@ -316,6 +319,13 @@ namespace Thornswood
                 // (Door.AnswerFile, kept beside the ticket).
                 Path.Combine(folder, "door.txt"),
             };
+            var all = new string[files.Length * 2];
+            for (int i = 0; i < files.Length; i++)
+            {
+                all[2 * i] = files[i];
+                all[2 * i + 1] = WholeFile.Next(files[i]);
+            }
+            return all;
         }
 
         public static void Forget()
@@ -342,13 +352,14 @@ namespace Thornswood
             try
             {
                 Directory.CreateDirectory(Folder);
-                File.WriteAllText(TicketFile, Secrets.Protect(t ?? ""));
-                File.WriteAllText(NameFile, who ?? "");
-                File.WriteAllText(AvatarFile, pic ?? "");
                 // The ticket is as good as the password: anything holding it
                 // can ask the site for the real one. Nobody else on this PC
-                // gets to read the file.
-                Secrets.LockDown(TicketFile);
+                // gets to read the file, which is locked before it takes the
+                // ticket's name. Each is written whole or not at all (#4702),
+                // so a launcher stopped here never leaves a sign-in cut short.
+                WholeFile.WriteText(TicketFile, Secrets.Protect(t ?? ""), new UTF8Encoding(false), Secrets.LockDown);
+                WholeFile.WriteText(NameFile, who ?? "");
+                WholeFile.WriteText(AvatarFile, pic ?? "");
             }
             catch (Exception ex) { Swallow.Note("Discord.Save", ex); }
             ticket = t ?? ""; name = who ?? ""; avatar = pic ?? ""; RanOut = null;
@@ -363,7 +374,7 @@ namespace Thornswood
             try
             {
                 Directory.CreateDirectory(Folder);
-                File.WriteAllText(AvatarFile, pic);
+                WholeFile.WriteText(AvatarFile, pic);
             }
             catch (Exception ex) { Swallow.Note("Discord.NoteAvatar", ex); }
             avatar = pic;
@@ -758,7 +769,7 @@ namespace Thornswood
             try
             {
                 Directory.CreateDirectory(Folder);
-                File.WriteAllText(PendingFile, id);
+                WholeFile.WriteText(PendingFile, id);
             }
             catch (Exception ex) { Swallow.Note("Discord.MarkPending", ex); }
         }

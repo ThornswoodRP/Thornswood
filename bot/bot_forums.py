@@ -20,7 +20,7 @@ from bot_github import (DEV_FORM, KNOWN_FORM, KNOWN_MARK, TASK_FORM, TASK_MARK,
 from bot_task_text import (_all_marked, _marked, checked_since, dev_chunks, dev_render,
     dev_task_of, fix_refs, issue_tags, main_task_of, strip_footer,
     test_task_of)
-from bot_post_rules import (fix_in_main, post_problems, refuse,
+from bot_post_rules import (fix_in_main, post_problems, refuse_off_loop,
     task_server_line)
 
 
@@ -106,17 +106,57 @@ async def _bot_threads(forum, me_id=None):
     return [mine[k] for k in sorted(mine)]
 
 
-async def _forum_post(forum, title, body, tags, me_id=None):
+class _BotTitles(object):
+    """
+    The bot's posts in one forum by title, for one pass (#4332). Listed the
+    first time a pass asks, and never again in that pass: a post this pass
+    makes is added, and one it deletes is taken off, so the list stays true
+    without asking Discord again. Until then _forum_post listed the forum's
+    whole archive (100 threads a request) for every new post, and _dev_post
+    listed it and then let _forum_post list it again, so a pass of 40 new
+    posts over 1000 archived ones made 400 list requests, 800 in
+    #dev-test-tasks. Each pass makes its own: nothing is kept across passes,
+    so staff closing, deleting or renaming a post between passes is seen.
+    """
+
+    def __init__(self, forum, me_id=None):
+        self.forum = forum
+        self.me_id = me_id
+        self.by = None
+
+    async def find(self, title):
+        if self.by is None:
+            self.by = {}
+            for th in await _bot_threads(self.forum, self.me_id):
+                self.by.setdefault(str(getattr(th, 'name', '')), th)   # the oldest
+        return self.by.get(title)
+
+    def add(self, title, th):
+        if self.by is not None:
+            self.by.setdefault(title, th)
+
+    def forget(self, tid):
+        if self.by is not None:
+            for title in [t for t, th in self.by.items() if getattr(th, 'id', None) == tid]:
+                del self.by[title]
+
+
+async def _forum_post(forum, title, body, tags, me_id=None, titles=None):
     """A post in the forum, tagged; a post of the bot's with that exact title,
        open or closed, is handed back rather than made twice. Returns the
        thread. Closed ones count since 22 Oct: Patrick found duplicates, and
        a post closed by staff or by Discord after quiet days was not looked
-       at, so one whose record was lost was made again."""
-    for th in await _bot_threads(forum, me_id):
-        if str(getattr(th, 'name', '')) == title:
-            return th
+       at, so one whose record was lost was made again. titles is the pass's
+       list of the bot's posts there (_BotTitles), so the archive is listed
+       once a pass, not once a post (#4332)."""
+    titles = titles or _BotTitles(forum, me_id)
+    found = await titles.find(title)
+    if found is not None:
+        return found
     made = await _create_forum_post(forum, title, body, tags)
-    return getattr(made, 'thread', made)
+    th = getattr(made, 'thread', made)
+    titles.add(title, th)
+    return th
 
 
 async def _create_forum_post(forum, title, body, tags, **kwargs):
@@ -138,7 +178,7 @@ def _refusal(what, forum, th, e):
                getattr(e, 'text', '') or str(e), getattr(e, 'code', '?')))
 
 
-async def _forum_drop(forum, tid):
+async def _forum_drop(forum, tid, titles=None):
     th = await _forum_thread(forum, tid)
     if th is not None:
         try:
@@ -146,6 +186,8 @@ async def _forum_drop(forum, tid):
         except discord.HTTPException as e:
             log(_refusal('remove', forum, th, e))
             raise
+    if titles is not None:
+        titles.forget(tid)      # gone, so a new post may take its title
 
 
 async def _main_task_thread(forum, records, key, me_id):
@@ -307,18 +349,17 @@ async def _sync_more(th, texts, more):
     return ids
 
 
-async def _dev_post(forum, title, chunks, tags, me_id=None):
+async def _dev_post(forum, title, chunks, tags, me_id=None, titles=None):
     """A #dev-test-tasks post over as many messages as its text takes.
        (thread, follow-up ids). A post of the bot's with this title, open or
        closed, made before a crash or whose record was lost, is taken up with
-       what it already holds, never made twice."""
-    found = None
-    for th in await _bot_threads(forum, me_id):
-        if str(getattr(th, 'name', '')) == title:
-            found = th
-            break
+       what it already holds, never made twice. It looks in the pass's one
+       list (_BotTitles) and hands the same list to _forum_post, which until
+       #4332 listed the archive a second time."""
+    titles = titles or _BotTitles(forum, me_id)
+    found = await titles.find(title)
     if found is None:
-        th = await _forum_post(forum, title, chunks[0], tags, me_id)
+        th = await _forum_post(forum, title, chunks[0], tags, me_id, titles)
         more = []
     else:
         th = found
@@ -362,6 +403,7 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
     pass read the comments of every other one again (#5184).
     """
     loop = asyncio.get_running_loop()
+    titles = _BotTitles(forum, me_id)     # this pass's one list of its posts (#4332)
     issues = await loop.run_in_executor(None, github_open_findings, get)
     rec = state.setdefault('issues', {})
     read = state.setdefault('known_read', {})
@@ -417,13 +459,15 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
         # With no "Known issue:" comment there are no words to post, so
         # nothing goes up whether the rules are checked or not: the bot never
         # writes a post's words itself (known_of).
-        if refuse(state, 'known', num, post_problems(
+        held, settled = await refuse_off_loop(state, 'known', num, post_problems(
                 'known', title, body, issue=issue, written=post is not None,
-                has_task=False, taken_titles=taken), say) or post is None:
+                has_task=False, taken_titles=taken), say)
+        if held or post is None:
             if have:
                 listed.add(num)     # the post already up stays as it was
             why[key] = 'its post breaks a rule'
-            unposted(key, mark + ('|kept' if have else ''))
+            if settled:             # a refusal GitHub did not take is said again
+                unposted(key, mark + ('|kept' if have else ''))
             continue
         listed.add(num)
         if read.pop(key, None) is not None:
@@ -444,7 +488,7 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
                             form=KNOWN_FORM)
                 state['_dirty'] = True
                 continue
-        th = await _forum_post(forum, title, body, tags, me_id)
+        th = await _forum_post(forum, title, body, tags, me_id, titles)
         rec[key] = {'thread_id': th.id, 'channel_id': forum.id, 'sig': sig,
                     'updated': issue.get('updated_at'), 'form': KNOWN_FORM}
         state['_dirty'] = True
@@ -468,7 +512,7 @@ async def known_issues_once(forum, state, get=None, save=None, me_id=None, say=N
         if int(key) in listed:
             continue
         try:
-            await _forum_drop(forum, have['thread_id'])
+            await _forum_drop(forum, have['thread_id'], titles)
         except discord.HTTPException:
             continue
         rec.pop(key, None)
@@ -496,6 +540,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
     in #dev-test-tasks. Returns the issue numbers posted, edited and removed.
     """
     loop = asyncio.get_running_loop()
+    titles = _BotTitles(forum, me_id)     # this pass's one list of its posts (#4332)
     dev_since = state.get('dev_since')
     since = state.get('since')
     if not since:
@@ -504,16 +549,17 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
     rec = state.setdefault('tasks', {})
 
     async def broken(num, issue, comments, post):
-        # The rules check before a #test-tasks post goes up or is edited.
+        # The rules check before a #test-tasks post goes up or is edited:
+        # (held, settled), as refuse_off_loop gives them.
         task = main_task_of(issue, comments, dev_since)
         if task is None:
-            return False    # no post is made of it (task_post_of)
+            return False, True  # no post is made of it (task_post_of)
         timeline = await loop.run_in_executor(None, github_timeline, num, get)
         refs = await loop.run_in_executor(None, fix_refs, timeline, get)
         inmain = await loop.run_in_executor(None, fix_in_main, *refs, get)
         taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items()
                  if k != str(num)]
-        return refuse(state, 'main', num, post_problems(
+        return await refuse_off_loop(state, 'main', num, post_problems(
             'main', post[0], post[1],
             server=task_server_line(issue, comments, task[4]),
             fix_in_main=inmain, taken_titles=taken), say)
@@ -539,7 +585,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
 
     async def post_new(num, issue, post):
         title, body, tags = post
-        th = await _forum_post(forum, title, body, tags, me_id)
+        th = await _forum_post(forum, title, body, tags, me_id, titles)
         rec[str(num)] = {'thread_id': th.id, 'channel_id': forum.id, 'sig': _sig(*post),
                          'updated': issue.get('updated_at'), 'form': TASK_FORM}
         state['_dirty'] = True
@@ -637,7 +683,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
         num = int(key)
         comments = await loop.run_in_executor(None, github_comments, num, get)
         post = task_post_of(issue, comments, dev_since)
-        if post is None or await broken(num, issue, comments, post):
+        if post is None or (await broken(num, issue, comments, post))[0]:
             return
         if _sig(*post) != have['sig']:
             # Revised instructions need a new active post. Keep every earlier
@@ -688,7 +734,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             # already here goes: it is no longer a test task for testers.
             if have:
                 try:
-                    await _forum_drop(forum, have['thread_id'])
+                    await _forum_drop(forum, have['thread_id'], titles)
                 except discord.HTTPException:
                     continue
                 rec.pop(key, None)
@@ -698,9 +744,12 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             continue
         title, body, tags = post
         sig = _sig(title, body, tags)
-        if (not have or have.get('sig') != sig) and await broken(num, issue, comments, post):
-            unposted(key, mark + ('|kept' if have else ''))
-            continue        # not posted, and a post already up keeps its text
+        if not have or have.get('sig') != sig:
+            held, settled = await broken(num, issue, comments, post)
+            if held:
+                if settled:         # a refusal GitHub did not take is said again
+                    unposted(key, mark + ('|kept' if have else ''))
+                continue            # not posted, and a post already up keeps its text
         if read.pop(key, None) is not None:
             state['_dirty'] = True
         if have:
@@ -728,7 +777,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
                 continue    # preserve the post when its issue is unknown
             # Deleted: it is in no list any more, so only this read finds it.
             try:
-                await _forum_drop(forum, have['thread_id'])
+                await _forum_drop(forum, have['thread_id'], titles)
             except discord.HTTPException:
                 continue
             rec.pop(key, None)
@@ -746,7 +795,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             await restore(key, issue)
         elif issue.get('state') == 'open':
             try:
-                await _forum_drop(forum, have['thread_id'])
+                await _forum_drop(forum, have['thread_id'], titles)
             except discord.HTTPException:
                 continue
             rec.pop(key, None)
@@ -762,7 +811,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
             if post is None:
                 # Its test task was taken back: the post goes, as above.
                 try:
-                    await _forum_drop(forum, have['thread_id'])
+                    await _forum_drop(forum, have['thread_id'], titles)
                 except discord.HTTPException:
                     continue
                 rec.pop(key, None)
@@ -770,7 +819,7 @@ async def test_tasks_once(forum, state, get=None, save=None, me_id=None, now=Non
                 removed.append(int(key))
                 continue
             sig = _sig(*post)
-            if have.get('sig') != sig and await broken(int(key), issue, comments, post):
+            if have.get('sig') != sig and (await broken(int(key), issue, comments, post))[0]:
                 continue
             if have.get('sig') != sig:
                 try:
@@ -806,6 +855,7 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
     Returns the issue numbers posted, edited and removed.
     """
     loop = asyncio.get_running_loop()
+    titles = _BotTitles(forum, me_id)     # this pass's one list of its posts (#4332)
     since = state.get('dev_since')
     if not since:
         state['dev_since'] = since = now or _utc_stamp()
@@ -831,11 +881,15 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
         post = None
         if task is not None:
             taken = [v.get('sig', '').split('\n')[0] for k, v in rec.items() if k != key]
-            if refuse(state, 'dev', num, post_problems(
+            held, settled = await refuse_off_loop(state, 'dev', num, post_problems(
                     'dev', task[0], task[1], server=task[2],
-                    taken_titles=taken), say):
-                read[key] = upd     # the post already up, if any, keeps its text
-                state['_dirty'] = True
+                    taken_titles=taken), say)
+            if held:
+                if settled:
+                    read[key] = upd     # the post already up, if any, keeps its text
+                    state['_dirty'] = True
+                else:
+                    refused.append(upd)  # a refusal GitHub did not take is said again
                 continue
             timeline = await loop.run_in_executor(None, github_timeline, num, get)
             refs = await loop.run_in_executor(None, fix_refs, timeline, get)
@@ -843,7 +897,7 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
         try:
             if post is None:
                 if have:
-                    await _forum_drop(forum, have['thread_id'])
+                    await _forum_drop(forum, have['thread_id'], titles)
                     rec.pop(key, None)
                     removed.append(num)
             else:
@@ -867,7 +921,7 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
                 if have:
                     have.update(sig=sig, updated=upd, form=DEV_FORM)
                 else:
-                    th, more = await _dev_post(forum, title, chunks, tags, me_id)
+                    th, more = await _dev_post(forum, title, chunks, tags, me_id, titles)
                     rec[key] = {'thread_id': th.id, 'channel_id': forum.id,
                                 'more': more, 'sig': sig, 'updated': upd,
                                 'form': DEV_FORM}
@@ -894,7 +948,7 @@ async def dev_tasks_once(forum, state, get=None, save=None, me_id=None, now=None
             if not gone:
                 continue
             try:
-                await _forum_drop(forum, have['thread_id'])
+                await _forum_drop(forum, have['thread_id'], titles)
             except discord.HTTPException:
                 continue
             rec.pop(key, None)

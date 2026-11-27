@@ -17,9 +17,11 @@
 // to date on the dull clock before it is shown.
 //
 // THE CRAFT. The real mp.onCraft is run as test-1398-fuel.js runs it, with a
-// stock: charcoal and a handle the pack lacks come out of the chest, the pack
-// is used first when it has them, and a craft that draws on chests that are no
-// longer the person's is refused with nothing taken.
+// stock: it asks the property block for the bench's stock with the engine's
+// eighth argument, takes nothing of the chests itself (since #6726 the
+// charcoal and the handle are inputs on the records, so the engine draws them
+// from the chests like any other input), and a craft that draws on chests
+// that are no longer the person's is refused with nothing taken.
 //
 // Read only. Prints PASS and FAIL lines, exit 1 when anything fails.
 const REPO_DIR = require('path').join(__dirname, '..', '..');
@@ -211,7 +213,6 @@ try { RECIPES = new Function('return ' + recSrc.slice('var RECIPES_BY_ID = '.len
 const keptSrc = slice(gm, 'const KEPT_SMELT = {', '\n};');
 let KEPT = null;
 try { KEPT = new Function('return ' + keptSrc.slice('const KEPT_SMELT = '.length).replace(/;$/, ''))(); } catch (e) { KEPT = null; }
-const fuelLine = /^const FUEL_BY_RECIPE = (\{.*\});$/m.exec(gm);
 const ITEMS = JSON.parse(/^const ITEMS = (\{.*\});$/m.exec(gm)[1]);
 const progression = slice(gm, '// ==== thornswood progression ====', '// ==== end thornswood progression ====');
 const box = { console: { log: function () {} } };
@@ -223,9 +224,6 @@ function byName(name) {
   return null;
 }
 const pieces = {
-  grades: slice(gm, 'const CHARCOAL_GRADES = [', '\n];'),
-  hafted: lineOf(/^const HAFTED_FAMILIES = .*$/m),
-  handle: lineOf(/^const HANDLE_DESC = .*$/m),
   tools: slice(gm, 'const TOOLS = {', '\n};'),
   key: lineOf(/^const KEY_RECIPE = .*$/m),
   // #3151: the quality a weapon or an armour piece comes out at, which onCraft
@@ -233,8 +231,7 @@ const pieces = {
   quality: [slice(gm, 'const CRAFT_QUALITY = {', '\n};'), lineOf(/^const QUALITY_WEAPON_FAMILIES = .*$/m),
             lineOf(/^const QUALITY_RANKS = .*$/m)].join('\n'),
   fns: ['function idOf(descriptor)', 'function mintedEntry(entry)', 'function takeItem(actorId, itemDesc, count)', 'function addItem(actorId, itemDesc, count)',
-        'function recipeMetadataRefusal(desc)', 'function craftRow(recipeDesc)', 'function fuelFor(recipeDesc)', 'function packCount(actorId, itemDesc)',
-        'function charcoalHeld(actorId, grade)', 'function fuelRefusal(fuel)', 'function wantsAHandle(row)',
+        'function recipeMetadataRefusal(desc)', 'function craftRow(recipeDesc)', 'function packCount(actorId, itemDesc)',
         'function holdsPerk(actorId, key)', 'function wovenMark(actorId)',
         'function wovenOutput(actorId, row)', 'function cookedOutput(actorId, row)',
         'function qualityTier(margin, roll)', 'function qualityRolled(row, baseId)',
@@ -244,7 +241,7 @@ const pieces = {
         'function unfitToMake(actorId, workbenchId)'].map(cut),
   onCraft: slice(gm, "mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {", '\n});\n')
 };
-const craftReady = !!RECIPES && !!KEPT && !!fuelLine && !!P && !!pieces.grades && !!pieces.hafted && !!pieces.handle &&
+const craftReady = !!RECIPES && !!KEPT && !!P &&
   !!pieces.tools && !!pieces.key && !!pieces.quality && pieces.fns.every(function (f) { return !!f; }) && !!pieces.onCraft;
 yes('the craft pieces are all in the gamemode', craftReady);
 yes('onCraft asks the property block for the stock with the eighth argument',
@@ -291,7 +288,7 @@ function craftRig(state, stockAnswer) {
       }
     }
   };
-  const body = [pieces.grades, fuelLine[0], pieces.hafted, pieces.handle, pieces.tools, pieces.key, pieces.quality]
+  const body = [pieces.tools, pieces.key, pieces.quality]
     .concat(pieces.fns).join('\n') + '\n' + pieces.onCraft + '\nreturn mp.onCraft;';
   const onCraft = new Function('mp', 'globalThis', 'ITEMS', 'RECIPES_BY_ID', 'KEPT_SMELT', 'guard', 'notify', 'say', 'log',
     'setTimeout', 'recipelessCraft', 'craftAnswer', 'creditWork',
@@ -326,37 +323,18 @@ if (craftReady) {
   const smith = P.pickProfession(P.fresh(), 'smith', 'edgewright').state;
   smith.ranks.edgewright = 'master';
   const T1 = ITEMS.charcoalT1;
-  const HANDLE = /'([^']+)'/.exec(pieces.handle)[1];
   const sword = byName('Iron Sword'), axe = byName('Iron War Axe');
   const theirs = { from: [CHEST], refusal: '' };
 
-  attempt('charcoal from the chest', function () {
+  attempt('the stock is asked, and the engine draws on it', function () {
     const r = craftRig(smith, theirs);
-    r.give(CHEST, T1, 2);
-    yes('with no charcoal in the pack, the forge burns one from the chest',
-        r.craft(sword) !== false && r.count(CHEST, T1) === 1 && r.count(r.A, T1) === 0);
+    r.give(CHEST, T1, 2); r.give(CHEST, ITEMS.charcoal, 1);
+    yes('a craft at a bench with chests of theirs goes through',
+        r.craft(sword) !== false && r.craft(axe) !== false);
     yes('the property block was asked for this bench, with the eighth argument',
-        r.asked.length === 1 && r.asked[0].benchId === BENCH_REF && Array.isArray(r.asked[0].draws));
-    r.give(r.A, T1, 1);
-    yes('with some in the pack, the pack burns first',
-        r.craft(sword) !== false && r.count(r.A, T1) === 0 && r.count(CHEST, T1) === 1);
-  });
-
-  attempt('a handle from the chest', function () {
-    const r = craftRig(smith, theirs);
-    r.give(r.A, T1, 1); r.give(CHEST, HANDLE, 1);
-    yes('a war axe takes its handle from the chest when the pack has none',
-        r.craft(axe) !== false && r.count(CHEST, HANDLE) === 0 && r.count(r.A, T1) === 0);
-    r.give(r.A, T1, 1);
-    yes('with no handle in either, it is refused and the charcoal stays',
-        r.craft(axe) === false && r.count(r.A, T1) === 1 && /fitted to a wooden handle/.test(r.said.join(' ')));
-  });
-
-  attempt('no stock', function () {
-    const r = craftRig(smith, { from: [], refusal: '' });
-    r.give(CHEST, T1, 2);
-    yes('a bench with no chests of theirs does not reach into one',
-        r.craft(sword) === false && r.count(CHEST, T1) === 2 && /you have none/.test(r.said.join(' ')));
+        r.asked.length === 2 && r.asked[0].benchId === BENCH_REF && Array.isArray(r.asked[0].draws));
+    yes('and the server takes nothing out of the chest itself: the charcoal and the handle are the record\'s inputs (#6726)',
+        r.count(CHEST, T1) === 2 && r.count(CHEST, ITEMS.charcoal) === 1);
   });
 
   attempt('chests that are not theirs any more', function () {

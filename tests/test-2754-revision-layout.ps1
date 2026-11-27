@@ -50,6 +50,10 @@
        rules and its plugin order from the record, every "$type" first, the
        same bytes on a second run; and a pin that is not MO2's GitHub
        release refused.
+   10. -Scripts (#7000): refused without -Record; with it, scripts.json
+       beside the record, a row for every placed compiled script, a dinput
+       mod's Data\Scripts too, with its file id and sha256, and nothing of
+       the script itself.
 
   OFF WINDOWS (#2969) every run writes only the record (-Record), because a
   game folder is laid out on Windows, and the same layout is held through
@@ -407,7 +411,7 @@ if ($win) {
     Yes 'every file in files.txt is placed with its sha256 and size, and nothing else is' ($okLines.Count -eq $lines.Count -and $onDisk.Count -eq $lines.Count)
 }
 else {
-    Yes 'nothing is placed off Windows: the record folder holds the four records only' ((@(Get-ChildItem -LiteralPath $recDir -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt' -and -not (Test-Path -LiteralPath $game))
+    Yes 'nothing is placed off Windows: the record folder holds the five records only' ((@(Get-ChildItem -LiteralPath $recDir -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt slidersets.json' -and -not (Test-Path -LiteralPath $game))
 }
 $lj = Get-Content -Raw -LiteralPath (P $recDir 'layout.json') | ConvertFrom-Json
 Yes 'layout.json says the revision, and each mod''s file id, md5 and installer' ($lj.collection.revision -eq 5 -and $lj.collection.slug -eq '7essxf' -and $lj.files -eq 13 -and (@($lj.mods | ForEach-Object { [string]$_.fileId + ':' + $_.installer }) -join ' ') -eq '900001:basic 900002:list 900003:fomod 900004:script-extender 900005:basic 900006:basic 900007:fomod' -and @($lj.mods | Where-Object { $_.fileId -eq 900003 })[0].md5 -eq (Md5 $arc.gamma))
@@ -602,7 +606,7 @@ $wjRec = P $T 'wj-record'
 $r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', $wjRec, '-Modlist', '-Mo2Record', $moRec)
 YesR 'the record with -Modlist runs to the end and prints the modlist''s sha256' ($r.Code -eq 0 -and $r.Out -match 'thornswood\.wabbajack, \d+ bytes, sha256 [0-9a-f]{64}') $r
 $wjFile = P $wjRec 'thornswood.wabbajack'
-Yes 'the record folder holds the four records and the modlist' ((@(Get-ChildItem -LiteralPath $wjRec -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt thornswood.wabbajack')
+Yes 'the record folder holds the five records and the modlist' ((@(Get-ChildItem -LiteralPath $wjRec -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt slidersets.json thornswood.wabbajack')
 $wjEntries = @{}
 if (Test-Path -LiteralPath $wjFile) {
     $za = [IO.Compression.ZipFile]::OpenRead($wjFile)
@@ -656,6 +660,22 @@ $wjSha1 = Sha $wjFile
 $wjRec2 = P $T 'wj-record-2'
 $r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', $wjRec2, '-Modlist', '-Mo2Record', $moRec)
 YesR 'the same record writes the same modlist, byte for byte' ($r.Code -eq 0 -and (Sha (P $wjRec2 'thornswood.wabbajack')) -eq $wjSha1 -and $r.Out -match ('sha256 ' + $wjSha1)) $r
+
+# ---- -Scripts (#7000) ------------------------------------------------------------
+# What each placed compiled script calls, read while its mod is unpacked. The
+# reading itself is tests\test-7000-pex-calls.js's; this is that the layout
+# hands it every placed script, a dinput mod's Data\Scripts too, with its
+# file id, and writes scripts.json beside the record.
+$r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Scripts')
+YesR '-Scripts with no -Record is refused' ($r.Code -eq 1 -and $r.Out -match '-Scripts writes scripts\.json beside a record') $r
+$scRec = P $T 'scripts-record'
+$r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', $scRec, '-Scripts')
+YesR 'the record with -Scripts runs to the end and says what the scripts call' ($r.Code -eq 0 -and $r.Out -match '1 scripts placed, 0 of them the copy the game reads; 0 calls to native functions, 0 the collection cannot settle; 1 would not read') $r
+Yes 'the record folder holds the five records and scripts.json' ((@(Get-ChildItem -LiteralPath $scRec -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt scripts.json slidersets.json')
+$sc = if (Test-Path -LiteralPath (P $scRec 'scripts.json')) { [IO.File]::ReadAllText((P $scRec 'scripts.json')) | ConvertFrom-Json } else { $null }
+$dp = if ($sc) { @($sc.scripts | Where-Object { $_.path -eq 'Data\Scripts\delta.pex' }) } else { @() }
+Yes 'Delta''s Data\Scripts\delta.pex, from a dinput mod, is a row with its file id, sha256 and why it would not read' ($dp.Count -eq 1 -and $dp[0].fileId -eq 900004 -and $dp[0].mod -eq 'Delta' -and $dp[0].sha256 -eq (Sha (P $T 'src\Delta\delta_1\Data\Scripts\delta.pex')) -and $dp[0].error -match 'not a compiled Papyrus script')
+Yes '  and nothing of the script is in the record' ($null -ne $sc -and -not ([IO.File]::ReadAllText((P $scRec 'scripts.json'))).Contains('"script"'))
 
 # ---- the key, across every run ---------------------------------------------------
 Yes ('no run printed the key, in ' + $script:outs.Count + ' runs') (@($script:outs | Where-Object { $_.Contains($KEY) }).Count -eq 0)

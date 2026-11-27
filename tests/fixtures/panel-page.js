@@ -24,7 +24,15 @@ function makePage() {
         if (i >= 0) { list.splice(i, 1); c.parentNode = null; }
         return c;
       },
-      insertBefore(c) { return this.appendChild(c); },
+      insertBefore(c, ref) {
+        if (!ref) { return this.appendChild(c); }
+        if (c === ref) { return c; }
+        if (c.parentNode) { c.parentNode.removeChild(c); }
+        const list = this.kids.indexOf(ref) >= 0 ? this.kids : this.children;
+        const at = list.indexOf(ref);
+        if (at < 0) { return this.appendChild(c); }
+        list.splice(at, 0, c); c.parentNode = this; return c;
+      },
       getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attrs, k) ? this.attrs[k] : null; },
       getAttributeNames() { return Object.keys(this.attrs); },
       setAttribute(k, v) { this.attrs[k] = String(v); if (k === 'id') { this.id = v; } if (k === 'class') { this.className = v; } },
@@ -75,6 +83,12 @@ function makePage() {
         };
       }
     });
+    // disabled is the attribute, as in a browser, so markup that leaves it
+    // off enables a control a page had disabled and an update kept.
+    Object.defineProperty(n, 'disabled', {
+      get() { return this.hasAttribute('disabled'); },
+      set(v) { if (v) { this.attrs.disabled = ''; } else { delete this.attrs.disabled; } }
+    });
     Object.defineProperty(n, 'childNodes', { get() { return this.kids.concat(this.children); } });
     Object.defineProperty(n, 'textContent', {
       get() { return String(this._text || '') + this.childNodes.map(c => c.textContent).join(''); },
@@ -85,8 +99,17 @@ function makePage() {
       }
     });
     Object.defineProperty(n, 'firstChild', { get() { return this.childNodes[0] || null; } });
+    Object.defineProperty(n, 'nextSibling', {
+      get() { const up = this.parentNode; if (!up || !up.childNodes) { return null; } const all = up.childNodes; return all[all.indexOf(this) + 1] || null; }
+    });
+    Object.defineProperty(n, 'nodeValue', {
+      get() { return this.nodeType === 1 ? null : String(this._text || ''); },
+      set(v) { if (this.nodeType !== 1) { this._text = String(v); } }
+    });
     Object.defineProperty(n, 'innerHTML', {
-      get() { return this._html; },
+      // What is in the node now, as a browser reads it back, so a node
+      // changed in place (thornswoodDialog.patch) reads as it now is.
+      get() { return (this._text ? escText(this._text) : '') + this.childNodes.map(outer).join(''); },
       set(h) {
         this._html = String(h);
         this._text = '';
@@ -98,6 +121,15 @@ function makePage() {
       }
     });
     return n;
+  }
+  function escText(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function outer(k) {
+    if (k.nodeType !== 1) { return escText(k._text || ''); }
+    const tag = k.tagName.toLowerCase();
+    const all = Object.assign({}, k.attrs);
+    if (k._class) { all['class'] = k._class; } else { delete all['class']; }
+    const attrs = Object.keys(all).map(function (a) { return ' ' + a + '="' + escText(all[a]).replace(/"/g, '&quot;') + '"'; }).join('');
+    return '<' + tag + attrs + '>' + (VOID.indexOf(tag) >= 0 ? '' : k.innerHTML + '</' + tag + '>');
   }
   function matcher(sel) {
     const last = String(sel).trim().split(/\s+/).pop();
@@ -181,12 +213,18 @@ function makePage() {
   doc.activeElement = doc.body;
   doc.createElement = function (t) { return Node(t); };
   doc.createTextNode = function (t) { const n = Node('#text'); n.nodeType = 3; n.textContent = String(t); return n; };
+  // The node with that id that is in the document, as a browser has it: a
+  // detached copy made with the same id (a parsed model, a removed row) is not.
+  function mounted(n) { let o = n; while (o && o !== doc) { o = o.parentNode; } return o === doc; }
   doc.getElementById = function (id) {
     const n = ids[id];
-    if (!n) { return null; }
-    let o = n;
-    while (o && o !== doc) { o = o.parentNode; }
-    return o === doc ? n : null;
+    if (n && mounted(n)) { return n; }
+    let found = null;
+    (function walk(list) {
+      for (const k of list) { if (found) { return; } if (k.nodeType === 1 && k._id === String(id)) { found = k; return; } walk(k.childNodes); }
+    })(html.childNodes);
+    if (found) { ids[id] = found; }
+    return found;
   };
   doc.querySelector = function (sel) { return html.querySelector(sel); };
   doc.querySelectorAll = function (sel) { return html.querySelectorAll(sel); };

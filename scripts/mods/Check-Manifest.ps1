@@ -284,13 +284,13 @@ if (-not (Test-Path -LiteralPath $plug)) {
       Say '  should not have them, bring the dev server up to it (Patrick runs it):' 'Yellow'
       Say '    .\scripts\deploy\Deploy-DevGamemode.ps1 -LoadOrder' 'Yellow'
     } else {
-      Say '  Press Fix in the launcher, then Scan. Fix takes Thornswood''s own plugins from the latest release' 'Yellow'
+      Say '  Press Fix in the launcher, then Scan. Fix takes Thornswood''s own plugins from the release the launcher is on' 'Yellow'
       Say '  and copies back a collection plugin Vortex has deployed or staged.' 'Yellow'
       Say '  A collection plugin Vortex has no copy of comes only from Vortex: open Vortex' 'Yellow'
       Say '  with the Thornswood profile active, install the Thornswood collection if it' 'Yellow'
       Say '  is not, and press Deploy. Then press Scan in the launcher and run this again.' 'Yellow'
-      Say '  If Fix says the release does not have the copy the server runs, the next' 'Yellow'
-      Say '  update brings it: take it when it is waiting.' 'Yellow'
+      Say '  If Fix says the release does not have the copy the server runs, it has asked' 'Yellow'
+      Say '  GitHub for the newer release that does: Install now on the card above Play takes it.' 'Yellow'
     }
   } else {
     Say '  you have every plugin the server wants' 'Green'

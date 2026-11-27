@@ -145,7 +145,7 @@
     '#' + ID + ' .main{overflow:auto;padding:18px 24px;font-size:17px}',
     '#' + ID + ' .foot{padding:12px 24px;border-top:1px solid rgba(198,170,109,.22);display:flex;gap:10px;',
     '  align-items:center;font-size:13.5px;font-style:italic;color:rgba(217,207,180,.7)}',
-    '#' + ID + ' h3{margin:14px 0 7px;padding-bottom:6px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' h3{margin:14px 0 7px;padding-bottom:6px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);font-weight:normal;border-bottom:1px solid rgba(198,170,109,.22)}',
     '#' + ID + ' h3:first-child{margin-top:0}',
     // The K panel's button at 11px rather than its 13px. Uppercase and spaced
@@ -163,9 +163,9 @@
     '  color:#f6e9c8;font-size:15px;letter-spacing:.02em;text-transform:none;white-space:normal}',
     '#' + ID + ' .item.sel{border-color:rgba(198,170,109,.55);background:rgba(120,94,44,.24);',
     '  box-shadow:inset 3px 0 0 0 #c6aa6d}',
-    '#' + ID + ' .item.go{text-align:center;font-size:11px;letter-spacing:.14em;text-transform:uppercase;',
+    '#' + ID + ' .item.go{text-align:center;font-size:12px;letter-spacing:.14em;text-transform:uppercase;',
     '  background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
-    '#' + ID + ' .item .c{float:right;color:rgba(217,207,180,.5);font-size:12px;font-style:italic}',
+    '#' + ID + ' .item .c{float:right;color:rgba(217,207,180,.7);font-size:12px;font-style:italic}',
     '#' + ID + ' button[data-page]{font-size:13.5px;letter-spacing:.02em;text-transform:none;color:#d9cfb4;',
     '  border-color:rgba(198,170,109,.30);background:rgba(0,0,0,.20)}',
     '#' + ID + ' button[data-page].go{border-color:#e9d19b;background:rgba(201,162,75,.20);color:#f6e9c8}',
@@ -178,9 +178,9 @@
     '#' + ID + ' textarea{min-height:300px;resize:vertical;line-height:1.55;font-size:15px}',
     '#' + ID + ' .bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}',
     '#' + ID + ' .bar .grow{flex:1}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:8px 2px;line-height:1.55}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:8px 2px;line-height:1.55}',
     '#' + ID + ' .read{white-space:pre-wrap;line-height:1.65;font-size:17px;color:#d9cfb4}',
-    '#' + ID + ' .from{color:rgba(217,207,180,.6);font-style:italic;font-size:12.5px;margin-bottom:10px}',
+    '#' + ID + ' .from{color:rgba(217,207,180,.7);font-style:italic;font-size:12.5px;margin-bottom:10px}',
     '#' + ID + ' .main b{font-weight:normal;font-size:16.5px;color:#f6e9c8}',
     // The K panel's scrollbars, the same rules scoped to this panel, so the
     // journal has them whether or not the K panel's page loaded first.
@@ -209,6 +209,9 @@
   var BASE_W = 1920, BASE_H = 1080, MAX_SCALE = 2.4;
 
   function scaleFor(w, h) {
+    // The one rule every panel scales by, with the text size (#4474), when
+    // the page has it; the journal's own otherwise.
+    if (window.thornswoodScale) { return window.thornswoodScale.scaleFor(w, h, 1040, 660); }
     var s = Math.min(w / BASE_W, h / BASE_H);
     if (!isFinite(s) || s < 1) { s = 1; }
     return Math.min(s, MAX_SCALE);
@@ -265,6 +268,7 @@
       var button = ev.target;
       if (!shown || !button || button.tagName !== 'BUTTON' ||
           (button.getAttribute('data-do') !== 'dropbook' && button.getAttribute('data-g') !== 'disband' &&
+           button.getAttribute('data-g') !== 'remove' &&
            button.id !== ID + '-discard') || (ev.key !== 'Enter' && ev.key !== ' ')) return;
       ev.preventDefault(); ev.stopPropagation();
       if (ev.repeat || destructiveHeld) return;
@@ -472,7 +476,7 @@
         html += '<button class="item' + (readingShared === j ? ' sel' : '') +
                 '" data-shared="' + j + '">' + esc(shared[j].title) +
                 '<span class="c">' + shared[j].pages.length + '</span>' +
-                '<div style="color:rgba(217,207,180,.6);font-size:12px;font-style:italic">from ' + esc(shared[j].from) + '</div></button>';
+                '<div style="color:rgba(217,207,180,.7);font-size:12px;font-style:italic">from ' + esc(shared[j].from) + '</div></button>';
       }
     }
     var group = data && data.group;
@@ -496,7 +500,7 @@
       }
     }
     html += boardsSide();
-    side.innerHTML = html;
+    put(side, html, 'side');
 
     var items = side.querySelectorAll('button[data-book],button[data-new],button[data-shared]');
     for (var k = 0; k < items.length; k++) {
@@ -602,7 +606,7 @@
     var bv = data && data.boards;
     var read = bv && bv.read;
     if (!read) {
-      main.innerHTML = '<div class="none">Pick a town under Boards to read its notice board.</div>';
+      put(main, '<div class="none">Pick a town under Boards to read its notice board.</div>');
       return;
     }
     var out = '<div class="from">The notice board in ' + esc(read.where || read.hold) +
@@ -650,7 +654,7 @@
     if (jobs.length) {
       out += '<div class="none">A job is handed back at the board it came from.</div>';
     }
-    main.innerHTML = out;
+    put(main, out);
   }
 
   function groupBook() {
@@ -676,7 +680,7 @@
 
   function drawGroup(main) {
     var book = groupBook();
-    if (!book) { main.innerHTML = '<div class="none">Gone.</div>'; return; }
+    if (!book) { put(main, '<div class="none">Gone.</div>'); return; }
     var out = '<div class="from">' + esc(book.name) + ', ' + esc(book.kind) + '</div>';
     if (book.read) {
       out += '<b>People</b>';
@@ -778,7 +782,7 @@
     if (book.leave) {
       out += '<div class="bar"><button data-g="leave">Leave</button></div>';
     }
-    main.innerHTML = out;
+    put(main, out);
     var actions = main.querySelectorAll('button[data-g]');
     for (var a = 0; a < actions.length; a++) {
       actions[a].onclick = onGroup;
@@ -924,8 +928,14 @@
     }
     if (verb === 'remove') {
       var gone = gval('gwho');
-      if (!needGroupField('gwho', 'Name the person to remove.')) return;
-      net('/book member ' + book.id + ' remove | ' + gone);
+      if (!needGroupField('gwho', 'Name the person to remove.')) { resetDestructive(); return; }
+      confirmDestructive(this, function () {
+        var current = groupBook();
+        return current && current.id === book.id && current.invite && gval('gwho') === gone
+          ? { book: current, who: gone } : null;
+      }, 'remove "' + gone + '" from "' + book.name + '"', function () {
+        net('/book member ' + book.id + ' remove | ' + gone);
+      });
       return;
     }
     if (verb === 'give') {
@@ -950,26 +960,26 @@
 
     if (readingShared >= 0) {
       var sh = ((data && data.shared) || [])[readingShared];
-      if (!sh) { main.innerHTML = '<div class="none">Gone.</div>'; return; }
+      if (!sh) { put(main, '<div class="none">Gone.</div>'); return; }
       var out = '<div class="from">' + esc(sh.title) + ', from ' + esc(sh.from) +
                 (sh.whole ? ' (the whole journal)' : ' (shared pages)') + '</div>';
       for (var i = 0; i < sh.pages.length; i++) {
         out += '<div style="margin-bottom:22px"><b>' + esc(sh.pages[i].title) + '</b>' +
                '<div class="read">' + esc(sh.pages[i].text) + '</div></div>';
       }
-      main.innerHTML = out;
+      put(main, out);
       return;
     }
 
     var book = bookOf(openBook);
     if (!book) {
       if (boardsShown()) { drawBoards(main); return; }
-      main.innerHTML = '<div class="none">Pick a journal on the left, or start one.</div>';
+      put(main, '<div class="none">Pick a journal on the left, or start one.</div>');
       return;
     }
 
     var friends = ((data && data.friends) || []).filter(function (f) { return true; });
-    var pick = '<select id="' + ID + '-who"><option value="">a friend...</option>';
+    var pick = '<select id="' + ID + '-who" aria-label="Friend to share with"><option value="">a friend...</option>';
     for (var f = 0; f < friends.length; f++) {
       var whoId = friends[f].p != null && friends[f].p !== '' ? String(friends[f].p) : friends[f].name;
       pick += '<option value="' + esc(whoId) + '">' + esc(friends[f].name) + '</option>';
@@ -1014,7 +1024,7 @@
         '<textarea id="' + ID + '-text" aria-label="Page text" maxlength="' + PAGE_CHARS + '">' + esc(pageDraft ? pageDraft.text : (page.text || '')) + '</textarea>';
     }
 
-    main.innerHTML = html;
+    put(main, html);
 
     var pages = main.querySelectorAll('button[data-page]');
     for (var q = 0; q < pages.length; q++) {
@@ -1144,12 +1154,17 @@
     }
   }
 
-  function draw() {
-    if (window.thornswoodDialog) { window.thornswoodDialog.redraw(root, drawContents); return; }
-    drawContents();
+  // In place, so what is being typed and its focus outlast the update (#4475).
+  // The main page's controls are new ones whenever it shows something else.
+  function put(host, html, subject) {
+    if (subject === undefined) {
+      var bv = data && data.boards;
+      subject = JSON.stringify([openGroup, readingShared, openBook, openPage, bv && bv.read && bv.read.hold]);
+    }
+    if (window.thornswoodDialog) { window.thornswoodDialog.patch(host, html, subject); } else { host.innerHTML = html; }
   }
 
-  function drawContents() {
+  function draw() {
     if (!root || !shown) { return; }
     clearGroupFieldError();
     resetDestructive();
@@ -1186,6 +1201,7 @@
     toggle: toggle,
     isOpen: function () { return shown; },
     scaleFor: scaleFor,
+    fit: fit,
     /*
       JournalKey's name, as the front has it bound, so the key that opened
       this closes it wherever it is. A key the front has no name for (#57,

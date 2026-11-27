@@ -15,15 +15,6 @@
     .\Deploy-Docs.ps1          the app only, documents untouched
     .\Deploy-Docs.ps1 -Site    also the public pages, which nobody edits in
                                the browser, so this is safe
-    .\Deploy-Docs.ps1 -Boards  also board.json, which DOES overwrite anything
-                               typed into a board on the site
-    .\Deploy-Docs.ps1 -Board active
-                               replaces just the named board inside the live
-                               board.json with the repo's, .bak first, and
-                               leaves every other board as it was typed. A
-                               board the repo marks "seeded" goes in once by
-                               itself, on the first deploy that finds the
-                               live copy without that mark (#2414)
     .\Deploy-Docs.ps1 -SeedDocs
                                flattens every document with the repo copy.
                                First install only. Takes a .bak of each first.
@@ -56,7 +47,7 @@
   agent swaps them in when they changed (docs\DEPLOY-AGENT.md). This asks
   the box whether the agent's agent.json names the site. When it does, a
   plain run sends no app and no public pages, -Site is refused before
-  anything is sent, and the documents, the boards, -Password, -RunAs, the
+  anything is sent, and the documents, -Password, -RunAs, the
   task and the firewall go on as below. Two senders of the same files would
   each put back what the other put in. -PutBack still puts back the newest
   .prev folder, which the agent's swap leaves the same way. Before the agent
@@ -104,16 +95,6 @@ param(
   # people have been typing into on the site. It is for a first install and for
   # nothing else. It now takes a backup and says what it stood on.
   [switch]$SeedDocs,
-  # Just the boards. -SeedDocs would also flatten every markdown document up
-  # there, which is too big a hammer when only the runbook moved.
-  [switch]$Boards,
-  # One board out of board.json, by its key (active), put in place of the
-  # live one while every other board stays exactly as typed on the site
-  # (#2414). -Boards flattens them all. The live board.json goes to .bak
-  # first, and the board's revision moves on, so a hub page still open on the
-  # old copy is told to reload rather than saving over the new one. A board
-  # the repo marks "seeded" does not need it: see BOARDS THE REPO SEEDS.
-  [string[]]$Board,
   # Just the public pages under data\site. Those are not editable in the
   # browser, so pushing them overwrites nobody's work. This is what you want
   # nine times out of ten when the wording on the public site changed.
@@ -177,11 +158,8 @@ if (-not $Vps) { $Vps = Get-ThornswoodVpsAddress }
 $App  = Join-Path $Here '..\..\site'
 
 if (-not (Test-Path -LiteralPath $App)) { throw "not found: $App" }
-if ($PutBack -and ($Password -or $SeedDocs -or $Boards -or $Board -or $Site -or $Docs -or $RunAs)) {
-  throw '-PutBack puts the last app back and sends nothing else, so it takes none of -Password, -SeedDocs, -Boards, -Board, -Site, -Docs or -RunAs.'
-}
-if ($Board -and ($Boards -or $SeedDocs)) {
-  throw '-Board replaces one board and keeps the rest; -Boards and -SeedDocs replace all of board.json. Use one of them.'
+if ($PutBack -and ($Password -or $SeedDocs -or $Site -or $Docs -or $RunAs)) {
+  throw '-PutBack puts the last app back and sends nothing else, so it takes none of -Password, -SeedDocs, -Site, -Docs or -RunAs.'
 }
 
 # Asked before anything is sent, so a deploy never stops halfway for it.
@@ -217,19 +195,6 @@ foreach ($d in @($Docs)) {
   $n = if ($d -match '[.](md|json)$') { $d } else { "$d.md" }
   if (-not (Test-Path -LiteralPath (Join-Path $App "data/$n"))) { throw "no such document in the repo: data/$n" }
   $docNames += $n
-}
-
-# -Board names have to be boards the repo's board.json has, for the same
-# reason, and only the plain names a board key is made of.
-$boardNames = @()
-if ($Board) {
-  $repoBoards = Get-Content -Raw -LiteralPath (Join-Path $App 'data/board.json') | ConvertFrom-Json
-  foreach ($b in @($Board)) {
-    if (-not $b) { continue }
-    if ($b -notmatch '^[a-z]+$') { throw "-Board takes a board's key, such as active: $b" }
-    if (-not ($repoBoards.PSObject.Properties.Name -contains $b)) { throw "no board named $b in the repo's data/board.json" }
-    $boardNames += $b
-  }
 }
 
 # Whether the box deploy agent has the site (header, ONCE THE DEPLOY AGENT
@@ -469,15 +434,13 @@ Get-ChildItem (Join-Path $App 'data/site') -Filter *.md -EA SilentlyContinue | F
 # is missing goes, unless -SeedDocs says to overwrite the lot.
 Write-Host ''
 Write-Host 'Documents...'
-if ($SeedDocs -or $Boards -or $docNames.Count -or $boardNames.Count) {
-  # Every document on the VPS goes to .bak first. Both of these have thrown
-  # away an evening of edits before now: -SeedDocs flattens the lot, -Boards
-  # flattens board.json, and a board is the thing most likely to have been
-  # typed into five minutes ago.
+if ($SeedDocs -or $docNames.Count) {
+  # Every document on the VPS goes to .bak first. -SeedDocs has thrown away
+  # an evening of edits before now by flattening the lot.
   #
   # The \* matters. -Include filters only what a wildcard or -Recurse has
   # already gathered, so on the bare folder it matched nothing and this said
-  # "backed up 0 document(s)" on every run: no -Docs, -Boards or -SeedDocs
+  # "backed up 0 document(s)" on every run: no -Docs or -SeedDocs
   # ever left the .bak the messages below promise. Measured 24 September on
   # Windows PowerShell 5.1: 0 files without it, every .md and .json with it.
   Remote @"
@@ -494,7 +457,7 @@ $there = @((Remote "Get-ChildItem '$rootWin\data' -File -EA SilentlyContinue | F
 $sent = 0
 Get-ChildItem (Join-Path $App 'data') | Where-Object { $_.Extension -in '.md','.json' } |
   ForEach-Object {
-    $force = $SeedDocs -or ($Boards -and $_.Name -eq 'board.json') -or ($docNames -contains $_.Name)
+    $force = $SeedDocs -or ($docNames -contains $_.Name)
     if ($force -or ($there -notcontains $_.Name)) {
       Push $_.FullName "$Root/data/$($_.Name)"
       Write-Host "  sent $($_.Name)"
@@ -503,78 +466,6 @@ Get-ChildItem (Join-Path $App 'data') | Where-Object { $_.Extension -in '.md','.
   }
 if (-not $sent) {
   Write-Host '  all present, nothing overwritten (use -SeedDocs to replace them)'
-}
-# BOARDS THE REPO SEEDS, AND -Board (#2414). Every deploy puts a board from
-# the repo into the live board.json when it carries a "seeded" mark the live
-# copy does not have yet: the first deploy after it lands seeds it, whatever
-# that deploy was for, and every later one leaves it as typed on the site,
-# because hub saves keep the mark. -Board puts the named boards in whatever
-# the live copy says. Nothing else in the file moves. The repo's board.json
-# goes up beside it, node on the box (the site's own) swaps the keys and moves
-# each one's _rev on, so a hub page still open on the old copy reloads rather
-# than saving over it, and the result replaces the file in one rename, after a
-# board.json.bak of what was there.
-$seedNames = @()
-$repoBoardFile = Join-Path $App 'data/board.json'
-if (-not $SeedDocs -and -not $Boards -and (Test-Path -LiteralPath $repoBoardFile)) {
-  $repoAll = Get-Content -Raw -LiteralPath $repoBoardFile | ConvertFrom-Json
-  foreach ($bp in $repoAll.PSObject.Properties) {
-    if ($bp.Name -match '^[a-z]+$' -and $boardNames -notcontains $bp.Name -and
-        $bp.Value -is [System.Management.Automation.PSCustomObject] -and
-        $bp.Value.PSObject.Properties.Name -contains 'seeded') { $seedNames += $bp.Name }
-  }
-}
-$boardArgs = @($boardNames | ForEach-Object { $_ + '=force' }) + @($seedNames | ForEach-Object { $_ + '=seed' })
-if ($boardArgs.Count) {
-  Push (Join-Path $App 'data/board.json') "$Root/data/board.json.from-repo"
-  $boardOut = @(Remote @"
-`$node = (Get-Command node -EA SilentlyContinue).Source
-if (-not `$node) { 'BOARD NOT REPLACED: node is not on this machine'; return }
-`$js = Join-Path `$env:TEMP ('ts-board-' + [guid]::NewGuid().ToString('N') + '.js')
-Set-Content -LiteralPath `$js -Encoding ASCII -Value @'
-var fs = require('fs');
-var a = process.argv.slice(2), live = a[0], repo = a[1], asks = a.slice(2);
-var BOM = String.fromCharCode(0xFEFF);
-function read(f) { var t = fs.readFileSync(f, 'utf8'); return JSON.parse(t.charAt(0) === BOM ? t.slice(1) : t); }
-var L = read(live), R = read(repo), moved = 0;
-var rev = (L._rev && typeof L._rev === 'object') ? L._rev : {};
-for (var i = 0; i < asks.length; i++) {
-  var n = asks[i].split('=')[0], how = asks[i].split('=')[1];
-  if (!R[n] || typeof R[n] !== 'object') { console.log('BOARD NOT REPLACED: the repo has no board ' + n); process.exitCode = 1; return; }
-  if (how === 'seed' && L[n] && typeof L[n] === 'object' && L[n].seeded === R[n].seeded) {
-    console.log('BOARD KEPT ' + n + ', already seeded ' + R[n].seeded + ', as typed on the site');
-    continue;
-  }
-  L[n] = R[n];
-  rev[n] = (typeof rev[n] === 'number' ? rev[n] : 0) + 1;
-  moved++;
-  console.log('BOARD REPLACED ' + n + ', now at revision ' + rev[n]);
-}
-if (moved) {
-  L._rev = rev;
-  fs.copyFileSync(live, live + '.bak');
-  fs.writeFileSync(live + '.new', JSON.stringify(L, null, 2) + '\n', 'utf8');
-  fs.renameSync(live + '.new', live);
-}
-'@
-& `$node `$js '$rootWin\data\board.json' '$rootWin\data\board.json.from-repo' $($boardArgs -join ' ')
-Remove-Item -LiteralPath `$js, '$rootWin\data\board.json.from-repo' -Force -EA SilentlyContinue
-"@ | Where-Object { $_ -is [string] } | ForEach-Object { "$_".Trim() })
-  $boardOut | ForEach-Object { Write-Host "  $_" }
-  $answered = @($boardOut | Where-Object { $_ -like 'BOARD REPLACED *' -or $_ -like 'BOARD KEPT *' }).Count
-  $forced = @($boardOut | Where-Object { $_ -like 'BOARD REPLACED *' }).Count
-  if ($answered -ne $boardArgs.Count -or $forced -lt $boardNames.Count) {
-    Write-Host ''
-    Write-Host '  THE BOARDS WERE NOT PUT IN PLACE. The live board.json is as it was.' -ForegroundColor Red
-    Write-Host '  The lines above say why. Nothing after this step was done.' -ForegroundColor Red
-    exit 1
-  }
-}
-if ($Boards -and -not $SeedDocs) {
-  Write-Host ''
-  Write-Host '  -Boards replaced board.json with the repo copy.' -ForegroundColor Yellow
-  Write-Host '  Anything typed into a board on the site since the last deploy is now' -ForegroundColor Yellow
-  Write-Host '  only in board.json.bak on the VPS. Plain Deploy-Docs never does this.' -ForegroundColor Yellow
 }
 if ($docNames.Count -and -not $SeedDocs) {
   Write-Host ''
@@ -587,7 +478,7 @@ if ($SeedDocs -and $sent) {
   Write-Host "  -SeedDocs overwrote $sent document(s) with the repo copy." -ForegroundColor Yellow
   Write-Host '  Anything typed into the site since the last deploy is now in the .bak' -ForegroundColor Yellow
   Write-Host '  file beside it on the VPS. Use -Site next time if you only meant the' -ForegroundColor Yellow
-  Write-Host '  public pages, or -Boards if you only meant the runbook.' -ForegroundColor Yellow
+  Write-Host '  public pages, or -Docs if you only meant one document.' -ForegroundColor Yellow
 }
 }
 

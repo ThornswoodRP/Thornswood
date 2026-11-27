@@ -38,6 +38,7 @@ Yes ('it declares its parameters (' + $declared.Count + ')') ($declared.Count -g
 # Every Die call, with its message text.
 $dies = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Die' }, $true))
 $modes = New-Object System.Collections.Generic.List[string]
+$sayChecked = New-Object System.Collections.Generic.HashSet[string]
 foreach ($d in $dies) {
     $msg = @($d.CommandElements)[1]
     if ($msg -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { continue }
@@ -50,6 +51,11 @@ foreach ($d in $dies) {
             foreach ($v in @($if.Clauses[0].Item1.FindAll({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] }, $true))) {
                 $name = $v.VariablePath.UserPath
                 if ($declared -contains $name -and -not $modes.Contains($name)) { $modes.Add($name) }
+                # #6501: the refusal's own text names each switch its condition reads.
+                if ($declared -contains $name -and -not $sayChecked.Contains($name)) {
+                    [void]$sayChecked.Add($name)
+                    Yes ("the no-mode refusal names -$name, which its condition reads") ($text -match ('(?<![A-Za-z])-' + $name + '(?![A-Za-z])'))
+                }
             }
         }
     }
