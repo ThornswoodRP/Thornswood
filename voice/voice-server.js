@@ -1695,12 +1695,13 @@ function sendRoster() {
   direction of the text round, so those go before the cap. The gamemode never
   reads the name off a command (dispatch reads the text, the profile and the
   proven and relay marks), so no name can change the command it rides with.
+  They go through headlines.plainLine, the one cleaning every word somebody
+  sends goes through before anybody is shown it (#4355). Until then this had
+  its own list, which let the zero-width marks through and ran the words
+  either side of a line break together.
 */
 function cleanName(v) {
-  return pageText(v)
-    .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '')
-    .trim()
-    .slice(0, 40);
+  return headlines.plainLine(pageText(v)).slice(0, 40);
 }
 
 /*
@@ -3327,6 +3328,13 @@ server.on('upgrade', (req, socket, head) => {
         return;
       }
 
+      // What is said is the words as floatLine cleaned them (#4355): one
+      // line, with nothing in it that can break it, turn it round or hide in
+      // it. It used to go out as typed. A line that is nothing but those is
+      // nothing said. Only a game command, above, keeps its text as typed.
+      const said = floated ? floated.words : headlines.plainLine(text).slice(0, SAID_CHARS);
+      if (!said) return;
+
       // Silenced by staff: said to nobody, and they are told why (#412).
       const hush = me ? silencedLeft(me.profileId, Date.now()) : 0;
       if (hush) {
@@ -3359,7 +3367,7 @@ server.on('upgrade', (req, socket, head) => {
         from: myId,
         profileId: profileId,
         name: peerName(me),
-        text: text,
+        text: said,
         kind: 'say',
         at: Date.now()
       };
