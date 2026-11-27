@@ -3,6 +3,7 @@
   test-4393-public-data-once.js
 
       node site\tests\test-4393-public-data-once.js
+      node site\tests\test-4393-public-data-once.js <another home.js>
 
   Issue #4393. Every public page asks the site for its public data
   (/api/public). The gallery page asked twice on every load: once for its
@@ -12,11 +13,19 @@
 
     A  ONE ASK A LOAD. site\public\home.js, run in a stand-in page at each
        public page, asks for /api/public once, and only once, per load.
+       The stand-in answers as a browser does: a body read a second time is
+       refused (#5775). The #4393 harness answered with a json() that could
+       be called any number of times, so a home.js that kept the raw answer
+       for two readers would have passed it and failed in every browser.
     B  304 WHEN NOTHING CHANGED. A copy of the site answers /api/public with
        an ETag; asked again with it, it answers 304 with no body; with a
        weak copy of the tag (W/, as a proxy that compresses sends it) or the
        tag in a list, 304 too; with another tag, the whole answer; and once
        the answer changes, a new tag and the whole answer.
+    C  BOTH READERS GET IT (#5775). On /gallery the gallery's pictures and
+       the part every page runs (the status line and the news) both draw
+       from that one answer, and back to the page from another (pageshow)
+       asks afresh and draws the status line again.
 
   Nothing leaves the machine. The scratch folder is removed at the end.
 */
@@ -34,7 +43,7 @@ const siteFiles = require('../../tests/site-files');
 const pageTimeout = (fn, ms, ...args) => setTimeout(fn, ms, ...args).unref();
 
 const ROOT = path.join(__dirname, '..', '..');
-const HOME_JS = fs.readFileSync(path.join(ROOT, 'site', 'public', 'home.js'), 'utf8');
+const HOME_JS = fs.readFileSync(path.resolve(process.argv[2] || path.join(ROOT, 'site', 'public', 'home.js')), 'utf8');
 
 let pass = 0, fail = 0;
 function yes(what, cond, why) {
@@ -81,9 +90,19 @@ function element(id) {
   });
   return e;
 }
-const PUBLIC_ANSWER = { open: false, invite: '', patreon: '', status: { up: false, online: 0, max: 30 },
+const PUBLIC_ANSWER = { open: false, invite: '', patreon: '', status: { up: true, online: 3, max: 30 },
   gallery: [], galleryTotal: 0, galleryNext: null, news: [], files: [], lines: [] };
-async function asksOn(pathname) {
+/* An answer as a browser's fetch gives it: its body can be read once, and a
+   second read is refused, as a browser refuses it. */
+function bodyOnce(data) {
+  let read = false;
+  return { ok: true, status: 200, json: () => {
+    if (read) return Promise.reject(new TypeError('Failed to execute \'json\' on \'Response\': body stream already read'));
+    read = true;
+    return Promise.resolve(JSON.parse(JSON.stringify(data)));
+  } };
+}
+async function asksOn(pathname, persisted) {
   const els = {};
   const byId = (id) => (els[id] = els[id] || element(id)).el;
   const asked = [];
@@ -92,7 +111,7 @@ async function asksOn(pathname) {
     // /api/public answers, so whatever runs after it runs; anything else
     // never does, which asks nothing more of the page than a slow site would.
     if (!String(url).startsWith('/api/public')) return new Promise(() => { });
-    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(JSON.parse(JSON.stringify(PUBLIC_ANSWER))) });
+    return Promise.resolve(bodyOnce(PUBLIC_ANSWER));
   };
   const document = anything('document');
   const doc = new Proxy({}, {
@@ -108,7 +127,8 @@ async function asksOn(pathname) {
   const win = anything('window');
   win.AbortController = AbortController;
   win.matchMedia = () => ({ matches: false });
-  win.addEventListener = () => { };
+  const heard = {};
+  win.addEventListener = (type, fn) => { (heard[type] = heard[type] || []).push(fn); };
   const ctx = {
     window: win, document: doc, fetch: fetchStub, console: { log() { }, error() { } },
     location: { pathname: pathname, hash: '', protocol: 'https:', reload() { } },
@@ -120,7 +140,20 @@ async function asksOn(pathname) {
   let threw = null;
   try { vm.runInContext(HOME_JS, ctx, { filename: 'home.js' }); } catch (e) { threw = e; }
   for (let i = 0; i < 30; i++) await tick();
-  return { asked, threw };
+  const drawn = () => ({
+    body: String(els.pagebody ? els.pagebody.p_innerHTML || '' : ''),
+    live: String(els.livetext ? els.livetext.p_textContent || '' : ''),
+    news: String(els.releases ? els.releases.p_innerHTML || '' : '')
+  });
+  const first = drawn();
+  let back = null;
+  if (persisted) {
+    if (els.livetext) els.livetext.p_textContent = '';
+    for (const fn of heard.pageshow || []) fn({ persisted: true });
+    for (let i = 0; i < 30; i++) await tick();
+    back = drawn();
+  }
+  return { asked, threw, first, back };
 }
 
 function get(port, where, headers) {
@@ -140,6 +173,18 @@ function get(port, where, headers) {
     const pub = r.asked.filter((u) => u.startsWith('/api/public'));
     yes('A ' + page + ' asks for the public data once a load (' + pub.length + ': ' + pub.join(', ') + ')' +
       (r.threw ? ' [home.js threw: ' + r.threw.message + ']' : ''), !r.threw && pub.length === 1);
+  }
+
+  // ---- C. both readers get it ----------------------------------------------
+  {
+    const r = await asksOn('/gallery', true);
+    const pub = r.asked.filter((u) => u.startsWith('/api/public'));
+    yes('C1 /gallery draws its pictures from the one answer' + (r.threw ? ' [home.js threw: ' + r.threw.message + ']' : ''),
+      /<h1>From the world<\/h1>/.test(r.first.body) && !/Could not load it/.test(r.first.body), r.first.body.slice(0, 200));
+    yes('C2 and the status line draws from it too (' + JSON.stringify(r.first.live) + ')', r.first.live === '3 of 30 people in the world');
+    yes('C3 and so does the news (' + JSON.stringify(r.first.news) + ')', /Nothing shipped yet/.test(r.first.news));
+    yes('C4 back to the page (pageshow) asks afresh (' + pub.length + ' asks in all)', pub.length === 2);
+    yes('C5 and draws the status line again (' + JSON.stringify(r.back && r.back.live) + ')', !!r.back && r.back.live === '3 of 30 people in the world');
   }
 
   // ---- B. 304 when nothing changed ----------------------------------------
