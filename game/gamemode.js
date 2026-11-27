@@ -7374,7 +7374,7 @@ try {
     isVisibleByOwner: false, isVisibleByNeighbors: false,
     updateOwner: '', updateNeighbor: ''
   });
-} catch (e) { /* made by an earlier load */ }
+} catch (e) { log('fish traps: the trap record was made by an earlier load:', String(e)); }
 try {
   mp.makeProperty(WATER_LINE_PROPERTY, {
     isVisibleByOwner: true, isVisibleByNeighbors: false,
@@ -7388,12 +7388,15 @@ try {
       '    globalThis.thornswoodWaterLine = { stamp: v.at, seen: Date.now(),',
       '      hex: String(v.hex || ""), x: String(v.x || ""), w: String(v.w || ""),',
       '      t: String(v.t || "") };',
-      '  } catch (e) { }',
+      '  } catch (e) { /* the client keeps the last line; the next press writes it again */ }',
       '})();'
     ].join('\n'),
     updateNeighbor: ''
   });
-} catch (e) { /* made by an earlier load; a changed script needs a restart, which a deploy is */ }
+} catch (e) {
+  // Made by an earlier load; a changed script needs a restart, which a deploy is.
+  log('fish traps: the water line was made by an earlier load:', String(e));
+}
 
 function fishTrapsOf(actorId) {
   let v = null;
@@ -7517,7 +7520,8 @@ function collectFishTrap(actorId, refrId) {
   try { given = addItemsAtomic(actorId, goods); } catch (e3) { given = false; }
   if (!given) {
     set.splice(i, 0, trap);
-    try { mp.set(actorId, TRAP_PROPERTY, set); } catch (e4) { }
+    try { mp.set(actorId, TRAP_PROPERTY, set); }
+    catch (e4) { log('fish traps: a trap could not be put back for', actorId.toString(16) + ':', String(e4)); }
     return { ok: false, line: 'Nothing from the trap would go in your pack, so it is still set. Say so in the dev channel.' };
   }
   if (got > 0) { economyGathered(actorId, caught.produce, got); }
@@ -7558,7 +7562,8 @@ function waterLine(actorId, refrId, baseDesc) {
       line.w = 'Set a fish trap here (' + set.length + ' of ' + FISH_TRAP_MAX + ' out)';
     }
   }
-  try { mp.set(actorId, WATER_LINE_PROPERTY, line); } catch (e) { }
+  try { mp.set(actorId, WATER_LINE_PROPERTY, line); }
+  catch (e) { log('fish traps: the water line could not be written for', actorId.toString(16) + ':', String(e)); }
 }
 
 /* /trap and a water's id: what the lock key sends at the line above. */
