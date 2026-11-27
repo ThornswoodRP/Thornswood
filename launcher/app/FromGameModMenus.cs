@@ -1,6 +1,6 @@
-// Written by scripts\mods\Build-ModMenus.py from the collection's SkyUI, SkyHUD and
-// moreHUD archives. Run it again rather than editing this; an edit here fails the
-// launcher's byte for byte check (#3113).
+// Written by scripts\mods\Build-ModMenus.py from the collection's SkyUI, SkyHUD,
+// moreHUD and RaceMenu archives. Run it again rather than editing this; an edit
+// here fails the launcher's byte for byte check (#3113).
 namespace Thornswood
 {
     public sealed partial class MenuRecipe
@@ -237,7 +237,56 @@ namespace Thornswood
             },
         };
 
+        public static readonly MenuRecipe RaceMenuMenu = new MenuRecipe
+        {
+            Mod = "RaceMenu",
+            Archive = "RaceMenu.bsa",
+            Source = "interface\\racesex_menu.swf",
+            SourceSize = 105756,
+            SourceSha256 = "ab3901335a28bbe53b360ce73be4dee5e74190c1efbb447ce22004f0638280e9",
+            Path = "Data\\Interface\\racesex_menu.swf",
+            Size = 105812,
+            Sha256 = "2ace92f7b883b665e4346ba5ab5940afa6e3a9f48d26e285b96269b330138792",
+            Edits = new[]
+            {
+                new MenuEdit(4, 4, "b5e00500"),
+                new MenuEdit(209837, 1, "99"),
+                new MenuEdit(209838, 1, "02"),
+                new MenuEdit(209840, 1, "39"),
+                new MenuEdit(209841, 1, "00"),
+                new MenuEdit(209993, 1, "99"),
+                new MenuEdit(209994, 1, "02"),
+                new MenuEdit(209996, 1, "cb"),
+                new MenuEdit(209997, 1, "00"),
+                new MenuEdit(330083, 4, "908a0000"),
+                new MenuEdit(336706, 2, "b170"),
+                new MenuEdit(339498, 1, "99"),
+                new MenuEdit(339499, 1, "02"),
+                new MenuEdit(339501, 1, "a2"),
+                new MenuEdit(339502, 1, "00"),
+                new MenuEdit(347100, 2, "4706"),
+                new MenuEdit(347135, 1, "00"),
+                new MenuEdit(347144, 1, "00"),
+                new MenuEdit(347520, 1, "99"),
+                new MenuEdit(347521, 1, "02"),
+                new MenuEdit(347523, 1, "fd"),
+                new MenuEdit(347524, 1, "03"),
+                new MenuEdit(348580, 0, "960400040108134e961000005f73656c6563746564496e646578004e96050007ffffffff49129d02003e00960d00060000000000000000040108134e960200089a5217961b000600000000000000000600000000000000000702000000040108134e960200085f5217"),
+                new MenuEdit(365506, 4, "c7200000"),
+                new MenuEdit(366876, 2, "6d1b"),
+                new MenuEdit(367442, 2, "1202"),
+                new MenuEdit(367476, 2, "f001"),
+                new MenuEdit(367530, 2, "aa01"),
+                new MenuEdit(367532, 0, "960700040307020000004e960e00004368616e67654865696768740049129d02008701960c000403070100000007040000004f9609000403081807080000004f"),
+                new MenuEdit(367908, 2, "fffd"),
+                new MenuEdit(367963, 1, "99"),
+                new MenuEdit(367964, 1, "02"),
+                new MenuEdit(367966, 1, "6e"),
+                new MenuEdit(367967, 1, "01"),
+            },
+        };
+
         /// <summary>Every mod menu FromGame makes, in this order.</summary>
-        public static readonly MenuRecipe[] Mods = { SkyUIConfig, SkyUIItemCard, SkyHUDMenu, MoreHUDInfo, MoreHUDInfoExported, SkyUIJournal, SkyUIInventory };
+        public static readonly MenuRecipe[] Mods = { SkyUIConfig, SkyUIItemCard, SkyHUDMenu, MoreHUDInfo, MoreHUDInfoExported, SkyUIJournal, SkyUIInventory, RaceMenuMenu };
     }
 }

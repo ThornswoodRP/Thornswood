@@ -2,7 +2,7 @@
 Build-ModMenus.py
 
 Writes launcher\\app\\FromGameModMenus.cs: Thornswood's edits to the menus of
-three of the collection's mods, as the bytes that change, so the launcher can
+four of the collection's mods, as the bytes that change, so the launcher can
 make the edited menus on each machine from that machine's own copy of those
 mods (#3113, #3127), the way it makes the main menu from the game's (#2827).
 
@@ -13,6 +13,7 @@ mods (#3113, #3127), the way it makes the main menu from the game's (#2827).
     Data\\Interface\\exported\\AHZHudInfo.swf  copy under exported
     Data\\Interface\\quest_journal.swf         SkyUI's journal (#3127)
     Data\\Interface\\inventorymenu.swf         SkyUI's mapped inventory close (#6721)
+    Data\\Interface\\racesex_menu.swf          RaceMenu's character creation menu (#7087)
 
 WHY
 
@@ -103,12 +104,48 @@ Then each file is made the way the launcher makes it (the edits applied, a
 movie packed again with zlib level 6, which FromGameDeflate.cs does to the
 bit), and its sha256 goes in the recipe.
 
+THE CREATION MENU (#7087). Patrick, 27 Nov 2026, of RaceMenu: "remove all of
+those 4 buttons at the top players will only have access to Sliders", "remove
+the All category", the MAKEUP and paint categories are empty "so don't even
+show those categories", and many categories "Overlap", "Do the same things",
+"Repeat", "Duplicate", "Do nothing". Measured 27 Nov from RaceMenu SE 0.4.20's
+interface\\racesex_menu.swf (RaceMenu.bsa) and the collection's scripts:
+  - The tabs: ModeSwitcher.onLoad makes Sliders, Presets and Camera, and
+    InitExtensions makes Sculpt when skee64.ini turns sculpting on.
+  - ALL: RaceMenu.onLoad puts it first and presses it; it is every slider of
+    every category in one list, so each slider is in it twice.
+  - COLORS: SetCategoriesList adds it after the game's own categories; each
+    colour slider (ChangeTintingMask, ChangeMaskColor, ChangeHairColorPreset)
+    is given its flag on top of its own part of the face or body, so all of
+    them are twice again. MAKEUP and BODY, HAND, FOOT and FACE PAINT are added
+    there too.
+  - BODY SCALES, CATEGORY BEAST and CATEGORY CAMERA come from Papyrus
+    (RaceMenuPlugin in RaceMenu.bsa, and XPMSE's RaceMenuPluginXPMSE, Beast and
+    Camera scripts): Height, Head, breasts, glutes, biceps, seven weapon
+    scales, about fifty of XPMSE's bone scales, the tail and the camera. Each
+    is a NiOverride scale or move on a bone of the person's own character in
+    the person's own game. The server keeps eleven fields of a body
+    (Appearance.h; BODY SHAPE in game\\gamemode\\cuffs.ts) and none of these,
+    so nobody else sees them and they are gone the next time the person plays.
+    Height stays by Patrick's rule of 28 Sep ("height and weight stay").
+  - Sculpt and the paints are NiOverride too, and the same is true of them.
+So the edits: no tab is made, ALL, COLORS, MAKEUP and the paints are never put
+on the list, the list is emptied whole each time the game sends its
+categories and the first of them, RACE, is pressed, no Papyrus category is put
+on, and of the Papyrus sliders only Height is, in BODY beside Weight. The
+game's own categories and sliders are left as they are, in the game's order
+(race, body, head, face, eyes, brow, mouth, hair): each is one of the eleven
+fields and is in one category only once ALL and COLORS are gone. Two of the
+edits put new actions in (insert_actions), which moves the code after them;
+each branch across them, each function around them and the lengths are made
+again, and every tag is checked after.
+
 Usage, with the collection's archives in a Data folder (read, never written):
     python scripts/mods/Build-ModMenus.py --data <Data>           write the recipe
     python scripts/mods/Build-ModMenus.py --data <Data> --check   say whether it is what this writes
     --recipe <file>   where the recipe goes (default launcher\\app\\FromGameModMenus.cs)
-Exit 1 when a check fails or a file cannot be read. Plain Python: none of the
-three archives is compressed; a compressed one needs the lz4 module.
+Exit 1 when a check fails or a file cannot be read. Plain Python: RaceMenu.bsa
+is LZ4 packed, and scripts\\dev\\bsa.py reads that without any module.
 """
 
 import argparse
@@ -158,11 +195,9 @@ def read_archive(path, want):
             raw = f.read(size)
             if not packed:
                 return raw
-            try:
-                import lz4.frame
-            except ImportError:
-                raise SystemExit('STOP. %s in %s is LZ4 packed and this Python has no lz4 module.' % (want, path))
-            return lz4.frame.decompress(raw[4:])
+            sys.path.insert(0, os.path.join(REPO, 'scripts', 'dev'))
+            from bsa import lz4_frame
+            return lz4_frame(raw[4:])
     raise SystemExit('STOP. %s has no %s.' % (path, want))
 
 
@@ -378,6 +413,240 @@ def edit_journal(plain):
     return edits, 'Quick Save, Save, Load, Help, Creations and Installed Content never put on the System page'
 
 
+# ------------------------------------------------------------------ RaceMenu
+
+def _action_records(b, start, end, what):
+    """Every action from start to end, the bodies of the functions in it
+    included (each follows its DefineFunction in line): (at, op, data, end)."""
+    out, at = [], start
+    while at < end:
+        op = b[at]
+        size = struct.unpack_from('<H', b, at + 1)[0] if op >= 0x80 else 0
+        data = at + (3 if op >= 0x80 else 1)
+        out.append((at, op, data, data + size))
+        at = data + size
+    if at != end:
+        raise SystemExit('STOP. %s: its actions run past the end of their tag.' % what)
+    return out
+
+
+def check_actions(b, start, end, what):
+    """Each branch lands on an action, and each function ends on one."""
+    recs = _action_records(b, start, end, what)
+    starts = {r[0] for r in recs} | {end}
+    for at, op, data, stop in recs:
+        if op in (0x99, 0x9d) and stop + struct.unpack_from('<h', b, data)[0] not in starts:
+            raise SystemExit('STOP. %s: the branch at %d lands inside an action.' % (what, at))
+        if op in (0x8e, 0x9b) and stop + struct.unpack_from('<H', b, stop - 2)[0] not in starts:
+            raise SystemExit('STOP. %s: the function at %d ends inside an action.' % (what, at))
+    return recs
+
+
+def insert_actions(plain, inserts, what):
+    """New actions put into a movie's DoInitAction tags, as edits of the movie.
+
+    inserts is a list of (at, code, branches): code goes in front of the action
+    that starts at at, which moves on behind it. branches says, for each branch
+    in code, where its two byte offset is in code and where it goes, counted in
+    the movie as it was; the at of its own insert there means just after the
+    new code. Every branch already in the tag that crosses an insert, the size
+    of every function around one, the tag's length and the movie's are given
+    their new values, and nothing else changes. An insert may not be where a
+    branch already lands or where a function starts or ends, so what each of
+    those meant is never a question."""
+    points = sorted(a for a, _, _ in inserts)
+    total = sum(len(c) for _, c, _ in inserts)
+
+    def before(x):
+        return sum(len(c) for a, c, _ in inserts if a < x)
+
+    def upto(x):
+        return sum(len(c) for a, c, _ in inserts if a <= x)
+
+    edits, placed = [(4, 4, struct.pack('<I', len(plain) + total).hex())], 0
+    for code, s, b0, e in tags(plain, header_end(plain), len(plain), what):
+        mine = [a for a in points if b0 < a < e]
+        if not mine:
+            continue
+        if code != 59 or b0 - s != 6:
+            raise SystemExit('STOP. %s: an insert is outside a long DoInitAction tag.' % what)
+        recs = check_actions(plain, b0 + 2, e, what)
+        if any(a not in {r[0] for r in recs} for a in mine):
+            raise SystemExit('STOP. %s: an insert is not at the start of an action.' % what)
+        for at, op, data, stop in recs:
+            if op in (0x99, 0x9d):
+                old = struct.unpack_from('<h', plain, data)[0]
+                to = stop + old
+                if to in points:
+                    raise SystemExit('STOP. %s: a branch already lands where an insert goes (%d).' % (what, to))
+                new = (to + upto(to)) - (stop + before(stop))
+                if not -32768 <= new <= 32767:
+                    raise SystemExit('STOP. %s: the branch at %d would no longer reach.' % (what, at))
+                if new != old:
+                    edits.append((data, 2, struct.pack('<h', new).hex()))
+            elif op in (0x8e, 0x9b):
+                size = struct.unpack_from('<H', plain, stop - 2)[0]
+                if stop in points or stop + size in points:
+                    raise SystemExit('STOP. %s: an insert goes where a function starts or ends.' % what)
+                new = (stop + size + before(stop + size)) - (stop + before(stop))
+                if new > 0xFFFF:
+                    raise SystemExit('STOP. %s: the function at %d grows past what its size can say.' % (what, at))
+                if new != size:
+                    edits.append((stop - 2, 2, struct.pack('<H', new).hex()))
+            elif op in (0x8f, 0x94):
+                raise SystemExit('STOP. %s: the tag has a Try or With, which this does not move.' % what)
+        grown = sum(len(c) for a, c, _ in inserts if a in mine)
+        edits.append((s + 2, 4, struct.pack('<I', e - b0 + grown).hex()))
+        placed += len(mine)
+    if placed != len(inserts):
+        raise SystemExit('STOP. %s: an insert is not inside a tag.' % what)
+    for a, c, branches in inserts:
+        c = bytearray(c)
+        here = a + before(a)
+        for k, to in branches:
+            struct.pack_into('<h', c, k, (to + upto(to)) - (here + k + 2))
+        edits.append((a, 0, bytes(c).hex()))
+    return edits
+
+
+def find_once(plain, part, what):
+    n = plain.count(part)
+    if n != 1:
+        raise SystemExit('STOP. %s: the bytes this edit finds are there %d times, not once, so it is not the file '
+                         'it was written for.' % (what, n))
+    return plain.index(part)
+
+
+def push_text(s):
+    """A Push of the string s, written into the push."""
+    return b'\x96' + struct.pack('<H', len(s) + 2) + b'\x00' + s.encode('latin-1') + b'\x00'
+
+
+# racesex_menu.swf of RaceMenu SE 0.4.20 (Nexus 19080, RaceMenu.bsa), as the
+# collection installs it. Each edit below names what it finds; the constants
+# (cN) are indexes into the pool of the tag the bytes are in.
+#
+# THE FOUR TABS. ModeSwitcher.onLoad makes Sliders, Presets and Camera in
+# one run: for each, Push '$Sliders' (c34), 1, this, 'addMode' (c21);
+# CallMethod; StoreRegister; Pop. Then the three addButton calls,
+# setSelectedButton and three rollOver listeners, up to the 'change'
+# listener on the group, 208 bytes from the first push. The first push
+# becomes a Jump to that listener. InitExtensions makes Sculpt when skee64.ini
+# says bEnableSculpting: Push "bEnableSculpting" (c19); GetMember; Not; If
+# past the block (62 bytes on); Push '$Sculpt' (c20), 1, this, 'addMode'. The
+# push becomes a Jump to where the If goes. With no button in the group,
+# ButtonGroup.setSelectedButton returns before it sends "change", so
+# onChangeMode never runs and the menu stays as it opens, on the sliders.
+TABS_BEFORE = bytes.fromhex('960b000822070100000004010815' '52' '87010002' '17'
+                            '960b000823070100000004010815' '52' '87010004' '17'
+                            '960b000824070100000004010815' '52' '87010003' '17')
+TABS_AFTER = jump(208 - 5) + TABS_BEFORE[5:]
+SCULPT_BEFORE = bytes.fromhex('9602000813' '4e' '12' '9d02003e00' '960b000814070100000004010815')
+SCULPT_AFTER = SCULPT_BEFORE[:12] + jump(62 - 5) + SCULPT_BEFORE[17:]
+
+# ALL. RaceMenu.onLoad pushes {type: ENTRY_TYPE_CAT (c146, c147),
+# bDontHide: true, filterFlag: 1, text: '$ALL' (c150), flag: 2044,
+# savedItemIndex: -1, priority: CATEGORY_PRIORITY_START, enabled: true} onto
+# the category list, then InvalidateData and onItemPress(0, 0) press it; the
+# itemList's requestInvalidate is 167 bytes from the first push. That push
+# becomes a Jump to it, so ALL is never made or pressed.
+ALL_BEFORE = bytes.fromhex('9604000892080c' '1c' '9602000893' '4e'
+                           '9621000894050108950701000000088d0896089707fc070000089807ffffffff0891080c')
+ALL_AFTER = jump(167 - 5) + ALL_BEFORE[5:]
+
+# SetCategoriesList, which the game calls with its categories when the menu
+# opens. It empties the list but its first entry, ALL:
+# entryList.splice(1, entryList.length - 1). With no ALL it has to empty the
+# whole list, splice(0, entryList.length - 0): the two pushed 1s become 0s.
+SPLICE_BEFORE = bytes.fromhex('96020008f0' '4e' '9605000701000000' '0b'
+                              '9617000701000000070200000006000000000000000004010813')
+SPLICE_AFTER = bytes.fromhex('96020008f0' '4e' '9605000700000000' '0b'
+                             '9617000700000000070200000006000000000000000004010813')
+
+# Then, after the game's own categories, it adds COLORS (every hair, skin and
+# makeup colour slider again, each already under its own part of the face or
+# body), MAKEUP, and BODY PAINT, HAND PAINT, FOOT PAINT and FACE PAINT when
+# skee64.ini gives overlays. After the Jump back to the top of its loop, the
+# first push of COLORS (c146 'type', c12, ...) to the send of
+# CategoriesInitialized is 1026 bytes. That push becomes a Jump to the send.
+COLORS_BEFORE = bytes.fromhex('990200e9fe' '9604000892080c' '1c' '96020008934e'
+                              '9614000894050008950701000000088d091b010897080c')
+COLORS_AFTER = COLORS_BEFORE[:5] + jump(1026 - 5) + COLORS_BEFORE[10:]
+
+# The first category is pressed once the list is made, which ALL's press did
+# before. Put in just before the list's last requestInvalidate, after the
+# send of CategoriesInitialized: if (categoryList._selectedIndex == -1)
+# {categoryList.InvalidateData(); categoryList.onItemPress(0, 0);}, the same
+# calls onLoad made for ALL. Index 0 is the first category the game sends,
+# RACE. Only when nothing is chosen yet, so a later call leaves the person's
+# category alone.
+CATEGORIES_END = bytes.fromhex('9604000403080e' '4e' '960300092f01' '47' '960700070100000008ef' '1c' '960300091101'
+                               '52' '17')
+
+def _press_first():
+    head = bytes.fromhex('96040004010813' '4e') + push_text('_selectedIndex') + bytes.fromhex(
+        '4e' '960500' '07ffffffff' '49' '12')
+    body = bytes.fromhex('960d0006000000000000000004010813' '4e' '960200089a' '52' '17'
+                         '961b00060000000000000000060000000000000000070200000004010813' '4e' '960200085f' '52' '17')
+    return head + bytes.fromhex('9d0200') + b'\0\0' + body, len(head) + 3
+
+
+# THE SLIDERS THAT ONLY CHANGE THE PERSON'S OWN SCREEN. Papyrus plugins add
+# sliders through RSM_AddSliders, one "name;;section;;callback;;min;;max;;
+# interval;;position;;category;;priority" string each, and their categories
+# through RSM_AddCategories. In the collection those are RaceMenu's own
+# plugin (BODY SCALES: Height, Head, breasts, glutes, biceps and seven weapon
+# scales) and XPMSE's three: about fifty more bone scales into BODY SCALES,
+# CATEGORY BEAST's tail and CATEGORY CAMERA. Every one of them is a scale or
+# a move on a bone of the person's own character in the person's own game
+# (NiOverride): the server keeps none of it, so nobody else ever sees it and
+# it is gone the next time they play. Height is the one kept, by Patrick's
+# rule of 28 Sep ("height and weight stay"), and it goes into BODY beside
+# Weight.
+#
+# RSM_AddSliders: after "if (r3[0] == '') skip", which jumps to the loop's
+# step, goes: if (r3[2] != 'ChangeHeight') skip (the same step); r3[1] = 4,
+# CATEGORY_BODY, its section; r3.length = 8, so it has no priority, like the
+# game's own sliders, and sorts after Weight by the order it came in.
+ADD_SLIDERS_AT = bytes.fromhex('960b0004030600000000000000004e' '960200081b' '49' '12' '12' '9d02006a01'
+                               '9604000401081c' '4e')
+KEEP_HEIGHT_HEAD = bytes.fromhex('96070004030702000000' '4e') + push_text('ChangeHeight') + bytes.fromhex('49' '12')
+KEEP_HEIGHT_TAIL = bytes.fromhex('960c00040307010000000704000000' '4f' '96090004030818' '0708000000' '4f')
+# RSM_AddCategories: the loop's first push becomes a Jump to where its If
+# leaves the loop, so no Papyrus category is put on the list.
+ADD_CATEGORIES_BEFORE = bytes.fromhex('9d02007301' '960b0008190701000000040204064e')
+ADD_CATEGORIES_AFTER = ADD_CATEGORIES_BEFORE[:5] + jump(0x173 - 5) + ADD_CATEGORIES_BEFORE[10:]
+
+
+def edit_racemenu(plain):
+    what = 'RaceMenu\'s menu'
+    edits = []
+    for before, after, part in ((TABS_BEFORE, TABS_AFTER, 'the Sliders, Presets and Camera tabs'),
+                                (SCULPT_BEFORE, SCULPT_AFTER, 'the Sculpt tab'),
+                                (ALL_BEFORE, ALL_AFTER, 'ALL'),
+                                (SPLICE_BEFORE, SPLICE_AFTER, 'emptying the category list'),
+                                (COLORS_BEFORE, COLORS_AFTER, 'COLORS, MAKEUP and the paints'),
+                                (ADD_CATEGORIES_BEFORE, ADD_CATEGORIES_AFTER, 'the plugins\' categories')):
+        edits += edit_once(plain, before, after, what + ', ' + part)
+    end = find_once(plain, CATEGORIES_END + bytes.fromhex('960d0006000000000000000004010813' '4e' '960200089b'),
+                    what + ', the end of SetCategoriesList') + len(CATEGORIES_END)
+    press, k = _press_first()
+    at = find_once(plain, ADD_SLIDERS_AT, what + ', RSM_AddSliders') + 28
+    step = at + struct.unpack_from('<h', plain, at - 2)[0]
+    keep = KEEP_HEIGHT_HEAD + bytes.fromhex('9d0200') + b'\0\0' + KEEP_HEIGHT_TAIL
+    edits += insert_actions(plain, [(end, press, [(k, end)]),
+                                    (at, keep, [(len(KEEP_HEIGHT_HEAD) + 3, step)])], what)
+    edits.sort()
+    for (a, n, _), (b, _, _) in zip(edits, edits[1:]):
+        if a + n > b:
+            raise SystemExit('STOP. %s: two edits overlap at %d.' % (what, b))
+    edited = apply(plain, edits)
+    for code, s, b0, e in tags(edited, header_end(edited), len(edited), 'the edited ' + what):
+        if code == 59:
+            check_actions(edited, b0 + 2, e, 'the edited ' + what)
+    return edits, 'no tabs, no ALL, COLORS, MAKEUP or paints, RACE first, Height in BODY and no other plugin slider'
+
+
 # ---------------------------------------------------------------- the config
 
 VALUE_COLUMNS = ('valueColumn', 'valueWeightColumn', 'alchValueColumn', 'alchValueWeightColumn')
@@ -551,6 +820,7 @@ MENUS = [
     ('MoreHUDInfoExported', 'moreHUD', 'AHZmoreHUD.bsa', 'interface\\exported\\ahzhudinfo.swf', 'Data\\Interface\\exported\\AHZHudInfo.swf', edit_morehud, 'movie'),
     ('SkyUIJournal', 'SkyUI', 'SkyUI_SE.bsa', 'interface\\quest_journal.swf', 'Data\\Interface\\quest_journal.swf', edit_journal, 'movie'),
     ('SkyUIInventory', 'SkyUI', 'SkyUI_SE.bsa', 'interface\\inventorymenu.swf', 'Data\\Interface\\inventorymenu.swf', edit_inventory, 'movie'),
+    ('RaceMenuMenu', 'RaceMenu', 'RaceMenu.bsa', 'interface\\racesex_menu.swf', 'Data\\Interface\\racesex_menu.swf', edit_racemenu, 'movie'),
 ]
 
 
@@ -587,9 +857,9 @@ def cs(s):
 
 def recipe(made):
     i2, i3, i4 = ' ' * 8, ' ' * 12, ' ' * 16
-    L = ['// Written by scripts\\mods\\Build-ModMenus.py from the collection\'s SkyUI, SkyHUD and',
-         '// moreHUD archives. Run it again rather than editing this; an edit here fails the',
-         '// launcher\'s byte for byte check (#3113).',
+    L = ['// Written by scripts\\mods\\Build-ModMenus.py from the collection\'s SkyUI, SkyHUD,',
+         '// moreHUD and RaceMenu archives. Run it again rather than editing this; an edit',
+         '// here fails the launcher\'s byte for byte check (#3113).',
          'namespace Thornswood',
          '{',
          '    public sealed partial class MenuRecipe',

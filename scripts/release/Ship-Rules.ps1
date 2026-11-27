@@ -845,7 +845,9 @@ function Test-ShipMadeFromGame([string]$rel) {
 # somebody looks at, and moreHUD's value to weight. And SkyUI's journal puts
 # Quick Save, Save, Load, Help and the Creation Club on its System page, which
 # Thornswood does not use (#3127). SkyUI's inventory closes with its mapped
-# key (#7008). The launcher makes these menus from each
+# key (#7008). RaceMenu's creation menu loses its tabs, ALL, COLORS, MAKEUP,
+# the paints and the sliders nobody else sees (#7087). The launcher makes
+# these menus from each
 # machine's own copy of those mods, out of their archives
 # (launcher\app\FromGameModMenus.cs, written by scripts\mods\Build-ModMenus.py),
 # the same way and at the same times as the three above. They are their
@@ -861,7 +863,8 @@ $ShipMadeFromMods = @(
     'Data\Interface\AHZHudInfo.swf',
     'Data\Interface\exported\AHZHudInfo.swf',
     'Data\Interface\quest_journal.swf',
-    'Data\Interface\inventorymenu.swf'
+    'Data\Interface\inventorymenu.swf',
+    'Data\Interface\racesex_menu.swf'
 )
 
 function Test-ShipMadeFromMods([string]$rel) {
