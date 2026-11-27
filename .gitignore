@@ -191,6 +191,7 @@ bot/data/
 /game/data/wells.json
 /game/data/cast.json
 /game/data/recipes.json
+/game/data/fuel-by-recipe.json
 /game/data/recost.json
 /game/data/last-plugin.recipe
 /game/data/last-plugin.json
