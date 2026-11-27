@@ -19,7 +19,9 @@
   Compiles the real Paths.cs and Swallow.cs with a stand-in Steam that names
   a folder of the test's own, with the .NET SDK the launcher builds with
   (tests\Launcher-Csc.ps1). Also reads OwnGame.cs, to hold its record and
-  Paths' to the one name. Writes only under its own temp folder.
+  Paths' to the one name. Writes only under its own temp folder. The
+  driver's run says SKIP off Windows: Paths lays the install out by Windows
+  paths, as the launcher only runs there.
 #>
 [CmdletBinding()]
 param()
@@ -123,6 +125,13 @@ try { $exe = Build-LauncherCode -Exe -Source $cs -File (Join-Path $app 'Paths.cs
 catch { ($_.Exception.Message -split "`n") | Select-Object -First 20 | ForEach-Object { Write-Host "      $_" } }
 Yes 'Paths.cs builds with the driver, with the .NET SDK the launcher builds with' ($null -ne $exe)
 if (-not $exe) { Done }
+if (-not $OnWindows) {
+    # Paths names its folders with Windows separators (Profile\OwnGame\files.txt),
+    # which are one file name elsewhere, and the launcher is built for Windows
+    # only (net10.0-windows, win-x64), so the run means something only there (#5970).
+    Write-Host 'SKIP  the driver on a pretend install: Paths lays the install out by Windows paths, so it runs on Windows only'
+    Done
+}
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('own-folder-record-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $root = Join-Path $tmp 'Thornswood'

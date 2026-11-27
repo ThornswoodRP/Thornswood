@@ -304,11 +304,18 @@ Check 'real preflight collector validates mocked Windows metadata and supports a
   function Get-ScheduledTask { param($TaskName,$ErrorAction) [pscustomobject]@{ State='Ready'; Principal=@{UserId='SYSTEM'}; Actions=@(@{Execute=(Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'); Arguments=('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+(Join-Path $env:ProgramData 'Thornswood-RunnerDrive\start.ps1')+'"')}) } }
   # The guards are read from the store an -OffBox install writes them to.
   function Get-NetFirewallRule { param($PolicyStore,$Group,$ErrorAction) if ($PolicyStore -ne 'PersistentStore') { return @() }; [pscustomobject]@{ Enabled='True'; Direction='Outbound'; Action='Block' } }
-  $p=Get-RunnerMigrationState 'thornswood-pr' 'actions.runner.test' 'R:\Thornswood-RunnerPR'
-  Assert ($p.SID -eq $script:f.Account.SID -and -not $p.AlreadyThere) 'collector rejected healthy source'
-  $script:f.Service.PathName='"R:\Thornswood-RunnerPR\bin\RunnerService.exe"'; $script:f.DestinationExists=$true
-  $p=Get-RunnerMigrationState 'thornswood-pr' 'actions.runner.test' 'R:\Thornswood-RunnerPR'
-  Assert ($p.AlreadyThere -and $p.SID -eq $script:f.Account.SID) 'collector did not recognize preserved identity on target'
+  # The collector reads the startup task's paths from ProgramFiles and
+  # ProgramData, which only Windows sets; elsewhere they stand in too (#5970).
+  $was = @{ ProgramFiles = $env:ProgramFiles; ProgramData = $env:ProgramData }
+  if (-not $env:ProgramFiles) { $env:ProgramFiles = Join-Path ([IO.Path]::GetTempPath()) 'Program Files' }
+  if (-not $env:ProgramData) { $env:ProgramData = Join-Path ([IO.Path]::GetTempPath()) 'ProgramData' }
+  try {
+    $p=Get-RunnerMigrationState 'thornswood-pr' 'actions.runner.test' 'R:\Thornswood-RunnerPR'
+    Assert ($p.SID -eq $script:f.Account.SID -and -not $p.AlreadyThere) 'collector rejected healthy source'
+    $script:f.Service.PathName='"R:\Thornswood-RunnerPR\bin\RunnerService.exe"'; $script:f.DestinationExists=$true
+    $p=Get-RunnerMigrationState 'thornswood-pr' 'actions.runner.test' 'R:\Thornswood-RunnerPR'
+    Assert ($p.AlreadyThere -and $p.SID -eq $script:f.Account.SID) 'collector did not recognize preserved identity on target'
+  } finally { $env:ProgramFiles = $was.ProgramFiles; $env:ProgramData = $was.ProgramData }
 }
 Check 'generated migration executes against OS/native mocks and fails closed at each cutover stage' {
   $body=[regex]::Match($script:generatedMigration, '(?s)# ==== a script it would run, with a secret on standard input ====\r?\n(.*)').Groups[1].Value
