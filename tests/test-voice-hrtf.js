@@ -267,6 +267,12 @@ function partSix() {
   console.log('      the mix with nobody in it: ' + pct(r.coreShareEmpty));
   console.log('      each person talking: ' + pct(r.coreSharePerTalker) + '; each person silent: ' + pct(r.coreSharePerSilent));
   yes('the data builds in under five seconds (' + Math.round(r.buildMs) + ' ms)', r.buildMs < 5000);
+  // #5654: the cost is the bench thread's own CPU time, so time it spends
+  // waiting (for a core another harness holds, or here a 200 ms sleep) is not
+  // charged to the person talking. A wall clock charges the whole 200 ms.
+  yes('the cost is read from the bench thread\'s own CPU clock, which a 200 ms wait does not move (' +
+      (r.waitChargedMs === undefined ? 'no reading' : r.waitChargedMs.toFixed(1) + ' ms') + ')',
+      r.clock === 'thread' && typeof r.waitChargedMs === 'number' && r.waitChargedMs < 50);
   yes('a person talking costs under 5% of one core (' + pct(r.coreSharePerTalker) + ')', r.coreSharePerTalker < 0.05);
   yes('a person silent costs less than half of one talking, since silence into empty filters is skipped (' + pct(r.coreSharePerSilent) + ')',
       r.coreSharePerSilent < r.coreSharePerTalker / 2);

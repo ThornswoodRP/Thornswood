@@ -50,6 +50,15 @@ Up to 3 at once. The wait is that water's rank. Collecting it is a
 catch of that water. Setting it and collecting it are each one piece
 of work.
 
+How (#4655): press E on the water. With a trap in your pack the line
+under the crosshair names the lock key, X unless you moved it, and
+says Set a fish trap here. The lock key sets it. Pressing E there
+later says how long is left, and once the wait is over the lock key
+takes the trap up with the catch in it, and the trap comes back to
+your pack. One trap to a water. Not in a pearl bed or the longfin
+water, whose catch is a quest's. The trap's wait is its own: it does
+not fish the water out for anybody casting a pole there.
+
 A cook turns the meat into a meal. The fisher does not.
 
 ## The poles and the trap
