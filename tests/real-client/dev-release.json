@@ -341,6 +341,98 @@
       "name": "back-in-world"
     },
     {
+      "do": "page",
+      "task": 4581,
+      "timeout": 30000,
+      "js": "(function(){if(window.__tsRideTp){return 'sent';}var n=window.thornswoodNet;if(!n||!n.say){return '';}n.say('/tp whiterun',{quiet:true});window.__tsRideTp=1;return 'sent';})()",
+      "why": "to Whiterun's start spot outside the gate, once, about 1,700 units from the stables' carriage driver, Bjorlam (#4581)"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 60000,
+      "task": 4581
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "task": 4581,
+      "why": "outside Whiterun"
+    },
+    {
+      "do": "face",
+      "what": "driver",
+      "ref": "bbf6d:CFTO.esp",
+      "task": 4581,
+      "why": "stand before Bjorlam, the Whiterun carriage driver, by his placed reference (carriages.ts carriage:whiterun)"
+    },
+    {
+      "do": "wait",
+      "for": "crosshair",
+      "what": "driver",
+      "timeout": 10000,
+      "task": 4581
+    },
+    {
+      "do": "shot",
+      "name": "driver-prompt",
+      "task": 4581,
+      "why": "what the game's prompt says over him"
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4581,
+      "why": "E on the driver"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:wants"
+      ],
+      "timeout": 10000,
+      "task": 4581,
+      "why": "the server answered /ride e with his stops and fares, and the page asks for the panel"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:opened"
+      ],
+      "timeout": 15000,
+      "task": 4581,
+      "why": "the panel is up, once no menu of the game's is"
+    },
+    {
+      "do": "shot",
+      "name": "ride-panel",
+      "task": 4581,
+      "why": "his stops and their fares"
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "task": 4581,
+      "why": "Escape closes the panel; no ride is taken and no fare paid"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:closed"
+      ],
+      "timeout": 10000,
+      "task": 4581
+    },
+    {
       "do": "end"
     }
   ]

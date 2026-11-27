@@ -119,6 +119,8 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"shot","name":"journal-open"}` | the runner saved a screenshot of the game window. |
 | `{"do":"face","what":"bed"}` | the character stands 90 units out from the nearest bed in its cell, on the side it was on, turned to the bed and looking a little down, as somebody walks up to use one. A bed is what `thornswood-front.js` clears the owner of (its `isBedRef`). No bed in the cell fails the step. |
 | `{"do":"wait","for":"crosshair","what":"bed"}` | a bed is under the crosshair, so the game shows its prompt. |
+| `{"do":"face","what":"driver","ref":"bbf6d:CFTO.esp"}` | the character stands 100 units out from the carriage or ferry driver whose placed reference that is, on the side it was on, turned to him and looking level. He is named by his reference because a driver stands outside, where the nearest person is as likely a guard. A driver not loaded near the character, or one `thornswood-front.js` does not take for a driver (its `isRideDriverRef`, the rule E on a driver goes by), fails the step. |
+| `{"do":"wait","for":"crosshair","what":"driver"}` | a driver is under the crosshair. |
 | `{"do":"wait","for":"running","ms":10000}` | the game kept sending updates for that long with no gap of a second, so the world was not paused (a menu that should leave the world running, #6408). |
 | `{"do":"wait","for":"time","ms":1500}` | that long has gone by. Only before a shot of something the game shows for a moment and gives no event for, like its message when a bed refuses. |
 | `{"do":"end"}` | always; the runner closes the game. |
@@ -142,6 +144,15 @@ Sitting down and getting up are results lines of their own,
 only, so a run says whether it lay down in a bed (#6712). The list goes to
 the Bannered Mare with `/tp bannered`, sent once from a page step, which the
 run's account may run because it is on the dev list.
+
+Last before the end, test task #4581 presses E on a carriage driver: `/tp
+whiterun` to the start spot outside the gate, Bjorlam at the stables by his
+reference, E, then the server's answer (`ride:wants`) and the panel
+(`ride:opened`), its screenshot `ride-panel`, and Escape to close it. No ride
+is taken and no fare paid. The task's results line says whether E on a driver
+opens his stops, and the game's `thornswood-front.log` beside it has the
+press's own lines ("carriage and ferry drivers: ...", "asked the server where
+driver ... goes").
 
 `tests\test-5197-real-client.js` runs the plugin against a fake game and
 checks every list here only uses these steps.

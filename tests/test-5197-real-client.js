@@ -924,6 +924,85 @@ foreach ($scan in @(1,23,36)) {
   yes('front shares its bed rule as Thornswood.isBedRef, the one the face step uses', /T\.isBedRef = isBedRef;/.test(FRONT_SRC) && /T\.isBedRef\(ref\)/.test(PLUGIN));
 }
 
+// Facing a carriage driver (#4581): the step finds the driver by his placed
+// reference, stands 100 units out on the character's side, turned to him and
+// looking level; the crosshair wait sees him; one not front's driver fails.
+{
+  const WS = { getFormID: function () { return 0x3c; } };
+  const cell = { getFormID: function () { return 0x9999; } };
+  function person(id, x, y, driver) {
+    return {
+      driver: driver, getFormID: function () { return id; },
+      getBaseObject: function () { return { getName: function () { return 'Bjorlam'; } }; },
+      getParentCell: function () { return cell; }, getWorldSpace: function () { return WS; },
+      getPositionX: function () { return x; }, getPositionY: function () { return y; }, getPositionZ: function () { return -4750; }
+    };
+  }
+  function run(driver, ref) {
+    const bjorlam = person(0x5bbf6d, 400, 0, driver);
+    const asked = [];
+    const g = game({ steps: [
+      { do: 'face', what: 'driver', ref: ref || 'bbf6d:CFTO.esp' },
+      { do: 'wait', for: 'crosshair', what: 'driver', timeout: 2000 },
+      { do: 'end' }
+    ] });
+    g.box.Thornswood.isRideDriverRef = function (r) { return !!(r && r.driver); };
+    g.box.skyrimPlatform.Game.getFormFromFile = function (id, file) { asked.push(id.toString(16) + ':' + file); return id === 0xbbf6d ? bjorlam : null; };
+    g.box.skyrimPlatform.ObjectReference = { from: function (f) { return f; } };
+    const at = { x: 0, y: 0, angle: null };
+    g.world.cell = cell;
+    g.world.pc = {
+      getParentCell: function () { return cell; }, getWorldSpace: function () { return WS; },
+      getPositionX: function () { return at.x; }, getPositionY: function () { return at.y; },
+      setPosition: function (x, y) { at.x = x; at.y = y; },
+      setAngle: function (x, y, z) { at.angle = [x, y, z]; }
+    };
+    for (let i = 0; i < 5; i++) { g.frame(16); }
+    const steps = function () { return g.lines().filter(function (l) { return l.t === 'step'; }); };
+    return { g: g, at: at, asked: asked, steps: steps, bjorlam: bjorlam };
+  }
+  const r = run(true);
+  const faced = r.steps()[0];
+  yes('face driver asks for the reference the step names', r.asked[0] === 'bbf6d:CFTO.esp');
+  yes('  passes and names him', !!faced && faced.ok && /before driver 5bbf6d "Bjorlam", he was 400 units off/.test(faced.note));
+  yes('  and stands 100 units out on the side the character was on', Math.round(r.at.x) === 300 && Math.round(r.at.y) === 0);
+  yes('  turned to him, heading east (90), looking level', !!r.at.angle && Math.round(r.at.angle[2]) === 90 && r.at.angle[0] === 0);
+  yes('the crosshair wait holds while no driver is under it', r.steps().length === 1);
+  r.g.world.crosshair = r.bjorlam;
+  r.g.frame(16); r.g.frame(16);
+  yes('  and passes once he is', r.steps().length >= 2 && r.steps()[1].ok && /driver 5bbf6d/.test(r.steps()[1].note));
+  const notOne = run(false).steps()[0];
+  yes('a person front does not take for a driver fails the face, and says E is not taken', !!notOne && notOne.ok === false && /is not a driver to thornswood-front\.js/.test(notOne.note));
+  const badRef = run(true, 'Bjorlam').steps()[0];
+  yes('a driver step without <id>:<plugin> fails and says so', !!badRef && badRef.ok === false && /names his reference as <id>:<plugin>/.test(badRef.note));
+  const missing = run(true, '123:CFTO.esp').steps()[0];
+  yes('a reference not in the load order fails and says so', !!missing && missing.ok === false && /no reference 123:CFTO\.esp/.test(missing.note));
+}
+{
+  let list = [];
+  try { list = JSON.parse(read(path.join('tests', 'real-client', 'dev-release.json')) || '{}').steps || []; } catch (e) { list = []; }
+  const ride = list.filter(function (x) { return String(x.task) === '4581'; });
+  const at = list.findIndex(function (x) { return String(x.task) === '4581'; });
+  const tp = ride.filter(function (x) { return x.do === 'page' && /\/tp whiterun'/.test(x.js || ''); });
+  yes('the driver task goes to Whiterun with one /tp, sent once', tp.length === 1 && /if\(window\.__tsRideTp\)\{return 'sent';\}/.test(tp[0].js) && /window\.__tsRideTp=1/.test(tp[0].js));
+  const face = ride.findIndex(function (x) { return x.do === 'face'; });
+  yes('  faces Bjorlam, the Whiterun carriage driver the server knows, and waits for him under the crosshair',
+      face > 0 && ride[face].what === 'driver' && /ref: 'bbf6d:CFTO\.esp'/.test(read(path.join('game', 'gamemode', 'carriages.ts'))) &&
+      ride[face].ref === 'bbf6d:CFTO.esp' && ride[face + 1].for === 'crosshair' && ride[face + 1].what === 'driver');
+  const e = ride.findIndex(function (x) { return x.do === 'key' && x.code === 18; });
+  const wants = ride.findIndex(function (x) { return x.for === 'message' && x.match && x.match[1] === 'ride:wants'; });
+  const opened = ride.findIndex(function (x) { return x.for === 'message' && x.match && x.match[1] === 'ride:opened'; });
+  const closed = ride.findIndex(function (x) { return x.for === 'message' && x.match && x.match[1] === 'ride:closed'; });
+  yes('  presses E, waits for the server\'s answer and the panel, shoots it and closes it', e > face && wants > e && opened > wants &&
+      ride.slice(opened).some(function (x) { return x.do === 'shot'; }) && closed > opened);
+  yes('  every step of it carries the task, and it comes last, before the end', at > 0 && list.slice(at, list.length - 1).every(function (x) { return String(x.task) === '4581'; }) && list[list.length - 1].do === 'end');
+}
+{
+  const FRONT_SRC = read(path.join('game', 'plugins', 'thornswood-front.js'));
+  yes('front shares its driver rule as Thornswood.isRideDriverRef, the one E on a driver and the face step use',
+      /T\.isRideDriverRef = isRideDriverRef;/.test(FRONT_SRC) && /if \(!ref \|\| !isRideDriverRef\(ref\)\) \{ return false; \}/.test(FRONT_SRC) && /T\.isRideDriverRef\(ref\)/.test(PLUGIN));
+}
+
 // Test tasks (#5197): a failing step ends its task, not the run, after its
 // screenshot; the next task runs; each task gets one results line; the run
 // ends failed and names the failed tasks.

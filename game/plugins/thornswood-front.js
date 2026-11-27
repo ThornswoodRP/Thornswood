@@ -8965,6 +8965,7 @@
     ['CFTO.esp', 0x14c6c], ['Dragonborn.esm', 0x182ae], ['Dragonborn.esm', 0x2582b]
   ];
   let rideDriverIds = null;
+  let rideDriverNoneSaid = false;
 
   /*
     THE RIDE PANEL WAITS FOR THE MOD'S CONVERSATION (#1635). The same E opens
@@ -9020,23 +9021,37 @@
     if (found) {
       rideDriverIds = out;
       say('carriage and ferry drivers: ' + found + ' of ' + RIDE_DRIVER_BASES.length + ' bases found');
+    } else if (!rideDriverNoneSaid) {
+      // A press on a person found none of them, so E on a driver is a
+      // press on nobody we know (#4581). Said once; asked again next press.
+      rideDriverNoneSaid = true;
+      say('carriage and ferry drivers: none of ' + RIDE_DRIVER_BASES.length + ' bases found');
     }
     return out;
   }
+
+  // Whether a reference is a carriage or ferry driver: a person whose base
+  // is one of the drivers'. 43 is kNPC.
+  function isRideDriverRef(ref) {
+    if (!ref) { return false; }
+    try {
+      const base = ref.getBaseObject();
+      if (!base || base.getType() !== 43) { return false; }
+      const baseId = base.getFormID() >>> 0;
+      return !!baseId && !!rideDriverIdSet()[baseId];
+    } catch (err) { return false; }
+  }
+  // The scripted real game run (thornswood-test.js) faces a driver and knows
+  // him by the same rule, so the driver it presses E on is one this press
+  // takes (#4581).
+  T.isRideDriverRef = isRideDriverRef;
 
   function driverPress(e) {
     if (!e || e.userEventName !== 'Activate') { return false; }
     if (claims.chat || busyMenuOpen()) { return false; }
     let ref = null;
     try { ref = sp.Game.getCurrentCrosshairRef(); } catch (err) { ref = null; }
-    if (!ref) { return false; }
-    let baseId = 0;
-    try {
-      const base = ref.getBaseObject();
-      if (!base || base.getType() !== 43) { return false; }
-      baseId = base.getFormID() >>> 0;
-    } catch (err) { return false; }
-    if (!baseId || !rideDriverIdSet()[baseId]) { return false; }
+    if (!ref || !isRideDriverRef(ref)) { return false; }
     let hex = '';
     let localId = 0;
     try {

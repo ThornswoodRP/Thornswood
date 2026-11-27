@@ -33,6 +33,8 @@
 //   {"do":"key","code":36}                 a DirectInput scan code (J is 36)
 //   {"do":"face","what":"bed"}             stand before the nearest bed in the cell
 //   {"do":"wait","for":"crosshair","what":"bed"}
+//   {"do":"face","what":"driver","ref":"bbf6d:CFTO.esp"}  stand before that driver
+//   {"do":"wait","for":"crosshair","what":"driver"}
 //   {"do":"wait","for":"time","ms":1500}   a pause, so a shot catches a message
 //   {"do":"wait","for":"running","ms":10000}  the world kept running that long
 // Any step may carry "task": <issue>; a failing one ends that test task and
@@ -126,7 +128,9 @@ sp.on('menuClose', function (e) {
 // done here and left for the step to pick up.
 let inWorld = false;
 let crosshairBed = '';     // the bed under the crosshair now, or ''
+let crosshairDriver = '';  // the carriage or ferry driver under it, or ''
 let faceAsked = '';        // what a face step wants stood before
+let faceRef = '';          // the reference it names, "<id>:<plugin>", for a driver
 let faceDone = null;       // { ok, note } once the update has done it
 function isBed(ref) {
   const T = globalThis.Thornswood;
@@ -167,6 +171,42 @@ function faceBed() {
   pc.setAngle(20, 0, Math.atan2(bx - sx, by - sy) * 180 / Math.PI);
   return { ok: true, note: 'before bed ' + refName(best) + ', ' + beds + ' bed(s) in the cell, it was ' + Math.round(bestD) + ' units off' };
 }
+// Stand 100 units out from the driver the step names, on the side the
+// person is on, turned to him and looking level, as somebody walks up to
+// talk to him (#4581). He is named by his placed reference, because a
+// driver stands outside, where the nearest person in the cell is as likely
+// a guard. 62 is kCharacter.
+function isDriver(ref) {
+  const T = globalThis.Thornswood;
+  return !!(T && typeof T.isRideDriverRef === 'function' && T.isRideDriverRef(ref));
+}
+function faceDriver(desc) {
+  const pc = sp.Game.getPlayer();
+  if (!pc || !pc.getParentCell()) { return { ok: false, note: 'not in a cell' }; }
+  const T = globalThis.Thornswood;
+  if (!T || typeof T.isRideDriverRef !== 'function') { return { ok: false, note: 'thornswood-front.js shares no isRideDriverRef, so this build cannot tell a driver' }; }
+  const m = /^([0-9a-f]{1,6}):(\S+\.es[mpl])$/i.exec(String(desc || ''));
+  if (!m) { return { ok: false, note: 'a driver step names his reference as <id>:<plugin>, not ' + JSON.stringify(desc) }; }
+  const form = sp.Game.getFormFromFile(parseInt(m[1], 16), m[2]);
+  const ref = form ? sp.ObjectReference.from(form) : null;
+  if (!ref) { return { ok: false, note: 'no reference ' + desc + ' in this load order' }; }
+  // A form is a new object at every call, so they are told apart by id. An
+  // interior has no world space, and then the cell is the place.
+  const cell = ref.getParentCell();
+  if (!cell) { return { ok: false, note: 'driver ' + refName(ref) + ' is not loaded, so he is not near the character' }; }
+  const wsOf = function (r) { const w = r.getWorldSpace(); return w ? w.getFormID() >>> 0 : 0; };
+  if (wsOf(ref) !== wsOf(pc) || (!wsOf(pc) && (cell.getFormID() >>> 0) !== (pc.getParentCell().getFormID() >>> 0))) {
+    return { ok: false, note: 'driver ' + refName(ref) + ' is not where the character is' };
+  }
+  if (!isDriver(ref)) { return { ok: false, note: refName(ref) + ' is not a driver to thornswood-front.js, so E on him is not taken' }; }
+  const px = pc.getPositionX(), py = pc.getPositionY();
+  const bx = ref.getPositionX(), by = ref.getPositionY(), bz = ref.getPositionZ();
+  const dx = px - bx, dy = py - by, len = Math.hypot(dx, dy) || 1;
+  const sx = bx + dx / len * 100, sy = by + dy / len * 100;
+  pc.setPosition(sx, sy, bz);
+  pc.setAngle(0, 0, Math.atan2(bx - sx, by - sy) * 180 / Math.PI);
+  return { ok: true, note: 'before driver ' + refName(ref) + ', he was ' + Math.round(len) + ' units off' };
+}
 let lastUpdateAt = 0;
 const updateTimes = [];
 function updatesSince(t) {
@@ -182,9 +222,14 @@ sp.on('update', function () {
   try { const pc = sp.Game.getPlayer(); cell = pc ? pc.getParentCell() : null; } catch (e) { cell = null; }
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
   crosshairBed = '';
-  try { const r = sp.Game.getCurrentCrosshairRef(); if (r && isBed(r)) { crosshairBed = refName(r); } } catch (e) { log('could not read the crosshair:', e); }
+  crosshairDriver = '';
+  try {
+    const r = sp.Game.getCurrentCrosshairRef();
+    if (r && isBed(r)) { crosshairBed = refName(r); }
+    if (r && isDriver(r)) { crosshairDriver = refName(r); }
+  } catch (e) { log('could not read the crosshair:', e); }
   if (faceAsked && !faceDone) {
-    try { faceDone = faceAsked === 'bed' ? faceBed() : { ok: false, note: 'cannot face a ' + faceAsked }; }
+    try { faceDone = faceAsked === 'bed' ? faceBed() : faceAsked === 'driver' ? faceDriver(faceRef) : { ok: false, note: 'cannot face a ' + faceAsked }; }
     catch (e) { faceDone = { ok: false, note: 'facing threw: ' + e }; }
   }
 });
@@ -340,6 +385,7 @@ function failTask() {
   waitingAsk = 0;
   pageId = '';
   faceAsked = '';
+  faceRef = '';
   faceDone = null;
 }
 function tasksNote() {
@@ -389,6 +435,7 @@ sp.on('tick', function () {
         if (inWorld) { pass(); return; }
       } else if (s.for === 'crosshair') {
         if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
+        if (s.what === 'driver' && crosshairDriver) { pass('driver ' + crosshairDriver); return; }
       } else if (s.for === 'running') {
         // The world runs while a menu is up: update, which the game sends
         // only while it is not paused, kept coming for ms with no gap of a
@@ -438,7 +485,7 @@ sp.on('tick', function () {
       return;
     }
     case 'face': {
-      if (!faceAsked) { faceAsked = String(s.what || ''); faceDone = null; return; }
+      if (!faceAsked) { faceAsked = String(s.what || ''); faceRef = String(s.ref || ''); faceDone = null; return; }
       if (faceDone) {
         const done = faceDone;
         faceAsked = ''; faceDone = null;
