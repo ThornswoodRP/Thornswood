@@ -709,6 +709,7 @@ CHANGES = {
         ('2026-11-17', 'The collection installs one additional scripting dependency, bringing it to 121 files from 112 mods.', '9005318bcb94'),
         ('2026-11-26', 'Downgrade is now a step of its own, step 3, between taking the installer and installing the collection, as the launcher and the setup window give it: if your Steam copy is on a build other than 1.6.1170, press Downgrade on the launcher\'s front page before the collection. The collection, Connect Discord and Play are now steps 4, 5 and 6.', '246c3a07e9b2'),
         ('2026-11-26', 'MCM Recorder leaves the collection, since it could not run here, bringing it to 120 files from 111 mods.', '177b227c18cd'),
+        ('2026-11-27', 'Step 2: the line about the installer fetching Thornswood\'s own content no longer gives a download size, since the size it gave was not what the fetch takes.', '356bf49d24b0'),
     ],
     'NEWS': [
         ('2026-10-22', 'The changelog starts here; earlier changes are in the repository history.', '90be4dab837f'),

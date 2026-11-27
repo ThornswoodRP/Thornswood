@@ -35,9 +35,8 @@ so switching back to your usual profile and running Purge Mods leaves your own
 Skyrim the way it was.
 
 1. From the [Downloads](/downloads) page take the installer. One file. Run it.
-   It fetches Thornswood's own content while you watch, about half a gigabyte,
-   and puts the launcher, the script extender and Thornswood's content into
-   your Skyrim.
+   It fetches Thornswood's own content while you watch, and puts the launcher,
+   the script extender and Thornswood's content into your Skyrim.
 2. Open Thornswood from the desktop shortcut. If your Skyrim is newer than
    1.6.1170, which most copies are, a card on the front page says so. Press
    **Downgrade** and Steam downloads that build under your own account. It is

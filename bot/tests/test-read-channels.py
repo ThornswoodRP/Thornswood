@@ -80,7 +80,7 @@ yes('join.md is read through its alpha and open markers, and none is left over',
     '<!--' not in START and (C.OPEN or '## 1. Come into the Discord' not in START))
 
 # ------------------------------------------------------------ the words --
-for word in ('Vortex', 'Nexus', 'collection', 'Downgrade', 'half a gigabyte'):
+for word in ('Vortex', 'Nexus', 'collection', 'Downgrade', 'carries on where it stopped'):
     yes('#start-here says ' + word, word in START)
 for word in ('Vortex', 'Nexus', 'collection', '1.6.1170'):
     yes('#faq says ' + word, word in FAQ)
@@ -89,6 +89,7 @@ yes('#welcome says Vortex and Purge Mods, what happens to your own Skyrim',
 
 DEAD = [
     'twenty gigabytes',          # the old zip, copied into place
+    'half a gigabyte',           # the content fetch, five times its size (#5869)
     'Two files',                 # a small exe and a large zip
     'both installer files',
     'small **exe**',
@@ -181,12 +182,12 @@ try:
         spec.loader.exec_module(mod)
         return mod
 
-    edited = join_raw.replace('about half a gigabyte', 'about three quarters of a gigabyte')
+    edited = join_raw.replace('while you watch', 'while you wait')
     edited = edited.replace('Purge Mods', 'Purge Everything')
     try:
         mod = load_with(edited, 'edited')
         yes('an edit to join.md reaches #start-here with nothing else changed',
-            'three quarters of a gigabyte' in mod.START and 'half a gigabyte' not in mod.START)
+            'while you wait' in mod.START and 'while you watch' not in mod.START)
         yes('and reaches #welcome and #faq',
             'Purge Everything' in mod.WELCOME and 'Purge Everything' in mod.FAQ)
     except Exception as e:
