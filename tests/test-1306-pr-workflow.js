@@ -137,9 +137,9 @@ for (const [what, workflow] of [['main', build], ['pull request', pr], ['nightly
   const job = (t, name) => { const m = new RegExp('\\n  ' + name + ':\\n([\\s\\S]*?)(?=\\n  [a-z][\\w-]*:\\n|$)').exec(t); return m ? m[1] : ''; };
   const qc = job(pr, 'queue-content');
   yes('the merge queue asks the box for the queued merge\'s content build, on a merge group\'s run alone (#6879)',
-    /\n    if: \$\{\{ github\.event_name == 'merge_group' \}\}\n/.test(qc) &&
+    /\n    needs: pick\n    if: \$\{\{ github\.event_name == 'merge_group' && needs\.pick\.outputs\.content_same == 'no' \}\}\n/.test(qc) &&
     /Get-ContentBuild\.ps1 -Server dev -Queued -Ask -WaitMinutes \d+ -Take -Keep /.test(qc) &&
-    /if: \$\{\{ steps\.content\.outputs\.same == 'no' \}\}/.test(qc));
+    /\n      content_same: \$\{\{ steps\.content\.outputs\.same \}\}\n/.test(job(pr, 'pick')));
   // Each job's own permissions block, read job by job.
   const jobs = code(pr).split('\njobs:\n')[1] || '';
   const writers = jobs.split(/\n(?=  [a-z][\w-]*:\n)/).filter(b => /^      (contents|deployments): write$/m.test(b)).map(b => /^\s*([a-z][\w-]*):/.exec(b)[1]);
@@ -147,7 +147,7 @@ for (const [what, workflow] of [['main', build], ['pull request', pr], ['nightly
     writers.join(',') === 'queue-content' && !/^  [a-z_]+:\s*write/m.test(code(pr).split('\njobs:\n')[0]));
   const qp = job(pr, 'queue-pick'), qw = job(pr, 'queue-checks'), ql = job(pr, 'queue-checks-linux');
   yes('  the content checks are picked over that build and run in shares on both platforms',
-    /Run-Gate\.ps1 -Pick \d+ -LinuxShares \d+ -Content/.test(qp) && /\n    if: \$\{\{ needs\['queue-content'\]\.outputs\.needed == 'yes' \}\}\n/.test(qp) &&
+    /Run-Gate\.ps1 -Pick \d+ -LinuxShares \d+ -Content/.test(qp) && /\n    needs: queue-content\n    runs-on: /.test(qp) &&
     /name: content-queued/.test(qw) && /name: content-queued/.test(ql) && /runs-on: windows-latest/.test(qw) && /-Platform Linux/.test(ql));
   const settings = read(path.join(REPO, 'records', 'github-repo-settings.json'));
   const limit = +((/"check_response_timeout_minutes": (\d+)/.exec(settings) || [])[1] || 0);

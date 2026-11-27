@@ -35,6 +35,9 @@
        says it built and no draft is there;
     3d. -Newest -Find names the newest build for actions/download-artifact,
        and in a workflow the script never downloads a build itself (#6359);
+       the box's build of the checkout's own key comes first when a run on
+       main kept one, and the merge release keeps each by its key as it
+       takes it (#6879);
     7. every workflow lays the build with .github/actions/lay-content, which
        has GitHub's download step take it, and none downloads it itself;
     6. the merge release runs the content checks over the build it took, in
@@ -236,13 +239,13 @@ try {
     Check '3 -Newest still holds the build to its server' ($r.Code -eq 1 -and $r.Text -match 'is for the main server, not dev')
     $arts = Join-Path $tmp 'artifacts.json'
     @{ artifacts = @(
-            @{ id = 1; expired = $false; created_at = '2026-11-15T10:00:00Z'; workflow_run = @{ id = 11; head_branch = 'claude/x' } },
-            @{ id = 2; expired = $true; created_at = '2026-11-14T10:00:00Z'; workflow_run = @{ id = 12; head_branch = 'main' } }) } |
+            @{ id = 1; name = 'content-dev'; expired = $false; created_at = '2026-11-15T10:00:00Z'; workflow_run = @{ id = 11; head_branch = 'claude/x' } },
+            @{ id = 2; name = 'content-dev'; expired = $true; created_at = '2026-11-14T10:00:00Z'; workflow_run = @{ id = 12; head_branch = 'main' } }) } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $arts
     $r = Run @('-Repo', $repo, '-Newest', '-ArtifactsFile', $arts, '-Output', '')
     Check '3 -Newest takes only a build kept by a run on main that has not expired' ($r.Code -eq 1 -and $r.Text -match 'no merge release on main has kept a content-dev build yet')
     $r = Run @('-Repo', $repo, '-Newest', '-Take', '-Output', '')
-    Check '3 -Newest goes without -Take and -Ask' ($r.Code -eq 1 -and $r.Text -match '-Newest takes the newest build main released')
+    Check '3 -Newest goes without -Take and -Ask' ($r.Code -eq 1 -and $r.Text -match '-Newest lays a build main kept')
 
     $oldSpotPath = 'docs/HUNTING-SPOTS.csv'
     $newSpotPath = 'game/data/HUNTING-SPOTS.csv'
@@ -267,9 +270,10 @@ try {
     # 3d. In a workflow GitHub's download step takes the build (#6359):
     # -Find names it, and the script's own download refuses.
     @{ artifacts = @(
-            @{ id = 7; expired = $false; created_at = '2026-11-16T07:21:06Z'; workflow_run = @{ id = 70; head_branch = 'main' } },
-            @{ id = 8; expired = $false; created_at = '2026-11-16T09:00:00Z'; workflow_run = @{ id = 80; head_branch = 'claude/x' } },
-            @{ id = 6; expired = $false; created_at = '2026-11-15T07:21:06Z'; workflow_run = @{ id = 60; head_branch = 'main' } }) } |
+            @{ id = 7; name = 'content-dev'; expired = $false; created_at = '2026-11-16T07:21:06Z'; workflow_run = @{ id = 70; head_branch = 'main' } },
+            @{ id = 8; name = 'content-dev'; expired = $false; created_at = '2026-11-16T09:00:00Z'; workflow_run = @{ id = 80; head_branch = 'claude/x' } },
+            @{ id = 6; name = 'content-dev'; expired = $false; created_at = '2026-11-15T07:21:06Z'; workflow_run = @{ id = 60; head_branch = 'main' } },
+            @{ id = 9; name = ('content-dev-' + ('b' * 64)); expired = $false; created_at = '2026-11-16T10:00:00Z'; workflow_run = @{ id = 90; head_branch = 'main' } }) } |
         ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $arts
     $out = Join-Path $tmp 'find-output.txt'
     $r = Run @('-Repo', $repo, '-Newest', '-Find', '-ArtifactsFile', $arts, '-Output', $out)
@@ -278,6 +282,40 @@ try {
         $r.Code -eq 0 -and $r.Text -match 'NEWEST artifact 7 of run 70' -and $said -ccontains 'artifact=7' -and $said -ccontains 'run=70' -and -not (Test-Path -LiteralPath (Join-Path $repo 'temp/content-laid.json')))
     $r = Run @('-Repo', $repo, '-Find', '-ArtifactsFile', $arts, '-Output', '')
     Check '3d -Find goes with -Newest alone' ($r.Code -eq 1 -and $r.Text -match '-Find goes with -Newest alone')
+    # #6879: the box's build of this checkout's own key comes first, from a
+    # run on main, unexpired; a newer content-dev of another key does not
+    # pass over it, and with none of its key the newest content-dev serves.
+    $mineKey = (Get-ThornswoodContentKey -Repo $repo -Commit 'HEAD' -Server dev -Paths $paths).Key
+    $ownArts = Join-Path $tmp 'artifacts-own.json'
+    @{ artifacts = @(
+            @{ id = 7; name = 'content-dev'; expired = $false; created_at = '2026-11-16T07:21:06Z'; workflow_run = @{ id = 70; head_branch = 'main' } },
+            @{ id = 21; name = "content-dev-$mineKey"; expired = $false; created_at = '2026-11-15T07:00:00Z'; workflow_run = @{ id = 210; head_branch = 'main' } },
+            @{ id = 22; name = "content-dev-$mineKey"; expired = $false; created_at = '2026-11-16T08:00:00Z'; workflow_run = @{ id = 220; head_branch = 'claude/x' } },
+            @{ id = 23; name = "content-dev-$mineKey"; expired = $true; created_at = '2026-11-16T09:00:00Z'; workflow_run = @{ id = 230; head_branch = 'main' } },
+            @{ id = 24; name = "content-main-$mineKey"; expired = $false; created_at = '2026-11-16T09:30:00Z'; workflow_run = @{ id = 240; head_branch = 'main' } }) } |
+        ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ownArts
+    Remove-Item -LiteralPath $out -Force -ErrorAction SilentlyContinue
+    $r = Run @('-Repo', $repo, '-Newest', '-Find', '-ArtifactsFile', $ownArts, '-Output', $out)
+    $said = if (Test-Path -LiteralPath $out) { @(Get-Content -LiteralPath $out) } else { @() }
+    Check '3d -Newest -Find names the box''s build of the checkout''s own key first, from main, unexpired, for its server (#6879)' (
+        $r.Code -eq 0 -and $r.Text -match 'OWN artifact 21 of run 210: the box''s build of this checkout''s content inputs' -and $said -ccontains 'artifact=21' -and $said -ccontains 'run=210')
+    Remove-Item -LiteralPath $out -Force -ErrorAction SilentlyContinue
+    $r = Run @('-Repo', $repo, '-Newest', '-Find', '-ArtifactsFile', $arts, '-Output', $out)
+    $said = if (Test-Path -LiteralPath $out) { @(Get-Content -LiteralPath $out) } else { @() }
+    Check '3d and with no build of its key, the newest build main kept' ($r.Code -eq 0 -and $r.Text -match 'NEWEST artifact 7 of run 70' -and $said -ccontains 'artifact=7')
+    $rel = [IO.File]::ReadAllText((Join-Path $root '.github/workflows/merge-release.yml')) -replace "`r`n", "`n"
+    Check '3d the merge release keeps each build it takes by its key, before its content checks, for as long as content-dev (#6879)' (
+        $rel -match '(?s)
+  content:
+.*?- name: Keep the build by its key
+        if: \$\{\{ steps\.find\.outputs\.found == ''yes'' \}\}
+        uses: actions/upload-artifact@[0-9a-f]{40} # v\S+
+        with:
+          name: content-dev-\$\{\{ steps\.find\.outputs\.key \}\}
+.*?retention-days: 90
+.*?
+  checks-pick:
+')
     $was = $env:GITHUB_ACTIONS
     try {
         $env:GITHUB_ACTIONS = 'true'

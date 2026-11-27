@@ -1,10 +1,13 @@
-# THE NEWEST CONTENT BUILD, LAID OVER THE CHECKOUT (#5191 stage 4, #6359).
+# THE CONTENT BUILD, LAID OVER THE CHECKOUT (#5191 stage 4, #6359, #6879).
 #
 # The content plugin and the tables out of the load order are not committed:
 # the box builds them, and each merge release keeps the build it took as the
-# artifact content-<server> (merge-release.yml, "Keep what was taken"). Every
-# job that reads them lays the newest kept build with this action, after its
-# checkout:
+# artifact content-<server>-<key> as soon as it takes it ("Keep the build by
+# its key"), and as content-<server> once its content checks pass ("Keep
+# what was taken"). Every job that reads them lays a kept build with this
+# action, after its checkout: the box's build of the checkout's own content
+# inputs when main has one, and the newest content-<server> otherwise
+# (Get-ContentBuild.ps1 -Newest says why):
 #
 #     - name: Lay the newest content build
 #       uses: ./.github/actions/lay-content
@@ -25,8 +28,8 @@
 # keep: a folder to keep the two files in (the gate's pick hands them to its
 # shares). Outputs same, key and commit as Get-ContentBuild.ps1 -Newest says
 # them.
-name: Lay the newest content build
-description: Lays the newest content build a merge release kept over the checkout.
+name: Lay the content build
+description: Lays the content build a merge release kept, of the checkout's own inputs or the newest, over the checkout.
 inputs:
   server:
     description: The server whose build to lay, dev or main.
@@ -53,7 +56,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Name the newest kept build
+    - name: Name the build to lay
       id: find
       shell: pwsh
       env:

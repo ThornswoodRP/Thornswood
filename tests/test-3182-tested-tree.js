@@ -322,7 +322,10 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   const pickJob = pj < 0 ? '' : build.slice(pj, gj > pj ? gj : undefined);
   const glj = build.indexOf('\n  gate-linux:\n');
   const gateJob = gj < 0 ? '' : build.slice(gj, glj > gj ? glj : (cj > gj ? cj : undefined));
-  const linuxJob = glj < 0 ? '' : build.slice(glj, cj > glj ? cj : undefined);
+  // To the next job: the merge queue's content jobs (#6879) stand between it
+  // and the Tree checks, and hold the tokens their asks need.
+  const nextJob = (i) => { const m = /\n  [a-z][\w-]*:\n/.exec(build.slice(i + 1)); return m ? i + 1 + m.index : undefined; };
+  const linuxJob = glj < 0 ? '' : build.slice(glj, nextJob(glj));
   const gateStep = (gateJob.split(/\n(?=      - )/).find(x => /^      - name: Run the gate harnesses\n/.test(x)) || '');
   const rg = read(path.join(REPO, 'scripts', 'dev', 'Run-Gate.ps1'));
   const part = "${{ needs.pick.outputs.whole != 'true' && ', what the change reaches' || '' }}";
@@ -368,11 +371,12 @@ async function ask(o, tree) { const g = github(o); return T.find({ tree: tree ||
   // The gate's reports are what a build keeps (#5295, public since 30 Oct
   // 2026): the Windows shares', the Linux shares' (#5293) and the merged
   // one; and the content build the pick laid, handed to the shares for a
-  // day so they lay the same one and hold no token (#5191, stage 4). The
-  // note is never one (#3399).
+  // day so they lay the same one and hold no token (#5191, stage 4); and in
+  // the merge queue, the box's build of the queued merge, handed to its
+  // content checks the same way (#6879). The note is never one (#3399).
   const uploads = (y) => (y.replace(/^\s*#.*$/gm, '').match(/uses: actions\/upload-artifact@[\s\S]*?\n\s+name: (.+)/g) || []).map(m => m.replace(/[\s\S]*name: /, ''));
-  const onlyReports = (y) => uploads(y).every(n => /^gate-report(-(linux-)?\$\{\{ matrix\.shard \}\})?$/.test(n) || n === 'content-laid');
-  yes('no step of either build uploads an artifact but the gate\'s reports and the content build the pick laid, and the note is never one (#3399, #5295, #5191)', onlyReports(build) && onlyReports(pr) && uploads(build).length === 4 && !/tested-tree/i.test(uploads(build).join(' ')));
+  const onlyReports = (y) => uploads(y).every(n => /^gate-report(-(linux-)?\$\{\{ matrix\.shard \}\})?$/.test(n) || n === 'content-laid' || n === 'content-queued');
+  yes('no step of either build uploads an artifact but the gate\'s reports, the content build the pick laid and the queued merge\'s, and the note is never one (#3399, #5295, #5191, #6879)', onlyReports(build) && onlyReports(pr) && uploads(build).length === 5 && !/tested-tree/i.test(uploads(build).join(' ')));
   for (const n of T.JOBS) { yes('the script\'s job name "' + n + '" is a job in build-pr.yml', pr.indexOf('\n    name: ' + n + '\n') >= 0); }
   yes('the script\'s workflow is the pull request build', fs.existsSync(path.join(REPO, T.WORKFLOW)) && /\non:\n  pull_request:\n/.test(pr));
   yes('  and runs in the merge queue, whose run the script reads first (#5182)', /\non:\n  pull_request:\n  merge_group:\n    types: \[checks_requested\]\n/.test(pr));

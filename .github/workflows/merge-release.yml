@@ -273,6 +273,24 @@ jobs:
           # Read by this run's content checks, minutes later, and by nothing
           # after it.
           retention-days: 1
+      # BY ITS KEY (#6879): the box's build of this merge's content inputs,
+      # kept as soon as it is taken, before the content checks below. A pull
+      # request or a merge group whose inputs are these lays it
+      # (.github/actions/lay-content, Get-ContentBuild.ps1 -Newest), so its
+      # checks run over its own build even while the release is red and
+      # content-dev, the newest build whose checks passed, lags. Before this
+      # every checkout laid content-dev only, and on 27 Nov 2026 the harnesses
+      # that read every table stopped on one #7191 had added (#7244).
+      - name: Keep the build by its key
+        if: ${{ steps.find.outputs.found == 'yes' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-dev-${{ steps.find.outputs.key }}
+          path: |
+            ${{ runner.temp }}/content-taken/content.zip
+            ${{ runner.temp }}/content-taken/content-build.json
+          if-no-files-found: error
+          retention-days: 90
 
   # THE CONTENT CHECKS (#5191, stage 4). Every gate harness a new content
   # build can affect, as main's nightly map says (scripts\dev\Run-Gate.ps1

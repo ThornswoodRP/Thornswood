@@ -27,12 +27,15 @@
   checkout, so every part built after it carries the box's build. Prints
   TOOK <key> FROM <commit>. Stops, writing nothing, on any difference.
 
-  NEWEST. The newest build a merge release on main took, from the artifact
-  content-<server> it keeps (-Keep; merge-release.yml, "Keep what was
-  taken"), whatever its key: what a harness or a developer's checkout reads
-  now that the tables are not committed. Held and written the same way as
-  TAKE, to the server but not to a key. Needs Actions read only, which every
-  pull request's token has.
+  NEWEST. The box's build of this checkout's own content inputs when a
+  merge release on main took one, from the artifact content-<server>-<key>
+  it keeps as soon as it takes it (#6879; merge-release.yml, "Keep the build
+  by its key"); with none, the newest build whose content checks passed,
+  from the artifact content-<server> (-Keep; "Keep what was taken"),
+  whatever its key: what a harness or a developer's checkout reads now that
+  the tables are not committed. Held and written the same way as TAKE, to
+  the server but not to a key. Needs Actions read only, which every pull
+  request's token has.
 
       pwsh scripts/release/Get-ContentBuild.ps1 -Newest
 
@@ -48,7 +51,7 @@
 
   IN A WORKFLOW (#6359) the build comes down through GitHub's own download
   step, never this script's: .github/actions/lay-content runs -Newest -Find,
-  which names the newest kept build and writes artifact= and run= to -Output,
+  which names that build (OWN or NEWEST) and writes artifact= and run= to -Output,
   then actions/download-artifact takes it, and -Newest -ArtifactDir lays it.
   On 16 Nov 2026 the script's own single request to GitHub's artifact store
   (an Azure storage account many of GitHub's customers share) was answered
@@ -222,32 +225,56 @@ function Use-ContentFiles([string]$Work, [string]$Key, [string]$From, [string[]]
 }
 
 # ---- the newest build main took, for a harness or a developer's checkout ----
-# The newest content-<server> build a run on main kept, from the list of
-# artifacts: the merge release keeps it 90 days; newest first, main only.
-function Get-NewestContentArtifact {
-    $json = if ($ArtifactsFile) { [IO.File]::ReadAllText($ArtifactsFile) } else { (gh api "repos/$GitHubRepo/actions/artifacts?name=content-$Server&per_page=50") -join "`n" }
-    if (-not $ArtifactsFile -and $LASTEXITCODE -ne 0) { Stop-Take "GitHub did not list the artifacts named content-$Server" }
-    $list = @(($json | ConvertFrom-Json).artifacts | Where-Object { -not $_.expired -and [string]$_.workflow_run.head_branch -ceq 'main' } | Sort-Object { [DateTimeOffset]$_.created_at } -Descending)
+# The artifacts of runs on main named $Name that have not expired, newest
+# first.
+function Get-MainContentArtifacts([string]$Name) {
+    $json = if ($ArtifactsFile) { [IO.File]::ReadAllText($ArtifactsFile) } else { (gh api "repos/$GitHubRepo/actions/artifacts?name=$Name&per_page=50") -join "`n" }
+    if (-not $ArtifactsFile -and $LASTEXITCODE -ne 0) { Stop-Take "GitHub did not list the artifacts named $Name" }
+    return @(($json | ConvertFrom-Json).artifacts | Where-Object { [string]$_.name -ceq $Name -and -not $_.expired -and [string]$_.workflow_run.head_branch -ceq 'main' } | Sort-Object { [DateTimeOffset]$_.created_at } -Descending)
+}
+
+# The build to lay. THIS CHECKOUT'S OWN KEY FIRST (#6879): the merge release
+# keeps the box's build of each merge's inputs as content-<server>-<key>
+# as soon as it takes it, before its content checks. Before #6879 every
+# checkout laid only the newest build whose checks passed, content-<server>,
+# so while merge releases failed every pull request ran over an older build
+# than main's own: on 27 Nov the newest was of 26 Nov 5:34 PM, before #7191
+# added STATIONS_THE_SERVER_STANDS, and the harnesses that read every table
+# stopped on it missing (#7244). A build of this checkout's inputs is the
+# one its checks mean, whether or not main's checks passed over it. With
+# none, the newest content-<server> a run on main kept (90 days).
+function Get-NewestContentArtifact([string]$Key) {
+    if ($Key) {
+        $own = @(Get-MainContentArtifacts "content-$Server-$Key")
+        if ($own.Count) { return [pscustomobject]@{ Artifact = $own[0]; Own = $true } }
+    }
+    $list = @(Get-MainContentArtifacts "content-$Server")
     if (-not $list.Count) { Stop-Take "no merge release on main has kept a content-$Server build yet (merge-release.yml, Keep what was taken)" }
-    return $list[0]
+    return [pscustomobject]@{ Artifact = $list[0]; Own = $false }
+}
+
+# This checkout's key, from git, before anything is written over it.
+function Get-CheckoutKey {
+    $sha = (& git -C $Repo rev-parse --verify ($Commit + '^{commit}') 2>$null) -join ''
+    if ($LASTEXITCODE -ne 0 -or $sha -cnotmatch '^[0-9a-f]{40}$') { Stop-Take "there is no commit $Commit in $Repo" }
+    $chain = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
+    try { return (Get-ThornswoodContentKey -Repo $Repo -Commit $sha -Server $Server -Paths $chain.Paths).Key } catch { Stop-Take $_.Exception.Message }
 }
 
 if ($Find) {
-    if (-not $Newest -or $Take -or $Ask -or $Kept -or $ArtifactDir -or $Keep -or $BuildKey) { Stop-Take '-Find goes with -Newest alone: it names the newest kept build for actions/download-artifact and lays nothing' }
-    $a = Get-NewestContentArtifact
-    Write-Host "NEWEST artifact $($a.id) of run $($a.workflow_run.id)"
+    if (-not $Newest -or $Take -or $Ask -or $Kept -or $ArtifactDir -or $Keep -or $BuildKey) { Stop-Take '-Find goes with -Newest alone: it names the build to lay for actions/download-artifact and lays nothing' }
+    $f = Get-NewestContentArtifact (Get-CheckoutKey)
+    $a = $f.Artifact
+    if ($f.Own) { Write-Host "OWN artifact $($a.id) of run $($a.workflow_run.id): the box's build of this checkout's content inputs" }
+    else { Write-Host "NEWEST artifact $($a.id) of run $($a.workflow_run.id)" }
     Say-Output "artifact=$($a.id)"
     Say-Output "run=$($a.workflow_run.id)"
     exit 0
 }
 
 if ($Newest) {
-    if ($Take -or $Ask -or $Kept) { Stop-Take '-Newest takes the newest build main released, whatever its key, so it goes without -Take, -Ask and -Kept' }
-    # This checkout's key, from git, before anything is written over it.
-    $sha = (& git -C $Repo rev-parse --verify ($Commit + '^{commit}') 2>$null) -join ''
-    if ($LASTEXITCODE -ne 0 -or $sha -cnotmatch '^[0-9a-f]{40}$') { Stop-Take "there is no commit $Commit in $Repo" }
-    $chain = Get-ThornswoodContentPaths -Repo $Repo -Tool 'scripts/mods/Add-ContentRecords.py'
-    try { $mine = (Get-ThornswoodContentKey -Repo $Repo -Commit $sha -Server $Server -Paths $chain.Paths).Key } catch { Stop-Take $_.Exception.Message }
+    if ($Take -or $Ask -or $Kept) { Stop-Take '-Newest lays a build main kept, its own key''s or the newest, so it goes without -Take, -Ask and -Kept' }
+    $mine = Get-CheckoutKey
     # What a build of this checkout writes (Build-ContentOnBox.ps1): the
     # plugin, the catalogue built in the order before the chain, and every
     # path the chain writes.
@@ -257,7 +284,8 @@ if ($Newest) {
     try {
         if ($ArtifactDir) { foreach ($n in 'content.zip', 'content-build.json') { Copy-Item -LiteralPath (Join-Path $ArtifactDir $n) -Destination (Join-Path $work $n) }; $from = "the folder $ArtifactDir" }
         else {
-            $a = Get-NewestContentArtifact
+            $f = Get-NewestContentArtifact $mine
+            $a = $f.Artifact
             # A workflow takes it through actions/download-artifact (IN A
             # WORKFLOW, above, #6359); this download is for a checkout.
             if ($env:GITHUB_ACTIONS -eq 'true') { Stop-Take "in a workflow the content build comes down through actions/download-artifact, not this script: lay it with the action .github/actions/lay-content (#6359)" }

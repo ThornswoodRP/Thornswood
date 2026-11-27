@@ -25,11 +25,11 @@
        and the launcher build passed and the gate, its Windows shares and
        since #5293 its Linux shares, each passed or were skipped because
        the pick said they had nothing to do; a skipped launcher build never
-       passes; and since #6879, in the merge queue, the queued merge's
-       content build passed, and when it said the merge needs them its
-       content checks' pick passed and each platform's shares passed or
-       were skipped because that pick gave them none, while on any other run
-       the build job is skipped;
+       passes; and since #6879, in the merge queue when the pick said the
+       merge's content inputs are not the build it laid, the queued merge's
+       content build passed, its content checks' pick passed and each
+       platform's shares passed or were skipped because that pick gave them
+       none, while on any other run the build job is skipped;
     3. read from this repository: the launcher job's steps are exactly the
        one that says why there is nothing to build, which alone runs when
        the pick said launcher=false, on Linux, then the native launcher's
@@ -162,20 +162,23 @@ else {
             Yes ("Build check result rejects bot result '{0}'" -f $state) ($LASTEXITCODE -ne 0)
         }
         # #6879: the queued merge's content build and checks, with every
-        # other job green. Event, the build job, whether it said the merge
-        # needs its checks, their pick, Windows shares and their list, Linux
+        # other job green. Event, the build job, whether the pick said the
+        # merge's inputs are not the build it laid (so the queue needs them),
+        # their pick, Windows shares and their list, Linux
         # shares and their list, then 0 to pass or 1 to fail.
         $env:BOT = 'success'
         $queue = @(
-            @('a pull request''s own run, where the queued build is skipped', 'pull_request', 'skipped', '', '', '', '', '', '', 0),
-            @('a pull request''s own run whose queued build ran (it never should)', 'pull_request', 'success', 'no', '', '', '', '', '', 1),
-            @('the queue, the inputs the newest kept build''s', 'merge_group', 'success', 'no', 'skipped', 'skipped', '', 'skipped', '', 0),
+            @('a pull request''s own run, where the queued build is skipped', 'pull_request', 'skipped', 'no', '', '', '', '', '', 0),
+            @('a pull request''s own run that changes a content input, the queued build skipped', 'pull_request', 'skipped', 'yes', 'skipped', 'skipped', '', 'skipped', '', 0),
+            @('a pull request''s own run whose queued build ran (it never should)', 'pull_request', 'success', 'yes', '', '', '', '', '', 1),
+            @('the queue, the inputs the newest kept build''s', 'merge_group', 'skipped', 'no', 'skipped', 'skipped', '', 'skipped', '', 0),
+            @('the queue, the inputs the newest kept build''s, yet the build job ran', 'merge_group', 'success', 'no', 'skipped', 'skipped', '', 'skipped', '', 1),
             @('the queue, the box built the merge and every content check passed', 'merge_group', 'success', 'yes', 'success', 'success', '[1,2]', 'success', '[1]', 0),
             @('the queue, the content checks had no Linux share', 'merge_group', 'success', 'yes', 'success', 'success', '[1]', 'skipped', '[]', 0),
             @('the queue, the content checks had nothing to run', 'merge_group', 'success', 'yes', 'success', 'skipped', '[]', 'skipped', '[]', 0),
-            @('the queue, the box''s build failed or never came', 'merge_group', 'failure', '', 'skipped', 'skipped', '', 'skipped', '', 1),
-            @('the queue, the build job was cancelled', 'merge_group', 'cancelled', '', 'skipped', 'skipped', '', 'skipped', '', 1),
-            @('the queue, the build job skipped', 'merge_group', 'skipped', '', 'skipped', 'skipped', '', 'skipped', '', 1),
+            @('the queue, the box''s build failed or never came', 'merge_group', 'failure', 'yes', 'skipped', 'skipped', '', 'skipped', '', 1),
+            @('the queue, the build job was cancelled', 'merge_group', 'cancelled', 'yes', 'skipped', 'skipped', '', 'skipped', '', 1),
+            @('the queue, the build job skipped though the inputs are new', 'merge_group', 'skipped', 'yes', 'skipped', 'skipped', '', 'skipped', '', 1),
             @('the queue, a content check failed on Windows', 'merge_group', 'success', 'yes', 'success', 'failure', '[1]', 'success', '[1]', 1),
             @('the queue, a content check failed on Linux', 'merge_group', 'success', 'yes', 'success', 'success', '[1]', 'failure', '[1]', 1),
             @('the queue, the content checks'' pick failed', 'merge_group', 'success', 'yes', 'failure', 'skipped', '', 'skipped', '', 1),

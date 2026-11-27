@@ -77,6 +77,9 @@ jobs:
       linux_shares: ${{ steps.pick.outputs.linux_shares }}
       whole: ${{ steps.pick.outputs.whole }}
       launcher: ${{ steps.reach.outputs.launcher }}
+      # Whether the build laid is of this checkout's content inputs, for the
+      # queued merge's content build (#6879).
+      content_same: ${{ steps.content.outputs.same }}
     steps:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,9 +92,11 @@ jobs:
       # THE CONTENT BUILD (#5191, stage 4). The content plugin and the tables
       # out of the load order are not committed: the box builds them, and
       # each merge release keeps the build it took as the artifact
-      # content-dev once its content checks pass. This lays the newest over
-      # the checkout and says whether it is of this checkout's content
-      # inputs, and hands that same build to every share as an artifact of
+      # content-dev once its content checks pass, and each build it took by
+      # its key, content-dev-<key>, as soon as it took it (#6879). This lays
+      # the build of this checkout's own inputs when main has one, and the
+      # newest content-dev otherwise, says whether it is of this checkout's
+      # content inputs, and hands that same build to every share as an artifact of
       # this run, so the shares hold no token (#4079). The pick leaves out
       # the content checks a change to those inputs leaves saying nothing
       # (scripts\dev\Run-Gate.ps1, -Content says why).
@@ -455,6 +460,241 @@ jobs:
           path: ${{ runner.temp }}/gate-report.xml
           if-no-files-found: ignore
           retention-days: 14
+
+  # THE QUEUED MERGE'S OWN CONTENT BUILD (#6879, Patrick's A, 26 Nov 2026).
+  # A pull request whose content inputs no merge release on main has built
+  # leaves out the content checks that read an input it changed (the job
+  # "pick", Run-Gate.ps1 -Content), since only the old build is there to run
+  # them over. Before #6879 they ran only in the merge release, after the
+  # merge was on main, so a red one held every release behind it: #7164's
+  # test-3182 and the three of #6879 (25 Nov) went in that way, and Dev had
+  # no release from 11:36 PM on 24 Nov until they were fixed. In the merge
+  # queue (build-pr.yml's merge_group run) these jobs ask the box to build
+  # the queued merge, wait for that build, and run every check a new build
+  # can affect over it, in shares as the merge release does; a red one is a
+  # red "Build check result", and the queue drops the pull request before
+  # it lands. A merge whose inputs main already built needs none of this:
+  # the pick lays that build, and the whole gate runs over it. Nothing here
+  # runs on main or on a pull request's own run. Whether the build laid is
+  # of the merge's inputs is the pick's answer, from the one build it laid
+  # for the whole run (#7115).
+  #
+  # THE BUILD. Get-ContentBuild.ps1 -Queued takes main's draft of these
+  # inputs when there is one (an earlier merge in the queue may share them),
+  # or the box's build of the queued merge, content-queue-dev-<key>, and
+  # otherwise asks for that by a Deployment to Content carrying the commit
+  # as queued. The box builds it as its limited account, from the queue's
+  # own branch only (docs/DEPLOY-AGENT.md, "A merge the queue holds"). A
+  # draft is listed only to a token that writes Contents, and the ask is a
+  # Deployment, so this job has both; it runs only for a merge already in
+  # the queue, whose workflow is its own merge's either way.
+  # HOW LONG (measured 27 Nov 2026, the Deployments to Content from 05:01 to
+  # 06:15 UTC): a new build took 7 minutes on the box (6.9 to 7.2, once 11
+  # behind another), a kept one 10 seconds, and the merge release's content
+  # checks 4 to 6 minutes from their pick to their last share (runs
+  # 45950582517 and 45950713259). Main's ruleset drops a merge group whose
+  # required checks have no answer within 30 minutes
+  # (records\github-repo-settings.json, check_response_timeout_minutes), so
+  # the wait is at most 18 minutes and each share's harnesses 10.
+  queue-content:
+    name: Build the queued merge's content
+    needs: pick
+    if: ${{ github.event_name == 'merge_group' && needs.pick.outputs.content_same == 'no' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    permissions:
+      contents: write
+      deployments: write
+    outputs:
+      key: ${{ steps.build.outputs.key }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Ask the box for this merge's build, and wait for it
+        id: build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Queued -Ask -WaitMinutes 18 -Take -Keep (Join-Path $env:RUNNER_TEMP 'content-queued')
+          exit $LASTEXITCODE
+      - name: Hand the build to the content checks
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: content-queued
+          path: |
+            ${{ runner.temp }}/content-queued/content.zip
+            ${{ runner.temp }}/content-queued/content-build.json
+          if-no-files-found: error
+          # Read by this run's content checks, minutes later, and by nothing
+          # after it.
+          retention-days: 1
+
+  # Every gate harness a new content build can affect, as main's nightly map
+  # says, picked over the queued merge's build and split as the gate is
+  # (merge-release.yml's checks-pick, which says why).
+  queue-pick:
+    name: Pick the queued merge's content checks
+    needs: queue-content
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      plan: ${{ steps.pick.outputs.plan }}
+      shares: ${{ steps.pick.outputs.shares }}
+      linux_shares: ${{ steps.pick.outputs.linux_shares }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch the queued merge's build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-queued
+          path: ${{ runner.temp }}/content-queued
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs['queue-content'].outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-queued') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Pick and split the content checks
+        id: pick
+        shell: pwsh
+        env:
+          GATE_MAP_TOKEN: ${{ github.token }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Pick 5 -LinuxShares 4 -Content
+          exit $LASTEXITCODE
+
+  # The checks themselves, as the gate's shares run theirs (the job "gate"
+  # says why each step is there).
+  queue-checks:
+    name: Queued merge's content checks (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: [queue-content, queue-pick]
+    if: ${{ needs['queue-pick'].outputs.shares != '[]' }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs['queue-pick'].outputs.shares) }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch the queued merge's build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-queued
+          path: ${{ runner.temp }}/content-queued
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs['queue-content'].outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-queued') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Put .NET and NuGet's packages on the work drive
+        shell: pwsh
+        run: |
+          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
+          "NUGET_PACKAGES=$env:RUNNER_TEMP\nuget" >> $env:GITHUB_ENV
+      - name: Take the .NET SDK from main's cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\dotnet
+          key: dotnet-${{ runner.os }}-sdk
+          restore-keys: dotnet-${{ runner.os }}-sdk
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run the content checks
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs['queue-pick'].outputs.plan }}
+        run: |
+          .\scripts\dev\Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Throttle 6 -BudgetSeconds 600
+          exit $LASTEXITCODE
+
+  queue-checks-linux:
+    name: Queued merge's content checks on Linux (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: [queue-content, queue-pick]
+    if: ${{ needs['queue-pick'].outputs.linux_shares != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs['queue-pick'].outputs.linux_shares) }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Fetch the queued merge's build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: content-queued
+          path: ${{ runner.temp }}/content-queued
+      - name: Lay the build
+        shell: pwsh
+        env:
+          CONTENT_KEY: ${{ needs['queue-content'].outputs.key }}
+        run: |
+          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-queued') -BuildKey $env:CONTENT_KEY
+          exit $LASTEXITCODE
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run the content checks
+        shell: pwsh
+        env:
+          SHARD: ${{ matrix.shard }}
+          OF: ${{ strategy.job-total }}
+          GATE_PLAN: ${{ needs['queue-pick'].outputs.plan }}
+        run: |
+          ./scripts/dev/Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Platform Linux -Throttle 6 -BudgetSeconds 600
+          exit $LASTEXITCODE
 
   # THE TREE CHECKS (#5292). Every check of the whole tree that needs
   # nothing from Windows, on GitHub's ubuntu-latest, which starts sooner than
@@ -1051,245 +1291,6 @@ jobs:
       # public, where GitHub bills no Actions storage, and gate-map.yml has
       # kept its map as an artifact here since.
 
-  # THE QUEUED MERGE'S OWN CONTENT BUILD (#6879, Patrick's A, 26 Nov 2026).
-  # A pull request whose content inputs are not the newest kept build's
-  # leaves out the content checks that read an input it changed (the job
-  # "pick", Run-Gate.ps1 -Content), since only the old build is there to run
-  # them over. Before #6879 they ran only in the merge release, after the
-  # merge was on main, so a red one held every release behind it: #7164's
-  # test-3182 and the three of #6879 (25 Nov) went in that way, and Dev had
-  # no release from 11:36 PM on 24 Nov until they were fixed. In the merge
-  # queue (build-pr.yml's merge_group run) these jobs ask the box to build
-  # the queued merge, wait for that build, and run every check a new build
-  # can affect over it, in shares as the merge release does; a red one is a
-  # red "Build check result", and the queue drops the pull request before
-  # it lands. A merge whose inputs are the newest kept build's needs none of
-  # this: its checks already ran over that build, in the merge release that
-  # kept it. Nothing here runs on main or on a pull request's own run.
-  #
-  # THE BUILD. Get-ContentBuild.ps1 -Queued takes main's draft of these
-  # inputs when there is one (an earlier merge in the queue may share them),
-  # or the box's build of the queued merge, content-queue-dev-<key>, and
-  # otherwise asks for that by a Deployment to Content carrying the commit
-  # as queued. The box builds it as its limited account, from the queue's
-  # own branch only (docs/DEPLOY-AGENT.md, "A merge the queue holds"). A
-  # draft is listed only to a token that writes Contents, and the ask is a
-  # Deployment, so this job has both; it runs only for a merge already in
-  # the queue, whose workflow is its own merge's either way.
-  # HOW LONG (measured 27 Nov 2026, the Deployments to Content from 05:01 to
-  # 06:15 UTC): a new build took 7 minutes on the box (6.9 to 7.2, once 11
-  # behind another), a kept one 10 seconds, and the merge release's content
-  # checks 4 to 6 minutes from their pick to their last share (runs
-  # 45950582517 and 45950713259). Main's ruleset drops a merge group whose
-  # required checks have no answer within 30 minutes
-  # (records\github-repo-settings.json, check_response_timeout_minutes), so
-  # the wait is at most 18 minutes and each share's harnesses 10.
-  queue-content:
-    name: Build the queued merge's content
-    if: ${{ github.event_name == 'merge_group' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 22
-    permissions:
-      actions: read
-      contents: write
-      deployments: write
-    outputs:
-      needed: ${{ steps.content.outputs.same == 'no' && 'yes' || 'no' }}
-      key: ${{ steps.content.outputs.key }}
-    steps:
-      - name: Check out the code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Lay the newest content build
-        id: content
-        uses: ./.github/actions/lay-content
-      - name: Ask the box for this merge's build, and wait for it
-        if: ${{ steps.content.outputs.same == 'no' }}
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Queued -Ask -WaitMinutes 18 -Take -Keep (Join-Path $env:RUNNER_TEMP 'content-queued')
-          exit $LASTEXITCODE
-      - name: Hand the build to the content checks
-        if: ${{ steps.content.outputs.same == 'no' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
-        with:
-          name: content-queued
-          path: |
-            ${{ runner.temp }}/content-queued/content.zip
-            ${{ runner.temp }}/content-queued/content-build.json
-          if-no-files-found: error
-          # Read by this run's content checks, minutes later, and by nothing
-          # after it.
-          retention-days: 1
-
-  # Every gate harness a new content build can affect, as main's nightly map
-  # says, picked over the queued merge's build and split as the gate is
-  # (merge-release.yml's checks-pick, which says why).
-  queue-pick:
-    name: Pick the queued merge's content checks
-    needs: queue-content
-    if: ${{ needs['queue-content'].outputs.needed == 'yes' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: read
-    outputs:
-      plan: ${{ steps.pick.outputs.plan }}
-      shares: ${{ steps.pick.outputs.shares }}
-      linux_shares: ${{ steps.pick.outputs.linux_shares }}
-    steps:
-      - name: Check out the code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Fetch the queued merge's build
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: content-queued
-          path: ${{ runner.temp }}/content-queued
-      - name: Lay the build
-        shell: pwsh
-        env:
-          CONTENT_KEY: ${{ needs['queue-content'].outputs.key }}
-        run: |
-          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-queued') -BuildKey $env:CONTENT_KEY
-          exit $LASTEXITCODE
-      - name: Set up Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-      - name: Pick and split the content checks
-        id: pick
-        shell: pwsh
-        env:
-          GATE_MAP_TOKEN: ${{ github.token }}
-        run: |
-          ./scripts/dev/Run-Gate.ps1 -Pick 5 -LinuxShares 4 -Content
-          exit $LASTEXITCODE
-
-  # The checks themselves, as the gate's shares run theirs (the job "gate"
-  # says why each step is there).
-  queue-checks:
-    name: Queued merge's content checks (${{ matrix.shard }} of ${{ strategy.job-total }})
-    needs: [queue-content, queue-pick]
-    if: ${{ needs['queue-pick'].outputs.shares != '[]' }}
-    runs-on: windows-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(needs['queue-pick'].outputs.shares) }}
-    steps:
-      - name: Check out the code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-      - name: Fetch the queued merge's build
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: content-queued
-          path: ${{ runner.temp }}/content-queued
-      - name: Lay the build
-        shell: pwsh
-        env:
-          CONTENT_KEY: ${{ needs['queue-content'].outputs.key }}
-        run: |
-          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-queued') -BuildKey $env:CONTENT_KEY
-          exit $LASTEXITCODE
-      - name: Set up Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.12'
-      - name: Put .NET and NuGet's packages on the work drive
-        shell: pwsh
-        run: |
-          "DOTNET_INSTALL_DIR=$env:RUNNER_TEMP\dotnet" >> $env:GITHUB_ENV
-          "NUGET_PACKAGES=$env:RUNNER_TEMP\nuget" >> $env:GITHUB_ENV
-      - name: Take the .NET SDK from main's cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}\dotnet
-          key: dotnet-${{ runner.os }}-sdk
-          restore-keys: dotnet-${{ runner.os }}-sdk
-      - name: Set up .NET
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: '10.0.x'
-      - name: Run the content checks
-        shell: pwsh
-        env:
-          SHARD: ${{ matrix.shard }}
-          OF: ${{ strategy.job-total }}
-          GATE_PLAN: ${{ needs['queue-pick'].outputs.plan }}
-        run: |
-          .\scripts\dev\Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Throttle 6 -BudgetSeconds 600
-          exit $LASTEXITCODE
-
-  queue-checks-linux:
-    name: Queued merge's content checks on Linux (${{ matrix.shard }} of ${{ strategy.job-total }})
-    needs: [queue-content, queue-pick]
-    if: ${{ needs['queue-pick'].outputs.linux_shares != '[]' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(needs['queue-pick'].outputs.linux_shares) }}
-    steps:
-      - name: Check out the code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-      - name: Fetch the queued merge's build
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: content-queued
-          path: ${{ runner.temp }}/content-queued
-      - name: Lay the build
-        shell: pwsh
-        env:
-          CONTENT_KEY: ${{ needs['queue-content'].outputs.key }}
-        run: |
-          ./scripts/release/Get-ContentBuild.ps1 -Server dev -Newest -ArtifactDir (Join-Path $env:RUNNER_TEMP 'content-queued') -BuildKey $env:CONTENT_KEY
-          exit $LASTEXITCODE
-      - name: Set up Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.12'
-      - name: Set up .NET
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: '10.0.x'
-      - name: Run the content checks
-        shell: pwsh
-        env:
-          SHARD: ${{ matrix.shard }}
-          OF: ${{ strategy.job-total }}
-          GATE_PLAN: ${{ needs['queue-pick'].outputs.plan }}
-        run: |
-          ./scripts/dev/Run-Gate.ps1 -Shard $env:SHARD -Of $env:OF -Platform Linux -Throttle 6 -BudgetSeconds 600
-          exit $LASTEXITCODE
-
   # One of the three checks main's ruleset requires (#3683): passes only
   # when the build and every share of the gate above succeeded. Written by
   # Build-PrWorkflow.js, which says why.
@@ -1313,7 +1314,7 @@ jobs:
           LINUX_SHARES: ${{ needs.pick.outputs.linux_shares }}
           EVENT: ${{ github.event_name }}
           QUEUE: ${{ needs['queue-content'].result }}
-          QUEUE_NEEDED: ${{ needs['queue-content'].outputs.needed }}
+          QUEUE_NEEDED: ${{ needs.pick.outputs.content_same == 'no' && 'yes' || 'no' }}
           QUEUE_PICK: ${{ needs['queue-pick'].result }}
           QUEUE_CHECKS: ${{ needs['queue-checks'].result }}
           QUEUE_CHECKS_LINUX: ${{ needs['queue-checks-linux'].result }}
@@ -1337,15 +1338,13 @@ jobs:
           if [ "$GATE_LINUX" != success ]; then
             if [ "$GATE_LINUX" = skipped ] && [ "$PICK" = success ] && [ "$LINUX_SHARES" = "[]" ]; then echo "The gate on Linux was skipped: the change reaches no harness that runs there (#5293)"; else ok=0; fi
           fi
-          if [ "$EVENT" = merge_group ]; then
-            echo "The queued merge's content build: $QUEUE (needed: $QUEUE_NEEDED)"
+          if [ "$EVENT" = merge_group ] && [ "$QUEUE_NEEDED" = yes ]; then
+            echo "The queued merge's content build: $QUEUE"
             [ "$QUEUE" = success ] || ok=0
-            if [ "$QUEUE_NEEDED" = yes ]; then
-              echo "Its content checks: pick $QUEUE_PICK, Windows $QUEUE_CHECKS (shares: $QUEUE_SHARES), Linux $QUEUE_CHECKS_LINUX (shares: $QUEUE_LINUX_SHARES)"
-              [ "$QUEUE_PICK" = success ] || ok=0
-              if [ "$QUEUE_CHECKS" != success ] && ! { [ "$QUEUE_CHECKS" = skipped ] && [ "$QUEUE_PICK" = success ] && [ "$QUEUE_SHARES" = "[]" ]; }; then ok=0; fi
-              if [ "$QUEUE_CHECKS_LINUX" != success ] && ! { [ "$QUEUE_CHECKS_LINUX" = skipped ] && [ "$QUEUE_PICK" = success ] && [ "$QUEUE_LINUX_SHARES" = "[]" ]; }; then ok=0; fi
-            fi
+            echo "Its content checks: pick $QUEUE_PICK, Windows $QUEUE_CHECKS (shares: $QUEUE_SHARES), Linux $QUEUE_CHECKS_LINUX (shares: $QUEUE_LINUX_SHARES)"
+            [ "$QUEUE_PICK" = success ] || ok=0
+            if [ "$QUEUE_CHECKS" != success ] && ! { [ "$QUEUE_CHECKS" = skipped ] && [ "$QUEUE_PICK" = success ] && [ "$QUEUE_SHARES" = "[]" ]; }; then ok=0; fi
+            if [ "$QUEUE_CHECKS_LINUX" != success ] && ! { [ "$QUEUE_CHECKS_LINUX" = skipped ] && [ "$QUEUE_PICK" = success ] && [ "$QUEUE_LINUX_SHARES" = "[]" ]; }; then ok=0; fi
           elif [ "$QUEUE" != skipped ]; then ok=0; fi
           if [ "$ok" = 1 ]; then exit 0; fi
           echo "::error::the pick, the tree checks, the bot harnesses, the launcher build, a share of the gate or the queued merge's content checks did not pass, so this pull request may not merge"

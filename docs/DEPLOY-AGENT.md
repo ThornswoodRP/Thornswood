@@ -504,10 +504,14 @@ Once the merge release finds the build, it runs the **content checks** over
 it before anything carries it (#5191, stage 4): every gate harness main's
 nightly map says a new build can affect (`Run-Gate.ps1 -Pick -Content`), in
 shares on Windows and Linux. A red one stops the release, and the build is
-kept as the artifact `content-dev` only after they pass. Every other run of
-the harnesses (a pull request's gate, the nightly, the named harnesses, the
-gate map's trace, the load test, a developer's clone) lays that artifact
-over its checkout first (`Get-ContentBuild.ps1 -Newest`). A workflow lays it
+kept as the artifact `content-dev` only after they pass. Each build it
+takes is also kept as `content-dev-<key>` as soon as it is taken (#6879).
+Every other run of the harnesses (a pull request's gate, the nightly, the
+named harnesses, the gate map's trace, the load test, a developer's clone)
+lays the build of its own content inputs when main has one, and
+`content-dev` otherwise, over its checkout first (`Get-ContentBuild.ps1
+-Newest`), so a red release does not leave every pull request on an older
+build than main's. A workflow lays it
 with `.github/actions/lay-content`, where GitHub's own download step takes
 it, never with the script's own download (#6359). A pull request
 whose content inputs are not that build's leaves out the content checks that
@@ -547,8 +551,8 @@ one drops it from the queue.
   file is the administrator's build of the same key (MATCHES or DIFFERS):
   how the limited run is measured on the box.
 - On GitHub the ask is the merge queue's own (build-pr.yml's merge_group
-  run, the jobs build.yml calls the queued merge's). When the merge's
-  content inputs are not the newest kept build's, `Get-ContentBuild.ps1
+  run, the jobs build.yml calls the queued merge's). When main has no build
+  of the merge's content inputs, `Get-ContentBuild.ps1
   -Queued -Ask -WaitMinutes 18 -Take` takes main's draft of these inputs or
   the queue's, asks for the queue's when neither is up and no ask for the
   key is open, and waits for it. A failed or errored ask stops it at once,
