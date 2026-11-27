@@ -330,6 +330,7 @@ sys.path.insert(0, os.path.join(ROOT, 'scripts', 'dev'))
 import bsa  # noqa: E402  (the repository's archive reader)
 import gamemode_tables  # noqa: E402  (where a table the gamemode reads is written, #5191)
 import riftweald  # noqa: E402 (the exact retired TG07 door and bar contract)
+import authored_doors  # noqa: E402 (default locks across the recorded load order)
 import claimable_doors  # noqa: E402 (four individually reviewed XLOC-only overrides)
 sys.path.insert(0, HERE)
 import last_recipe  # noqa: E402  (the recipe each machine builds this plugin from, #2791)
@@ -1595,7 +1596,11 @@ def build(data_dir):
         gates.append(e)
     riftweald_copies = riftweald.entries(plugins, win, policy, subrecords, vmad_parse)
     riftweald_entries = [e for e, _ in riftweald_copies]
-    claimable_entries = claimable_doors.entries(plugins, win, policy, subrecords, vmad_parse)
+    defaults = policy.get('authoredDoorDefaults')
+    claimable_entries = [] if defaults else claimable_doors.entries(plugins, win, policy, subrecords, vmad_parse)
+    authored_entries = authored_doors.entries(
+        plugins, win, defaults, subrecords,
+        handled={plugins[e.pi].gid(e.fid) for e in gates + riftweald_entries}) if defaults else []
 
     # Nothing is copied out of a plugin the policy says is never handed on
     # (notCopiedFrom: Patrick, 17 Oct 2026, Immersive Armors is used as-is
@@ -1816,7 +1821,7 @@ def build(data_dir):
         actors.remove(e)
         refs['disabled'].remove(actor_ref[(e.pi, e.fid)])
         refs['heldByServer'].append(actor_ref[(e.pi, e.fid)])
-    for e in actors + gates + riftweald_entries + claimable_entries:
+    for e in actors + gates + riftweald_entries + claimable_entries + authored_entries:
         stand(e)
     # The cells only the floor items need: what this adds to the records the
     # plugin copies from other authors (#2791), counted by who wins each.
@@ -1868,7 +1873,7 @@ def build(data_dir):
     # (Build-Recost.py lists those under notCopied instead).
     held = sorted('%s %s (won by %s)%s' % (e.tag.decode(), desc_of(plugins[e.pi].gid(e.fid), canon),
                                            plugins[e.pi].name, placed(e))
-                  for e in actors + gates + riftweald_entries + claimable_entries + qentries + [e for e, _ in qprops] +
+                  for e in actors + gates + riftweald_entries + claimable_entries + authored_entries + qentries + [e for e, _ in qprops] +
                   [e for e, _, _ in hold_locs]
                   if plugins[e.pi].name.lower() in blocked)
     for e, row in recipes:
@@ -1928,6 +1933,11 @@ def build(data_dir):
             src = plugins[e.pi]
             pairs = claimable_doors.copy_pairs(src, subrecords(src.data(e)), rn)
             out['refr'].append((rn.one(src, e.fid, 'claimable door'), e.flags & ~COMPRESSED,
+                                pack_subrecords(pairs), e))
+        for e in authored_entries:
+            src = plugins[e.pi]
+            pairs = authored_doors.copy_pairs(src, subrecords(src.data(e)), rn)
+            out['refr'].append((rn.one(src, e.fid, 'authored door default'), e.flags & ~COMPRESSED,
                                 pack_subrecords(pairs), e))
         for e in actors:
             src = plugins[e.pi]
@@ -2087,7 +2097,8 @@ def build(data_dir):
         'refs': {k: sorted(v, key=ref_key) for k, v in refs.items()},
         'gatesUnlocked': [desc_of(g, canon) for g in GATES],
         'riftwealdUnlocked': list(riftweald.policy_refs(policy)),
-        'claimableDoorsUnlocked': list(claimable_doors.policy_refs(policy)),
+        'claimableDoorsUnlocked': [desc_of(plugins[e.pi].gid(e.fid), canon) for e in claimable_entries],
+        'authoredDoorsUnlocked': [desc_of(plugins[e.pi].gid(e.fid), canon) for e in authored_entries],
         'quests': {'stopped': quests_cut, 'kept': quests_kept, 'modStopped': mod_stopped},
         # The mod quests whose script properties are set here (#3101), each
         # with the plugin whose record it is a copy of.
@@ -2687,8 +2698,18 @@ def verify(data_dir, plugin_bytes, manifest):
     rn = Renumber(); rn.masters = [name.lower() for name in last.masters]
     fails.extend(riftweald.verify(plugins, source_win, win, last, manifest, policy,
                                  subrecords, vmad_parse, rn))
-    fails.extend(claimable_doors.verify(plugins, source_win, win, last, manifest, policy,
-                                       subrecords, vmad_parse, rn))
+    defaults = policy.get('authoredDoorDefaults')
+    if defaults:
+        handled = set(GATES) | {ref_key(ref) for ref in riftweald.policy_refs(policy)}
+        authored = authored_doors.entries(plugins, source_win, defaults, subrecords, handled=handled)
+        expected = [desc_of(plugins[e.pi].gid(e.fid), canon) for e in authored]
+        if expected != manifest.get('authoredDoorsUnlocked'):
+            fails.append('authored door list differs from the winning source records')
+        fails.extend(authored_doors.verify(plugins, source_win, win, last, defaults,
+                                           subrecords, rn, handled=handled))
+    else:
+        fails.extend(claimable_doors.verify(plugins, source_win, win, last, manifest, policy,
+                                           subrecords, vmad_parse, rn))
     for row in expected_seasoned:
         actual = win.get((b'COBJ', ref_key(row['recipe'])))
         if actual is None or actual.pi != last.index:

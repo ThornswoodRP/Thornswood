@@ -244,10 +244,15 @@ def main():
     ap.add_argument('--check', action='store_true', help='say what it found, write nothing')
     args = ap.parse_args()
 
-    # Built before Thornswood-Last.esp (#5191), so that plugin is never read
-    # here, whether or not the order holds it: what it does to the doors is
-    # taken from the list it is made from, below.
-    order = [n for n in own_plugins.load_order(args.plugins) if n.lower() != LAST_PLUGIN.lower()]
+    with open(args.policy, encoding='utf-8') as fh:
+        policy = json.load(fh)
+    defaults = policy.get('authoredDoorDefaults')
+    order = own_plugins.load_order(args.plugins)
+    if defaults:
+        if not order or order[-1].lower() != LAST_PLUGIN.lower():
+            raise SystemExit('STOP. Default door locks require the freshly built Last plugin at the end of the order.')
+    else:
+        order = [n for n in order if n.lower() != LAST_PLUGIN.lower()]
     missing = [n for n in order if not os.path.isfile(own_plugins.plugin_path(args.data, n))]
     if missing:
         print('STOP. %d plugin(s) are not in %s: %s'
@@ -282,35 +287,44 @@ def main():
 
     cells, placed = out['cells'], out['doors']
 
-    # The town gates (#2484) load unlocked: Thornswood-Last.esp carries each
-    # without its lock. This step is built before that plugin (#5191), so it
-    # takes them from the list the plugin is made from, the policy's
-    # gatesUnlocked, and not from the plugin. A gate no plugin places, or one
-    # some other plugin already opens, means the list is out of date, and
-    # stops the build.
-    with open(args.policy, encoding='utf-8') as fh:
-        policy = json.load(fh)
+    # The current table uses the compiled plugin. Older policies also support
+    # reading the pre-Last load order with the individual planned overrides.
     gates = list((policy.get('gatesUnlocked') or {}).get('gates', []))
-    claimable_doors.table_apply(placed, policy)
-    if riftweald.policy_refs(policy):
-        riftweald.table_check(placed)
-        del placed[riftweald.DOOR]['lock']
-    opened = []
-    for g in gates:
-        row = placed.get(g)
-        if row is None:
-            print('STOP. no plugin places the town gate %s that %s names. Nothing was written.' % (g, args.policy))
-            return 1
-        if row.pop('lock', None) is not None:
-            opened.append(g)
-        else:
-            print('STOP. the town gate %s already has no lock; take it off gatesUnlocked in %s. Nothing was written.'
-                  % (g, args.policy))
-            return 1
+    if defaults:
+        # The compiler has already selected, written and verified the native
+        # door overrides. The table reads those same winning records.
+        manifest_path = os.path.join(os.path.dirname(args.policy), 'last-plugin.json')
+        with open(manifest_path, encoding='utf-8') as fh:
+            defaults_manifest = json.load(fh)
+        opened = gates + [riftweald.DOOR] if riftweald.policy_refs(policy) else list(gates)
+        opened += defaults_manifest['authoredDoorsUnlocked']
+        for ref in opened:
+            if ref not in placed or placed[ref].get('lock'):
+                raise SystemExit('STOP. Compiled authored door %s is absent or still locked.' % ref)
+    else:
+        claimable_doors.table_apply(placed, policy)
+        if riftweald.policy_refs(policy):
+            riftweald.table_check(placed)
+            del placed[riftweald.DOOR]['lock']
+        opened = []
+        for g in gates:
+            row = placed.get(g)
+            if row is None:
+                print('STOP. no plugin places the town gate %s that %s names. Nothing was written.' % (g, args.policy))
+                return 1
+            if row.pop('lock', None) is not None:
+                opened.append(g)
+            else:
+                print('STOP. the town gate %s already has no lock; take it off gatesUnlocked in %s. Nothing was written.'
+                      % (g, args.policy))
+                return 1
     print('')
     print('The town gates')
-    print('  %d of %d unlocked from gatesUnlocked (#2484), as Thornswood-Last.esp loads them'
-          % (len(opened), len(gates)))
+    if defaults:
+        print('  %d authored locks removed, as Thornswood-Last.esp loads them' % len(opened))
+    else:
+        print('  %d of %d unlocked from gatesUnlocked (#2484), as Thornswood-Last.esp loads them' %
+              (len(opened), len(gates)))
 
     leads = {d: r for d, r in placed.items() if r.get('to')}
     locked = {d: r for d, r in leads.items() if r.get('lock')}

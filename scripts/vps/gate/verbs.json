@@ -967,6 +967,7 @@
         "scripts/dev/Build-WoodworkingBenches.py",
         "scripts/dev/MerchantRoster.py",
         "scripts/dev/OwnPlugins.ps1",
+        "scripts/dev/authored_doors.py",
         "scripts/dev/bsa.py",
         "scripts/dev/claimable_doors.py",
         "scripts/dev/gamemode_tables.py",
