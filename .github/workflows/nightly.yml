@@ -564,7 +564,9 @@ jobs:
     # harness share stops starting harnesses inside its own budget and
     # prints the list itself.
     name: Put the night on the board
-    needs: [nightly, harnesses, harness-report, bot]
+    # Every other job, shares too (#7453): a failed shares job is a failed
+    # night in its own name, not only a skipped harnesses job.
+    needs: [nightly, shares, harnesses, harness-report, bot]
     # Main only, as "nightly" above says (#3550).
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: windows-latest
@@ -580,7 +582,7 @@ jobs:
           persist-credentials: false
 
       - name: Put a failure on the board
-        if: ${{ needs.nightly.result != 'success' || needs.harnesses.result != 'success' || needs.harness-report.result != 'success' || needs.bot.result != 'success' }}
+        if: ${{ needs.nightly.result != 'success' || needs.shares.result != 'success' || needs.harnesses.result != 'success' || needs.harness-report.result != 'success' || needs.bot.result != 'success' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -593,11 +595,11 @@ jobs:
           # pointing to it), opened when none is. Issues #905 and #1120.
           # The comment lists each failed test, its FAIL lines and the
           # command that runs it alone, from the harness report (#4178).
-          Write-Host ('checks: ${{ needs.nightly.result }}, harnesses: ${{ needs.harnesses.result }}, harness report: ${{ needs.harness-report.result }}, bot: ${{ needs.bot.result }}')
+          Write-Host ('checks: ${{ needs.nightly.result }}, shares: ${{ needs.shares.result }}, harnesses: ${{ needs.harnesses.result }}, harness report: ${{ needs.harness-report.result }}, bot: ${{ needs.bot.result }}')
           .\scripts\dev\Nightly-Issue.ps1 -Result failure
 
       - name: Close the failure when every check passed
-        if: ${{ needs.nightly.result == 'success' && needs.harnesses.result == 'success' && needs.harness-report.result == 'success' && needs.bot.result == 'success' }}
+        if: ${{ needs.nightly.result == 'success' && needs.shares.result == 'success' && needs.harnesses.result == 'success' && needs.harness-report.result == 'success' && needs.bot.result == 'success' }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
