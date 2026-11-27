@@ -195,8 +195,10 @@ Fix and the update are awaited paths (`PlayAsync`, `RunScanAsync`,
 with `Waiting.cs:105 Begin()`. Until #4582 the wait was `Waiting`, a nested
 dispatcher frame that Avalonia refuses during layout, after which the window
 thread waited plainly and froze.
-`Waiting.cs:124 Pump` takes the answer of something Avalonia only offers as a
-task, such as Windows' own folder picker, and `Waiting.cs:144 OnceOnScreen()`
+`Waiting.cs:124 Pump` runs the message loop until the install window at the
+first start has answered, before the launcher's own loop exists; nothing in the
+window's own life uses it, since a task is awaited there, Windows' own folder
+picker among them (#4582). `Waiting.cs:144 OnceOnScreen()`
 runs work once the window is first on screen and laid out. Voice runs on
 threads of its own (VoiceSession.cs, VoiceAudio.cs) and never on the window's.
 The HTTP requests of the launcher's own go through one shared client

@@ -127,10 +127,16 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// The answer of something Avalonia only offers as a task, such as
-        /// Windows' own folder picker, taken on the window's thread the way a
-        /// dialog's ShowDialog gave it: the window's messages keep moving
-        /// until the task is done, then this carries on from the next line.
+        /// The answer of the install window at the first start (Shell.Run),
+        /// before the launcher's own window and loop exist: this runs the
+        /// application's message loop until the task is done, then Run carries
+        /// on from the next line. Nothing else is running a loop then, so this
+        /// one is not nested in another. Nothing in the window's own life uses
+        /// it: there, a task is awaited (#4582). Until then Settings' Choose
+        /// Vortex's folder took Windows' folder picker with this, a loop
+        /// nested inside the button's click on the window's thread.
+        /// launcher/tests/test-4582-await-not-pump.ps1 holds Shell.Run to
+        /// being its only caller.
         /// </summary>
         static T Pump<T>(Task<T> task)
         {

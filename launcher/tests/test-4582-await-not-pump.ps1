@@ -42,6 +42,15 @@
        to date twice.
 
   Read only apart from the builds under out\harness, which git ignores.
+
+    0. Before anything is built: Pump, the one place a message loop is run
+       by hand (Waiting.cs), is called only from Shell.Run, at the first
+       start before the launcher's own loop exists, where it is the only
+       loop. Settings' Choose Vortex's folder awaits Windows' folder picker
+       instead (PickVortexFolder is an async Task, started through Begin),
+       with no empty catch left in it. Until #4582's second half it took the
+       picker through Pump, a loop nested inside the button's click. 1 also
+       reads the built IL for every call to Pump.
 #>
 [CmdletBinding()]
 param([string]$AppDir)
@@ -75,6 +84,37 @@ function Body([string]$src, [string]$start) {
     }
     return ''
 }
+
+# ---- 0. Pump only at the first start, the picker awaited (source) ---------------
+$appFiles = @(Get-ChildItem -LiteralPath $AppDir -Filter '*.cs' -File)
+$pumpCalls = @()
+$defined = 0
+foreach ($f in $appFiles) {
+    $text = [IO.File]::ReadAllText($f.FullName, [Text.Encoding]::UTF8)
+    # Shell.Pump is Shell's: only the files that are part of Shell can call
+    # it unqualified (VoiceSession has a Pump of its own, a socket reader).
+    if ($text -notmatch 'static partial class Shell\b') { continue }
+    $defined += [regex]::Matches($text, 'static T Pump<T>\(Task<T> task\)').Count
+    foreach ($m in [regex]::Matches($text, '(?<![A-Za-z0-9_.])Pump\(')) {
+        $line = $text.Substring(0, $m.Index).Split("`n").Count
+        $pumpCalls += [pscustomobject]@{ File = $f.Name; Line = $line; At = $m.Index }
+    }
+}
+Yes '0. Shell has one Pump, in Waiting.cs' ($defined -eq 1)
+$callers = $pumpCalls
+$shellSrc = [IO.File]::ReadAllText((Join-Path $AppDir 'Shell.cs'), [Text.Encoding]::UTF8)
+$runBody = Body $shellSrc 'static void Run(string[] args)'
+$runAt = $shellSrc.IndexOf('static void Run(string[] args)')
+$inRun = @($callers | Where-Object { $_.File -eq 'Shell.cs' -and $runAt -ge 0 -and $_.At -gt $runAt -and $_.At -lt ($runAt + $runBody.Length) })
+$outside = @($callers | Where-Object { $inRun -notcontains $_ })
+foreach ($c in $outside) { Write-Host ("      Pump is called in " + $c.File + ":" + $c.Line) }
+Yes ('0. Pump is called only from Shell.Run, before the launcher''s own loop (' + $outside.Count + ' calls elsewhere)') ($outside.Count -eq 0 -and $inRun.Count -ge 1)
+$ownSrc = [IO.File]::ReadAllText((Join-Path $AppDir 'ShellOwnGame.cs'), [Text.Encoding]::UTF8)
+$picker = Body $ownSrc 'static async Task PickVortexFolder()'
+Yes '0. Settings'' Choose Vortex''s folder is an awaited task (static async Task PickVortexFolder)' ($picker.Length -gt 0)
+Yes '0. it awaits Windows'' folder picker' ($picker.Contains('await win.StorageProvider.OpenFolderPickerAsync(pick)'))
+Yes '0. its button starts it through Begin, so a fault in it is said' ($ownSrc.Contains('btnOwnGamePick.Click += delegate { Begin(PickVortexFolder()); };'))
+Yes '0. and it has no empty catch' ($picker.Length -gt 0 -and $picker -notmatch 'catch\s*\{' -and $picker -notmatch 'catch\s*\([^)]*\)\s*\{\s*\}')
 
 Yes ('the .NET SDK the launcher builds with is on this machine (' + $LauncherDotnet + ')') (Test-Path -LiteralPath $LauncherDotnet)
 if (-not (Test-Path -LiteralPath $LauncherDotnet)) { Done }
@@ -129,6 +169,7 @@ namespace Thornswood4582
             const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
             int methods = 0, unread = 0, posts = 0;
             var nested = new List<string>();
+            var pumps = new List<string>();
             Type[] types;
             try { types = typeof(Scan).Assembly.GetTypes(); }
             catch (ReflectionTypeLoadException e)
@@ -179,6 +220,10 @@ namespace Thornswood4582
                                 if (callee.Name == "PushFrame") nested.Add(t.FullName + "." + m.Name);
                                 if (callee.Name == "Post" || callee.Name == "InvokeAsync") posts++;
                             }
+                            // Shell.Pump runs a message loop by hand: only the
+                            // first start may, before the launcher's own loop.
+                            if (callee != null && callee.DeclaringType != null && callee.DeclaringType.FullName == "Thornswood.Shell" && callee.Name == "Pump")
+                                pumps.Add(t.FullName + "." + m.Name);
                         }
                         i += OperandSize(op.OperandType, il, i);
                     }
@@ -188,6 +233,7 @@ namespace Thornswood4582
             Console.WriteLine("UNREADCOUNT " + unread);
             Console.WriteLine("POSTS " + posts);
             foreach (string n in nested) Console.WriteLine("NESTED " + n);
+            foreach (string p in pumps) Console.WriteLine("PUMP " + p);
             return 0;
         }
     }
@@ -215,6 +261,9 @@ if ($exe) {
     $launcher = @($nested | Where-Object { $_ -ne 'Thornswood4582.Teeth.Nested' })
     foreach ($n in $launcher) { Write-Host "      nested frame in $n" }
     Yes ('1. no method in the launcher pushes a nested frame (' + $launcher.Count + ' do)') ($launcher.Count -eq 0)
+    $pumps = @($lines | Where-Object { $_ -like 'PUMP *' } | ForEach-Object { $_.Substring(5) })
+    foreach ($p in @($pumps | Where-Object { $_ -ne 'Thornswood.Shell.Run' })) { Write-Host "      Pump runs a loop by hand in $p" }
+    Yes ('1. in the built launcher only Shell.Run calls Pump (' + $pumps.Count + ' calls)') ($pumps.Count -ge 1 -and @($pumps | Where-Object { $_ -ne 'Thornswood.Shell.Run' }).Count -eq 0)
 }
 
 # ---- 2. OffThread and Begin, lifted --------------------------------------------
