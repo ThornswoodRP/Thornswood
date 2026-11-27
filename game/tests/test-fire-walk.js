@@ -116,6 +116,7 @@ function harness(clock) {
     '\nreturn {' +
     '  spots: fireSpotsHere,' +
     '  distance: fireDistance,' +
+    '  flame: function () { return fireFlame; },' +
     '  loaded: typeof fireCellLoaded === "function" ? fireCellLoaded : function () { },' +
     '  walked: function () { return fireWalked; },' +
     '  hits: function () { return fireHits; },' +
@@ -376,6 +377,26 @@ if (walk !== null && fires !== null && reach && inside) {
     }
     yes('S10 the bases are not asked for again in later cells', asks === once && once === 2);
     yes('S10 and no cell is walked for nothing', calls.n === 0);
+  }
+
+  // S11: SEATED IS NOT IN THE COALS (#6722). A cooking spit or pot stands over
+  // its campfire, often inside FIRE_INSIDE of it, and the game puts the cook
+  // there. Seated at any furniture warms and never catches; standing in the
+  // same spot still catches.
+  {
+    const h = harness();
+    const calls = { n: 0 };
+    const camp = cell(0x6722, { 24: [ref(FXFIRE01, 40, 0, 0)] }, calls);
+    const standing = standingIn(camp);
+    h.distance(0, 0, 0, standing);
+    yes('S11 standing 40 from the fire is in the coals', h.flame() === 40);
+    const spit = { getBaseObject: function () { return { getFormID: function () { return 0x68adb; } }; } };
+    const cooking = { getParentCell: standing.getParentCell, getFurnitureReference: function () { return spit; } };
+    const r = tryIt(function () { return h.distance(0, 0, 0, cooking); });
+    yes('S11 cooking in the same spot is warmed by that fire', r.err === null && r.value === 40);
+    yes('S11 and does not catch', h.flame() === -1);
+    h.distance(0, 0, 0, standing);
+    yes('S11 standing up again in the coals catches again', h.flame() === 40);
   }
 }
 
