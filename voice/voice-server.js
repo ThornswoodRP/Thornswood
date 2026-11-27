@@ -787,14 +787,48 @@ function speakingNow(profileId, now) {
 }
 
 function captionAllow(me, now) {
-  if (typeof me.captionTokens !== 'number') { me.captionTokens = CAPTION_BURST; me.captionAt = now; }
-  const since = Math.max(0, now - me.captionAt);
-  me.captionTokens = Math.min(CAPTION_BURST, me.captionTokens + since / CAPTION_REFILL_MS);
-  me.captionAt = now;
-  if (me.captionTokens < 1) return false;
-  me.captionTokens -= 1;
+  const b = bucketFor(captionLimit, me, now);
+  if (b.tokens < 1) return false;
+  b.tokens -= 1;
   return true;
 }
+
+/*
+  THE CHAT AND CAPTION LIMITS ARE KEPT BY PROFILE, NOT BY SOCKET (#4356).
+  The buckets lived on each socket's peer record, and onJoin gave every socket
+  a full one, so a second socket for the same profile, or the same one
+  reconnecting, started again with five lines and three captions. Every join
+  is proven since #1303, so a profile id is somebody's own, and a bucket keyed
+  on it cannot be emptied by anybody else. A connection with no profile
+  (profileId 0) keeps one of its own.
+
+  A bucket is forgotten only once it has refilled to full, and a full bucket
+  is exactly what a new one is, so forgetting it gives nobody anything back:
+  a reconnect inside the window finds the one it left. The look for full ones
+  runs at most once a refill, so the map stays as small as the profiles that
+  have spoken lately.
+*/
+function limiter(burst, refillMs) {
+  return { burst: burst, refillMs: refillMs, buckets: new Map(), lookedAt: 0 };
+}
+
+function bucketFor(lim, me, now) {
+  if (now - lim.lookedAt >= lim.refillMs || now < lim.lookedAt) {
+    lim.lookedAt = now;
+    for (const [key, b] of lim.buckets) {
+      if (b.tokens + Math.max(0, now - b.at) / lim.refillMs >= lim.burst) lim.buckets.delete(key);
+    }
+  }
+  const pid = Number(me.profileId) || 0;
+  const key = pid > 0 ? pid : me;
+  let b = lim.buckets.get(key);
+  if (!b) { b = { tokens: lim.burst, at: now }; lim.buckets.set(key, b); }
+  // A clock that steps backwards refills nothing rather than locking anybody out.
+  b.tokens = Math.min(lim.burst, b.tokens + Math.max(0, now - b.at) / lim.refillMs);
+  b.at = now;
+  return b;
+}
+const captionLimit = limiter(CAPTION_BURST, CAPTION_REFILL_MS);
 
 /* The connections a caption from me goes to. */
 function captionTargets(me, reach, now) {
@@ -847,10 +881,10 @@ function relayCaption(me, raw, now) {
  * 400 character cap, so one open console could fill every screen in the
  * world faster than anybody could read it, let alone answer it.
  *
- * A TOKEN BUCKET ON THE PEER RECORD. Five lines at once, then one more every
+ * A TOKEN BUCKET FOR EACH PROFILE. Five lines at once, then one more every
  * second and a half, which is forty a minute: more than anybody types, and
- * the five cover a quick back and forth. It lives on the peer that onJoin
- * writes rather than in the broadcast, because the broadcast is the part
+ * the five cover a quick back and forth. It is asked where a line arrives
+ * rather than in the broadcast, because the broadcast is the part
  * that changes when chat goes local, and a limit written into it would go
  * with it.
  *
@@ -871,12 +905,13 @@ function relayCaption(me, raw, now) {
  * flood of its own. A dropped line is not in the chat log as said, because
  * it never reached the room; the service log says who was slowed.
  *
- * PER CONNECTION, NOT PER ACCOUNT. This was on purpose while
- * THORNSWOOD_VOICE_AUTH could be log, when the profile id on a join was
+ * BY PROFILE, NOT BY CONNECTION (#4356). It was per connection on purpose
+ * while THORNSWOOD_VOICE_AUTH could be log, when the profile id on a join was
  * whatever the message claimed and a bucket keyed on it would have let
- * anybody empty somebody else's; since #1303 every join is proven.
- * A reconnect starts with a full bucket; it costs a join and a roster to
- * everybody, so it slows a flood rather than stopping a determined one.
+ * anybody empty somebody else's. Since #1303 every join is proven, and a
+ * bucket per connection let a second socket or a reconnect start again full,
+ * so every socket of one profile now draws from one bucket (bucketFor, above
+ * captionAllow), and a reconnect finds the one it left.
  *
  * Both numbers are settable so they can be tuned on the box without a
  * release.
@@ -885,19 +920,17 @@ const CHAT_BURST = Number(process.env.THORNSWOOD_CHAT_BURST) || 5;
 const CHAT_REFILL_MS = Number(process.env.THORNSWOOD_CHAT_REFILL_MS) || 1500;
 const CHAT_SLOW = 'Slow down: lines sent this quickly are not going out. ' +
                   'Wait a few seconds, then say it again.';
+const chatLimit = limiter(CHAT_BURST, CHAT_REFILL_MS);
 
-/* Whether this peer's line may go to the room. Tells them the first time it
-   may not. A record without a bucket starts full rather than silenced, and a
-   clock that steps backwards refills nothing rather than locking anybody
-   out. */
+/* Whether this peer's line may go to the room. Tells this connection the
+   first time it may not, and again only after one of its lines has gone
+   through. The allowance is the profile's (chatLimit); the notice is the
+   connection's, so a second socket that is held is told as well. */
 function chatAllow(me, peerId, now) {
   if (!me) return true;
-  if (typeof me.chatTokens !== 'number') { me.chatTokens = CHAT_BURST; me.chatAt = now; }
-  const since = Math.max(0, now - me.chatAt);
-  me.chatTokens = Math.min(CHAT_BURST, me.chatTokens + since / CHAT_REFILL_MS);
-  me.chatAt = now;
-  if (me.chatTokens >= 1) {
-    me.chatTokens -= 1;
+  const b = bucketFor(chatLimit, me, now);
+  if (b.tokens >= 1) {
+    b.tokens -= 1;
     me.chatSlowed = false;
     return true;
   }
@@ -1722,7 +1755,7 @@ function onJoin(ws, msg, profileId) {
   // voice is false only when the join says so (#1925, over roster).
   peers.set(id, { ws, profileId, name, mode: cleanMode(msg.mode), proven: true,
                   voice: msg.voice !== false,
-                  chatTokens: CHAT_BURST, chatAt: Date.now(), chatSlowed: false });
+                  chatSlowed: false });
 
   ws.send({ t: 'welcome', peer: id, profileId: profileId });
   if (profileId && silencedLeft(profileId, Date.now())) {
