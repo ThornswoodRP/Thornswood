@@ -14,7 +14,8 @@
 //      flute and drum still ask for what they asked for.
 //   T  the recipe table, built on the box from that plugin, has the horn as
 //      a Woodwright's recipe at the woodworking bench, making the Nord War
-//      Horn (a content check: it reads game/data/recipes.json).
+//      Horn, advanced work since the horker tusk is an advanced hunter's
+//      (a content check: it reads game/data/recipes.json).
 //
 // Read only.
 'use strict';
@@ -94,10 +95,10 @@ if (check) {
 const recipes = JSON.parse(fs.readFileSync(path.join(ROOT, 'game', 'data', 'recipes.json'), 'utf8'));
 const desc = typeof v === 'number' ? (v & 0xFFFFFF).toString(16) + ':Thornswood-Content.esp' : '';
 const row = (recipes.recipes || {})[desc];
-yes('T1 the recipe table has the horn as a Woodwright\'s recipe at the woodworking bench, making the Nord War Horn',
+yes('T1 the recipe table has the horn as an advanced Woodwright\'s recipe at the woodworking bench, making the Nord War Horn',
     !!row && row.editorId === 'ThornswoodRecipeInstrumentHorn' && row.out === '200b6:Skyrim.esm' && row.makes === 1 &&
     row.benchName === 'ThornswoodCraftingWoodworking' && row.owner === 'Woodworker' && row.half === 'Woodwright' &&
-    row.book !== 'cut' &&
+    row.rank === 'advanced' && row.book !== 'cut' &&
     JSON.stringify(row.inputItems.map((x) => [x.item, x.count]).sort()) ===
       JSON.stringify([['3ad68:Skyrim.esm', 1], ['800e4:Skyrim.esm', 1]]));
 
