@@ -54502,6 +54502,24 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     if (!n) { n = fresh(); write(actorId, n); return n; }
 
     var projected = projectNeeds(n, now, arriving, projectionEnvironment(actorId));
+    /*
+      WHAT THE TIME AWAY DID, SAID ONCE AN ARRIVAL (#6590). A tester came back
+      on main with Rest still at 24 and nothing on the server could say why:
+      how long they were away, what they logged out on, and the meters before
+      and after were never written down. The logging out table (exhaustion.md)
+      gives 24 back as 24 for anybody who logged out on their feet or a seat,
+      and Rest 100 for a night in a bed that gives one. This line tells the two
+      apart.
+    */
+    if (arriving) {
+      var after = projected.needs;
+      nlog(actorId.toString(16), 'back after', Math.round(Math.max(0, now - n.at) / 60000) + 'm,',
+           'logged out on', (n.resting || 'their feet') + ':',
+           'rest', Math.round(n.rest), '->', Math.round(after.rest) + ',',
+           'hunger', Math.round(n.food), '->', Math.round(after.food) + ',',
+           'thirst', Math.round(n.drink), '->', Math.round(after.drink),
+           projected.slept ? '(a night slept)' : '(no night given)');
+    }
     if (!projected.changed) { return projected.needs; }
     write(actorId, projected.needs);
     projectionEffects(actorId, projected);
