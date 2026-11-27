@@ -188,6 +188,10 @@ $utf8    = New-Object Text.UTF8Encoding($false)
 $runTag  = [Guid]::NewGuid().ToString('N').Substring(0, 8)
 $TaskPrefix = 'Thornswood Test ' + $runTag   # every task this run makes, and only those
 foreach ($d in $box, $tasks, $far) { $null = [IO.Directory]::CreateDirectory($d) }
+# The folder goes in the finally of this try, which opens where it is made, so
+# a stop before the runs begin still removes it (#4264). The runs' own try
+# below stops what they started first.
+try {
 # Beside the scratch folder, not in it, because that is removed at the end.
 $script:transcript = Join-Path ([IO.Path]::GetTempPath()) ('ts-install-' + $runTag + '.log')
 try { Start-Transcript -LiteralPath $script:transcript -Force | Out-Null } catch { $script:transcript = '' }
@@ -1338,6 +1342,8 @@ finally {
         }
     }
     Start-Sleep -Milliseconds 500
+}
+} finally {
     Remove-Item -LiteralPath $work -Recurse -Force -EA SilentlyContinue
 }
 

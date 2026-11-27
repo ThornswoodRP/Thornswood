@@ -15,13 +15,15 @@
 //      static, parent, inside a property's handler) with its caller and its
 //      instruction, through every kind of argument and every fixed-length
 //      opcode before it;
-//   2. --read, on a loose script, an archive holding scripts, and a file that
-//      is not a script: a line each, the bad one with its error;
+//   2. --read, on a loose script, an archive holding scripts, an archive
+//      holding none, and a file that is not a script: a line each, the bad
+//      one with its error, the empty archive's saying it holds none;
 //   3. --record: a call that lands on a native up the chain is listed with
 //      the script that declares it; one that lands on Papyrus is not; one
 //      the collection cannot settle is listed apart with why; the loose copy
 //      is the one taken over an archive's; an archive no plugin loads is never
-//      taken; a placed file never read is counted and exits 1; nothing of a
+//      taken; an archive holding no script is read, named apart and no row;
+//      a placed file never read is counted and exits 1; nothing of a
 //      script's bytes is written.
 //
 // Exits 1 when any check fails. Writes only in its own temp folder.
@@ -213,11 +215,18 @@ try {
   const bad = path.join(tmp, 'mods', '2', 'Scripts', 'Broken.pex');
   fs.mkdirSync(path.dirname(bad), { recursive: true });
   fs.writeFileSync(bad, Buffer.from('garbage garbage garbage'));
+  const tex = path.join(tmp, 'mods', '3', 'TS Mod - Textures.bsa');
+  fs.mkdirSync(path.dirname(tex), { recursive: true });
+  fs.writeFileSync(tex, bsa({ 'textures\\x.dds': Buffer.from('dds'), 'meshes\\y.nif': Buffer.from('nif') }));
   const reads = path.join(tmp, 'reads.jsonl');
   const said = execFileSync('node', [TOOL, '--read', reads, loose, arch], { encoding: 'utf8' });
   execFileSync('node', [TOOL, '--read', reads, stray, bad], { encoding: 'utf8' });
-  const lines = fs.readFileSync(reads, 'utf8').trim().split('\n').map(JSON.parse);
+  const saidTex = execFileSync('node', [TOOL, '--read', reads, tex], { encoding: 'utf8' });
+  const all = fs.readFileSync(reads, 'utf8').trim().split('\n').map(JSON.parse);
+  const lines = all.filter(function (l) { return l.file !== tex; });
   yes('a line for the loose script and each script in the archive, none for its mesh', lines.length === 5 && /3 compiled script\(s\) read/.test(said));
+  const texLines = all.filter(function (l) { return l.file === tex; });
+  yes('an archive holding no script is one line saying so, and no script is counted', texLines.length === 1 && texLines[0].scripts === 0 && !texLines[0].error && /^0 compiled script\(s\) read/.test(saidTex));
   yes('  each with its sha256', lines.every(function (l) { return /^[0-9a-f]{64}$/.test(l.sha256 || ''); }));
   yes('  an archive\'s with its path inside it', lines.filter(function (l) { return l.file === arch; }).map(function (l) { return l.inner; }).sort().join(',') === 'scripts\\ts_base.pex,scripts\\ts_quest.pex');
   yes('  the file that is not a script with its error, and the run goes on', lines.some(function (l) { return l.file === bad && /not a compiled Papyrus script/.test(l.error || ''); }));
@@ -233,7 +242,8 @@ try {
       { rel: 'Data\\Scripts\\TS_Quest.pex', full: loose, fileId: 111, mod: 'TS Mod' },
       { rel: 'Data\\TS Mod.bsa', full: arch, fileId: 111, mod: 'TS Mod' },
       { rel: 'Data\\Stray.bsa', full: stray, fileId: 222, mod: 'Stray' },
-      { rel: 'Data\\Scripts\\Broken.pex', full: bad, fileId: 222, mod: 'Stray' }
+      { rel: 'Data\\Scripts\\Broken.pex', full: bad, fileId: 222, mod: 'Stray' },
+      { rel: 'Data\\TS Mod - Textures.bsa', full: tex, fileId: 444, mod: 'TS Textures' }
     ]
   };
   fs.writeFileSync(placed, JSON.stringify(doc));
@@ -261,6 +271,7 @@ try {
   yes('the counts add up', rec.counts.scripts === 5 && rec.counts.taken === 2 && rec.counts.nativeCalls === lq.natives.length + aq.natives.length + ab.natives.length + sb.natives.length);
   const text = fs.readFileSync(out, 'latin1');
   yes('nothing of a script\'s bytes is in the record', text.indexOf('someone') < 0 && text.indexOf('somewhere') < 0 && text.indexOf(quest.slice(0, 4).toString('latin1')) < 0);
+  yes('the archive holding no script is read, named apart, and no row', rec.counts.filesNotRead === 0 && rec.filesNotRead.length === 0 && rec.counts.archivesWithoutScripts === 1 && rec.archivesWithoutScripts[0] === 'Data\\TS Mod - Textures.bsa' && !rec.scripts.some(function (r) { return r.path === 'Data\\TS Mod - Textures.bsa'; }));
   yes('the record names its columns', rec.columns.natives.length === 6 && rec.columns.unsettled.length === 6);
 
   doc.files.push({ rel: 'Data\\Scripts\\Never.pex', full: path.join(tmp, 'never.pex'), fileId: 333, mod: 'Never' });

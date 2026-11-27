@@ -11,8 +11,9 @@
 // gamemode now disables the three on the server at start.
 //
 // Drives the real disableBlocksOff out of game/gamemode.js against a fake mp,
-// and reads the client source in engine/skymp for the name it reads. Read
-// only.
+// checks the front plugin no longer takes them out itself (#5052), and reads
+// the client source in engine/skymp for the name it reads and how it applies
+// it. Read only.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -72,6 +73,17 @@ if (a >= 0 && b > a) {
       bad.logs.some(function (l) { return /could not hold chopping block d6ae9/.test(l); }));
 }
 
+// ---- and nothing else takes them out (#5052) -------------------------------
+// Until the server held them and the client kept what the server held,
+// thornswood-front.js disabled the three itself and did it again every four
+// seconds. The plugin and skymp5-client.js come in one pack, so no game runs
+// the plugin with a client from before that, and the loop went.
+const FRONT = process.env.FRONT || path.join(ROOT, 'game', 'plugins', 'thornswood-front.js');
+const front = fs.readFileSync(FRONT, 'utf8');
+yes('the front plugin has no loop of its own for the blocks', front.indexOf("guard('blocksgone'") < 0 &&
+    front.indexOf('BLOCKS_GONE') < 0 && !/0xd6ae9|0xa9ee1|0xabf83/.test(front));
+yes('  and says the server holds them', front.includes('THE SERVER HOLDS THEM OFF, AND NOTHING HERE DOES.'));
+
 // ---- the client reads the name the server sends -----------------------------
 const ENGINE = process.env.ENGINE || path.join(ROOT, 'engine', 'skymp');
 const rs = path.join(ENGINE, 'skymp5-client', 'src', 'services', 'services', 'remoteServer.ts');
@@ -81,8 +93,14 @@ if (fs.existsSync(rs) && fs.existsSync(hdr)) {
   const server = fs.readFileSync(hdr, 'utf8');
   const sent = (/\.Serialize\("([A-Za-z]*[Dd]isabled)"/.exec(server) || [])[1];
   yes('the server sends the flag as isDisabled', sent === 'isDisabled');
-  yes('the client reads isDisabled when an object arrives', /applyModelIsDisabled\(refr, !!\(msg\.props\['isDisabled'\]/.test(client));
+  yes('the client reads isDisabled when an object arrives', /disabled: !!\(msg\.props\['isDisabled'\]/.test(client) &&
+      /ModelApplyUtils\.applyModelIsHarvestedAndDisabled\(refr, flags\.harvested, flags\.disabled\);/.test(client));
   yes('and in a property update', /msg\.propName === 'isDisabled'/.test(client));
+  // The fork's own skymp5-client/test-disabled-stays.js runs that decision
+  // over a stand-in with latent enable and disable (#2328): a reference the
+  // server holds disabled stays off on its second stream and after.
+  yes('the fork holds that decision to a harness of its own',
+      fs.existsSync(path.join(ENGINE, 'skymp5-client', 'test-disabled-stays.js')));
 } else {
   console.log('SKIP  the engine source is not here (git submodule update --init engine/skymp)');
 }

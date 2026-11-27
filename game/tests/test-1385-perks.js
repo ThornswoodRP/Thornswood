@@ -123,6 +123,15 @@ RECORDS[POWER] = { type: 'SPEL', fields: [{ type: 'SPIT', data: spitTyped(0, 1, 
 // A bolt that only takes health, at once.
 RECORDS[BOLT] = { type: 'SPEL', fields: [{ type: 'SPIT', data: spitTyped(30, 1, 0) },
   { type: 'EFID', data: bytes(MGEF_HURT, 0) }, { type: 'EFIT', data: efit(25, 0) }] };
+// Overcharge's first half (#4788): a stream held like Flames, a ball with an
+// area that catches everybody near, and a power that takes health.
+const FLAMES = 0x5f6, AREA = 0x5f7, BREATH = 0x5f8;
+RECORDS[FLAMES] = { type: 'SPEL', fields: [{ type: 'SPIT', data: spitTyped(14, 2, 0) },
+  { type: 'EFID', data: bytes(MGEF_HURT, 0) }, { type: 'EFIT', data: efit(8, 0) }] };
+RECORDS[AREA] = { type: 'SPEL', fields: [{ type: 'SPIT', data: spitTyped(130, 1, 0) },
+  { type: 'EFID', data: bytes(MGEF_HURT, 0) }, { type: 'EFIT', data: efit(40, 0) }] };
+RECORDS[BREATH] = { type: 'SPEL', fields: [{ type: 'SPIT', data: spitTyped(0, 1, 2) },
+  { type: 'EFID', data: bytes(MGEF_HURT, 0) }, { type: 'EFIT', data: efit(50, 0) }] };
 
 const mpFake = {
   getActorRuntimeIdentity: function(id) {
@@ -513,19 +522,94 @@ heal(WOLF);
 yes('Lethal Aim fired twice and the log says so', logged('Lethal Aim') === 2);
 
 // ------------------------------------------------------------ Overcharge --
+// The first half (#4788): every fifth cast of yours that takes health lands
+// double, every hit of it, and no hit of the four before it. It counts casts,
+// from mp.onSpellCast, never hits.
 const POT = actor(0xff000006);
+const FOX = actor(0xff002102, { pid: -1 }), ELK = actor(0xff002103, { pid: -1 });
 states.set(POT, filled(['potency']));
-for (let i = 0; i < 4; i++) { strike(POT, WOLF, 0.1, SPELL); settle(); }
-yes('four spells land as themselves', near(health(WOLF), 0.6));
-strike(POT, WOLF, 0, SPELL); settle();
-yes('a spell that took nothing does not count towards five', near(health(WOLF), 0.6));
-strike(POT, WOLF, 0.1, SPELL); settle();
-yes('the fifth deals double: 0.1 becomes 0.2', near(health(WOLF), 0.4));
-yes('and the caster is told, and the log records it', world.told.some(function (x) { return x.id === POT && x.text === 'Overcharge: that spell lands double.'; }) &&
-  logged('Overcharge') === 1);
-strike(POT, WOLF, 0.1, SPELL); settle();
-yes('the count starts again', near(health(WOLF), 0.3));
+yes('a spell takes health when one of its effects is hostile and works on Health',
+  K.takesHealth(BOLT) && K.takesHealth(BURN) && K.takesHealth(FLAMES) && K.takesHealth(AREA));
+yes('one that helps, one with no effect, a power, a weapon and nothing do not',
+  !K.takesHealth(OAK) && !K.takesHealth(LIGHT) && !K.takesHealth(SPELL) && !K.takesHealth(BREATH) &&
+  !K.takesHealth(SWORD) && !K.takesHealth(0x999));
+const firedBefore = logged('Overcharge');
+function bolt(target) { K.cast(POT, BOLT, 1); strike(POT, target, 0.1, BOLT); settle(); }
+// Five single-target spells.
+for (let i = 0; i < 4; i++) { bolt(WOLF); }
+yes('four single-target spells land as themselves', near(health(WOLF), 0.6) && K.state.spells[POT] === 4);
+bolt(WOLF);
+yes('the fifth deals double: 0.1 becomes 0.2', near(health(WOLF), 0.4) && K.state.spells[POT] === 0);
+yes('and the caster is told once, and the log records it once',
+  world.told.filter(function (x) { return x.id === POT && x.text === 'Overcharge: that spell lands double.'; }).length === 1 &&
+  logged('Overcharge') === firedBefore + 1);
+bolt(WOLF);
+yes('the count starts again, and the cast after it lands as itself', near(health(WOLF), 0.3) && K.state.spells[POT] === 1);
 heal(WOLF);
+// A concentration spell: one cast, a hit every moment it is held.
+K.state.spells[POT] = 0;
+K.cast(POT, FLAMES, 1);
+for (let i = 0; i < 12; i++) { strike(POT, WOLF, 0.01, FLAMES); settle(); }
+yes('a stream held for twelve hits is one cast: none of them doubles, and it counts once',
+  near(health(WOLF), 0.88) && K.state.spells[POT] === 1);
+heal(WOLF);
+K.cast(POT, BOLT, 1); K.cast(POT, BOLT, 1); K.cast(POT, BOLT, 1);
+K.cast(POT, FLAMES, 1);
+for (let i = 0; i < 12; i++) { strike(POT, WOLF, 0.01, FLAMES); settle(); }
+yes('when the stream is the fifth cast, every hit of it lands double for as long as it is held',
+  near(health(WOLF), 0.76) && K.state.spells[POT] === 0);
+heal(WOLF);
+K.cast(POT, BOLT, 1);
+strike(POT, WOLF, 0.1, BOLT); settle();
+strike(POT, WOLF, 0.01, FLAMES); settle();
+yes('a cast of another spell in the other hand neither doubles nor lets go of the stream',
+  near(health(WOLF), 0.88));
+heal(WOLF);
+K.cast(POT, FLAMES, 1);
+strike(POT, WOLF, 0.01, FLAMES); settle();
+yes('the next cast of the stream is a new cast, and lands as itself', near(health(WOLF), 0.99));
+heal(WOLF);
+// A spell with an area: one cast, a hit on each person it catches.
+K.state.spells[POT] = 0;
+K.cast(POT, AREA, 1);
+[WOLF, FOX, ELK].forEach(function (t) { strike(POT, t, 0.1, AREA); });
+settle();
+yes('a ball that catches three is one cast: none of them doubles, and it counts once',
+  near(health(WOLF), 0.9) && near(health(FOX), 0.9) && near(health(ELK), 0.9) && K.state.spells[POT] === 1);
+[WOLF, FOX, ELK].forEach(heal);
+K.state.spells[POT] = 4;
+K.cast(POT, AREA, 1);
+[WOLF, FOX, ELK].forEach(function (t) { strike(POT, t, 0.1, AREA); });
+settle();
+yes('when the ball is the fifth cast, everybody it catches takes double',
+  near(health(WOLF), 0.8) && near(health(FOX), 0.8) && near(health(ELK), 0.8) && K.state.spells[POT] === 0);
+[WOLF, FOX, ELK].forEach(heal);
+// What does not count, and what never doubles.
+K.state.spells[POT] = 0;
+K.cast(POT, OAK, 1); K.cast(POT, BREATH, 1);
+yes('a cast that takes no health and a power do not count', K.state.spells[POT] === 0);
+K.cast(POT, BOLT, 1);
+yes('a cast that misses counts all the same', K.state.spells[POT] === 1);
+K.state.spells[POT] = 0;
+for (let i = 0; i < 5; i++) { strike(POT, WOLF, 0.1, SPELL); settle(); }
+yes('hits of a spell with no cast before them count nothing and never double',
+  near(health(WOLF), 0.5) && K.state.spells[POT] === 0);
+heal(WOLF);
+for (let i = 0; i < 5; i++) { K.cast(NONE, BOLT, 1); strike(NONE, WOLF, 0.1, BOLT); settle(); }
+yes('somebody who does not hold Overcharge lands every spell as itself', near(health(WOLF), 0.5) && !K.state.spells[NONE]);
+heal(WOLF);
+K.state.spells[POT] = 4;
+K.cast(POT, BOLT, 1);
+states.set(POT, filled([]));
+K.state.held = {};
+K.cast(POT, BOLT, 1);
+states.set(POT, filled(['potency']));
+K.state.held = {};
+strike(POT, WOLF, 0.1, BOLT); settle();
+yes('a cast made without Overcharge lets go of the charged one before it', near(health(WOLF), 0.9));
+heal(WOLF);
+K.state.spells[POT] = 0;
+K.state.charged = {};
 
 // The other half (#2848): every fifth cast that holds, twice as long. The
 // caster's machine counts and asks (the engine fork, setCastDurationEvery);
@@ -544,7 +628,7 @@ yes('one that takes health, one held up, a power and one that lasts no time do n
   yes('four casts that hold hold their own time, and the fifth, asked for, holds twice as long', got.join(',') === '1,1,1,1,2,1');
   yes('and the caster is told, and the log records it',
     world.told.slice(before).some(function (x) { return x.id === POT && x.text === 'Overcharge: that spell holds twice as long.'; }) &&
-    logged('Overcharge') === 2);
+    logged('Overcharge') === firedBefore + 5);
   K.state.holding[POT] = 0;
   yes('a spell that takes health or is held up does not count, asked or not',
     [K.cast(POT, BURN, 2), K.cast(POT, HELD_WARD, 2), K.cast(POT, BOLT, 1)].join(',') === '1,1,1' && !K.state.holding[POT]);

@@ -111,6 +111,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [dev/GamemodeTables.ps1](dev/GamemodeTables.ps1) | Where a builder puts a table the gamemode reads (#5191). |
 | [dev/Gate-Harnesses.ps1](dev/Gate-Harnesses.ps1) | Prints the harnesses the build check runs on every pull request: every test-*.js and test-*.ps1 in tests\ and in a product's own tests folder (launcher\tests\) that tests\gate-excluded.txt does not name, one a line, in name order. |
 | [dev/Gate-Map.ps1](dev/Gate-Map.ps1) | Fetches the newest map of which gate harnesses a change can reach: the gate-map artifact of main's nightly trace on GitHub's runner (#5183, #4009). |
+| [dev/Get-AppContainerStore.ps1](dev/Get-AppContainerStore.ps1) | Says whether this process runs inside an app package's container (#5197), by the one thing that breaks the real game run there: a folder made under %LOCALAPPDATA% lands in the package's own store, under %LOCALAPPDATA%\Packages\<package>\LocalCache\Local, and not in the real folder. |
 | [dev/Harness-Files.ps1](dev/Harness-Files.ps1) | Where the test harnesses are, and the name each one goes by. Dot-sourced by Gate-Harnesses.ps1 and Nightly-Harnesses.ps1, so the gate and the nightly can never disagree about which files are harnesses. |
 | [dev/Install-Serena.ps1](dev/Install-Serena.ps1) | Installs Serena once, at the version in scripts\dev\serena-version.txt, and points Claude Code on this machine at the installed program, so a session start runs Serena straight away instead of resolving it first. |
 | [dev/Install-Thornswood.ps1](dev/Install-Thornswood.ps1) | Everything the client needs, in one run, in the order it has to happen in. |
@@ -150,7 +151,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [mods/List-GameDataOnBox.ps1](mods/List-GameDataOnBox.ps1) | The deploy gate's List-GameData verb (#5736): runs one of the repository's read-only listers of Skyrim's own data on the box, where the masters are, and prints what it found. |
 | [mods/LoadOrder.ps1](mods/LoadOrder.ps1) | The load order as the game counts it, and how to put a plugin list into the server's order. |
 | [mods/New-CollectionPluginRecord.ps1](mods/New-CollectionPluginRecord.ps1) | Writes records\collection-plugins.json, the collection's plugins with the size and sha256 of each, which the full deploys hold the plugins they send to (#2019, CollectionPlugins.ps1). |
-| [mods/OnBox.ps1](mods/OnBox.ps1) | The four script texts that run on the box (issue #2899), for Run-OnBox.ps1 and the others below: the run (Get-ThornswoodOnBoxScript), and the keeper that makes the run's folder and removes it, in three parts (its hold, keep and end scripts). |
+| [mods/OnBox.ps1](mods/OnBox.ps1) | The six script texts that run on the box (issue #2899), for Run-OnBox.ps1 and the others below: the run (Get-ThornswoodOnBoxScript) and its two limited parts, and the keeper that makes the run's folder and removes it, in three parts (its hold, keep and end scripts). |
 | [mods/PluginRuleLoops.ps1](mods/PluginRuleLoops.ps1) | The plugin rules of a collection that LOOT can never keep, because they go against an order the game itself sets. |
 | [mods/Rebuild-ContentTables.ps1](mods/Rebuild-ContentTables.ps1) | Rebuilds every table that is read out of the plugins of the load order, in the order they read each other, after a change to one of Thornswood's own plugins in game\content, and says what changed. |
 | [mods/Run-OnBox.ps1](mods/Run-OnBox.ps1) | Runs one of the repository's content tools on the VPS box, against the game plugins a game server there already holds, and brings back what the tool wrote into the repository's game\, records\ and docs\systems\ folders. |
@@ -207,6 +208,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/CollectionRecord.ps1](release/CollectionRecord.ps1) | The collection as it should be, records\collection.json, and everything that reads it (#5189). |
 | [release/CollectionRevision.ps1](release/CollectionRevision.ps1) | Which collection revision a release is built against, and the one place that number comes from (#3597). |
 | [release/Compare-NexusLayout.ps1](release/Compare-NexusLayout.ps1) | Says whether a collection revision's layout record (what Install-NexusRevision.ps1 writes) is the same as another layout record, or the same as what Vortex deployed into a game folder, file by file and plugin by plugin (#2969). |
+| [release/Copy-NexusRevision.ps1](release/Copy-NexusRevision.ps1) | Copies a published revision of one Thornswood collection on Nexus Mods into another, as that collection's next revision, and publishes it; with -New it makes the Dev collection from it (#7193). |
 | [release/Dev-News.ps1](release/Dev-News.ps1) | Which notes on the dev feed are marked DEV, worked out from main's feed, and the one place that writes those marks and the dev feed's mainVersion. |
 | [release/EngineArtifact.ps1](release/EngineArtifact.ps1) | CI's engine build of the pin, the public fork's own build of the commit (thornswood-engine-<commit>), made this machine's engine build after every file in it is held to the checkout's records. |
 | [release/EngineJobs.ps1](release/EngineJobs.ps1) | How many projects an engine build compiles at once, and whether a compile that failed ran the machine out of memory. |
@@ -246,6 +248,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [release/NexusPublished.ps1](release/NexusPublished.ps1) | The newest published revision of a Nexus collection, as Nexus says it now (#4068). |
 | [release/Note-Repeats.ps1](release/Note-Repeats.ps1) | Whether a note tells a channel something it has already been told (#3320). |
 | [release/Open-EnginePinPr.ps1](release/Open-EnginePinPr.ps1) | Opens the engine pin pull request from engine-pin/next, or brings the open one's title and body up to the branch's head commit. |
+| [release/Promote-Collection.ps1](release/Promote-Collection.ps1) | Puts the collection revision a Release runs on the main collection, from the Dev collection, when main is promoted to it (#7193). |
 | [release/Publish-CollectionRecord.ps1](release/Publish-CollectionRecord.ps1) | Makes the collection on Nexus what records\collection.json says, once a change to that record is merged (#5189). |
 | [release/Publish-FridaSources.ps1](release/Publish-FridaSources.ps1) | The source of what is inside frida-gum.lib, on one permanent Release of this repository (#3287, Patrick's answer C of 26 Oct 2026). |
 | [release/Publish-Pack.ps1](release/Publish-Pack.ps1) | Builds the optional packs listed in optional-packs.txt, sends them to the site, and adds them to version.json so every launcher offers them under Add-ons on its Diagnostics page. |
@@ -345,6 +348,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [vps/Read-Load.ps1](vps/Read-Load.ps1) | Says which service is using the box, from the record vps-load.ps1 keeps on it. |
 | [vps/Read-MiningLines.ps1](vps/Read-MiningLines.ps1) | Prints what thornswood-front.js wrote about mining in the sessions people really played. |
 | [vps/Read-Online.ps1](vps/Read-Online.ps1) | Says how many people are on each game server, live and dev, from the online.json each server announces on its resources port (3000 live, 7788 dev), the same file Restart-Server.ps1 and the launcher read. |
+| [vps/Read-RideLines.ps1](vps/Read-RideLines.ps1) | Prints what reached the box when people pressed E on a carriage or ferry driver in the games they really played. |
 | [vps/Read-ServerHolders.ps1](vps/Read-ServerHolders.ps1) | Says what has a game server's folder open right now, while the server runs, and every process of that server's task with it, so that what an install has to stop before it moves the folder aside is a measurement and not a guess. |
 | [vps/Rehearse-OnBox.ps1](vps/Rehearse-OnBox.ps1) | The monthly restore rehearsal (#5020, #5175), run on the box from the cloud through the deploy gate's Rehearse-Restore verb, with a bot loading the character (#5196) where a person used to load it on One. |
 | [vps/Remote.ps1](vps/Remote.ps1) | Runs a bit of PowerShell on the VPS, properly. |

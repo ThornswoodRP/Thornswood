@@ -525,6 +525,79 @@ try { (function () {
         (rows.slice(0, 5).map(function (r) {
           return r.k + ' ' + r.ms.toFixed(0) + 'ms/' + r.runs + ' worst ' + r.worst.toFixed(1) + 'ms';
         }).join('; ') || 'nothing ran'));
+    netLines(secs);
+  }
+
+  /*
+    WHAT EACH CONNECTION DID, one "net:" line a person a minute (#5053).
+
+    "The dev server lags, worst at the Whiterun market" was measured on 26 Nov
+    2026 from every source the box holds, and none of them showed it: the
+    server was 5 to 7% of one core with its loop p99 at 8 ms, and testers'
+    games drew the market as fast as anywhere outdoors. Nothing on the server
+    or in the games said what a connection did, so lag between the server and
+    one person could be neither shown nor ruled out. The engine's transport
+    knows (mp.getConnectionStats, fork PR #202), and this says it beside where
+    the person stood:
+
+      ping       the transport's last, average and lowest round trip
+      sent       bytes a second to this person over the minute, on the wire,
+                 resends included; resent, the part sent again
+      received   bytes a second from them
+      waiting    messages queued to send right now, and sent but not yet
+                 acknowledged; a queue that grows is the server sending
+                 faster than the link takes it
+      loss       the packets lost since they connected
+      and "held back by congestion control" when the transport is slowing
+      itself down for this link.
+
+    READ IT AS the same person in the market and elsewhere: a ping, a queue
+    or a rate that rises only in the market is the server's traffic there,
+    and one that is high everywhere is the person's link. Reads only.
+  */
+  const netWas = {};
+  function netLines(secs) {
+    let people = [];
+    try { people = mp.get(0, 'onlinePlayers') || []; } catch (e) { people = []; }
+    if (!people.length) { return; }
+    if (typeof mp.getConnectionStats !== 'function') {
+      log('net: not measured; this engine has no getConnectionStats');
+      return;
+    }
+    const seen = {};
+    const kib = function (bytes) { return (bytes / secs / 1024).toFixed(1); };
+    for (let i = 0; i < people.length; i++) {
+      const actor = people[i];
+      let user = -1, s = null;
+      try { user = mp.getUserByActor(actor); } catch (e) { user = -1; }
+      if (typeof user !== 'number' || user < 0) { continue; }
+      try { s = mp.getConnectionStats(user); } catch (e) { s = null; }
+      if (!s || typeof s !== 'object') { continue; }
+      const key = user + ':' + actor;
+      seen[key] = true;
+      const was = netWas[key];
+      netWas[key] = { sent: s.bytesSent, resent: s.bytesResent, got: s.bytesReceived };
+      let rates = 'its first minute';
+      if (was && s.bytesSent >= was.sent && s.bytesReceived >= was.got) {
+        rates = 'sent ' + kib(s.bytesSent - was.sent) + ' KiB/s, resent ' +
+                kib(Math.max(0, s.bytesResent - was.resent)) + ' KiB/s, received ' +
+                kib(s.bytesReceived - was.got) + ' KiB/s';
+      }
+      let cell, at = '?';
+      try { cell = String(mp.get(actor, 'worldOrCellDesc') || '?'); } catch (e) { cell = '?'; }
+      try {
+        const pos = mp.get(actor, 'pos');
+        if (pos && pos.length >= 2) { at = Math.round(pos[0]) + ',' + Math.round(pos[1]); }
+      } catch (e) { at = '?'; }
+      log('net: ' + (actor >>> 0).toString(16) + ' in ' + cell + ' at ' + at + ': ping ' + s.lastPingMs +
+          'ms (average ' + s.averagePingMs + ', lowest ' + s.lowestPingMs + '), ' + rates + ', ' +
+          s.messagesWaiting + ' waiting to send, ' + s.messagesToResend + ' unacknowledged, loss ' +
+          (Number(s.packetLoss || 0) * 100).toFixed(1) + '%' +
+          (s.limitedByCongestion ? ', held back by congestion control' : ''));
+    }
+    for (const k in netWas) {
+      if (Object.prototype.hasOwnProperty.call(netWas, k) && !seen[k]) { delete netWas[k]; }
+    }
   }
 
   g.__thornswoodServerBeat = { timer: setInterval(function () {
@@ -1542,7 +1615,8 @@ function creditWork(actorId, key, n) {
     the plot, the river and the hunt all call it, and anything added later
     gets the same treatment for nothing.
 
-    No catch around it (#4955). A needs block that is not loaded yet, or a
+    No catch that goes on without it (#4955); the one below only names whose
+    work it was before it goes up (#6071). A needs block that is not loaded yet, or a
     hot reload mid-tick, is the check below: the work is still counted and
     there is nothing to charge it to. Everything worked() reaches either
     catches its own engine call or is arithmetic, and notify and say catch
@@ -1559,7 +1633,9 @@ function creditWork(actorId, key, n) {
       swing before that says nothing, which is the same rule the seam and
       the chopping block already follow.
     */
-    const tiredLine = needs.worked(actorId, key);
+    let tiredLine;
+    try { tiredLine = needs.worked(actorId, key); }
+    catch (e) { throw workStepThrew('the tiredness of', actorId, key, e); }
     if (tiredLine) {
       notify(actorId, tiredLine);
       say(actorId, tiredLine);
@@ -1586,17 +1662,26 @@ function creditWork(actorId, key, n) {
     listed together is a checkbox everybody ticks once and never thinks about
     again.
   */
+  /*
+    No empty catch around it (#6071), for the reason the tiredness above has
+    none (#4955): workBonus reaches partyNear, which catches each of its own
+    engine reads, and the rest is our own lookups and arithmetic. Until 27 Nov
+    2026 a throw here was swallowed, and that piece of work paid no party
+    bonus with nothing in the log. Now it goes up to the event's guard with
+    who and what work it was.
+  */
   let extra = 0;
-  try {
-    const soc = globalThis.__thornswoodSocial;
-    if (soc && soc.workBonus) {
-      const over = soc.workBonus(actorId) - 1;
-      if (over > 0) {
-        PARTY_BANK[actorId] = (PARTY_BANK[actorId] || 0) + over * pieces;
-        while (PARTY_BANK[actorId] >= 1) { PARTY_BANK[actorId] -= 1; extra++; }
-      }
+  const soc = globalThis.__thornswoodSocial;
+  if (soc && soc.workBonus) {
+    let bonus;
+    try { bonus = soc.workBonus(actorId); }
+    catch (e) { throw workStepThrew('the party bonus of', actorId, key, e); }
+    const over = bonus - 1;
+    if (over > 0) {
+      PARTY_BANK[actorId] = (PARTY_BANK[actorId] || 0) + over * pieces;
+      while (PARTY_BANK[actorId] >= 1) { PARTY_BANK[actorId] -= 1; extra++; }
     }
-  } catch (e) { }
+  }
 
   /*
     And an apprentice's work beside their master counts 1.5 times (#4562,
@@ -1632,6 +1717,14 @@ function creditWork(actorId, key, n) {
     log('could not count', key, 'work for', actorId.toString(16) + ':', e);
     return null;
   }
+}
+
+/* A throw from a step of creditWork, named for the person and the work
+   (#6071), so the event guard's log line says whose work it was. The
+   original stack is kept in the message. */
+function workStepThrew(step, actorId, key, e) {
+  return new Error(step + ' ' + Number(actorId).toString(16) + "'s " + key +
+    ' work threw: ' + (e && e.stack ? e.stack : String(e)));
 }
 
 /* What each character is owed of the party bonus, in fractions of a piece.
@@ -3666,7 +3759,8 @@ function chopWood(actorId, refrId, fromSwing) {
   that build is told so when the block streams in, and it stays gone without
   the loop. The disabled flag is on the reference's change form, so it
   survives a restart; setting it again at every start costs one read each.
-  The plugin's loop stays for launchers from before that client.
+  The plugin's loop went with #5052: the plugin and the client come in one
+  pack, so every client running it has the fork's fix (#2328).
 */
 const BLOCKS_OFF_REFS = ['d6ae9:Skyrim.esm', 'a9ee1:Skyrim.esm', 'abf83:Skyrim.esm'];
 
@@ -6089,8 +6183,9 @@ mp.onDeath = guard('onDeath', function (actorId, killerId) {
   if (!(pid > 0)) { return; }
 
   /*
-    THE WOUNDS COME WITH YOU (#1383, death.md): the record stays as it was,
-    and only the bleed stops, in the injury and disease block's died().
+    THE TEMPLE CLEANS THE CUTS (#6616, death.md): the injury and disease
+    block's died() clears the cuts, bites and burns and keeps the breaks,
+    the crooked heals and every disease.
   */
   try {
     const hurt = globalThis.__thornswoodHurt;
@@ -9680,58 +9775,22 @@ function benchGate(actorId, baseDesc) {
 }
 
 /*
-  The handle, and which recipes want one. Argued for at the call in mp.onCraft.
+  THE CHARCOAL AND THE HANDLE ARE IN THE RECIPES (#1398, #6726).
 
-  Keyed off the family the recipe table already puts on every owned row, so this
-  list is checked against real data rather than against a memory of what Skyrim
-  contains: game\tests\test-1398-fuel.js counts the rows in each of these families and fails if
-  a family here matches nothing, because a family name that has been renamed
-  under it would turn this rule off without a word.
+  docs/systems/professions/smith.md: every forge, skyforge and smelter
+  recipe burns one charcoal of the grade its metal asks for, and a war axe,
+  a battleaxe, a warhammer and a mace take a Tool Handle as well. Until
+  #6726 the server took both after the craft, so the game's own list never
+  named them and a tester only learned of them from a line in chat.
+  Patrick's B on #6726: they are inputs on the records, so the list shows
+  them and the engine takes them like any other input, from the pack or the
+  bench's stock. scripts/dev/Build-FuelTable.js says which recipe takes
+  which (FUEL_BY_RECIPE), scripts/mods/Build-LastPlugin.py writes them into
+  every recipe it copies, and a recipe of a plugin it never copies takes
+  them in each person's game (RECIPES_SET_IN_GAME, below). The
+  Charcoal grade is Skyrim's own Charcoal, which the Charburner's kiln
+  makes.
 */
-const HANDLE_DESC = '15490:Thornswood-Content.esp';
-/*
-  CHARCOAL FOR THE FIRE, BY GRADE (#1398).
-
-  docs/systems/professions/smith.md: "Every forge and every skyforge burns one
-  charcoal. No charcoal of the grade the metal asks for, the piece is not
-  made." Then the grade table, the smelter at the same grade as its metal, and
-  the skyforge one grade poorer. Which grade each recipe asks for is
-  FUEL_BY_RECIPE below, worked out of game\data\recipes.json by
-  scripts\dev\Build-FuelTable.js, because the rows the server carries name
-  neither their bench nor their metal. The rule before this read a bench off
-  the row, no installed row carries one, and so no forge took any charcoal.
-
-  The same shape as the handle: not an ingredient on the record, which would
-  couple this to every smithing plugin, but taken here once the craft is
-  allowed.
-
-  THE GRADE THE TABLE NAMES, AND ONLY THAT GRADE. It used to burn the cheapest
-  piece in the pack, Poor Charcoal first, whatever the metal. A hotter grade
-  is not burned in place of the one asked for: the page says no charcoal of
-  that grade, no piece. Skyrim's own Charcoal is the Charcoal grade, by its
-  name, as it was always taken here.
-*/
-const CHARCOAL_GRADES = [
-  null,
-  { name: 'Poor Charcoal', descs: [ITEMS.charcoalT1] },
-  { name: 'Charcoal', descs: [ITEMS.charcoalT2, ITEMS.charcoal] },
-  { name: 'Charcoal Briquette', descs: [ITEMS.charcoalT3] },
-  { name: 'Coke', descs: [ITEMS.charcoalT4] }
-];
-
-/* Written by scripts\dev\Build-FuelTable.js out of game\data\recipes.json into its table file:
-   every recipe at a forge, a skyforge or a smelter, which prints the counts.
-   Recipe desc -> [grade 1 to 4, the metal that asks for it or nothing, the bench]. */
-const FUEL_BY_RECIPE = table('FUEL_BY_RECIPE');
-
-/** The fuel a recipe burns, { grade, metal, bench }, or null when it burns none. */
-function fuelFor(recipeDesc) {
-  if (!Object.prototype.hasOwnProperty.call(FUEL_BY_RECIPE, recipeDesc)) { return null; }
-  const f = FUEL_BY_RECIPE[recipeDesc];
-  const grade = Number(f && f[0]);
-  if (!CHARCOAL_GRADES[grade]) { return null; }
-  return { grade: grade, metal: String(f[1] || ''), bench: String(f[2] || 'forge') };
-}
 
 /** How many of one item a pack holds, every stack of it counted. */
 function packCount(actorId, itemDesc) {
@@ -9745,57 +9804,6 @@ function packCount(actorId, itemDesc) {
     if (entries[i] && entries[i].baseId === baseId) { n += Number(entries[i].count) || 0; }
   }
   return n;
-}
-
-/** The charcoal of exactly that grade in this pack, or '' when there is none. */
-function charcoalHeld(actorId, grade) {
-  const g = CHARCOAL_GRADES[grade];
-  if (!g) { return ''; }
-  for (let i = 0; i < g.descs.length; i++) {
-    if (g.descs[i] && packCount(actorId, g.descs[i]) > 0) { return g.descs[i]; }
-  }
-  return '';
-}
-
-/** What is said when the grade a piece asks for is not in the pack. */
-function fuelRefusal(fuel) {
-  const grade = CHARCOAL_GRADES[fuel.grade].name;
-  const metal = fuel.metal.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
-  let first;
-  if (fuel.bench === 'smelter') {
-    first = metal ? 'Smelting ' + metal + ' burns ' + grade : 'A smelter burns ' + grade;
-  } else {
-    const at = fuel.bench === 'skyforge' ? 'the skyforge' : 'a forge';
-    first = metal ? metal + ' at ' + at + ' burns ' + grade
-                  : (fuel.bench === 'skyforge' ? 'The skyforge' : 'A forge') + ' burns ' + grade;
-  }
-  return first + ', and you have none. A Charburner makes it from firewood at a kiln.';
-}
-
-/*
-  The four hafted families on the smith page: a war axe, a battleaxe, a
-  warhammer and a mace are a metal head on a wooden haft. Other weapons was
-  on this list too, and in the table that family is the woodcutter's axe and
-  the drum, the flute and the lute, so the instruments were asked for a
-  handle (#1398). An instrument is not a haft.
-*/
-const HAFTED_FAMILIES = ['War axes', 'Battleaxes', 'Warhammers', 'Maces'];
-
-/** True when this recipe makes something fitted to a wooden handle. */
-function wantsAHandle(row) {
-  if (!row || typeof row !== 'object') { return false; }
-  // The three tools ask for a handle in the records, so the rule must not ask
-  // for a second one. Their outputs are the ones TOOLS names.
-  const out = String(row.out || '');
-  for (const key in TOOLS) {
-    if (!Object.prototype.hasOwnProperty.call(TOOLS, key)) { continue; }
-    if (TOOLS[key].give === out) { return false; }
-  }
-  const family = String(row.family || '');
-  for (let i = 0; i < HAFTED_FAMILIES.length; i++) {
-    if (HAFTED_FAMILIES[i] === family) { return true; }
-  }
-  return false;
 }
 
 /*
@@ -10739,7 +10747,7 @@ function handRecipesHidden(actorId) {
   a craft at the new counts matches no record and arrives with no recipe id.
   recipeSetInGame names the recipe from its output, its bench and exactly the
   new counts, and onCraft treats it as that recipe from there: the same gate,
-  charcoal, handle and credit as any other. A craft at the mod's own counts,
+  tool and credit as any other. A craft at the mod's own counts,
   from a game that has not set the new ones yet, matches the record and is
   refused, so nobody pays the coins or the old counts.
 
@@ -10747,8 +10755,27 @@ function handRecipesHidden(actorId) {
 */
 // Written by scripts\dev\Build-Recost.py from game\data\recost.json into its table file.
 // The re-costed recipes of a plugin Thornswood-Last.esp never copies from (#613, #2454),
-// set in each person's game instead: each input as [item, count it had, count it asks].
+// and its forge, skyforge and smelter ones given their charcoal and handle (#6726),
+// set in each person's game instead: each input as [item, count it had, count it asks],
+// an input the record does not name after the ones it does, with 0 for what it had.
 var RECIPES_SET_IN_GAME = table('RECIPES_SET_IN_GAME');
+
+/*
+  THE CHARCOAL AND THE HANDLE IN EACH GAME TOO (#6726).
+
+  Thornswood-Last.esp writes the charcoal and the handle into every forge,
+  skyforge and smelter recipe it copies (the block at the top of this file).
+  Immersive Armors' are never copied (#2454), so Build-Recost.py puts each
+  of those in RECIPES_SET_IN_GAME as well, with the charcoal and the handle
+  as inputs on top of its counts. One its record does not name has 0 for
+  the count it had, and each person's game adds it to its own copy of the
+  record with the fork's TESModPlatform.SetCraftingInput, which SKSE's
+  ConstructibleObject has no call for. Its craft then matches no server
+  record, as a re-costed one does, and recipeSetInGame names it from its
+  output, its bench and the counts with the charcoal and handle in them. A
+  craft at the record's own counts, from a game that has not added them, is
+  refused, so nobody makes one without them.
+*/
 
 var RECIPE_COUNTS_PROPERTY = 'thornswoodRecipeCounts';
 // One stamp per load, so a deploy that changes the table hands it again.
@@ -10774,9 +10801,18 @@ function recipeCountsScript() {
     // A plugin this game does not have lists nothing, so there is nothing to set.
     '      if (!cobj) { continue; }',
     '      var inputs = v.rows[key];',
-    '      if (cobj.getNumIngredients() !== inputs.length) { continue; }',
+    // The inputs the record names come first; the ones it does not (had 0)
+    // are added after them, so a game that added them already has them all.
+    '      var named = 0;',
+    '      while (named < inputs.length && inputs[named][1] > 0) { named++; }',
+    '      var num = cobj.getNumIngredients();',
+    '      if (num !== named && num !== inputs.length) { continue; }',
+    // A client from before the fork's SetCraftingInput cannot add one, so
+    // it leaves the recipe as its record has it, and the server refuses a
+    // craft at those counts (recipeMetadataRefusal).
+    '      if (named < inputs.length && !(sp.TESModPlatform && typeof sp.TESModPlatform.setCraftingInput === "function")) { continue; }',
     '      var same = true;',
-    '      for (var i = 0; i < inputs.length && same; i++) {',
+    '      for (var i = 0; i < num && same; i++) {',
     '        var item = formOf(inputs[i][0]);',
     '        var has = cobj.getNthIngredient(i);',
     '        var count = cobj.getNthIngredientQuantity(i);',
@@ -10784,8 +10820,13 @@ function recipeCountsScript() {
     '               (count === inputs[i][1] || count === inputs[i][2]);',
     '      }',
     '      if (!same) { continue; }',
-    '      for (var n = 0; n < inputs.length; n++) {',
+    '      for (var n = 0; n < named; n++) {',
     '        if (cobj.getNthIngredientQuantity(n) !== inputs[n][2]) { cobj.setNthIngredientQuantity(inputs[n][2], n); }',
+    '      }',
+    // SetCraftingInput sets the count, so asking again changes nothing.
+    '      for (var m = named; m < inputs.length; m++) {',
+    '        var more = formOf(inputs[m][0]);',
+    '        if (more) { sp.TESModPlatform.setCraftingInput(formOf(key), more, inputs[m][2]); }',
     '      }',
     '    }',
     '  } catch (e) { }',
@@ -10922,9 +10963,10 @@ function recipeMovedInGame(craftedItemBaseId, workbenchId, inputs) {
     if (!own.call(RECIPES_MOVED_IN_GAME, desc)) { continue; }
     var row = RECIPES_MOVED_IN_GAME[desc];
     if (row.out !== outDesc || row.to !== benchKey) { continue; }
-    // A recipe whose counts are set in each game too is named by
-    // recipeSetInGame at its new counts, at this bench; its record's own
-    // counts are the ones that game refuses.
+    // A recipe whose counts are set in each game too (re-costed, or given
+    // its charcoal and handle) is named by recipeSetInGame at its new
+    // counts, at this bench; its record's own counts are the ones that game
+    // refuses.
     if (typeof RECIPES_SET_IN_GAME === 'object' && RECIPES_SET_IN_GAME && own.call(RECIPES_SET_IN_GAME, desc)) { continue; }
     var want = {};
     for (var n = 0; n < row.inputs.length; n++) {
@@ -11619,6 +11661,16 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
     log(actorId.toString(16), 'was refused', desc, '(' + (row && row.name || 'recipe') + '):', refusal);
     return false;
   }
+  // The trade's tool (#3162), asked now the way mp.onCraft asks it, so a
+  // missing tool is said before the wait and not when it is over (#6804).
+  const toolKey = row && typeof row === 'object' ? benchToolKey(row) : null;
+  const noTool = toolKey ? toolGate(actorId, toolKey) : null;
+  if (noTool) {
+    notify(actorId, noTool);
+    say(actorId, noTool);
+    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', toolFor(toolKey).name);
+    return false;
+  }
   const size = craftSize(row, workbenchId);
   mp.set(actorId, 'craftWork', { ms: CRAFT_WORK_MS[size] });
 
@@ -11632,6 +11684,47 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
 });
 
 mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {
+  /*
+    THE PIECE AN ENCHANTMENT GOES ON KEEPS ITS NAME (#4608). A piece's
+    condition is on its name, "Iron Sword (85%)", and so is a crude or
+    masterwork piece's make (the durability block), so the engine takes such a
+    piece off its named stack and says so in onCraft's seventh argument. The
+    engine gives the enchanted piece back with no name of its own, which would
+    be a free repair, so a named input was refused (inputRefusal in the
+    spoilage block) and a worn or masterwork piece could not be enchanted.
+
+    An enchantment is the craft with no recipe whose effects the engine named
+    and whose output is a piece under the runtime line (a brew's output is a
+    bottle above it). The piece is the one input of the output's own record.
+    When it came off a named stack, it is let past inputRefusal and the
+    enchanted piece is given that name (craftOutput), so its condition and its
+    make go with it, and the durability block goes on wearing it from there.
+    A plain piece is not named, so it comes back as it always did.
+  */
+  function enchantedPiece(craftedItemBaseId, recipeId, effects, inputs) {
+    var base = Number(craftedItemBaseId) || 0;
+    if (recipeId || !Array.isArray(effects) || !Array.isArray(inputs) || base <= 0 || base >= 0xff000000) {
+      return null;
+    }
+    for (var i = 0; i < inputs.length; i++) {
+      var input = inputs[i];
+      if (input && typeof input.name === 'string' && input.name &&
+          Number(input.baseId) === base && Number(input.count) === 1) {
+        return input;
+      }
+    }
+    return null;
+  }
+
+  function keepPieceName(actorId, piece) {
+    try {
+      mp.set(actorId, 'craftOutput', { name: piece.name });
+      log(actorId.toString(16), 'enchanted', piece.name, 'and it keeps that name');
+    } catch (e) {
+      log('could not keep the name', piece.name, 'on the piece', actorId.toString(16), 'enchanted:', e);
+    }
+  }
+
   /*
     TOO SICK, TOO HURT OR TOO TIRED TO MAKE ANYTHING (#1383, #1676), asked
     before anything else, brews, enchanting and tempering included. The gate
@@ -11655,7 +11748,8 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     that spent one would hand back a plain piece. See the spoilage block.
   */
   const spoilage = globalThis.__thornswoodSpoilage;
-  const namedNo = spoilage && spoilage.inputRefusal ? spoilage.inputRefusal(arguments[6]) : '';
+  const piece = enchantedPiece(craftedItemBaseId, recipeId, effects, arguments[6]);
+  const namedNo = spoilage && spoilage.inputRefusal ? spoilage.inputRefusal(arguments[6], piece) : '';
   if (namedNo) {
     notify(actorId, namedNo);
     say(actorId, namedNo);
@@ -11670,9 +11764,10 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     engine's eighth argument is what it is about to take from them. Asked
     again here, because the building may have changed hands since: a craft
     that draws on chests that are no longer theirs is refused, and nothing
-    leaves the pack or the chests. The charcoal and the handle below come
-    out of the same chests when the pack has none. An engine before fork
-    #116, or a person at a bench with no chests, gets the pack alone.
+    leaves the pack or the chests. The charcoal and the handle are inputs
+    on the record (#6726), so they come out of the same chests as any other
+    input when the pack has none. An engine before fork #116, or a person at
+    a bench with no chests, gets the pack alone.
   */
   const propForStock = globalThis.__thornswoodProperty;
   const stock = (propForStock && typeof propForStock.benchStock === 'function')
@@ -11722,7 +11817,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
       The inputs go on to the brew as a fifth argument (#3134): what this
       character has eaten is asked of every ingredient in it.
     */
-    return recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects, inputs);
+    const made = recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects, inputs);
+    if (made !== false && piece) { keepPieceName(actorId, piece); }
+    return made;
   }
 
   /*
@@ -11781,41 +11878,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
   }
 
   /*
-    THE FUEL AND THE HANDLE ARE ASKED FOR BEFORE ANYTHING IS TAKEN (#1398), so
-    a refusal for one never costs the other, and a key is never named for a
-    craft that did not happen. They are taken below, once nothing can refuse.
-  */
-  const fuel = fuelFor(desc);
-  let coal = fuel ? charcoalHeld(actorId, fuel.grade) : '';
-  let coalFrom = actorId;
-  for (let i = 0; fuel && !coal && i < stock.from.length; i++) {
-    coal = charcoalHeld(stock.from[i], fuel.grade);
-    if (coal) { coalFrom = stock.from[i]; }
-  }
-  if (fuel && !coal) {
-    const no = fuelRefusal(fuel);
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no', CHARCOAL_GRADES[fuel.grade].name);
-    return false;
-  }
-  const hafted = wantsAHandle(row);
-  let handleFrom = actorId;
-  for (let i = 0; hafted && packCount(handleFrom, HANDLE_DESC) < 1 && i < stock.from.length; i++) {
-    handleFrom = stock.from[i];
-  }
-  if (hafted && packCount(handleFrom, HANDLE_DESC) < 1) {
-    const no = 'A ' + String(row.name || 'that') + ' is fitted to a wooden handle and you ' +
-               'have none. A woodworker cuts them from firewood at a kiln.';
-    notify(actorId, no);
-    say(actorId, no);
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): no handle');
-    return false;
-  }
-  /*
-    THE TRADE'S TOOL (#3162), asked with the fuel and the handle, before
-    anything is taken, and worn below once the craft has gone through. The
-    tool is never an input: an input is taken, and a tool is held and wears.
+    THE TRADE'S TOOL (#3162), asked before anything is taken, and worn
+    below once the craft has gone through. The tool is never an input: an
+    input is taken, and a tool is held and wears.
   */
   const toolKey = benchToolKey(row);
   const noTool = toolKey ? toolGate(actorId, toolKey) : null;
@@ -11844,52 +11909,6 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     say(actorId, no);
     return false;
   }
-  /*
-    THE HANDLE, AND EVERY OTHER HAFTED THING.
-
-    Patrick, 21 September: the woodworker makes handles "that the smith needs
-    for Pickaxes, Shovels, Axes and other items that have wooden handles like
-    that". The pickaxe, the axe and the shovel ask for one in the records, which
-    is where a requirement belongs. The "other items" are the problem: there are
-    Counted rather than guessed, 21 September: 277 of the 3,439 owned rows in
-    tools
-ecipes.json are hafted, and 126 of those are rows the server is
-    actually asked about. They come out of Bethesda's five plugins and half a
-    dozen mods.
-
-    SO IT IS A RULE HERE RATHER THAN 277 OVERRIDES. Overriding another mod's
-    COBJ records couples this plugin to their versions: Immersive Weapons owns a
-    good number of these, and an override is a copy that goes stale silently the
-    day they change one. A rule keyed off the family already on every row covers
-    the same recipes, covers anything added later with no plugin edit at all,
-    and cannot go stale against a mod it has never heard of.
-
-    WHAT IT COSTS TO DO IT THIS WAY, said out loud because it is a real gap:
-    Build-RecipeTable ranks a row by what its INPUTS cost, and it reads inputs
-    out of the records. A handle required here is not in the records, so the
-    table does not know about it and the 269 rows are ranked as though the
-    handle were free. It is worth five gold and a novice woodworker's minute, so
-    the error is small, but it is an error and not a rounding.
-
-    THE FOUR FAMILIES. A haft is a shaft you hold in two hands or one, with the
-    weight at the end: war axes, battleaxes, warhammers and maces, the four the
-    smith page names. Other weapons was a fifth, and in the table it is the
-    woodcutter's axe, which names its handle in its own record, and the drum,
-    the flute and the lute, which are not hafted (#1398). Swords, greatswords
-    and daggers are a tang and a grip rather than a haft. Bows and staves are
-    wooden through and through, which is a different thing from having a
-    handle fitted to them, and a bow that wanted a handle would read as a
-    mistake to anybody holding one.
-  */
-  if (coal && !takeItem(coalFrom, coal, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the charcoal could not be taken');
-    return false;
-  }
-  if (hafted && !takeItem(handleFrom, HANDLE_DESC, 1)) {
-    log(actorId.toString(16), 'was refused', desc, '(' + row.name + '): the handle could not be taken');
-    return false;
-  }
-
   // The skill that made the piece is the rank before this craft counts (#3151).
   const margin = qualityMargin(actorId, row);
   if (answer.credit) {
@@ -23534,17 +23553,14 @@ module.exports = {
   }
 
   /*
-    THE REST OF THE JAIL RULES (#502). Patrick, 12 October: jails can be
-    claimed by the Jarl only, and the rest as written on the issue: no timer,
+    THE REST OF THE JAIL RULES (#502): no timer,
     release by that hold's guards, lockpicking allowed, the game's jail keys
     open nothing, /stuck does not move someone out of a locked cell, and
     dying in a cell wakes at a temple.
 
-    THE JARL ONLY. A jail building (JAIL_BUILDING, read out of the world with
-    the cells) is the Jarl of its hold's to claim, and nobody else's: claim()
-    refuses anybody else, the line under the crosshair offers nobody else the
-    claim, and a deed presented at its door by anybody else is paper. Read as
-    the Jarl of that jail's hold, because the office is of one hold.
+    A building containing cells is an ordinary claimable place (#7071).
+    Holding it grants no guard authority: its actual cell locks remain the
+    hold's guards' responsibility and are never overridden by a claim.
 
     THE GAME'S JAIL KEYS. Each cell door's lock names a key the game made
     (JAIL_KEY), and a key in somebody's pack opens that lock in their own
@@ -23571,12 +23587,6 @@ module.exports = {
   function jailOfBuilding(building) {
     var b = String(building || '');
     return Object.prototype.hasOwnProperty.call(JAIL_BUILDING, b) ? JAIL_BUILDING[b] : null;
-  }
-
-  /** May this person hold this building: anybody, but a jail is its hold's Jarl's alone. */
-  function mayHold(actorId, profileId, building) {
-    var jh = jailOfBuilding(building);
-    return !jh || isJarlOf(profileId, jh);
   }
 
   /** The hold whose cell door a key the game made opens, or null, by the key's descriptor. */
@@ -23949,11 +23959,6 @@ module.exports = {
     try { mine = Number(mp.get(actorId, 'profileId')) || 0; } catch (e) { mine = 0; }
     push(actorId, mine);
 
-    // The embassy is held by its office, not by a claim, so a deed presented
-    // at its door is paper (#1390, see the embassy and remnant block).
-    var accordHeld = globalThis.__thornswoodEmbassy;
-    if (accordHeld && accordHeld.holds(building)) { return; }
-
     var held = holderOf(building);
     try { mine = Number(mp.get(actorId, 'profileId')) || 0; } catch (e) { mine = 0; }
 
@@ -23989,14 +23994,7 @@ module.exports = {
       word deed.delayMinutes later, or when they are next in the world, and
       names nobody. See word to the holder.
     */
-    /*
-      A JAIL'S DEED IS PAPER IN ANY HAND BUT ITS JARL'S (#502): the jail is
-      claimed by the Jarl of its hold alone, and presenting its deed is a
-      claim like any other. The deed still opens the door it names, as a
-      deed does (mayPass).
-    */
-    if (mine && held && held.by !== mine && holdsDeed(actorId, building) &&
-        mayHold(actorId, mine, building)) {
+    if (mine && held && held.by !== mine && holdsDeed(actorId, building)) {
       var was = held.name;
       var now2 = Date.now();
       var who2 = 'somebody';
@@ -24154,14 +24152,8 @@ module.exports = {
       if (cid) { line.d.push((cid >>> 0).toString(16)); }
     } else if (building) {
       var held = holderOf(building);
-      // The embassy is held by its office, not by a claim, so its doors offer
-      // nothing to claim (#1390); claim() refuses the line if it comes anyway.
-      var accordLine = globalThis.__thornswoodEmbassy;
       if (!held) {
-        // A jail offers the claim to the Jarl of its hold alone (#502).
-        if (!(accordLine && accordLine.holds(building)) && mayHold(actorId, profileId, building)) {
-          line.x = 'claim';
-        }
+        line.x = 'claim';
       } else if ((profileId && held.by === profileId) || holdsDeed(actorId, building) ||
                  holdsMasterKey(actorId, building)) {
         line.x = held.locked ? 'unlock' : 'lock';
@@ -24271,19 +24263,6 @@ module.exports = {
     if (!building) {
       toProfile(profileId, 'Open the door of the building you mean first. That is how ' +
                            'the server knows which one it is.');
-      return true;
-    }
-    // embassy.md: the embassy doors start held, so a claim is refused (#1390).
-    var accordClaim = globalThis.__thornswoodEmbassy;
-    if (accordClaim && accordClaim.holds(building)) {
-      toProfile(profileId, accordClaim.CLAIM_REFUSED);
-      return true;
-    }
-    // A jail is the Jarl of its hold's alone (#502). See jailOfBuilding.
-    if (!mayHold(actorId, profileId, building)) {
-      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
-      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' +
-                           jailTown + ' claims it.');
       return true;
     }
     var held = holderOf(building);
@@ -31606,16 +31585,6 @@ module.exports = {
     }
     var held = holderOf(building);
     if (!held) {
-      /*
-        embassy.md: "A steward of Haafingar does not evict the Accord" (#1390).
-        A claim somebody made before the embassy held this door is still that
-        person's claim, and ending it below is still the steward's to do.
-      */
-      var accordEvict = globalThis.__thornswoodEmbassy;
-      if (accordEvict && accordEvict.holds(building)) {
-        toProfile(profileId, accordEvict.EVICT_REFUSED);
-        return true;
-      }
       toProfile(profileId, 'Nobody holds ' + nameOf(building) + '.');
       return true;
     }
@@ -31837,45 +31806,6 @@ module.exports = {
   }
 
   /*
-    THE JAIL RULE, APPLIED TO THE CLAIMS MADE BEFORE IT, ONCE (#502).
-
-    Patrick, 12 October evening: jail claims made before the jail rule end
-    once, and then the rule holds. Before #2497 anybody could claim a jail
-    building; since, only the Jarl of its hold may, and since #2551 the Jarl
-    is whoever holds that hold's Jarl role. So at the first server start with
-    the rule, every claim on a jail building whose holder is not that hold's
-    Jarl ends, each logged by building, holder and profile, and
-    steps.jailRule records that it ran, in the same save. With no such claim
-    nothing ends and the mark is still written. It runs here, after every
-    part of the register is read, because save() writes all of them, and it
-    never runs again: a claim after this is made under the rule.
-
-    The holder is read on record (__thornswoodOfficesOnRecord): at server
-    start nobody has sent a pass, and this is about a claim the server
-    already holds, not a press arriving now.
-  */
-  function endPreRuleJailClaims() {
-    if (steps.jailRule) { return 0; }
-    var ended = 0;
-    for (var b in claims) {
-      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
-      var hold = jailOfBuilding(b);
-      if (!hold) { continue; }
-      // The character that holds the hold's Jarl office (#2551), read on record.
-      if (officesOfProfile(claims[b].by, true).jarl.indexOf(hold) !== -1) { continue; }
-      plog('law: the jail rule ends', claims[b].name + '\'s claim (profile ' + claims[b].by + ') on',
-           nameOf(b) + ', made before only the Jarl of', hold, 'could hold it');
-      keepOwed(b, claims[b], Date.now());
-      delete claims[b];
-      ended++;
-    }
-    steps.jailRule = Date.now();
-    save();
-    plog('law: the jail rule was applied to the claims made before it once:', ended, 'claim(s) ended');
-    return ended;
-  }
-
-  /*
     WHAT A DELETED CHARACTER HELD, LET GO (#2351, Patrick's A of 16 October:
     "Delete-Person.ps1 writes a list, and the gamemode releases those entries
     at its next start"). Asked once, as this block loads and before
@@ -31908,6 +31838,12 @@ module.exports = {
                   they held, ends
       owing       gold or goods owed into their pack and not yet in it
                   (#4258) go
+      the word    the holders' word (#2680, wordBook): a word to them goes,
+                  sent or not, as there is nobody to tell; a word whose pick
+                  or presented deed they were among keeps its count and
+                  times for its holder, with their profile out of it and its
+                  looks cleared, since a look is not kept by whose it was and
+                  theirs is their race and sex (#4786)
 
     THE BOOKS STAY BALANCED BECAUSE NO COIN MOVES. Not a hold's ledger
     (funds), not the box, not a pack. A release only changes who a coin is
@@ -31929,7 +31865,7 @@ module.exports = {
     var mine = function (pid) { var n = Number(pid) || 0; return n > 0 && who.profile(n); };
     var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
     var c = { claims: 0, masterKeys: 0, offices: 0, posts: 0, handedBack: 0, owed: 0, lines: 0,
-              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0 };
+              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0, words: 0 };
     var reg = false, lawChanged = false, beds = false;
     var b;
     for (b in claims) {
@@ -32022,6 +31958,15 @@ module.exports = {
     for (var op in owing) {
       if (has(owing, op) && mine(op)) { c.owing += owing[op].length; delete owing[op]; reg = true; }
     }
+    var words = [];
+    for (var wi = 0; wi < wordBook.list.length; wi++) {
+      var wd = wordBook.list[wi];
+      if (mine(wd.holder)) { c.words++; reg = true; continue; }
+      var others = wd.by.filter(function (p) { return !mine(p); });
+      if (others.length !== wd.by.length) { wd.by = others; wd.looks = []; c.words++; reg = true; }
+      words.push(wd);
+    }
+    wordBook.list = words;
     var saved = true;
     if (reg && !save()) { saved = false; }
     if (lawChanged && !saveLaw()) { saved = false; }
@@ -32032,7 +31977,6 @@ module.exports = {
 
   if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('property', release); }
   rolesRead();
-  endPreRuleJailClaims();
 
   ready();
   g.__thornswoodProperty = {
@@ -32067,12 +32011,12 @@ module.exports = {
     isJarl: isJarl, isJarlOf: isJarlOf, jarlHoldsOf: jarlHoldsOf, isCourtOf: isCourtOf,
     rolesRead: rolesRead, held: function () { return JSON.parse(JSON.stringify(law.held)); },
     isSteward: isSteward, isStewardOf: isStewardOf, stewardHoldsOf: stewardHoldsOf,
-    endPreRuleJailClaims: endPreRuleJailClaims, steps: function () { return Object.assign({}, steps); },
+    steps: function () { return Object.assign({}, steps); },
     // What a deleted character held, let go at server start (#2351).
     release: release,
     isGuard: isGuard, guardHoldsOf: guardHoldsOf, jailHoldOf: jailHoldOf, cellLocked: cellLocked,
     mayPassCell: mayPassCell, lockCell: lockCell,
-    jailOfBuilding: jailOfBuilding, mayHold: mayHold, jailKeyHold: jailKeyHold, lockedJailHere: lockedJailHere,
+    jailOfBuilding: jailOfBuilding, jailKeyHold: jailKeyHold, lockedJailHere: lockedJailHere,
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
@@ -32111,16 +32055,14 @@ module.exports = {
   docs/systems/embassy.md, thalmor.md, npcs.md and cut-items.md are the
   design. Every number here is one of theirs.
 
-  THE BUILDING. "The embassy doors start held by the Ambassador's office,
-  so the line at them offers nobody a claim. A steward of Haafingar does
-  not evict the Accord." The page calls it a warehouse in Solitude
+  THE BUILDING. The embassy roll names a warehouse in Solitude
   ("The Empire wanted the province and got a warehouse. This is that
   warehouse") and names none. EMBASSY_BUILDING is the answer suggested on
   #1390, the Abandoned Warehouse: the one warehouse in Solitude that is
   not a shop and not the East Empire Company's, which the trading company
   replaces. If Patrick names another building, that one line changes. The
-  property block asks holds() for the line at the door, before a claim and
-  an eviction, and before a deed presented at the door. It is not a hold:
+  property block uses ordinary saved ownership there (#7071); the embassy
+  identity does not manufacture a claim after a reset. It is not a hold:
   nothing here makes a box, a board, a ledger or a mint, and Solitude's box
   and board stay Haafingar's.
 
@@ -32176,10 +32118,6 @@ module.exports = {
 
   var ROLL_NAME = { embassy: 'the embassy roll', remnant: 'the Thalmor remnant roll' };
 
-  var CLAIM_REFUSED = 'The embassy is held by the Ambassador\'s office under the Accord. ' +
-                      'It cannot be claimed.';
-  var EVICT_REFUSED = 'The embassy is not a house of the hold. A steward of Haafingar ' +
-                      'does not evict the Accord.';
   var NOT_ADMIN = {
     embassy: 'Only an admin writes the embassy roll.',
     remnant: 'The remnant roll is an application. Only an admin writes it.'
@@ -32319,7 +32257,7 @@ module.exports = {
 
   // ------------------------------------------------------- what is asked --
 
-  /** True when this building is the embassy. Asked by the property block. */
+  /** Exact embassy identity; identifying a place does not manufacture title. */
   function holds(building) {
     return !!building && String(building) === EMBASSY_BUILDING;
   }
@@ -32597,7 +32535,6 @@ module.exports = {
     release: release,
     holds: holds, command: command, enter: enter, setArmed: setArmed, leave: leave,
     listing: listing, rolls: function () { return reg; },
-    CLAIM_REFUSED: CLAIM_REFUSED, EVICT_REFUSED: EVICT_REFUSED,
     EMBASSY_BUILDING: EMBASSY_BUILDING, ROLL_MOST: ROLL_MOST, ARMED_MOST: ARMED_MOST
   };
   g.__thornswoodRolls = { has: has };
@@ -32956,15 +32893,39 @@ module.exports = {
   */
   var pressedBy = {};
 
+  /*
+    WHAT A PRESS FOUND IS SAID (#4581). Every press on a driver that people
+    made from 15 to 27 November reached this server as /ride e with the
+    driver's own id (Read-RideLines, the chat logs), and not one opened the
+    panel, while the server said nothing about any of them. So each press
+    says here which of the three ways it went, with what decided it: the
+    base the server read for that id when it is no driver's, where both
+    stood when he was out of reach, and the stop when his panel was sent.
+    One line a press, and a press is somebody's E.
+  */
+  function pressSaid(driverId, actorId, what) {
+    plog('E on ' + (Number(driverId) >>> 0).toString(16) + ' by ' + (Number(actorId) >>> 0).toString(16) + ': ' + what);
+  }
+
+  function placeSaid(p) {
+    return p ? p.cell + ' ' + p.pos.map(Math.round).join(',') : 'nowhere the server can read';
+  }
+
   function pressDriver(actorId, driverId) {
-    var base = '';
-    try { base = String(mp.get(driverId, 'baseDesc') || ''); } catch (e) { base = ''; }
+    var base = '', why = '';
+    try { base = String(mp.get(driverId, 'baseDesc') || ''); } catch (e) { base = ''; why = String(e && e.message || e); }
     var stop = stopByBase(base);
-    if (!stop) { return null; }
+    if (!stop) {
+      pressSaid(driverId, actorId, 'no driver, its base is ' + (base || 'unreadable' + (why ? ' (' + why + ')' : '')));
+      return null;
+    }
     var me = placeOf(actorId), them = placeOf(driverId);
     if (!me || !them || me.cell !== them.cell || apart(me.pos, them.pos) > RIDE_REACH) {
+      pressSaid(driverId, actorId, stop.driver + ' at ' + stop.key + ' is out of reach: the person at ' + placeSaid(me) +
+                ', the driver at ' + placeSaid(them) + (me && them && me.cell === them.cell ? ', ' + Math.round(apart(me.pos, them.pos)) + ' apart' : ''));
       return { stop: stop, far: true };
     }
+    pressSaid(driverId, actorId, stop.driver + ' at ' + stop.key + ', ' + Math.round(apart(me.pos, them.pos)) + ' apart: the panel is sent');
     pressedBy[actorId] = { stop: stop.key, driver: driverId, at: Date.now() };
     return { stop: stop, far: false };
   }
@@ -38702,6 +38663,14 @@ return module.exports;
       // at creation. The panel draws these as placed rather than spent, and
       // nothing takes one back out.
       placed: s.placed || {},
+      /*
+        What each class, profession, half and school places (#7168), the
+        table progression's place() reads, sent only while creating. Then a
+        class and a profession are the panel's until Confirm, so the panel adds
+        up what its own picks will place and the tree shows them before the
+        server has them. In the world every pick is already sent and in tree.
+      */
+      placing: creating && P.TUNING ? P.TUNING.placed : undefined,
       points: s.points || 0,
       perks: P.perks(s),
       /*
@@ -40777,7 +40746,10 @@ return module.exports;
                        reads it) raised by the tree's Clarity, as the client
                        raises it.
     Overcharge         Every fifth spell of yours that takes health takes as
-                       much again. And every fifth spell of yours that holds
+                       much again, counted by the cast (THE CASTS THAT TAKE
+                       HEALTH, below): every hit of that cast, on everybody
+                       it catches and for as long as it is held, is double,
+                       and no hit of the four before it is (#4788). And every fifth spell of yours that holds
                        (one you cast and let go, with an effect that lasts a
                        time and none that takes health: a ward of flesh, a
                        light, a fear) holds twice as long. A spell's effects
@@ -40990,7 +40962,8 @@ return module.exports;
       font   actor -> { until }            a Font of Magic that is running
       troll  actor -> { at, said }         Troll's Blood's second, and its fight
       ley    actor -> when Leyline Attunement last gave
-      spells actor -> how many spells of theirs have landed towards Overcharge
+      spells actor -> how many casts of theirs that take health, towards Overcharge
+      charged actor -> { spell: true } the spells whose last cast was the fifth
       holding actor -> how many casts of theirs that hold, towards Overcharge
       sb     'target:caster:spell' -> when a concentration spell last gave
       blow   actor -> { by, at }           whose blow, when this block's write killed
@@ -40998,9 +40971,10 @@ return module.exports;
   var ST = g.__thornswoodPerkState;
   if (!ST || typeof ST !== 'object') {
     ST = g.__thornswoodPerkState = { held: {}, last: {}, fight: {}, font: {}, troll: {}, ley: {},
-                                     spells: {}, holding: {}, sb: {}, blow: {} };
+                                     spells: {}, holding: {}, charged: {}, sb: {}, blow: {} };
   }
   if (!ST.holding || typeof ST.holding !== 'object') { ST.holding = {}; }
+  if (!ST.charged || typeof ST.charged !== 'object') { ST.charged = {}; }
 
   function heldOf(id, t) {
     var c = ST.held[id];
@@ -41235,6 +41209,53 @@ return module.exports;
   }
 
   /*
+    THE CASTS THAT TAKE HEALTH (Overcharge's first half, #4788). A spell (SPIT
+    type 0) with an effect that takes health, by the same test as above. It
+    counts once a cast, from mp.onSpellCast: a stream like Flames sends its
+    cast once when it starts and lands a hit every moment it is held, and a
+    spell with an area lands one hit on each person it catches, so counting
+    hits doubled those far more often than one spell in five.
+  */
+  var hurtsCache = {};
+  function takesHealth(id) {
+    if (!id) { return false; }
+    if (has(hurtsCache, id)) { return hurtsCache[id]; }
+    var r = lookup(id);
+    var spit = typeOf(r) === 'SPEL' ? fieldOf(r, 'SPIT') : null;
+    var hurts = false;
+    var fields = (spit && u32(spit, 8) === 0 && r.record.fields) || [];
+    for (var i = 0; i < fields.length && !hurts; i++) {
+      var f = fields[i];
+      if (!f || String(f.type) !== 'EFID') { continue; }
+      var data = fieldOf(lookup(globalOf(r, u32(f.data, 0))), 'DATA');
+      if (((u32(data, 0) || 0) & DETRIMENTAL) && u32(data, 0x44) === HEALTH) { hurts = true; }
+    }
+    hurtsCache[id] = hurts;
+    return hurts;
+  }
+
+  /*
+    A cast that takes health. Each one is a new cast of that spell, so what
+    the last one of it was is let go first, whoever casts it. Then, for
+    somebody who holds Overcharge, it counts, and the fifth is charged: every
+    hit of that spell by them lands double until they cast it again.
+  */
+  function castHurts(by, id) {
+    if (ST.charged[by]) { delete ST.charged[by][id]; }
+    if (!heldOf(by, now()).overcharge) { return; }
+    var n = (ST.spells[by] || 0) + 1;
+    if (n >= PERKS.overcharge.inEvery) {
+      n = 0;
+      if (!ST.charged[by]) { ST.charged[by] = {}; }
+      ST.charged[by][id] = true;
+      fired(by, 'overcharge', '(' + hex(id) + ' lands double)');
+      tell(by, 'Overcharge: that spell lands double.');
+    }
+    ST.spells[by] = n;
+  }
+  function charged(by, id) { return !!(ST.charged[by] && ST.charged[by][id]); }
+
+  /*
     A cast, from mp.onSpellCast, before the engine sends it to anybody near.
     asked is how many times its usual time the caster's own machine gave its
     effects; the answer is what everybody else's machine gives them. Every
@@ -41249,7 +41270,9 @@ return module.exports;
   function cast(casterId, spellId, asked) {
     var by = Number(casterId) || 0;
     var id = Number(spellId) || 0;
-    if (!by || !id || !personOf(by) || !heldOf(by, now()).overcharge || !holdsLonger(id)) { return 1; }
+    if (!by || !id || !personOf(by)) { return 1; }
+    if (takesHealth(id)) { castHurts(by, id); return 1; }
+    if (!heldOf(by, now()).overcharge || !holdsLonger(id)) { return 1; }
     var longer = PERKS.overcharge.longer;
     var n = (ST.holding[by] || 0) + 1;
     if (n >= PERKS.overcharge.inEvery) {
@@ -41370,7 +41393,7 @@ return module.exports;
     var mine = heldOf(by, t);
     var e = { before: -1, after: null, by: by, identity: identity, more: 0, overcharge: false, aim: false };
     if (kind === 'melee' && power && !bash && mine.devastatingblow) { e.more = PERKS.devastatingblow.more; }
-    if (kind === 'spell' && mine.overcharge) { e.overcharge = true; }
+    if (kind === 'spell' && mine.overcharge && charged(by, idOfForm(source))) { e.overcharge = true; }
     if (kind === 'bow' && mine.lethalaim) { e.aim = true; }
     if (!e.more && !e.overcharge && !e.aim) { return; }
     e.target = targetLife(target);
@@ -41458,15 +41481,8 @@ return module.exports;
           }
         }
         if (e.overcharge) {
-          var n = (ST.spells[e.by] || 0) + 1;
-          if (n >= PERKS.overcharge.inEvery) {
-            n = 0;
-            change -= took * PERKS.overcharge.more;
-            killer = e;
-            fired(e.by, 'overcharge');
-            tell(e.by, 'Overcharge: that spell lands double.');
-          }
-          ST.spells[e.by] = n;
+          change -= took * PERKS.overcharge.more;
+          killer = e;
         }
       }
       if (h > 0 && change !== 0) { setHealth(target, h, change, killer); }
@@ -41718,7 +41734,7 @@ return module.exports;
     PERKS: PERKS, ORDER: ORDER, PROPERTY: PERK_PROPERTY, CRIT_LINE: CRIT_LINE, FIGHT_MS: FIGHT_MS,
     holds: holds, cheatDeath: cheatDeath, hit: hit, flush: flush, killerOf: killerOf, tick: tick,
     use: use, clocks: clocks, spendLine: spendLine, effects: effects, armourOf: armourOf,
-    lethalExtra: lethalExtra, readyAt: readyAt, fired: fired, cast: cast, holdsLonger: holdsLonger, state: ST
+    lethalExtra: lethalExtra, readyAt: readyAt, fired: fired, cast: cast, holdsLonger: holdsLonger, takesHealth: takesHealth, state: ST
   };
   console.log('[thornswood perks] ready: ' + ORDER.length + ' perks');
 })();
@@ -42696,10 +42712,15 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
   if (college && college.hit) {
     try { college.hit(targetId, aggressor, source); } catch (e) { log('college: the hit threw:', e); }
   }
+  // The maneuvers (#1386), on their own like the three above: before #4789
+  // this was the one call left bare, so a throw here took the two injury
+  // calls below with it, and the guard logged the whole hit as failed.
   var mv = globalThis.__thornswoodManeuvers;
-  if (mv && mv.hit) { mv.hit(targetId, aggressor, source, power, blocked); }
+  if (mv && mv.hit) {
+    try { mv.hit(targetId, aggressor, source, power, blocked); } catch (e) { log('maneuvers: the hit threw:', e); }
+  }
   // A healing spell landing on somebody's wounds (#1383), in the injury and
-  // disease block. On its own, so the two above cannot stop it.
+  // disease block. On its own, so none of the calls above can stop it.
   var hurt = globalThis.__thornswoodHurt;
   if (hurt && hurt.hit) {
     try { hurt.hit(targetId, aggressor, source); } catch (e) { log('injury: the hit threw:', e); }
@@ -46035,7 +46056,7 @@ function thornswoodBooks(env) {
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
@@ -46256,8 +46277,8 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
   /ooc, with /roll (#1639), and /needs, the needs bars as a line of text
   for somebody who hid them (Patrick, 11 October, #2267). Everything else
   anybody does is a key, a prompt or a panel, and the help panel names
-  those. /me, /do, /w, /s and /y are said by the voice service and never
-  reach this server, so they are named here and are not in WORDS. /need is
+  those. /me, /do, /w, /s, /y and /ooc are said by the voice service and
+  never reach this server (#4238), so they are named here and are not in WORDS. /need is
   /needs and is not named twice. docs/systems/commands.md has the same list.
 */
 // Not /plot, /plant or /claim: a farm is worked and claimed at the plot, and
@@ -46331,9 +46352,10 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   }
 
   /** A line in the chat, to one person. */
-  // How far out of character talk carries. About the length of a longhouse,
-  // which is roughly the group a scene has in it.
-  var OOC_RANGE = 4000;
+  // How far a /roll carries: 4000 units, about the length of a longhouse,
+  // which is roughly the group a scene has in it. The same reach as /ooc,
+  // which the voice service says (SPEECH in voice/headlines.js, #4238).
+  var ROLL_RANGE = 4000;
 
   /*
     The dice, and their limits.
@@ -46665,7 +46687,33 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       }
     }
     out.hall = { desc: HALL.desc, pos: HALL.pos, rot: HALL.rot, town: 'the creation hall' };
+    /*
+      EVERY CARRIAGE AND FERRY STOP, BY ITS NAME (#7172). "/tp Mixwater Mill"
+      found nothing: a village is no building, so BUILDING_NAME has no row for
+      it (its two houses are "Worker's House" and "Gilfre's House"), and it is
+      none of the towns above. The carriages block already holds every stop
+      with its name, its world and the spot a ride lands on, so /tp lands
+      where the carriage would. A town keeps its own spot: a stop never takes
+      a name already here, and of two stops with one name the first is kept.
+    */
+    var stops = rideStops();
+    for (var i = 0; i < stops.length; i++) {
+      var st = stops[i];
+      var name = String((st && st.name) || '');
+      var key = name.toLowerCase();
+      if (!key || Object.prototype.hasOwnProperty.call(out, key)) { continue; }
+      if (!st.world || !st.pos || st.pos.length !== 3) { continue; }
+      out[key] = { desc: st.world, pos: [st.pos[0], st.pos[1], st.pos[2]], rot: [0, 0, Number(st.rot) || 0],
+                   town: name, stop: true };
+    }
     return out;
+  }
+
+  /** The carriages block's stops, or none while it is not loaded. */
+  function rideStops() {
+    var g = (typeof globalThis !== 'undefined') ? globalThis : null;
+    var c = g && g.__thornswoodCarriages;
+    return (c && Object.prototype.toString.call(c.STOPS) === '[object Array]') ? c.STOPS : [];
   }
 
   /*
@@ -47054,23 +47102,29 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
                    : { why: named[want].name + ' is in the load order but the server ' +
                             'cannot find a door into it, so there is nowhere to stand.' };
     }
+    // Part of a stop's name (#7172) counts as part of a building's does.
     var hits = [];
+    for (var sk in table) {
+      if (!Object.prototype.hasOwnProperty.call(table, sk) || !table[sk].stop) { continue; }
+      if (sk.indexOf(want) !== -1) { hits.push({ stop: sk, name: table[sk].town }); }
+    }
     for (var key in named) {
       if (!Object.prototype.hasOwnProperty.call(named, key)) { continue; }
-      if (key.indexOf(want) !== -1) { hits.push(key); }
+      if (key.indexOf(want) !== -1) { hits.push({ key: key, name: named[key].name }); }
       if (hits.length > 12) { break; }
     }
     if (!hits.length) {
-      return { why: 'No place called that. Try a town, or part of a building\'s name: ' +
+      return { why: 'No place called that. Try a town, a carriage stop, or part of a building\'s name: ' +
                     'bannered, jorrvaskr, understone.' };
     }
     if (hits.length === 1) {
-      var one = namedPlace(hits[0]);
+      if (hits[0].stop) { return { where: table[hits[0].stop] }; }
+      var one = namedPlace(hits[0].key);
       return one ? { where: one }
-                 : { why: named[hits[0]].name + ' has no door the server can find.' };
+                 : { why: hits[0].name + ' has no door the server can find.' };
     }
     var names = [];
-    for (var h = 0; h < hits.length && h < 10; h++) { names.push(named[hits[h]].name); }
+    for (var h = 0; h < hits.length && h < 10; h++) { names.push(hits[h].name); }
     return { why: 'Which one: ' + names.join(', ') +
                   (hits.length > 10 ? ', and more' : '') + '.' };
   }
@@ -48136,8 +48190,9 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       person (#412). The staff block at the end of this file does the work
       and says whether it took the line; it reuses /give's, /spawn's and
       /tp's lookups, handed over here. A /give, /spawn, /tp or /goto that
-      names no person goes on to the branches below, and /ooc or /roll from
-      somebody staff silenced stops here.
+      names no person goes on to the branches below, and /roll from somebody
+      staff silenced stops here. Their /ooc never arrives: the voice service
+      says it, and holds it back from them itself (#4238).
     */
     var commandTools = g.__thornswoodCommandTools;
     if (commandTools && commandTools.command(cmd, word, parts, profileId, actorId)) { return; }
@@ -48213,7 +48268,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       var table = places();
       if (!wanted) {
         toProfile(profileId, 'Where to: ' + Object.keys(table).sort().join(', ') +
-                  ', or the name of any inn, keep, shop or house in the world. ' +
+                  ', or the name of any carriage stop, inn, keep, shop or house in the world. ' +
                   'Part of the name is enough.');
         return;
       }
@@ -48404,76 +48459,6 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       return;
     }
 
-    // ------------------------------------------------------------- ooc ---
-    //
-    // Brackets worked, but only if everybody remembered them, and a line of
-    // out of character talk typed without them lands in the middle of a scene
-    // as though somebody's character said it.
-    //
-    // This is deliberately LOCAL. Out of character talk belongs to the scene
-    // it interrupts, not to everybody in Skyrim, and a server wide one would
-    // be a second general chat inside the game.
-    // The chat box handles both aliases in voice/headlines.js (#4238).
-    // Direct game-server calls still use this handler.
-    if (word === '/ooc' || word === '/o') {
-      var said = parts.slice(1).join(' ').trim();
-      if (!said) {
-        toProfile(profileId, 'Say /ooc and then whatever you meant to say.');
-        return;
-      }
-      // Needs a character: who hears it is worked out from where that
-      // character is standing.
-      if (!needCharacter()) { return; }
-      if (said.length > 300) { said = said.slice(0, 300); }
-
-      var myPos = [0, 0, 0], myCell = '';
-      try {
-        myPos = mp.get(actorId, 'pos') || [0, 0, 0];
-        myCell = String(mp.get(actorId, 'worldOrCellDesc') || '');
-      } catch (e) { }
-
-      var who = '';
-      try {
-        var ap = mp.get(actorId, 'appearance');
-        who = String((ap && ap.name) || '');
-      } catch (e) { }
-      if (!who) { who = 'Somebody'; }
-
-      var line = '(( ' + who + ': ' + said + ' ))';
-
-      var near = [];
-      try { near = mp.get(0, 'onlinePlayers') || []; } catch (e) { near = []; }
-
-      var heard = 0;
-      for (var oi = 0; oi < near.length; oi++) {
-        var oid = near[oi], opid = 0;
-        try { opid = Number(mp.get(oid, 'profileId')) || 0; } catch (e) { continue; }
-        if (!opid) { continue; }
-
-        if (oid !== actorId) {
-          var oCell = '', oPos = [0, 0, 0];
-          try {
-            oCell = String(mp.get(oid, 'worldOrCellDesc') || '');
-            oPos = mp.get(oid, 'pos') || [0, 0, 0];
-          } catch (e) { continue; }
-          // Same room first. Two people at the same coordinates in different
-          // cells are not in earshot of each other.
-          if (oCell !== myCell) { continue; }
-          var dx = oPos[0] - myPos[0], dy = oPos[1] - myPos[1], dz = oPos[2] - myPos[2];
-          if ((dx * dx + dy * dy + dz * dz) > (OOC_RANGE * OOC_RANGE)) { continue; }
-        }
-
-        toProfile(opid, line);
-        heard++;
-      }
-
-      if (heard <= 1) {
-        toProfile(profileId, 'Nobody near enough to hear that.');
-      }
-      log('command: /ooc', actorId.toString(16), 'heard by', heard);
-      return;
-    }
-
     /*
       ------------------------------------------------------------- the dice
 
@@ -48497,7 +48482,10 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
-      part of a conversation and belongs in the room it happened in.
+      part of a conversation and belongs in the room it happened in. /ooc is
+      said by the voice service and never reaches this server (#4238), so the
+      same cell and ROLL_RANGE here are its reach written twice: a change to
+      one is a change to voice/headlines.js too.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
@@ -48561,7 +48549,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
           } catch (e) { continue; }
           if (rc !== rCell) { continue; }
           var rdx = rp[0] - rPos[0], rdy = rp[1] - rPos[1], rdz = rp[2] - rPos[2];
-          if ((rdx * rdx + rdy * rdy + rdz * rdz) > (OOC_RANGE * OOC_RANGE)) { continue; }
+          if ((rdx * rdx + rdy * rdy + rdz * rdz) > (ROLL_RANGE * ROLL_RANGE)) { continue; }
         }
         toProfile(rpid, rline);
         rHeard++;
@@ -50855,8 +50843,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           keeps the condition and nothing here watches drops any more.
     a craft. CraftEvent::OnFireSuccess takes away plain entries and adds a
           plain one. A temper is refused (recipelessCraft), so it is not a
-          way round this. Enchanting a piece that is not at 100% fails in
-          the engine, because the plain piece it asks to take is not there.
+          way round this. An enchantment takes the piece by its name and
+          the bench names the enchanted piece the same (#4608,
+          enchantedPiece in the bench block), so its condition goes with it.
   A trade was a third, and it was this file's: moveById in the trade block
   wrote a base and a count and nothing else. It moves a piece with its name
   now, and leaves every other stack's alone (#1594).
@@ -52103,7 +52092,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   and mp.onCraft's seventh argument names an input that came off a named
   stack; inputRefusal below refuses any named input that is not food
   carrying its days, so a worn sword (85%), a house's mold or a woven
-  garment is still never spent by a craft, as it never could be.
+  garment is still never spent by a craft, as it never could be. The one
+  exception is the piece an enchantment goes on, which comes back with the
+  same name (#4608).
 
   WHICH FOOD SPOILS AND HOW FAST is FOOD_GROUPS.spoil
   (game/data/food-groups.json): days by group (raw meat and fish, and the
@@ -52537,12 +52528,17 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       piece's condition, a house's mold, a woven garment's mark and a dye
       each sit on a name too, and a craft that took one would give back a
       plain piece (a free repair) or lose what the name said.
+
+      except is the one input that is let through by name (#4608): the piece
+      an enchantment goes on, which the bench gives back carrying the same
+      name (enchantedPiece in the bench block), so nothing the name said is
+      lost and nothing is repaired.
     */
-    function inputRefusal(inputs) {
+    function inputRefusal(inputs, except) {
       if (!Array.isArray(inputs)) { return ''; }
       for (var i = 0; i < inputs.length; i++) {
         var input = inputs[i];
-        if (!input || !input.name) { continue; }
+        if (!input || !input.name || input === except) { continue; }
         var entry = { baseId: Number(input.baseId) || 0, name: String(input.name) };
         if (ownName(entry)) { continue; }
         return 'Your ' + entry.name + ' cannot go into that. Keep it, or use a plain one.';
@@ -56282,7 +56278,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A bard playing where this person is resting.
 
     Grim's idea and Patrick's yes. Somebody counts as a bard for this when the
-    server has seen them playing, they are in the same cell, and it saw them
+    server has seen them playing, they are together (social's together(), #5046), and it saw them
     in the last few minutes. There is no bard profession in the rulebook to
     read, and inventing one here would be settling a design question that is
     Patrick's.
@@ -56345,19 +56341,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
   }
 
+  /* Within earshot means together, as the party bonus counts it (#5046):
+     the same interior, or outdoors within the Near you reach. The same cell
+     description alone was the whole worldspace outdoors. */
   function bardNear(actorId, savedOnly) {
-    var myCell = null;
-    try { myCell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return false; }
-    if (!myCell) { return false; }
+    var soc = g.__thornswoodSocial;
+    if (!soc || !soc.together) { return false; }
     var now = Date.now();
     for (var id in BARDS) {
       if (!Object.prototype.hasOwnProperty.call(BARDS, id)) { continue; }
       if (now - BARDS[id] > BARD_FOR) { if (!savedOnly) { delete BARDS[id]; } continue; }
       var who = Number(id);
       if (who === actorId) { continue; }
-      var theirs = null;
-      try { theirs = String(mp.get(who, 'worldOrCellDesc') || ''); } catch (e) { continue; }
-      if (theirs && theirs === myCell) { return true; }
+      if (soc.together(actorId, who)) { return true; }
     }
     return false;
   }
@@ -58062,7 +58058,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   to the person and everybody near them, and one log line says who, whose
   hair, which dye, and the colour before and after. The first dye on somebody
   stores the colour they were made with, which a wash goes back towards. The
-  person's own game redraws the hair in the front plugin ("hair colour").
+  person's own game redraws the hair at once in the engine fork's client,
+  which calls the game's UpdateHairColor when an appearance is applied
+  (skymp5-client/src/sync/appearance.ts, #2867); nothing here or in the front
+  plugin draws it.
 
   A DYE IS NOT A PLAIN ITEM. Each dye is registered with mintedEntry, so
   addItem, takeItem, the merchants and anything else that reads the record
@@ -58078,7 +58077,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   // ==== HAIR_DYES ====
   /* Built by scripts\dev\Build-HairDyeGamemode.js out of game\data\hair-dyes.json and
      game\hair-dye.js. Do not hand edit: change those two and run it again. */
-  var HAIR_DYES = {"about":"Hair dye (#2675). The staff's list: what a dye is carried as, where and how long it steeps, how close you stand to dye somebody else's hair, who may steep, and each dye's colour and what it takes. game/hair-dye.js reads it and names none of it. docs/systems/hair-dye.md says what each field does.","item":"98626:Skyrim.esm","steepSeconds":60,"steepAt":"a5cb3:Skyrim.esm","reach":300,"who":{"anyone":false,"halves":{"haberdasher":"novice","liverywright":"novice"}},"dyes":[{"id":"black","name":"Black Hair Dye","colour":"#1b1918","strength":0.75,"wander":10,"inputs":[{"item":"15482:Thornswood-Content.esp","count":1},{"item":"16e26:Dragonborn.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"brown","name":"Brown Hair Dye","colour":"#4a3020","strength":0.6,"wander":14,"inputs":[{"item":"5076e:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"red","name":"Red Hair Dye","colour":"#7a2418","strength":0.55,"wander":16,"inputs":[{"item":"1b3bd:Skyrim.esm","count":2},{"item":"77e1d:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"deep-red","name":"Deep Red Hair Dye","colour":"#5a1014","strength":0.6,"wander":12,"inputs":[{"item":"4da20:Skyrim.esm","count":1},{"item":"b701a:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"gold","name":"Gold Hair Dye","colour":"#b8945a","strength":0.5,"wander":14,"inputs":[{"item":"4b0ba:Skyrim.esm","count":2},{"item":"2a78:Dawnguard.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"copper","name":"Copper Hair Dye","colour":"#a4512a","strength":0.55,"wander":16,"inputs":[{"item":"889a2:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"blue","name":"Blue Hair Dye","colour":"#2b3f6e","strength":0.5,"wander":18,"inputs":[{"item":"77e1c:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"purple","name":"Purple Hair Dye","colour":"#4e2c5e","strength":0.5,"wander":18,"inputs":[{"item":"77e1e:Skyrim.esm","count":2},{"item":"45c28:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"nightshade","name":"Nightshade Hair Dye","colour":"#2a1a30","strength":0.65,"wander":10,"inputs":[{"item":"516c8:Skyrim.esm","count":1},{"item":"2f44c:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"green","name":"Green Hair Dye","colour":"#3d5a2c","strength":0.5,"wander":18,"inputs":[{"item":"57f91:Skyrim.esm","count":2},{"item":"134aa:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"hair-wash","name":"Hair Wash","wash":true,"strength":0.6,"wander":6,"inputs":[{"item":"34cdd:Skyrim.esm","count":1},{"item":"34cdf:Skyrim.esm","count":1},{"item":"3f7f8:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]}]};
+  var HAIR_DYES = {"about":"Hair dye (#2675). The staff's list: what a dye is carried as, where and how long it steeps, how close you stand to dye somebody else's hair, who may steep, and each dye's colour and what it takes. game/hair-dye.js reads it and names none of it. docs/systems/hair-dye.md says what each field does.","item":"98626:Skyrim.esm","steepSeconds":60,"steepAt":"a5cb3:Skyrim.esm","reach":300,"who":{"anyone":false,"halves":{"haberdasher":"novice","liverywright":"novice"}},"dyes":[{"id":"black","name":"Black Hair Dye","colour":"#1b1918","strength":0.75,"wander":10,"inputs":[{"item":"33760:Skyrim.esm","count":1},{"item":"16e26:Dragonborn.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"brown","name":"Brown Hair Dye","colour":"#4a3020","strength":0.6,"wander":14,"inputs":[{"item":"5076e:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"red","name":"Red Hair Dye","colour":"#7a2418","strength":0.55,"wander":16,"inputs":[{"item":"1b3bd:Skyrim.esm","count":2},{"item":"77e1d:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"deep-red","name":"Deep Red Hair Dye","colour":"#5a1014","strength":0.6,"wander":12,"inputs":[{"item":"4da20:Skyrim.esm","count":1},{"item":"b701a:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"gold","name":"Gold Hair Dye","colour":"#b8945a","strength":0.5,"wander":14,"inputs":[{"item":"4b0ba:Skyrim.esm","count":2},{"item":"2a78:Dawnguard.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"copper","name":"Copper Hair Dye","colour":"#a4512a","strength":0.55,"wander":16,"inputs":[{"item":"889a2:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"blue","name":"Blue Hair Dye","colour":"#2b3f6e","strength":0.5,"wander":18,"inputs":[{"item":"77e1c:Skyrim.esm","count":3},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"purple","name":"Purple Hair Dye","colour":"#4e2c5e","strength":0.5,"wander":18,"inputs":[{"item":"77e1e:Skyrim.esm","count":2},{"item":"45c28:Skyrim.esm","count":2},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"nightshade","name":"Nightshade Hair Dye","colour":"#2a1a30","strength":0.65,"wander":10,"inputs":[{"item":"516c8:Skyrim.esm","count":1},{"item":"2f44c:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"green","name":"Green Hair Dye","colour":"#3d5a2c","strength":0.5,"wander":18,"inputs":[{"item":"57f91:Skyrim.esm","count":2},{"item":"134aa:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]},{"id":"hair-wash","name":"Hair Wash","wash":true,"strength":0.6,"wander":6,"inputs":[{"item":"34cdd:Skyrim.esm","count":1},{"item":"34cdf:Skyrim.esm","count":1},{"item":"3f7f8:Skyrim.esm","count":1},{"item":"13f598:WindhelmSSE.esp","count":1}]}]};
   var HAIR_DYE = (function () {
   var module = { exports: {} };
 'use strict';
@@ -58756,7 +58755,7 @@ module.exports = {
   somebody else, a healing spell landing on them, or a healing potion
   stands them up at a quarter of their health (standUp). Nobody does in
   DOWN.minutes, and the tick lets the death through (wake): the ordinary
-  wake at the temple, with the wounds they had. Staff seeing who is down,
+  wake at the temple, with the breaks and diseases they had. Staff seeing who is down,
   confirming the outcome and changing the minutes is #6409; a potion brewed
   at a lab standing somebody up is #6407.
   ============================================================================
@@ -59207,7 +59206,24 @@ module.exports = {
       if (stage === 'caught') { continue; }
       out.push(WORDS[rec.ills[k].k] + (stage === 'bad' ? ', bad' : ''));
     }
-    return out;
+    return once(out);
+  }
+
+  /*
+    ONE LINE FOR ONE KIND (#6616). Every wound is a line, so three bites in a
+    fight with skeevers were three "Open bite" lines down the edge of the
+    screen, and a tester read them as the same line drawn again and again.
+    Lines that read the same are one line now, with how many after it, in
+    the order the first of them came: "Open bite (3)".
+  */
+  function once(list) {
+    var order = [], count = {};
+    for (var i = 0; i < list.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(count, list[i])) { count[list[i]]++; continue; }
+      count[list[i]] = 1;
+      order.push(list[i]);
+    }
+    return order.map(function (l) { return count[l] > 1 ? l + ' (' + count[l] + ')' : l; });
   }
 
   function tell(actorId, line) {
@@ -59974,21 +59990,25 @@ module.exports = {
   }
 
   /*
-    A DEATH. The temple stopped the death and did not wash the cuts
-    (death.md), so every wound and disease stays on the record. The bleed
-    stops: the wake is the death being stopped, and a cut still bleeding in
-    the temple would kill again before anybody could reach it (Patrick's
-    answer on #1383, 4 October). The fire goes out with the body.
+    A DEATH. The temple's wake clears the cuts, bites and burns, and keeps
+    the breaks, the crooked heals and every disease (Patrick's answer B on
+    #6616, 27 November; death.md). Before it the record kept every wound,
+    and somebody woke with the same row of open cuts each time they died.
+    Nothing left bleeds: the cuts and bites are gone, and a cut still
+    bleeding in the temple would kill again before anybody could reach it
+    (Patrick's answer on #1383, 4 October). The fire goes out with the body.
   */
   function died(actorId) {
     delete fires[actorId];
     var needs = g.__thornswoodNeeds;
     if (needs && needs.clearBurning) { needs.clearBurning(actorId); }
     var rec = read(actorId);
-    var any = false;
+    var kept = [];
     for (var i = 0; i < rec.wounds.length; i++) {
-      if (rec.wounds[i].bleed) { rec.wounds[i].bleed = false; any = true; }
+      if (rec.wounds[i].k === 'break') { rec.wounds[i].bleed = false; kept.push(rec.wounds[i]); }
     }
+    var any = kept.length !== rec.wounds.length;
+    rec.wounds = kept;
     // Down ends with the death (#4607): the wake is the temple's. Their machine
     // is told by what it was last sent, because the wake's own death has
     // already taken the down off the record (wake, below).
@@ -60091,7 +60111,7 @@ module.exports = {
     THE CLOCK RAN OUT with nobody standing them up: the death goes through.
     wake tells goDown to let the next one go, and health written to nothing
     is that death, through the engine's own onDying and onDeath, so the wake
-    is the temple's with the wounds they had (died, above). A write the
+    is the temple's with the breaks and diseases they had (died, above). A write the
     engine refuses puts the down back, so the record never says less than
     the truth.
   */
@@ -61764,19 +61784,38 @@ module.exports = {
     var pid = profileOf(actorId);
     var p = partyOf(pid);
     if (!p || p.members.length < 2) { return 0; }
-    var cell = '';
-    try { cell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return 0; }
-    if (!cell) { return 0; }
     var n = 0;
     for (var i = 0; i < p.members.length; i++) {
       if (p.members[i] === pid) { continue; }
       var them = actorForProfile(p.members[i]);
-      if (!them) { continue; }
-      try {
-        if (String(mp.get(them, 'worldOrCellDesc') || '') === cell) { n++; }
-      } catch (e) { }
+      if (them && together(actorId, them)) { n++; }
     }
     return n;
+  }
+
+  /*
+    Are these two people together (#5046): in the same interior, or outdoors
+    in the same worldspace and within nearReach of each other, the reach the
+    Near you list already uses for "near you". Until 27 Nov 2026 this was the
+    same cell description alone, and outdoors that is the whole worldspace:
+    two people a hold apart in Tamriel counted as together for the party's
+    work share, the party panel and a bard's rest bonus (needs block,
+    bardNear, which asks this).
+  */
+  function whereIs(actorId) {
+    return memo('w' + actorId, function () {
+      try {
+        return { cell: String(mp.get(actorId, 'worldOrCellDesc') || ''), pos: mp.get(actorId, 'pos') };
+      } catch (e) { return { cell: '', pos: null }; }
+    });
+  }
+  function together(a, b) {
+    var x = whereIs(a), y = whereIs(b);
+    if (!x.cell || x.cell !== y.cell) { return false; }
+    if (!WORLDSPACES.has(x.cell)) { return true; }
+    if (!x.pos || !y.pos) { return false; }
+    var dx = x.pos[0] - y.pos[0], dy = x.pos[1] - y.pos[1], dz = x.pos[2] - y.pos[2];
+    return dx * dx + dy * dy + dz * dz <= SOCIAL.nearReach * SOCIAL.nearReach;
   }
 
   /** The multiplier work credit is paid at, for somebody with their party. */
@@ -62299,7 +62338,7 @@ module.exports = {
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
     confirmPartyAction: confirmPartyAction,
-    partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
+    partyNear: partyNear, together: together, workBonus: workBonus, parties: parties, inParty: inParty,
     newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,
     view: view, push: push, tick: tick, nearTick: nearTick,
@@ -65351,8 +65390,9 @@ module.exports = {
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
-  var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
+  // /me, /do, /w, /s and /ooc are said by the voice service, which holds
+  // them back itself, and never reach this server (#4238).
+  var SILENCED_WORDS = ['/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
   var FREEZE_SLACK = 64;            // units, a little under a metre
@@ -69211,7 +69251,14 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
     missing.forEach(id=>knownFactions.add(id));
     return s;
   }
-  function hostile(a,b) {
+  // Whether a starts a fight with b, d away. Aggression and faction
+  // reactions count within SIGHT. A person inside the larger of a's warn or
+  // attack and attack radius counts too unless a is their friend, whatever
+  // a's aggression: the game's own rule for the aggro radius, read from its
+  // code (#6493). An Aggressive skeever has no Enemy faction toward people,
+  // so without the radius it never attacked them.
+  const SIGHT=1200;
+  function hostile(a,b,d) {
     let enemy=false,friend=false;
     for(const f of a.factions) for(const g of b.factions) {
       // Friendship and common membership suppress conflicting enemy entries.
@@ -69219,14 +69266,18 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       friend ||= f.id===g.id || r===2 || r===3;
       enemy ||= r===1;
     }
-    if(friend || a.aggression===0) return false;
-    return a.aggression===3 || (a.aggression===2 && !friend) || (a.aggression===1 && enemy);
+    if(friend) return false;
+    const radius=b.isHuman ? Math.max(a.aggroRadius[1],a.aggroRadius[2]) : 0;
+    if(radius>0 && d<=radius) return true;
+    if(a.aggression===0 || d>SIGHT) return false;
+    return a.aggression===3 || a.aggression===2 || (a.aggression===1 && enemy);
   }
   function validState(s) {
     return s && Number.isInteger(s.cellOrWorld) && Array.isArray(s.pos) &&
       s.pos.length===3 && s.pos.every(Number.isFinite) && Array.isArray(s.rot) &&
       s.rot.length===3 && s.rot.every(Number.isFinite) && Number.isInteger(s.aggression) &&
       s.aggression>=0 && s.aggression<=3 && Number.isInteger(s.confidence) && s.confidence>=0 && s.confidence<=4 &&
+      Array.isArray(s.aggroRadius) && s.aggroRadius.length===3 && s.aggroRadius.every(r=>Number.isFinite(r) && r>=0) &&
       Number.isFinite(s.meleeReach) && s.meleeReach>=0 && Number.isFinite(s.meleeAllowance) &&
       s.meleeAllowance>=16 && s.meleeAllowance<=96;
   }
@@ -69294,7 +69345,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
   function emerge(h) {
     const {id,state,saved,bank,near}=h;
     const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node:near.node,
-      lift:near.pos[2]-npcSurface(near.node,near.pos),bank,approach:near.pos.slice(),
+      lift:liftOf(state,near.node,near.pos),bank,approach:near.pos.slice(),
       path:[],dwell:0,last:now(),sequence:saved && Number.isInteger(saved.sequence) ? saved.sequence : id%997,
       mode:'ambient',savedMode:'ambient',target:0,policy:policies.get(id)};
     actors.set(id,a);queue(a,now());indexActor(a);
@@ -69364,8 +69415,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
         // Set down beyond its leash at an earlier start (#2067).
         const policy=policies.get(id);
         if(outsideHome(policy,state.cellOrWorld,state.pos) && settleHome(id,bank,policy,state)) continue;
-        const surface=npcSurface(node,state.pos),lift=state.pos[2]-surface;
-        const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node,lift,bank,
+        const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node,lift:liftOf(state,node,state.pos),bank,
           path:[],dwell:0,last:now(),sequence:saved && Number.isInteger(saved.sequence) ? saved.sequence : id%997,
           mode:'ambient',savedMode:'ambient',target:0,policy:policies.get(id)};
         actors.set(id,a);queue(a,now());indexActor(a);
@@ -69398,6 +69448,29 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       }
     } catch(e) {report('NPC identity refresh failed: '+e);}
     schedule(discover,5000);
+  }
+  // A walker stands on its navmesh (#6474). The game puts an actor down on
+  // the floor under it, but each game moves a server's NPC with translateTo,
+  // which neither falls nor collides, so the height the server sends is the
+  // height it is seen at. Until 27 Nov 2026 a walker kept the height its
+  // placement had over its triangle wherever it walked, and the first Dev
+  // reading had 573 of 4,729 walkers more than 16 units above the navmesh
+  // and 51 more than 64 above, floating wherever they went. A swimmer keeps
+  // its height over the bed, which is where it swims.
+  function liftOf(s,node,pos) {
+    return s.swims ? pos[2]-npcSurface(node,pos) : 0;
+  }
+  // A walker found off its navmesh (placed above or below it, or moved there)
+  // is put down onto it where it stands, as the game drops a placed actor
+  // onto the floor. found keeps how far off it was, for the heights line.
+  function setDown(a,s) {
+    if(s.swims) return;
+    const floor=npcSurface(a.node,a.pos);
+    if(floor===null || Math.abs(a.pos[2]-floor)<=1) return;
+    const pos=[a.pos[0],a.pos[1],floor];
+    a.found=a.pos[2]-floor;
+    nativeCall('updateNpcMovement',a.id,pos,s.rot,0);
+    a.pos=pos;a.path=[];
   }
   // Where an actor stands over a navmesh point: its lift above the floor, and
   // a swimmer no higher than its depth. Home checks use this point, the one a
@@ -69530,8 +69603,9 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       const node=bank.ready && locate(bank,s.pos,s);
       if(!node) throw new Error('Displaced outside prepared local navigation');
       a.cell=s.cellOrWorld;a.bank=bank;a.node=node;a.pos=s.pos.slice();
-      a.lift=s.pos[2]-npcSurface(node,s.pos);a.path=[];a.target=0;indexActor(a);
+      a.lift=liftOf(s,node,s.pos);a.path=[];a.target=0;indexActor(a);
     }
+    setDown(a,s);
     // A swimmer aims at each point no higher than its depth (#2067).
     const aim=p=>s.swims ? [p[0],p[1],Math.min(p[2],s.swimTop)] : p;
     let target=0,targetState=null,retaliation=false;
@@ -69540,10 +69614,10 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       retaliation=true;
       targetState=humans.get(target) || actors.get(target).state;
     } else {
-      let best=1200;
+      let best=Infinity;
       for(const [id,h] of humans) {
         const d=h.cellOrWorld===a.cell ? distance(h.pos,a.pos) : Infinity;
-        if(d<best && hostile(s,h)) {target=id;targetState=h;best=d;}
+        if(d<best && hostile(s,h,d)) {target=id;targetState=h;best=d;}
       }
       // NPC combat uses the same spatial index when nobody is connected.
       // Inspect a bounded local sample rather than comparing the full cast.
@@ -69555,7 +69629,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
           const other=actors.get(id);
           if(!other || other.state.isDead || other.state.isDisabled) continue;
           const d=distance(other.pos,a.pos);
-          if(d<best && hostile(s,other.state)) {target=id;targetState=other.state;best=d;}
+          if(d<best && hostile(s,other.state,d)) {target=id;targetState=other.state;best=d;}
           if(++inspected>=32) break search;
         }
       }
@@ -69567,7 +69641,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
         const live=nativeCall('getNpcAIState',target);
         if(!validState(live) || live.isDead || live.isDisabled || (live.isHuman && !live.isConnected) || live.cellOrWorld!==a.cell ||
             distance(a.pos,live.pos)>4096 || !withinHome(a,live.pos)) {target=0;targetState=null;}
-        else if(!retaliation && !hostile(s,factionData(live))) {target=0;targetState=null;}
+        else if(!retaliation && !hostile(s,factionData(live),distance(a.pos,live.pos))) {target=0;targetState=null;}
         else targetState=live;
       } catch(e) {target=0;targetState=null;}
     }
@@ -69661,28 +69735,28 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
     }
   }
-  // How far above the navmesh each walking NPC is held (#6474). An NPC keeps
-  // the height its placement had over its navmesh triangle (lift) wherever
-  // it walks, and each game moves it there with translateTo, which neither
-  // falls nor collides, so a positive lift is how far it floats above the
-  // navmesh. Said when it changes, with the largest, to measure the reports
-  // of NPCs floating.
+  // How far off the navmesh each walking NPC was found before it was set
+  // down on it (#6474), and how many stand off it now, which is none once
+  // each has had its first step. Said when it changes, with the largest.
   let heightsLine='';
   function heightsReport() {
-    let walking=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
+    let walking=0,off=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
     for(const a of actors.values()) {
       if(!a.state || a.state.swims) continue;
       walking++;
-      if(a.lift>16) above16++;
-      if(a.lift>32) above32++;
-      if(a.lift>64) above64++;
-      if(a.lift<-16) below16++;
-      largest.push(a);
+      const floor=npcSurface(a.node,a.pos);
+      if(floor!==null && Math.abs(a.pos[2]-floor)>1) off++;
+      const found=a.found || 0;
+      if(found>16) above16++;
+      if(found>32) above32++;
+      if(found>64) above64++;
+      if(found<-16) below16++;
+      if(found) largest.push(a);
     }
-    largest.sort((x,y)=>Math.abs(y.lift)-Math.abs(x.lift));
-    const line='NPC heights over their navmesh: '+walking+' walking; above 16 units '+above16+', above 32 '+above32+
-      ', above 64 '+above64+', below -16 '+below16+'; largest '+
-      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.lift)+' in '+a.cell.toString(16)).join(', ');
+    largest.sort((x,y)=>Math.abs(y.found)-Math.abs(x.found));
+    const line='NPC heights over their navmesh: '+walking+' walking, '+off+' off it now; set down from above 16 units '+above16+
+      ', above 32 '+above32+', above 64 '+above64+', below -16 '+below16+'; largest '+
+      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.found)+' in '+a.cell.toString(16)).join(', ');
     if(line!==heightsLine) {report(line);heightsLine=line;}
   }
   function backgroundTick() {
@@ -69729,7 +69803,9 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
     const again=id=>{if(!preparing.includes(id)) preparing.push(id);};
     for(const [id,a] of actors) {
       const node=navigation.nodeAt(a.node);
-      if(node) {a.node=node;continue;}
+      // A walker carried from a load that kept its placement's height walks
+      // on the navmesh from its next step, as one taken on now does (#6474).
+      if(node) {a.node=node;if(a.state) a.lift=liftOf(a.state,node,a.pos);continue;}
       actors.delete(id);
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
       again(id);
@@ -70607,6 +70683,12 @@ const INVENTORY=typeof MERCHANT_SETTLEMENT!=='undefined'?MERCHANT_SETTLEMENT:req
 const copy=value=>JSON.parse(JSON.stringify(value));
 const hash=value=>require('node:crypto').createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Published jobs remain routable while their accepted promises exist.
+// A published job whose goods nothing makes any more is retired by taking it
+// off this list, and given a new id when it comes back with other goods: the
+// four woodworker parcels that asked for Thornswood's Charcoal went when the
+// kiln began making Skyrim's own (#6726), and came back as the four
+// *-charcoal-parcel ids. A retired job is not finished for anybody who had
+// accepted it.
 const publication=Object.freeze({
  'q-whiterun-smith-straps':'8f03bdc903aaf1e37727f54a3e49bfdea5a2b817bc7534ba0111c88d25502734',
  'q-rift-woodworker-hunt-arrows':'84b31663cd265c9b26068ff7343622f04b332ddce394e58b52a55b0b6cbb3a89',
@@ -70689,7 +70771,7 @@ const publication=Object.freeze({
  'q-markarth-smith-expert-parcel':'9f8a055c39abe1c6da78e026d06439129cb9209423504f58d10aab4011fd5a2d',
  'q-markarth-smith-master-parcel':'f9b1854ae2954c03148c0953b29b7f03077aee9842b9a0405a4340d8ff388bec',
  'q-markarth-woodworker-novice-parcel':'8a14d28f769296a7779f86bfe78517a8388e58d86feded698a791cbcefe9538e',
- 'q-markarth-woodworker-advanced-parcel':'83dc5ab0d102b917460dc3ad68b39b8ea25dffaf511f6f0b520356b6b3dd931b',
+ 'q-markarth-woodworker-advanced-charcoal-parcel':'962355eff1861bf51f5bc4f9efa9cacf392b60d0ebadc7a26d3f231f2c09a3cc',
  'q-markarth-woodworker-expert-parcel':'2bdfa338694777b2af3bf7dad169013e990a12f7b92c1c3bc3fb417b0eff8c69',
  'q-markarth-woodworker-master-parcel':'8378ba65a73153a84b4a6dbde433ed97caf1cbd4d3e4167ce52bc5fe8da8c538',
  'q-markarth-tailor-novice-parcel':'41d6dcf835ba00f47aad39321873750c027453c2f72770f22ac49665b6d7c42b',
@@ -70737,7 +70819,7 @@ const publication=Object.freeze({
  'q-morthal-smith-expert-parcel':'419ddedc579950eee90774f768d1b51574f440c2453a2b703f03da5d114355e9',
  'q-morthal-smith-master-parcel':'00d8e6292fbb97467975120876fed4b80579849c1d8ac6c4b2748340c48ae6fd',
  'q-morthal-woodworker-novice-parcel':'1826e4d2d9f8f54abfc7d117dee2a025d9ed97bea817310f72df3509a6e79c41',
- 'q-morthal-woodworker-advanced-parcel':'51ce93d15b6ba610a43424b4a32dc4ea099354575112aa27f0893d87327bdc69',
+ 'q-morthal-woodworker-advanced-charcoal-parcel':'21ee6794881ea168206bf0d18863483b2f7dc71051e331ffd2de7ac89ff1e38a',
  'q-morthal-woodworker-expert-parcel':'0dc1b3f60331ccec3ef609a166dbaf47ff8196d31ebc49b3d780759272cd0f40',
  'q-morthal-woodworker-master-parcel':'189e472f274ba7a5fc2b9c537c23d1fb1a699c6963d4afdd9c0f28b4465ffa2d',
  'q-morthal-tailor-novice-parcel':'020ac422c90a12d91d074c53ab7f1a0e325ff4a85eb8c77bf9031d8a274c40a5',
@@ -70784,9 +70866,9 @@ const publication=Object.freeze({
  'q-winterhold-smith-expert-parcel':'75c5bceb51d5f24af727c4ee968774097754b7cc0f64f10cb415d58330cd7e60',
  'q-winterhold-smith-master-parcel':'59f73bf6d038034fa2c9ac65b1b85a6582c9502c77e512349ef309125969f02d',
  'q-winterhold-woodworker-novice-parcel':'c77c432bc1a72f7da71368a839140359f67880dcc6d2dd928ceee18091aa6339',
- 'q-winterhold-woodworker-advanced-parcel':'7362c2e1c85870d505ba5fad8413d5673fb99cb993b33f4bc09d6a82239f4840',
+ 'q-winterhold-woodworker-advanced-charcoal-parcel':'c39d9aeb843999b7beb1b35e4b1b2849c6bcb9452fee11d1716c677a2f75a0f6',
  'q-winterhold-woodworker-expert-parcel':'2b15efd43ad1a57ffa9519a592e41ee56062e220441bf7cdfd340bd1c359335b',
- 'q-winterhold-woodworker-master-parcel':'22941c4af6bd41eb6aa96c9f29085ea2605fdd89157f091d562305d1e9e5c184',
+ 'q-winterhold-woodworker-master-charcoal-parcel':'871497fa81b6059a848fff092cbea12b2ac78915e7aa0d1ffbd03b83558af572',
  'q-winterhold-tailor-novice-parcel':'4ddea61b68bc9451d942295376ebd20082dc472aa12f5e046cc9960548bf58c8',
  'q-winterhold-tailor-advanced-parcel':'1e25774626e32469e0dae4cf4e949f279d1d6e9f1839ac48a4753a7d7f5fb5e7',
  'q-winterhold-tailor-expert-parcel':'8322953574b8161b13669df1e8f973f9009418f806681e9ecf4ea8b3b8aa0518',

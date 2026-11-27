@@ -74,10 +74,15 @@ These are the targets before clothing, fire and weather.
 | Outdoors, nothing falling | 40 |
 | Rain | 34 |
 | Wading, about waist deep or less | 26 |
-| Snow | 16 |
+| Snow on the ground | 16 |
 | Swimming | 8 |
 
 A roof stops weather, night, wind and height. A campfire is not a roof.
+
+Snow is the ground under your feet, read in your game from the land's own
+material (the one footsteps are played from): deep snow on a clear day is
+the snow place, and a snowfall on a bare road is outdoors with the falling
+snow on top (#4653). Snow underfoot wins over rain falling.
 
 ## Weather, wind, night, height
 
@@ -86,7 +91,7 @@ Only with no roof. Degrees on or off the place.
 | Factor | Worth |
 | --- | --- |
 | Wind, up to a full gale | as much as 14 colder, scaled by that weather's own wind |
-| Snow falling | 6 colder, on top of the snow place |
+| Snow falling | 6 colder, on top of the place |
 | Rain falling | 4 colder |
 | Overcast | 1 colder |
 | A clear day, not at night | 4 warmer |

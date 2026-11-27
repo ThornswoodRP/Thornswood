@@ -33,7 +33,7 @@
   Usage:
     .\scripts\dev\Build-SpellTable.ps1
     .\scripts\dev\Build-SpellTable.ps1 -Data 'C:\Thornswood\Game\Data'
-    .\scripts\dev\Build-SpellTable.ps1 -JsOut "$env:TEMP\spells.js"
+    .\scripts\dev\Build-SpellTable.ps1 -JsOut .\temp\spells.js
 
   Exit code 1 if a name in the book has no record, if two names land on the
   same record, or if a name had to be resolved by a rule other than the first.

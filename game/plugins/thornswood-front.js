@@ -407,6 +407,20 @@
   let CHAT_FADE = chatFadeOf(ini);
   let NEEDS_BARS = needsBarsOf(ini);
   /*
+    How big every panel's words are, in percent (#4474), from the Settings
+    panel in the game (TextSize in Thornswood.ini). It goes to the page as
+    window.THORNSWOOD.textSize, where thornswood-scale.js scales every panel
+    by the screen and then by this. Anything that is not one of the choices
+    is 100, as Skyrim draws them now.
+  */
+  const TEXT_SIZE_CHOICES = [100, 115, 130, 150];
+  function textSizeOf(text) {
+    const m = text.match(/^\s*TextSize\s*=\s*(\d+)\s*$/im);
+    const v = m ? Number(m[1]) : 100;
+    return TEXT_SIZE_CHOICES.indexOf(v) >= 0 ? v : 100;
+  }
+  let TEXT_SIZE = textSizeOf(ini);
+  /*
     Where voice lives: https://thornswood.net/voice, or /voice-dev on the dev
     build. Written by the launcher at every Play, the same way VoicePort is,
     and always https since #1304, when the raw port it used to fall back to
@@ -607,6 +621,7 @@
     SKILLS_KEY = iniNumber(ini, 'SkillsKey', SETTINGS_KEYS.SkillsKey);
     CHAT_FADE = chatFadeOf(ini);
     NEEDS_BARS = needsBarsOf(ini);
+    TEXT_SIZE = textSizeOf(ini);
     PARTY_KEY = iniNumber(ini, 'PartyKey', SETTINGS_KEYS.PartyKey);
     JOURNAL_KEY = iniNumber(ini, 'JournalKey', SETTINGS_KEYS.JournalKey);
     FRIEND_KEY = iniNumber(ini, 'FriendKey', SETTINGS_KEYS.FriendKey);
@@ -1542,7 +1557,7 @@
     // Idempotent, so a page the silence watch reloaded gets all of it back.
     T.js('try{if(!window.thornswoodNet){window.THORNSWOOD=' + JSON.stringify({
       host: HOST, port: VOICE_PORT, profileId: lineId, name: '', token: tok, base: VOICE_URL, socket: VOICE_SOCKET_URL,
-      chatFade: CHAT_FADE, needsBars: NEEDS_BARS
+      chatFade: CHAT_FADE, needsBars: NEEDS_BARS, textSize: TEXT_SIZE
     }) + ';}}catch(e){}');
     inject('thornswood-chat.js');
     // rejoinAs only takes the token while the connection is already this
@@ -2515,6 +2530,12 @@
     cursor, the same trap the cap was written to end. Found by the review of
     the J journal.
 
+    The furniture panel claimed the keyboard and had no name here, so the
+    cap released it with the panel left drawn and its Escape and Close out of
+    reach (#4812). Every name that claims the keyboard, the chat box apart
+    (it has its own three watchdogs below), has its window here;
+    tests\test-4812-cap-closes-every-claim.js holds the two lists together.
+
     The trade window's close hides it and leaves the trade to the server: the
     next change to either pile draws it again, and so does H, or Trade on the
     P panel, while the trade stands (#1628), which puts Walk away back. The
@@ -2527,7 +2548,8 @@
     board: 'thornswoodBoard', repair: 'thornswoodRepair', treat: 'thornswoodTreat', preserve: 'thornswoodPreserve',
     trade: 'thornswoodTrade', merchant: 'thornswoodMerchant', select: 'thornswoodSelect', wheel: 'thornswoodEmotes',
     afk: 'thornswoodAfk', maneuvers: 'thornswoodManeuvers', ride: 'thornswoodRide',
-    help: 'thornswoodHelp', settings: 'thornswoodSettings', box: 'thornswoodBox', ship: 'thornswoodShip', stall: 'thornswoodStall'
+    help: 'thornswoodHelp', settings: 'thornswoodSettings', box: 'thornswoodBox', ship: 'thornswoodShip', stall: 'thornswoodStall',
+    furniture: 'thornswoodFurniture'
   };
 
   T.claimFocus = function (who, on) {
@@ -4325,69 +4347,18 @@
     ------------------------------------- three chopping blocks, taken away
 
     Djinn, 22 September, "Removal from area - Woodworking chopping Blocks":
-    Solitude, Solitude Stables and Dragon Bridge, with a coordinate each.
-    Patrick: "I want them actually removed and not there visible anymore."
+    Solitude, Solitude Stables and Dragon Bridge. Patrick: "I want them
+    actually removed and not there visible anymore."
 
-    THE SERVER CANNOT DO THIS AND NEITHER CAN A GAMEMODE. Refusing the press
-    only makes a block that does nothing, which is what the first attempt did
-    and is not what was asked: the block is still standing there. Deleting a
-    placed reference means editing the plugin that placed it, which is a
-    rebuild, a pack, and a server that will not start if it goes wrong.
-
-    So it is done where it can be done. Skyrim Platform runs on the machine
-    that is drawing the block and ObjectReference.disable is the engine's own
-    "this is not here", the same call the game uses for every object a quest
-    takes out of the world. Every person running this plugin stops seeing them,
-    which is everybody.
-
-    BY FORM ID, MEASURED FROM THE PLUGINS. Djinn, 24 September, on dev, with
-    three screenshots of a Wood Chopping Block and "E Use" under the
-    crosshair: "The ones I gave you coords for are not removed". So every
-    placed reference in the load order was read (99 plugins, last one wins)
-    for what stands at each of his points:
-
-      Solitude          d6ae9:Skyrim.esm, 103 units from the point, in
-                        SolitudeWorld. Skyrim.esm files it in the cell at
-                        -16,25; Populated Cities Towns Villages
-                        Legendary.esp overrides it into a PERSISTENT
-                        reference in that worldspace's persistent cell.
-      Solitude Stables  a9ee1:Skyrim.esm, 61 units away, Tamriel, an
-                        ordinary reference in the cell at -19,23.
-      Dragon Bridge     abf83:Skyrim.esm, 132 units away, Tamriel, a
-                        PERSISTENT reference in Tamriel's persistent cell,
-                        standing in the cell at -25,19.
-
-    All three are base 7022e, WoodChoppingBlock. No other of the 128 placed
-    blocks on the three chopping block bases is within 400 units of any
-    point; the nearest is 4,638 units from Dragon Bridge.
-
-    So the walk of the cell somebody stands in was the wrong question twice
-    over. Two of the three are filed under a persistent cell rather than
-    the cell they stand in, and the third could only be found from inside
-    its own cell, not from the one next to it. Asking for the three by form id
-    finds each one wherever the person stands and cannot catch a fourth.
-    Whether the engine also lists a persistent reference under its exterior
-    cell at run time was not measured, because that needs the game running;
-    asking by form id does not depend on it. The base and the position are
-    still checked, once, so an override that moved one or made it something
-    else leaves it alone and says so.
-
-    AGAIN WHENEVER IT COMES BACK, which is the other half of the report.
-    SkyMP's own client puts it back. Every time the server streams a
-    Skyrim.esm reference to this machine (walking into range, coming back
-    after leaving, reconnecting), the fork's skymp5-client remoteServer.ts
-    onCreateActorMessage calls ModelApplyUtils.applyModelIsDisabled(refr,
-    !!msg.props['disabled']), and the server writes that flag as
-    "isDisabled" (skymp5-server CreateActorMessage.h), so it always reads
-    false and the client calls refr.enable(true). The old code marked a
-    site done after its first disable and never looked again. Now each
-    site is checked every four seconds while somebody is near it, and
-    taken out again when it is back, with one line each time.
-
-    ONLY WHEN SOMEBODY IS NEAR. An ordinary reference is not in memory until
-    its cell loads, and nothing is asked of the game from anywhere else, so
-    away from these three places the cost is one distance sum per site every
-    four seconds.
+    THE SERVER HOLDS THEM OFF, AND NOTHING HERE DOES. The gamemode sets
+    isDisabled on the three references at every start (disableBlocksOff,
+    #495), and the client applies that flag each time a reference streams
+    in and on every update, in one decision with the harvested flag (fork
+    #61, Thornswood #2328). Until both were true this plugin disabled the
+    three itself and did it again every four seconds, because the client
+    put them back on each stream. That loop is gone (#5052): this plugin and
+    skymp5-client.js come in the same pack, so no game runs this file with a
+    client from before the fix.
   */
   /*
     ======================= WALKING A CELL FOR A BASE =======================
@@ -4401,18 +4372,18 @@
       outside it, on 23 September
 
       the chopping blocks at Solitude, the stables and Dragon Bridge, which
-      have never once written their own "took the chopping block out of the
-      world" line in any log on this machine
+      never once wrote their own "took the chopping block out of the world"
+      line in any log on this machine (the server holds them off now: see
+      the note above this one)
 
     Neither was a table problem or a radius problem. Cell.getNumRefs and
     getNthRef see everything in the cell, temporary references included, so
-    that is what the fire probe uses now. The chopping blocks moved on again,
-    to their own form ids: see the note above this one.
+    that is what the fire probe uses now.
 
     THE FORM TYPES ARE THE FILTER AND THEY MATTER: walking every reference in
     an exterior cell is thousands of native calls. Activator 24, static 34,
     movable static 36 and furniture 42 are the four the fire table is built
-    from, and the chopping blocks are furniture.
+    from.
   */
   const CELL_TYPES = [24, 34, 36, 42];
 
@@ -4528,103 +4499,6 @@
     }
     return true;
   }
-
-  const BLOCK_BASES = [0x7022e, 0xa91bf, 0x10f575];
-  // ref is the placed reference at the point, read out of the plugins on
-  // 24 September (see "three chopping blocks, taken away" above). All three
-  // are Skyrim.esm's own, which is always load index 00, so the local id is
-  // the id the game uses.
-  const BLOCKS_GONE = [
-    { where: 'Solitude', pos: [-64263, 106003.5, -8377.8], ref: 0xd6ae9 },
-    { where: 'Solitude Stables', pos: [-76193.3, 96600.6, -11435], ref: 0xa9ee1 },
-    { where: 'Dragon Bridge', pos: [-101780.7, 80484.5, -12522.7], ref: 0xabf83 }
-  ];
-  const BLOCK_FIND = 400;      // how close to the point the block has to be
-  const BLOCK_NEAR = 6000;     // how close YOU have to be for it to be loaded
-  const blockDone = {};        // never again this session: not ours, or it threw
-  const blockChecked = {};     // base and position read once and right
-  const blockTook = {};        // how many times each has been taken out
-  let blockAt = 0;
-
-  sp.on('update', guard('blocksgone', () => {
-    const now = Date.now();
-    if (now - blockAt < 4000) { return; }
-    blockAt = now;
-
-    let pc = null;
-    try { pc = sp.Game.getPlayer(); } catch (e) { return; }
-    if (!pc) { return; }
-    let px = 0, py = 0, pz = 0;
-    try { px = pc.getPositionX(); py = pc.getPositionY(); pz = pc.getPositionZ(); }
-    catch (e) { return; }
-
-    for (let i = 0; i < BLOCKS_GONE.length; i++) {
-      if (blockDone[i]) { continue; }
-      const site = BLOCKS_GONE[i];
-      const dx = px - site.pos[0], dy = py - site.pos[1], dz = pz - site.pos[2];
-      if (Math.sqrt(dx * dx + dy * dy + dz * dz) > BLOCK_NEAR) { continue; }
-
-      /*
-        ASKED FOR BY FORM ID, NOT WALKED FOR. A walk of the parent cell can
-        only find a block filed under the cell the person stands in, and two
-        of these three are filed under a persistent cell instead. See the
-        note over BLOCKS_GONE. Nothing back is an ordinary reference whose
-        cell has not loaded yet, which is not a failure: it is asked for
-        again in four seconds.
-      */
-      let ref = null;
-      try { ref = sp.ObjectReference.from(sp.Game.getFormEx(site.ref)); } catch (e) { ref = null; }
-      if (!ref) { continue; }
-
-      // Checked once: the id was measured, and a load order that changes
-      // what stands there must leave it alone rather than take something
-      // else out of the world.
-      if (!blockChecked[i]) {
-        let why = '';
-        try {
-          const base = ref.getBaseObject();
-          const id = base ? base.getFormID() : 0;
-          const dx2 = ref.getPositionX() - site.pos[0];
-          const dy2 = ref.getPositionY() - site.pos[1];
-          const dz2 = ref.getPositionZ() - site.pos[2];
-          const off = Math.sqrt(dx2 * dx2 + dy2 * dy2 + dz2 * dz2);
-          if (BLOCK_BASES.indexOf(id) < 0) {
-            why = 'its base is ' + id.toString(16) + ', which is not a chopping block';
-          } else if (off > BLOCK_FIND) {
-            why = 'it stands ' + Math.round(off) + ' units from the point';
-          }
-        } catch (e) {
-          why = 'it could not be read: ' + e;
-        }
-        if (why) {
-          say('left the ' + site.where + ' reference ' + site.ref.toString(16) + ' alone: ' + why);
-          blockDone[i] = true;
-          continue;
-        }
-        blockChecked[i] = true;
-      }
-
-      let gone = false;
-      try { gone = ref.isDisabled(); } catch (e) { gone = false; }
-      if (gone) { continue; }
-      try {
-        // disable answers a promise. Nothing waits on it: the block either
-        // goes or it does not, and a failure is worth one line, not a stall.
-        const p = ref.disable(false);
-        if (p && typeof p.then === 'function') { p.then(function () { }, function () { }); }
-        blockTook[i] = (blockTook[i] || 0) + 1;
-        if (blockTook[i] === 1) {
-          say('took the chopping block at ' + site.where + ' out of the world');
-        } else {
-          say('the ' + site.where + ' chopping block came back and was taken out again (' +
-              blockTook[i] + ' times this session)');
-        }
-      } catch (e) {
-        say('could not take the ' + site.where + ' chopping block out: ' + e);
-        blockDone[i] = true;   // do not try it every four seconds forever
-      }
-    }
-  }));
 
   /*
     ------------------------------------------- where you are standing
@@ -4762,6 +4636,45 @@
   // How far the water can be over your feet and still be wading. A character
   // is about 128 units tall, so this is roughly waist deep.
   const WADE_DEEP = 70;
+  /*
+    SNOW IS WHAT YOU STAND IN, NOT WHAT FALLS ON YOU (#4653).
+
+    The cold rules say the snow place is standing in snow on the ground
+    (docs/systems/temperature.md), and until 27 Nov 2026 this said snow only
+    while the weather was snowing: a clear day in deep snow in the Pale was
+    plain outdoors, and a snowfall on bare road was snow. Snow falling on you
+    is the weather's own line on the server (NEEDS.weather.snow, read from
+    the weather id this line carries), so the place is only the ground.
+
+    The ground is the landscape's material under your feet, which the game
+    keeps for every exterior cell and plays footsteps from. Papyrus Extender
+    (in the collection) reads it: PO3_SKSEFunctions.GetLandMaterialType
+    gives the material's name, "Snow" for the snow textures and "SnowStairs"
+    for snowy steps. Indoors and in the water it is not asked.
+  */
+  const SNOW_GROUND = ['Snow', 'SnowStairs'];
+  // What the last ground read threw, said in the heartbeat until one works.
+  let groundWhy = '';
+  function groundUnder(px, py, pz) {
+    try {
+      const material = sp.callNative('PO3_SKSEFunctions', 'GetLandMaterialType', undefined, px, py, pz);
+      groundWhy = '';
+      return typeof material === 'string' ? material : '';
+    } catch (e) {
+      groundWhy = 'GetLandMaterialType threw: ' + (e && e.message ? e.message : e);
+      return '';
+    }
+  }
+  // One word, in order of what wins: water, then a roof, then snow under
+  // your feet, then rain falling on you, and outdoors last.
+  function placeKind(p) {
+    if (p.swimming) { return 'water'; }
+    if (p.wading) { return 'shallow'; }
+    if (p.indoors) { return 'indoors'; }
+    if (SNOW_GROUND.indexOf(p.ground) >= 0) { return 'snow'; }
+    if (p.sky === 2) { return 'rain'; }
+    return 'outdoors';
+  }
   /*
     PLACED WATER, READ OUT OF THE RECORDS (#2302).
 
@@ -5359,18 +5272,14 @@
 
       Water first, because being in it beats everything else about a place.
       Then fire, which beats a roof: the point of the Bannered Mare is the fire
-      in the middle of it. Then the roof, then the weather, and outdoors last,
-      which is slightly cool rather than neutral so that walking into a
+      in the middle of it. Then the roof, then snow underfoot (#4653), then
+      rain, and outdoors last, which is slightly cool rather than neutral so that walking into a
       building is felt. Everything the server does not know a word for is
       comfortable, so a client from before this says nothing and its owner
       simply has no weather.
     */
-    let kind = 'outdoors';
-    if (swimming) { kind = 'water'; }
-    else if (wading) { kind = 'shallow'; }
-    else if (indoors) { kind = 'indoors'; }
-    else if (sky === 3) { kind = 'snow'; }
-    else if (sky === 2) { kind = 'rain'; }
+    const ground = (swimming || wading || indoors) ? '' : groundUnder(px, py, pz);
+    const kind = placeKind({ swimming: swimming, wading: wading, indoors: indoors, ground: ground, sky: sky });
 
     /*
       ONE LINE, AND IT IS SENT WHEN ANY OF IT CHANGES.
@@ -5434,7 +5343,8 @@
       say('place: ' + line + '  [fire probe: ' + fireBases + ' bases, ' + fireHits +
           ' in this cell of ' + fireWalked + ' looked at, ' + fireThrew + ' threw' +
           (fireWhy ? ' (' + fireWhy + ')' : '') + ']' +
-          (waterSaid ? '  [' + waterSaid + ']' : '') + looking);
+          (waterSaid ? '  [' + waterSaid + ']' : '') +
+          '  [ground ' + (ground || 'not read') + (groundWhy ? ', ' + groundWhy : '') + ']' + looking);
     }
 
     /*
@@ -5591,6 +5501,7 @@
   const NEAR_EVERY = 320;
   let nearAt = 0;
   let lookingAt = '';      // the form id hex the prompt is currently drawn for
+  let lookingCamera = -1;  // the camera mode last recorded for that person
   let lookingSig = '';     // what the prompt says, so it is not redrawn per poll
 
   function nearList() {
@@ -5738,10 +5649,8 @@
     the two copies are the HUD and that widget, before anything is changed.
     It reads; it changes nothing.
   */
-  function gamePromptSaid(ref) {
+  function gamePromptSaid(ref, cam) {
     const bits = [];
-    let cam = -1;
-    try { cam = Number(sp.Game.getCameraState()); } catch (e) { cam = -1; }
     // SKSE's numbers: 0 first person, 8 and 9 the two third person states.
     bits.push('camera ' + (cam === 0 ? 'first person' : (cam === 8 || cam === 9) ? 'third person' : String(cam)));
     const read = function (target) {
@@ -5863,9 +5772,15 @@
     const row = Object.prototype.hasOwnProperty.call(near, hex) ? near[hex] : null;
     if (!row) { lookingAt = ''; drawPrompt(null); return; }
 
-    if (hex !== lookingAt) {
+    let camera = -1;
+    try { camera = Number(sp.Game.getCameraState()); } catch (e) { camera = -1; }
+    if (!Number.isFinite(camera)) { camera = -1; }
+    // Both third-person states describe the same capture in #4584.
+    if (camera === 8) { camera = 9; }
+    if (hex !== lookingAt || camera !== lookingCamera) {
       lookingAt = hex;
-      say('looking at ' + row.n + ' (' + hex + ')' + gamePromptSaid(ref));
+      lookingCamera = camera;
+      say('looking at ' + row.n + ' (' + hex + ')' + gamePromptSaid(ref, camera));
     }
     const cover = lookCoveredBy();
     if (cover !== lookCover) {
@@ -8799,6 +8714,88 @@
   }));
   // ---------------------------------------------- end mod settings menus
 
+  // ---------------------------------------------- QuickLoot's own file (#4511)
+  /*
+    QUICKLOOT'S MENU IS KEPT IN THE FILE QUICKLOOT ITSELF READS.
+
+    QuickLoot IE keeps every option of its menu in its script (QLIE_ShowInCombat,
+    the window, the columns, the keys) and nowhere else, except one file of its
+    own: Data\SKSE\Plugins\QuickLootIE\DefaultConfig.json, its ConfigPath. It
+    reads that file at the start of every session, which does run here
+    (QuickLootIE.log: OnConfigInit, then ImportSettings), and it writes it only
+    from its Export settings button. So nobody's file existed, the import found
+    nothing and loaded the defaults, and every change was gone next time.
+    Measured 26 Nov 2026 from its compiled scripts.
+
+    SO WHEN THE JOURNAL CLOSES, where its menu lives, the file is written the
+    way that button writes it: QuickLootIEMCM's five ExportSettings_ steps with
+    its own ConfigPath, one after another, then JsonUtil.Save. Not
+    ExportSettings itself, which ends in a message box. The steps are the
+    script's own Papyrus, which callNative cannot run, so runScriptFunction
+    (engine fork, Thornswood #4511) runs them and says when each returned.
+
+    NOT BEFORE ITS OWN IMPORT. OnConfigInit sets IsInitialLoad to False once it
+    has read the file; a journal closed before that would write the defaults
+    over what was kept. So nothing is written while IsInitialLoad is not False.
+
+    The launcher keeps the file with the person's settings on thornswood.net
+    (YourSettings.cs), the way it keeps the MCM Helper menus' files.
+  */
+  const QLIE_PLUGIN = 'QuickLootIE.esp';
+  const QLIE_QUEST = 0x1;          // MCMQuickLootIE, the quest the menu is on
+  const QLIE_SCRIPT = 'QuickLootIEMCM';
+  const QLIE_STEPS = ['ExportSettings_General', 'ExportSettings_Display', 'ExportSettings_Sorting',
+                      'ExportSettings_Controls', 'ExportSettings_Compatibility'];
+  let qlieQuestId = 0;
+  let qlieWriting = false;
+  let qlieAgain = false;
+
+  function qlieQuest() {
+    if (qlieQuestId) { return qlieQuestId; }
+    try {
+      const form = sp.Game.getFormFromFile(QLIE_QUEST, QLIE_PLUGIN);
+      qlieQuestId = form ? form.getFormID() : 0;
+    } catch (e) { qlieQuestId = 0; }
+    return qlieQuestId;
+  }
+
+  function qlieDone(why) {
+    qlieWriting = false;
+    log('quickloot settings: ' + (why || 'written'));
+    if (qlieAgain) { qlieAgain = false; qlieWrite(); }
+  }
+
+  function qlieWrite() {
+    if (qlieWriting) { qlieAgain = true; return; }
+    const quest = qlieQuest();
+    if (!quest) { return; }
+    if (sp.getScriptProperty(quest, QLIE_SCRIPT, 'IsInitialLoad') !== false) { return; }
+    const file = sp.getScriptProperty(quest, QLIE_SCRIPT, 'ConfigPath');
+    if (typeof file !== 'string' || !file) { log('quickloot settings: its menu has no ConfigPath'); return; }
+    qlieWriting = true;
+    let i = 0;
+    // Each step starts when the one before it has returned; any throw ends
+    // the run with what it said, so the next close can write again.
+    const next = (ran) => {
+      try {
+        if (!ran) { qlieDone(QLIE_STEPS[i - 1] + ' did not run, so nothing was saved'); return; }
+        if (i < QLIE_STEPS.length) {
+          sp.runScriptFunction(quest, QLIE_SCRIPT, QLIE_STEPS[i++], [file])
+            .then(next, (err) => qlieDone(QLIE_STEPS[i - 1] + ' failed, so nothing was saved: ' + err));
+          return;
+        }
+        const saved = !!sp.callNative('JsonUtil', 'Save', undefined, file, false);
+        qlieDone(saved ? '' : 'JsonUtil.Save did not write ' + file);
+      } catch (e) { qlieDone('stopped: ' + (e && e.message ? e.message : e)); }
+    };
+    next(true);
+  }
+
+  sp.on('menuClose', guard('quickloot settings close', (e) => {
+    if (e && e.name === JOURNAL_MENU) { qlieWrite(); }
+  }));
+  // ---------------------------------------------- end QuickLoot's own file
+
   /*
     / OPENS THE CHAT WITH A SLASH IN IT, AND ONLY THE CHAT.
 
@@ -9054,11 +9051,39 @@
   }
 
   // except: the menu that is closing right now, which is not in the way.
+  // What the panel waited on is said once a wait (#4581): no press on a
+  // driver from 15 to 27 November opened it, and the log said nothing after
+  // "asked the server where driver ... goes".
+  let rideWaitSaid = '';
   function rideOpenIfFree(except) {
     if (rideState !== 'waiting') { return; }
-    if (!rideInReach()) { rideState = ''; return; }
-    if (busyMenuOpenNow(except)) { return; }
+    if (!rideInReach()) {
+      rideState = '';
+      say('the ride panel is not opened: driver ' + (rideDriver >>> 0).toString(16) + ' is out of reach (' + rideApart() + ')');
+      return;
+    }
+    const busy = busyMenuOpenNow(except);
+    if (busy) {
+      if (rideWaitSaid !== busy) { rideWaitSaid = busy; say('the ride panel waits for the ' + busy + ' to close'); }
+      return;
+    }
+    rideWaitSaid = '';
     T.js('try{window.thornswoodRide&&window.thornswoodRide.open();}catch(e){}');
+  }
+
+  // How far the driver pressed is, for the line above: a distance, or why none.
+  function rideApart() {
+    if (!rideDriver) { return 'no driver kept'; }
+    try {
+      const pc = sp.Game.getPlayer();
+      const ref = sp.ObjectReference.from(sp.Game.getFormEx(rideDriver));
+      if (!pc) { return 'no character'; }
+      if (!ref) { return 'he is not loaded'; }
+      const dx = pc.getPositionX() - ref.getPositionX();
+      const dy = pc.getPositionY() - ref.getPositionY();
+      const dz = pc.getPositionZ() - ref.getPositionZ();
+      return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz)) + ' apart, reach ' + RIDE_REACH;
+    } catch (err) { return 'unreadable: ' + err; }
   }
 
   function rideDriverIdSet() {
@@ -9552,7 +9577,7 @@
       T.js('window.THORNSWOOD=' + JSON.stringify({
         host: HOST, port: VOICE_PORT, profileId: PROFILE, name: sentName,
         token: '', base: VOICE_URL, socket: VOICE_SOCKET_URL,
-        chatFade: CHAT_FADE, needsBars: NEEDS_BARS
+        chatFade: CHAT_FADE, needsBars: NEEDS_BARS, textSize: TEXT_SIZE
       }) + ';');
       OVERLAYS.forEach(inject);
       // The token itself is never logged. It is what somebody would need to
@@ -10390,7 +10415,10 @@
       return;
     }
     // The ride panel (#1635): see THE RIDE PANEL WAITS above.
-    if (what === 'ride:wants') { rideState = 'waiting'; rideOpenIfFree(''); return; }
+    if (what === 'ride:wants') {
+      say('the server sent the ride panel for driver ' + (rideDriver >>> 0).toString(16));
+      rideState = 'waiting'; rideOpenIfFree(''); return;
+    }
     if (what === 'ride:opened') { rideState = 'up'; T.claimFocus('ride', true); return; }
     if (what === 'ride:closed') {
       T.claimFocus('ride', false);
@@ -11562,6 +11590,7 @@
     return {
       fov: { value: wantedFov || FOV_DEFAULT, min: FOV_MIN, max: FOV_MAX, def: FOV_DEFAULT },
       chatFade: CHAT_FADE, chatChoices: CHAT_FADE_CHOICES, needsBars: NEEDS_BARS,
+      textSize: TEXT_SIZE, textChoices: TEXT_SIZE_CHOICES,
       keys: keys, mods: modKeys(), said: said || ''
     };
   }
@@ -11575,8 +11604,10 @@
      chat page, which reads them off window.THORNSWOOD. */
   function chatSettingsToPage() {
     T.js('try{var c=window.THORNSWOOD=window.THORNSWOOD||{};c.chatFade=' + CHAT_FADE +
-         ';c.needsBars=' + NEEDS_BARS + ';window.thornswoodChat&&window.thornswoodChat.settings&&' +
-         'window.thornswoodChat.settings();}catch(e){}');
+         ';c.needsBars=' + NEEDS_BARS + ';c.textSize=' + TEXT_SIZE +
+         ';window.thornswoodChat&&window.thornswoodChat.settings&&' +
+         'window.thornswoodChat.settings();window.thornswoodScale&&window.thornswoodScale.settings&&' +
+         'window.thornswoodScale.settings();}catch(e){}');
   }
 
   /*
@@ -11640,6 +11671,11 @@
       if (CHAT_FADE_CHOICES.indexOf(v) < 0) { settingsToPage('That is not one of the choices.'); return; }
       value = v === 10 ? null : String(v);
       said = v === 0 ? 'The chat stays on screen all the time.' : 'The chat hides ' + v + ' seconds after its last line.';
+    } else if (name === 'TextSize') {
+      const v = Number(raw);
+      if (TEXT_SIZE_CHOICES.indexOf(v) < 0) { settingsToPage('That is not one of the choices.'); return; }
+      value = v === 100 ? null : String(v);
+      said = v === 100 ? 'Text at its usual size.' : 'Text at ' + v + ' percent.';
     } else if (name === 'NeedsBars') {
       const shown = String(raw) !== '0';
       value = shown ? null : '0';
@@ -11702,6 +11738,222 @@
       try { others[n](text); } catch (e) { log('settings: a plugin threw reading the new settings:', e); }
     }
   }
+
+  // ---------------------------------------------- SkyUI's favourite groups (#4511)
+  /*
+    SKYUI'S FAVOURITE GROUPS ARE KEPT, PER CHARACTER, ON THIS MACHINE.
+
+    SkyUI keeps its eight favourite groups only in SKI_FavoritesManager's
+    arrays (each group's 32 items and their item ids, in _items1 and
+    _itemIds1 for groups 1 to 4 and the "2" arrays for 5 to 8, and each
+    group's main hand, off hand and icon), and those live in the save. There
+    is no save here, so OnInit made them empty at every session's start and
+    every group was gone. Only the Favorites menu's own events fill them, and
+    no function of the script takes a whole group from outside. Measured
+    26 Nov 2026 from SKI_FavoritesManager.pex in SkyUI_SE.bsa.
+
+    SO WHEN THE FAVORITES MENU CLOSES, where groups are made, the arrays are
+    read (getScriptVariable, engine fork, Thornswood #4511) and written to
+    Data\Platform\thornswood-favourite-groups.json under this server and
+    character. At the next start, once OnInit has made the arrays and the
+    version update has made _itemInvalidFlags2, they are filled back
+    (setScriptVariable), and the menu sends them to its page when it opens,
+    as it does after a load. A character with nothing kept gets them empty,
+    which is also what a pick of another character at the choice puts back.
+
+    An item is kept as its plugin and the id inside it, so a change in the
+    load order does not point it at another record. Its item id is SKSE's,
+    the one the menu gave and EquipItemById takes, kept as it was given, as
+    a save keeps it. A form the game made this session (an 0xFF id) cannot
+    be found again and is left out with its id.
+
+    The launcher keeps the file with the person's settings on thornswood.net
+    (YourSettings.cs). The site refuses a file over 64 KB, so the characters
+    kept longest ago are left out first when the file would pass FAV_MOST.
+  */
+  const FAV_PLUGIN = 'SkyUI_SE.esp';
+  const FAV_QUEST = 0x82a;          // SKI_FavoritesManagerInstance
+  const FAV_SCRIPT = 'SKI_FavoritesManager';
+  const FAV_MENU = 'FavoritesMenu';
+  const FAV_FILE = 'Data/Platform/thornswood-favourite-groups.json';
+  const FAV_MOST = 48 * 1024;
+  const FAV_HALF = 128;
+  // Each group's own form and item id: main hand, off hand, icon.
+  const FAV_HANDS = [['main', '_groupMainHandItems', '_groupMainHandItemIds'],
+                     ['off', '_groupOffHandItems', '_groupOffHandItemIds'],
+                     ['icon', '_groupIconItems', '_groupIconItemIds']];
+  let favQuestId = 0;
+  let favFor = '';              // whose groups the script holds now
+  let favPutOk = false;         // and whether they were put back whole
+  let favWaitLogged = false;
+
+  function favQuest() {
+    if (favQuestId) { return favQuestId; }
+    try {
+      const form = sp.Game.getFormFromFile(FAV_QUEST, FAV_PLUGIN);
+      favQuestId = form ? form.getFormID() : 0;
+    } catch (e) { favQuestId = 0; }
+    return favQuestId;
+  }
+
+  function favKey() { return PROFILE ? HOST + '/' + PROFILE : ''; }
+
+  // A form as "<plugin>|<id inside it, hex>", or '' when it has none to keep.
+  function favFormKey(raw) {
+    if (!raw) { return ''; }
+    const form = sp.Form.from(raw);
+    const id = form ? form.getFormID() >>> 0 : 0;
+    if (!id) { return ''; }
+    const hi = id >>> 24;
+    if (hi === 0xff) { return ''; }
+    const file = hi === 0xfe ? sp.Game.getLightModName((id >>> 12) & 0xfff) : sp.Game.getModName(hi);
+    const local = hi === 0xfe ? (id & 0xfff) : (id & 0xffffff);
+    return file ? file + '|' + local.toString(16) : '';
+  }
+
+  function favForm(key) {
+    const bar = typeof key === 'string' ? key.lastIndexOf('|') : -1;
+    if (bar <= 0) { return null; }
+    const local = parseInt(key.slice(bar + 1), 16);
+    if (!(local > 0)) { return null; }
+    return sp.Game.getFormFromFile(local, key.slice(0, bar)) || null;
+  }
+
+  function favRead() {
+    try { return JSON.parse(require('fs').readFileSync(FAV_FILE, 'utf8')); } catch (e) { return null; }
+  }
+
+  // The arrays as they are now, or null while the script has not made them.
+  function favArrays(quest) {
+    const names = ['_items1', '_itemIds1', '_items2', '_itemIds2', '_itemInvalidFlags2'];
+    FAV_HANDS.forEach((h) => { names.push(h[1], h[2]); });
+    const out = {};
+    for (const n of names) {
+      const v = sp.getScriptVariable(quest, FAV_SCRIPT, n);
+      if (!Array.isArray(v)) { return null; }
+      out[n] = v;
+    }
+    return out;
+  }
+
+  // What is kept of one character: each filled slot, 0 to 255 over both
+  // halves, and each group's hands and icon, as [form, item id].
+  function favTake(a) {
+    const slots = {};
+    for (let i = 0; i < 2 * FAV_HALF; i++) {
+      const half = i < FAV_HALF ? '1' : '2';
+      const j = i % FAV_HALF;
+      const itemId = Number(a['_itemIds' + half][j]) | 0;
+      const form = itemId ? favFormKey(a['_items' + half][j]) : '';
+      if (itemId && form) { slots[i] = [form, itemId]; }
+    }
+    const kept = { saved: Date.now(), slots: slots };
+    FAV_HANDS.forEach((h) => {
+      const by = {};
+      for (let g = 0; g < 8; g++) {
+        const itemId = Number(a[h[2]][g]) | 0;
+        const form = itemId ? favFormKey(a[h[1]][g]) : '';
+        if (itemId && form) { by[g] = [form, itemId]; }
+      }
+      kept[h[0]] = by;
+    });
+    return kept;
+  }
+
+  function favSave() {
+    const key = favKey();
+    const quest = favQuest();
+    // Never before this character's groups were put back: the empty arrays
+    // of a fresh start would be written over what was kept.
+    if (!key || !quest || favFor !== key || !favPutOk) { return; }
+    const a = favArrays(quest);
+    if (!a) { log('favourite groups: the menu closed before SkyUI made its arrays, so nothing was kept'); return; }
+    const all = favRead() || {};
+    const chars = (all.characters && typeof all.characters === 'object') ? all.characters : {};
+    chars[key] = favTake(a);
+    // Newest first, and only as many as fit.
+    const order = Object.keys(chars).sort((x, y) => (Number(chars[y].saved) || 0) - (Number(chars[x].saved) || 0));
+    const out = { version: 1, characters: {} };
+    for (const k of order) {
+      out.characters[k] = chars[k];
+      if (JSON.stringify(out).length > FAV_MOST) { delete out.characters[k]; log('favourite groups: left out ' + k + ', kept longest ago, to stay under ' + FAV_MOST + ' bytes'); }
+    }
+    const fs = require('fs');
+    fs.writeFileSync(FAV_FILE + '.tmp', JSON.stringify(out));
+    fs.renameSync(FAV_FILE + '.tmp', FAV_FILE);
+    log('favourite groups: kept ' + Object.keys(chars[key].slots).length + ' items for ' + key);
+  }
+
+  // Puts this character's groups in the script's arrays, every value checked
+  // by setScriptVariable before any is written.
+  function favPut(quest, a, kept) {
+    const next = {};
+    ['1', '2'].forEach((half) => {
+      next['_items' + half] = a['_items' + half].map(() => null);
+      next['_itemIds' + half] = a['_itemIds' + half].map(() => 0);
+    });
+    let put = 0, lost = 0;
+    const slots = (kept && kept.slots) || {};
+    for (const s of Object.keys(slots)) {
+      const i = Number(s);
+      if (!(i >= 0 && i < 2 * FAV_HALF) || !Array.isArray(slots[s])) { continue; }
+      const form = favForm(slots[s][0]);
+      const itemId = Number(slots[s][1]) | 0;
+      if (!form || !itemId) { lost++; continue; }
+      const half = i < FAV_HALF ? '1' : '2';
+      next['_items' + half][i % FAV_HALF] = form;
+      next['_itemIds' + half][i % FAV_HALF] = itemId;
+      put++;
+    }
+    FAV_HANDS.forEach((h) => {
+      next[h[1]] = a[h[1]].map(() => null);
+      next[h[2]] = a[h[2]].map(() => 0);
+      const by = (kept && kept[h[0]]) || {};
+      for (let g = 0; g < 8; g++) {
+        if (!Array.isArray(by[g])) { continue; }
+        const form = favForm(by[g][0]);
+        const itemId = Number(by[g][1]) | 0;
+        if (form && itemId) { next[h[1]][g] = form; next[h[2]][g] = itemId; }
+      }
+    });
+    for (const n of Object.keys(next)) {
+      if (!sp.setScriptVariable(quest, FAV_SCRIPT, n, next[n])) { throw new Error('SkyUI has no ' + n); }
+    }
+    return { put: put, lost: lost };
+  }
+
+  // Once the script has made its arrays, and again after a pick of another
+  // character, its groups are this character's.
+  let favLook = 0;
+  sp.on('update', guard('favourite groups', () => {
+    const key = favKey();
+    if (!key || key === favFor || ++favLook % 30) { return; }
+    const quest = favQuest();
+    if (!quest) { return; }
+    const a = favArrays(quest);
+    if (!a) {
+      if (!favWaitLogged) { favWaitLogged = true; log('favourite groups: waiting for SkyUI to make its arrays'); }
+      return;
+    }
+    const all = favRead();
+    const kept = all && all.characters ? all.characters[key] : null;
+    // Looked at once for each character. One that could not be put back is
+    // never saved this session, so what was kept is not written over.
+    favFor = key;
+    favPutOk = false;
+    try {
+      const got = favPut(quest, a, kept);
+      favPutOk = true;
+      log('favourite groups: put back ' + got.put + ' items for ' + key + (got.lost ? ', ' + got.lost + ' whose record is not loaded left out' : ''));
+    } catch (err) {
+      log('favourite groups: could not put them back for ' + key + ', so none are kept this session: ' + (err && err.message ? err.message : err));
+    }
+  }));
+
+  sp.on('menuClose', guard('favourite groups close', (e) => {
+    if (e && e.name === FAV_MENU) { favSave(); }
+  }));
+  // ---------------------------------------------- end SkyUI's favourite groups
 
   /*
     Write the game's real load order to disk, once, on the first update.

@@ -174,12 +174,12 @@ function world() {
   function run(block) {
     new Function('globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
       'guard', 'say', 'notify', 'Math', 'Number', 'String', 'Object', 'Array',
-      'JSON', 'isFinite', 'parseInt', require('../../tests/fixtures/ordinary-quest-items') + block)(
+      'JSON', 'isFinite', 'parseInt', 'WORLDSPACES', require('../../tests/fixtures/ordinary-quest-items') + block)(
       g, mp, { now: function () { return 1700000000000; } }, { log: function () { } },
       function () { return 1; }, function () { }, function (n, f) { return f; },
       function (id, line) { said.push({ to: id, line: line }); },
       function () { },
-      Math, Number, String, Object, Array, JSON, isFinite, parseInt);
+      Math, Number, String, Object, Array, JSON, isFinite, parseInt, new Set(['3c:Skyrim.esm']));
   }
   run(social);
   run(trade);
@@ -252,8 +252,8 @@ if (social && trade && branch && journal) {
     yes('P3 Remove first names her for confirmation and sends nothing', p.press('Remove', 102) === '');
     yes('P3 Remove beside her sends her profile id too', p.press('Remove', 102) === '/friend remove 102');
     yes('P4 Mute, Text and Name still send it',
-        p.press('Mute', 102) === '/mute 102' && p.press('Text', 102) === '/mute text 102' &&
-        p.press('Name', 102) === '/hidename 102');
+        p.press('Mute voice', 102) === '/mute 102' && p.press('Hide text', 102) === '/mute text 102' &&
+        p.press('Hide name', 102) === '/hidename 102');
     const rowButtons = p.buttons().filter(function (b) {
       return ['ask', 'mute', 'mtext', 'mname', 'drop'].indexOf(b.attrs['data-do']) !== -1;
     });

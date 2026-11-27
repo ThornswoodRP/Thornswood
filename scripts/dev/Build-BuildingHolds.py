@@ -351,9 +351,12 @@ def main():
     table, refused = {}, {}
     unplaced = 0
     for bld in sorted(buildings):
-        c = cells.get(key_of(bld)) or {}
+        site = dj.get('sites', {}).get(bld, {})
+        # Established town gateways are named properties, while new exterior
+        # sites use a placed DOOR reference identity, never a shared world CELL.
+        c = (cells.get(key_of(bld)) or {}) if site.get('kind', 'interior') == 'interior' else {}
         own, own_loc = hold_of_loc(c.get('loc'))
-        name = (dj['cells'].get(bld) or {}).get('name') or c.get('edid') or bld
+        name = site.get('name') or (dj['cells'].get(bld) or {}).get('name') or c.get('edid') or bld
         for d in buildings[bld]:
             if place_of(d) is None:
                 unplaced += 1

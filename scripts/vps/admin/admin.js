@@ -208,6 +208,21 @@ const RULES = {
 // ask them only with check (the redesign's part 20, 1 Nov 2026); settings and
 // installation-repos only read, so they need no check.
 const CHANGING_ASKS = ['runner-labels', 'repo-about', 'repo-settings'];
+// This file in the repository, and git's id for the code this process runs
+// (#4307). The records come from main, but this code reaches the box only
+// when Install-AdminService.ps1 sends it, so a merge that changes both a
+// record and how it is read had the old code apply the new record: on 27
+// Oct 2026 (PR #3861, run 40454492575) that took thornswood-build off five
+// runners for an hour. So a changing ask, check or not, is answered only
+// while this is the admin.js on main. The id is read when the process
+// starts, since a later install can change the file under a running one.
+const SELF = 'scripts/vps/admin/admin.js';
+// git's blob id of some bytes, the sha GitHub's contents API gives a file.
+function blobSha(buf) { return crypto.createHash('sha1').update('blob ' + buf.length + '\0').update(buf).digest('hex'); }
+// This file as git holds it: a Windows checkout may write CRLF where the
+// repository holds LF.
+function ownSha(file) { return blobSha(Buffer.from(fs.readFileSync(file).toString('latin1').replace(/\r\n/g, '\n'), 'latin1')); }
+const OWN_SHA = ownSha(__filename);
 // The one issue a scheduled check of the repository settings opens on the
 // board when GitHub differs from the record, and closes once it matches
 // again. Found by this title among the open issues the App itself opened.
@@ -658,6 +673,14 @@ async function installationToken(held, now, repo, permissions, inst) {
     repo ? { repositories: [repo.split('/')[1]], permissions } : { permissions });
   if (tok.status !== 201) throw new Error('GitHub gave the App no token (' + said(tok) + ')');
   return tok.body.token;
+}
+
+// git's id for admin.js on main, read through the App (#4307).
+async function mainCode(token) {
+  const got = await call('GET', API + '/repos/' + REPO + '/contents/' + SELF + '?ref=main', { Authorization: 'Bearer ' + token });
+  const sha = got.body && typeof got.body === 'object' ? String(got.body.sha || '') : '';
+  if (got.status !== 200 || !/^[0-9a-f]{40}$/.test(sha)) throw new Error('GitHub would not say which ' + SELF + ' is on main (' + said(got) + '), so nothing was asked of GitHub');
+  return sha;
 }
 
 // Every records/<name>-runners.json on main, read through the App.
@@ -1348,6 +1371,19 @@ async function converge(req, res, now) {
     }
     return;
   }
+  // A read-only token for this repository: main's admin.js is read with it,
+  // and runner-labels reads its records with it too.
+  let codeRead = null;
+  if (CHANGING_ASKS.includes(ask.what)) {
+    let main;
+    try { codeRead = await installationToken(held, now, REPO, { contents: 'read' }); main = await mainCode(codeRead); }
+    catch (e) { log('run ' + run + ': ' + ask.what + ': ' + e.message); json(res, 502, { ok: false, changed: 0, lines: [e.message] }); return; }
+    if (main !== OWN_SHA) {
+      log('run ' + run + ': refused ' + ask.what + ', this admin.js is ' + OWN_SHA.slice(0, 12) + ' and main\'s is ' + main.slice(0, 12));
+      json(res, 409, { ok: false, changed: 0, lines: ['STOP this service runs admin.js ' + OWN_SHA.slice(0, 12) + ' and main has ' + main.slice(0, 12) + ', so it changed and checked nothing: put main\'s on the box with Install-AdminService.ps1 (the gate verb Install-AdminService), then ask again'] });
+      return;
+    }
+  }
   try {
     if (ask.what === 'installation-repos') {
       const r = await installationRepos(await installationToken(held, now, null, { metadata: 'read' }));
@@ -1371,7 +1407,7 @@ async function converge(req, res, now) {
     } else if (ask.what === 'repo-about') {
       r = await repoAbout(await installationToken(held, now, REPO, { administration: 'write', contents: 'read' }), !!ask.check);
     } else {
-      const read = await installationToken(held, now, REPO, { contents: 'read' });
+      const read = codeRead;
       const token = await installationToken(held, now, RUNNERS_REPO, { administration: 'write' });
       r = await runnerLabels(read, token, !!ask.check);
     }
@@ -1405,5 +1441,5 @@ function serve() {
   return server;
 }
 
-module.exports = { said, driftBody, CHANGING_ASKS, DRIFT_TITLE, MACHINE_ACTORS, verifyOidc, appJwt, call, botToken, BOT_PERMISSIONS, siteToken, SITE_PERMISSIONS, planCollaborators, planLabels, planLeftovers, checkRecords, checkAbout, planAbout, runnerNumber, checkRulesets, checkSettings, planRulesets, rulesetBody, says, manifest, RULES, ASKS, REPO, RUNNERS_REPO, SETTINGS_REPOS, SCANNING_KEYS, MERGE_KEYS, METHOD_KEYS, FREE_PRIVATE_REPOS, SETTINGS_PERMISSIONS, SETTINGS_EXTRA, serve };
+module.exports = { said, blobSha, ownSha, OWN_SHA, SELF, driftBody, CHANGING_ASKS, DRIFT_TITLE, MACHINE_ACTORS, verifyOidc, appJwt, call, botToken, BOT_PERMISSIONS, siteToken, SITE_PERMISSIONS, planCollaborators, planLabels, planLeftovers, checkRecords, checkAbout, planAbout, runnerNumber, checkRulesets, checkSettings, planRulesets, rulesetBody, says, manifest, RULES, ASKS, REPO, RUNNERS_REPO, SETTINGS_REPOS, SCANNING_KEYS, MERGE_KEYS, METHOD_KEYS, FREE_PRIVATE_REPOS, SETTINGS_PERMISSIONS, SETTINGS_EXTRA, serve };
 if (require.main === module) serve();

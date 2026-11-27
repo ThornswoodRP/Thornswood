@@ -264,8 +264,8 @@ try {
     $wf = ([IO.File]::ReadAllText((Join-Path $root '.github\workflows\merge-release.yml')) -replace "`r`n", "`n")
     $job = $wf.Substring($wf.IndexOf("`n  release:"))
     Check '5 it starts again on deployment_status' ($wf -match '(?m)^  deployment_status:')
-    Check '5 a content job asks for the build, on main only, on a push or a Content Deployment''s success' (
-        $wf -match "(?s)  content:.*?if: \$\{\{ github\.ref == 'refs/heads/main' && \(github\.event_name != 'deployment_status' \|\| \(github\.event\.deployment\.environment == 'Content' && github\.event\.deployment_status\.state == 'success'\)\) \}\}" -and
+    Check '5 a content job asks for the build, on main only, on a push or a Content Deployment''s success, never a queued merge''s (#6879)' (
+        $wf -match "(?s)  content:.*?if: \$\{\{ github\.ref == 'refs/heads/main' && \(github\.event_name != 'deployment_status' \|\| \(github\.event\.deployment\.environment == 'Content' && github\.event\.deployment_status\.state == 'success' && !github\.event\.deployment\.payload\.queued\)\) \}\}" -and
         $wf -match 'Get-ContentBuild\.ps1 -Server dev -Ask')
     Check '5 the release waits on it and runs only when the build is found' ($job -match 'needs: \[content, ' -and $job -match "if: \$\{\{ !cancelled\(\) && needs\.content\.outputs\.found == 'yes' && ")
     $takeAt = $job.IndexOf('Get-ContentBuild.ps1 -Server dev -Take')

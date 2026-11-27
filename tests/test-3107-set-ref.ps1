@@ -10,8 +10,9 @@
   step does that in a cloud session (Release-Name.ps1, Add-ReleaseTag).
 
   WHAT IT HOLDS THEM TO.
-    1. git-ref.yml: started by hand only; a token that can write refs and
-       read pull requests and nothing else; on GitHub's runner with a
+    1. git-ref.yml: started by hand only; a token that can write refs,
+       read pull requests and start release-files.yml, and nothing else, as
+       Set-Ref.ps1's header says; on GitHub's Windows runner with a
        timeout; no token kept by the checkout; main's Set-Ref.ps1 -OnGitHub under pwsh with no
        profile; the inputs reach it through the environment, nothing pasted
        into its script.
@@ -96,6 +97,9 @@ Yes 'it is started by hand and by nothing else' ($on -match '^\s{2}workflow_disp
 $perm = [regex]::Match($code, '(?ms)^permissions:\n(.*?)^\S').Groups[1].Value.Trim()
 Yes ("its token writes refs, reads pull requests and starts release-files.yml (#3686), nothing else ($($perm -replace '\s+', ' '))") ($perm -eq "contents: write`n  pull-requests: read`n  actions: write")
 Yes '  and no job asks for more' ($code -notmatch '(?m)^    permissions:')
+$head = ([regex]::Match([IO.File]::ReadAllText($setRef), '(?s)<#(.*?)#>').Groups[1].Value -replace '\s+', ' ')
+Yes '  and Set-Ref.ps1''s header names those three rights (#4235)' ($head -match [regex]::Escape('(contents: write, pull-requests: read and actions: write, nothing else)'))
+Yes '  and says it runs on GitHub''s Windows runner, not a VPS runner (#4235)' ($head -match [regex]::Escape("on GitHub's Windows runner") -and $head -notmatch 'on a VPS runner')
 Yes 'it runs on GitHub''s Windows runner (#3685, #4983)' ($code -match ('(?m)^    runs-on: ' + [regex]::Escape('windows-latest') + '$'))
 Yes '  with a timeout' ($code -match '(?m)^    timeout-minutes: \d+$')
 Yes '  in no environment, so it holds no secret' ($code -notmatch '(?m)^\s+environment:' -and $code -notmatch 'secrets\.')

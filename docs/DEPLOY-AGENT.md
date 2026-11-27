@@ -54,7 +54,7 @@ build** (the engine).
 | Dev gamemode | Applied by the agent: a merge that changes `game/gamemode.js` makes a signed Release and a Deployment, and the agent reloads the dev server's gamemode with nobody dropped. The gate's `Deploy-Release` verb puts in any such Release by its tag. |
 | Dev engine (the server build) | Applied by the agent (#5219): every Release carries the server build its commit records, and when dev runs another one the agent stops dev, swaps in the build and the gamemode together and starts it under a hold. So a merged engine pin reaches dev with no Publish-Server and no Deploy-DevGamemode. See "A new server build" below. |
 | Dev plugins and load order | Moved by the agent after a dev Deployment (#5180): when the Deployment's commit changed what the order is made from since the agent last moved it (`records/collection.json`, `records/collection-plugins.json`, `records/collection-dropped.json` or `records/load-order.json`, what the box's content build reads its order from, #6209; our own plugins, Thornswood-Content.esp and Thornswood-Last.esp, are the Release's and go in with it, #6175), the agent asks the gate for `Deploy-DevGamemode -LoadOrder -FromRecord -OrderOnly -ShipFollows -At <the Deployment's commit>`, the tested move a person runs with Box-Run, which sends nothing of the gamemode (#6166). See "After a dev Deployment" below. Settings flags (`-RequirePass`, `-Npcs` and the like) stay a person's Deploy-DevGamemode run. |
-| Server load order | Applied with every server Deployment (#6209): the order is the plugin list of the Release's own NPC catalogue (`NPC_POPULATION_DATA.json` in its tables), which the gamemode holds the server's `loadOrder` to name for name, or starts no NPC runtime. When the server loads another, the new order goes into `server-settings.json` in the same stop, swap and start as the Release's plugins, and the bot pass runs on that order first. A plugin the order adds is taken at the bytes the Release commit's `records/collection-plugins.json` names (read from GitHub at that commit), from the server's `plugins` folder when it is there already and otherwise from the box's store of that revision (`C:\Thornswood-Deploys\collection\<slug>-<revision>`, which `Deploy-DevGamemode -LoadOrder -FromRecord` fills). An order that leaves out a plugin the server loads, or adds one that is neither on the server nor in the store at the record's bytes, stops the Deployment before anything is touched. Before this, on 15 Nov 2026, build-1.3.72's catalogue named collection revision 8's 107 plugins while dev ran revision 7's 106, and the bot pass refused it at merchants. |
+| Server load order | Applied with every server Deployment (#6209): the order is the plugin list of the Release's own NPC catalogue (`NPC_POPULATION_DATA.json` in its tables), which the gamemode holds the server's `loadOrder` to name for name, or starts no NPC runtime. When the server loads another, the new order goes into `server-settings.json` in the same stop, swap and start as the Release's plugins, and the bot pass runs on that order first. A plugin the order adds is taken at the bytes the Release commit's `records/collection-plugins.json` names (read from GitHub at that commit), from the server's `plugins` folder when it is there already and otherwise from the box's store of that revision (`C:\Thornswood-Deploys\collection\<slug>-<revision>`, which `Deploy-DevGamemode -LoadOrder -FromRecord` fills). A plugin the server loads that the order leaves out goes only when the Release commit's `records/collection-dropped.json` names it, with why its forms can go, for the revision that commit's `records/collection-plugins.json` is (the rule the gate's `Deploy-DevGamemode -LoadOrder -FromRecord` and `Deploy-Server` hold to). An order that leaves out any other, or adds one that is neither on the server nor in the store at the record's bytes, stops the Deployment before anything is touched. Until 27 Nov 2026 every drop stopped it, so revision 13's first Release, without McmRecorder.esp, could reach neither server. A plugin dropped that way is also written into the settings' `forgetPlugins`, the engine's word that its forms can go, so a save that still names one of them loads without it; without that, main's server stopped at its first start on build-1.3.136 (27 Nov 2026) on a saved head part named 827:McmRecorder.esp, and the agent put the previous build back. The names stay in `forgetPlugins`, and one the order loads again leaves it. Before this, on 15 Nov 2026, build-1.3.72's catalogue named collection revision 8's 107 plugins while dev ran revision 7's 106, and the bot pass refused it at merchants. |
 | Server plugins | Applied with every server Deployment (#6175): the Release's game files carry `Thornswood-Content.esp` and `Thornswood-Last.recipe` from the box's content build, and when the server's `plugins\Thornswood-Content.esp` or `plugins\Thornswood-Last.esp` is not that Release's, the agent puts in the Release's content plugin and the Last plugin it makes from the Release's recipe, out of the server's other plugins and the string tables of `C:\Thornswood-GameData` (the launcher's own `LastPlugin.cs`, compiled in), by a stop, swap and start that keeps the server build when the Release records the one the server runs. A recipe the server's plugins cannot make stops the Deployment before anything is touched. Before this, on 15 Nov 2026, main took build-1.3.69's box-built tables over its committed plugins, and every launcher on it refused Play. |
 | Main | Applied by the agent once `Install-DeployAgent -Main` has run (#5181): the same Release dev ran, after Patrick approves its promotion on GitHub. See "Main" below. |
 | Site, Discord bot | Applied by the agent (#5190, #5187): a merge that changes either makes a Deployment to **Site** or **Discord bot** with the Release's `site.zip` or `discord.zip`, and the agent swaps it in the way Deploy-Docs and Install-Bot -CodeOnly do. See "The site, the Discord bot and voice" below. |
@@ -393,7 +393,7 @@ a copy of dev that nobody plays on:
    `C:\Thornswood-BotPass\passes\<when it last wrote>-<its Deployment>`
    (`run\pass.txt` names the Deployment; a pass from an agent before that is
    kept as `unnamed`). The newest 30 stay, and of a log past 8 MiB its end.
-   `Install-DeployAgent -Status` lists them and `-Status -Pass <name>` prints
+   `Install-DeployAgent -Status` lists them and `-Status -KeptPass <name>` prints
    one.
 
 The bot pass rides in the gamemode Release as a part of its own, `bot`
@@ -513,6 +513,38 @@ it, never with the script's own download (#6359). A pull request
 whose content inputs are not that build's leaves out the content checks that
 read an input it changed, since they would hold its new sources to the old
 tables; the merge release runs them.
+
+### A merge the queue holds
+
+Patrick's A on #6879 (26 Nov 2026): a merge is built on the box while the
+merge queue holds it, so its content checks run before it lands, and a red
+one drops it from the queue.
+
+- The ask is a Deployment to **Content** like main's, with the queued commit
+  beside the key: `{"content": "<key>", "server": "dev", "queued": "<commit>"}`.
+  The agent asks the gate for `Build-Content -Server dev -Queued <commit>`.
+- The verb builds that commit only when it is the head of one of the
+  queue's `gh-readonly-queue/main/` branches on GitHub. It lays the commit
+  out in a worktree of the gate's checkout and runs main's own scripts over
+  it, never the commit's.
+- Every tool of the commit, and Make-LastPlugin.py before each one, runs on
+  the box as its limited account, never as its administrator: a one-shot
+  task as `NT AUTHORITY\LOCAL SERVICE`, limited, with a SID of its own
+  (`NT TASK\Thornswood Limited Build`), in a job that ends whatever it
+  starts. It may read the game data and change only its run's folder. The
+  services' fail-safe runs first and stops the run when this account could
+  read a place no service may read, the gate's folder among them
+  (`scripts/mods/OnBox.ps1`, THE LIMITED RUN).
+- The build is kept apart, in `C:\Thornswood-ContentBuilds\queue-<server>\<key>`,
+  and goes on a draft of its own, `content-queue-<server>-<key>`, the
+  newest 8 kept. No release takes it: the merge release builds the merge
+  again once it is on main, and it ignores the success of a queued ask.
+- Each queued ask is built, oldest first, and an ask for main never passes
+  over one, since each merge group waits on its own commit. The newest ask
+  for main still stands for every older ask for main.
+- `Build-Content -Limited` builds main the same way and says whether every
+  file is the administrator's build of the same key (MATCHES or DIFFERS):
+  how the limited run is measured on the box.
 
 ## Release news
 
