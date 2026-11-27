@@ -1,2 +1,0 @@
-    Copy-Item -LiteralPath (Join-Path $repo 'scripts/release/Release-Name.ps1') -Destination (Split-Path -Parent $copy)
-    Copy-Item -LiteralPath (Join-Path $repo 'scripts/release/Get-ScratchDir.ps1') -Destination (Split-Path -Parent $copy)   
