@@ -8,12 +8,14 @@
 // of the choice and everything else that asks whether the world is there
 // stayed off for the rest of the game.
 //
-// The real cameBack, lifted out of thornswood-front.js, runs against a
-// stand-in game: the old world for a few frames while the quit lands, the main
-// menu, the loading screen, then the world. It must set the flag only once the
-// world is back, never in the frames before the main menu (that would tell
-// skymp5-client it is already in a game, and the pick would load no world),
-// and take a choice still up down the way the first arrival does.
+// The real loadGame handler and cameBack, lifted out of thornswood-front.js,
+// run against a stand-in game that sends update the way SkyrimPlatform does:
+// from the Papyrus VM's OnUpdate, so never while the main menu is up. The
+// flag must go up only once the world is back (a load while it was down, a
+// character, no menu, connected), never in the old world's last frames before
+// the main menu (that would tell skymp5-client it is already in a game, and
+// the pick would load no world), and a choice still up comes down the way the
+// first arrival takes it down.
 //
 // Read only.
 const fs = require('fs');
@@ -35,9 +37,18 @@ function lift(first) {
   const b = src.indexOf('\n  }\n', a);
   return b < 0 ? null : src.slice(a, b + 4);
 }
+/** A two-space-indented sp.on(...) block, by its first line. */
+function liftOn(first) {
+  const a = src.indexOf(first);
+  if (a < 0) { return null; }
+  const b = src.indexOf('\n  }));\n', a);
+  return b < 0 ? null : src.slice(a, b + 7);
+}
 
 const came = lift('  function cameBack(now) {');
+const onLoad = liftOn("  sp.on('loadGame', guard('world load', () => {");
 yes('cameBack is in the plugin', came !== null);
+yes('and the world load it waits on', onLoad !== null);
 
 // The tick asks it on every frame after the first arrival, before anything
 // else the world frame does.
@@ -48,7 +59,8 @@ const arbiter = src.indexOf('    if (phase >= 2) {', tickAt);
 yes('the tick asks after the first arrival and before the focus arbiter',
     tickAt > 0 && firstArrival > tickAt && asks > firstArrival && arbiter > asks);
 
-// Every way out clears the flag, which is what cameBack waits on.
+// Every way out clears the flag and closes the connection before the quit,
+// which is what cameBack's two waits stand on.
 const ways = [
   ['the idle check', '  function afkOut(why) {'],
   ['the server ending the session', '  function sessionEnded(sentence) {'],
@@ -57,23 +69,29 @@ const ways = [
 ];
 for (const [what, first] of ways) {
   const body = lift(first);
-  yes('leaving through ' + what + ' clears the world flag and goes to the main menu',
-      body !== null && body.indexOf('globalThis.__thornswoodInWorld = false') !== -1 &&
-      body.indexOf('quitToMainMenu') !== -1);
+  const flag = body ? body.indexOf('globalThis.__thornswoodInWorld = false') : -1;
+  const closed = body ? body.indexOf('destroyClient()') : -1;
+  const quit = body ? body.indexOf('quitToMainMenu()') : -1;
+  yes('leaving through ' + what + ' clears the flag and closes the connection before the main menu',
+      flag !== -1 && closed !== -1 && quit !== -1 && flag < quit && closed < quit);
 }
 
 function game() {
   const g = {
     menus: { 'Main Menu': false, 'Loading Menu': false },
     player: { id: 0x14 },
+    connected: true,
     choice: false,
     gone: 0,
     logs: [],
-    world: { __thornswoodInWorld: false }
+    world: { __thornswoodInWorld: true },
+    clock: 1000000
   };
+  const handlers = {};
   const sp = {
-    Ui: { isMenuOpen: function (name) { return !!g.menus[name]; } },
-    Game: { getPlayer: function () { return g.player; } }
+    on: function (name, fn) { handlers[name] = fn; },
+    Game: { getPlayer: function () { return g.player; } },
+    mpClientPlugin: { isConnected: function () { return g.connected; } }
   };
   const gameMenuOpen = function () {
     for (const k in g.menus) { if (g.menus[k]) { return true; } }
@@ -82,43 +100,63 @@ function game() {
   const choiceUp = function () { return g.choice; };
   const menuGone = function () { g.gone++; g.choice = false; };
   const log = function () { g.logs.push(Array.prototype.join.call(arguments, ' ')); };
-  const fn = new Function('sp', 'globalThis', 'gameMenuOpen', 'choiceUp', 'menuGone', 'log', 'PROFILE',
-    'let menuPhase = 0;\n' + 'let awaySawMenu = false;\n' + came +
+  const guard = function (name, fn) { return fn; };
+  const clockDate = { now: function () { return g.clock; } };
+  const fn = new Function('sp', 'globalThis', 'gameMenuOpen', 'choiceUp', 'menuGone', 'log', 'guard', 'Date', 'PROFILE',
+    'let menuPhase = 0;\n' + 'let loadedOutOfWorld = 0;\n' + onLoad + '\n' + came +
     '\nreturn { frame: cameBack, menuPhase: function () { return menuPhase; } };');
-  g.api = fn(sp, g.world, gameMenuOpen, choiceUp, menuGone, log, 7);
-  g.frames = function (n) { let any = false; for (let i = 0; i < n; i++) { any = g.api.frame(i) || any; } return any; };
+  g.api = fn(sp, g.world, gameMenuOpen, choiceUp, menuGone, log, guard, clockDate, 7);
+  // Update frames: none while the main menu is up, as in the game.
+  g.frames = function (n) {
+    let any = false;
+    for (let i = 0; i < n; i++) {
+      g.clock += 16;
+      if (g.menus['Main Menu']) { continue; }
+      any = g.api.frame(g.clock) || any;
+    }
+    return any;
+  };
+  g.load = function () { handlers.loadGame(); };
+  // A way out: flag down and connection closed, then a few frames of the old
+  // world while the quit lands, then the main menu.
+  g.leave = function () {
+    g.world.__thornswoodInWorld = false;
+    g.connected = false;
+    g.frames(10);
+    g.menus['Main Menu'] = true;
+  };
+  // A pick: connect again, the load, the loading screen, the world.
+  g.pick = function () {
+    g.choice = false;
+    g.connected = true;
+    g.menus['Main Menu'] = false;
+    g.menus['Loading Menu'] = true;
+    g.load();
+    g.frames(30);
+    g.menus['Loading Menu'] = false;
+  };
   return g;
 }
 
-if (came) {
-  // R1: in the world, nothing to do.
+if (came && onLoad) {
+  // R1: in the world, a save something else loads is not an arrival.
   {
     const g = game();
-    g.world.__thornswoodInWorld = true;
-    yes('R1 in the world, it does nothing', !g.frames(20) && g.logs.length === 0);
+    g.load();
+    yes('R1 in the world, nothing to do', !g.frames(20) && g.logs.length === 0);
   }
 
   // R2: THE BUG. Out to the choice and back in.
   {
     const g = game();
-    g.world.__thornswoodInWorld = true;
     g.frames(5);
-    // The way out clears the flag; the old world is there for a few frames.
-    g.world.__thornswoodInWorld = false;
-    g.frames(10);
-    yes('R2 the frames before the main menu do not count as arriving',
+    g.leave();
+    yes('R2 the old world\'s last frames do not count as arriving',
         g.world.__thornswoodInWorld === false);
-    g.menus['Main Menu'] = true;
     g.choice = true;
     g.frames(30);
-    yes('R2 nor does the main menu', g.world.__thornswoodInWorld === false);
-    // The pick closes the choice, then the loading screen.
-    g.choice = false;
-    g.menus['Main Menu'] = false;
-    g.menus['Loading Menu'] = true;
-    g.frames(30);
-    yes('R2 nor the loading screen', g.world.__thornswoodInWorld === false);
-    g.menus['Loading Menu'] = false;
+    g.pick();
+    yes('R2 nor does the loading screen', g.world.__thornswoodInWorld === false);
     const arrived = g.frames(1);
     yes('R2 THE BUG: back in the world, it is marked as back',
         arrived && g.world.__thornswoodInWorld === true);
@@ -128,45 +166,63 @@ if (came) {
     yes('R2 once, not every frame after', !g.frames(50) && g.logs.length === 1);
   }
 
-  // R3: the world loads with the choice still up (the client's own fallback).
+  // R3: the old world's last frames still connected (a quit before the close
+  // lands): no load since the flag went down, so no arrival.
   {
     const g = game();
-    g.menus['Main Menu'] = true;
-    g.choice = true;
-    g.frames(5);
-    g.menus['Main Menu'] = false;
+    g.world.__thornswoodInWorld = false;
+    g.frames(10);
+    yes('R3 no load since leaving, no arrival even while connected',
+        g.world.__thornswoodInWorld === false);
+  }
+
+  // R4: the load came, but the connection did not.
+  {
+    const g = game();
+    g.leave();
+    g.pick();
+    g.connected = false;
+    g.frames(20);
+    yes('R4 a world with no connection is not the server\'s world',
+        g.world.__thornswoodInWorld === false);
+    g.connected = true;
     g.frames(1);
-    yes('R3 a choice still up is taken down, as at the first arrival',
+    yes('R4 then connected, it is', g.world.__thornswoodInWorld === true);
+  }
+
+  // R5: the world loads with the choice still up (the client's own fallback).
+  {
+    const g = game();
+    g.leave();
+    g.choice = true;
+    g.connected = true;
+    g.menus['Main Menu'] = false;
+    g.load();
+    g.choice = true;
+    g.frames(1);
+    yes('R5 a choice still up is taken down, as at the first arrival',
         g.world.__thornswoodInWorld === true && g.gone === 1);
   }
 
-  // R4: out and back twice.
+  // R6: out and back twice.
   {
     const g = game();
-    for (let round = 1; round <= 2; round++) {
-      g.world.__thornswoodInWorld = false;
-      g.frames(3);
-      g.menus['Main Menu'] = true;
-      g.frames(3);
-      g.menus['Main Menu'] = false;
-      g.frames(3);
-    }
-    yes('R4 each return is marked', g.world.__thornswoodInWorld === true &&
+    for (let round = 1; round <= 2; round++) { g.leave(); g.pick(); g.frames(3); }
+    yes('R6 each return is marked', g.world.__thornswoodInWorld === true &&
         g.logs.filter(function (l) { return l.indexOf('back in the world') !== -1; }).length === 2);
   }
 
-  // R5: no character yet after the menu, so nothing is claimed.
+  // R7: no character yet after the load, so nothing is claimed.
   {
     const g = game();
-    g.menus['Main Menu'] = true;
-    g.frames(2);
-    g.menus['Main Menu'] = false;
+    g.leave();
     g.player = null;
+    g.pick();
     g.frames(10);
-    yes('R5 no character, no arrival', g.world.__thornswoodInWorld === false);
+    yes('R7 no character, no arrival', g.world.__thornswoodInWorld === false);
     g.player = { id: 0x14 };
     g.frames(1);
-    yes('R5 then the character is there, and it is', g.world.__thornswoodInWorld === true);
+    yes('R7 then the character is there, and it is', g.world.__thornswoodInWorld === true);
   }
 }
 

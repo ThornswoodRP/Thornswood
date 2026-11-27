@@ -9364,34 +9364,47 @@
     being said to the client for ninety seconds, and so did everything else
     that asks whether the world is there.
 
-    So the arrival is noticed the same way as the first: a character and no
-    menu. Only after the main menu has been seen since leaving, because the
-    quit takes a few frames to land, and in those frames the old world is
-    still there; arriving in them would tell skymp5-client it is already in a
-    game, and then the pick would load no world (remoteServer.ts,
-    alreadyInAGame).
+    What says a world came back is the load: skymp5-client loads the world
+    with a save of its own once it takes a pick (remoteServer.ts, while the
+    flag is down), so a load while the flag is down is an arrival like the
+    first. It is recorded on loadGame, and the flag goes up on the first
+    update after it with a character, no menu, and the game connected. Not
+    the main menu: update does not run there (the Papyrus VM's OnUpdate sends
+    it, and the main menu has none), which is why the menu code runs on tick.
+    The connection is asked because a leave's own last frames still have the
+    old world with a character and no menu, and arriving in them would tell
+    skymp5-client it is already in a game, so the pick would load no world
+    (alreadyInAGame). Every leave closes the connection before it quits, and
+    a pick opens it again (relogAs) before the world loads. The first cut of
+    this waited for the main menu in update and so never fired (#4615).
 
     The page is not loaded again, unlike the first arrival: it outlived the
     world on purpose, with its chat moved to whoever was picked (pickedAgain),
     so only what the first arrival does for the world itself is done again.
   */
-  let awaySawMenu = false;
-  function cameBack(now) {
+  let loadedOutOfWorld = 0;
+  sp.on('loadGame', guard('world load', () => {
     let here = false;
     try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
-    if (here) { awaySawMenu = false; return false; }
-    let atMenu = false;
-    try { atMenu = !!sp.Ui.isMenuOpen('Main Menu'); } catch (e) { atMenu = false; }
-    if (atMenu) { awaySawMenu = true; return false; }
-    if (!awaySawMenu || gameMenuOpen()) { return false; }
+    if (!here) { loadedOutOfWorld = Date.now(); }
+  }));
+  function cameBack(now) {
+    if (!loadedOutOfWorld) { return false; }
+    let here = false;
+    try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+    // The first arrival counted it.
+    if (here) { loadedOutOfWorld = 0; return false; }
+    let up = false;
+    try { up = !!sp.mpClientPlugin.isConnected(); } catch (e) { up = false; }
+    if (!up || gameMenuOpen()) { return false; }
     let pc = null;
     try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
     if (!pc) { return false; }
-    awaySawMenu = false;
     try { globalThis.__thornswoodInWorld = true; } catch (e) { }
+    log('back in the world as profile', PROFILE, Math.round((now - loadedOutOfWorld) / 1000) + 's after it loaded');
+    loadedOutOfWorld = 0;
     if (choiceUp()) { menuGone(); }
     menuPhase = 9;
-    log('back in the world as profile', PROFILE);
     return true;
   }
 
