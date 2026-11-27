@@ -192,9 +192,9 @@ const wipe = (dir) => { try { fs.rmSync(dir, { recursive: true, force: true }); 
     const OLDER = '# Help\n\nThe one before. ' + 'x'.repeat(400) + '\n';
     const NEW = '# Help\n\nThe page as saved. ' + 'y'.repeat(800) + '\n';
     const save = 'const s = require("./lib/store"); console.log("saved=" + s.writeDoc("help", ' + JSON.stringify(NEW) + '));';
-    // A crash leaves its half-written temp file beside the page, which
-    // nothing yet clears (#7437), so each case
-    // starts without the last one's.
+    // A crash leaves its half-written temp file beside the page until the
+    // site next starts (#7437), and these cases never start it, so each
+    // case starts without the last one's.
     const reset = () => {
       fs.writeFileSync(PAGE, OLD); fs.writeFileSync(BAK, OLDER);
       for (const n of tmpsIn(DATA)) fs.unlinkSync(path.join(DATA, n));
