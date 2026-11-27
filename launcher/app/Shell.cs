@@ -304,30 +304,100 @@ namespace Thornswood
         static bool askedToUninstall;
 
         /// <summary>
-        /// How long the mod check on the way in took, for the start line
-        /// (LogStartTime). -1 until it has run.
+        /// How long the mod check on the way in took, for the first status
+        /// line (LogFirstStatus). -1 until it has run.
         /// </summary>
         static double startScanSeconds = -1;
 
+        /// <summary>True once the first status line is written, so a start writes it once.</summary>
+        static bool firstStatusLogged;
+
         /// <summary>
         /// One line in launcher.log once the window has drawn: how long after
-        /// Windows started the process, and how much of that the mod check
-        /// on the way in took (#3534). Nothing measured the launcher's start
-        /// before, so the weekly review had no number for it. The line goes to
-        /// the site with the session's launcher.log like every other line, and
-        /// scripts\vps\Read-LauncherStarts.ps1 totals a week of them on the box.
-        /// Its words are what that script reads: change both together.
+        /// Windows started the process (#3534). Nothing measured the launcher's
+        /// start before, so the weekly review had no number for it. The line
+        /// goes to the site with the session's launcher.log like every other
+        /// line, and scripts\vps\Read-LauncherStarts.ps1 totals a week of them
+        /// on the box. Its words are what that script reads: change both
+        /// together. The mod check is no part of this time since #4726, which
+        /// moved it after the window, so this line no longer names it; the
+        /// first status line (LogFirstStatus) does.
         /// </summary>
         static void LogStartTime()
         {
-            double window;
-            using (var me = Process.GetCurrentProcess())
-                window = (DateTime.Now - me.StartTime).TotalSeconds;
             var inv = System.Globalization.CultureInfo.InvariantCulture;
-            LogOnly("Launcher start: the window was on screen " + window.ToString("F1", inv) + " s after the launcher started" +
-                    (startScanSeconds >= 0 ? ", " + startScanSeconds.ToString("F1", inv) + " s of it the mod check" : "") +
+            LogOnly("Launcher start: the window was on screen " + SinceStart().ToString("F1", inv) + " s after the launcher started" +
                     ", on launcher " + Updater.Version + ".");
             if (leftCurrentFolder != null) LogOnly(leftCurrentFolder);
+        }
+
+        /// <summary>Seconds since Windows started this process.</summary>
+        static double SinceStart()
+        {
+            using (var me = Process.GetCurrentProcess())
+                return (DateTime.Now - me.StartTime).TotalSeconds;
+        }
+
+        /// <summary>
+        /// One line in launcher.log when the status line first says whether
+        /// the launcher is ready, after the mod check on the way in (#4726):
+        /// how long after the process started, and how much of it the check
+        /// took. Once a start, however often the check runs after it.
+        /// </summary>
+        static void LogFirstStatus()
+        {
+            if (firstStatusLogged) return;
+            firstStatusLogged = true;
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            LogOnly("Launcher start: the first status was on screen " + SinceStart().ToString("F1", inv) + " s after the launcher started" +
+                    (startScanSeconds >= 0 ? ", " + startScanSeconds.ToString("F1", inv) + " s of it the mod check" : "") +
+                    ", on launcher " + Updater.Version + ".");
+        }
+
+        /// <summary>
+        /// The mod check on the way in, once the window has drawn (#4726). It
+        /// asks the server for its plugin list and reads every plugin's bytes
+        /// (Verify.Run), which with the server slow or down takes seconds. Run
+        /// from Shell.Run, before the window was shown, that time was spent
+        /// with nothing on screen, because OffThread runs its work on the
+        /// calling thread until the window is up. From here it is awaited off
+        /// the window's thread like the Scan button's, with the window on
+        /// screen and its status line saying it is checking. The server having
+        /// a bad night is not a reason for the launcher to stop starting, so a
+        /// failure is said and the start goes on. Then the rest of an update to
+        /// the launcher itself, after the check rather than beside it.
+        /// </summary>
+        static async System.Threading.Tasks.Task StartupCheck()
+        {
+            var scanClock = Stopwatch.StartNew();
+            try { await RunScanAsync(false); }
+            catch (Exception ex) { Log("Could not check the mod list on the way in: " + Failure.Say("Shell.Run, the mod list on the way in", ex)); }
+            startScanSeconds = scanClock.Elapsed.TotalSeconds;
+            if (DrawStatus()) Log("Ready."); else Log("Something needs attention before you can play.");
+            try { LogFirstStatus(); } catch (Exception ex) { Swallow.Note("Shell.StartupCheck, saying how long the first status took", ex); }
+            if (Velo.Restarted) AfterLauncherUpdate();
+        }
+
+        /// <summary>
+        /// The rest of an update to the launcher itself. Velopack started this
+        /// launcher straight after putting the update in (Velo.Restarted), so
+        /// the shortcut icons are redrawn, which is when blank ones show up,
+        /// and the same Fix Install an update that needs no restart runs
+        /// follows (#3201), after the icon pass so the two never race.
+        /// </summary>
+        static void AfterLauncherUpdate()
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                int moved = 0;
+                try { moved = Icons.Ensure(true); } catch (Exception ex) { Swallow.Note("Shell.Run, refreshing shortcut icons after the update", ex); }
+                if (moved > 0)
+                    try { Dispatcher.UIThread.Post((Action)delegate { Log("Shortcut icon brought up to date after the update."); }); } catch (Exception ex) { Swallow.Note("Shell.Run, saying shortcut icons were refreshed", ex); }
+                // Not without a folder of our own, where the offer to
+                // make one (OwnGameAtStart) is the thing to answer first.
+                if (!Paths.Collection)
+                    try { Dispatcher.UIThread.Post((Action)delegate { RunFix(true); }); } catch (Exception ex) { Swallow.Note("Shell.Run, the scan after the launcher update", ex); }
+            });
         }
 
         static void Run(string[] args)
@@ -555,14 +625,12 @@ namespace Thornswood
                 catch (Exception ex) { Swallow.Note("Shell.Run", ex); }
             });
 
-            // Scan asks the server for its plugin list. The server having a bad
-            // night is not a reason for the launcher to stop halfway through
-            // starting, with the window built and nothing on it.
-            var scanClock = Stopwatch.StartNew();
-            try { RunScan(); }
-            catch (Exception ex) { Log("Could not check the mod list on the way in: " + Failure.Say("Shell.Run, the mod list on the way in", ex)); }
-            startScanSeconds = scanClock.Elapsed.TotalSeconds;
-            if (DrawStatus()) Log("Ready."); else Log("Something needs attention before you can play.");
+            // The mod check asks the server for its plugin list and reads every
+            // plugin's bytes. Before the window is on screen OffThread runs its
+            // work on this thread, so a slow or down server held the window off
+            // the screen for as long as the server took (#4726). It runs once
+            // the window has drawn (StartupCheck, from ContentRendered below),
+            // and the status line says what it is waiting on (above win.Show).
             // Nobody should have to press anything to get a client file back.
             // This does nothing at all when the six are the recorded build,
             // which is every start but the one that needed it.
@@ -585,28 +653,15 @@ namespace Thornswood
             // back. It plays from this process (MenuMusic.cs, #3207).
             Dispatcher.UIThread.Post(new Action(StartMenuMusic), DispatcherPriority.ApplicationIdle);
 
-            // The rest of an update to the launcher itself, once its window is
-            // up. Velopack started this launcher straight after putting the
-            // update in (Velo.Restarted), so the shortcut icons are redrawn,
-            // which is when blank ones show up, and the same Fix Install an
-            // update that needs no restart runs follows (#3201), after the
-            // icon pass so the two never race.
+            // The rest of the start, once the window is on screen: the mod check
+            // (StartupCheck, #4726), and after it the rest of an update to the
+            // launcher itself (AfterLauncherUpdate), so its Fix never scans
+            // beside the check.
             win.ContentRendered += delegate
             {
                 try { LogStartTime(); } catch (Exception ex) { Swallow.Note("Shell.Run, saying how long the start took", ex); }
                 try { SayHandedUpdate(); } catch (Exception ex) { Swallow.Note("Shell.Run, the update the last launcher handed over", ex); }
-                if (Velo.Restarted)
-                    ThreadPool.QueueUserWorkItem(delegate
-                    {
-                        int moved = 0;
-                        try { moved = Icons.Ensure(true); } catch (Exception ex) { Swallow.Note("Shell.Run, refreshing shortcut icons after the update", ex); }
-                        if (moved > 0)
-                            try { Dispatcher.UIThread.Post((Action)delegate { Log("Shortcut icon brought up to date after the update."); }); } catch (Exception ex) { Swallow.Note("Shell.Run, saying shortcut icons were refreshed", ex); }
-                        // Not without a folder of our own, where the offer to
-                        // make one (OwnGameAtStart) is the thing to answer first.
-                        if (!Paths.Collection)
-                            try { Dispatcher.UIThread.Post((Action)delegate { RunFix(true); }); } catch (Exception ex) { Swallow.Note("Shell.Run, the scan after the launcher update", ex); }
-                    });
+                Begin(StartupCheck());
                 // Message boxes belong to the window from here on, so they
                 // stay in front of it and keep it from being used meanwhile.
                 try { Ask.Owner = win.TryGetPlatformHandle().Handle; } catch (Exception ex) { Swallow.Note("Shell.Run, giving message boxes the window", ex); }
@@ -702,6 +757,9 @@ namespace Thornswood
                     catch (Exception ex) { Swallow.Note("Shell.Run, terms recheck", ex); }
                 });
             }
+            // On screen from the first frame: the mod check runs once the
+            // window has drawn (StartupCheck), and this is what it waits on.
+            Log("Checking your mods against the server.");
             win.Show();
             if (installing != null) installing.Close();
             Dispatcher.UIThread.MainLoop(closed.Token);

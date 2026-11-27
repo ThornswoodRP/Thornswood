@@ -11,9 +11,10 @@
 
   What it checks:
     1. the launcher writes the line in the words the reader reads, after the
-       window has drawn, timed from the process's own start, with the mod
-       check's time taken around RunScan, and through LogOnly, which puts
-       nothing on the status line;
+       window has drawn, timed from the process's own start, and through
+       LogOnly, which puts nothing on the status line; and, since #4726 moved
+       the mod check after the window, a second line once the first status is
+       up, with the mod check's time taken around the scan on the way in;
     2. the reader, run against session log sets made here: it counts each
        start once although the same launcher.log comes in several sets, keeps
        two accounts' starts at the same second apart, leaves out a start
@@ -54,12 +55,18 @@ $shell = Join-Path $repo 'launcher/app/Shell.cs'
 Write-Host 'the launcher'
 $cs = [IO.File]::ReadAllText($shell) -replace "`r`n", "`n"
 $fn = [regex]::Match($cs, '(?ms)static void LogStartTime\(\)\n\s+\{\n(.*?)\n        \}\n').Groups[1].Value
+$since = [regex]::Match($cs, '(?ms)static double SinceStart\(\)\n\s+\{\n(.*?)\n        \}\n').Groups[1].Value
+$first = [regex]::Match($cs, '(?ms)static void LogFirstStatus\(\)\n\s+\{\n(.*?)\n        \}\n').Groups[1].Value
+$check = [regex]::Match($cs, '(?ms)static async System\.Threading\.Tasks\.Task StartupCheck\(\)\n\s+\{\n(.*?)\n        \}\n').Groups[1].Value
 Yes 'Shell.cs has LogStartTime' ($fn.Length -gt 0)
-Yes '  timed from the process''s own start' ($fn.Contains('Process.GetCurrentProcess()') -and $fn.Contains('.StartTime'))
+Yes '  timed from the process''s own start' ($fn.Contains('SinceStart()') -and $since.Contains('Process.GetCurrentProcess()') -and $since.Contains('.StartTime'))
 Yes '  in the reader''s words, through LogOnly' ($fn -match 'LogOnly\("Launcher start: the window was on screen " \+' -and $fn.Contains('" s after the launcher started"') -and
-    $fn.Contains('" s of it the mod check"') -and $fn.Contains('", on launcher " + Updater.Version + "."') -and $fn.Contains('InvariantCulture'))
+    $fn.Contains('", on launcher " + Updater.Version + "."') -and $fn.Contains('InvariantCulture'))
+Yes '  and it names no mod check, which runs after the window since #4726' (-not $fn.Contains('mod check'))
 Yes 'it is written once the window has drawn' ($cs -match '(?ms)win\.ContentRendered \+= delegate\n\s+\{\n\s+try \{ LogStartTime\(\); \}')
-Yes 'the mod check is timed around RunScan' ($cs -match '(?ms)var scanClock = Stopwatch\.StartNew\(\);\n\s+try \{ RunScan\(\); \}\n[^\n]*\n\s+startScanSeconds = scanClock\.Elapsed\.TotalSeconds;')
+Yes 'the first status line says the mod check''s time, once (#4726)' ($first -match 'if \(firstStatusLogged\) return;\s+firstStatusLogged = true;' -and
+    $first -match 'LogOnly\("Launcher start: the first status was on screen " \+' -and $first.Contains('" s of it the mod check"') -and $first.Contains('SinceStart()'))
+Yes 'the mod check is timed around the scan on the way in' ($check -match '(?ms)var scanClock = Stopwatch\.StartNew\(\);\n\s+try \{ await RunScanAsync\(false\); \}\n[^\n]*\n\s+startScanSeconds = scanClock\.Elapsed\.TotalSeconds;')
 $readerText = [IO.File]::ReadAllText($reader)
 Yes 'the reader names where the line comes from' ($readerText.Contains('Shell.cs LogStartTime'))
 
