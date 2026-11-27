@@ -314,15 +314,18 @@ try {
             $at = $b.IndexOf("`n  ${j}:"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
             Check "6 $f`: $j lays the pick's build before it runs the gate, with no token" ($body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?Run-Gate\.ps1 -Shard' -and $body -notmatch 'github\.token|GH_TOKEN')
         }
+        # The tree checks too (#7115): one list of the kept builds a check.
+        $at = $b.IndexOf("`n  checks:"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
+        Check "6 $f`: checks lays the pick's build before its first check, with no token" ($at -ge 0 -and $body -match '(?s)name: content-laid.*?Get-ContentBuild\.ps1 -Newest -ArtifactDir .*?- name: Scan the tree for secrets' -and $body -notmatch 'github\.token|GH_TOKEN|actions: read|lay-content')
     }
     # Checkout options may follow persist-credentials. They are still part of
     # checkout, not an intervening step that could read stale content tables.
     $laysNewest = '(?s)actions: read.*?persist-credentials: false\n(?:[ \t]*\n|        [^\n]*\n|      #[^\n]*\n)*      - name: Lay the newest content build\n        uses: \./\.github/actions/lay-content\s*\n'
-    foreach ($w in @(@('build.yml', 'checks'), @('build-pr.yml', 'checks'), @('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
+    foreach ($w in @(@('nightly.yml', 'harnesses'), @('harnesses.yml', 'harnesses'), @('gate-map.yml', 'trace'), @('gate-map.yml', 'linux'), @('load-test.yml', 'load'))) {
         $b = ([IO.File]::ReadAllText((Join-Path $root ".github\workflows\$($w[0])")) -replace "`r`n", "`n")
         $at = $b.IndexOf("`n  $($w[1]):"); $body = $b.Substring($at + 1); $end = [regex]::Match($body.Substring(3), '\n  [a-z-]+:\n'); if ($end.Success) { $body = $body.Substring(0, $end.Index + 3) }
         Check "6 $($w[0]) $($w[1]) lays the newest build right after its checkout" ($at -ge 0 -and $body -match $laysNewest)
-        if ($w[0] -eq 'build-pr.yml') {
+        if ($w[0] -eq 'nightly.yml') {
             $late = $body.Replace('      - name: Lay the newest content build', "      - name: Read stale tables`n        run: node stale.js`n      - name: Lay the newest content build")
             Check '6 a step between checkout and laying content is still refused' ($late -notmatch $laysNewest)
             Check '6 keeping checkout credentials is still refused' ($body.Replace('persist-credentials: false', 'persist-credentials: true') -notmatch $laysNewest)
