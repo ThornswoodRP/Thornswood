@@ -295,6 +295,19 @@ if (HURT_SRC && P && WARRIOR_KILL) {
         !races.foxrace && !races.mudcrabrace && !races.nordrace);
   }
 
+  // ------------------------------------------------------- one line for one kind (#6616)
+  {
+    const r = rig();
+    const me = r.person(0x20, 'Ysolda');
+    const at = r.clock.now;
+    const bite = { k: 'bite', at: at, bleed: false };
+    r.mp.set(me, 'thornswoodHurt', { wounds: [bite, { k: 'cut', at: at, bleed: false }, bite, bite], ills: [], show: [] });
+    r.tick();
+    const show = r.mp.get(me, 'thornswoodHurt').show;
+    yes('three open bites and a cut are two lines, the bites counted, in the order they came (#6616)',
+        JSON.stringify(show) === JSON.stringify(['Open bite (3)', 'Open cut']));
+  }
+
   // ------------------------------------------------------- the weapon kinds
   {
     const r = rig();

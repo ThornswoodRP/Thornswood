@@ -59224,7 +59224,24 @@ module.exports = {
       if (stage === 'caught') { continue; }
       out.push(WORDS[rec.ills[k].k] + (stage === 'bad' ? ', bad' : ''));
     }
-    return out;
+    return once(out);
+  }
+
+  /*
+    ONE LINE FOR ONE KIND (#6616). Every wound is a line, so three bites in a
+    fight with skeevers were three "Open bite" lines down the edge of the
+    screen, and a tester read them as the same line drawn again and again.
+    Lines that read the same are one line now, with how many after it, in
+    the order the first of them came: "Open bite (3)".
+  */
+  function once(list) {
+    var order = [], count = {};
+    for (var i = 0; i < list.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(count, list[i])) { count[list[i]]++; continue; }
+      count[list[i]] = 1;
+      order.push(list[i]);
+    }
+    return order.map(function (l) { return count[l] > 1 ? l + ' (' + count[l] + ')' : l; });
   }
 
   function tell(actorId, line) {
