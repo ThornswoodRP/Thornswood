@@ -4,17 +4,20 @@
       pwsh -NoProfile -File .\tests\test-check-outside.ps1
 
   Check-Outside.ps1 walks what a first install needs that this project does
-  not run: the feed on GitHub, every address in it, the downloads, Steam's
-  public build and the Nexus collection. Nothing watched any of it before.
+  not run: the launcher's Releases on GitHub, the package and the installer
+  the channel's Release carries, the downloads, Steam's public build and the
+  Nexus collection. Nothing watched any of it before.
 
-  MEASURED 24 SEPTEMBER, anonymously, from Patrick's machine. The live feed
-  answered with 227 packs. 164 of them point at EvilPatrick06/Thornswood,
-  whose release listing answers a stranger with 404, and 63 at
-  Thornswood-Releases, which lists every one of them across two pages of 100.
-  The launcher's asset answered 302 to release-assets.githubusercontent.com
-  and the first byte came back 206 of 3,292,160. api.steamcmd.net gave public
-  build 24914197 for app 489830. The Nexus collection page answered a bare
-  request with 403; from #1064 the check asks Nexus GraphQL instead.
+  MEASURED 27 NOVEMBER 2026, from a cloud session. main was on
+  main-build-1.3.128: releases.main.json named
+  Thornswood-1.3.128-main-full.nupkg at 102,164,205 bytes, the Release carried
+  it at that size and sha256 with setup-files.main.json and
+  Thornswood-Setup.exe (109,897,200 bytes), and both answered 302 to
+  release-assets.githubusercontent.com and then their first byte. dev was on
+  build-1.3.135 the same way, with Thornswood-Dev-Setup.exe. Until then the
+  script walked the site's version.json and the AllowedHosts list in
+  Updater.cs, neither of which a launcher has read since #5796, so it and
+  this harness were red on every run (#7114).
 
   These drive the real walk, dot-sourced out of the shipped script, with the
   one function that touches the network (Probe) replaced by answers from a
@@ -67,12 +70,10 @@ function Probe([string]$url, [string]$accept = '', [switch]$Body, [switch]$First
 }
 
 $A = 'Owner/Public'
-$B = 'Owner/Private'
-function Api([string]$repo, [string]$id) { return ('https://api.github.com/repos/' + $repo + '/releases/assets/' + $id) }
-$FeedA  = 'https://api.github.com/repos/Owner/Public/contents/version.json?ref=main'
-$ListA1 = 'https://api.github.com/repos/Owner/Public/releases?per_page=100'
-$ListA2 = 'https://api.github.com/repositories/42/releases?per_page=100&page=2'
-$ListB  = 'https://api.github.com/repos/Owner/Private/releases?per_page=100'
+$Repos  = 'https://api.github.com/repos/Owner/Public'
+function Api([string]$id) { return ($Repos + '/releases/assets/' + $id) }
+$List1  = $Repos + '/releases?per_page=100'
+$List2  = 'https://api.github.com/repositories/42/releases?per_page=100&page=2'
 $Steam  = 'https://api.steamcmd.net/v1/info/489830'
 $Nexus  = 'https://www.nexusmods.com/games/skyrimspecialedition/collections/abc123'
 $Gql    = 'https://api.nexusmods.com/v2/graphql'
@@ -86,43 +87,71 @@ function NexusJson([string]$name, $rev, [hashtable]$text = @{ summary = $summary
 }
 $Signed = '?sp=r&sv=2018&jwt=SECRETJWTSIGNATURE'
 function Cdn([string]$id) { return ('https://release-assets.githubusercontent.com/github-production-release-asset/1/' + $id + $Signed) }
+$ShaPkg = ('ab' * 32)
 
-function Pack([string]$id, [string]$url, [string]$sha = 'abc') { return [ordered]@{ id = $id; url = $url; sha256 = $sha; notes = 'n' } }
-function FeedJson($packs, [hashtable]$over) {
-  $f = [ordered]@{
-    launcherVersion = '1.1.92'
-    launcherUrl = (Api $A '900'); launcherSha256 = 'aa'
-    serverAddress = '192.0.2.10'; serverPort = '7777'
-    siteUrl = 'https://thornswood.net'
-    updateRepo = $A
-    collectionUrl = $Nexus
-    clientRuntime = [ordered]@{ url = (Api $A '901'); sha256 = 'bb'; bytes = 5000; forkCommit = 'c883' }
-    packs = @($packs)
-  }
-  if ($over) { foreach ($k in $over.Keys) { $f[$k] = $over[$k] } }
-  return (ConvertTo-Json -InputObject $f -Depth 8)
+# A file of a Release as GitHub's list gives it.
+function File([string]$id, [string]$name, [long]$size, [string]$sha = '', [string]$state = 'uploaded', [string]$url = '') {
+  $f = [ordered]@{ id = [long]$id; url = $(if ($url) { $url } else { Api $id }); name = $name; size = $size; state = $state }
+  if ($sha) { $f.digest = 'sha256:' + $sha }
+  return $f
 }
-function Rel([string[]]$ids, [string]$state = 'uploaded') {
-  return [ordered]@{ tag_name = 't'; assets = @($ids | ForEach-Object { [ordered]@{ id = [long]$_; name = 'x.zip'; state = $state } }) }
+function Rel([string]$tag, [string]$at, $files, [bool]$pre = $false, [bool]$draft = $false) {
+  $r = [ordered]@{ tag_name = $tag; draft = $draft; prerelease = $pre; published_at = $(if ($draft) { $null } else { $at }); assets = @($files) }
+  return $r
 }
 function ListJson($rels) { return (ConvertTo-Json -InputObject @($rels) -Depth 8) }
+# A Velopack feed: each entry "version:type:file:size:sha".
+function FeedJson([string[]]$entries) {
+  $as = @()
+  foreach ($e in $entries) {
+    $b = $e -split ':'
+    $as += [ordered]@{ PackageId = 'Thornswood'; Version = $b[0]; Type = $b[1]; FileName = $b[2]; SHA256 = $b[4].ToUpperInvariant(); Size = [long]$b[3] }
+  }
+  return (ConvertTo-Json -InputObject ([ordered]@{ Assets = @($as) }) -Depth 6)
+}
 function SteamJson([string]$build) {
   return ('{"data":{"489830":{"depots":{"branches":{"public":{"buildid":"' + $build + '","timeupdated":"1787839209"}}}}},"status":"success"}')
 }
 $gh = @{ left = '55'; reset = '1790000000' }
 
-# Everything answering the way it should.
-function Clean {
+# The main channel's Release, its files as they should be.
+function MainFiles {
+  return @(
+    (File '10' 'releases.main.json' 300),
+    (File '11' 'Thornswood-1.3.128-main-full.nupkg' 1234 $ShaPkg),
+    (File '12' 'setup-files.main.json' 50),
+    (File '13' 'Thornswood-Setup.exe' 5000))
+}
+$MainFeed = FeedJson @(('1.3.127:Full:Thornswood-1.3.127-main-full.nupkg:999:' + ('cd' * 32)), ('1.3.128:Full:Thornswood-1.3.128-main-full.nupkg:1234:' + $ShaPkg))
+
+# Everything answering the way it should. Page one: a draft carrying main's
+# feed (no stranger sees it, and it is never taken), dev's newer Release,
+# main's Release, and a Release that carries no feed at all. Page two: an
+# older main Release.
+function Clean([string]$feed = $MainFeed) {
   $script:Served = @{}
-  Serve $FeedA 200 (FeedJson @((Pack 'p1' (Api $A '1')), (Pack 'p2' (Api $A '2')), (Pack 'p3' (Api $A '3')))) $gh
-  Serve $ListA1 200 (ListJson @((Rel @('1', '2', '900')))) @{ left = '54'; reset = '1790000000'; link = ('<' + $ListA2 + '>; rel="next", <' + $ListA2 + '>; rel="last"') }
-  Serve $ListA2 200 (ListJson @((Rel @('3', '901')))) @{ left = '53'; reset = '1790000000'; link = ('<' + $ListA1 + '>; rel="prev"') }
-  foreach ($pair in @(@('900', '1234'), @('901', '5000'), @('3', '77'))) {
-    Serve (Api $A $pair[0]) 302 '' @{ location = (Cdn $pair[0]); left = '52' }
+  $page1 = @(
+    (Rel 'main-build-9.9.9' '' @((File '90' 'releases.main.json' 300)) $false $true),
+    (Rel 'build-1.3.135' '2026-11-27T00:42:32Z' @((File '20' 'releases.dev.json' 300), (File '21' 'Thornswood-1.3.135-dev-full.nupkg' 777 $ShaPkg), (File '22' 'setup-files.dev.json' 50), (File '23' 'Thornswood-Dev-Setup.exe' 6000)) $true),
+    (Rel 'main-build-1.3.128' '2026-11-26T21:07:01Z' (MainFiles)),
+    (Rel 'content-dev-abc' '2026-11-26T22:00:00Z' @((File '30' 'Thornswood-Content.esp' 10))))
+  Serve $List1 200 (ListJson $page1) @{ left = '54'; reset = '1790000000'; link = ('<' + $List2 + '>; rel="next", <' + $List2 + '>; rel="last"') }
+  Serve $List2 200 (ListJson @((Rel 'main-build-1.3.100' '2026-11-10T10:00:00Z' @((File '40' 'releases.main.json' 300))))) @{ left = '53'; reset = '1790000000'; link = ('<' + $List1 + '>; rel="prev"') }
+  Serve (Api '10') 302 '' @{ location = (Cdn '10'); left = '52' }
+  Serve (Cdn '10') 200 $feed
+  Serve (Api '20') 302 '' @{ location = (Cdn '20') }
+  Serve (Cdn '20') 200 (FeedJson @(('1.3.135:Full:Thornswood-1.3.135-dev-full.nupkg:777:' + $ShaPkg)))
+  foreach ($pair in @(@('11', '1234'), @('13', '5000'), @('21', '777'), @('23', '6000'))) {
+    Serve (Api $pair[0]) 302 '' @{ location = (Cdn $pair[0]); left = '51' }
     Serve (Cdn $pair[0]) 206 '' @{ range = ('bytes 0-0/' + $pair[1]) }
   }
   Serve $Steam 200 (SteamJson '100')
   Serve $Gql 200 (NexusJson 'Thornswood' 1)
+}
+# Main's Release again, with its files as given.
+function MainWith($files) {
+  $page1 = @((Rel 'main-build-1.3.128' '2026-11-26T21:07:01Z' $files))
+  Serve $List1 200 (ListJson $page1) $gh
 }
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-outside-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -132,12 +161,11 @@ $record = Join-Path $root 'steam-build.json'
 $pageRecord = Join-Path $root 'collection-page.json'
 $page = @{ version = 1; collection = 'abc123'; revision = 1; summary = 'Try [[SkyUI|12604]].'; description = $description; installInstructions = ''; notSaid = @() }
 [IO.File]::WriteAllText($pageRecord, (ConvertTo-Json -InputObject $page))
-$Allowed = Read-AllowedHosts (Join-Path $RepoRoot 'launcher\app\Updater.cs')
 
-function Run([string]$feedUrl = '', [string[]]$hosts = $Allowed, [string]$steamRecord = $record) {
+function Run([string]$branch = 'main', [string]$steamRecord = $record, [string]$collection = $Nexus, [string]$repo = $A) {
   $script:Asked.Clear()
-  $all = @(Invoke-Outside -Repo $A -Branch 'main' -FeedUrl $feedUrl -Hosts $hosts -SteamRecord $steamRecord `
-             -Collection '' -PageRecord $pageRecord -Server @('thornswood.net', '192.0.2.99') 6>&1)
+  $all = @(Invoke-Outside -Repo $repo -Branch $branch -SteamRecord $steamRecord `
+             -Collection $collection -PageRecord $pageRecord -Server @('thornswood.net', '192.0.2.99') 6>&1)
   $n = @($all | Where-Object { $_ -is [int] }) | Select-Object -Last 1
   $text = (@($all | Where-Object { $_ -is [Management.Automation.InformationRecord] } | ForEach-Object { [string]$_.MessageData }) -join "`n")
   return [pscustomobject]@{
@@ -155,25 +183,33 @@ function AskedFor($r, [string]$url) { return (@($r.Asked | Where-Object { $_.Url
 
 try {
   # ---- the files it reads out of the repository ------------------------------
-  Yes "AllowedHosts is read out of the real Updater.cs" (($Allowed -contains 'api.github.com') -and ($Allowed -contains 'release-assets.githubusercontent.com'))
   $d = Read-Defaults (Join-Path $RepoRoot 'launcher\app\Config.cs')
-  Yes 'no releases repository is named by default any more; the feed is the site''s (#907)' ($d.Repo -eq '')
+  Yes 'the launcher''s repository is read out of the real Velo.cs' ($d.Repo -eq 'ThornswoodRP/Thornswood')
   Yes 'the collection address is read out of the real Config.cs' ($d.Collection -like 'https://*nexusmods.com/*')
   Yes 'and the site, so it can be kept off it' ($d.SiteHost -eq 'thornswood.net')
   $real = [IO.File]::ReadAllText((Join-Path $RepoRoot 'records\steam-build.json')) | ConvertFrom-Json
   Yes 'records\steam-build.json records app 489830 and a build number' ($real.appId -eq 489830 -and ([string]$real.publicBuildId) -match '^\d+$')
+  $merge = [IO.File]::ReadAllText((Join-Path $RepoRoot '.github\workflows\merge-release.yml'))
+  Yes 'the installers it looks for are the ones merge-release.yml publishes' (
+    $merge.Contains("'Thornswood-Dev-Setup.exe'") -and $merge.Contains("'Thornswood-Setup.exe'") -and (Setup-Name 'dev') -eq 'Thornswood-Dev-Setup.exe' -and (Setup-Name 'main') -eq 'Thornswood-Setup.exe')
+  $velo = [IO.File]::ReadAllText((Join-Path $RepoRoot 'launcher\app\VeloUpdate.cs'))
+  Yes 'and the feed is the one the launcher reads, releases.<channel>.json' ($velo.Contains('feedName = "releases." + channel + ".json"'))
 
   # ---- everything as it should be ------------------------------------------
   Clean
   $r = Run
   Yes 'with nothing wrong it finds nothing, so it can exit 0' ($r.N -eq 0 -and $r.Bad.Count -eq 0)
-  Yes 'the feed is read the way the launcher reads it, the contents API raw' (@($r.Asked | Where-Object { $_.Url -eq $FeedA -and $_.Accept -eq 'application/vnd.github.raw' }).Count -eq 1)
-  Yes 'the second page of the listing is followed' (AskedFor $r $ListA2)
-  Yes 'an asset on the second page counts as listed' (Has $r.Ok '3 packs, the launcher and the client runtime are all listed in Owner/Public.')
-  Yes 'the launcher is asked for with Accept octet-stream, as the launcher asks' (@($r.Asked | Where-Object { $_.Url -eq (Api $A '900') -and $_.Accept -eq 'application/octet-stream' }).Count -eq 1)
-  Yes 'then only the first byte of where GitHub sends it' (@($r.Asked | Where-Object { $_.Url -eq (Cdn '900') -and $_.FirstByte }).Count -eq 1)
-  Yes 'the client runtime and the newest pack are fetched too' ((AskedFor $r (Api $A '901')) -and (AskedFor $r (Api $A '3')))
-  Yes 'an older pack is not fetched, the listing already covers it' (-not (AskedFor $r (Api $A '1')))
+  Yes 'the main channel is the newest published Release with main''s feed, not dev''s newer one nor a draft' (Has $r.Ok 'the main channel is on main-build-1.3.128, published 26 Nov 2026 21:07 UTC*')
+  Yes 'the second page of the list is followed, as the launcher reads up to five' (AskedFor $r $List2)
+  Yes 'the feed is read the way the launcher reads it, its API address with Accept octet-stream' (@($r.Asked | Where-Object { $_.Url -eq (Api '10') -and $_.Accept -eq 'application/octet-stream' }).Count -eq 1)
+  Yes 'of the two full packages a feed names, the highest numbered is the one checked' (Has $r.Ok 'releases.main.json names launcher 1.3.128, Thornswood-1.3.128-main-full.nupkg, and the Release carries it at the size and sha256 the feed gives.')
+  Yes 'the files a first start reads and the installer are found' ((Has $r.Ok '*carries setup-files.main.json*') -and (Has $r.Ok '*carries Thornswood-Setup.exe*'))
+  Yes 'the package is asked for with Accept octet-stream, then only the first byte of where GitHub sends it' (
+    (@($r.Asked | Where-Object { $_.Url -eq (Api '11') -and $_.Accept -eq 'application/octet-stream' }).Count -eq 1) -and (@($r.Asked | Where-Object { $_.Url -eq (Cdn '11') -and $_.FirstByte }).Count -eq 1))
+  Yes 'and the installer the same way' (@($r.Asked | Where-Object { $_.Url -eq (Cdn '13') -and $_.FirstByte }).Count -eq 1)
+  Yes 'nothing of dev''s Release, the draft or an older Release is fetched' (-not ((AskedFor $r (Api '20')) -or (AskedFor $r (Api '90')) -or (AskedFor $r (Api '40')) -or (AskedFor $r (Api '21'))))
+  $apiCalls = @($r.Asked | Where-Object { $_.Url -like 'https://api.github.com/*' }).Count
+  Yes ('the whole walk costs ' + $apiCalls + ' of a stranger''s sixty GitHub API calls') ($apiCalls -le 5)
   Yes 'the Steam build matches the record' (Has $r.Ok "Steam's public build is still 100, as recorded 2026-09-24.")
   Yes 'Nexus GraphQL found reports name and revision' (Has $r.Ok 'the collection "Thornswood" is there, revision 1.')
   Yes 'Nexus is asked by anonymous GraphQL POST, not the collection page' (@($r.Asked | Where-Object { $_.Url -eq $Gql -and $_.Method -eq 'POST' -and $_.PostBody -like '*abc123*skyrimspecialedition*' }).Count -eq 1)
@@ -182,130 +218,117 @@ try {
   Yes 'the signed download address is never printed' (($r.Text + ($r.Ok -join ' ')) -notmatch 'SECRETJWT|jwt=')
   Yes 'only its host is' ($r.Text -match 'release-assets\.githubusercontent\.com')
 
-  # ---- the budget: a stranger gets sixty calls an hour ----------------------
-  $many = @(1..150 | ForEach-Object { Pack ('m' + $_) (Api $A ([string](1000 + $_))) })
+  # ---- the dev channel -------------------------------------------------------
   Clean
-  Serve $FeedA 200 (FeedJson $many) $gh
-  Serve $ListA1 200 (ListJson @((Rel (@(1..150 | ForEach-Object { [string](1000 + $_) }) + @('900', '901'))))) $gh
-  Serve (Api $A '1150') 302 '' @{ location = (Cdn '1150') }
-  Serve (Cdn '1150') 206 '' @{ range = 'bytes 0-0/9' }
+  $r = Run 'dev'
+  Yes 'the dev channel takes dev''s Release, a prerelease, and dev''s installer' ($r.N -eq 0 -and (Has $r.Ok 'the dev channel is on build-1.3.135*') -and (Has $r.Ok '*carries Thornswood-Dev-Setup.exe*'))
+  Yes 'and fetches its package, not main''s' ((AskedFor $r (Api '21')) -and -not (AskedFor $r (Api '11')))
+
+  # ---- the newest by when it was published, wherever it is on the list --------
+  Clean
+  Serve $List2 200 (ListJson @((Rel 'main-build-1.3.129' '2026-11-27T01:00:00Z' (MainFiles)))) $gh
   $r = Run
-  $apiCalls = @($r.Asked | Where-Object { $_.Url -like 'https://api.github.com/*' }).Count
-  Yes ('150 packs cost ' + $apiCalls + ' GitHub API calls, not one each') ($r.N -eq 0 -and $apiCalls -le 6)
+  Yes 'a Release published later on the second page is the channel''s, as the launcher sorts them' (Has $r.Ok 'the main channel is on main-build-1.3.129*')
 
-  # ---- the failure the live feed has today -----------------------------------
+  # ---- the list itself ---------------------------------------------------------
   Clean
-  $packs = @((Pack 'b1' (Api $B '11')), (Pack 'b2' (Api $B '12')), (Pack 'b3' (Api $B '13')), (Pack 'p1' (Api $A '1')), (Pack 'p2' (Api $A '2')), (Pack 'p3' (Api $A '3')))
-  Serve $FeedA 200 (FeedJson $packs) $gh
-  Serve $ListB 404 '{"message":"Not Found"}' $gh
+  Serve $List1 404 '{"message":"Not Found"}' $gh
   $r = Run
-  Yes 'packs in a repository a stranger gets 404 for are wrong' ($r.N -eq 1 -and (Has $r.Bad 'Owner/Private answers a stranger with 404*3 packs in the feed point there*cannot fetch them.*'))
-  Yes 'and it says which, oldest and newest' (Has $r.Bad '*The oldest is b1 and the newest b3.')
-  Yes 'one listing call tells it, not one per pack' (@($r.Asked | Where-Object { $_.Url -like '*Owner/Private/releases/assets/*' }).Count -eq 0)
-  Yes 'the public ones are still passed' (Has $r.Ok '3 packs, the launcher and the client runtime are all listed in Owner/Public.')
-
-  # ---- a feed that is not there, or not a feed -------------------------------
-  Clean
-  $wrongUrl = 'https://raw.githubusercontent.com/Owner/Public/main/no-such.json'
-  Serve $wrongUrl 404 '404: Not Found'
-  $r = Run $wrongUrl
-  Yes 'a feed address that answers 404 is wrong' ($r.N -ge 1 -and (Has $r.Bad 'version.json answers 404*'))
-  Yes 'nothing is listed off a feed it could not read' (-not (AskedFor $r $ListA1))
-  Yes 'Steam is still asked, it does not come from the feed' (AskedFor $r $Steam)
+  Yes 'a repository a stranger gets 404 for is wrong, and said' ($r.N -ge 1 -and (Has $r.Bad 'Owner/Public answers a stranger with 404*'))
+  Yes 'and nothing else of GitHub is asked' (@($r.Asked | Where-Object { $_.Url -like 'https://api.github.com/*' }).Count -eq 1)
+  Yes 'Steam is still asked, it does not come from GitHub' (AskedFor $r $Steam)
 
   Clean
-  $r = Run 'https://nowhere.example/version.json'
-  Yes 'a feed that does not answer at all is wrong' (Has $r.Bad 'version.json answers nothing (unreachable)*')
-
-  Clean
-  Serve $FeedA 200 '<html>rate limited</html>' $gh
+  Serve $List1 403 '{"message":"API rate limit exceeded"}' @{ left = '0'; reset = '1790000000' }
   $r = Run
-  Yes 'a feed that answers but is not JSON is wrong' (Has $r.Bad 'version.json answers but is not a feed*')
-
-  # ---- GitHub's allowance, which is not the feed's fault ---------------------
-  Clean
-  Serve $ListA1 403 '{"message":"API rate limit exceeded"}' @{ left = '0'; reset = '1790000000' }
-  $r = Run
-  Yes 'a spent allowance is said as that' (Has $r.Bad '*were not checked. GitHub*used up*')
+  Yes 'a spent allowance is said as that' (Has $r.Bad 'the Releases were not listed. GitHub*used up*')
   Yes 'and is not called a private repository' (-not (Has $r.Bad '*private*'))
 
   Clean
-  Serve $FeedA 403 '' @{ left = '0'; reset = '1790000000' }
+  Serve $List1 200 '<html>busy</html>' $gh
   $r = Run
-  Yes 'a spent allowance on the feed itself is said as that' (Has $r.Bad 'version.json was not read. GitHub*used up*')
-
-  # ---- one asset gone, one half uploaded -------------------------------------
-  Clean
-  Serve $FeedA 200 (FeedJson @((Pack 'p1' (Api $A '1')), (Pack 'p4' (Api $A '4')), (Pack 'p3' (Api $A '3')))) $gh
-  $r = Run
-  Yes 'a pack whose asset the repository no longer lists is wrong' ($r.N -eq 1 -and (Has $r.Bad 'Owner/Public no longer lists the asset behind 1 pack:'))
-  Yes 'and it is named' (Has $r.Lines '*pack p4, asset 4')
+  Yes 'a list that is not JSON is wrong' (Has $r.Bad 'could not list the Releases in Owner/Public: nothing (the listing was not JSON)*')
 
   Clean
-  Serve $ListA1 200 (ListJson @((Rel @('1', '900')), (Rel @('2') 'starter'))) @{ left = '54'; link = ('<' + $ListA2 + '>; rel="next"') }
+  Serve $List1 200 (ListJson @((Rel 'content-dev-abc' '2026-11-26T22:00:00Z' @((File '30' 'Thornswood-Content.esp' 10))))) $gh
+  Serve $List2 200 '[]' $gh
   $r = Run
-  Yes 'an upload that never finished is wrong' (Has $r.Bad 'in Owner/Public, the upload behind 1 pack never finished:')
-  Yes 'and the pack is named with the state GitHub gave' (Has $r.Lines '*pack p2, asset 2, starter')
-
-  # ---- what the launcher itself would refuse ---------------------------------
-  Clean
-  $bad = @(
-    (Pack 'p5' 'http://api.github.com/repos/Owner/Public/releases/assets/5'),
-    (Pack 'p6' 'https://evil.example.com/p6.zip'),
-    (Pack 'p7' (Api $A '7') ''),
-    (Pack 'p1' (Api $A '1')), (Pack 'p2' (Api $A '2')), (Pack 'p3' (Api $A '3')))
-  Serve $FeedA 200 (FeedJson $bad) $gh
-  $r = Run
-  Yes 'addresses the launcher refuses are one finding' ($r.N -eq 1 -and (Has $r.Bad "3 address(es) in the feed the launcher will not download:"))
-  Yes 'plain http is named' (Has $r.Lines '*pack p5 is not https*')
-  Yes 'a host off AllowedHosts is named' (Has $r.Lines '*pack p6 points at evil.example.com, which the launcher refuses')
-  Yes 'a missing checksum is named' (Has $r.Lines '*pack p7 has no checksum*')
-  Yes 'none of them is requested' (@($r.Asked | Where-Object { $_.Url -like '*evil.example.com*' -or $_.Url -like 'http://*' -or $_.Url -eq (Api $A '7') }).Count -eq 0)
+  Yes 'no Release carrying the channel''s feed is wrong' ($r.N -eq 1 -and (Has $r.Bad 'none of the 1 published Releases a stranger can see in Owner/Public carries releases.main.json*'))
 
   Clean
-  $r = Run '' @()
-  Yes 'with no AllowedHosts to read it says so rather than passing blind' (Has $r.Bad 'could not read AllowedHosts*')
+  $r = Run 'main' $record $Nexus ''
+  Yes 'no repository read out of Velo.cs is wrong, not a pass' (Has $r.Bad 'could not read the launcher''s repository*')
 
-  # ---- the server is never asked --------------------------------------------
-  Clean
-  $srv = @(
-    (Pack 'p8' 'https://thornswood.net/packs/p8.zip'),
-    (Pack 'p9' 'https://github.com/Owner/Public/releases/download/t/p9.zip'),
-    (Pack 'p1' (Api $A '1')), (Pack 'p2' (Api $A '2')), (Pack 'p3' (Api $A '3')))
-  Serve $FeedA 200 (FeedJson $srv) $gh
+  # ---- the feed ----------------------------------------------------------------
+  Clean '{ not json'
   $r = Run
-  Yes 'a pack on the server is reported as unchecked' ($r.N -eq 0 -and (Has $r.Skip '1 pack on the server, which this does not contact*'))
-  Yes 'a pack at an address it cannot read is unchecked, not passed' (Has $r.Skip '1 pack not at a GitHub release asset address*')
+  Yes 'a feed that is not a Velopack feed is wrong' ($r.N -eq 1 -and (Has $r.Bad 'releases.main.json on main-build-1.3.128 answers but is not a Velopack feed*'))
+
   Clean
-  Serve $FeedA 200 (FeedJson @((Pack 'p1' (Api $A '1')), (Pack 'p2' (Api $A '2')), (Pack 'p3' (Api $A '3'))) @{ collectionUrl = 'https://thornswood.net/collection' }) $gh
+  Serve (Cdn '10') 403 ''
   $r = Run
-  Yes 'a collection address on the server is not asked either' ((-not (AskedFor $r 'https://thornswood.net/collection')) -and (Has $r.Skip '*on the server, which this does not contact.'))
-  # The one path that reaches the guard inside Ask itself: somebody hands it a
-  # feed address on the server.
+  Yes 'a feed GitHub sends on to storage that refuses it is wrong' (Has $r.Bad 'releases.main.json on main-build-1.3.128 cannot be read: GitHub sends releases.main.json on to release-assets.githubusercontent.com, which answers 403.*')
+
+  Clean (FeedJson @(('1.3.128:Delta:Thornswood-1.3.128-main-delta.nupkg:5:' + $ShaPkg)))
+  $r = Run
+  Yes 'a feed with no full package is wrong' (Has $r.Bad '*names no full package*')
+
+  # ---- what the feed names -------------------------------------------------------
   Clean
-  $r = Run 'https://thornswood.net/version.json'
-  Yes 'a feed address on the server is refused before any request, and said' ((-not (AskedFor $r 'https://thornswood.net/version.json')) -and (Has $r.Bad 'version.json answers nothing (not asked, that is the server)*'))
+  MainWith @((File '10' 'releases.main.json' 300), (File '12' 'setup-files.main.json' 50), (File '13' 'Thornswood-Setup.exe' 5000))
+  $r = Run
+  Yes 'a package the feed names and the Release does not carry is wrong' ($r.N -eq 1 -and (Has $r.Bad 'releases.main.json names Thornswood-1.3.128-main-full.nupkg (1.3.128), and main-build-1.3.128 carries no finished file of that name*'))
+  Yes 'and it is not fetched' (-not (AskedFor $r (Api '11')))
+
+  Clean
+  MainWith @((File '10' 'releases.main.json' 300), (File '11' 'Thornswood-1.3.128-main-full.nupkg' 1234 $ShaPkg 'starter'), (File '12' 'setup-files.main.json' 50), (File '13' 'Thornswood-Setup.exe' 5000))
+  $r = Run
+  Yes 'an upload that never finished counts as not there' (Has $r.Bad '*carries no finished file of that name*')
+
+  Clean
+  MainWith @((File '10' 'releases.main.json' 300), (File '11' 'Thornswood-1.3.128-main-full.nupkg' 1200 $ShaPkg), (File '12' 'setup-files.main.json' 50), (File '13' 'Thornswood-Setup.exe' 5000))
+  $r = Run
+  Yes 'a package of another size than the feed''s is wrong' (Has $r.Bad 'Thornswood-1.3.128-main-full.nupkg is 1200 bytes on main-build-1.3.128 and releases.main.json says 1234*')
+
+  Clean
+  MainWith @((File '10' 'releases.main.json' 300), (File '11' 'Thornswood-1.3.128-main-full.nupkg' 1234 ('ef' * 32)), (File '12' 'setup-files.main.json' 50), (File '13' 'Thornswood-Setup.exe' 5000))
+  $r = Run
+  Yes 'a package whose sha256 is not the feed''s is wrong' (Has $r.Bad '*has the sha256 efef*releases.main.json says abab*')
+
+  Clean
+  MainWith @((File '10' 'releases.main.json' 300), (File '11' 'Thornswood-1.3.128-main-full.nupkg' 1234 $ShaPkg), (File '13' 'Thornswood-Setup.exe' 5000))
+  $r = Run
+  Yes 'a Release with no setup-files list is wrong' ($r.N -eq 1 -and (Has $r.Bad 'main-build-1.3.128 carries no setup-files.main.json*'))
+
+  Clean
+  MainWith @((File '10' 'releases.main.json' 300), (File '11' 'Thornswood-1.3.128-main-full.nupkg' 1234 $ShaPkg), (File '12' 'setup-files.main.json' 50))
+  $r = Run
+  Yes 'a Release with no installer is wrong' ($r.N -eq 1 -and (Has $r.Bad 'main-build-1.3.128 carries no Thornswood-Setup.exe, so nobody new can install from the main channel.'))
 
   # ---- the downloads themselves ----------------------------------------------
   Clean
-  Serve (Cdn '901') 206 '' @{ range = 'bytes 0-0/4000' }
+  Serve (Cdn '11') 206 '' @{ range = 'bytes 0-0/4000' }
   $r = Run
-  Yes 'a client runtime whose size is not the feed''s is wrong' (Has $r.Bad 'the client runtime is 4000 bytes at release-assets.githubusercontent.com and the feed says 5000*')
+  Yes 'a package whose bytes are not the size GitHub lists is wrong' (Has $r.Bad 'Thornswood-1.3.128-main-full.nupkg is 4000 bytes at release-assets.githubusercontent.com and GitHub lists it at 1234*')
 
   Clean
-  Serve (Cdn '900') 403 ''
+  Serve (Cdn '13') 403 ''
   $r = Run
-  Yes 'a redirect to something that will not hand it over is wrong' (Has $r.Bad 'the launcher: GitHub sends it on to release-assets.githubusercontent.com, which answers 403*')
+  Yes 'a redirect to something that will not hand it over is wrong' (Has $r.Bad 'Thornswood-Setup.exe: GitHub sends it on to release-assets.githubusercontent.com, which answers 403*')
 
   Clean
-  Serve (Api $A '900') 404 '' $gh
+  Serve (Api '11') 404 '' $gh
   $r = Run
-  Yes 'a listed asset GitHub will not hand out is wrong' (Has $r.Bad 'GitHub answers 404 when a launcher asks for the launcher*')
+  Yes 'a listed file GitHub will not hand out is wrong' (Has $r.Bad 'GitHub answers 404 when a launcher asks for Thornswood-1.3.128-main-full.nupkg*')
 
+  # ---- the server is never asked --------------------------------------------
   Clean
-  Serve $FeedA 200 (FeedJson @((Pack 'p1' (Api $A '1')), (Pack 'p2' (Api $A '2')), (Pack 'p3' (Api $A '3'))) @{ updateRepo = $B }) $gh
+  MainWith @((File '10' 'releases.main.json' 300), (File '11' 'Thornswood-1.3.128-main-full.nupkg' 1234 $ShaPkg), (File '12' 'setup-files.main.json' 50), (File '13' 'Thornswood-Setup.exe' 5000 '' 'uploaded' 'https://thornswood.net/Thornswood-Setup.exe'))
   $r = Run
-  Yes 'a feed that sends every launcher somewhere else is wrong' (Has $r.Bad 'the feed sends every launcher to Owner/Private*')
+  Yes 'a file whose address is on the server is unchecked, not asked' ((-not (AskedFor $r 'https://thornswood.net/Thornswood-Setup.exe')) -and (Has $r.Skip 'Thornswood-Setup.exe is on the server*'))
+  Clean
+  $r = Run 'main' $record 'https://thornswood.net/collection'
+  Yes 'a collection address on the server is not asked either' ((-not (AskedFor $r 'https://thornswood.net/collection')) -and (Has $r.Skip '*on the server, which this does not contact.'))
 
   # ---- Steam -----------------------------------------------------------------
   Clean
@@ -320,7 +343,7 @@ try {
   Yes 'a third party that does not answer is unchecked, not red' ($r.N -eq 0 -and (Has $r.Skip 'Steam: api.steamcmd.net answered nothing*'))
 
   Clean
-  $r = Run '' $Allowed (Join-Path $root 'no-such-record.json')
+  $r = Run 'main' (Join-Path $root 'no-such-record.json')
   Yes 'no record to compare with is red' (Has $r.Bad 'no Steam build is recorded in*')
 
   # ---- Nexus (GraphQL: found / gone / no answer) --------------------------------
@@ -356,7 +379,6 @@ try {
   $r = Run
   Yes 'a non-answer HTTP code from GraphQL is unchecked, not red' ($r.N -eq 0 -and (Has $r.Skip 'the collection: Nexus answered 403*unchecked.'))
 
-  # ---- over every run above --------------------------------------------------
   # ---- over every run above --------------------------------------------------
   $toServer = @($script:Ever | Where-Object { $_ -match '^https?://([^/]+\.)?thornswood\.net(/|:|$)' -or $_ -match '192\.0\.2\.10|192\.0\.2\.99' })
   Yes ('not one request in ' + $script:Ever.Count + ' went to the server') ($toServer.Count -eq 0)

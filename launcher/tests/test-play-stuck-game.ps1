@@ -84,6 +84,8 @@ using System.Threading.Tasks;
 namespace Thornswood
 {
     class Config { }
+    // Failure.Say notes the exception it says (Failure.cs); here the note goes nowhere.
+    static class Swallow { public static void Note(string where, Exception e) { } }
     // Stands in for Ask.cs: every box is recorded, a Yes and No box gets
     // Answer, and nothing goes on the screen.
     static class Ask
@@ -224,7 +226,9 @@ __METHODS__
             Reset(); SkyMp.Local = true; SkyMp.StartSays = "Node is missing.";
             Yes("local server will not start: stop and show why", !EnsureServerNow() && Ask.Asked.Count == 1 && Ask.Asked[0] == "Node is missing.");
             Reset(); SkyMp.Throw = true;
-            Yes("a check that throws is logged and lets Play go on (as written)", EnsureServerNow() && LoggedHas("Could not check the server: boom"));
+            // Since #6156 the line says the failure the way Failure.Say words one it
+            // did not expect, and the exception itself goes to launcher.log.
+            Yes("a check that throws is logged and lets Play go on (as written)", EnsureServerNow() && LoggedHas("Could not check the server: Windows stopped it while the launcher worked on the server."));
 
             // #4582: starting the local server is awaited, up to forty eight seconds of it.
             Reset(); SkyMp.Local = true; gate = new TaskCompletionSource<bool>();
@@ -243,7 +247,9 @@ __METHODS__
 $driver = $driver.Replace('__METHODS__', ($bodies -join "`r`n`r`n"))
 
 $exe = $null
-try { $exe = Build-LauncherCode -Source $driver -Exe } catch { Write-Host ('      ' + $_.Exception.Message) }
+# The lifted bodies say a failure through Failure.Say (#6156), so the real
+# Failure.cs is built beside them, with a Swallow of the driver's own.
+try { $exe = Build-LauncherCode -Source $driver -File (Join-Path $AppDir 'Failure.cs') -Exe } catch { Write-Host ('      ' + $_.Exception.Message) }
 Yes 'the lifted guards build the way the project builds them' ($null -ne $exe)
 if (-not $exe) { Done }
 $lines = Invoke-LauncherExe $exe

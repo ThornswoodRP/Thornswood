@@ -30,7 +30,11 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $Nightly = Join-Path (Join-Path (Split-Path -Parent $Here) 'scripts\vps') 'vps-nightly-backup.ps1'
 
-$work = & (Join-Path (Split-Path -Parent $Here) 'scripts\release\Get-ScratchDir.ps1') ('longtemp-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+# On the volume TEMP is on, which is where Windows hands out TEMP's short
+# form (C:\Users\RUNNER~1\... on a GitHub runner, and the box's own): the
+# case #1156 is about. The repository's scratch folder can be on a volume
+# that makes no 8.3 names at all (a GitHub runner's D:, #7114).
+$work = Join-Path ([IO.Path]::GetTempPath()) ('ts-longtemp-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 $long = Join-Path $work 'LongTempNameForShortPath'
 $oldTemp = $env:TEMP
 $oldTmp = $env:TMP

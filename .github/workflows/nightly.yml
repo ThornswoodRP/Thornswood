@@ -385,23 +385,21 @@ jobs:
       - name: Lay the newest content build
         uses: ./.github/actions/lay-content
 
-      - name: Install the eslint the lint harness copies
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      # tests\test-eslint-amp-path.ps1 (#1343, #2092) copies eslint 9.39.5 out
+      # of herald-lint in the temp folder, and with nothing there it says SKIP
+      # and exits 2; the harnesses that run bot.py need the bot's libraries
+      # (tests\bot-python.js). The gate's shares install both the same way
+      # (#7114).
+      - name: Install what some harnesses need
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
-          # tests\test-eslint-amp-path.ps1 (#1343, #2092) runs build.yml's
-          # eslint lines offline: its npm stand-in copies eslint 9.39.5 out of
-          # %TEMP%\herald-lint, and with nothing there it says SKIP and exits
-          # 2. No runner had that folder, so it failed the first night it was
-          # in the tree (#1273). This is the same pinned install build.yml's
-          # lint step makes, into the folder the harness reads by default.
-          $cache = Join-Path $env:TEMP 'herald-lint'
-          npm install --prefix $cache --no-save --no-audit --no-fund --silent eslint@9.39.5
-          if (-not (Test-Path -LiteralPath (Join-Path $cache 'node_modules\eslint\bin\eslint.js'))) {
-            Write-Host '::error file=tests/test-eslint-amp-path.ps1::could not install eslint 9.39.5, so the lint harness has nothing to copy'
-            exit 1
-          }
-          Write-Host ('eslint 9.39.5 is in ' + $cache)
+          ./scripts/dev/Install-HarnessTools.ps1
+          exit $LASTEXITCODE
 
       - name: Run the test harnesses
         if: ${{ !cancelled() }}
@@ -410,16 +408,21 @@ jobs:
           # Written to be run by hand, and until 25 September never run
           # anywhere else. A harness that reads this machine's game folder
           # says SKIP for the parts it cannot measure on a runner and still
-          # checks the rest. One at a time within the share, each on its
-          # clock, each printed the moment it ends, and the step ends with
+          # checks the rest. Each on its own clock, each printed the moment
+          # it ends, and the step ends with
           # the ten slowest and every one that failed: the header of
           # scripts\dev\Nightly-Harnesses.ps1 says why each of those is so.
           # 2400 of the job's 45 minutes: a harness starts only when its
           # whole clock still fits, so the list of what failed is printed
           # before the job could be cancelled.
+          # Six at a time, as the gate's shares run them (#3114): one at a
+          # time the two shares left 287 harnesses not run every night, out
+          # of their 2400 s (run 45877891275, 26 Nov 2026, #7114), so most
+          # of what the gate leaves out had run nowhere. A harness that must
+          # run alone says RUNS ALONE and still does.
           # One report (#5295): each share keeps a test case for every check,
           # and the job "Harness report" merges both shares' into one.
-          .\scripts\dev\Nightly-Harnesses.ps1 -Shard ${{ matrix.shard }} -Of 2 -BudgetSeconds 2400 -Report (Join-Path $env:RUNNER_TEMP 'harness-report\share.xml')
+          .\scripts\dev\Nightly-Harnesses.ps1 -Shard ${{ matrix.shard }} -Of 2 -Throttle 6 -BudgetSeconds 2400 -Report (Join-Path $env:RUNNER_TEMP 'harness-report\share.xml')
 
       - name: Keep this share's report for the harness report
         if: ${{ !cancelled() }}

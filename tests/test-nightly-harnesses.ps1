@@ -159,8 +159,12 @@ try {
 
     # ---- 4. the workflow ------------------------------------------------------
     $y = [IO.File]::ReadAllText((Join-Path $repo '.github\workflows\nightly.yml'))
-    $calls = @([regex]::Matches($y, 'Nightly-Harnesses\.ps1 -Shard \$\{\{ matrix\.shard \}\} -Of (\d+) -BudgetSeconds (\d+)'))
+    $calls = @([regex]::Matches($y, 'Nightly-Harnesses\.ps1 -Shard \$\{\{ matrix\.shard \}\} -Of (\d+) -Throttle (\d+) -BudgetSeconds (\d+)'))
     Yes 'nightly.yml runs Nightly-Harnesses.ps1 for the share its matrix names, once' ($calls.Count -eq 1)
+    # One at a time, the two shares ran out of their 2400 s before 287
+    # harnesses every night (run 45877891275), so those ran nowhere (#7114).
+    $throttle = $(if ($calls.Count) { [int]$calls[0].Groups[2].Value } else { 0 })
+    Yes "  several harnesses at once (-Throttle $throttle), as the gate runs them, so a share gets through its list" ($throttle -gt 1)
     $job = [regex]::Match($y, '(?s)(?m)^  harnesses:\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\z)').Groups[1].Value
     $shards = @([regex]::Match($job, '(?m)^\s+shard:\s*\[([^\]]*)\]').Groups[1].Value -split '\s*,\s*' | Where-Object { $_ })
     $of = $(if ($calls.Count) { [int]$calls[0].Groups[1].Value } else { 0 })
@@ -168,7 +172,7 @@ try {
     Yes '  where one share failing does not cancel the other' ($job -match '(?m)^\s+fail-fast:\s*false\s*$')
     Yes '  on GitHub''s Windows runner, a runner a share (#4983)' ($job -match ('(?m)^\s+runs-on: ' + [regex]::Escape('windows-latest') + '\s*$'))
     $minutes = [int][regex]::Match($job, '(?m)^\s+timeout-minutes:\s*(\d+)').Groups[1].Value
-    $budget = $(if ($calls.Count) { [int]$calls[0].Groups[2].Value } else { 0 })
+    $budget = $(if ($calls.Count) { [int]$calls[0].Groups[3].Value } else { 0 })
     Yes ("  with a budget ($budget s) that leaves room inside the job's $minutes minutes for the rest of it") ($budget -gt 0 -and $minutes -gt 0 -and $budget -le ($minutes * 60 - 180))
     Yes '  and the old inline harness loop is gone from the workflow' ($y -notmatch 'function Run-One' -and $y -notmatch 'function Kill-Left')
 
