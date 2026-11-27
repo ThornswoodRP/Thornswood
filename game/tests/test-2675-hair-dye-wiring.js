@@ -11,6 +11,8 @@
 // S: THE STEEP. E at the list's cooking spot with one dye's inputs starts a
 //    steep, one at a time; walking off before steepSeconds loses it and takes
 //    nothing; after it the inputs go and one named entry comes.
+//    A relog in the middle keeps the steep, as it keeps a boil (#5047): the
+//    first fire report after the return makes the dye or loses it.
 // T: A TAILOR'S JOB (Patrick, 18 Oct). Only the list's halves may steep, asked
 //    the way a bench asks; anybody else is told whose work it is, nothing is
 //    taken, and their boil still runs. Using a dye stays anybody's.
@@ -229,6 +231,34 @@ const BOWL = idFor(DATA.item);
   const two = W.mp.get(A, 'inventory').entries;
   yes('S11 a second dye of the same kind stacks on the one entry', two.filter((e) => e.name === 'Brown Hair Dye').length === 1 &&
       count(two, BOWL, 'Brown Hair Dye') === 2);
+  // A relog in the middle of a steep (#5047). The steep is the character's, by
+  // actor id, which a relog keeps, and nothing in the gamemode hears the leave:
+  // the first fire report after the return settles it, as it settles a boil.
+  W.mp.set(A, 'inventory', { entries: packWith(brown) });
+  W.HD.pressed(A, COOK);
+  W.clock += 20000;
+  // ...logged out here, and back an hour later where they left, by the fire.
+  W.clock += 3600 * 1000;
+  W.said.length = 0;
+  W.ctx.boilSay(A, W.ctx.read(A));
+  yes('S11b a relog in the middle of a steep keeps it: back by the fire once its time is up, the dye is made',
+      W.said.some((s) => /Brown Hair Dye has steeped/.test(s[1])) &&
+      count(W.mp.get(A, 'inventory').entries, BOWL, 'Brown Hair Dye') === 1, JSON.stringify(W.said));
+  W.mp.set(A, 'inventory', { entries: packWith(brown) });
+  W.HD.pressed(A, COOK);
+  W.clock += 20000;
+  W.needs[A].fire = -1;
+  W.said.length = 0;
+  W.ctx.boilSay(A, W.ctx.read(A));
+  yes('S11c ...and back away from the fire, it is lost and nothing is taken',
+      W.said.some((s) => /You left the fire, and Brown Hair Dye did not steep/.test(s[1])) &&
+      JSON.stringify(W.mp.get(A, 'inventory').entries) === JSON.stringify(packWith(brown)));
+  W.needs[A].fire = 10;
+  W.mp.set(A, 'inventory', { entries: two });
+  const deletes = gm.split('delete steeps[').length - 1;
+  yes('S11d only the hair dye block ends a steep: no leave, login or arrival in the gamemode drops one',
+      deletes > 0 && blockSrc.split('delete steeps[').length - 1 === deletes &&
+      !/\.steeps\b/.test(gm), String(deletes));
   const v = W.HD.view(A);
   yes('S12 K\'s view lists the dye carried', !!v && v.dyes.length === 1 && v.dyes[0].id === 'brown' && v.dyes[0].count === 2 && v.steeping === null);
   W.HD.pressed(A, COOK);

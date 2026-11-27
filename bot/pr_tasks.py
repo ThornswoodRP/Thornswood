@@ -39,7 +39,8 @@ Findings). Every open finding the body names with Refs, Closes, Fixes or
 Resolves and no test task for needs one, or "Known issue for #N: unchanged",
 so a change says what it means for a problem testers still meet; Done on
 merge writes the block on the issue. The engine pin's own pull request
-(engine-pin/...) is not asked.
+(engine-pin/...) is not asked, using the requested pull request's verified
+same-repository head metadata, never a caller's HEAD_REF prefix.
 
 A TEST TASK IN ANOTHER SHAPE is refused too, when the body has no block:
 a heading or a line that starts "Test task", "Test tasks", "Main test
@@ -304,7 +305,8 @@ def known_problems(body, read_issue=None, bot=None, head_ref=''):
        what was true two weeks before. "Known issue for #N: unchanged", with
        nothing under it, says it stays as it is. The engine pin's own pull
        request (engine-pin/...) is not asked: it carries the fork's changes,
-       which are said where they were made."""
+       which are said where they were made. head_ref is verified PR context
+       from pr_context/_event_pr_head, never the caller's queue or branch hint."""
     bot = bot or _bot()
     out, skipped = [], []
     kb = known_blocks(body)
@@ -381,21 +383,73 @@ def github_reader(repo, token):
     return lambda n: _get(token, 'repos/%s/issues/%d' % (repo, n))
 
 
-def pr_body(repo, token, number=None, head_ref=None):
-    """(body, what) of the pull request numbered number, or of the one open
-       pull request whose head is head_ref in repo; (None, why) when there is
-       none to read."""
+def _verified_pr_head(pr, repo, number):
+    """Only this requested PR's same-repository head can identify a pin."""
+    if (not isinstance(pr, dict) or not isinstance(number, int) or isinstance(number, bool)
+            or number <= 0 or pr.get('number') != number):
+        return ''
+    base, head = pr.get('base'), pr.get('head')
+    if not isinstance(base, dict) or not isinstance(head, dict):
+        return ''
+    for side in (base, head):
+        source = side.get('repo')
+        if not isinstance(source, dict) or str(source.get('full_name') or '').lower() != repo.lower():
+            return ''
+    ref = head.get('ref')
+    return ref if isinstance(ref, str) else ''
+
+
+def pr_context(repo, token, number=None, head_ref=None):
+    """(body, what, verified head) from one requested PR response.
+       A queue's synthetic ref is a selector, never the actual PR's head."""
     if number:
-        pr = _get(token, 'repos/%s/pulls/%d' % (repo, int(number)))
+        number = int(number)
+        pr = _get(token, 'repos/%s/pulls/%d' % (repo, number))
         if pr is None:
-            return None, 'there is no pull request %s' % number
-        return str(pr.get('body') or ''), 'pull request %s' % number
-    owner = repo.split('/')[0]
-    got = _get(token, 'repos/%s/pulls?state=open&per_page=10&head=%s'
-               % (repo, urllib.parse.quote('%s:%s' % (owner, head_ref), safe=''))) or []
-    if len(got) != 1:
-        return None, '%d open pull requests have %s as their head' % (len(got), head_ref)
-    return str(got[0].get('body') or ''), 'pull request %s' % got[0].get('number')
+            return None, 'there is no pull request %s' % number, ''
+        if not isinstance(pr, dict) or pr.get('number') != number:
+            raise ValueError('the pull request response does not match the requested number')
+    else:
+        owner = repo.split('/')[0]
+        got = _get(token, 'repos/%s/pulls?state=open&per_page=10&head=%s'
+                   % (repo, urllib.parse.quote('%s:%s' % (owner, head_ref), safe=''))) or []
+        if len(got) != 1:
+            return None, '%d open pull requests have %s as their head' % (len(got), head_ref), ''
+        pr = got[0]
+        if not isinstance(pr, dict):
+            raise ValueError('the pull request response is not an object')
+        number = pr.get('number')
+        head = pr.get('head')
+        if not isinstance(head, dict):
+            head = {}
+        if head.get('ref') is not None and head.get('ref') != head_ref:
+            raise ValueError('the pull request response does not match the requested head')
+    return str(pr.get('body') or ''), 'pull request %s' % number, _verified_pr_head(pr, repo, number)
+
+
+def pr_body(repo, token, number=None, head_ref=None):
+    """The existing (body, what) interface; provenance stays in pr_context."""
+    body, what, _head = pr_context(repo, token, number, head_ref)
+    return body, what
+
+
+def _event_pr_head(repo, number, body):
+    """Keep first-event body validation local; decline unverified context."""
+    path = os.environ.get('GITHUB_EVENT_PATH', '')
+    if not path or not number or not repo:
+        return ''
+    try:
+        with open(path, encoding='utf-8') as f:
+            event = json.load(f)
+        if not isinstance(event, dict) or event.get('number') != int(number):
+            return ''
+        pr = event.get('pull_request')
+        if not isinstance(pr, dict) or str(pr.get('body') or '') != body:
+            return ''
+        return _verified_pr_head(pr, repo, int(number))
+    except (OSError, ValueError):
+        # Missing or invalid metadata grants no exception to the ordinary gate.
+        return ''
 
 
 def from_event():
@@ -419,6 +473,7 @@ def main(argv):
     repo = os.environ.get('GITHUB_REPOSITORY', '').strip()
     number = os.environ.get('PR_NUMBER', '').strip()
     head_ref = os.environ.get('HEAD_REF', '').strip()
+    verified_head = ''
     if '--file' in argv:
         with open(argv[argv.index('--file') + 1], encoding='utf-8-sig') as f:
             body = f.read()
@@ -427,10 +482,11 @@ def main(argv):
         # a GitHub error on that read was this required check failing the
         # pull request, as the newest run on its head, over one that passed.
         body = os.environ.get('PR_EVENT_BODY', '')
+        verified_head = _event_pr_head(repo, number, body)
         print('reading the body the pull_request event carries, of pull request %s' % (number or '?'))
     elif token and repo and (number or head_ref):
         try:
-            body, what = pr_body(repo, token, number, head_ref)
+            body, what, verified_head = pr_context(repo, token, number, head_ref)
         except (urllib.error.URLError, OSError, ValueError) as e:
             print('FAIL  the pull request could not be read from GitHub, so nothing was checked: %s' % e)
             return 1
@@ -443,7 +499,7 @@ def main(argv):
     reader = github_reader(repo, token) if token and repo else None
     try:
         results, skipped = problems(body, reader)
-        known, kskipped = known_problems(body, reader, head_ref=head_ref)
+        known, kskipped = known_problems(body, reader, head_ref=verified_head)
     except (urllib.error.URLError, OSError, ValueError) as e:
         print('FAIL  an issue the body names could not be read from GitHub, so the check did not finish: %s' % e)
         return 1
