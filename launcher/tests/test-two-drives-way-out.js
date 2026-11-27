@@ -118,7 +118,9 @@ yes('and the log line carries it too', /Log\([\s\S]*?\+ why\);/.test(box));
 const ask = /static void AskOwnGame\(bool atStart\)\s*\{([\s\S]*?)\n        \}/.exec(shell);
 yes('Make it, in Settings, shows the whole answer as well',
     !!ask && /Ask\.Tell\(why,/.test(ask[1]));
-yes('and the card in Settings draws it whole', /"Off\. " \+ why/.test(shell));
+// The card's word was "Off." until #5944 put the folder on by default; it
+// says "Not made yet." since, and still draws the whole answer after it.
+yes('and the card in Settings draws it whole', /"Not made yet\. " \+ why/.test(shell));
 yes('nothing cuts the answer down before showing it',
     shell.indexOf('why.Substring') < 0 && shell.indexOf('why.Split') < 0);
 

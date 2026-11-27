@@ -2404,8 +2404,11 @@ function ReadStationVerbs([string]$path) {
                 }
             }
 
-            # Shape four: what the verb EATS is not what it produces.
-            if ($line -notmatch 'takeItem\s*\(') {
+            # Shape four: what the verb EATS is not what it produces, and
+            # what it tells the economy count it gathered (economyGathered,
+            # beside the addItem that hands it over) is the same thing again,
+            # not a second product.
+            if ($line -notmatch 'takeItem\s*\(' -and $line -notmatch 'economyGathered\s*\(') {
                 foreach ($im in [regex]::Matches($line, 'ITEMS\.([A-Za-z_][A-Za-z0-9_]*)')) {
                     $k = $im.Groups[1].Value
                     if (-not $itemsJs.ContainsKey($k)) {

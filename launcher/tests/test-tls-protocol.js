@@ -96,9 +96,33 @@ files.forEach(function (rel) {
 
 yes('there are SecurityProtocol assignments to read, ' + found.length + ' of them', found.length > 20);
 
-const inCs = found.filter(function (a) { return /\.cs$/i.test(a.rel); });
+// Which C# runs on the .NET Framework: a file whose nearest project targets
+// net4x. The mover, launcher/move (#5466), is one on purpose: it is what an
+// old launcher runs to fetch the new one on a machine that may have no .NET
+// 10 yet, so it runs on the .NET Framework 4.8 every Windows has. There
+// WebClient still reads ServicePointManager, its default leaves TLS 1.2 out on
+// an old Windows, and |= Tls12 adds it without taking anything away: the rule
+// PowerShell keeps, below, and not the .NET 10 one.
+function onFramework(rel) {
+  let dir = path.dirname(path.join(REPO_DIR, rel));
+  while (dir.length >= REPO_DIR.length) {
+    const projects = fs.readdirSync(dir).filter(function (f) { return /\.csproj$/i.test(f); });
+    if (projects.length) {
+      return projects.some(function (f) {
+        return /<TargetFrameworks?>[^<]*\bnet4\d+/i.test(fs.readFileSync(path.join(dir, f), 'utf8'));
+      });
+    }
+    const up = path.dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return false;
+}
+const inCs = found.filter(function (a) { return /\.cs$/i.test(a.rel) && !onFramework(a.rel); });
 inCs.forEach(function (a) { console.log('      ' + a.rel + ':' + a.line + '  ' + (a.text || '|=')); });
-yes('no C# sets SecurityProtocol: on .NET 10 HttpClient takes what Windows offers', inCs.length === 0);
+yes('no C# on .NET 10 sets SecurityProtocol: there HttpClient takes what Windows offers', inCs.length === 0);
+yes('the mover is held as .NET Framework code, which adds TLS 1.2 with |=',
+    onFramework('launcher/move/Program.cs') && !onFramework('launcher/app/Updater.cs'));
 
 const replaces = found.filter(function (a) { return !a.adds; });
 replaces.forEach(function (a) { console.log('      ' + a.rel + ':' + a.line + '  ' + a.text); });

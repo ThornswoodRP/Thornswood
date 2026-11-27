@@ -11,8 +11,8 @@
   Play shut, because the main feed only holds the main client.
 
   This holds both halves:
-    - Updater.FeedUrl never lets a saved address cross channels, and that is
-      RUN here on every combination, not just read;
+    - the launcher reads no saved feed address at all since #5796, when its
+      updates came straight from GitHub (Updater.FeedUrl went then);
     - Publish-Update writes its own channel's feed into updateFeedUrl.
 
   Read only. It reads source files and nothing else.
@@ -30,41 +30,22 @@ const yes = (w, c) => { if (c) { pass++; console.log('PASS  ' + w); } else { fai
 const MAIN = 'https://thornswood.net/feed/version.json';
 const DEV = 'https://thornswood.net/feed-dev/version.json';
 
-// ---- the launcher: the rule, run ---------------------------------------------
-const body = UPD.slice(UPD.indexOf('public static string FeedUrl(Config cfg)'));
-yes('FeedUrl is there to read', UPD.indexOf('public static string FeedUrl(Config cfg)') > 0);
-yes('it checks the channel of a saved address',
-    /bool saysDev = u\.AbsolutePath\.IndexOf\("\/feed-dev\/", StringComparison\.OrdinalIgnoreCase\) >= 0;/.test(body) &&
-    /if \(saysDev != dev\) return builtIn;/.test(body));
-
-/*
-  The same steps as the C#, in order, so the combinations can be run: built-in
-  by channel; empty or not a url, built-in; not https, not the default port or
-  with user info, built-in; not thornswood.net, built-in; other channel,
-  built-in; otherwise what was saved.
-*/
-function feedUrl(dev, said) {
-  const builtIn = dev ? DEV : MAIN;
-  said = (said || '').trim();
-  let u;
-  try { u = new URL(said); } catch (e) { return builtIn; }
-  if (u.protocol !== 'https:' || u.port !== '' || u.username || u.password) return builtIn;
-  const host = u.hostname.toLowerCase();
-  if (host !== 'thornswood.net' && !host.endsWith('.thornswood.net')) return builtIn;
-  const saysDev = u.pathname.toLowerCase().indexOf('/feed-dev/') >= 0;
-  if (saysDev !== dev) return builtIn;
-  return said;
+// ---- the launcher: no saved address to cross over -------------------------------
+// Since #5796 (11 Nov) the launcher takes its updates straight from GitHub,
+// and Dev is a channel of the one install. Updater.FeedUrl went with it, so
+// no saved feed address is read at all, and the 1 Oct case cannot come back
+// through the launcher. What is held now is that it stays gone: no launcher
+// source reads updateFeedUrl, and only the config merge still names the key
+// (so an old config.json carries it without anything reading it).
+const APP = path.join(REPO_DIR, 'launcher', 'app');
+const readers = [];
+for (const f of fs.readdirSync(APP)) {
+  if (!f.endsWith('.cs')) continue;
+  const t = fs.readFileSync(path.join(APP, f), 'utf8');
+  if (/updateFeedUrl|FeedUrl\s*\(/i.test(t.replace(/"UpdateFeedUrl" or /g, ''))) readers.push(f);
 }
-yes('a dev build that saved the MAIN feed reads the dev feed (the 1 Oct case)', feedUrl(true, MAIN) === DEV);
-yes('a dev build that saved the dev feed reads it', feedUrl(true, DEV) === DEV);
-yes('a dev build with nothing saved reads the dev feed', feedUrl(true, '') === DEV);
-yes('a main build that saved the dev feed reads the main feed', feedUrl(false, DEV) === MAIN);
-yes('a main build that saved the main feed reads it', feedUrl(false, MAIN) === MAIN);
-yes('a move within the dev channel is still honoured',
-    feedUrl(true, 'https://thornswood.net/feed-dev/v2/version.json') === 'https://thornswood.net/feed-dev/v2/version.json');
-yes('a move within the main channel is still honoured',
-    feedUrl(false, 'https://thornswood.net/feed2/version.json') === 'https://thornswood.net/feed2/version.json');
-yes('another host is still refused', feedUrl(true, 'https://example.com/feed-dev/version.json') === DEV);
+yes('no launcher source reads a saved update feed address (' + (readers.join(', ') || 'none') + ')', readers.length === 0);
+yes('Updater has no FeedUrl any more', UPD.indexOf('FeedUrl(') < 0);
 
 // ---- the publisher -------------------------------------------------------------
 const at = PUB.indexOf("Set-Prop $doc 'updateFeedUrl' $feedUrl");

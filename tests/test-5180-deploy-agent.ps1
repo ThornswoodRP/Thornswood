@@ -187,9 +187,9 @@ try {
             Yes '  and every error the copy''s server threw in its tick or caught there, with the lines around it, which the last lines miss' (
                 $null -ne $st -and $st.Text.Contains("Select-String -LiteralPath `$srv -Pattern 'in server\.tick|index\.ts:192:' -Context 12,8") -and
                 $st.Text.Contains("'server\bot-pass-server.log'"))
-            $kp = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '20261101-234130-unnamed')
-            Yes '  and -Status -Pass prints that kept pass from passes\' ($null -ne $kp -and $kp.Parses -and $kp.Text.Contains("'C:\Thornswood-BotPass\passes\20261101-234130-unnamed'"))
-            $bad = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-Pass', '..\..\Windows')
+            $kp = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-BotPass', '20261101-234130-unnamed')
+            Yes '  and -Status -BotPass prints that kept pass from passes\' ($null -ne $kp -and $kp.Parses -and $kp.Text.Contains("'C:\Thornswood-BotPass\passes\20261101-234130-unnamed'"))
+            $bad = Probe 'Install-DeployAgent.ps1' 'INSTALLED: probe' @('-Repo', 'O/R', '-Status', '-BotPass', '..\..\Windows')
             Yes '  and -Pass that is not a kept pass''s name sends nothing' ($null -eq $bad -or -not $bad.Text)
             Yes '  and only once dev''s engine has the bot client (skymp #137)' ($t.Contains("Contains('createBotClient')") -and $t.IndexOf("Contains('createBotClient')") -lt $t.IndexOf('Register-ScheduledTask -TaskName $passTask'))
             Yes '  and names the folder in agent.json only once the task is set up' ($t.Contains('-NotePropertyName botPassRoot') -and $t.Contains('$noPass = [bool]0'))

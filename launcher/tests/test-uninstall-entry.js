@@ -324,8 +324,14 @@ yes('the buttons are still wired, so Uninstall does something', un.calls.has('Wi
 yes('the Settings page still draws its folder rows', un.calls.has('BuildPathRows'));
 yes('it lands on the Settings page', un.calls.has('ShowSettingsPage'));
 yes('and no other page, which would draw that page\'s work', !un.calls.has('ShowPage'));
-yes('ShowPage draws nothing for the Settings page, which is why landing there is cheap',
-    shell.ShowPage && !/\bPageSettings\b/.test(shell.ShowPage.code));
+// Since #6586 (19 Nov) ShowPage fills the Settings page's microphone and
+// output lists as it lands there. Those read Windows' device lists and start
+// nothing: no voice, no update check, no server test. So landing there is
+// still cheap as long as that is all its Settings branch does.
+const settingsBranch = shell.ShowPage &&
+  /else if \(i == PageSettings\)\s*\{([^}]*)\}/.exec(shell.ShowPage.code);
+yes('ShowPage only fills the device lists for the Settings page, which is why landing there is cheap',
+    !!settingsBranch && settingsBranch[1].replace(/\s+/g, '') === 'BuildMicrophoneSettings();BuildOutputSettings();');
 yes('it says in the log why it opened, which is the line a person reads back', un.calls.has('Log') &&
     !!shell.OpenForUninstall && /Log\s*\(\s*"[^"]*uninstall/i.test(shell.OpenForUninstall.raw));
 

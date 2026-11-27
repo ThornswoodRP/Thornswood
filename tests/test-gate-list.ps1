@@ -90,7 +90,7 @@ try {
         '# comment lines are skipped',
         '',
         'launcher/tests/test-loff.js  needs the launcher built',
-        'test-off.ps1  needs a game install',
+        'test-off.ps1  fails on main: its fixture is stale (#1)',
         'test-own.js  own step in build.yml, "Some step"')
     $planted += $good
     $r = Invoke-Lister $good
@@ -105,6 +105,8 @@ try {
 
     $cases = @(
         @{ What = 'a line with no reason'; Lines = @('test-off.ps1'); Want = 'line=1::test-off\.ps1 has no reason' },
+        @{ What = 'a line off the gate as not sorted yet (#7100)'; Lines = @('test-off.ps1  not sorted yet, runs in the nightly (#2513)'); Want = 'line=1::test-off\.ps1 is off the gate as not sorted yet' },
+        @{ What = 'a fails on main line that names no issue (#7100)'; Lines = @('test-off.ps1  fails on main: its fixture is stale'); Want = 'line=1::test-off\.ps1 fails on main and names no issue' },
         @{ What = 'a file that is not in tests'; Lines = @('test-gone.ps1  removed long ago'); Want = 'line=1::test-gone\.ps1 is not a harness in tests or a product''s tests folder' },
         @{ What = 'a product harness that is not there'; Lines = @('launcher/tests/test-gone.ps1  removed long ago'); Want = 'line=1::launcher/tests/test-gone\.ps1 is not a harness' },
         @{ What = 'a path to a file that is no harness'; Lines = @('launcher/tests/helper.ps1  a helper'); Want = 'line=1::launcher/tests/helper\.ps1 is not a harness' },
