@@ -3557,28 +3557,32 @@ function blockIsOff(refrId) {
 
 function chopWood(actorId, refrId, fromSwing) {
   /*
-    #842: Skyrim starts the chopping FURN on the client the moment E is
-    pressed. mp.onActivate returning false only stops the server's
-    ProcessActivateNormal; the axe loop is already running locally. A
-    refused press (wrong half, no axe, off-limits block, or no firewood
-    form) must kick that loop the same way a mining spell ends:
-    IdleChairExitStart then IdleForceDefaultState via swingEnd.
+    A REFUSED PRESS STARTS NOTHING (#4598). Skyrim used to start the chopping
+    FURN on the presser's machine the moment E was pressed, so a refusal had
+    to undo the axe loop afterwards with swingEnd (#842). The client now
+    leaves every chopping block to the server before it acts (the
+    serverFirstBases packet, scripted-activators.ts), so a refused press sat
+    nobody down and there is nothing to undo.
+
+    A swing is different. fromSwing is a fall of the axe in a session the
+    server allowed, and the loop is running: a refusal there (the axe broke,
+    the block went off) ends that session with swingEnd, as before.
   */
   // Before the class and the axe, because this block is not work for anybody
   // and telling a woodworker they lack a tool at one would be a lie.
   const off = blockIsOff(refrId);
   if (off) {
-    swingEnd(actorId);
-    return fromSwing ? '' : 'Nobody works this block. There are others in ' + off + '.';
+    if (fromSwing) { swingEnd(actorId); return ''; }
+    return 'Nobody works this block. There are others in ' + off + '.';
   }
 
   const half = halfGate(actorId, 'woodwright', 'novice',
     'A chopping block is a woodworker\'s. Only a woodworker who took Woodwright can ' +
     'work one, and a charburner gets the novice yield. Ask one.');
-  if (half) { swingEnd(actorId); return half; }
+  if (half) { if (fromSwing) { swingEnd(actorId); } return half; }
 
   const tool = toolGate(actorId, 'woodworker');
-  if (tool) { swingEnd(actorId); return tool; }
+  if (tool) { if (fromSwing) { swingEnd(actorId); } return tool; }
 
   /*
     NO WAIT BETWEEN SWINGS, because a swing is the unit now.
@@ -3615,7 +3619,7 @@ function chopWood(actorId, refrId, fromSwing) {
   */
   const yielded = 2;
   if (!addItem(actorId, ITEMS.firewood, yielded)) {
-    swingEnd(actorId);
+    if (fromSwing) { swingEnd(actorId); }
     return 'The block gives up firewood and there is nothing in this load order to ' +
            'put in your hands. Say so in #bugs.';
   }
@@ -8778,6 +8782,83 @@ function showsPick(refrId) {
     if (before && packGrew(before, packCounts(casterRefrId))) { showPicked(casterRefrId, refrId); }
     return result;
   };
+})();
+
+/*
+  THE BASES WHOSE PRESS WAITS FOR THE SERVER (#4598).
+
+  The client blocks a press by record type: containers, items, actors, doors,
+  plants, trees and benches wait for the server's answer. A chopping block is
+  furniture that is no bench, and an ore vein is an activator, so neither
+  waited. The presser's own Skyrim sat them at the block, or ran the vein's
+  MineOreScript, before the server had said whether they may, and chopWood
+  could only end the swing after it had started.
+
+  Since skymp#166 the client takes the bases the server names, as the custom
+  packet { customPacketType: 'serverFirstBases', bases: [runtime form ids] },
+  and blocks every reference of them the way it blocks a bench. A refused
+  press then changes nothing on that machine, and an allowed one comes back
+  as the server's own activation. The client forgets the list with each
+  connection (resetServerFirstActivation in networkingService.ts), so it is
+  sent once to every connection: a character's connection is its GUID, the
+  same identity join-pass.ts reads, and a new one is told again.
+
+  CHOPPING_BLOCKS and ORES_BY_BASE are the whole of it. Benches, doors,
+  plants and trees already wait by their type.
+*/
+(function serverFirstBases() {
+  const ids = [];
+  const seen = {};
+  function add(desc) {
+    const id = idOf(desc);
+    // 0 is a plugin that is not loaded: nothing of it can be pressed.
+    if (id && !seen[id]) { seen[id] = true; ids.push(id); }
+  }
+  for (let i = 0; i < CHOPPING_BLOCKS.length; i++) { add(CHOPPING_BLOCKS[i]); }
+  for (const veinBase in ORES_BY_BASE) {
+    if (Object.prototype.hasOwnProperty.call(ORES_BY_BASE, veinBase)) { add(veinBase); }
+  }
+  const packet = JSON.stringify({ customPacketType: 'serverFirstBases', bases: ids });
+  // actorId to the connection it was last sent on.
+  const told = {};
+
+  function connection(userId) {
+    if (typeof mp.getUserGuid !== 'function') { return 'user ' + userId; }
+    let guid = '';
+    try { guid = String(mp.getUserGuid(userId) || ''); } catch (e) { guid = ''; }
+    return guid ? 'guid ' + guid : '';
+  }
+
+  function tell() {
+    let online = [];
+    try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { online = []; }
+    const here = {};
+    for (let i = 0; i < online.length; i++) {
+      const actorId = online[i];
+      let userId = -1;
+      try { userId = mp.getUserByActor(actorId); } catch (e) { userId = -1; }
+      if (userId === undefined || userId === null || userId < 0) { continue; }
+      const conn = connection(userId);
+      if (!conn) { continue; }
+      here[actorId] = true;
+      if (told[actorId] === conn) { continue; }
+      told[actorId] = conn;
+      try {
+        mp.sendCustomPacket(userId, packet);
+      } catch (e) {
+        log('could not tell', Number(actorId).toString(16), 'which bases wait for the server:', e);
+      }
+    }
+    for (const k in told) {
+      if (Object.prototype.hasOwnProperty.call(told, k) && !here[k]) { delete told[k]; }
+    }
+  }
+
+  const g = globalThis;
+  if (g.__thornswoodServerFirstTimer) { clearInterval(g.__thornswoodServerFirstTimer); }
+  g.__thornswoodServerFirstTimer = setInterval(guard('serverFirstBases', tell), 1000);
+  g.__thornswoodServerFirst = { bases: ids, tell: tell };
+  log(ids.length, 'bases wait for the server before the client acts on them');
 })();
 
 /*
