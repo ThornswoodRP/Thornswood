@@ -1205,6 +1205,13 @@ $tagBefore = Join-Path $T 'tag-before'
 & $sz x -y ('-o' + $tagBefore) $draft3 | Out-Null
 & $node.Source $js '--check-tags' $tagBefore $tagAfter '192762'
 YesR '-RefreshTag -WhatIf builds an identity-only repair of the published revision, with no Nexus writes' ($r.Code -eq 0 -and $LASTEXITCODE -eq 0 -and @(Writes @(Since $n0)).Count -eq 0) $r
+# #6501: a run with no change switch stops on the "Say which" refusal, and
+# that refusal names every switch that would have made a revision, -RefreshTag
+# among them, before anything is written.
+$n0 = Count
+$r = Run 'New-NexusRevision.ps1' @('-WhatIf')
+$sayWhich = [regex]::Match($r.Out, 'Say which [^\r\n]*').Value
+YesR 'with no change switch it stops and the refusal names -RefreshTag, before writing' ($r.Code -eq 1 -and $sayWhich -match '(?<![A-Za-z])-RefreshTag(?![A-Za-z])' -and @(Writes @(Since $n0)).Count -eq 0) $r
 foreach ($case in @(
     @(@('-RefreshTag', '999'), 'no one entry', 'an absent mod'),
     @(@('-RefreshTag', '0'), 'distinct positive', 'zero'),

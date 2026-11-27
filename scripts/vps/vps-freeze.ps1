@@ -29,7 +29,9 @@
   is called off. -NoBackup stops without taking a backup.
 
   Prints FROZEN at the end only when nothing is left holding a port and a
-  backup was written (or -NoBackup was passed).
+  backup was written (or -NoBackup was passed), and ends 0 then; NOT FROZEN
+  ends 1. -Undo ends 1 with NOT UNDONE when anything did not start again
+  (#4219).
 #>
 [CmdletBinding()]
 param(
@@ -47,17 +49,36 @@ $tasks = @('Thornswood Server', 'Thornswood Dev Server', 'Thornswood Docs',
 # python again fifteen seconds after the sweep below ended it.
 $botService = 'ThornswoodBot'
 
+# -Undo says UNDONE and ends 0 only when every task it found started, the
+# bot's service is running and the watchdog is enabled again; otherwise it
+# names what did not come back and ends 1, which Remote.ps1 hands back
+# (#4219). Until then it printed "started" whatever Start-ScheduledTask
+# said, so a move called off could leave the old box dark and read as back.
 if ($Undo) {
+  $notBack = @()
   foreach ($t in $tasks) {
-    if (Get-ScheduledTask -TaskName $t -EA SilentlyContinue) { Start-ScheduledTask -TaskName $t; 'started   ' + $t }
+    if (-not (Get-ScheduledTask -TaskName $t -EA SilentlyContinue)) { 'no task   ' + $t; continue }
+    try { Start-ScheduledTask -TaskName $t -EA Stop }
+    catch { 'DID NOT START ' + $t + ': ' + $_.Exception.Message; $notBack += $t; continue }
+    $state = '' + (Get-ScheduledTask -TaskName $t -EA SilentlyContinue).State
+    if (@('Running', 'Queued') -notcontains $state) { 'DID NOT START ' + $t + ': it is ' + $state + ' after the start'; $notBack += $t }
+    else { 'started   ' + $t }
   }
-  if (Get-Service -Name $botService -EA SilentlyContinue) { Start-Service -Name $botService; 'started   ' + $botService }
+  if (Get-Service -Name $botService -EA SilentlyContinue) {
+    try {
+      Start-Service -Name $botService -EA Stop
+      $status = '' + (Get-Service -Name $botService -EA SilentlyContinue).Status
+      if ($status -ne 'Running') { 'DID NOT START ' + $botService + ': it is ' + $status + ' after the start'; $notBack += $botService }
+      else { 'started   ' + $botService }
+    } catch { 'DID NOT START ' + $botService + ': ' + $_.Exception.Message; $notBack += $botService }
+  }
   if (Get-ScheduledTask -TaskName $watch -EA SilentlyContinue) {
-    Enable-ScheduledTask -TaskName $watch | Out-Null
-    'enabled   ' + $watch
+    try { Enable-ScheduledTask -TaskName $watch -EA Stop | Out-Null; 'enabled   ' + $watch }
+    catch { 'NOT ENABLED ' + $watch + ': ' + $_.Exception.Message; $notBack += $watch }
   }
+  if ($notBack.Count) { 'NOT UNDONE: ' + ($notBack -join ', ') + ' did not come back. The lines above say why.'; exit 1 }
   'UNDONE: the old box serves again'
-  return
+  exit 0
 }
 
 $site = Get-ScheduledTask -TaskName 'Thornswood Docs' -EA SilentlyContinue
@@ -122,5 +143,7 @@ if ($NoBackup) {
 }
 
 ''
-if (-not $left.Count -and ($NoBackup -or $wrote)) { 'FROZEN: nothing on the old box is serving the world, the site or the bot' }
-else { 'NOT FROZEN: see the lines above. -Undo puts the old box back as it was.' }
+# Ends 1 on NOT FROZEN, so Remote.ps1 hands back a failure (#4219).
+if (-not $left.Count -and ($NoBackup -or $wrote)) { 'FROZEN: nothing on the old box is serving the world, the site or the bot'; exit 0 }
+'NOT FROZEN: see the lines above. -Undo puts the old box back as it was.'
+exit 1

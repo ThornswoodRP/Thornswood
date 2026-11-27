@@ -22,6 +22,10 @@
   temp folder, and looks at what it asks, what it says and what it leaves in
   the folder.
 
+  And the window (#7060): only generations the box wrote in the last -Days
+  days come down, and -Match keeps only the lines holding one of its words,
+  so a pull fits under what the gate sends back.
+
   No ssh and no VPS.
 #>
 [CmdletBinding()]
@@ -54,6 +58,12 @@ $text = [IO.File]::ReadAllText($getLogs)
 Yes 'header says the rolled generations come down' ($text -match 'its\s+rolled generations come down too')
 Yes 'header says the box is asked which it has' ($text -match 'the box is asked\s+once which of them it has')
 Yes 'header says door.log does not roll' ($text -match 'door\.log does not roll')
+Yes 'a window in days, 2 unless said (#7060)' ($text -match '\[int\]\$Days\s+= 2,')
+Yes 'and the words to keep, matched as plain text' ($text -match '\[string\]\$Match = ''''' -and $text -match '-SimpleMatch')
+$gateVerbs = Get-Content -Raw -LiteralPath (Join-Path $repo 'scripts\vps\gate\verbs.json') | ConvertFrom-Json
+$glParams = $gateVerbs.verbs.'Get-Logs'.params
+Yes 'the gate takes -Days and -Match for Get-Logs, so a cloud thread can say them' (
+    $glParams.Days -eq '^[0-9]{1,3}$' -and ('Loading character,chargen' -match $glParams.Match) -and -not ("it's" -match $glParams.Match))
 
 foreach ($name in @('server.log', 'thornswood.log', 'voice.log', 'site.log', 'bot.log')) {
     $pat = "Name = '$name'[^`r`n]*Rolls = \`$true"
@@ -127,6 +137,9 @@ function Put([string]$rel, [int]$count) {
 Put 'Thornswood-Server-Dev\server.log' 7
 Put 'Thornswood-Server-Dev\server.log.1' 7
 Put 'Thornswood-Server-Dev\server.log.2' 7
+# Last written ten days ago, outside the default two day window (#7060).
+Put 'Thornswood-Server-Dev\server.log.3' 7
+(Get-Item -LiteralPath (Join-Path $global:standInBox 'Thornswood-Server-Dev\server.log.3')).LastWriteTimeUtc = (Get-Date).ToUniversalTime().AddDays(-10)
 Put 'Thornswood-Server-Dev\server.log.bak' 7
 Put 'Thornswood-Server-Dev\server.log.1.old' 7
 Put 'Thornswood-Server-Dev\thornswood.log' 7
@@ -247,6 +260,28 @@ try {
     Yes 'the deploy agent''s log of a Deployment comes down by its own name (#6149)' (
         (Test-Path -LiteralPath (Pulled 'deploy-7808834094.log')) -and $words -match '(?m)^\s*deploy-7808834094\.log\s+3 lines')
     Yes 'and the file beside it that is not a log does not' (-not (Test-Path -LiteralPath (Pulled 'deploy-7808834094.after.json')))
+    Yes 'a generation last written before the window is not named or read: server.log.3, ten days old (#7060)' (
+        -not (Test-Path -LiteralPath (Pulled 'server.log.3')) -and -not ($global:standInListed | Where-Object { $_ -match 'server\.log\.3$' }))
+
+    # ---- a window of 0 days, and only the lines asked for (#7060) ----
+    $picked = Join-Path $work 'picked'
+    New-Item -ItemType Directory -Path $picked -Force | Out-Null
+    $global:standInAsks.Clear()
+    $said2 = @(& {
+        $ErrorActionPreference = 'Continue'
+        try { & $getLogs -Vps 203.0.113.9 -User tester -Out $picked -Lines 3 -Days 0 -Match 'line 2, line 5' -Dev -NoPause *>&1 }
+        catch { $_ }
+    })
+    $errors2 = @($said2 | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] })
+    foreach ($e in $errors2) { Write-Host ('  said: ' + $e) }
+    Yes 'the matching pull says no error' ($errors2.Count -eq 0)
+    Yes '-Days 0 names and reads every generation, server.log.3 too' (Test-Path -LiteralPath (Join-Path $picked 'server.log.3'))
+    $kept = @(Get-Content -LiteralPath (Join-Path $picked 'server.log.3'))
+    Yes ('-Match keeps only the lines holding one of its words, on the box: {0}' -f ($kept -join ' / ')) (
+        $kept.Count -eq 2 -and $kept[0] -eq 'Thornswood-Server-Dev\server.log.3 line 2' -and $kept[1] -eq 'Thornswood-Server-Dev\server.log.3 line 5')
+    Yes 'and the box is asked with Select-String, as plain text, never Get-Content' (
+        @($global:standInAsks | Where-Object { $_.Contains('Select-String') -and $_.Contains('-SimpleMatch') }).Count -ge 1 -and
+        -not @($global:standInAsks | Where-Object { $_ -match 'Get-Content -LiteralPath' }).Count)
 } finally {
     Remove-Item -Path function:global:ssh -ErrorAction SilentlyContinue
     Remove-Item -Path function:global:Invoke-RestMethod -ErrorAction SilentlyContinue

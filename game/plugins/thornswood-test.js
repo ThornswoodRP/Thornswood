@@ -132,6 +132,8 @@ let crosshairDriver = '';  // the carriage or ferry driver under it, or ''
 let faceAsked = '';        // what a face step wants stood before
 let faceRef = '';          // the reference it names, "<id>:<plugin>", for a driver
 let faceDone = null;       // { ok, note } once the update has done it
+let faceTry = null;        // the bed and the spots beside it still to try
+let cellName = '';         // the name of the cell the character is in
 function isBed(ref) {
   const T = globalThis.Thornswood;
   return !!(T && typeof T.isBedRef === 'function' && T.isBedRef(ref));
@@ -142,34 +144,80 @@ function refName(ref) {
   try { const b = ref.getBaseObject(); name = b ? String(b.getName() || '') : ''; } catch (e) { log('could not read a reference name:', e); }
   return (id >>> 0).toString(16) + (name ? ' "' + name + '"' : '');
 }
-// Stand 90 units out from the nearest bed in the cell, on the side the
-// person is on, turned to it and looking a little down, as somebody walks
-// up to a bed to use it. 40 is kFurniture.
-function faceBed() {
+// Stand beside the nearest bed in the cell, turned to it and looking down at
+// it, as somebody walks up to a bed to use it. 40 is kFurniture.
+//
+// Where beside it is measured, not guessed: a bed stands against a wall on
+// some sides, and which of its sides are free differs bed to bed. So the
+// spots on its four sides, 45 units clear of its bounds (GetWidth along its
+// own x, GetLength along its own y), are tried in turn, nearest to the
+// character first, and the first from which the crosshair lands on that bed
+// is the one. The camera goes to first person so the crosshair is the eyes'
+// line. Each spot gets FACE_LOOK_MS before the crosshair is read, and every
+// spot that does not see the bed is said in the step's note.
+const FACE_LOOK_MS = 400;
+const EYE_HEIGHT = 115;
+function faceStart() {
   const pc = sp.Game.getPlayer();
   const cell = pc ? pc.getParentCell() : null;
   if (!cell) { return { ok: false, note: 'not in a cell' }; }
   const T = globalThis.Thornswood;
   if (!T || typeof T.isBedRef !== 'function') { return { ok: false, note: 'thornswood-front.js shares no isBedRef, so this build cannot tell a bed' }; }
-  const px = pc.getPositionX(), py = pc.getPositionY();
+  const px = pc.getPositionX(), py = pc.getPositionY(), pz = pc.getPositionZ();
   let best = null, bestD = Infinity, beds = 0;
   const n = cell.getNumRefs(40);
   for (let i = 0; i < n; i++) {
     const ref = cell.getNthRef(i, 40);
     if (!ref || !isBed(ref)) { continue; }
     beds++;
-    const d = Math.hypot(ref.getPositionX() - px, ref.getPositionY() - py);
+    const d = Math.hypot(ref.getPositionX() - px, ref.getPositionY() - py, (ref.getPositionZ() - pz) * 2);
     if (d < bestD) { bestD = d; best = ref; }
   }
   if (!best) { return { ok: false, note: 'no bed among the ' + n + ' furniture in this cell' }; }
   const bx = best.getPositionX(), by = best.getPositionY(), bz = best.getPositionZ();
-  const dx = px - bx, dy = py - by, len = Math.hypot(dx, dy) || 1;
-  const sx = bx + dx / len * 90, sy = by + dy / len * 90;
-  pc.setPosition(sx, sy, bz);
+  const h = best.getAngleZ() * Math.PI / 180;
+  // The bed's own axes on the ground: y is where its heading points
+  // (0 is north, clockwise), x is to its right.
+  const ax = { x: Math.cos(h), y: -Math.sin(h) }, ay = { x: Math.sin(h), y: Math.cos(h) };
+  const halfW = (Number(best.getWidth()) || 100) / 2, halfL = (Number(best.getLength()) || 200) / 2;
+  const top = bz + Math.min(60, (Number(best.getHeight()) || 60) * 0.6);
+  const spots = [
+    { side: 'right', x: bx + ax.x * (halfW + 45), y: by + ax.y * (halfW + 45) },
+    { side: 'left', x: bx - ax.x * (halfW + 45), y: by - ax.y * (halfW + 45) },
+    { side: 'foot', x: bx - ay.x * (halfL + 45), y: by - ay.y * (halfL + 45) },
+    { side: 'head', x: bx + ay.x * (halfL + 45), y: by + ay.y * (halfL + 45) }
+  ].sort(function (p, q) { return Math.hypot(p.x - px, p.y - py) - Math.hypot(q.x - px, q.y - py); });
+  try { sp.Game.forceFirstPerson(); } catch (e) { log('could not go to first person:', e); }
+  faceTry = { bed: best, name: refName(best), beds: beds, off: Math.round(bestD), bx: bx, by: by, bz: bz, top: top, spots: spots, k: -1, at: 0, missed: [] };
+  return null;
+}
+// One look per update: put the character on the next spot, or read whether
+// the crosshair found the bed from the spot it was put on.
+function faceStep() {
+  const f = faceTry, now = Date.now();
+  if (f.k >= 0 && now - f.at < FACE_LOOK_MS) { return null; }
+  if (f.k >= 0) {
+    let on = '';
+    try { const r = sp.Game.getCurrentCrosshairRef(); on = r ? refName(r) : ''; } catch (e) { log('could not read the crosshair:', e); }
+    if (on === f.name) {
+      faceTry = null;
+      return { ok: true, note: 'before bed ' + f.name + ' from its ' + f.spots[f.k].side + ', ' + f.beds + ' bed(s) in the cell, it was ' + f.off + ' units off' + (f.missed.length ? '; not from ' + f.missed.join(', ') : '') };
+    }
+    f.missed.push(f.spots[f.k].side + ' (' + (on || 'nothing') + ' under the crosshair)');
+  }
+  f.k++;
+  if (f.k >= f.spots.length) {
+    faceTry = null;
+    return { ok: false, note: 'bed ' + f.name + ' was under the crosshair from none of its sides: ' + f.missed.join(', ') };
+  }
+  const pc = sp.Game.getPlayer(), s = f.spots[f.k];
+  pc.setPosition(s.x, s.y, f.bz);
+  const dist = Math.hypot(f.bx - s.x, f.by - s.y) || 1;
   // Papyrus angles are degrees. Heading 0 is north (+y), turning clockwise;
-  // a positive x looks down.
-  pc.setAngle(20, 0, Math.atan2(bx - sx, by - sy) * 180 / Math.PI);
-  return { ok: true, note: 'before bed ' + refName(best) + ', ' + beds + ' bed(s) in the cell, it was ' + Math.round(bestD) + ' units off' };
+  // a positive x looks down, here from the eyes to the top of the bed.
+  pc.setAngle(Math.atan2(f.bz + EYE_HEIGHT - f.top, dist) * 180 / Math.PI, 0, Math.atan2(f.bx - s.x, f.by - s.y) * 180 / Math.PI);
+  f.at = now;
+  return null;
 }
 // Stand 100 units out from the driver the step names, on the side the
 // person is on, turned to him and looking level, as somebody walks up to
@@ -221,6 +269,7 @@ sp.on('update', function () {
   let cell = null;
   try { const pc = sp.Game.getPlayer(); cell = pc ? pc.getParentCell() : null; } catch (e) { cell = null; }
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
+  try { cellName = cell ? String(cell.getName() || '') : ''; } catch (e) { cellName = ''; log('could not read the cell name:', e); }
   crosshairBed = '';
   crosshairDriver = '';
   try {
@@ -229,8 +278,11 @@ sp.on('update', function () {
     if (r && isDriver(r)) { crosshairDriver = refName(r); }
   } catch (e) { log('could not read the crosshair:', e); }
   if (faceAsked && !faceDone) {
-    try { faceDone = faceAsked === 'bed' ? faceBed() : faceAsked === 'driver' ? faceDriver(faceRef) : { ok: false, note: 'cannot face a ' + faceAsked }; }
-    catch (e) { faceDone = { ok: false, note: 'facing threw: ' + e }; }
+    try {
+      if (faceAsked === 'driver') { faceDone = faceDriver(faceRef); }
+      else if (faceAsked !== 'bed') { faceDone = { ok: false, note: 'cannot face a ' + faceAsked }; }
+      else { faceDone = faceTry ? faceStep() : faceStart(); }
+    } catch (e) { faceTry = null; faceDone = { ok: false, note: 'facing threw: ' + e }; }
   }
 });
 
@@ -387,6 +439,7 @@ function failTask() {
   faceAsked = '';
   faceRef = '';
   faceDone = null;
+  faceTry = null;
 }
 function tasksNote() {
   return failedTasks.length ? 'test task(s) failed: ' + failedTasks.map(function (t) { return '#' + t; }).join(', ') : '';
@@ -433,6 +486,17 @@ sp.on('tick', function () {
         if (since !== undefined && since >= prevAt) { pass(want ? 'it opened and closed again before this tick' : 'it closed and opened again before this tick'); return; }
       } else if (s.for === 'world') {
         if (inWorld) { pass(); return; }
+      } else if (s.for === 'shut') {
+        // None of "menus" is open.
+        const up = (Array.isArray(s.menus) ? s.menus : []).filter(function (m) { return !!openMenus[String(m)]; });
+        if (!up.length) { pass(); return; }
+        if (late) { fail('waited ' + limit + ' ms for ' + up.join(', ') + ' to shut'); }
+        return;
+      } else if (s.for === 'cell') {
+        // In (or, with "in": false, not in) a cell whose name holds "name".
+        const want = s.in !== false;
+        const here = cellName.toLowerCase().indexOf(String(s.name || '').toLowerCase()) >= 0 && cellName !== '';
+        if (inWorld && here === want) { pass(cellName ? 'in ' + cellName : 'in an unnamed cell'); return; }
       } else if (s.for === 'crosshair') {
         if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
         if (s.what === 'driver' && crosshairDriver) { pass('driver ' + crosshairDriver); return; }
@@ -457,7 +521,7 @@ sp.on('tick', function () {
         return;
       }
       if (late) {
-        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : s.for === 'crosshair' ? 'a ' + s.what + ' under the crosshair' : 'the world');
+        const what = 'waited ' + limit + ' ms for ' + (s.for === 'menu' ? s.menu + (s.open === false ? ' to close' : ' to open') : s.for === 'message' ? JSON.stringify(s.match) : s.for === 'crosshair' ? 'a ' + s.what + ' under the crosshair' : s.for === 'cell' ? (s.in === false ? 'a cell other than ' : 'the cell ') + s.name + ', and the character is in ' + (cellName || 'no named cell') : 'the world');
         if (Number(s.skip) > 0) { skipOn(what); } else { fail(what); }
       }
       return;
@@ -492,11 +556,18 @@ sp.on('tick', function () {
         if (done.ok) { pass(done.note); } else { fail(done.note); }
         return;
       }
-      if (late) { faceAsked = ''; fail('no update came in ' + limit + ' ms to stand before a ' + s.what); }
+      if (late) { faceAsked = ''; faceTry = null; fail('no update came in ' + limit + ' ms to stand before a ' + s.what); }
       return;
     }
     case 'shot':
     case 'key': {
+      // A key with "ifMenu": [names] is pressed only while one of those menus
+      // is open: the first step of a task shuts what a failed task before it
+      // left open, and presses nothing when nothing is.
+      if (!waitingAsk && s.do === 'key' && Array.isArray(s.ifMenu) && !s.ifMenu.some(function (m) { return !!openMenus[String(m)]; })) {
+        pass('none of ' + s.ifMenu.join(', ') + ' is open, so not pressed');
+        return;
+      }
       if (!waitingAsk) {
         if (s.do === 'key') {
           inventoryKey = s.inventoryTrace === true

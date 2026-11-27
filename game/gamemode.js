@@ -33691,6 +33691,15 @@ module.exports = {
     on that life until somebody searches it or the actor stands back up.
     A camp enemy carries a little. Anything good on any other body is rare.
     A person is not searched. A hunter carcass stays on the hunter path.
+
+    NO BODY IS EVER EMPTY (#6715). Patrick, 26 Nov 2026, after a tester
+    searched two bandits in Embershard Mine and was told both times that
+    there was nothing on the body: "nothing should ever drop nothing atleast
+    something small or common or whatever". The wild odds left about seven
+    bodies in ten with nothing at all, so a roll that comes up with no coin
+    and no item takes one common supply (the tier 1 list: a lockpick, salt,
+    bone meal, a strip of leather, bread and the like). The odds of anything
+    better are as they were.
   */
   var BODY_CAMP = { gold: 0.80, goldN: 6, minor: 0.65, decent: 0.08, good: 0.015, rare: 0.002 };
   var BODY_WILD = { gold: 0.20, goldN: 4, minor: 0.12, decent: 0.02, good: 0.005, rare: 0.0005 };
@@ -33802,6 +33811,7 @@ module.exports = {
     if (rng() < odds.decent) pushPick(items, pickWeighted(supplyExact(2), rng));
     if (rng() < odds.good) pushPick(items, pickWeighted(gearOrNovice(), rng));
     if (rng() < odds.rare) pushPick(items, pickWeighted(rarePile(), rng));
+    if (!gold && !items.length) pushPick(items, pickWeighted(supplyExact(1), rng));
     return { gold: gold, items: mergeItems(items), camp: !!camp };
   }
 
@@ -53629,9 +53639,12 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
                  takes twenty to notice is not a fire.
 
       IT CANNOT RUN AWAY WITH ITSELF. Somebody who catches it becomes a source
-      in their own right, which is what "spread" means, but the burn is on a
-      clock and the radius is small, so a crowd standing shoulder to shoulder
-      in a bonfire is the worst it gets and that is a decision they made.
+      in their own right, which is what "spread" means, but a fire is never
+      caught back by anybody it already came through (burnFrom, #6722). The
+      clock alone did not stop it: each catch started a new one, so two
+      people at a fire handed it back and forth until both were dead. Now a
+      fire goes out once it has been through everybody standing there, and
+      only somebody still in the coals keeps setting their neighbours alight.
     */
     burn: { spread: 220, catches: 5000, every: 2000 },
 
@@ -57147,6 +57160,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   var burning = {};        // actorId -> when they last said they were alight
   var burnIdentities = {}; // actorId -> profile, current runtime and life
   var burnStarts = {};     // actual start, independent of whether needs saved
+  /*
+    WHO A FIRE HAS ALREADY BEEN THROUGH (#6722). Each person alight carries
+    the list of people their fire came through: empty for a fire of their own
+    (the coals), the giver's list and the giver for one caught from somebody.
+    A fire is never caught by anybody on its own list. Before this a fire
+    caught from a neighbour was caught back by them once their own had gone
+    out, and back again, so two or three people standing together at a fire
+    kept setting each other alight, 7 health a second, until they died. The
+    list only grows along a chain, so every chain ends, and walking into the
+    coals again is a new fire with an empty list.
+  */
+  var burnFrom = {};       // actorId -> the ids this person's fire came through
+  var burnCaught = {};     // actorId -> { from: list, at } of a catch not yet reported
 
   function burnIdentity(actorId, savedOnly) {
     try {
@@ -57183,6 +57209,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       delete burning[actorId];
       delete burnIdentities[actorId];
       delete burnStarts[actorId];
+      delete burnFrom[actorId];
       publishBurnVisual(actorId, false);
     }
     if (bankHeat) { pushEffects(actorId); }
@@ -57196,7 +57223,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       // A new fire cannot warm the time before the report. A heartbeat also
       // banks the old interval before extending its deadline.
       settle(actorId);
-      if (!wasBurning) { burnStarts[actorId] = Date.now(); }
+      if (!wasBurning) {
+        burnStarts[actorId] = Date.now();
+        // Caught from somebody, the report after the catch: that fire's
+        // list. Anything else is a fire of their own.
+        var got = burnCaught[actorId];
+        burnFrom[actorId] = (got && Date.now() - got.at <= NEEDS.burn.every * 3) ? got.from : [];
+      }
+      delete burnCaught[actorId];
       burning[actorId] = Date.now();
       burnIdentities[actorId] = identity;
       publishBurnVisual(actorId, true);
@@ -57205,7 +57239,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /** Tell one person's client to catch fire for a while. */
-  function catchFire(actorId, ms, why) {
+  function catchFire(actorId, ms, why, from) {
+    if (from) { burnCaught[actorId] = { from: from, at: Date.now() }; }
     try {
       mp.set(actorId, BURN_PROPERTY, {
         ms: Number(ms) || NEEDS.burn.catches,
@@ -57242,11 +57277,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         hereCell = String(mp.get(who, 'worldOrCellDesc') || '');
       } catch (e) { continue; }
       if (!herePos) { continue; }
+      var came = burnFrom[who] || [];
       for (var j = 0; j < online.length; j++) {
         var them = online[j];
         if (them === who) { continue; }
         // Already alight, so there is nothing to catch.
         if (burning[them]) { continue; }
+        // This fire already came through them (#6722).
+        if (came.indexOf(them) !== -1) { continue; }
         try {
           if (String(mp.get(them, 'worldOrCellDesc') || '') !== hereCell) { continue; }
           var p = mp.get(them, 'pos');
@@ -57254,7 +57292,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           var dx = p[0] - herePos[0], dy = p[1] - herePos[1], dz = p[2] - herePos[2];
           if ((dx * dx + dy * dy + dz * dz) > reach) { continue; }
         } catch (e) { continue; }
-        catchFire(them, NEEDS.burn.catches, 'caught');
+        catchFire(them, NEEDS.burn.catches, 'caught', came.concat([who]));
         nlog('fire spread from', who.toString(16), 'to', them.toString(16));
       }
     }
