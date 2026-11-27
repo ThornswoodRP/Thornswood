@@ -14,6 +14,11 @@ measured there, not remembered:
 
     pwsh scripts/mods/Run-OnBox.ps1 scripts/dev/List-ToolRecords.py --data '{data}'
 
+or, from any session gh is signed in on, through the deploy gate's
+List-GameData verb (#5736):
+
+    pwsh scripts/vps/Box-Run.ps1 -Line 'List-GameData -Lister ToolRecords'
+
 --models also lists every .nif path in the mesh archives that matches the same
 words, so a model that no MISC or STAT uses yet is seen too.
 """
