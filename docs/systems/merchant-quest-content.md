@@ -13,7 +13,7 @@ No new actor, container contents, recipe, skill book or farming mechanic is adde
 | Guild Signet | `17002:Thornswood-Content.esp` | Silver ring `3b97c:Skyrim.esm` |
 | Guild Locket | `17003:Thornswood-Content.esp` | Necklace `877f1:Skyrim.esm` |
 | Sealed Guild Case | `17004:Thornswood-Content.esp` | Strongbox `ea722:Skyrim.esm` |
-| Sealed Guild Dispatch | `17005:Thornswood-Content.esp` | Parchment `33761:Skyrim.esm` |
+| Sealed Guild Dispatch | `17005:Thornswood-Content.esp` | Strongbox `ea722:Skyrim.esm` |
 | Guild Seal | `17006:Thornswood-Content.esp` | Parchment `33761:Skyrim.esm` |
 
 These are MISC tokens with zero value and weight, no vendor keywords, no
@@ -46,7 +46,7 @@ manifest. Native CELL grids verify that every shifted point remains in its
 declared exterior cell. Native HasWater, XCLW and Tamriel DNAM resolve the sea level to -14000; markers stand at -14032 rather than on deep seabed clam heights. The clams and their stock remain independent.
 
 Source measurement used the enabled winning references under the population
-catalogue's103-plugin order. The ledger CELL's Embers, populated-town and
+catalogue's 103-plugin order. The ledger CELL's Embers, populated-town and
 Last overrides were inspected: their lighting, ownership and other fields
 match the canonical master record after localized names are written in plain.
 The five exterior CELLs have no non-master override apart from our new parent

@@ -7,7 +7,7 @@
   "who": { "anyone": false, "halves": { "haberdasher": "novice", "liverywright": "novice" } },
   "dyes": [
     { "id": "black", "name": "Black Hair Dye", "colour": "#1b1918", "strength": 0.75, "wander": 10,
-      "inputs": [ { "item": "15482:Thornswood-Content.esp", "count": 1 }, { "item": "16e26:Dragonborn.esm", "count": 1 }, { "item": "13f598:WindhelmSSE.esp", "count": 1 } ] },
+      "inputs": [ { "item": "33760:Skyrim.esm", "count": 1 }, { "item": "16e26:Dragonborn.esm", "count": 1 }, { "item": "13f598:WindhelmSSE.esp", "count": 1 } ] },
     { "id": "brown", "name": "Brown Hair Dye", "colour": "#4a3020", "strength": 0.6, "wander": 14,
       "inputs": [ { "item": "5076e:Skyrim.esm", "count": 3 }, { "item": "13f598:WindhelmSSE.esp", "count": 1 } ] },
     { "id": "red", "name": "Red Hair Dye", "colour": "#7a2418", "strength": 0.55, "wander": 16,

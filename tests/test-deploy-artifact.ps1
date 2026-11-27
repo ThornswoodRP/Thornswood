@@ -28,13 +28,16 @@
        functions that act on a temp folder): the store gets the zip and its
        record, a zip the store already holds is not sent again, and
        current\<part>.json, the copy beside the part and history.log all say
-       the artifact.
+       the artifact; a copy beside the part that fails, or a box that says
+       nothing back, stops the deploy with what is true, and history.log
+       gets no line (#4221).
     5. The five deploy scripts, read and never run: each builds its
        component's artifact, sends it before anything is swapped, sends from
        its folder, and records it once the files are in place; each names
        the other repository files it sends so they are checked too, and
        Publish-Server refuses before its first scp; and the site's reader,
-       Deploy-Docs' grant and Artifact.ps1 name one store.
+       Deploy-Docs' grant and Artifact.ps1 name one store. None of the seven
+       deploys that record catches a record the box did not write (#4221).
        tests\test-deploy-swaps.ps1 runs each of them against a dirty tree.
     6. Site and voice, before anything would be sent (#1335): the expanded
        tree and the zip have to match the commit's own bytes. A flipped
@@ -410,6 +413,26 @@ try {
             (Test-Path -LiteralPath (Join-Path $box 'Thornswood-Docs/thornswood-deploy.json')) -and
             (Test-Path -LiteralPath (Join-Path $store 'current/thornswood-docs.json')) -and
             ((Get-Content -LiteralPath $cur -Raw | ConvertFrom-Json).name -eq $g.Name))
+
+        # #4221: the copy beside the part fails (here its folder is a file).
+        # Until then the box said RECORDED anyway and the helper went on, so
+        # Deploy-Server ended with PASS while data\thornswood-deploy.json
+        # still named the build before.
+        $badRoot = Join-Path $box 'Thornswood-Bad'
+        New-Item -ItemType Directory -Force -Path $badRoot | Out-Null
+        [IO.File]::WriteAllText((Join-Path $badRoot 'data'), 'a file where the data folder goes')
+        $histBefore = @(Get-Content -LiteralPath (Join-Path $store 'history.log')).Count
+        $threw = $null
+        try { $null = Set-ThornswoodArtifactCurrent -Artifact $g -Target 'someone@box' -Root $badRoot -Beside "$badRoot/data/thornswood-deploy.json" -Store $store } catch { $threw = $_.Exception.Message }
+        Yes ('a copy beside the part that fails stops the deploy, saying what is true: ' + $threw) ($threw -and $threw -like '*thornswood-bad runs *' -and $threw -like '*not recorded*' -and $threw -like '*does not name it*')
+        Yes '  and history.log gets no line for it' (@(Get-Content -LiteralPath (Join-Path $store 'history.log')).Count -eq $histBefore)
+        $realSsh = ${function:global:ssh}
+        try {
+            ${function:global:ssh} = { $global:tsSsh++; $global:LASTEXITCODE = 0 }
+            $threw = $null
+            try { $null = Set-ThornswoodArtifactCurrent -Artifact $g -Target 'someone@box' -Root $partRoot -Beside "$partRoot/data/thornswood-deploy.json" -Store $store } catch { $threw = $_.Exception.Message }
+            Yes '  and so does a box that says nothing back' ($threw -and $threw -like '*not recorded*')
+        } finally { ${function:global:ssh} = $realSsh }
     } finally {
         Remove-Item -Path Function:\scp, Function:\ssh -ErrorAction SilentlyContinue
     }
@@ -478,6 +501,19 @@ foreach ($w in $wiring) {
         Yes "$n builds, then sends, then records" (
             $builds[0].Extent.StartOffset -lt $sends[0].Extent.StartOffset -and $sends[0].Extent.StartOffset -lt $sets[0].Extent.StartOffset)
     }
+}
+
+# #4221: a record the box did not write stops every deploy that records, so
+# none of them catches what Set-ThornswoodArtifactCurrent throws, or takes
+# its answer and goes on.
+foreach ($f in 'Deploy-Server.ps1', 'Deploy-DevGamemode.ps1', 'Deploy-Docs.ps1', 'Install-Voice.ps1', 'Install-Bot.ps1', 'Install-Bridge.ps1', 'Install-AdminService.ps1') {
+    $ast = Read-Ast ('scripts\deploy\' + $f)
+    $caught = @(Commands $ast 'Set-ThornswoodArtifactCurrent' | Where-Object {
+        $p = $_.Parent; $in = $false
+        while ($p) { if ($p -is [System.Management.Automation.Language.TryStatementAst] -and $p.CatchClauses.Count) { $in = $true }; if ($p -is [System.Management.Automation.Language.TrapStatementAst]) { $in = $true }; $p = $p.Parent }
+        $in -or @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.TrapStatementAst] }, $true)).Count
+    })
+    Yes "$f stops with exit 1 when the box has not recorded what it now runs (nothing catches it)" ($null -ne $ast -and @(Commands $ast 'Set-ThornswoodArtifactCurrent').Count -ge 1 -and $caught.Count -eq 0)
 }
 
 # The other repository files each sends, beside its artifact, are checked too.

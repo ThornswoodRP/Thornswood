@@ -2,12 +2,6 @@
   "note": "Items the world hands out or a recipe asks for that nobody makes or gathers yet, each with the open issue that gives it a maker. scripts/dev/Check-Makers.js fails on a gap not listed here, and on an entry here that now has a maker or that nothing hands out or asks for any more (#3132). exempt is for named uniques, quest items and what Patrick has set apart as found only (the Ancient Nord burial set), each with why.",
   "items": [
     {
-      "desc": "f:Skyrim.esm",
-      "name": "Gold",
-      "issue": "#4625",
-      "why": "a forge recipe (the Eyepatch) still asks for a gold coin, which no recipe may"
-    },
-    {
       "desc": "2e500:Skyrim.esm",
       "name": "Black Soul Gem",
       "issue": "#4673",
@@ -560,12 +554,6 @@
       "why": "Woodwright work with no recipe yet"
     },
     {
-      "desc": "a:Skyrim.esm",
-      "name": "lockpick",
-      "issue": "#4646",
-      "why": "Smith work with no recipe yet"
-    },
-    {
       "desc": "34c5e:Skyrim.esm",
       "name": "ale",
       "issue": "#4648",
@@ -648,37 +636,57 @@
     {
       "desc": "cc842:Skyrim.esm",
       "name": "Ancient Nord Amulet",
-      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524."
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
+    },
+    {
+      "desc": "18388:Skyrim.esm",
+      "name": "Ancient Nord Armor",
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
     },
     {
       "desc": "34182:Skyrim.esm",
       "name": "Ancient Nord Arrow",
-      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524."
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
     },
     {
       "desc": "1cb64:Skyrim.esm",
       "name": "Ancient Nord Battleaxe",
-      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524."
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
+    },
+    {
+      "desc": "56a9d:Skyrim.esm",
+      "name": "Ancient Nord Boots",
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
     },
     {
       "desc": "302ca:Skyrim.esm",
       "name": "Ancient Nord Bow",
-      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524."
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
+    },
+    {
+      "desc": "56b17:Skyrim.esm",
+      "name": "Ancient Nord Gauntlets",
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
     },
     {
       "desc": "236a5:Skyrim.esm",
       "name": "Ancient Nord Greatsword",
-      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524."
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
+    },
+    {
+      "desc": "56a9e:Skyrim.esm",
+      "name": "Ancient Nord Helmet",
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
     },
     {
       "desc": "2c66f:Skyrim.esm",
       "name": "Ancient Nord Sword",
-      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524."
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
     },
     {
       "desc": "2c672:Skyrim.esm",
       "name": "Ancient Nord War Axe",
-      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #3524."
+      "why": "The burial set is found in a dungeon and nowhere else. Patrick, 26 Oct, B on #3132; its four Skyforge armour recipes are cut on #4676."
     }
   ]
 }

@@ -50,6 +50,25 @@ namespace Thornswood
         public static int ServerCollectionRevision;
 
         /// <summary>
+        /// The Nexus collection ServerCollectionRevision is a revision of:
+        /// the Dev collection's slug on the dev channel, from the signed
+        /// record's devCollection (#7193), or "" for the collection the
+        /// config names (Config.Collection, 7essxf, main's). Main and Dev had
+        /// one collection until then, so Vortex offered every main install
+        /// the revision Dev was trying before main ran it.
+        /// </summary>
+        public static string ServerCollectionSlug = "";
+
+        /// <summary>
+        /// The same revision in the records' numbering, the main
+        /// collection's (#7193): the signed record's collectionRevision. The
+        /// Release's Mod Organizer 2 modlist names this one, whichever
+        /// channel runs the Release. Equal to ServerCollectionRevision on
+        /// main and on a Release from before the Dev collection.
+        /// </summary>
+        public static int ServerRecordRevision;
+
+        /// <summary>
         /// Every path Vortex says it has deployed into the game folder. Under
         /// a folder of Thornswood's own the record lives in the folder Vortex
         /// deploys into (OwnGame.DeploysInto), never in Thornswood's folder,

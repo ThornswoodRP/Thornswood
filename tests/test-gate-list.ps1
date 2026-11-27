@@ -24,7 +24,9 @@
        and this harness among them;
     3. build.yml's gate step and scripts\dev\Run-Gate.ps1, which it runs
        (#3114), parsed with the PowerShell parser the runner uses: the
-       script calls Gate-Harnesses.ps1, stops when that fails, runs what it
+       script calls Gate-Harnesses.ps1, stops when that fails, takes its
+       share of the cores from the build count Get-MachineBuilds reads from
+       the runner records (run over planted records, #4292), runs what it
        returns through Nightly-Harnesses.ps1 (all of it unless a pull
        request's map chose fewer) and fails when that does, and neither
        names a harness itself, since a name there is a second list that
@@ -186,7 +188,40 @@ $r = Get-Named $rg
 Yes 'Run-Gate.ps1 parses' ($r.Errors -eq 0)
 Yes 'it takes its list from Gate-Harnesses.ps1' ($rg -match "(?m)^\`$gate = @\(& \(Join-Path \`$Here 'Gate-Harnesses\.ps1'\)\)\s*$")
 Yes 'and stops when that fails, before running any' ($rg -match '(?m)^\$gate = @\(.*\r?\nif \(\$LASTEXITCODE -ne 0\) \{ exit 1 \}')
-Yes 'its share of the cores is the cores over the build runners' ($rg -match '(?m)^\$share = .*\[Environment\]::ProcessorCount / .*\$builds' -and $rg -match "records\\build-runners\.json")
+Yes 'its share of the cores is the cores over the build runners' ($rg -match '(?m)^\$builds = Get-MachineBuilds\s*$' -and $rg -match '(?m)^\$share = .*\[Environment\]::ProcessorCount / .*\$builds')
+# Which file the count comes from is held by running Get-MachineBuilds over
+# planted records, not by looking for the file's name in the text, which a
+# comment can hold when the code does not (#4292).
+$fnAst = [System.Management.Automation.Language.Parser]::ParseInput($rg, [ref]$null, [ref]$null).Find({
+    param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-MachineBuilds' }, $true)
+Yes 'Run-Gate.ps1 has Get-MachineBuilds' ($null -ne $fnAst)
+if ($null -ne $fnAst) {
+    $plant = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-gate-builds-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    $savedEnv = @{ RUNNER_ENVIRONMENT = $env:RUNNER_ENVIRONMENT; RUNNER_NAME = $env:RUNNER_NAME; COMPUTERNAME = $env:COMPUTERNAME }
+    try {
+        New-Item -ItemType Directory -Path (Join-Path $plant 'records') -Force | Out-Null
+        [IO.File]::WriteAllText((Join-Path $plant 'records/build-runners.json'), '{"runners": ["thornswood-vps", "thornswood-vps-2", "thornswood-vps-3"]}')
+        [IO.File]::WriteAllText((Join-Path $plant 'records/merge-runners.json'), '{"runners": ["thornswood-merge"], "offBox": ["thornswood-pr-plantpc", "thornswood-pr-plantpc-2", "thornswood-pr-otherpc"]}')
+        $count = {
+            param($fn, $repoAt)
+            $Repo = $repoAt
+            . ([scriptblock]::Create($fn))
+            Get-MachineBuilds
+        }
+        $env:RUNNER_ENVIRONMENT = 'self-hosted'; $env:RUNNER_NAME = 'thornswood-vps-2'
+        Yes '  on the box it is the runners build-runners.json lists (3 planted)' ((& $count $fnAst.Extent.Text $plant) -eq 3)
+        $env:RUNNER_NAME = 'thornswood-pr-plantpc-2'; $env:COMPUTERNAME = 'PLANTPC'
+        Yes '  on One, the off-box runners the records name for that machine (2 planted)' ((& $count $fnAst.Extent.Text $plant) -eq 2)
+        $env:RUNNER_ENVIRONMENT = 'github-hosted'
+        Yes '  on GitHub''s hosted runner, one' ((& $count $fnAst.Extent.Text $plant) -eq 1)
+        [IO.File]::WriteAllText((Join-Path $plant 'records/build-runners.json'), '{"runners": ["thornswood-vps"]}')
+        $env:RUNNER_ENVIRONMENT = 'self-hosted'; $env:RUNNER_NAME = 'thornswood-vps'
+        Yes '  and it follows build-runners.json when that changes (1 planted)' ((& $count $fnAst.Extent.Text $plant) -eq 1)
+    } finally {
+        foreach ($k in $savedEnv.Keys) { [Environment]::SetEnvironmentVariable($k, $savedEnv[$k]) }
+        Remove-Item -LiteralPath $plant -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 Yes 'it runs what it chose through Nightly-Harnesses.ps1, the whole gate unless a pull request''s map chose fewer (#3114)' (
     $rg -match '(?m)^\$run = \$gate\s*$' -and $rg -match "(?m)^\s+\`$with = @\{ Only = \(\`$run -join ' '\); Throttle = \`$Throttle; Share = \`$share; BudgetSeconds = \`$BudgetSeconds \}\s*$" -and
     $rg -match "(?m)^\s+& \(Join-Path \`$Here 'Nightly-Harnesses\.ps1'\) @with\s*\r?\n\s+\`$code = \`$LASTEXITCODE\s*$")

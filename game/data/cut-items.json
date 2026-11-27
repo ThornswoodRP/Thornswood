@@ -2,10 +2,10 @@
   "builtFrom": "game/data/recipes.json",
   "note": "References held out of the open craft book. recipes.json is not edited by the script that writes this file.",
   "counts": {
-    "cut": 3417,
+    "cut": 3421,
     "embassy": 19,
     "thalmor": 10,
-    "kept": 595
+    "kept": 591
   },
   "rieklingKept": [
     "Riekling Fur Armour",
@@ -40988,6 +40988,54 @@
       "fires": false,
       "disposition": "cut",
       "why": "Temper on the grindstone or the armour table. Repair is a kit. Not found and not made. The reference stays here so it can come back for an event."
+    },
+    {
+      "id": "f46cc:Skyrim.esm",
+      "name": "Ancient Nord Armor",
+      "plugin": "Skyrim.esm",
+      "half": "Platewright",
+      "owner": "Smith",
+      "family": "Body armour",
+      "rank": "advanced",
+      "fires": true,
+      "disposition": "cut",
+      "why": "The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, issue #4676). Not made. The reference stays here so it can come back for an event."
+    },
+    {
+      "id": "f46cd:Skyrim.esm",
+      "name": "Ancient Nord Boots",
+      "plugin": "Skyrim.esm",
+      "half": "Platewright",
+      "owner": "Smith",
+      "family": "Armoured boots",
+      "rank": "advanced",
+      "fires": true,
+      "disposition": "cut",
+      "why": "The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, issue #4676). Not made. The reference stays here so it can come back for an event."
+    },
+    {
+      "id": "f46cf:Skyrim.esm",
+      "name": "Ancient Nord Gauntlets",
+      "plugin": "Skyrim.esm",
+      "half": "Platewright",
+      "owner": "Smith",
+      "family": "Gauntlets",
+      "rank": "advanced",
+      "fires": true,
+      "disposition": "cut",
+      "why": "The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, issue #4676). Not made. The reference stays here so it can come back for an event."
+    },
+    {
+      "id": "f46d0:Skyrim.esm",
+      "name": "Ancient Nord Helmet",
+      "plugin": "Skyrim.esm",
+      "half": "Platewright",
+      "owner": "Smith",
+      "family": "Helmets",
+      "rank": "advanced",
+      "fires": true,
+      "disposition": "cut",
+      "why": "The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, issue #4676). Not made. The reference stays here so it can come back for an event."
     },
     {
       "id": "1f24f:FishingInSkyrim.esp",

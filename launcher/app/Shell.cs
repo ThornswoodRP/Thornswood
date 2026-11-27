@@ -2216,12 +2216,7 @@ namespace Thornswood
         {
             if (shot == null || shot.Image == null) return;
             if (galleryImage != null)
-            {
-                galleryImage.Stretch = Stretch.UniformToFill;
-                galleryImage.HorizontalAlignment = HorizontalAlignment.Stretch;
-                galleryImage.VerticalAlignment = VerticalAlignment.Stretch;
                 galleryImage.Source = shot.Image;
-            }
             if (galleryBy != null)
                 galleryBy.Text = (shot.By != null && shot.By.Length > 0)
                     ? "By " + shot.By

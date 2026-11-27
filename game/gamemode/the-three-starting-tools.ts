@@ -1881,28 +1881,32 @@ function blockIsOff(refrId) {
 
 function chopWood(actorId, refrId, fromSwing) {
   /*
-    #842: Skyrim starts the chopping FURN on the client the moment E is
-    pressed. mp.onActivate returning false only stops the server's
-    ProcessActivateNormal; the axe loop is already running locally. A
-    refused press (wrong half, no axe, off-limits block, or no firewood
-    form) must kick that loop the same way a mining spell ends:
-    IdleChairExitStart then IdleForceDefaultState via swingEnd.
+    A REFUSED PRESS STARTS NOTHING (#4598). Skyrim used to start the chopping
+    FURN on the presser's machine the moment E was pressed, so a refusal had
+    to undo the axe loop afterwards with swingEnd (#842). The client now
+    leaves every chopping block to the server before it acts (the
+    serverFirstBases packet, scripted-activators.ts), so a refused press sat
+    nobody down and there is nothing to undo.
+
+    A swing is different. fromSwing is a fall of the axe in a session the
+    server allowed, and the loop is running: a refusal there (the axe broke,
+    the block went off) ends that session with swingEnd, as before.
   */
   // Before the class and the axe, because this block is not work for anybody
   // and telling a woodworker they lack a tool at one would be a lie.
   const off = blockIsOff(refrId);
   if (off) {
-    swingEnd(actorId);
-    return fromSwing ? '' : 'Nobody works this block. There are others in ' + off + '.';
+    if (fromSwing) { swingEnd(actorId); return ''; }
+    return 'Nobody works this block. There are others in ' + off + '.';
   }
 
   const half = halfGate(actorId, 'woodwright', 'novice',
     'A chopping block is a woodworker\'s. Only a woodworker who took Woodwright can ' +
     'work one, and a charburner gets the novice yield. Ask one.');
-  if (half) { swingEnd(actorId); return half; }
+  if (half) { if (fromSwing) { swingEnd(actorId); } return half; }
 
   const tool = toolGate(actorId, 'woodworker');
-  if (tool) { swingEnd(actorId); return tool; }
+  if (tool) { if (fromSwing) { swingEnd(actorId); } return tool; }
 
   /*
     NO WAIT BETWEEN SWINGS, because a swing is the unit now.
@@ -1939,9 +1943,9 @@ function chopWood(actorId, refrId, fromSwing) {
   */
   const yielded = 2;
   if (!addItem(actorId, ITEMS.firewood, yielded)) {
-    swingEnd(actorId);
+    if (fromSwing) { swingEnd(actorId); }
     return 'The block gives up firewood and there is nothing in this load order to ' +
-           'put in your hands. Say so in #bugs.';
+           'put in your hands. Post it in #test-findings in the Discord.';
   }
   /*
     The press is what starts a session, and the block is a FURN so Skyrim's own
@@ -1986,7 +1990,8 @@ function chopWood(actorId, refrId, fromSwing) {
   that build is told so when the block streams in, and it stays gone without
   the loop. The disabled flag is on the reference's change form, so it
   survives a restart; setting it again at every start costs one read each.
-  The plugin's loop stays for launchers from before that client.
+  The plugin's loop went with #5052: the plugin and the client come in one
+  pack, so every client running it has the fork's fix (#2328).
 */
 const BLOCKS_OFF_REFS = ['d6ae9:Skyrim.esm', 'a9ee1:Skyrim.esm', 'abf83:Skyrim.esm'];
 

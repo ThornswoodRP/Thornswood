@@ -184,6 +184,24 @@ function show(html) {
   if (document.title === 'Thornswood' && h1 && h1.textContent) document.title = h1.textContent + ' \u00b7 Thornswood';
 }
 
+/* A page the server sent with its content keeps it (#4446). The server
+   writes /news, /roadmap and /gallery into #pagebody (publicPageBody in
+   site/lib/public.js), and this script still asks the API on those pages to
+   draw them again. That ask used to end, on a dropped connection, a timeout
+   or the request limit, in show() putting "Could not load it." over the
+   page that had loaded fine. Whether the server sent a body is read here,
+   before anything is drawn over it: if it did, a failed ask leaves it as it
+   is. Only a page that came with nothing says it could not load, and gives a
+   Try again button, which asks the server for the whole page again. */
+var pageBody = document.getElementById('pagebody');
+var pageSent = !!(pageBody && pageBody.children && pageBody.children.length);
+function pageFailed(title) {
+  if (pageSent) return;
+  show('<h1>' + esc(title) + '</h1><p>Could not load it. The site did not answer in time, or answered with an error.</p>' +
+       '<p><button class="btn ghost" type="button" id="pageAgain">Try again</button></p>');
+  document.getElementById('pageAgain').addEventListener('click', function () { location.reload(); });
+}
+
 /* Hard eighteen-and-over door on /downloads and /join only. Remembered in
    localStorage, with a cookie fallback. Confirming is a statement kept as a
    record, not verification of age. The rest of the site stays open.
@@ -322,11 +340,13 @@ if (AGE_PATHS[here] && !ageOk()) {
     // read is said, never drawn as an empty one.
     if (b.unread) out += '<p>The roadmap could not be read from the issue board just now. Try again in a few minutes.</p>';
     else if (!live.some(function (s) { return (s.rows || []).length; })) {
-      out += '<p>Nothing on it yet.</p>';
+      // The server's words for an empty roadmap (site/lib/public.js), so the
+      // page says the same thing however it was drawn (#4446).
+      out += '<p>No upcoming work is listed here yet. See <a href="/known">known issues</a> for current limits.</p>';
     }
     if (b.at) out += '<p><em>Read from the issue board ' + esc(b.at) + '.</em></p>';
     show(out);
-  }).catch(function () { show('<h1>Roadmap</h1><p>Could not load it.</p>'); });
+  }).catch(function () { pageFailed('Roadmap'); });
 } else if (here === '/news') {
   request('/api/releases').then(function (r) { return r.json(); }).then(function (d) {
     var out = '<h1>Every release</h1>';
@@ -349,7 +369,7 @@ if (AGE_PATHS[here] && !ageOk()) {
                : (n.image && typeof n.image.alt === 'string' ? '<p>' + esc(n.image.alt) + '</p>' : '')) + '</div>';
     });
     show(out);
-  }).catch(function () { show('<h1>Every release</h1><p>Could not load it.</p>'); });
+  }).catch(function () { pageFailed('Every release'); });
 } else if (here === '/gallery') {
   /* Public approved shots and a themed submit form for signed-in members.
      Staff Accept and Delete live on the hub Gallery page.
@@ -366,7 +386,7 @@ if (AGE_PATHS[here] && !ageOk()) {
   publicData().then(function (r) { return r.json(); }).then(function (d) {
     galData = d || {};
     drawGallery();
-  }).catch(function () { show('<h1>From the world</h1><p>Could not load it.</p>'); });
+  }).catch(function () { pageFailed('From the world'); });
   function drawGallery() {
     var d = galData;
     var waiting = !galWho;
@@ -1098,12 +1118,15 @@ function startSlideshow(show, dots, shots, reduce) {
      them are "in view" once the box is, and scrolling down to it fetched
      every shot in the gallery at once, 5 MB on 21 Oct 2026. Lazy now, as
      the band is far below the first screen. */
+  var viewport = document.createElement('div');
+  viewport.className = 'gal-frames';
+  show.appendChild(viewport);
   var frames = shots.map(function (s, n) {
     var img = document.createElement('img');
     img.alt = s.alt || 'Skyrim scene shared by ' + (s.by || 'the Thornswood community');
     img.loading = 'lazy';
     if (n === 0) img.className = 'on';
-    show.appendChild(img);
+    viewport.appendChild(img);
     return img;
   });
   // A picture's smaller copies (#3218) are set with its address, so
@@ -1187,8 +1210,8 @@ function startSlideshow(show, dots, shots, reduce) {
   next.setAttribute('aria-label', 'Next picture');
   next.innerHTML = '&#8250;';
   next.onclick = function () { userStep(i + 1); };
-  show.appendChild(prev);
-  show.appendChild(next);
+  viewport.appendChild(prev);
+  viewport.appendChild(next);
   if (!reduce) {
     var pause = document.createElement('button');
     pause.type = 'button';
@@ -1203,7 +1226,7 @@ function startSlideshow(show, dots, shots, reduce) {
       said();
       if (stopped) stopFlip(); else startFlip();
     };
-    show.appendChild(pause);
+    viewport.appendChild(pause);
   }
   show.addEventListener('mouseenter', function () { hovered = true; stopFlip(); });
   show.addEventListener('mouseleave', function () { hovered = false; startFlip(); });

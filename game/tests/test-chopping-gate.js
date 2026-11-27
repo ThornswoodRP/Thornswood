@@ -130,7 +130,7 @@ yes('ALLOW, NO_PROFESSION, STATIONS, ITEMS and the bench tables read',
 // Skyrim.esm 00. Positions are the placed references' own, from the same read.
 const REFS = {
   // Tamriel, a common block on the road out of Solitude, nowhere near
-  // Djinn's three points (test-chopping-blocks.js has it at the same spot).
+  // Djinn's three points.
   0x000b3949: { base: COMMON, pos: [-75967.2734, 90795.7109, -13881.7363] },
   // The three ash blocks, DLC2SolstheimWorld.
   0x0402b1a4: { base: ASH, pos: [29909.4, 37515.2, 422.5] },
@@ -294,15 +294,15 @@ if (chopping && handler && loot && benchGate && halfGate && gateHalf && allowM &
 
   // G2: SOMEBODY WHO IS NOT A WOODWORKER. Refused at the common block with
   // the Woodwright line, before the axe is asked about, nothing handed over,
-  // the press blocked, and swingEnd kicked so the local axe loop stops (#842).
-  // The same at ash.
+  // and the press blocked. Nothing is undone: the client waited for this
+  // answer (#4598), so no axe loop started on their machine. The same at ash.
   {
     const s = server();
     const common = s.press('smith', 0x000b3949);
     yes('G2 a Smith at the common block is refused with the Woodwright line (' + show(common) + ')',
         common.ret === 'blocked' && common.firewood === 0 && common.other === 0 &&
         common.told.length === 1 && /only a woodworker who took Woodwright/i.test(common.told[0]) &&
-        !common.session && !common.axeAsked && common.kicked);
+        !common.session && !common.axeAsked && !common.kicked);
     ASH_REFS.forEach(function (ref) {
       const s2 = server();
       const ash = s2.press('smith', ref);
@@ -317,13 +317,13 @@ if (chopping && handler && loot && benchGate && halfGate && gateHalf && allowM &
     const c3 = server().press('fresh', 0x000b3949);
     const a3 = server().press('fresh', ASH_REFS[0]);
     yes('G3 no profession: told to press K at the common block (' + show(c3) + ')',
-        c3.ret === 'blocked' && c3.firewood === 0 && c3.told[0] === noProfM[1] && c3.kicked);
+        c3.ret === 'blocked' && c3.firewood === 0 && c3.told[0] === noProfM[1] && !c3.kicked);
     yes('G3 and exactly the same at the ash block (' + show(a3) + ')', same(a3, c3));
 
     const c4 = server().press('bare', 0x000b3949);
     const a4 = server().press('bare', ASH_REFS[0]);
     yes('G4 no axe: refused for the tool at the common block (' + show(c4) + ')',
-        c4.ret === 'blocked' && c4.firewood === 0 && /^You need a /.test(c4.told[0] || '') && c4.kicked);
+        c4.ret === 'blocked' && c4.firewood === 0 && /^You need a /.test(c4.told[0] || '') && !c4.kicked);
     yes('G4 and exactly the same at the ash block (' + show(a4) + ')', same(a4, c4));
   }
 
@@ -364,13 +364,15 @@ if (chopping && handler && loot && benchGate && halfGate && gateHalf && allowM &
         ASH_REFS.every(function (ref) { return s.api.blockIsOff(ref) === null; }));
     const off = s.press('wright', 0x000abf83);
     yes('G6 the Dragon Bridge block is still nobody\'s (' + show(off) + ')',
-        off.ret === 'blocked' && off.firewood === 0 && /^Nobody works this block/.test(off.told[0] || '') && off.kicked);
+        off.ret === 'blocked' && off.firewood === 0 && /^Nobody works this block/.test(off.told[0] || '') && !off.kicked);
   }
 }
 
 
-// G7: THE SOURCE SAYS THE KICK. chopWood must call swingEnd on every refuse
-// path (#842), and must not call it on a paid press.
+// G7: THE SOURCE SAYS WHEN THE SWING IS ENDED. A refused press starts nothing
+// since the client waits for the server at a chopping block (#4598), so
+// chopWood ends the swing only on a fall of the axe it refuses (fromSwing),
+// never on a press, and never on a paid one.
 {
   const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
   const fn = cut('function chopWood(actorId, refrId, fromSwing) {', '\n}\n') ||
@@ -389,9 +391,12 @@ if (chopping && handler && loot && benchGate && halfGate && gateHalf && allowM &
              })();
   yes('G7 chopWood is still in the gamemode', !!fn);
   if (fn) {
-    const ends = (fn.match(/swingEnd\s*\(/g) || []).length;
-    yes('G7 chopWood calls swingEnd on refuse paths (' + ends + ' times)', ends >= 4);
-    yes('G7 chopWood names the #842 kick', /#842/.test(fn));
+    const body = fn.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+    const ends = (body.match(/swingEnd\s*\(/g) || []).length;
+    const guarded = (body.match(/if \(fromSwing\) \{ swingEnd\(actorId\);/g) || []).length;
+    yes('G7 every swingEnd in chopWood is under fromSwing (' + guarded + ' of ' + ends + ')',
+        ends >= 4 && guarded === ends);
+    yes('G7 chopWood names #4598', /#4598/.test(fn));
   }
 }
 

@@ -50,6 +50,10 @@
        rules and its plugin order from the record, every "$type" first, the
        same bytes on a second run; and a pin that is not MO2's GitHub
        release refused.
+   10. -Scripts (#7000): refused without -Record; with it, scripts.json
+       beside the record, a row for every placed compiled script, a dinput
+       mod's Data\Scripts too, with its file id and sha256, and nothing of
+       the script itself.
 
   OFF WINDOWS (#2969) every run writes only the record (-Record), because a
   game folder is laid out on Windows, and the same layout is held through
@@ -656,6 +660,22 @@ $wjSha1 = Sha $wjFile
 $wjRec2 = P $T 'wj-record-2'
 $r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', $wjRec2, '-Modlist', '-Mo2Record', $moRec)
 YesR 'the same record writes the same modlist, byte for byte' ($r.Code -eq 0 -and (Sha (P $wjRec2 'thornswood.wabbajack')) -eq $wjSha1 -and $r.Out -match ('sha256 ' + $wjSha1)) $r
+
+# ---- -Scripts (#7000) ------------------------------------------------------------
+# What each placed compiled script calls, read while its mod is unpacked. The
+# reading itself is tests\test-7000-pex-calls.js's; this is that the layout
+# hands it every placed script, a dinput mod's Data\Scripts too, with its
+# file id, and writes scripts.json beside the record.
+$r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Scripts')
+YesR '-Scripts with no -Record is refused' ($r.Code -eq 1 -and $r.Out -match '-Scripts writes scripts\.json beside a record') $r
+$scRec = P $T 'scripts-record'
+$r = Run @('-CollectionArchive', $colFull, '-Revision', '5', '-Cache', $cache, '-Record', $scRec, '-Scripts')
+YesR 'the record with -Scripts runs to the end and says what the scripts call' ($r.Code -eq 0 -and $r.Out -match '1 scripts placed, 0 of them the copy the game reads; 0 calls to native functions, 0 the collection cannot settle; 1 would not read') $r
+Yes 'the record folder holds the five records and scripts.json' ((@(Get-ChildItem -LiteralPath $scRec -Force | ForEach-Object { $_.Name } | Sort-Object) -join ' ') -eq 'files.txt layout.json loadorder.txt plugins.txt scripts.json slidersets.json')
+$sc = if (Test-Path -LiteralPath (P $scRec 'scripts.json')) { [IO.File]::ReadAllText((P $scRec 'scripts.json')) | ConvertFrom-Json } else { $null }
+$dp = if ($sc) { @($sc.scripts | Where-Object { $_.path -eq 'Data\Scripts\delta.pex' }) } else { @() }
+Yes 'Delta''s Data\Scripts\delta.pex, from a dinput mod, is a row with its file id, sha256 and why it would not read' ($dp.Count -eq 1 -and $dp[0].fileId -eq 900004 -and $dp[0].mod -eq 'Delta' -and $dp[0].sha256 -eq (Sha (P $T 'src\Delta\delta_1\Data\Scripts\delta.pex')) -and $dp[0].error -match 'not a compiled Papyrus script')
+Yes '  and nothing of the script is in the record' ($null -ne $sc -and -not ([IO.File]::ReadAllText((P $scRec 'scripts.json'))).Contains('"script"'))
 
 # ---- the key, across every run ---------------------------------------------------
 Yes ('no run printed the key, in ' + $script:outs.Count + ' runs') (@($script:outs | Where-Object { $_.Contains($KEY) }).Count -eq 0)

@@ -31,6 +31,8 @@ function clone(o) { return JSON.parse(JSON.stringify(o)); }
 yes('the launcher\'s choices are a name the site keeps', ys.nameOk('launcher.json'));
 yes('so are Thornswood.ini, the emote slots and the intro', ys.nameOk('game/Thornswood.ini') &&
     ys.nameOk('game/thornswood-emote-slots.json') && ys.nameOk('game/thornswood-intro.txt'));
+yes('so is QuickLoot\'s own file (#4511)', ys.nameOk('game/quickloot.json'));
+yes('and SkyUI\'s favourite groups (#4511)', ys.nameOk('game/favourite-groups.json'));
 yes('and a mod menu\'s file', ys.nameOk('mcm/SkyUI (SE).ini') && ys.nameOk("mcm/Someone's Mod.ini"));
 yes('a screen or graphics file is not', !ys.nameOk('game/Skyrim.ini') && !ys.nameOk('game/SkyrimPrefs.ini'));
 yes('nor a path out of the folder', !ys.nameOk('mcm/../launcher.json') && !ys.nameOk('mcm/a/b.ini') && !ys.nameOk('../x'));
@@ -98,6 +100,12 @@ async function ask(files, ticket, req, standing, writes) {
     putJson: function (f, v) { if (writes === false) return false; files[f] = clone(v); return true; },
     yourSettings: ys, SETTINGS: ys.SETTINGS, chars: require('../site/lib/characters'),
     sendJson: function (r, c, o) { sent = { code: c, obj: o }; return sent; }
+  };
+  // The routes read their body with lib/http.js bodyObject (#4382): JSON, and an object.
+  if (env.body && !env.bodyObject) env.bodyObject = async function () {
+    const v = JSON.parse(await env.body.apply(null, arguments));
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+    return v;
   };
   const names = Object.keys(env);
   await new AsyncFunction(names.join(','), route + '\nreturn null;').apply(null, names.map((n) => env[n]));

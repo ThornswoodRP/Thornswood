@@ -837,6 +837,13 @@ namespace Thornswood
             try
             {
                 Directory.CreateDirectory(profile);
+                // Every reason the steps note (Failure.Say and Why, through
+                // Swallow) goes to launcher.log, and before Paths.Init, which
+                // runs only once this has installed, there was no launcher.log
+                // to go to: a stop said its sentence and what Windows said
+                // behind it was in no log at all (#4711). Its own file, from
+                // the moment Profile is there.
+                Paths.LogFile = Paths.LogFileFor(choice.Root);
                 lock (logLock) logFile = new StreamWriter(log, false, new UTF8Encoding(false)) { AutoFlush = true };
                 Log("Thornswood Setup, " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture));
                 Log("Install to " + choice.Root + (choice.MakeOwnGame ? ", Thornswood's own Skyrim folder on" : "") +
@@ -900,7 +907,8 @@ namespace Thornswood
                 finished = true;
                 bar.IsVisible = false;
                 txtBody.Text = why + "\n\nEverything it said is below, and saved in " + log +
-                               ". Send staff a screenshot of this window, or that file, in the Discord.";
+                               ", and what Windows said behind it is in " + Paths.LogFileFor(choice.Root) +
+                               ". Send staff a screenshot of this window, or those files, in the Discord.";
                 txtStat.Text = "";
                 btnClose.IsEnabled = true;
                 btnClose.Content = "Close";

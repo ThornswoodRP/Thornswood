@@ -12,6 +12,9 @@ try {
     $deploy = New-Item -ItemType Directory -Path (Join-Path $tmp deploy) -Force
     $vps = New-Item -ItemType Directory -Path (Join-Path $tmp vps) -Force
     Copy-Item (Join-Path $repo 'scripts/deploy/Install-Backup.ps1') $deploy
+    # Install-Backup takes its scratch folder from release\Get-ScratchDir.ps1 (#4264).
+    $release = New-Item -ItemType Directory -Path (Join-Path $tmp release) -Force
+    Copy-Item (Join-Path $repo 'scripts/release/Get-ScratchDir.ps1') $release
     Set-Content (Join-Path $deploy 'World.ps1') '$ThornswoodWorld = "fixture"'
     Set-Content (Join-Path $deploy 'ServiceAccount.ps1') @'
 function Get-ThornswoodServiceAccountScript {

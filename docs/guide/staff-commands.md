@@ -53,7 +53,7 @@ The other needs first account for their elapsed time. The selected value is then
 | `/setneeds` | Set your own hunger, thirst, rest or temperature. Admins may name another character. |
 | `/repairgear` | Repair your carried gear. Admins may name another character. |
 | `/tp` | Lists the towns you can name |
-| `/tp <place>`, `/goto <place>` | Moves you to a town, or to any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare` |
+| `/tp <place>`, `/goto <place>` | Moves you to a town, a carriage or ferry stop (where the ride puts you down), or any inn, keep, shop or house by its name. Part of the name is enough: `/tp bannered mare`, `/tp mixwater` |
 | `/give <item> [count]` | Puts it in your pack. Any named item in the load order, gold included, or a form id: `/give iron ore 5`, `/give 12eb7:Skyrim.esm`. Up to 100,000 |
 | `/spawn <creature> [count] [keep]` | Puts it a few steps in front of you, several spread round you. Any named actor, or a form id: `/spawn troll`, `/spawn skeleton 3`, `/spawn 23aba`. Up to 40. It is temporary unless the line ends in `keep`: when it dies its body lies the usual time and then it is gone, and a restart takes it too. `/spawn troll keep` stays (#2623) |
 | `/where` | Your cell, position and facing, for a bug report or a new place. Refused to anybody who is not a tester (#1633) |

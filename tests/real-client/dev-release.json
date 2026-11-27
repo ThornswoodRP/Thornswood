@@ -39,8 +39,14 @@
       "menu": "RaceSex Menu",
       "open": true,
       "timeout": 90000,
-      "skip": 9,
+      "skip": 10,
       "why": "a character this server has not got is made first: the race menu opens in the hall. A character it has goes straight to the world, and the race menu steps are skipped"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 3000,
+      "why": "the menu's camera swings round to the character's face while the menu is open and the game paused (#6979); a shot a second after it opens caught the hall door"
     },
     {
       "do": "shot",
@@ -550,6 +556,147 @@
       "do": "shot",
       "name": "back-in-world",
       "task": 5197
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 4581,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 4581
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 4581,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "page",
+      "task": 4581,
+      "timeout": 30000,
+      "js": "(function(){if(window.__tsRideTp){return 'sent';}var n=window.thornswoodNet;if(!n||!n.say){return '';}n.say('/tp whiterun',{quiet:true});window.__tsRideTp=1;return 'sent';})()",
+      "why": "to Whiterun's start spot outside the gate, once, about 1,700 units from the stables' carriage driver, Bjorlam (#4581)"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 60000,
+      "task": 4581
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "task": 4581,
+      "why": "outside Whiterun"
+    },
+    {
+      "do": "face",
+      "what": "driver",
+      "ref": "bbf6d:CFTO.esp",
+      "task": 4581,
+      "why": "stand before Bjorlam, the Whiterun carriage driver, by his placed reference (carriages.ts carriage:whiterun)"
+    },
+    {
+      "do": "wait",
+      "for": "crosshair",
+      "what": "driver",
+      "timeout": 10000,
+      "task": 4581
+    },
+    {
+      "do": "shot",
+      "name": "driver-prompt",
+      "task": 4581,
+      "why": "what the game's prompt says over him"
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4581,
+      "why": "E on the driver"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:wants"
+      ],
+      "timeout": 10000,
+      "task": 4581,
+      "why": "the server answered /ride e with his stops and fares, and the page asks for the panel"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:opened"
+      ],
+      "timeout": 15000,
+      "task": 4581,
+      "why": "the panel is up, once no menu of the game's is"
+    },
+    {
+      "do": "shot",
+      "name": "ride-panel",
+      "task": 4581,
+      "why": "his stops and their fares"
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "task": 4581,
+      "why": "Escape closes the panel; no ride is taken and no fare paid"
+    },
+    {
+      "do": "wait",
+      "for": "message",
+      "match": [
+        "thornswood-front",
+        "ride:closed"
+      ],
+      "timeout": 10000,
+      "task": 4581
     },
     {
       "do": "end"

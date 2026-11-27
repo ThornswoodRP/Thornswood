@@ -150,7 +150,15 @@ namespace Thornswood
                 // Once the modlist installs into Mod Organizer 2 the revision
                 // is the one its last whole install put in (#6244), and
                 // Vortex's state is not read again.
-                if (OwnGame.FromMods) return OwnGame.ModsRevision();
+                // Its modlist names the revision in the records' numbering,
+                // main's; on the Dev collection (#7193) the revision this is
+                // held to is Dev's own, so it is given in Dev's numbering.
+                if (OwnGame.FromMods)
+                {
+                    int mods = OwnGame.ModsRevision();
+                    int offset = Updater.ServerRecordRevision > 0 && Updater.ServerCollectionRevision > 0 ? Updater.ServerRecordRevision - Updater.ServerCollectionRevision : 0;
+                    return mods > 0 ? mods - offset : mods;
+                }
                 string slug = CollectionSlug(cfg);
                 if (slug.Length == 0) return 0;
                 int fromState = CollectionRevisionFromState(slug);
@@ -233,21 +241,42 @@ namespace Thornswood
         /// The collection's slug out of its address, "7essxf" from
         /// .../collections/7essxf. Read from the config so a machine pointed at
         /// a different collection still answers about its own.
+        ///
+        /// A dev install whose config names the collection the launcher ships
+        /// with is on the Dev collection the signed record names instead
+        /// (Updater.ServerCollectionSlug, #7193), so every revision it is held
+        /// to, and every page and link it opens, is Dev's own.
         /// </summary>
         public static string CollectionSlug(Config cfg)
         {
             try
             {
-                string url = cfg == null ? "" : (cfg.CollectionUrl ?? "");
-                int at = url.LastIndexOf("/collections/", StringComparison.OrdinalIgnoreCase);
-                if (at < 0) return "";
-                string s = url.Substring(at + "/collections/".Length).Trim();
-                int q = s.IndexOfAny(new char[] { '/', '?', '#' });
-                if (q >= 0) s = s.Substring(0, q);
-                foreach (char c in s) { if (!char.IsLetterOrDigit(c)) return ""; }
+                string s = SlugIn(cfg == null ? "" : cfg.CollectionUrl);
+                string dev = Updater.ServerCollectionSlug ?? "";
+                if (dev.Length > 0 && IsSlug(dev) && string.Equals(s, SlugIn(Config.Collection), StringComparison.OrdinalIgnoreCase)) return dev;
                 return s;
             }
             catch { return ""; }
+        }
+
+        /// <summary>The slug in a collection's address, or "".</summary>
+        static string SlugIn(string url)
+        {
+            url = url ?? "";
+            int at = url.LastIndexOf("/collections/", StringComparison.OrdinalIgnoreCase);
+            if (at < 0) return "";
+            string s = url.Substring(at + "/collections/".Length).Trim();
+            int q = s.IndexOfAny(new char[] { '/', '?', '#' });
+            if (q >= 0) s = s.Substring(0, q);
+            return IsSlug(s) ? s : "";
+        }
+
+        /// <summary>Whether this is a collection's slug: letters and digits, at least one.</summary>
+        public static bool IsSlug(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            foreach (char c in s) { if (!char.IsLetterOrDigit(c)) return false; }
+            return true;
         }
 
         /// <summary>
@@ -410,45 +439,45 @@ namespace Thornswood
 
         /// <summary>
         /// Vortex profile folder named <paramref name="name"/> (default Thornswood),
-        /// or null. Same as Get-VortexProfileDir (#557).
+        /// or null when Vortex has no such profile. Same as Get-VortexProfileDir
+        /// (#557). Throws when Vortex's state cannot be read, which is not the
+        /// same answer: on 15 November a tester's log said "Vortex profile
+        /// Thornswood was not found" while this had swallowed "MANIFEST-000565
+        /// is being used by another process" from a Vortex that was deploying
+        /// (#6229).
         /// </summary>
         public static string VortexProfileDir(string name)
         {
-            try
+            if (string.IsNullOrEmpty(name)) name = "Thornswood";
+            string profilesRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Vortex\\skyrimse\\profiles");
+            if (!Directory.Exists(profilesRoot)) return null;
+            string stateDir = VortexStateDir();
+            if (File.Exists(Path.Combine(stateDir, "CURRENT")))
+                return VortexProfileState.Find(stateDir, profilesRoot, name);
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            if (Directory.Exists(stateDir))
             {
-                if (string.IsNullOrEmpty(name)) name = "Thornswood";
-                string profilesRoot = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Vortex\\skyrimse\\profiles");
-                if (!Directory.Exists(profilesRoot)) return null;
-                string stateDir = VortexStateDir();
-                if (File.Exists(Path.Combine(stateDir, "CURRENT")))
-                    return VortexProfileState.Find(stateDir, profilesRoot, name);
-                var ids = new HashSet<string>(StringComparer.Ordinal);
-                if (Directory.Exists(stateDir))
+                var pairRe = new Regex(
+                    "\"profileId\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"profileName\"\\s*:\\s*\"" +
+                    Regex.Escape(name) + "\"");
+                var pairRe2 = new Regex(
+                    "\"profileName\"\\s*:\\s*\"" + Regex.Escape(name) +
+                    "\"\\s*,\\s*\"profileId\"\\s*:\\s*\"([^\"]+)\"");
+                foreach (string f in Directory.GetFiles(stateDir))
                 {
-                    var pairRe = new Regex(
-                        "\"profileId\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"profileName\"\\s*:\\s*\"" +
-                        Regex.Escape(name) + "\"");
-                    var pairRe2 = new Regex(
-                        "\"profileName\"\\s*:\\s*\"" + Regex.Escape(name) +
-                        "\"\\s*,\\s*\"profileId\"\\s*:\\s*\"([^\"]+)\"");
-                    foreach (string f in Directory.GetFiles(stateDir))
-                    {
-                        string txt;
-                        try { txt = VortexStateText(f); } catch { continue; }
-                        foreach (Match m in pairRe.Matches(txt)) ids.Add(m.Groups[1].Value);
-                        foreach (Match m in pairRe2.Matches(txt)) ids.Add(m.Groups[1].Value);
-                    }
-                }
-                foreach (string id in ids)
-                {
-                    string p = Path.Combine(profilesRoot, id);
-                    if (File.Exists(Path.Combine(p, "plugins.txt"))) return p;
-                    if (Directory.Exists(p)) return p;
+                    string txt = VortexStateText(f);
+                    foreach (Match m in pairRe.Matches(txt)) ids.Add(m.Groups[1].Value);
+                    foreach (Match m in pairRe2.Matches(txt)) ids.Add(m.Groups[1].Value);
                 }
             }
-            catch (Exception ex) { Swallow.Note("Checks.VortexProfileDir", ex); }
+            foreach (string id in ids)
+            {
+                string p = Path.Combine(profilesRoot, id);
+                if (File.Exists(Path.Combine(p, "plugins.txt"))) return p;
+                if (Directory.Exists(p)) return p;
+            }
             return null;
         }
 
