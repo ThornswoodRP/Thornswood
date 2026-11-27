@@ -49,4 +49,23 @@ jobs:
             }
             Unregister-ScheduledTask -TaskName $name -Confirm:$false
           }
+          'a task taken away between Get-ScheduledTask and Get-ScheduledTaskInfo:'
+          $null = Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Description 'probe' -Force
+          Start-ScheduledTask -TaskName $name
+          Start-Sleep -Seconds 1
+          $t = Get-ScheduledTask -TaskName $name
+          '  got ' + @($t).Count + ', state ' + [string]$t.State
+          Stop-ScheduledTask -InputObject $t; Unregister-ScheduledTask -TaskName $name -Confirm:$false
+          try { $i = Get-ScheduledTaskInfo -InputObject $t; '  info: ' + $i.LastRunTime + ' 0x{0:x}' -f [int64]$i.LastTaskResult } catch { '  info THREW: ' + $_.FullyQualifiedErrorId + ' ' + $_.Exception.GetType().FullName + ': ' + $_.Exception.Message }
+          'the same, registered again under the same name before the info:'
+          $null = Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Description 'probe' -Force
+          $t = Get-ScheduledTask -TaskName $name
+          Unregister-ScheduledTask -TaskName $name -Confirm:$false
+          $null = Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Description 'probe again' -Force
+          try { $i = Get-ScheduledTaskInfo -InputObject $t; '  info: ' + $i.LastRunTime + ' 0x{0:x}' -f [int64]$i.LastTaskResult } catch { '  info THREW: ' + $_.FullyQualifiedErrorId + ' ' + $_.Exception.GetType().FullName + ': ' + $_.Exception.Message }
+          Unregister-ScheduledTask -TaskName $name -Confirm:$false
+          'Get-ScheduledTask with a null name, EAP Stop:'
+          try { $x = Get-ScheduledTask -TaskName $null; 'did not throw' } catch { '  THREW: ' + $_.FullyQualifiedErrorId + ': ' + $_.Exception.Message }
+          'Get-ScheduledTaskInfo -InputObject @():'
+          try { $x = Get-ScheduledTaskInfo -InputObject @(); 'did not throw' } catch { '  THREW: ' + $_.FullyQualifiedErrorId + ': ' + $_.Exception.Message }
           Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-TaskScheduler/Operational'; StartTime = (Get-Date).AddMinutes(-5) } -ErrorAction SilentlyContinue | Where-Object Message -match $name | Sort-Object TimeCreated | ForEach-Object { $_.TimeCreated.ToString('HH:mm:ss.fff') + ' ' + $_.Id + ' ' + ($_.Message -split "`n")[0] }
