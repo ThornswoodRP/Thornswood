@@ -77,8 +77,9 @@
   (Assert-ThornswoodSourceIntegrity) before anything is sent. They go into
   -Root\.stage-<stamp>, are checked there by hash and node --check with the
   old service still running, and only then is it stopped and they are renamed
-  in; what they replace goes to .prev-<stamp>. If the new one does not
-  answer, the old files and the old task go back and are started. Nothing
+  in; what they replace goes to .prev-<stamp>, and the newest two of those
+  are kept to put back (#4373). If the new one does not answer, the old
+  files and the old task go back and are started. Nothing
   in the state folder, the App's key included, is moved, changed or removed
   by an install; only its rules and owner are set, as above.
 
@@ -597,6 +598,8 @@ Start-ScheduledTask -TaskName '$TaskName'
 if (Answers @('$Plain')) {
     'the admin service answers on 127.0.0.1:$Port'
     if (-not (Test-Path -LiteralPath '$state\app.json')) { 'it holds no App yet, so it refuses every ask until -Setup makes one' }
+    # The newest two sets of replaced files stay, to put back (#4373).
+    Remove-ThornswoodOldCopies -Root '$Root' -Like '.prev-*' -Keep 2
     Clear-ThornswoodHold -Target '$TaskName'
     'ADMIN OK'; exit 0
 }
@@ -605,6 +608,10 @@ if (Test-Path -LiteralPath '$log') { Get-Content -LiteralPath '$log' -Tail 15 } 
 StopIt
 `$back = @(Get-ChildItem -LiteralPath '$Root\$prev' -File -EA SilentlyContinue)
 foreach (`$f in `$back) { Move-Item -LiteralPath `$f.FullName -Destination (Join-Path '$Root' `$f.Name) -Force }
+# Emptied by the put-back, so it is not one of the two copies kept (#4373).
+# Said, not thrown away, and never in the way of the old task's start below.
+try { if (-not @(Get-ChildItem -LiteralPath '$Root\$prev' -Force).Count) { Remove-Item -LiteralPath '$Root\$prev' -Force -ErrorAction Stop } }
+catch { 'could not remove the emptied $Root\${prev}: ' + `$_.Exception.Message }
 if (`$oldXml) {
     if (Get-ScheduledTask -TaskName '$TaskName' -EA SilentlyContinue) { Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false }
     Register-ScheduledTask -TaskName '$TaskName' -Xml `$oldXml | Out-Null
