@@ -1,30 +1,15 @@
 {
   "_note": "The vcpkg libraries whose code is in each native client file, read from its program database by the fork's build, the fork's own folders under a notice of their own and the npm packages in skymp5-client.js (libraries), and each one's licence text in client-licences\\<name>.txt. Written by scripts\\release\\New-ClientLicenceRecord.ps1 (#3099, #3751).",
-  "forkCommit": "11988fae",
+  "forkCommit": "a261e9c9",
   "readWith": "LLVM version 20.1.8",
   "files": {
     "Data\\SKSE\\Plugins\\MpClientPlugin.dll": [
-      "antigo",
-      "bzip2",
       "fmt",
-      "libbson",
-      "libsodium",
-      "libzip",
-      "libzippp",
-      "lz4",
-      "makeid",
-      "mongo-c-driver",
-      "mongo-cxx-driver",
       "nlohmann-json",
       "prometheus-cpp-lite",
-      "rsm-binary-io",
-      "rsm-bsa",
-      "rsm-mmio",
       "simdjson",
       "slikenet",
-      "spdlog",
-      "utf8proc",
-      "zlib"
+      "spdlog"
     ],
     "Data\\SKSE\\Plugins\\SkyrimPlatform.dll": [
       "commonlibsse-ng-flatrim"
@@ -56,16 +41,6 @@
     ]
   },
   "ports": {
-    "antigo": {
-      "version": "0.0.1",
-      "portVersion": 0,
-      "licence": "LGPL-3.0",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
-      "bytes": 7652
-    },
     "asio": {
       "version": "1.32.0",
       "portVersion": 0,
@@ -85,16 +60,6 @@
       ],
       "sha256": "712a867cc12ebfcdecf6cea097f5aa7ec5acaa435a8f818c9f370960df35acbf",
       "bytes": 1076
-    },
-    "bzip2": {
-      "version": "1.0.8",
-      "portVersion": 6,
-      "licence": "bzip2-1.0.6",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
-      "bytes": 1896
     },
     "cef-prebuilt": {
       "version": "108.4.13",
@@ -169,62 +134,11 @@
       "sha256": "19699d730807ff64c7396a818618d4ad0d0df51b7209a7df933988727fd6c339",
       "bytes": 68114
     },
-    "libbson": {
-      "version": "2.2.3",
-      "portVersion": 0,
-      "licence": null,
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "38a5b9a7e9f5bc1d22b3a816f1acbfd487181ae2d1a21419556af0629772fd9c",
-      "bytes": 20867
-    },
-    "libsodium": {
-      "version": "1.0.21",
-      "portVersion": 1,
-      "licence": "ISC",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "508a76d186356c0dd807a670ef510964f8724557024796a2c426c6c0e19ab683",
-      "bytes": 823
-    },
-    "libzip": {
-      "version": "1.11.4",
-      "portVersion": 0,
-      "licence": "BSD-3-Clause",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "01c022eca6d566e2e8792fd0f091a28653b2a608319922bcd4de91c49d1438e1",
-      "bytes": 1454
-    },
-    "libzippp": {
-      "version": "7.1-1.10.1",
-      "portVersion": 0,
-      "licence": "BSD-3-Clause",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "184f3ecf3d8cf4affad2b322ede037fb79a14e8b5b20c38ccbb66e33c23180d9",
-      "bytes": 1445
-    },
-    "lz4": {
-      "version": "1.10.0",
-      "portVersion": 0,
-      "licence": "BSD-2-Clause",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c",
-      "bytes": 1311
-    },
     "makeid": {
       "version": "1.0.3",
       "portVersion": 0,
       "licence": null,
       "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll",
         "Data\\Platform\\Distribution\\RuntimeDependencies\\SkyrimPlatformImpl.dll"
       ],
       "sha256": "2d6c3a410c38875c899c2dcf1083bdbe186121ca9c90a8d552a176a2fe75e477",
@@ -239,26 +153,6 @@
       ],
       "sha256": "c3b7e4acc215a9c8a41d6801d68dcaea62fdb84d05d419c2013afcaf7ea969a2",
       "bytes": 1150
-    },
-    "mongo-c-driver": {
-      "version": "2.2.3",
-      "portVersion": 0,
-      "licence": "Apache-2.0",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "feb660f4cd820cc7ccac97d3c0cb73675dadf5a2c3358023af19bf60ee03b169",
-      "bytes": 21046
-    },
-    "mongo-cxx-driver": {
-      "version": "4.1.4",
-      "portVersion": 0,
-      "licence": "Apache-2.0",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14",
-      "bytes": 11325
     },
     "nirnlab-ui-platform-headers": {
       "version": "3.1",
@@ -331,36 +225,6 @@
       "sha256": "686cf8d62cc44fecff4be967238aba89665f9b6acf8a728987801ffc3a626bc7",
       "bytes": 1075
     },
-    "rsm-binary-io": {
-      "version": "2.0.6",
-      "portVersion": 0,
-      "licence": "MIT",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "ebeeefa102269964ea6c45ced49d6d33df40cb7bacccb983a9f84b6140afc73b",
-      "bytes": 1070
-    },
-    "rsm-bsa": {
-      "version": "4.1.0",
-      "portVersion": 0,
-      "licence": "MIT",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "ebeeefa102269964ea6c45ced49d6d33df40cb7bacccb983a9f84b6140afc73b",
-      "bytes": 1070
-    },
-    "rsm-mmio": {
-      "version": "2.0.0",
-      "portVersion": 0,
-      "licence": "MIT",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "ebeeefa102269964ea6c45ced49d6d33df40cb7bacccb983a9f84b6140afc73b",
-      "bytes": 1070
-    },
     "simdjson": {
       "version": "4.6.0",
       "portVersion": 0,
@@ -402,22 +266,11 @@
       "sha256": "d678c20826e1392578508e1c78649a1e3c31bda05ef4388d967dbd654461b140",
       "bytes": 1323
     },
-    "utf8proc": {
-      "version": "2.11.3",
-      "portVersion": 0,
-      "licence": "MIT",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "3b510150d34f248a221bb88e1d811238d6c6c18b51231822c42974c39bb07256",
-      "bytes": 5125
-    },
     "zlib": {
       "version": "1.3.1",
       "portVersion": 0,
       "licence": "Zlib",
       "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll",
         "Data\\Platform\\Distribution\\RuntimeDependencies\\SkyrimPlatformImpl.dll"
       ],
       "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
@@ -425,17 +278,6 @@
     }
   },
   "libraries": {
-    "libespm": {
-      "kind": "fork",
-      "version": null,
-      "licence": "MIT",
-      "from": "libespm/LICENSE",
-      "in": [
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
-      ],
-      "sha256": "eb4b85fb674453b785637c73d1a2f68e1e172026d0bb328775c0ce86447d2866",
-      "bytes": 1080
-    },
     "npm-eventemitter3-5.0.1": {
       "kind": "npm",
       "version": "5.0.1",
@@ -453,8 +295,7 @@
       "licence": "MIT",
       "from": "papyrus-vm/LICENSE",
       "in": [
-        "Data\\Platform\\Distribution\\RuntimeDependencies\\SkyrimPlatformImpl.dll",
-        "Data\\SKSE\\Plugins\\MpClientPlugin.dll"
+        "Data\\Platform\\Distribution\\RuntimeDependencies\\SkyrimPlatformImpl.dll"
       ],
       "sha256": "a84ad3fca175101a31bc979fd051d056f2bbc594aefb9501e584666256957ce1",
       "bytes": 1080
