@@ -17,6 +17,7 @@ const doc=load('merchant-ranked-quests'),source={legacy:load('merchant-quests').
  for(const [id,reference,item] of retired) {
   const {merchant:{role}}=doc.quests.find(row=>row.id===id);
   cut.recipes[reference].book='cut';
+  cut.recipes[reference].needs=cut.recipes[reference].needs.map(need=>({...need,or:false}));
   cut.roles.tables[role].buy=cut.roles.tables[role].buy.filter(entry=>entry!==item);
   delete cut.roles.records[item];
   delete cut.roles.evidence[item];
@@ -39,6 +40,11 @@ const doc=load('merchant-ranked-quests'),source={legacy:load('merchant-quests').
   altered.published[id]=cut.published[id];
   altered.recipes[reference].out='12:Skyrim.esm';
   assert.throws(()=>validateRankedQuests({...doc,quests:[definition]},altered),/source evidence/,'the cut recipe must still identify the original item');
+  altered.recipes[reference]=copy(cut.recipes[reference]);
+  for(const changed of [true,'false']) {
+   altered.recipes[reference].needs[0].or=changed;
+   assert.throws(()=>validateRankedQuests({...doc,quests:[definition]},altered),/source evidence/,'an original condition did not have an OR flag set');
+  }
   altered.recipes[reference]=cut.recipes[reference];
   const resealed={...definition,text:definition.text+' Changed.'};
   altered.published[id]=require('node:crypto').createHash('sha256').update(JSON.stringify(resealed)).digest('hex');

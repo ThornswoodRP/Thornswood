@@ -17,8 +17,15 @@ function retiredBurialGood(id,pin,good,recipes) {
  const retired=retiredBurialRecipes.get(id);
  if(!retired||pin!==retired.pin||good.item!==retired.item||good.recipe?.reference!==retired.reference)return false;
  const actual=recipes[retired.reference];
- return actual?.book==='cut'&&actual.type==='ARMO'&&
-  same(good.recipe,{reference:retired.reference,...Object.fromEntries(recipeFields.map(key=>[key,actual[key]]))});
+ if(actual?.book!=='cut'||actual.type!=='ARMO'||!Array.isArray(actual.needs))return false;
+ // The original conditions predate the explicit OR flag. An unset flag
+ // preserves the old condition; a set flag is a change to the proof.
+ const needs=actual.needs.map(need=>{
+  if(need?.or!==false)return need;
+  const {or,...condition}=need;
+  return condition;
+ });
+ return same(good.recipe,{reference:retired.reference,...Object.fromEntries(recipeFields.map(key=>[key,actual[key]])),needs});
 }
 function publicRecipe(source,reference,row) {
  return row&&row.fires===true&&row.book!=='cut'&&row.roll===undefined&&row.race===''&&row.inputsWithNoProducer===0&&
