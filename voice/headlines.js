@@ -60,6 +60,24 @@ function cut(text, n) {
   return s.slice(0, Math.max(0, n - 3)).trimEnd() + '...';
 }
 
+/* EVERYTHING THAT CAN BREAK A LINE, TURN THE TEXT ROUND OR HIDE IN IT (#4355):
+   control characters, the Arabic letter mark, zero-width spaces and joiners
+   and the direction marks, the line and paragraph separators, the direction
+   embeddings, overrides and isolates, and the byte order mark. Words
+   somebody else's machine sent go through this before anybody is shown
+   them: a caption, a typed line, /me and its kin, and a join name. Until
+   #4355 only a caption did; a typed line went out as typed, /me kept the
+   marks, and a join name (cleanName) took out some and let the zero-width
+   ones through. Each is a space, so words either side stay apart. */
+const UNSEEN = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g;
+function plainText(text) {
+  return String(text == null ? '' : text).replace(UNSEEN, ' ');
+}
+/* The same, as one line: every run of space one space, none at the ends. */
+function plainLine(text) {
+  return plainText(text).replace(/\s+/g, ' ').trim();
+}
+
 /* The line above the head. An /ooc is in brackets. A /me and an emote are
    the action, which is the words themselves. A whisper and a shout use the
    same words as the box, without the name, because the name is already
@@ -71,7 +89,7 @@ function headOf(kind, words) {
 }
 
 function floatLine(raw) {
-  const trimmed = String(raw == null ? '' : raw).trim();
+  const trimmed = plainLine(raw);
   if (!trimmed) return null;
   if (trimmed.charAt(0) !== '/') {
     const words = trimmed.length > 400 ? trimmed.slice(0, 400) : trimmed;
@@ -87,7 +105,7 @@ function floatLine(raw) {
   if (!m) return null;
   const kind = VERBS[m[1].toLowerCase()];
   if (!kind) return null;
-  let words = String(m[2] || '').replace(/\s+/g, ' ').trim();
+  let words = String(m[2] || '').trim();
   if (!words) return { kind: kind, empty: true, usage: USAGE[kind] };
   if (kind === 'ooc' && words.length > OOC_CHARS) words = words.slice(0, OOC_CHARS);
   const reach = kind === 'whisper' ? WHISPER : kind === 'shout' ? SHOUT : SPEECH;
@@ -129,9 +147,7 @@ function emoteHead(name) {
    typed line. Nothing that can break a line, turn the text round or hide in
    it survives, because the words come from the speaker's own machine. */
 function captionHead(text) {
-  const s = String(text == null ? '' : text)
-    .slice(0, CAPTION_CHARS)
-    .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2069\ufeff]/g, ' ');
+  const s = plainText(String(text == null ? '' : text).slice(0, CAPTION_CHARS));
   return cut(s, FLOAT_CHARS);
 }
 
@@ -175,6 +191,7 @@ module.exports = {
   FLOAT_CHARS: FLOAT_CHARS,
   FLOAT_MS: FLOAT_MS,
   floatLine: floatLine,
+  plainLine: plainLine,
   headOf: headOf,
   emoteHead: emoteHead,
   EMOTE_NAMES: EMOTE_NAMES,
