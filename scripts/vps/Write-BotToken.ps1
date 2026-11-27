@@ -300,6 +300,7 @@ $ThornswoodRestartSteps = [ordered]@{
 }
 $ThornswoodRestartFailLines = @(
   '^BOT NOT RESTARTED',
+  '^SITE NOT RESTARTED',
   '^BOT HAS NOT SAID IT IS CONNECTED',
   '^SITE DID NOT COME BACK',
   'CANNOT READ THE SERVER'

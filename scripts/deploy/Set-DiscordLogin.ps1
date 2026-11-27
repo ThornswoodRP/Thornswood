@@ -382,8 +382,12 @@ if (`$patch.token) {
 
 # Read it back off the disk. What was in memory a second ago proves nothing.
 `$bytes = [IO.File]::ReadAllBytes(`$f)
-if (`$bytes.Length -ge 3 -and `$bytes[0] -eq 239 -and `$bytes[1] -eq 187 -and `$bytes[2] -eq 191) {
-  'BYTE ORDER MARK STILL ON THE FILE. The site cannot read it. Tell Claude.'
+# Both writes above leave no mark, so a mark here was put there by something
+# else that wrote config.json while this ran. The site would start on a file
+# it cannot read, so it is not restarted, and the line says what to do (#6109).
+`$marked = (`$bytes.Length -ge 3 -and `$bytes[0] -eq 239 -and `$bytes[1] -eq 187 -and `$bytes[2] -eq 191)
+if (`$marked) {
+  'SITE NOT RESTARTED: config.json has a byte order mark again after this wrote it without one, so something else wrote it while this ran, and the site cannot read it. Close whatever has config.json open on the VPS, then run Set-DiscordLogin.ps1 again.'
 }
 `$back = [Text.Encoding]::UTF8.GetString(`$bytes) | ConvertFrom-Json
 
@@ -425,7 +429,7 @@ if (`$patch.access) {
   }
 }
 
-Restart-ThornswoodSite -Root '$rootWin' -Task '$Task'
+if (-not `$marked) { Restart-ThornswoodSite -Root '$rootWin' -Task '$Task' }
 if (`$tokenChanged) { Restart-ThornswoodBot -Root '$botWin' -Service '$BotService' }
 "@))
 $payload = $null
