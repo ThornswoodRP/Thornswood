@@ -37,10 +37,13 @@
   makes a new collection, the Dev collection, whose first revision is this
   one; the run prints its slug.
 
-  A collection Nexus publishes into has to have a category: the new
-  collection, and one -To names that has none, is given the source's
-  (PATCH /v3/collections/<id>) before the publish. Then the revision is
-  published (publishRevision) and read back as the collection's newest. A revision copied from one already published is not
+  Nexus publishes no revision of a collection whose own category, summary
+  and description are not filled in. The new collection, and one -To names
+  that lacks any of them, is given what it lacks before the publish
+  (PATCH /v3/collections/<id>, Edit-NexusCollection in Nexus.ps1): the
+  source's category, and the summary and description the copy carries.
+  Then the revision is published (publishRevision) and read back as the
+  collection's newest. A revision copied from one already published is not
   checked again as a draft would be: it is the same revision.
 
   Last line, for a workflow to read:
@@ -153,7 +156,7 @@ function Get-ArchivePaths([string]$sz, [string]$archive) {
   return @($paths | Sort-Object)
 }
 function Read-Collection([string]$slug, [string]$what) {
-  $q = '{ collection(slug: "' + $slug + '", domainName: "' + $Game + '") { id name category { id name } latestPublishedRevision { id revisionNumber } draftRevisionNumber } }'
+  $q = '{ collection(slug: "' + $slug + '", domainName: "' + $Game + '") { id name summary description category { id name } latestPublishedRevision { id revisionNumber } draftRevisionNumber } }'
   $c = Get-NexusField (Step { Invoke-NexusGraph $q $null ('Reading collection ' + $slug + $what) }) 'collection'
   if (-not [string](Get-NexusField $c 'id')) { Die ('Nexus has no collection ' + $slug + ' on ' + $Game + '.') }
   return $c
@@ -200,6 +203,7 @@ $srcCatName = if ($srcCat) { [string](Get-NexusField $srcCat 'name') } else { ''
 $targetId = ''
 $next = 1
 $dstCatId = 0
+$dstSummary = ''; $dstDescription = ''
 if ($To) {
   $dst = Read-Collection $To ''
   $targetId = [string](Get-NexusField $dst 'id')
@@ -210,6 +214,8 @@ if ($To) {
   $next = $tLatest + 1
   $dc = Get-NexusField $dst 'category'
   if ($dc) { $dstCatId = [int](Get-NexusField $dc 'id') }
+  $dstSummary = [string](Get-NexusField $dst 'summary')
+  $dstDescription = [string](Get-NexusField $dst 'description')
   Head ('To ' + $To + ' revision ' + $next)
   Say ('  "' + (Get-NexusField $dst 'name') + '", id ' + $targetId + ', revision ' + $tLatest + ' its newest, no draft; the ' + $channel + ' collection')
 }
@@ -258,13 +264,22 @@ if ($gone.Count -or $extra.Count) { Die ('The copy does not hold the same files 
 $facts = Step { Get-NexusArchiveFacts $out }
 Say ('  ' + $out + ', ' + $facts.Size.ToString('N0') + ' bytes, md5 ' + $facts.Md5Hex + ', the same ' + $newPaths.Count + ' files and folders')
 $payloadText = ([IO.File]::ReadAllText($payloadJson)).Trim()
+# The collection's own details it lacks, which Nexus publishes no revision
+# without (#7193): the source's category, and the copy's summary and
+# description.
+$details = [ordered]@{}
+if ($giveCategory) { $details.category_id = $srcCatId }
+$copyInfo = (Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText((Join-Path $build 'collection.json'))) 'the copy''s collection.json' }).info
+if (-not $dstSummary.Trim()) { $details.summary = [string]$copyInfo.summary }
+if (-not $dstDescription.Trim()) { $details.description = [string]$copyInfo.description }
+if (($details.Contains('summary') -and -not $details.summary.Trim()) -or ($details.Contains('description') -and -not $details.description.Trim())) { Die 'The copy carries no summary or no description to give the collection, and Nexus publishes no revision of a collection without them. Nothing was sent.' }
 $path = if ($To) { '/v3/collections/' + $targetId + '/revisions' } else { '/v3/collections' }
 
 if ($WhatIf) {
   Head 'What it would write'
   Say ('  POST /v3/uploads  {"size_bytes":' + $facts.Size + ',"filename":"' + $facts.Name + '","md5":"' + $facts.Md5Hex + '"}, the archive to the address it gives, finalise, wait until available')
   Say ('  POST ' + $path + '  {"upload_id":"<that upload>","collection_data":<' + $payloadText.Length + ' characters, in ' + $payloadJson + '>}')
-  if ($giveCategory) { Say ('  PATCH /v3/collections/' + $(if ($To) { $targetId } else { '<its id>' }) + '  {"category_id":' + $srcCatId + '}, ' + $Slug + '''s category "' + $srcCatName + '"') }
+  if ($details.Count) { Say ('  PATCH /v3/collections/' + $(if ($To) { $targetId } else { '<its id>' }) + '  {' + ((@($details.Keys) | ForEach-Object { '"' + $_ + '"' }) -join ',') + '}' + $(if ($giveCategory) { ', with ' + $Slug + '''s category "' + $srcCatName + '" (' + $srcCatId + ')' } else { '' })) }
   Say '  then the GraphQL mutation publishRevision on the revision it makes'
   Write-Host ''
   Say 'Nothing was written to Nexus.' 'Green'
@@ -286,11 +301,12 @@ $script:Done.Add('revision ' + $num + ' of ' + $toSlug + ' made as ' + (Get-Nexu
 if ($toSlug -notmatch '^[a-z0-9]+$' -or -not $revId) { Die ('Nexus answered without a slug and revision id this can read (slug "' + $toSlug + '", revision id "' + $revId + '").') }
 if ($num -ne $next) { Die ('Nexus numbered the copy ' + $num + ', not ' + $next + ', so it was left a draft. Discard it (New-NexusRevision.ps1 -Slug ' + $toSlug + ' -Discard ' + $num + ') and find what else made a revision there.') }
 
-if ($giveCategory) {
-  $catOf = if ($To) { $targetId } else { [string](Get-NexusField $made 'id') }
-  Step { Set-NexusCollectionCategory $catOf $srcCatId ('Giving ' + $toSlug + ' ' + $Slug + '''s category') }
-  $script:Done.Add($toSlug + ' given ' + $Slug + '''s category "' + $srcCatName + '" (' + $srcCatId + ')')
-  Say ('  ' + $toSlug + ' has ' + $Slug + '''s category, "' + $srcCatName + '"')
+if ($details.Count) {
+  $editOf = if ($To) { $targetId } else { [string](Get-NexusField $made 'id') }
+  $named = (@($details.Keys) | ForEach-Object { $_ -replace '_id$', '' }) -join ', '
+  Step { Edit-NexusCollection $editOf $details ('Giving ' + $toSlug + ' its ' + $named) }
+  $script:Done.Add($toSlug + ' given its ' + $named)
+  Say ('  ' + $toSlug + ' has its ' + $named + $(if ($giveCategory) { ' (' + $Slug + '''s category, "' + $srcCatName + '")' } else { '' }))
 }
 $mut = 'mutation publishRevision($revisionId: ID!) { publishRevision(revisionId: $revisionId) { success } }'
 $res = Step { Invoke-NexusGraph $mut ([ordered]@{ revisionId = $revId }) ('Publishing revision ' + $num + ' of ' + $toSlug) }
