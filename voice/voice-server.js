@@ -2689,12 +2689,14 @@ const server = http.createServer((req, res) => {
           const next = accountSilenceList(doc.accounts);
           const canonical = value => JSON.stringify(Object.fromEntries([...value].sort(([a], [b]) => a.localeCompare(b))));
           if (doc.accountRevision === accountSilenceRevision && canonical(next) !== canonical(accountSilences)) throw Error('conflicting account snapshot');
-          const encoded = JSON.stringify({ version: 1, revision: doc.accountRevision, accounts: Object.fromEntries(next) });
-          fs.mkdirSync(CHAT_DIR, { recursive: true });
-          fs.writeFileSync(ACCOUNT_SILENCE_FILE + '.tmp', encoded, { mode: 0o600 });
-          fs.renameSync(ACCOUNT_SILENCE_FILE + '.tmp', ACCOUNT_SILENCE_FILE);
-          accountSilences = next;
-          accountSilenceRevision = doc.accountRevision;
+          if (doc.accountRevision !== accountSilenceRevision) {
+            const encoded = JSON.stringify({ version: 1, revision: doc.accountRevision, accounts: Object.fromEntries(next) });
+            fs.mkdirSync(CHAT_DIR, { recursive: true });
+            fs.writeFileSync(ACCOUNT_SILENCE_FILE + '.tmp', encoded, { mode: 0o600 });
+            fs.renameSync(ACCOUNT_SILENCE_FILE + '.tmp', ACCOUNT_SILENCE_FILE);
+            accountSilences = next;
+            accountSilenceRevision = doc.accountRevision;
+          }
         } catch (e) {
           res.writeHead(409, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ error: 'account silence snapshot was not applied' }));

@@ -38,7 +38,7 @@ function boot(w, prior) {
       const handlers = {};
       if (cb) cb({ statusCode: w.voiceFailure ? 503 : 200, resume() {}, on(event, fn) { handlers[event] = fn; } });
       if (doc && w.voiceProtocol === 1) {
-        const ack = { accountProtocol: 1, accountRevision: doc.accountRevision, accountReady: w.voiceBound !== false };
+        const ack = { accountProtocol: 1, accountRevision: w.voiceAckRevision === undefined ? doc.accountRevision : w.voiceAckRevision, accountReady: w.voiceBound !== false };
         if (handlers.data) handlers.data(Buffer.from(JSON.stringify(ack)));
         if (handlers.end) handlers.end();
       }
@@ -682,6 +682,44 @@ try {
     w.targetProfile = ALT; w.afterEnd = () => { w.guid = 'replacement-connection'; };
     r.box.__thornswoodStaff.freezeTick();
     assert.equal(r.kicked.length, 0);
+  });
+  test('initially disabled account mode keeps character-only wire and books unchanged', () => {
+    for (const accountMode of [undefined, false]) {
+      const w = Object.assign(fresh(), { accountMode, voiceProtocol: 1 }), r = boot(w);
+      r.command('/silence ' + TARGET + ' 30m'); r.box.__thornswoodStaff.pushSilenced();
+      assert.ok(r.posts.every(doc => Object.keys(doc).join(',') === 'profiles'));
+      assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(w.file))).sort(), ['clearedWipes','frozen','revision','silenced','version']);
+      assert.equal(r.posts.at(-1).profiles[TARGET], w.now + 30 * 60000);
+    }
+  });
+  test('enabled empty mode still negotiates account readiness', () => {
+    const { r } = accountWorld();
+    assert.equal(r.posts[0].accountProtocol, 1);
+    assert.match(r.command('/freezeaccount ' + TARGET), /Froze/);
+  });
+  test('disabled mode publishes its existing account silence and durably retries its final clear after restart', () => {
+    const { w, r } = accountWorld(); r.command('/silenceaccount ' + TARGET + ' 30m');
+    w.accountMode = false;
+    const two = boot(w);
+    assert.equal(two.posts.at(-1).accounts[ACCOUNT], w.now + 30 * 60000);
+    two.box.__thornswoodPassSeen.passes[PID].d = STAFF_ACCOUNT;
+    two.box.__thornswoodPassSeen.passes[TARGET] = { x: w.now + 3600000, d: ACCOUNT };
+    w.voiceFailure = true;
+    assert.match(two.command('/unsilenceaccount ' + TARGET), /saved.*pending/i);
+    const waiting = JSON.parse(fs.readFileSync(w.file));
+    assert.equal(waiting.accountVoicePending, true);
+    assert.equal(waiting.version, 1);
+    const three = boot(w);
+    assert.equal(three.posts[0].accountProtocol, 1);
+    assert.deepEqual(Object.keys(three.posts[0].accounts), []);
+    assert.equal(JSON.parse(fs.readFileSync(w.file)).accountVoicePending, true);
+    w.voiceFailure = false; w.voiceAckRevision = -1; three.box.__thornswoodStaff.pushSilenced();
+    assert.equal(JSON.parse(fs.readFileSync(w.file)).accountVoicePending, true, 'a mismatched ACK cannot clear the receipt');
+    delete w.voiceAckRevision; three.box.__thornswoodStaff.pushSilenced();
+    assert.equal(JSON.parse(fs.readFileSync(w.file)).accountVoicePending, undefined);
+    three.command('/silence ' + TARGET + ' 10m');
+    assert.deepEqual(Object.keys(three.posts.at(-1)), ['profiles']);
+    assert.equal(three.posts.at(-1).profiles[TARGET], w.now + 10 * 60000);
   });
 } finally {
   const resolved = path.resolve(TEMP);

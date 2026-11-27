@@ -225,6 +225,14 @@ async function halt(run) {
     check('account snapshot acknowledges its exact protocol and revision privately', applied.status === 200 && applied.value?.accountProtocol === 1 && applied.value?.accountRevision === 1);
     const active = await ipc('state');
     check('matching already-connected peers are silenced by immutable account', active.peers.filter(p => p.account === A).every(p => p.muted));
+    const cacheFile = path.join(dir, 'chat/.account-silences.json'), heldCache = cacheFile + '.held';
+    fs.renameSync(cacheFile, heldCache); fs.mkdirSync(cacheFile);
+    try {
+      const identical = await request('/silenced', { profiles: { [PID]: deadline }, accountProtocol: 1, accountRevision: 1, accounts: { [A]: deadline } });
+      check('identical persisted revision needs no cache write and still applies character updates', identical.status === 200 &&
+        identical.value?.accountRevision === 1 && (await ipc('state')).peers.find(p => p.id === two.peer)?.muted === true);
+    } finally { fs.rmdirSync(cacheFile); fs.renameSync(heldCache, cacheFile); }
+    await request('/silenced', { profiles: {}, accountProtocol: 1, accountRevision: 1, accounts: { [A]: deadline } });
     check('a different verified account stays free even with the same profile number', active.peers.find(p => p.id === two.peer)?.muted === false);
     check('an unbound peer retains its connection but cannot bypass active account moderation', active.peers.find(p => p.id === old.peer)?.muted === true && old.ws.readyState === WebSocket.OPEN && applied.value?.accountReady === false);
     const beforeAccount = published.length;

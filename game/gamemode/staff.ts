@@ -125,7 +125,7 @@
         (typeof restraintSettings.privDir !== 'string' || !restraintSettings.privDir))) { throw new Error('private folder settings are invalid'); }
     restraintFile = path.join(restraintSettings.privDir || 'private', 'staff-restraints.json');
   } catch (e) { log('staff restraints: could not establish the private folder: ' + e); }
-  var restraintBytes = null, restraintRevision = 0, restraintWipes = [], restraintsReady = false;
+  var restraintBytes = null, restraintRevision = 0, restraintWipes = [], restraintsReady = false, accountVoicePending = false;
 
   // One private authority. Runtime notice timestamps and ban overlays do not
   // belong in this book. A stale hot-reload closure cannot become its writer.
@@ -156,6 +156,8 @@
     if (!Array.isArray(wipes) || wipes.some(function (id) { return typeof id !== 'string' || !/^[0-9a-f]{32}$/.test(id); }) ||
         new Set(wipes).size !== wipes.length) { throw new Error('invalid freeze-wipe receipts'); }
     var out = { version: v.version, revision: v.revision, frozen: {}, silenced: {}, clearedWipes: wipes.slice() };
+    if (v.accountVoicePending !== undefined && typeof v.accountVoicePending !== 'boolean') throw new Error('invalid account voice receipt');
+    if (v.accountVoicePending === true) out.accountVoicePending = true;
     Object.keys(v.frozen).forEach(function (k) {
       if (!profileKey(k)) { throw new Error('invalid frozen profile'); }
       out.frozen[k] = anchor(v.frozen[k]);
@@ -188,6 +190,7 @@
   }
   function restraintSnapshot(revision) {
     var doc = { version: 1, revision: revision, frozen: state.frozen, silenced: state.silenced, clearedWipes: restraintWipes };
+    if (accountVoicePending) doc.accountVoicePending = true;
     if (Object.keys(state.accountFrozen || {}).length || Object.keys(state.accountSilenced || {}).length) {
       doc.version = 2; doc.accountFrozen = state.accountFrozen; doc.accountSilenced = state.accountSilenced;
     }
@@ -216,6 +219,7 @@
     restraintRevision = doc.revision; restraintBytes = bytes; restraintsReady = true;
     g.__thornswoodRestraintBookKnown = restraintFile;
     restraintWipes = doc.clearedWipes;
+    accountVoicePending = doc.accountVoicePending === true;
   }
   function loadRestraints() {
     if (!currentRestraints()) { return false; }
@@ -244,6 +248,9 @@
       if (readRestraintBytes() !== restraintBytes) { throw new Error('restraint book changed outside its current writer'); }
       var doc = restraintDocument(restraintSnapshot(restraintRevision + 1));
       change(doc);
+      // A cleared account list may already have reached voice. Keep the
+      // empty replacement due across a cold restart until its matching ACK.
+      if (Object.keys(state.accountSilenced).length && !Object.keys(doc.accountSilenced || {}).length) doc.accountVoicePending = true;
       if (Object.keys(doc.accountFrozen || {}).length || Object.keys(doc.accountSilenced || {}).length) {
         doc.version = 2; doc.accountFrozen = doc.accountFrozen || {}; doc.accountSilenced = doc.accountSilenced || {};
       } else { doc.version = 1; delete doc.accountFrozen; delete doc.accountSilenced; }
@@ -708,7 +715,10 @@
     var accounts = {};
     Object.keys(state.accountSilenced || {}).forEach(function (key) { accounts[key] = state.accountSilenced[key].until; });
     var revision = restraintRevision;
-    var body = JSON.stringify({ profiles: list, accountProtocol: 1, accountRevision: revision, accounts: accounts });
+    var accountEnvelope = settings().thornswoodAccountRestraints === true || accountVoicePending ||
+      Object.keys(accounts).length > 0 || accountFreezesActive();
+    var body = JSON.stringify(accountEnvelope ? { profiles: list, accountProtocol: 1, accountRevision: revision, accounts: accounts } : { profiles: list });
+    if (!accountEnvelope) accountVoiceReady = false;
     if (Buffer.byteLength(body) > 20000) { accountVoiceReady = false; finish(false); return; }
     try {
       var req = http.request({
@@ -720,11 +730,16 @@
         res.on('data', function (chunk) { size += chunk.length; if (size <= 4096) reply += chunk; });
         res.on('end', function () {
           if (!currentRestraints()) { finish(false); return; }
+          if (!accountEnvelope) { finish(true); return; }
           var value = null; try { value = JSON.parse(reply); } catch (e) { }
           var applied = size <= 4096 && value && value.accountProtocol === 1 && value.accountRevision === revision;
-          accountVoiceReady = applied && value.accountReady === true;
+          var matched = !!applied && restraintRevision === revision;
+          if (matched && accountVoicePending && !Object.keys(state.accountSilenced).length) {
+            matched = saveRestraints(function (doc) { delete doc.accountVoicePending; });
+          }
+          accountVoiceReady = matched && value.accountReady === true;
           if (accountVoiceReady) accountVoiceAt = Date.now();
-          finish(!!applied && restraintRevision === revision);
+          finish(matched);
         });
         res.on('error', function () { accountVoiceReady = false; finish(false); });
       });

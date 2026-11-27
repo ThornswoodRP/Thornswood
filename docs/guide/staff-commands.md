@@ -195,6 +195,13 @@ cache in its existing private writable chat directory across restart. Neither
 that cache nor the moderation log replaces the restraint book authority. Do not
 roll back either component while account controls remain active.
 
+Initially disabled mode with no account controls keeps the existing
+character-only voice traffic and book format. After a nonempty account silence
+list is cleared, a pending-clear receipt in the same book survives restart
+until voice acknowledges that exact empty replacement. Off-mode character
+updates return to the legacy route after that receipt is saved as cleared.
+An identical already-persisted account revision needs no further cache write.
+
 Moving a frozen character with `/bring` or `/tp` saves the new frozen position. If a move or its save cannot be confirmed, staff are told it may already have happened. Only that character's session is ended and its next login is refused until staff repair the storage problem and explicitly `/unfreeze <profile>`. The server does not retry the move or return them to the old position.
 
 The private `staff-restraints.json` is the control authority. An unreadable or invalid book refuses new logins and restraint changes; a reload keeps the last validated controls for people already online. Repair that book rather than replacing it with an empty file. Normal character resets keep profile controls. Person deletion removes the target's active controls; a world wipe clears frozen positions while retaining timed silences. Opaque wipe receipts stay in the same book to prevent an unacknowledged old wipe from clearing a newer freeze. Historical moderation records are unchanged.
