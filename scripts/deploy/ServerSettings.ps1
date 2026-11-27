@@ -346,10 +346,13 @@ if ($unread.Count) {
   if (-not (Test-Path -LiteralPath variable:DropPlugins)) { $DropPlugins = @() }
   $drop = Test-ThornswoodLoadOrderDrop $run $m.Settings $DropPlugins
   foreach ($l in $drop.Said) { $l }
+  # Every reason, so a run wrong on both is told both at once (#4679).
+  $why = @()
+  if ($drop.Problem) { $why += $drop.Problem }
   $passWhy = Get-ThornswoodPassSwitchProblem $m.Settings
-  if ($drop.Problem) { $passWhy = $drop.Problem }
-  if ($passWhy) {
-    $passWhy
+  if ($passWhy) { $why += $passWhy }
+  if ($why.Count) {
+    foreach ($w in $why) { $w }
     Remove-Item -LiteralPath $stageDir -Recurse -Force -EA SilentlyContinue
     'the stage is cleared and the server was not touched'
     'CARRY REFUSED'

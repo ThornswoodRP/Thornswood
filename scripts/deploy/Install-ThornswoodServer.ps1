@@ -2019,9 +2019,12 @@ if (-not $PutBack) {
         # An order that leaves out a plugin the running server loads (#2320).
         $drop = Test-ThornswoodLoadOrderDrop $script:running $s $dropNames
         foreach ($l in $drop.Said) { Say $l 'Yellow' }
-        if ($drop.Problem) { Refuse @($drop.Problem) }
+        # Every reason, so a run wrong on both is told both at once (#4679).
+        $carryWhy = @()
+        if ($drop.Problem) { $carryWhy += $drop.Problem }
         $passWhy = Get-ThornswoodPassSwitchProblem $s $passScript
-        if ($passWhy) { Refuse @($passWhy) }
+        if ($passWhy) { $carryWhy += $passWhy }
+        if ($carryWhy.Count) { Refuse $carryWhy }
         [IO.File]::WriteAllText($settingsPath, (ConvertTo-Json -InputObject $s -Depth 30), (New-Object Text.UTF8Encoding($false)))
     } else {
         foreach ($k in $askedKeys) {
