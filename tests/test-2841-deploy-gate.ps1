@@ -94,6 +94,22 @@ Yes 'ping is taken, with nothing after it' ((Test-ThornswoodGateRequest -Line 'p
 Yes 'a switch and a quoted text value become their words, in order' ((Words 'Deploy-DevGamemode -Restart -Why "a gamemode update"') -eq '-Restart|-Why|a gamemode update')
 Yes 'a verb''s fixed words come first' ((Words 'Install-Bot -PutBack') -eq '-CodeOnly|-NoPause|-PutBack')
 Yes 'Get-Logs takes -Dev and -Lines, and names its out parameter' ((Words 'Get-Logs -Dev -Lines 2000') -eq '-NoPause|-Dev|-Lines|2000' -and (Test-ThornswoodGateRequest -Line 'Get-Logs' -Verbs $verbs).Out -eq '-Out')
+$previewBuild = '1' * 40
+foreach ($channel in 'Main', 'Dev') {
+    $verb = "Read-PropertyResetCounts-$channel"
+    $request = Test-ThornswoodGateRequest -Line "$verb -Build $previewBuild" -Verbs $verbs
+    Yes "$verb pins the source and gives the script only its fixed server" (
+        $request.Ok -and $request.Build -ceq $previewBuild -and $request.Script -ceq 'scripts/vps/Read-PropertyResetCounts.ps1' -and
+        ($request.Args -join '|') -ceq ('-Server|' + $channel.ToLowerInvariant()) -and -not $request.Out)
+    Yes "$verb refuses unpinned requests and all caller-supplied script parameters" (
+        (Words $verb) -eq 'REFUSED' -and (Words "$verb -Build 123") -eq 'REFUSED' -and
+        (Words "$verb -Build $previewBuild -Server dev") -eq 'REFUSED' -and
+        (Words "$verb -Build $previewBuild -Source $previewBuild") -eq 'REFUSED' -and
+        (Words "$verb -Build $previewBuild -FixtureScope private") -eq 'REFUSED' -and
+        (Words "$verb -Build $previewBuild -MongoShell foo") -eq 'REFUSED' -and
+        (Words "$verb -Build $previewBuild -MaxForms 1") -eq 'REFUSED' -and
+        (Words "$verb -Build $previewBuild -Out private") -eq 'REFUSED')
+}
 Yes 'an enum value outside its list is refused' ((Words 'Deploy-DevGamemode -Npcs maybe') -eq 'REFUSED')
 # The weekly review's launcher start read (#3534): a number of days and
 # nothing else, never the folder it reads.
