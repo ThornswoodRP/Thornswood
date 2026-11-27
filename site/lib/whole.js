@@ -17,8 +17,10 @@ const path = require('path');
    and copying over it is the in-place write this is here to stop. The error
    carries step 'rename' then, for the caller to say. A temp file that will
    not go is said, by its name and code (#2736): it holds a whole copy of the
-   file. */
+   file. A file that may not be written is not renamed over either: writing
+   it in place refused it, and on Linux a rename would replace it. */
 function writeWhole(p, body) {
+  if (fs.existsSync(p)) fs.accessSync(p, fs.constants.W_OK);
   const tmp = path.join(path.dirname(p), '.' + path.basename(p) + '.' + process.pid + '.tmp');
   try {
     fs.writeFileSync(tmp, body, typeof body === 'string' ? 'utf8' : undefined);

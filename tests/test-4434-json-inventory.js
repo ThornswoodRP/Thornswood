@@ -59,7 +59,7 @@ const FOLDERS = { DATA: 'data', FOR_BOT: 'for-bot', FROM_BOT: 'from-bot', UP: 'u
 // A function that writes the file it is handed as its first argument
 // (noteRules(file, ...) puts rules-accepted.json): a call handing it a
 // store's constant is a write of that store.
-const writers = ['putJson', 'fs\\.writeFileSync'];
+const writers = ['putJson', 'fs\\.writeFileSync', 'writeWhole'];
 for (const m of siteSrc.matchAll(/^function ([A-Za-z_]+)\(([A-Za-z_]+)[,)]/gm)) {
   const open = siteSrc.indexOf('{', m.index);
   let d = 0, end = open;

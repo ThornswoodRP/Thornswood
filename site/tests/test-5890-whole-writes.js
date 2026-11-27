@@ -52,7 +52,9 @@ function yes(what, cond, why) {
    names whose write is cut in half and the process killed; rename, a list
    of file names a rename onto is refused. A temp file beside a name counts
    as the name only for the crash, since a crash while writing the temp file
-   is the crash a whole write lives through. */
+   is the crash a whole write lives through. Just before the kill it leaves
+   the name in killed.txt beside TS_FAULT, since a kill on Windows ends the
+   process with exit code 1 and no signal, as a failure would. */
 function fault() {
   const fs = require('fs');
   const path = require('path');
@@ -63,6 +65,7 @@ function fault() {
     if (typeof p === 'string' && (asked().crash || []).indexOf(named(p)) >= 0) {
       const b = Buffer.isBuffer(body) ? body : Buffer.from(String(body), 'utf8');
       write.call(fs, p, b.subarray(0, Math.floor(b.length / 2)));
+      write.call(fs, path.join(path.dirname(process.env.TS_FAULT), 'killed.txt'), named(p));
       process.kill(process.pid, 'SIGKILL');
     }
     return write.apply(this, arguments);
@@ -72,6 +75,7 @@ function fault() {
     if (typeof to === 'string' && (asked().crash || []).indexOf(path.basename(to)) >= 0) {
       const b = fs.readFileSync(from);
       write.call(fs, to, b.subarray(0, Math.floor(b.length / 2)));
+      write.call(fs, path.join(path.dirname(process.env.TS_FAULT), 'killed.txt'), path.basename(to));
       process.kill(process.pid, 'SIGKILL');
     }
     return copy.apply(this, arguments);
@@ -111,7 +115,12 @@ function config(dir, withSecret) {
 }
 const ENV = (dir) => Object.assign({}, process.env, { THORNSWOOD_DOCS_PORT: '0', THORNSWOOD_GITHUB_API: 'http://127.0.0.1:1',
   THORNSWOOD_DOCS_LOCAL: '1', THORNSWOOD_CHAT_DIR: path.join(dir, 'chat'), TS_FAULT: path.join(dir, 'fault.json') });
-const faults = (dir, f) => fs.writeFileSync(path.join(dir, 'fault.json'), JSON.stringify(f));
+const faults = (dir, f) => {
+  fs.rmSync(path.join(dir, 'killed.txt'), { force: true });
+  fs.writeFileSync(path.join(dir, 'fault.json'), JSON.stringify(f));
+};
+// The file the preload was writing when it killed the process, or ''.
+const killed = (dir) => { try { return fs.readFileSync(path.join(dir, 'killed.txt'), 'utf8'); } catch (e) { return ''; } };
 
 // Runs a few lines in a copy of the site, with the faults loaded.
 function run(dir, code) {
@@ -159,7 +168,7 @@ const wipe = (dir) => { try { fs.rmSync(dir, { recursive: true, force: true }); 
     faults(dir, { crash: ['config.json'] });
     const r = await start(dir);
     const now = fs.readFileSync(path.join(dir, 'config.json'), 'utf8');
-    yes('B1 the site was killed part way through writing config.json (' + r.how + ')', r.how === 'SIGKILL', r.out);
+    yes('B1 the site was killed part way through writing config.json (' + killed(dir) + ', ' + r.how + ')', killed(dir) === 'config.json' && r.how !== 0 && !r.listened, r.out);
     yes('B2 and config.json is as it was, whole', now === was, now.slice(0, 200));
   } finally { wipe(dir); }
   dir = scratch();
@@ -194,11 +203,11 @@ const wipe = (dir) => { try { fs.rmSync(dir, { recursive: true, force: true }); 
     console.log('\nC. a page:');
     reset(); faults(dir, { crash: ['help.md'] });
     let r = run(dir, save);
-    yes('C1 the save was killed part way through writing the page (' + r.signal + ')', r.signal === 'SIGKILL', r.out);
+    yes('C1 the save was killed part way through writing the page (' + killed(dir) + ')', killed(dir) === 'help.md' && r.status !== 0 && !/saved=/.test(r.out), r.out);
     yes('C2 and the page is as it was, whole', fs.readFileSync(PAGE, 'utf8') === OLD);
     reset(); faults(dir, { crash: ['help.md.bak'] });
     r = run(dir, save);
-    yes('C3 a save killed part way through writing the .bak (' + r.signal + ')', r.signal === 'SIGKILL', r.out);
+    yes('C3 a save killed part way through writing the .bak (' + killed(dir) + ')', killed(dir) === 'help.md.bak' && r.status !== 0 && !/saved=/.test(r.out), r.out);
     yes('C4 leaves the .bak as it was, whole, and the page too', fs.readFileSync(BAK, 'utf8') === OLDER && fs.readFileSync(PAGE, 'utf8') === OLD);
     reset(); faults(dir, { rename: ['help.md'] });
     r = run(dir, save);
@@ -226,7 +235,7 @@ const wipe = (dir) => { try { fs.rmSync(dir, { recursive: true, force: true }); 
     fs.writeFileSync(SET, SET_WAS);
     faults(dir, { crash: ['set.json'] });
     r = run(dir, 'const s = require("./lib/sessions"); s.writeSlogSet(' + JSON.stringify(SET) + ', { at: Date.now(), lines: ["' + 'b'.repeat(900) + '"] });');
-    yes('E1 the write was killed part way through (' + r.signal + ')', r.signal === 'SIGKILL', r.out);
+    yes('E1 the write was killed part way through (' + killed(dir) + ')', killed(dir) === 'set.json' && r.status !== 0, r.out);
     yes('E2 and the set is as it was, whole', fs.readFileSync(SET, 'utf8') === SET_WAS);
   } finally { wipe(dir); }
 
