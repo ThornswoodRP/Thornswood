@@ -869,8 +869,8 @@ namespace Thornswood
         }
 
         /// <summary>
-        /// Nobody but this account has any business reading config.json. It
-        /// holds the server password once the launcher has fetched one. The
+        /// Nobody but this account has any business reading config.json, the
+        /// settings of this person's own install. The
         /// script did this with Set-Acl; a refusal is said and the install goes
         /// on, as it did there, because the file is still only in this
         /// person's own folder.

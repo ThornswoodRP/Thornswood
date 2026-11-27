@@ -13147,7 +13147,9 @@ log('gamemode loaded:',
 // worse outage than the hole it closes. Run it for a day, read the log, and
 // only then set "enforce": true.
 //
-// The allow list lives at <dataDir>/allowed.json:
+// The allow list lives at <privDir>/allowed.json, in the private folder
+// (server-settings.json's privDir, private unless it says otherwise), never
+// in the data folder, which the server hands to anybody who connects (#4449):
 //
 //     { "enforce": false, "profiles": [123, 456], "devProfiles": [123], "note": "..." }
 //
