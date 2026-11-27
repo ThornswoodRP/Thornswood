@@ -35,8 +35,8 @@ $script:pass = 0; $script:fail = 0
 function Check([bool]$ok, [string]$what) {
     if ($ok) { $script:pass++; Write-Host "PASS  $what" } else { $script:fail++; Write-Host "FAIL  $what" }
 }
-$onWindows = ($IsWindows -or $env:OS -eq 'Windows_NT')
-$pwsh = (Get-Process -Id $PID).Path
+. (Join-Path $PSScriptRoot 'Windows.ps1')
+$pwsh = Get-BoxPowerShell
 
 # A Python to stand behind the stand-in: a real one, not the Store's stub.
 $py = $null
