@@ -383,7 +383,7 @@ function carryingInstrument(need) {
     try {
       const form = sp.Game.getFormFromFile(id, file);
       if (form && pc.getItemCount(form) > 0) { return true; }
-    } catch (e) { }
+    } catch (e) { log('could not read', id.toString(16) + ':' + file, 'in the pack:', String(e && e.message || e)); }
   }
   return false;
 }
