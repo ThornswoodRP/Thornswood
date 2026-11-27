@@ -83,10 +83,16 @@ function Invoke-Case([string]$name, [string[]]$alerts, [string]$hook, [string]$s
     $out = @(& $pwshExe -NoProfile -NonInteractive -File $child 2>&1 | ForEach-Object { [string]$_ })
     $code = $LASTEXITCODE
     $sent = Join-Path $state 'alerts-sent.txt'
+    # Built here, not inside $( ): a subexpression unrolls an empty array to
+    # $null and one id to a bare string, and StrictMode then refuses .Count.
+    [string[]]$posted = @()
+    if (Test-Path -LiteralPath $calls) { $posted = @(Get-Content -LiteralPath $calls | Where-Object { $_ }) }
+    [string[]]$sentIds = @()
+    if (Test-Path -LiteralPath $sent) { $sentIds = @(Get-Content -LiteralPath $sent | Where-Object { $_ }) }
     return [pscustomobject]@{
         Code = $code; Out = ($out -join "`n"); State = $state
-        Posts = $(if (Test-Path -LiteralPath $calls) { @(Get-Content -LiteralPath $calls).Count } else { 0 })
-        Sent = $(if (Test-Path -LiteralPath $sent) { @(Get-Content -LiteralPath $sent | Where-Object { $_ }) } else { @() })
+        Posts = [int]$posted.Length
+        Sent = $sentIds
     }
 }
 
