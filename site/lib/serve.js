@@ -36,7 +36,7 @@ const { ageGateBody, ageStated, downloadServed, downloadsBody, downloadsFacts,
 const { deleteUpload, GALLERY, GALLERY_ALLOW, GALLERY_CAP, GALLERY_HOLD_DAYS,
   GPENDING, GREPORTS, KIND, listUploads, pendingCopies, pictureSize,
   receiveUpload, shotSrcset, SMALL_CAP, SMALL_KINDS, SMALL_WIDTHS, smallCopy,
-  smallFile, srcsetWidths, UP_SMALL, uploadRemoved, UPMETA,
+  smallFile, srcsetWidths, submissionName, UP_SMALL, uploadRemoved, UPMETA,
   withGalleryPending } = require('./uploads');
 const { accountBanned, accountOf, activeBans, banMinutes, banUntilText,
   characterBar, dropBan, findDead, heldBroken, modLog, PK, pkActive,
@@ -1776,6 +1776,13 @@ async function handle(req, res) {
 
     const pending = jsonFile(GPENDING, []);
     const hit = pending.find((x) => String(x.name) === name);
+    const gallery = jsonFile(GALLERY, []);
+    const already = gallery.find((g) => String(g.name) === name);
+    // Only a picture waiting for staff, or one already on the gallery, and
+    // only a submission's own file (#4401). Any name in uploads/ went onto
+    // gallery.json before, so /shot/ served the notes file to anybody.
+    if (!hit && !already) return sendJson(res, 404, { error: 'That picture is not waiting for staff or on the gallery.' });
+    if (!submissionName(name) || !fs.existsSync(path.join(UP, name))) return sendJson(res, 404, { error: 'That picture\'s file is not on the site, so it cannot be accepted.' });
     // "by" from the call wins, then the pending entry's, then empty. The url is
     // built here so gallery.json holds exactly the shape /api/public hands out.
     const by = (o.by !== undefined && o.by !== null) ? String(o.by).slice(0, 40)
@@ -1788,8 +1795,6 @@ async function handle(req, res) {
     const copies = pendingCopies(hit).filter((n) => showed.indexOf(n) >= 0);
     const srcset = copies.length ? shotSrcset(name, copies) : '';
 
-    const gallery = jsonFile(GALLERY, []);
-    const already = gallery.find((g) => String(g.name) === name);
     const changed = !already || already.url !== '/shot/' + name ||
       (by && already.by !== by) || (srcset && already.srcset !== srcset);
     if (already) {
@@ -1879,13 +1884,30 @@ async function handle(req, res) {
       return sendJson(res, 500, { ok: false, name: name,
         error: 'The site could not save ' + file + ', so it is not all removed yet. Try again in a minute.' });
     };
+    /* Only a name this door has to do with (#4401): on the gallery, on the
+       queue, named by a report, or marked removed by an earlier Delete whose
+       file is still to go. Any name in uploads/ was deleted before, a hub
+       upload that only an admin may delete and the notes file among them.
+       An earlier Delete that stopped part way leaves the name on one of
+       these, so asking again still finishes it. */
     const gallery = jsonFile(GALLERY, []);
+    const pending = jsonFile(GPENDING, []);
+    const reports = jsonFile(GREPORTS, fs.existsSync(GREPORTS) ? null : []);
+    const named = (list) => Array.isArray(list) && list.some((x) => x && String(x.name) === name);
+    // Notes that cannot be read are not taken as no mark: the file step
+    // below answers them, and touches nothing.
+    const notes = jsonFile(UPMETA, fs.existsSync(UPMETA) ? null : {});
+    const marked = !notes || typeof notes !== 'object' || Array.isArray(notes) ||
+      !!(Object.prototype.hasOwnProperty.call(notes, name) && notes[name] && notes[name].removed);
+    if (!named(gallery) && !named(pending) && !named(reports) && !marked) {
+      return sendJson(res, 404, { error: 'That picture is not waiting for staff or on the gallery.' });
+    }
+
     const leftGal = gallery.filter((x) => String(x.name) !== name);
     const removedGal = gallery.length - leftGal.length;
     if (removedGal && !putJson(GALLERY, leftGal)) return notSaved('the gallery');
     if (removedGal) recordRemoval('approved');
 
-    const pending = jsonFile(GPENDING, []);
     const leftPend = pending.filter((x) => String(x.name) !== name);
     const removedPend = pending.length - leftPend.length;
     if (removedPend && !putJson(GPENDING, leftPend)) return notSaved('the queue');
@@ -1893,7 +1915,6 @@ async function handle(req, res) {
 
     // Drop open reports against this name too, so the reports list does not
     // keep asking about a picture that is already gone.
-    const reports = jsonFile(GREPORTS, fs.existsSync(GREPORTS) ? null : []);
     if (!Array.isArray(reports)) return notSaved('the reports');
     const kept = reports.filter((r) => String(r.name) !== name);
     const itsReports = reports.filter((r) => String(r.name) === name);
@@ -1921,8 +1942,9 @@ async function handle(req, res) {
       removedPending: removedPend,
       fileDeleted: false
     };
-    const file = path.join(UP, name);
-    const hasFile = file.startsWith(UP + path.sep) && fs.existsSync(file);
+    // The file only when it is a submission's own (#4401): never the notes
+    // file or the small folder, even for a name a list holds.
+    const hasFile = submissionName(name) && fs.existsSync(path.join(UP, name));
     const now = Date.now();
     const savedMeta = hasFile ? jsonFile(UPMETA, fs.existsSync(UPMETA) ? null : {}) : {};
     const noteNotSaved = () => {
