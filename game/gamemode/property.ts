@@ -1842,6 +1842,14 @@
       // and expensive. Failing that way round is the right one: a door that
       // is not locked is a house anybody can walk into.
       '    var sp = ctx.sp;',
+      // HOW EACH DOOR WAS FOUND (#7077), before this script first turned it:
+      // true for locked. A claim that ends takes its doors off both lists, so
+      // a door this script turned is put back the way it was found once it is
+      // on neither. A door the game itself ships locked keeps its own lock.
+      // Kept for the whole game, not on this character's state, because the
+      // doors stay as this script left them across a change of character.
+      '    var found = globalThis.__thornswoodLockFound || (globalThis.__thornswoodLockFound = {});',
+      '    var listed = {};',
       // Remember which form ids property wants shut (#615), published for
       // anything on the client that asks whether a door is property's to hold.
       '    var shutMap = {};',
@@ -1857,7 +1865,9 @@
       // four seconds, 16 events costing 408 ms in 30 s, worst 229 ms, which
       // is a stutter on each heartbeat. If isLocked cannot be read the door
       // is locked anyway, so this fails shut.
+      '        listed[v.shut[i]] = true;',
       '        if (r) { var was = null; try { was = r.isLocked(); } catch (e2) { }',
+      '          if (!(v.shut[i] in found)) { found[v.shut[i]] = was === true; }',
       '          if (was !== true) { r.lock(true, false); } }',
       '        shutMap[v.shut[i]] = true;',
       '      } catch (e) { }',
@@ -1869,9 +1879,23 @@
       // reads a door on __thornswoodPropertyShut that opens as a pick, so
       // a door this script opens is taken off the list first.
       '        try { var pub = globalThis.__thornswoodPropertyShut; if (pub) { delete pub[v.open[j]]; } } catch (e3) { }',
+      '        listed[v.open[j]] = true;',
       '        if (o) { var shut = true; try { shut = o.isLocked(); } catch (e2) { }',
+      '          if (!(v.open[j] in found)) { found[v.open[j]] = shut === true; }',
       '          if (shut !== false) { o.lock(false, false); } }',
       '        delete shutMap[v.open[j]];',
+      '      } catch (e) { }',
+      '    }',
+      // On neither list: the claim that turned it has ended. A door out of
+      // reach stays in found, and the heartbeat puts it back when it loads.
+      '    for (var k in found) {',
+      '      if (listed[k]) { continue; }',
+      '      try {',
+      '        var g = sp.ObjectReference.from(sp.Game.getFormEx(Number(k)));',
+      '        if (!g) { continue; }',
+      '        var now2 = null; try { now2 = g.isLocked(); } catch (e2) { }',
+      '        if (now2 !== found[k]) { g.lock(found[k], false); }',
+      '        delete found[k];',
       '      } catch (e) { }',
       '    }',
       '    try { globalThis.__thornswoodPropertyShut = shutMap; } catch (e) { }',
