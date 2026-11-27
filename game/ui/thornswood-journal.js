@@ -265,6 +265,7 @@
       var button = ev.target;
       if (!shown || !button || button.tagName !== 'BUTTON' ||
           (button.getAttribute('data-do') !== 'dropbook' && button.getAttribute('data-g') !== 'disband' &&
+           button.getAttribute('data-g') !== 'remove' &&
            button.id !== ID + '-discard') || (ev.key !== 'Enter' && ev.key !== ' ')) return;
       ev.preventDefault(); ev.stopPropagation();
       if (ev.repeat || destructiveHeld) return;
@@ -924,8 +925,14 @@
     }
     if (verb === 'remove') {
       var gone = gval('gwho');
-      if (!needGroupField('gwho', 'Name the person to remove.')) return;
-      net('/book member ' + book.id + ' remove | ' + gone);
+      if (!needGroupField('gwho', 'Name the person to remove.')) { resetDestructive(); return; }
+      confirmDestructive(this, function () {
+        var current = groupBook();
+        return current && current.id === book.id && current.invite && gval('gwho') === gone
+          ? { book: current, who: gone } : null;
+      }, 'remove "' + gone + '" from "' + book.name + '"', function () {
+        net('/book member ' + book.id + ' remove | ' + gone);
+      });
       return;
     }
     if (verb === 'give') {
