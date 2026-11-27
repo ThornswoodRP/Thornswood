@@ -52424,11 +52424,40 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
 
     /*
+      THE CLOCK AND THE GOODS, WRITTEN AS ONE (#5284). They are two writes,
+      and before #5284 the goods went first and a refused clock was dropped
+      in an empty catch, so the next look took the same days off the food
+      again and nothing said so. Now the clock goes first: a refused clock
+      changes nothing, and the next look takes the days once. Goods refused
+      after it put the clock back as it was, so again the next look takes
+      the days once. Each refusal is logged; only a clock refused twice in a
+      row, once forward and once back, leaves the days untaken, and that
+      is logged too.
+    */
+    function commit(id, kind, was, clock, before, after) {
+      var setClock = kind === 'pack' ? api.setPackClock : api.setChestClock;
+      var hex = Number(id).toString(16);
+      try { setClock(id, clock); } catch (e) {
+        api.log('spoilage: could not move the ' + kind + ' clock of', hex + ':', e);
+        return false;
+      }
+      if (same(after, before) || api.setInventory(id, after)) { return true; }
+      try { setClock(id, was); } catch (e2) {
+        api.log('spoilage: could not put back the ' + kind + ' clock of', hex, 'after its goods were refused, so',
+                'these days are not taken:', e2);
+        return false;
+      }
+      api.log('spoilage: the goods of', hex, 'were refused; the ' + kind + ' clock is as it was');
+      return false;
+    }
+
+    /*
       ONE LOOK AT AN ONLINE PACK. The time since the last look is added to
       the pack's own clock unless it is more than GAP_MS (time away), each
       whole day of it comes off every piece that spoils, and plain food is
-      named. The clock moves only once the pack is written, so a write that
-      fails is tried again on the next look with nothing lost.
+      named. The clock and the pack are written as one (commit, above), so a
+      write that fails is tried again on the next look with nothing lost
+      and nothing taken twice.
     */
     function pass(actorId, now) {
       var entries = api.inventory(actorId);
@@ -52444,10 +52473,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var turned = Math.floor(ms / DAY_MS);
       ms -= turned * DAY_MS;
       var res = aged(entries, turned);
-      if (!same(res.entries, entries) && !api.setInventory(actorId, res.entries)) {
-        return null;
-      }
-      try { api.setPackClock(actorId, { at: now, ms: ms }); } catch (e) { }
+      if (!commit(actorId, 'pack', clock, { at: now, ms: ms }, entries, res.entries)) { return null; }
       var line = goneLine(res.gone, '');
       if (line) {
         api.say(actorId, 'Your ' + line);
@@ -52473,10 +52499,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       var from = clock && Number(clock.at) > 0 ? Math.max(0, Number(clock.days) || 0) : days;
       var time = storageTime(containerId, at, from, now);
       var res = aged(entries, time.turned);
-      if (!same(res.entries, entries) && !api.setInventory(containerId, res.entries)) {
-        return null;
-      }
-      try { api.setChestClock(containerId, { at: at, days: days }); } catch (e) { }
+      if (!commit(containerId, 'chest', clock, { at: at, days: days }, entries, res.entries)) { return null; }
       var line = goneLine(res.gone, 'this chest');
       if (line && openerId) {
         api.say(openerId, 'The ' + line);
