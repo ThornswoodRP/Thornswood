@@ -376,13 +376,18 @@ namespace Thornswood
         /// install leaves to do waits on the folder: Thornswood-Last.esp and
         /// the other files made from the game, the plugin list in the
         /// server's order, and the animation and body files. All of it is
-        /// Fix's. The make's finish runs that Fix in the same run and takes
-        /// this note as it starts (ShellOwnGame, FolderWork), so the setup
-        /// restarts once, at the end. The note is for a launcher that closes
-        /// before then: an update going in, or the launcher shut by hand. A
+        /// Fix's. The make's finish runs that Fix in the same run, so the
+        /// setup restarts once, at the end. The note is for a launcher that
+        /// closes before that Fix has finished: an update going in, or the
+        /// launcher shut by hand while Pandora or BodySlide is building. A
         /// restart of the launcher's own (Shell.RestartLauncher) is not
         /// Velopack's, so Velo.Restarted does not say it happened; this file
         /// does, and the next start the person makes runs Fix for it.
+        ///
+        /// So it is taken when that Fix ends (ShellScanFix, MakeFixEnded),
+        /// never as it starts (#6086). Until 27 Nov both the make's finish
+        /// and the next start took it before their Fix ran, and a launcher
+        /// shut during the Fix left no note, so the start after it ran none.
         /// </summary>
         static string FixAfterMakeFile { get { return Path.Combine(Dir, "fix-after-make.txt"); } }
 
@@ -392,10 +397,21 @@ namespace Thornswood
             try { WriteRecord(FixAfterMakeFile, new string[] { DateTime.Now.ToString("o") }); } catch (Exception ex) { Swallow.Note("OwnGame.NoteFixAfterMake, write", ex); }
         }
 
+        /// <summary>True while the note is there: the Fix after the make has not finished.</summary>
+        public static bool FixAfterMakeWaiting
+        {
+            get
+            {
+                try { return File.Exists(FixAfterMakeFile); }
+                catch (Exception ex) { Swallow.Note("OwnGame.FixAfterMakeWaiting", ex); return false; }
+            }
+        }
+
         /// <summary>
-        /// True once, on the first start after the folder was made: the note
-        /// is taken away as it is read, so Fix runs once for it and a Fix that
-        /// leaves something wrong is reported, never run again at every start.
+        /// Takes the note away, when the Fix after the make has ended
+        /// (#6086). A Fix that leaves something wrong still ends, so it is
+        /// reported and not run again at every start. True when there was a
+        /// note and it is gone.
         /// </summary>
         public static bool TakeFixAfterMake()
         {
@@ -408,8 +424,7 @@ namespace Thornswood
             }
             catch (Exception ex)
             {
-                // Not taken away, so not run: a note that cannot be deleted
-                // would run Fix at every start.
+                // Left, so the next start runs Fix again; said in the log.
                 Swallow.Note("OwnGame.TakeFixAfterMake", ex);
                 return false;
             }
