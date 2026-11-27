@@ -667,7 +667,10 @@ the exe and there is no browser data folder. Voice.cs is the launcher's side,
 as it always was. It talks to the game through small files in both
 `Game\Data\Platform` and Profile (`voice-status.txt`, and `voice-muted.txt`
 written by the game, passed on to the session by `Voice.cs:720 PassMuted()`),
-and hears push to talk from the game plugin on a loopback port.
+and hears push to talk from the game plugin on a loopback port. The fifth
+word of `voice-status.txt` says the microphone is silent: held for five
+seconds with nothing over -100 dBFS in it (`MicSilence` in VoiceMeter.cs,
+#6470), and the game's indicator then reads MIC SILENT.
 `Voice.cs:525 Reconfigure()` tells it which character is being played. A join
 token opens one connection and is good for two minutes (#1322), so nothing
 keeps one: the session asks for a token before every try (`PageToken()`), and

@@ -708,12 +708,12 @@ function plugin(opts) {
   yes('a second of frames reads nothing from disk on the game\'s thread (read ' +
       pl.counts.syncInFrame + ' times)', pl.counts.syncInFrame === 0);
   yes('the reads went to fs.readFile instead', pl.counts.asked > 0);
-  yes('the launcher\'s status still reaches the page', pl.sent('setLauncherStatus(true,2,false,"yell")') === 1);
+  yes('the launcher\'s status still reaches the page', pl.sent('setLauncherStatus(true,2,false,"yell",false)') === 1);
   yes('and its port, from ../Profile when Data/Platform has none', pl.sent('setLauncherPort(54321)') >= 1);
 
   pl.files[STATUS] = '0 3 1 whisper';
   pl.run(640);
-  yes('a new status reaches the page within a poll', pl.sent('setLauncherStatus(false,3,true,"whisper")') === 1);
+  yes('a new status reaches the page within a poll', pl.sent('setLauncherStatus(false,3,true,"whisper",false)') === 1);
   yes('and each status is sent once, not once a frame',
       pl.sent('setLauncherStatus(') === 2);
 
@@ -721,11 +721,11 @@ function plugin(opts) {
   pl.files[STATUS_PROFILE] = '1 5 0 local';
   pl.run(640);
   yes('an empty file in Data/Platform falls through to ../Profile, as before',
-      pl.sent('setLauncherStatus(true,5,false,"local")') === 1);
+      pl.sent('setLauncherStatus(true,5,false,"local",false)') === 1);
   pl.files[STATUS] = '1 6 0 local';
   pl.run(640);
   yes('and Data/Platform is still read first when it has something',
-      pl.sent('setLauncherStatus(true,6,false,"local")') === 1);
+      pl.sent('setLauncherStatus(true,6,false,"local",false)') === 1);
 
   const before = pl.sent('setLauncherPort(54321)');
   pl.run(10000);
@@ -751,7 +751,7 @@ function plugin(opts) {
   pl.state.drop = false;
   pl.run(5000);
   yes('a read that hangs is let go and asked again, and the status still arrives',
-      pl.sent('setLauncherStatus(true,9,false,"yell")') === 1);
+      pl.sent('setLauncherStatus(true,9,false,"yell",false)') === 1);
   yes('without going back to reading on the game\'s thread', pl.counts.syncInFrame === 0);
 }
 
@@ -763,7 +763,7 @@ function plugin(opts) {
       pl.counts.syncInFrame === 0 && pl.sent('setLauncherStatus(') === 0);
   pl.run(2500);
   yes('when none ever does, the status reaches the page the old way',
-      pl.sent('setLauncherStatus(true,2,false,"yell")') === 1);
+      pl.sent('setLauncherStatus(true,2,false,"yell",false)') === 1);
   yes('and the port', pl.sent('setLauncherPort(54321)') >= 1);
   const said = pl.files[LOG].split('\n').filter(function (l) { return l.indexOf('never came back') >= 0; });
   yes('and the log says so, once', said.length === 1);
@@ -774,7 +774,7 @@ function plugin(opts) {
   const pl = plugin({ async: 'none', files: { [STATUS]: '1 2 0 yell', [PORT_PROFILE]: '54321' } });
   pl.run(1000);
   yes('with no fs.readFile, the status and port reach the page as they always did',
-      pl.sent('setLauncherStatus(true,2,false,"yell")') === 1 && pl.sent('setLauncherPort(54321)') >= 1);
+      pl.sent('setLauncherStatus(true,2,false,"yell",false)') === 1 && pl.sent('setLauncherPort(54321)') >= 1);
 }
 
 // ---------------------------------------------------- push to talk, as it was
