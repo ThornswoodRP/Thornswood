@@ -186,6 +186,7 @@ rest) and the `test-*.js` harnesses are not in this list.
 | [ops/Stage-MainGameplayPolicies.ps1](ops/Stage-MainGameplayPolicies.ps1) | Stages Main's audited Dev gameplay policies without restarting a process. |
 | [ops/Wipe-Saves.ps1](ops/Wipe-Saves.ps1) | Starts the world over. Everybody begins again, nothing is claimed, nothing has been looted, and every container in the province is holding what Bethesda put in it. |
 | [ops/WorkflowRun.ps1](ops/WorkflowRun.ps1) | Starts a workflow on main and reads the answer its runner left, for a script whose session cannot make the change itself: Set-Ref.ps1 (a ref write, which a cloud session's proxy refuses), Set-BuildRunners.ps1 (a runner label, which needs the box's GitHub App) and Set-RepoAbout.ps1 (the repository About box). |
+| [ops/World-Server.ps1](ops/World-Server.ps1) | Whether the game server whose change forms a folder holds is running (#4243). |
 | [release/Add-VirusTotalComment.ps1](release/Add-VirusTotalComment.ps1) | Optional manual tool: leaves one community comment on a build's VirusTotal report, or says plainly that it is not commenting and carries on. |
 | [release/App-Part.ps1](release/App-Part.ps1) | Makes the zip of one app the box deploy agent puts in from a build Release (#5190, #5187): the site, the Discord bot or the voice service, each as the folder it lands in on the box holds it. |
 | [release/Assert-PublishSigned.ps1](release/Assert-PublishSigned.ps1) | Helpers for the publish sign gate. Dot-source this from Ship.ps1. |

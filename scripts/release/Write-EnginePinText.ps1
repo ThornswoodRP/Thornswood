@@ -9,7 +9,8 @@
   places by hand at every pin, and went stale between pins. Now each is a
   marked block (scripts\release\EnginePin.ps1 says what a block is) written
   from records\server-build.json, records\client-build.json and
-  records\front-build.json. Update-EnginePin.ps1 runs this at every pin move;
+  records\front-build.json. The measured library tables come from
+  records\client-licences.json. Update-EnginePin.ps1 runs this at every pin move;
   tests\test-5148-engine-pin.ps1 runs it with -Check in the build check, so a
   hand edit inside a block, or a record moved without the pages, is red.
 
@@ -21,7 +22,7 @@
 
 .EXAMPLE
   pwsh scripts/release/Write-EnginePinText.ps1
-  After a pin move: the five blocks written from the records.
+  After a pin move: the blocks written from the records.
 
 .EXAMPLE
   pwsh scripts/release/Write-EnginePinText.ps1 -MainCommit <the commit main's release carries>

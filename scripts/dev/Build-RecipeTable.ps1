@@ -3568,7 +3568,7 @@ function PerkDropsOf($r) {
 function NeedGroupsOf($needs) {
     $groups = New-Object 'System.Collections.Generic.List[object]'
     $group = New-Object 'System.Collections.Generic.List[object]'
-    foreach ($n in @($needs)) {
+    foreach ($n in $needs) {
         $group.Add($n)
         if (-not $n.Or) { $groups.Add($group.ToArray()); $group.Clear() }
     }

@@ -13,7 +13,7 @@
   gh, holds the records to what they must be, and writes them here.
 
   What is held first: the run is engine.yml's, in this repository, and ended
-  green; exactly one of its Engine build jobs succeeded, and its log holds the records
+  green; its one Engine build job succeeded, and its log holds the records
   whole (their length and sha256); the records are the four things and no
   other; both build records name one fork commit; and that commit is the one
   this checkout's index pins engine\skymp to. So move the pin first, then run
@@ -73,14 +73,16 @@ if ([string]$r.path -ne '.github/workflows/engine.yml') { Stop-Here ("run $Run i
 if ([string]$r.status -ne 'completed' -or [string]$r.conclusion -ne 'success') { Stop-Here ("run $Run is $($r.status) $($r.conclusion), not green, so it handed back no records to take: " + $r.html_url) }
 Say ("engine.yml run {0} ({1}), green" -f $Run, $r.html_url) 'Cyan'
 
-# The job that ran the build's steps and succeeded: "Engine build", or in an
-# older run its "(VPS fallback)" when that one ran instead (engine.yml, WHERE
-# IT RUNS). Picked by name: since #5220 the run also has the job "Wake the
-# engine pin", which succeeds beside it and hands back no records, and a
-# pick of "the one job that succeeded" stopped every pin from 1 Nov (#5219).
+# The job that ran the build's steps: "Engine build", the only job of
+# engine.yml that builds since its VPS fallback went at the flip (#4983,
+# engine.yml, WHERE IT RUNS), so a run never again ends red over a failed
+# job whose fallback succeeded (#4260). Picked by its whole name: since #5220
+# the run also has the job "Wake the engine pin", which succeeds beside it
+# and hands back no records, and a pick of "the one job that succeeded"
+# stopped every pin from 1 Nov (#5219).
 $jobs = @((((Get-Gh "repos/$GitHubRepo/actions/runs/$Run/jobs") -join "`n") | ConvertFrom-Json).jobs |
-  Where-Object { [string]$_.conclusion -eq 'success' -and [string]$_.name -like 'Engine build*' })
-if ($jobs.Count -ne 1) { Stop-Here ("run $Run has $($jobs.Count) Engine build jobs that succeeded, and engine.yml's records come from the one: " + $r.html_url) }
+  Where-Object { [string]$_.conclusion -eq 'success' -and [string]$_.name -eq 'Engine build' })
+if ($jobs.Count -ne 1) { Stop-Here ("run $Run has $($jobs.Count) Engine build jobs that succeeded, and engine.yml's records come from its one: " + $r.html_url) }
 # The log keeps the runner's colours, which a newer gh hands over only when
 # told (Get-GhLogFlags, #5202).
 $log = Get-Gh "repos/$GitHubRepo/actions/jobs/$($jobs[0].id)/logs" (Get-GhLogFlags $Gh)
