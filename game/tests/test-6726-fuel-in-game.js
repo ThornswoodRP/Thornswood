@@ -2,18 +2,16 @@
 //
 // #6726, Patrick's B: the charcoal and the handle are inputs on the forge's
 // recipes. Thornswood-Last.esp writes them into every recipe it copies; one
-// of Immersive Armors', which is never copied (#2454), gets them in each
-// person's game from RECIPES_FUELED_IN_GAME, through the same counts script
-// that sets the re-costed counts (#613), with the fork's
-// TESModPlatform.SetCraftingInput for an input the record does not name.
+// of Immersive Armors', which is never copied (#2454), is in
+// RECIPES_SET_IN_GAME with them on top (Build-Recost.py; its half is
+// tests/test-6726-fuel-in-records.py), and each person's game sets them
+// through the same counts script that sets the re-costed counts (#613), with
+// the fork's TESModPlatform.SetCraftingInput for an input the record does
+// not name.
 //
 // What it holds, running the real functions out of game/gamemode.js over a
 // fake mp and a fake game:
 //
-//   M  recipesSetInGame: a fueled row is its record's inputs, each [item, had,
-//      had], with the added ones after them [item, 0, n]; one re-costed too
-//      takes them on top of its new counts; an added item the record names
-//      already asks that many more;
 //   G  the counts script adds each missing input with setCraftingInput and
 //      sets the rest, asking again changes nothing, a record whose inputs are
 //      not the ones measured is left alone, and a client without the native
@@ -22,8 +20,8 @@
 //      charcoal and the handle, and not one at the record's own counts;
 //   R  recipeMetadataRefusal refuses a craft matched to the record, and
 //      recipeMovedInGame leaves a fueled recipe to recipeSetInGame;
-//   T  the gamemode reads the table, and the server takes no charcoal and no
-//      handle of its own.
+//   T  the gamemode reads no table of its own for them, and the server takes
+//      no charcoal and no handle of its own.
 //
 // Read only.
 'use strict';
@@ -50,16 +48,14 @@ function take(start, end) {
 }
 
 const PARTS = [
-  take('function recipesSetInGame() {'),
   take('function recipeCountsScript() {'),
   take('function recipeSetInGame(craftedItemBaseId, workbenchId, inputs) {'),
   take('function recipeMovedInGame(craftedItemBaseId, workbenchId, inputs) {'),
   take('function recipeMetadataRefusal(desc) {')
 ];
 yes('T1 the functions are in the gamemode', PARTS.every(function (p) { return p !== null; }));
-yes('T2 the gamemode reads RECIPES_FUELED_IN_GAME and builds SET_IN_GAME from it',
-    /var RECIPES_FUELED_IN_GAME = table\('RECIPES_FUELED_IN_GAME'\);/.test(benches) &&
-    /var SET_IN_GAME = recipesSetInGame\(\);/.test(benches));
+yes('T2 the gamemode reads no table of its own for them: they are rows of RECIPES_SET_IN_GAME',
+    /var RECIPES_SET_IN_GAME = table\('RECIPES_SET_IN_GAME'\);/.test(benches) && !/FUELED_IN_GAME/.test(benches));
 yes('T3 the server takes no charcoal and no handle of its own: onCraft names neither',
     !/charcoalHeld|wantsAHandle|HANDLE_DESC|fuelFor/.test(benches));
 if (!PARTS.every(function (p) { return p !== null; })) {
@@ -70,17 +66,17 @@ if (!PARTS.every(function (p) { return p !== null; })) {
 const IA = 'Hothtrooper44_ArmorCompilation.esp';
 const POOR = '15481:Thornswood-Content.esp', CHARCOAL = '33760:Skyrim.esm', HANDLE = '15490:Thornswood-Content.esp';
 const STEEL = '5ace5:Skyrim.esm', IRON = '5ace4:Skyrim.esm', COIN = 'f:Skyrim.esm';
-const FUELED = {
-  ['20:' + IA]: { name: 'Wolf Shield', out: '214a1:' + IA, bench: 'f46ce:Skyrim.esm',
-                  inputs: [[STEEL, 3]], add: [[POOR, 1]] },
-  ['30:' + IA]: { name: 'Iron Axe', out: '214a2:' + IA, bench: '88105:Skyrim.esm',
-                  inputs: [[IRON, 2], [CHARCOAL, 1]], add: [[CHARCOAL, 1], [HANDLE, 1]] },
-  ['40:' + IA]: { name: 'Steel Buckler', out: '214a3:' + IA, bench: '88105:Skyrim.esm',
-                  inputs: [[STEEL, 1], [COIN, 50]], add: [[POOR, 1]] }
-};
+// RECIPES_SET_IN_GAME as Build-Recost.py writes it: a fueled row is its
+// record's inputs, each [item, had, had], an added item the record names
+// asking that many more, then the ones it does not name [item, 0, n]; one
+// re-costed too takes them on top of its new counts.
 const SET = {
+  ['20:' + IA]: { name: 'Wolf Shield', out: '214a1:' + IA, bench: 'f46ce:Skyrim.esm',
+                  inputs: [[STEEL, 3, 3], [POOR, 0, 1]] },
+  ['30:' + IA]: { name: 'Iron Axe', out: '214a2:' + IA, bench: '88105:Skyrim.esm',
+                  inputs: [[IRON, 2, 2], [CHARCOAL, 1, 2], [HANDLE, 0, 1]] },
   ['40:' + IA]: { name: 'Steel Buckler', out: '214a3:' + IA, bench: '88105:Skyrim.esm',
-                  inputs: [[STEEL, 1, 2], [COIN, 50, 0]] },
+                  inputs: [[STEEL, 1, 2], [COIN, 50, 0], [POOR, 0, 1]] },
   ['50:' + IA]: { name: 'Glass Buckler', out: '214a4:' + IA, bench: '88105:Skyrim.esm',
                   inputs: [[STEEL, 1, 4]] }
 };
@@ -107,26 +103,15 @@ const ctx = {
   },
   JSON: JSON, Object: Object, Array: Array, String: String, Number: Number,
   BENCH_BY_BASE: { 'forgebase:Skyrim.esm': '88105:Skyrim.esm', 'skybase:Skyrim.esm': 'f46ce:Skyrim.esm' },
-  RECIPES_SET_IN_GAME: SET, RECIPES_FUELED_IN_GAME: FUELED, RECIPES_MOVED_IN_GAME: MOVED
+  RECIPES_SET_IN_GAME: SET, RECIPES_MOVED_IN_GAME: MOVED
 };
 vm.createContext(ctx);
-vm.runInContext(PARTS.join('\n') + '\nvar SET_IN_GAME = recipesSetInGame();\n' +
-                'this.api = { merged: SET_IN_GAME, script: recipeCountsScript(), named: recipeSetInGame, ' +
+vm.runInContext(PARTS.join('\n') + '\n' +
+                'this.api = { script: recipeCountsScript(), named: recipeSetInGame, ' +
                 'moved: recipeMovedInGame, refusal: recipeMetadataRefusal };', ctx);
 const api = ctx.api;
 
-// ------------------------------------------------------------------- M --
-const M = JSON.parse(JSON.stringify(api.merged));
-yes('M1 a fueled row is its record\'s inputs, each [item, had, had], then the added ones [item, 0, n]',
-    JSON.stringify(M['20:' + IA].inputs) === JSON.stringify([[STEEL, 3, 3], [POOR, 0, 1]]) &&
-    M['20:' + IA].bench === 'f46ce:Skyrim.esm' && M['20:' + IA].out === '214a1:' + IA);
-yes('M2 an added item the record already names asks that many more, and the handle comes after',
-    JSON.stringify(M['30:' + IA].inputs) === JSON.stringify([[IRON, 2, 2], [CHARCOAL, 1, 2], [HANDLE, 0, 1]]));
-yes('M3 one re-costed as well takes the charcoal on top of its new counts',
-    JSON.stringify(M['40:' + IA].inputs) === JSON.stringify([[STEEL, 1, 2], [COIN, 50, 0], [POOR, 0, 1]]));
-yes('M4 a re-costed row with no fuel is as RECIPES_SET_IN_GAME has it, and the table it came from is unchanged',
-    JSON.stringify(M['50:' + IA]) === JSON.stringify(SET['50:' + IA]) &&
-    JSON.stringify(SET['40:' + IA].inputs) === JSON.stringify([[STEEL, 1, 2], [COIN, 50, 0]]));
+const M = SET;
 
 // ------------------------------------------------------------------- G --
 function game(records, native) {

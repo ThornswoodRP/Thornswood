@@ -4,26 +4,31 @@ test-6726-fuel-in-records.py
 #6726, Patrick's B: the charcoal a forge, skyforge or smelter recipe burns,
 and the Tool Handle a hafted weapon takes, are inputs on the recipe, so the
 game's own crafting menu names them and takes them. scripts/dev/Build-FuelTable.js
-says which recipe takes which (FUEL_BY_RECIPE, [grade, metal, bench, handle]),
-and scripts/mods/Build-LastPlugin.py writes them into every recipe it copies;
-one of a plugin it never copies is handed to each game instead
-(RECIPES_FUELED_IN_GAME). This holds the builder's half on small records made
-here, without the game:
+says which recipe takes which (game/data/fuel-by-recipe.json: the item each
+grade is, the handle, and per recipe [grade, metal, bench, handle]);
+scripts/mods/Build-LastPlugin.py writes them into every recipe it copies, and
+scripts/dev/Build-Recost.py puts one of a plugin it never copies in
+RECIPES_SET_IN_GAME with them on top, for each game to set. This holds the
+builders' half on small records made here, without the game:
 
   1  fuel_entries: a copied recipe takes its grade's item, and the handle
      when the table says so; a never-copied plugin's recipe, or one it wins,
-     goes to each game with its name, output, bench (the one it is moved to,
-     when it is moved in each game too), its record's inputs and what to add;
-     a recipe nobody has, or a grade the table cannot give, stops the build;
+     is left to each game, and stops the build unless RECIPES_SET_IN_GAME
+     holds it with its record's inputs first and what it takes on top; a
+     recipe nobody has, or a grade the file cannot give, stops the build;
   2  add_inputs: a new input is a CNTO after the last input and its COED, an
      input the record already names asks that many more, COCT is the count,
      and nothing else changes; a record with no COCT stops the build;
   3  with_adds is add_inputs on a list of (item, count), in the same order,
      which is what verify holds the plugin to;
-  4  the table each game reads is the manifest's fuelInGame, and the counts
-     and the --check and the writes name it;
+  4  Build-Recost.py's RECIPES_SET_IN_GAME: a never-copied fueled recipe is
+     its inputs [item, had, had], an item it names asking more, then the
+     added ones [item, 0, n]; a re-costed one takes them on top of its new
+     counts; a carried or a copied one is not in it; and the content chain
+     builds the file first, then the table, then the plugin, and nothing
+     writes a table of its own for them;
   5  the item each grade is: Poor Charcoal, Skyrim's own Charcoal, the
-     briquette and coke, and the handle, as Build-FuelTable.js has them.
+     briquette and coke, and the handle, as Build-FuelTable.js writes them.
 
     python tests/test-6726-fuel-in-records.py
 
@@ -40,6 +45,9 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 spec = importlib.util.spec_from_file_location('build_last', os.path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py'))
 bl = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bl)
+spec = importlib.util.spec_from_file_location('build_recost', os.path.join(ROOT, 'scripts', 'dev', 'Build-Recost.py'))
+br = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(br)
 
 passed = failed = 0
 
@@ -114,14 +122,25 @@ win = {
     # A Skyrim recipe the never-copied plugin wins.
     (b'COBJ', ('skyrim.esm', 0x14)): entry(0x14, 1),
 }
-fuel = {
+GRADES = [None, '15481:Thornswood-Content.esp', '33760:Skyrim.esm', '15484:Thornswood-Content.esp',
+          '15485:Thornswood-Content.esp']
+HANDLE_ITEM = '15490:Thornswood-Content.esp'
+
+
+def fuel_file(recipes):
+    return {'grades': GRADES, 'handle': HANDLE_ITEM, 'recipes': recipes}
+
+
+fuel = fuel_file({
     '10:Skyrim.esm': [1, 'iron', 'forge', 1],
     '11:Skyrim.esm': [1, 'steel', 'forge', 0],
     '20:' + IA: [1, 'steel', 'skyforge', 0],
     '14:Skyrim.esm': [2, '', 'forge', 1],
+})
+set_in_game = {
+    '20:' + IA: {'inputs': [['5ace5:Skyrim.esm', 3, 3], ['15481:Thornswood-Content.esp', 0, 1]]},
+    '14:Skyrim.esm': {'inputs': [['5ace4:Skyrim.esm', 1, 1], ['33760:Skyrim.esm', 0, 1], [HANDLE_ITEM, 0, 1]]},
 }
-catalogue = {'20:' + IA: {'name': 'Wolf Shield'}, '14:Skyrim.esm': {'name': 'Iron Thing'}}
-moved = [{'recipe': '14:Skyrim.esm', 'to': '6ce000:Update.esm'}]
 
 
 def never(tag, g):
@@ -129,27 +148,34 @@ def never(tag, g):
 
 
 # 1
-here, in_game = bl.fuel_entries(fuel, catalogue, plugins, win, canon, blocked, never, moved)
+here, in_game = bl.fuel_entries(fuel, set_in_game, plugins, win, canon, blocked, never)
 got = {desc: add for _, add, desc in here}
 yes('1 the two copied recipes take their grade\'s item, and the mace its handle too',
     got == {'10:Skyrim.esm': [('15481:Thornswood-Content.esp', 1), ('15490:Thornswood-Content.esp', 1)],
             '11:Skyrim.esm': [('15481:Thornswood-Content.esp', 1)]})
-rows = {r['recipe']: r for r in in_game}
-yes('1 the never-copied plugin\'s recipe and the one it wins go to each game instead', sorted(rows) == ['14:Skyrim.esm', '20:' + IA])
-yes('1 each with its name, output, bench and inputs as the record asks them, and what to add',
-    rows['20:' + IA] == {'recipe': '20:' + IA, 'name': 'Wolf Shield', 'out': '214a1:' + IA, 'bench': 'f46ce:Skyrim.esm',
-                         'inputs': [['5ace5:Skyrim.esm', 3]], 'add': [['15481:Thornswood-Content.esp', 1]]})
-yes('1 one moved to its trade\'s bench in each game is at that bench, and takes Skyrim\'s Charcoal and a handle',
-    rows['14:Skyrim.esm']['bench'] == '6ce000:Update.esm' and
-    rows['14:Skyrim.esm']['add'] == [['33760:Skyrim.esm', 1], ['15490:Thornswood-Content.esp', 1]])
-here2, in_game2 = bl.fuel_entries(fuel, catalogue, plugins, win, canon, blocked, lambda tag, g: True, moved)
+yes('1 the never-copied plugin\'s recipe and the one it wins are left to each game, with what each takes on top',
+    sorted(in_game, key=lambda r: r['recipe']) ==
+    [{'recipe': '14:Skyrim.esm', 'add': [['33760:Skyrim.esm', 1], [HANDLE_ITEM, 1]]},
+     {'recipe': '20:' + IA, 'add': [['15481:Thornswood-Content.esp', 1]]}])
+short = dict(set_in_game)
+del short['14:Skyrim.esm']
+yes('1 one RECIPES_SET_IN_GAME does not hold stops the build, naming Build-Recost.py',
+    'Build-Recost.py' in stops(bl.fuel_entries, fuel, short, plugins, win, canon, blocked, never))
+other = dict(set_in_game, **{'20:' + IA: {'inputs': [['5ace5:Skyrim.esm', 2, 2], ['15481:Thornswood-Content.esp', 0, 1]]}})
+yes('1 so does one it holds with other inputs than the record\'s',
+    'Build-Recost.py' in stops(bl.fuel_entries, fuel, other, plugins, win, canon, blocked, never))
+bare = dict(set_in_game, **{'20:' + IA: {'inputs': [['5ace5:Skyrim.esm', 3, 3]]}})
+yes('1 and one it holds without the charcoal',
+    'Build-Recost.py' in stops(bl.fuel_entries, fuel, bare, plugins, win, canon, blocked, never))
+here2, in_game2 = bl.fuel_entries(fuel, {}, plugins, win, canon, blocked, lambda tag, g: True)
 yes('1 a recipe the policy carries from a never-copied plugin is copied, and given them here',
     len(here2) == 4 and in_game2 == [])
 yes('1 a recipe no plugin has stops the build',
-    'no plugin has it' in stops(bl.fuel_entries, {'99:Skyrim.esm': [1, '', 'forge', 0]}, {}, plugins, win, canon, blocked,
-                                never, []))
-yes('1 a grade the table cannot give stops the build',
-    'grade' in stops(bl.fuel_entries, {'10:Skyrim.esm': [5, '', 'forge', 0]}, {}, plugins, win, canon, blocked, never, []))
+    'no plugin has it' in stops(bl.fuel_entries, fuel_file({'99:Skyrim.esm': [1, '', 'forge', 0]}), {}, plugins, win,
+                                canon, blocked, never))
+yes('1 a grade the file cannot give stops the build',
+    'grade' in stops(bl.fuel_entries, fuel_file({'10:Skyrim.esm': [5, '', 'forge', 0]}), {}, plugins, win, canon,
+                     blocked, never))
 
 # 2
 CHARCOAL, HANDLE = 0x33760, 0x5015490
@@ -183,35 +209,63 @@ for name, rec, add in (('mace', mace, [(CHARCOAL, 1), (HANDLE, 1)]), ('has', has
         [tuple(i) for i in bl.with_adds(cnto(rec), add)] == cnto(bl.add_inputs(rec, add, name)))
 
 # 4
-manifest = {'fuelInGame': in_game}
-table = json.loads(bl.fueled_table(manifest))
-yes('4 the table each game reads is the manifest\'s fuelInGame, by recipe',
-    sorted(table) == ['14:Skyrim.esm', '20:' + IA] and
-    table['20:' + IA] == {'name': 'Wolf Shield', 'out': '214a1:' + IA, 'bench': 'f46ce:Skyrim.esm',
-                          'inputs': [['5ace5:Skyrim.esm', 3]], 'add': [['15481:Thornswood-Content.esp', 1]]})
+policy = {'notCopiedFrom': [{'plugin': IA, 'carried': ['COBJ 30:' + IA]}]}
+recipes = {'recipes': {
+    '20:' + IA: {'name': 'Wolf Shield', 'out': '214a1:' + IA, 'bench': 'f46ce:Skyrim.esm',
+                 'inputItems': [{'item': '5ace5:Skyrim.esm', 'name': 'Steel Ingot', 'count': 3}]},
+    '21:' + IA: {'name': 'Iron Axe', 'out': '214a2:' + IA, 'bench': '88105:Skyrim.esm',
+                 'inputItems': [{'item': '5ace4:Skyrim.esm', 'count': 2}, {'item': '33760:Skyrim.esm', 'count': 1}]},
+    '22:' + IA: {'name': 'Steel Buckler', 'out': '214a3:' + IA, 'bench': '88105:Skyrim.esm', 'inputItems': []},
+    '30:' + IA: {'name': 'Carried', 'out': '214a5:' + IA, 'bench': '88105:Skyrim.esm', 'inputItems': []},
+    '10:Skyrim.esm': {'name': 'Iron Mace', 'out': '13982:Skyrim.esm', 'bench': '88105:Skyrim.esm', 'inputItems': []},
+}}
+data = {'notCopied': [{'recipe': '22:' + IA, 'name': 'Steel Buckler', 'inputs': [
+    {'item': '5ace5:Skyrim.esm', 'count': 1, 'to': 2}, {'item': 'f:Skyrim.esm', 'count': 50, 'to': 0}]}]}
+rsig = json.loads(br.in_game_table(data, recipes, fuel_file({
+    '20:' + IA: [1, 'steel', 'skyforge', 0], '21:' + IA: [2, 'iron', 'forge', 1],
+    '22:' + IA: [1, 'steel', 'forge', 0], '30:' + IA: [1, '', 'forge', 0], '10:Skyrim.esm': [1, 'iron', 'forge', 1]}),
+    policy))
+yes('4 a never-copied fueled recipe is its inputs [item, had, had], then the charcoal [item, 0, 1]',
+    rsig['20:' + IA] == {'name': 'Wolf Shield', 'out': '214a1:' + IA, 'bench': 'f46ce:Skyrim.esm',
+                         'inputs': [['5ace5:Skyrim.esm', 3, 3], ['15481:Thornswood-Content.esp', 0, 1]]})
+yes('4 an added item it names asks one more, and the handle comes after',
+    rsig['21:' + IA]['inputs'] == [['5ace4:Skyrim.esm', 2, 2], ['33760:Skyrim.esm', 1, 2], [HANDLE_ITEM, 0, 1]])
+yes('4 a re-costed one takes the charcoal on top of its new counts',
+    rsig['22:' + IA]['inputs'] == [['5ace5:Skyrim.esm', 1, 2], ['f:Skyrim.esm', 50, 0],
+                                   ['15481:Thornswood-Content.esp', 0, 1]])
+yes('4 one the policy carries, and one of a plugin that is copied, are not in it',
+    sorted(rsig) == ['20:' + IA, '21:' + IA, '22:' + IA])
+yes('4 and the table is the same as before for a load order with no fuel',
+    json.loads(br.in_game_table(data, recipes, fuel_file({}), policy)) ==
+    {'22:' + IA: {'name': 'Steel Buckler', 'out': '214a3:' + IA, 'bench': '88105:Skyrim.esm',
+                  'inputs': [['5ace5:Skyrim.esm', 1, 2], ['f:Skyrim.esm', 50, 0]]}})
 src = open(os.path.join(ROOT, 'scripts', 'mods', 'Build-LastPlugin.py'), encoding='utf-8').read()
-yes('4 the build writes the table, --check compares it, and the counts name both halves',
-    "gamemode_tables.write('RECIPES_FUELED_IN_GAME', fueled_table(manifest), args.tables)" in src and
-    "gamemode_tables.is_current('RECIPES_FUELED_IN_GAME', fueled_table(manifest), args.tables)" in src and
+yes('4 the plugin reads RECIPES_SET_IN_GAME for them, writes no table of its own, and counts both halves',
+    "gamemode_tables.read('RECIPES_SET_IN_GAME', tables_dir)" in src and 'FUELED_IN_GAME' not in src and
     "'recipesFueled': len(fuels)" in src and "'recipesFueledInGame': len(fueled_in_game)" in src)
 chain = json.load(open(os.path.join(ROOT, 'scripts', 'mods', 'content-tables.json'), encoding='utf-8'))
-step = [s for s in chain['steps'] if s['tool'] == 'scripts/mods/Build-LastPlugin.py'][0]
-fuel_step = [i for i, s in enumerate(chain['steps']) if s['tool'] == 'scripts/dev/Build-FuelTable.js'][0]
-yes('4 the content chain has the plugin read FUEL_BY_RECIPE, after the step that writes it, and write the new table',
-    'game/gamemode-tables/FUEL_BY_RECIPE.json' in step['reads'] and
-    'game/gamemode-tables/RECIPES_FUELED_IN_GAME.json' in step['writes'] and
-    fuel_step < chain['steps'].index(step))
+order = [s['tool'] for s in chain['steps']]
+step = chain['steps'][order.index('scripts/mods/Build-LastPlugin.py')]
+recost = chain['steps'][order.index('scripts/dev/Build-Recost.py')]
+fuel_step = chain['steps'][order.index('scripts/dev/Build-FuelTable.js')]
+yes('4 the content chain builds the file, then RECIPES_SET_IN_GAME from it, then the plugin from both',
+    fuel_step['writes'] == ['game/data/fuel-by-recipe.json'] and
+    'game/data/fuel-by-recipe.json' in recost['reads'] and
+    'game/data/fuel-by-recipe.json' in step['reads'] and
+    'game/gamemode-tables/RECIPES_SET_IN_GAME.json' in step['reads'] and
+    order.index('scripts/dev/Build-FuelTable.js') < order.index('scripts/dev/Build-Recost.py') <
+    order.index('scripts/mods/Build-LastPlugin.py') and
+    not any('FUEL' in w for s in chain['steps'] for w in s['writes'] if 'gamemode-tables' in w))
 
 # 5
-node = subprocess.run(['node', '-e', 'const f=require(process.argv[1]);console.log(JSON.stringify([f.GRADE_ITEMS,f.HANDLE]))',
+node = subprocess.run(['node', '-e', 'const f=require(process.argv[1]);console.log(JSON.stringify(JSON.parse(f.fileJson({}))))',
                        os.path.join(ROOT, 'scripts', 'dev', 'Build-FuelTable.js')], capture_output=True, text=True)
 try:
-    grades, handle = json.loads(node.stdout.strip().splitlines()[-1])
+    written = json.loads(node.stdout.strip().splitlines()[-1])
 except (ValueError, IndexError):
-    grades, handle = None, None
-yes('5 the item each grade is and the handle are Build-FuelTable.js\'s',
-    grades == list(bl.GRADE_ITEMS) and handle == bl.HANDLE)
-yes('5 the Charcoal grade is Skyrim\'s own Charcoal', bl.GRADE_ITEMS[2] == '33760:Skyrim.esm')
+    written = {}
+yes('5 the file names Poor Charcoal, Skyrim\'s own Charcoal, the briquette and coke, and the handle',
+    written == {'grades': GRADES, 'handle': HANDLE_ITEM, 'recipes': {}})
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

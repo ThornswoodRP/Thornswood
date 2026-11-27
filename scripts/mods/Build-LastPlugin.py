@@ -347,13 +347,10 @@ RECIPES = os.path.join(ROOT, 'game', 'data', 'recipes.json')
 FOOD_GROUPS = os.path.join(ROOT, 'game', 'data', 'food-groups.json')
 # The charcoal and the handle each forge, skyforge and smelter recipe takes
 # (#1398, #6726): FUEL_BY_RECIPE, recipe desc -> [grade, metal, bench, 1 when
-# it takes a handle], written by scripts/dev/Build-FuelTable.js out of
-# recipes.json. The item each grade is, and the handle, are that script's
-# GRADE_ITEMS and HANDLE; game/tests/test-1398-fuel.js holds the two the same.
-FUEL_TABLE = 'FUEL_BY_RECIPE'
-GRADE_ITEMS = (None, '15481:Thornswood-Content.esp', '33760:Skyrim.esm',
-               '15484:Thornswood-Content.esp', '15485:Thornswood-Content.esp')
-HANDLE = '15490:Thornswood-Content.esp'
+# it takes a handle], written into game/data/fuel-by-recipe.json by
+# scripts/dev/Build-FuelTable.js out of recipes.json, beside the item each
+# grade is (grades) and the handle.
+FUEL = os.path.join(ROOT, 'game', 'data', 'fuel-by-recipe.json')
 OWN_DIR = os.path.join(ROOT, 'game', 'content')
 RECIPE = os.path.join(ROOT, 'game', 'data', 'last-plugin.recipe')
 
@@ -1856,10 +1853,11 @@ def build(data_dir, tables_dir=None):
     # and smelter recipe takes the charcoal its grade asks for, and a hafted
     # one the Tool Handle, in its record, so the game's own list shows them
     # and takes them (Patrick's B on #6726). One a never-copied plugin has,
-    # or wins, takes them in each person's game instead.
-    fuels, fueled_in_game = fuel_entries(gamemode_tables.read(FUEL_TABLE, tables_dir),
-                                         json.load(open(RECIPES, encoding='utf-8'))['recipes'],
-                                         plugins, win, canon, blocked, carries, moved_in_game)
+    # or wins, takes them in each person's game instead, from
+    # RECIPES_SET_IN_GAME, which Build-Recost.py writes.
+    fuels, fueled_in_game = fuel_entries(json.load(open(FUEL, encoding='utf-8')),
+                                         gamemode_tables.read('RECIPES_SET_IN_GAME', tables_dir),
+                                         plugins, win, canon, blocked, carries)
 
     # 9. The recipes freed of Skyrim's perks (#4826).
     perk_recipes, perk_stats = perk_entries(plugins, win, canon, blocked, perks_off)
@@ -2133,7 +2131,7 @@ def build(data_dir, tables_dir=None):
         'benchMovesInGame': moved_in_game,
         # The charcoal and the handle (#6726): each recipe given them here,
         # with what it takes on top, and each a never-copied plugin's game
-        # gives them instead (RECIPES_FUELED_IN_GAME).
+        # gives them instead (RECIPES_SET_IN_GAME, Build-Recost.py).
         'fuel': [{'recipe': desc, 'add': [[item, n] for item, n in add]} for _, add, desc in fuels],
         'fuelInGame': fueled_in_game,
         # The recipes freed of Skyrim's perks (#4826), counted rather than
@@ -2391,39 +2389,42 @@ def move_entries(table, plugins, win, canon, blocked, carries):
     return here, in_game
 
 
-def fuel_entries(table, catalogue, plugins, win, canon, blocked, carries, moved_in_game):
-    """The charcoal and the handle on every recipe FUEL_BY_RECIPE names
+def fuel_entries(fuel, set_in_game, plugins, win, canon, blocked, carries):
+    """The charcoal and the handle on every recipe fuel-by-recipe.json names
     (#1398, #6726): (winning entry, [(item key, count)] to add, desc) for
-    every one copied here, and for every one a never-copied plugin has or
-    wins, what each person's game is handed (RECIPES_FUELED_IN_GAME): its
-    name, output and bench, its inputs as [item, count] as the record asks
-    them, and what to add."""
-    moved_to = {r['recipe']: r['to'] for r in moved_in_game}
+    every one copied here, and {recipe, add} for every one a never-copied
+    plugin has or wins, which each person's game gives them from
+    RECIPES_SET_IN_GAME. Stops when one of those is not there with the
+    record's own inputs first and every item it takes on top."""
     here, in_game = [], []
+    table = fuel.get('recipes') or {}
+    grades, handle_item = fuel.get('grades') or [], fuel.get('handle')
     for desc in sorted(table, key=ref_key):
         grade, _, _, handle = table[desc]
-        if grade not in (1, 2, 3, 4) or handle not in (0, 1):
-            raise SystemExit('STOP. FUEL_BY_RECIPE gives %s grade %r and handle %r. Rebuild it with '
-                             'scripts/dev/Build-FuelTable.js. Nothing was written.' % (desc, grade, handle))
-        add = [(GRADE_ITEMS[grade], 1)] + ([(HANDLE, 1)] if handle else [])
+        if grade not in (1, 2, 3, 4) or handle not in (0, 1) or len(grades) != 5 or not grades[grade] \
+                or (handle and not handle_item):
+            raise SystemExit('STOP. fuel-by-recipe.json gives %s grade %r and handle %r, or names no item for '
+                             'them. Rebuild it with scripts/dev/Build-FuelTable.js. Nothing was written.'
+                             % (desc, grade, handle))
+        add = [(grades[grade], 1)] + ([(handle_item, 1)] if handle else [])
         e = win.get((b'COBJ', ref_key(desc)))
         if e is None:
-            raise SystemExit('STOP. FUEL_BY_RECIPE burns charcoal for %s and no plugin has it. Rebuild '
+            raise SystemExit('STOP. fuel-by-recipe.json burns charcoal for %s and no plugin has it. Rebuild '
                              'recipes.json, then scripts/dev/Build-FuelTable.js. Nothing was written.' % desc)
         src = plugins[e.pi]
         g = src.gid(e.fid)
         if (src.name.lower() in blocked or desc.split(':', 1)[1].lower() in blocked) and not carries(b'COBJ', g):
-            pairs = subrecords(src.data(e))
-            got = dict(pairs)
-            bnam = got.get(b'BNAM')
-            if not bnam or b'CNAM' not in got:
-                raise SystemExit('STOP. %s in %s has no bench or no output. Nothing was written.' % (desc, src.name))
-            in_game.append({'recipe': desc, 'name': (catalogue.get(desc) or {}).get('name', ''),
-                            'out': desc_of(src.gid(struct.unpack_from('<I', got[b'CNAM'], 0)[0]), canon),
-                            'bench': moved_to.get(desc) or desc_of(src.gid(struct.unpack_from('<I', bnam, 0)[0]), canon),
-                            'inputs': [[desc_of(src.gid(struct.unpack_from('<I', b, 0)[0]), canon),
-                                        struct.unpack_from('<i', b, 4)[0]] for t, b in pairs if t == b'CNTO'],
-                            'add': [[item, n] for item, n in add]})
+            record = [(desc_of(src.gid(struct.unpack_from('<I', b, 0)[0]), canon), struct.unpack_from('<i', b, 4)[0])
+                      for t, b in subrecords(src.data(e)) if t == b'CNTO']
+            row = (set_in_game or {}).get(desc) or {}
+            got = row.get('inputs') or []
+            had = [(i[0], i[1]) for i in got if i[1] > 0]
+            if had != record or not all(any(i[0] == item for i in got) for item, _ in add):
+                raise SystemExit('STOP. %s in %s is never copied, so each game gives it its charcoal and handle, '
+                                 'but RECIPES_SET_IN_GAME does not hold it with its record\'s inputs and %s on top. '
+                                 'Run scripts/dev/Build-Recost.py. Nothing was written.'
+                                 % (desc, src.name, ', '.join(item for item, _ in add)))
+            in_game.append({'recipe': desc, 'add': [[item, n] for item, n in add]})
         else:
             here.append((e, add, desc))
     return here, in_game
@@ -3047,7 +3048,7 @@ def main():
     print('  %d recipes moved to their trade\'s bench here, %d in each person\'s game (recipes.json, #3120)'
           % (c['recipesMoved'], c['recipesMovedInGame']))
     print('  %d forge, skyforge and smelter recipes take their charcoal and handle here, %d in each person\'s '
-          'game (FUEL_BY_RECIPE, #6726)' % (c['recipesFueled'], c['recipesFueledInGame']))
+          'game (fuel-by-recipe.json, #6726)' % (c['recipesFueled'], c['recipesFueledInGame']))
     for row in manifest['questScriptProperties']:
         print('  %s (%s, from %s): %s' % (row['quest'], row['edid'], row['winner'],
                                          ', '.join('%s %s' % (k, json.dumps(v)) for k, v in row['set'].items())))
@@ -3104,10 +3105,7 @@ def main():
         d = gamemode_tables.is_current('RECIPES_MOVED_IN_GAME', moved_table(manifest), args.tables)
         print('  %s the RECIPES_MOVED_IN_GAME table %s' % (('ok   ', 'is what this builds') if d else
                                                                  ('DIFFERS', 'is not what this builds')))
-        f = gamemode_tables.is_current('RECIPES_FUELED_IN_GAME', fueled_table(manifest), args.tables)
-        print('  %s the RECIPES_FUELED_IN_GAME table %s' % (('ok   ', 'is what this builds') if f else
-                                                                  ('DIFFERS', 'is not what this builds')))
-        return 0 if a and b and c and d and f else 1
+        return 0 if a and b and c and d else 1
     with open(out + '.making', 'wb') as f:
         f.write(plugin)
     os.replace(out + '.making', out)
@@ -3117,12 +3115,10 @@ def main():
         f.write(manifest_bytes(manifest))
     gamemode_tables.write('HELD_BY_SERVER', held_table(manifest), args.tables)
     gamemode_tables.write('RECIPES_MOVED_IN_GAME', moved_table(manifest), args.tables)
-    gamemode_tables.write('RECIPES_FUELED_IN_GAME', fueled_table(manifest), args.tables)
-    print('Wrote %s, game/data/%s, game/data/last-plugin.json, the HELD_BY_SERVER table (%d), the '
-          'RECIPES_MOVED_IN_GAME table (%d) and the RECIPES_FUELED_IN_GAME table (%d)'
+    print('Wrote %s, game/data/%s, game/data/last-plugin.json, the HELD_BY_SERVER table (%d) and the '
+          'RECIPES_MOVED_IN_GAME table (%d)'
           % (out, os.path.basename(RECIPE), len(manifest['floorItems']['heldByServer']) + len(manifest['refs']['heldByServer']) +
-             len((manifest.get('holdOnly') or {}).get('heldByServer', [])), len(manifest['benchMovesInGame']),
-             len(manifest['fuelInGame'])))
+             len((manifest.get('holdOnly') or {}).get('heldByServer', [])), len(manifest['benchMovesInGame'])))
     return 0
 
 
@@ -3147,18 +3143,6 @@ def moved_table(manifest):
                           'inputs': r['inputs']} for r in manifest['benchMovesInGame']}
     return json.dumps(rows, sort_keys=True, ensure_ascii=False)
 
-
-
-def fueled_table(manifest):
-    """The RECIPES_FUELED_IN_GAME table, as JSON text: the forge, skyforge
-    and smelter recipes (#6726) Thornswood-Last.esp cannot give their
-    charcoal and handle without copying a plugin it never copies from, which
-    each person's game gives them instead: the name, the output, the bench
-    keyword it is made at, its inputs as [item, count] as the record asks
-    them, and what it takes on top as [item, count]."""
-    rows = {r['recipe']: {'name': r['name'], 'out': r['out'], 'bench': r['bench'], 'inputs': r['inputs'],
-                          'add': r['add']} for r in manifest['fuelInGame']}
-    return json.dumps(rows, sort_keys=True, ensure_ascii=False)
 
 
 if __name__ == '__main__':

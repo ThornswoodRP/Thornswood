@@ -300,7 +300,7 @@ attempt('a plugin not in the load order', function () {
   yes('C7 with Thornswood-Content.esp missing the shears do not resolve, and the craft is not refused for them',
       t.craft(tailorRow) !== false);
 });
-function FUEL_ROW(k) { return Object.prototype.hasOwnProperty.call(require('../../tests/gamemode-tables.js').table('FUEL_BY_RECIPE'), k); }
+function FUEL_ROW(k) { return Object.prototype.hasOwnProperty.call(require('../../scripts/dev/Build-FuelTable.js').read().recipes, k); }
 
 // ------------------------------------------------------------ B. benchGate
 function baseFor(key) {

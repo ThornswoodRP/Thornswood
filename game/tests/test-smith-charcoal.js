@@ -23,7 +23,7 @@ yes('the server takes no charcoal and no handle of its own',
   src.indexOf('function fuelFor(') < 0 && src.indexOf('function charcoalHeld(') < 0 &&
   src.indexOf('function wantsAHandle(') < 0 && src.indexOf('const CHARCOAL_GRADES = [') < 0);
 
-const FUEL = require('../../tests/gamemode-tables.js').table('FUEL_BY_RECIPE');
+const FUEL = require('../../scripts/dev/Build-FuelTable.js').read().recipes;
 const benches = {};
 Object.keys(FUEL).forEach(k => { benches[FUEL[k][2]] = true; });
 yes('a forge recipe wants charcoal', !!benches.forge);

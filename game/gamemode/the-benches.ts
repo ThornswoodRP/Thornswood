@@ -292,7 +292,7 @@ function benchGate(actorId, baseDesc) {
   bench's stock. scripts/dev/Build-FuelTable.js says which recipe takes
   which (FUEL_BY_RECIPE), scripts/mods/Build-LastPlugin.py writes them into
   every recipe it copies, and a recipe of a plugin it never copies takes
-  them in each person's game (RECIPES_FUELED_IN_GAME, below). The
+  them in each person's game (RECIPES_SET_IN_GAME, below). The
   Charcoal grade is Skyrim's own Charcoal, which the Charburner's kiln
   makes.
 */
@@ -1260,7 +1260,9 @@ function handRecipesHidden(actorId) {
 */
 // Written by scripts\dev\Build-Recost.py from game\data\recost.json into its table file.
 // The re-costed recipes of a plugin Thornswood-Last.esp never copies from (#613, #2454),
-// set in each person's game instead: each input as [item, count it had, count it asks].
+// and its forge, skyforge and smelter ones given their charcoal and handle (#6726),
+// set in each person's game instead: each input as [item, count it had, count it asks],
+// an input the record does not name after the ones it does, with 0 for what it had.
 var RECIPES_SET_IN_GAME = table('RECIPES_SET_IN_GAME');
 
 /*
@@ -1268,51 +1270,17 @@ var RECIPES_SET_IN_GAME = table('RECIPES_SET_IN_GAME');
 
   Thornswood-Last.esp writes the charcoal and the handle into every forge,
   skyforge and smelter recipe it copies (the block at the top of this file).
-  Immersive Armors' are never copied (#2454), so each person's game adds
-  them to its own copy of the record, with the same counts script: an input
-  the record does not name is added by the fork's
-  TESModPlatform.SetCraftingInput, which SKSE's ConstructibleObject has no
-  call for. Its craft then matches no server record, as a re-costed one
-  does, and recipeSetInGame names it from its output, its bench and the
-  counts with the charcoal and handle in them. A craft at the record's own
-  counts, from a game that has not added them, is refused, so nobody makes
-  one without them.
+  Immersive Armors' are never copied (#2454), so Build-Recost.py puts each
+  of those in RECIPES_SET_IN_GAME as well, with the charcoal and the handle
+  as inputs on top of its counts. One its record does not name has 0 for
+  the count it had, and each person's game adds it to its own copy of the
+  record with the fork's TESModPlatform.SetCraftingInput, which SKSE's
+  ConstructibleObject has no call for. Its craft then matches no server
+  record, as a re-costed one does, and recipeSetInGame names it from its
+  output, its bench and the counts with the charcoal and handle in them. A
+  craft at the record's own counts, from a game that has not added them, is
+  refused, so nobody makes one without them.
 */
-// Written by scripts\mods\Build-LastPlugin.py from FUEL_BY_RECIPE into its table file.
-// The forge, skyforge and smelter recipes of a plugin Thornswood-Last.esp never copies from,
-// given their charcoal and handle in each person's game: the name, output and bench keyword,
-// the inputs as [item, count] as the record asks them, and what each takes on top.
-var RECIPES_FUELED_IN_GAME = table('RECIPES_FUELED_IN_GAME');
-
-/**
- * Every recipe each game sets for itself, desc -> { name, out, bench,
- * inputs }, each input as [item, count it had, count it asks]: the
- * re-costed ones (RECIPES_SET_IN_GAME), and the ones given their charcoal
- * and handle (RECIPES_FUELED_IN_GAME), on top of the re-costed counts when
- * a recipe is both. An input the record does not name has 0 for what it had.
- */
-function recipesSetInGame() {
-  var own = Object.prototype.hasOwnProperty;
-  var out = {};
-  for (var desc in RECIPES_SET_IN_GAME) {
-    if (own.call(RECIPES_SET_IN_GAME, desc)) { out[desc] = RECIPES_SET_IN_GAME[desc]; }
-  }
-  for (var d in RECIPES_FUELED_IN_GAME) {
-    if (!own.call(RECIPES_FUELED_IN_GAME, d)) { continue; }
-    var f = RECIPES_FUELED_IN_GAME[d];
-    var set = own.call(out, d) ? out[d] : null;
-    var inputs = set ? set.inputs.map(function (i) { return [i[0], i[1], i[2]]; })
-                     : f.inputs.map(function (i) { return [i[0], i[1], i[1]]; });
-    for (var a = 0; a < f.add.length; a++) {
-      var at = -1;
-      for (var n = 0; n < inputs.length && at < 0; n++) { if (inputs[n][0] === f.add[a][0]) { at = n; } }
-      if (at < 0) { inputs.push([f.add[a][0], 0, f.add[a][1]]); } else { inputs[at][2] += f.add[a][1]; }
-    }
-    out[d] = { name: f.name, out: f.out, bench: f.bench, inputs: inputs };
-  }
-  return out;
-}
-var SET_IN_GAME = recipesSetInGame();
 
 var RECIPE_COUNTS_PROPERTY = 'thornswoodRecipeCounts';
 // One stamp per load, so a deploy that changes the table hands it again.
@@ -1383,14 +1351,14 @@ try {
   // made, so a changed script needs a restart, which a deploy is.
 }
 
-/** Hand the owner the counts each game sets (recipesSetInGame), once a load. */
+/** Hand the owner the counts RECIPES_SET_IN_GAME sets, once a load. */
 function handRecipeCounts(actorId) {
   var had = null;
   try { had = mp.get(actorId, RECIPE_COUNTS_PROPERTY); } catch (e) { had = null; }
   if (had && typeof had === 'object' && had.at === RECIPE_COUNTS_AT) { return; }
   var rows = {};
-  for (var desc in SET_IN_GAME) {
-    if (Object.prototype.hasOwnProperty.call(SET_IN_GAME, desc)) { rows[desc] = SET_IN_GAME[desc].inputs; }
+  for (var desc in RECIPES_SET_IN_GAME) {
+    if (Object.prototype.hasOwnProperty.call(RECIPES_SET_IN_GAME, desc)) { rows[desc] = RECIPES_SET_IN_GAME[desc].inputs; }
   }
   try {
     mp.set(actorId, RECIPE_COUNTS_PROPERTY, { at: RECIPE_COUNTS_AT, rows: rows });
@@ -1400,7 +1368,7 @@ function handRecipeCounts(actorId) {
 }
 
 /**
- * The recipe set in each game (SET_IN_GAME) a craft with no recipe id is, or null: the
+ * The RECIPES_SET_IN_GAME recipe a craft with no recipe id is, or null: the
  * same output, the same bench keyword, and exactly the counts it asks now
  * (an input it takes to 0 is not sent at all), summed per item.
  */
@@ -1425,9 +1393,9 @@ function recipeSetInGame(craftedItemBaseId, workbenchId, inputs) {
     if (!d) { return null; }
     held[d] = (held[d] || 0) + (Number(entry.count) || 0);
   }
-  for (var desc in SET_IN_GAME) {
-    if (!own.call(SET_IN_GAME, desc)) { continue; }
-    var row = SET_IN_GAME[desc];
+  for (var desc in RECIPES_SET_IN_GAME) {
+    if (!own.call(RECIPES_SET_IN_GAME, desc)) { continue; }
+    var row = RECIPES_SET_IN_GAME[desc];
     if (row.out !== outDesc || row.bench !== benchKey) { continue; }
     var want = {};
     for (var n = 0; n < row.inputs.length; n++) {
@@ -1504,7 +1472,7 @@ function recipeMovedInGame(craftedItemBaseId, workbenchId, inputs) {
     // its charcoal and handle) is named by recipeSetInGame at its new
     // counts, at this bench; its record's own counts are the ones that game
     // refuses.
-    if (typeof SET_IN_GAME === 'object' && SET_IN_GAME && own.call(SET_IN_GAME, desc)) { continue; }
+    if (typeof RECIPES_SET_IN_GAME === 'object' && RECIPES_SET_IN_GAME && own.call(RECIPES_SET_IN_GAME, desc)) { continue; }
     var want = {};
     for (var n = 0; n < row.inputs.length; n++) {
       want[row.inputs[n][0]] = (want[row.inputs[n][0]] || 0) + row.inputs[n][1];
@@ -2090,8 +2058,8 @@ function unfitToMake(actorId, workbenchId) {
 // Shared by start and completion; resolved recipe-less events already use
 // this game's counts and bench, so they do not ask this named-record check.
 function recipeMetadataRefusal(desc) {
-  if (typeof SET_IN_GAME === 'object' && SET_IN_GAME && Object.prototype.hasOwnProperty.call(SET_IN_GAME, desc)) {
-    const asks = SET_IN_GAME[desc];
+  if (typeof RECIPES_SET_IN_GAME === 'object' && Object.prototype.hasOwnProperty.call(RECIPES_SET_IN_GAME, desc)) {
+    const asks = RECIPES_SET_IN_GAME[desc];
     return 'The ' + asks.name.trim() + ' takes different materials here than that bench listed. ' +
            'Leave the bench and use it again to see what it takes.';
   }

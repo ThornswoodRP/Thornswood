@@ -48,15 +48,15 @@ function cut(head) { return slice(gm, head, '\n}\n'); }
 function lineOf(re) { const m = re.exec(gm); return m ? m[0] : null; }
 
 // ------------------------------------------------- 1. the table and the page
-const FUEL = require('../../tests/gamemode-tables.js').table('FUEL_BY_RECIPE');
+const FUEL = require('../../scripts/dev/Build-FuelTable.js').read().recipes;
 yes('FUEL_BY_RECIPE is built', Object.keys(FUEL).length > 200);
 yes('the gamemode no longer reads it: the charcoal and the handle are on the records (#6726)',
     !/table\('FUEL_BY_RECIPE'\)/.test(fs.readFileSync(path.join(REPO_DIR, 'game', 'gamemode', 'the-benches.ts'), 'utf8')));
 {
-  // The gamemode reads the table from game/gamemode-tables/FUEL_BY_RECIPE.json (#5191).
+  // The table is game/data/fuel-by-recipe.json, which Thornswood-Last.esp is built from (#6726).
   const built = JSON.parse(Fuel.tableJson(Fuel.fuelTable(RECIPES_JSON)));
   yes('the installed table is what Build-FuelTable.js builds out of recipes.json today',
-    JSON.stringify(require('../../tests/gamemode-tables.js').table('FUEL_BY_RECIPE')) === JSON.stringify(built));
+    JSON.stringify(require('../../scripts/dev/Build-FuelTable.js').read().recipes) === JSON.stringify(built));
 }
 {
   // The page's table, row by row, is the script's METALS.
@@ -314,14 +314,15 @@ if (RECIPES && KEPT && pieces.onCraft && P) {
   attempt('the item each grade is', function () {
     yes('the four grades are the kiln\'s, and the Charcoal grade is Skyrim\'s own Charcoal (Patrick\'s B on #6726)',
         JSON.stringify(Fuel.GRADE_ITEMS) === JSON.stringify([null, ITEMS.charcoalT1, ITEMS.charcoal, ITEMS.charcoalT3, ITEMS.charcoalT4]));
-    const py = require('child_process').spawnSync(process.platform === 'win32' ? 'python' : 'python3', ['-c',
-      'import importlib.util,json,sys;s=importlib.util.spec_from_file_location("b",sys.argv[1]);m=importlib.util.module_from_spec(s);' +
-      's.loader.exec_module(m);print(json.dumps([list(m.GRADE_ITEMS),m.HANDLE]))',
-      path.join(REPO_DIR, 'scripts', 'mods', 'Build-LastPlugin.py')], { encoding: 'utf8', env: Object.assign({}, process.env, { PYTHONDONTWRITEBYTECODE: '1' }) });
-    let said = null;
-    try { said = JSON.parse(String(py.stdout).trim().split('\n').pop()); } catch (e) { said = null; }
-    yes('Build-LastPlugin.py writes the same item for each grade, and the same handle',
-        !!said && JSON.stringify(said[0]) === JSON.stringify(Fuel.GRADE_ITEMS) && said[1] === Fuel.HANDLE);
+    // The builders that read the file take the items from it, not from
+    // copies of their own (Build-LastPlugin.py, Build-Recost.py).
+    const file = Fuel.read();
+    yes('the file names the item each grade is and the handle, and no builder keeps a copy',
+        JSON.stringify(file.grades) === JSON.stringify(Fuel.GRADE_ITEMS) && file.handle === Fuel.HANDLE &&
+        ['scripts/mods/Build-LastPlugin.py', 'scripts/dev/Build-Recost.py'].every(function (f) {
+          const t = fs.readFileSync(path.join(REPO_DIR, f), 'utf8');
+          return t.indexOf("'15481:Thornswood-Content.esp'") < 0 && t.indexOf("'15490:Thornswood-Content.esp'") < 0;
+        }));
     const records = fs.readFileSync(path.join(REPO_DIR, 'scripts', 'mods', 'Add-ContentRecords.py'), 'utf8');
     yes('the kiln\'s Charcoal recipe makes Skyrim\'s Charcoal',
         /^SKYRIM_CHARCOAL = 0x00033760$/m.test(records) &&

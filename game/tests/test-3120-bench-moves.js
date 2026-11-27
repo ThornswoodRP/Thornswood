@@ -163,8 +163,7 @@ const ctx = {
   JSON: JSON, Object: Object, Array: Array, String: String, Number: Number,
   BENCH_BY_BASE: { 'forgebase:Skyrim.esm': '88105:Skyrim.esm', 'loombase:Update.esm': '1234:Update.esm' },
   RECIPES_MOVED_IN_GAME: MOVED,
-  // What each game sets for itself (recipesSetInGame), re-costed or fueled.
-  SET_IN_GAME: { '286a:Hothtrooper44_ArmorCompilation.esp': {} }
+  RECIPES_SET_IN_GAME: { '286a:Hothtrooper44_ArmorCompilation.esp': {} }
 };
 vm.createContext(ctx);
 vm.runInContext(NAMER + '\nthis.named = recipeMovedInGame;', ctx);
