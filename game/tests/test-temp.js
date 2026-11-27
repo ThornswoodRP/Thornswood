@@ -206,7 +206,11 @@ if (block) {
     const to = FRONT.indexOf('   * Jump and sprint.', from);
     const where = (from >= 0 && to > from) ? FRONT.slice(from, to) : '';
     yes('the place block is findable in the plugin', !!where);
-    const sends = (where.match(/kind = '([a-z]+)'/g) || [])
+    // The words are what placeKind answers (#4653).
+    const kindAt = where.indexOf('function placeKind(');
+    const kindEnd = where.slice(kindAt).search(/\r?\n  \}\r?\n/);
+    const kindBody = kindAt >= 0 && kindEnd >= 0 ? where.slice(kindAt, kindAt + kindEnd) : '';
+    const sends = (kindBody.match(/return '([a-z]+)'/g) || [])
       .map(function (s) { return /'([a-z]+)'/.exec(s)[1]; });
     yes('the client reports a place at all', sends.length >= 5);
     const missing = sends.filter(function (w) { return typeof NEEDS.place[w] !== 'number'; });
@@ -862,7 +866,7 @@ if (block) {
       yes('wading is warmer than swimming',
           swimIn('nowhere:X.esm', 'shallow') > swimIn('nowhere:X.esm', 'water'));
       yes('the client has a word for wading',
-          /wading = /.test(FRONT) && /kind = 'shallow'/.test(FRONT));
+          /wading = /.test(FRONT) && /if \(p\.wading\) \{ return 'shallow'; \}/.test(FRONT));
       // #2302: no guessed slack under the feet; placed water is read instead.
       yes('and the cell plane counts only above the feet (#2302)',
           !/FEET_SLACK/.test(FRONT) && /deep > 0 && deep < WADE_DEEP/.test(FRONT));

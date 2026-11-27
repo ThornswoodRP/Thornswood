@@ -236,6 +236,9 @@ function code(s) {
 
   yes('the same room and somewhere else are told apart',
       /String\(them\.cell\) === String\(mine\.cell\)/.test(page));
+  // #4474: and in words, not by colour alone.
+  yes('the same room says so in words beside the distance, not only in green',
+      /reads \+ \(sameRoom \? ', same room' : ''\)/.test(page));
   yes('and the strip says how far, in something a person reads',
       /' km'/.test(page) && /' m'/.test(page));
   yes('it uses the same seventy units to the metre the voice page does',

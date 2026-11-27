@@ -1,5 +1,12 @@
 # The test harnesses
 
+Run `node tests/test-7071-claim-eligibility.js` for the real door compiler's
+general claim-site rule over synthetic plugins: stable existing holdings,
+exterior pairs, standalone gates, exact protected doors and safe passage.
+`node game/tests/test-502-jail-rules.js`, `node game/tests/test-502-jail-cells.js`
+and `node game/tests/test-scenario-offices.js` retain actual guard-cell controls
+while ordinary ownership no longer depends on a Jarl office.
+
 Run `node game/tests/test-7071-riften-gate-claim.js` for claiming Riften's
 existing gates from either side, the normal deed and holder flow, safe inside
 egress, active guard cell controls and unrelated door mappings. It executes the actual

@@ -9,7 +9,7 @@
 // needs this one back finds them (a function is there from the top of its
 // file).
 module.exports = { galleryPage, loginBackoffBump, loginKey, loginNote,
-  loginWait, publicApiWait, publicJson, reportFrom, reportRefusal,
+  loginWait, publicApiWait, publicJson, reportFrom, reportLine, reportRefusal,
   reportTaken, requestAddr, trimInbox, turnstileOn, turnstilePasses };
 
 const net    = require('net');
@@ -197,6 +197,18 @@ async function turnstilePasses(token, addr) {
   return 'no';
 }
 
+/* One line of what somebody typed into the report form (#4953). Its name,
+   its Who and its title go into the bold first line of the staff channel's
+   post, and the hub's list. A line break in one started a line of its own
+   there, which could read as a staff note; a direction mark (U+202E) turned
+   the rest of the line around; and a title of only a zero-width character
+   passed the empty check. So controls and line or paragraph breaks are a
+   space, format characters (direction marks, zero-width characters, the
+   BOM) are dropped, a run of spaces is one, and it is trimmed and cut at n. */
+function reportLine(v, n) {
+  return String(v || '').replace(/[\p{Cc}\u2028\u2029]/gu, ' ').replace(/\p{Cf}/gu, '')
+    .replace(/\s+/g, ' ').trim().slice(0, n);
+}
 function reportRefusal(key, now, whose) {
   const from = whose || 'your connection';
   const HOUR = 60 * 60 * 1000, DAY = 24 * HOUR;

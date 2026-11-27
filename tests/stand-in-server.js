@@ -100,7 +100,7 @@ const ENGINE_METHODS = [
   'writePrivateEconomyLedger', 'writeFileWhole', 'tick', 'on', 'createActor', 'setUserActor',
   'getUserActor', 'getUserGuid', 'isConnected', 'getActorPos', 'getActorCellOrWorld', 'getActorName',
   'destroyActor', 'setRaceMenuOpen', 'getActorsByProfileId', 'getUnreadableChangeForms', 'setEnabled',
-  'createBot', 'getUserByActor', 'getUserIp', 'kick', 'getLocalizedString', 'getServerSettings', 'clear',
+  'createBot', 'getUserByActor', 'getUserIp', 'getConnectionStats', 'kick', 'getLocalizedString', 'getServerSettings', 'clear',
   'makeProperty', 'makeEventSource', 'get', 'set', 'compareAndSetInventory',
   'compareAndSetInventoryAndProperty', 'compareAndSetActorProperty', 'compareAndSetActorPropertyAndSpells', 'getInventoryReceipt',
   'getSavedInventoryReceipt', 'place', 'lookupEspmRecordById', 'getEspmLoadOrder',
@@ -744,6 +744,8 @@ function world(opts) {
         isEssential: row.isEssential === true, isProtected: row.isProtected === true, isUnique: row.isUnique === true,
         lifeGeneration: Number(row._skympNpcLifeGeneration) || 0, runtimeLifeIdentity: String(runtimeIdentity(id >>> 0)),
         difficultyTier: row.difficultyTier || 0, aggression: ai[0], confidence: ai[1],
+        // ScampServer::GetNpcAIState: warn, warn or attack, attack; all 0 when off (#6493).
+        aggroRadius: ((records.get(baseOf(row)) || {}).aggroRadius || [0, 0, 0]).slice(),
         meleeReach: 0, meleeAllowance: 16, canSwim: false, canFly: false, immobile: false, combatTarget: 0, factions: []
       };
     },

@@ -79,7 +79,7 @@ foreach ($a in $archives) { Say "  $($a.Name)" 'Green' }
 $7z = Find-SevenZip
 if (-not $7z) { Die '7-Zip is not installed.' }
 
-$work = Join-Path $env:TEMP 'McmShortcut-install'
+$work = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') 'McmShortcut-install'
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 $null = New-Item -ItemType Directory -Force -Path $work
 

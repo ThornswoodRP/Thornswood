@@ -252,6 +252,11 @@ namespace Thornswood
                     // Vortex has one (OwnGame.RestoreMissingPlugins).
                     : Issue.Of(IssueKind.Plugins, p + " is not installed.", "Fix brings it from Vortex's copy when Vortex has one.", VortexDeploys, true);
                 off.Absent = !onDisk;
+                // Not on disk either way, so the Mods card counts it with the
+                // rest and names it (Checks.ModsRow). The file check below
+                // skips it: it is this one issue, not a second that says it
+                // is in the list (#4727).
+                off.FileMissing = !onDisk;
                 off.Plugin = p;
                 issues.Add(off);
             }
@@ -395,9 +400,13 @@ namespace Thornswood
             // One per expected plugin, flagged FileMissing so the card can count
             // them: when it is most of the list, Vortex has not deployed the
             // collection, and the card says that once instead of once per plugin.
+            // Only the ones the live list does name: one it does not was said
+            // above, as not installed or turned off, and until #4727 it was
+            // said again here as in the list, so Play counted it twice.
             string data = Path.Combine(Paths.Game, "Data");
             foreach (string p in want)
             {
+                if (!haveSet.Contains(p)) continue;
                 try
                 {
                     if (!File.Exists(Path.Combine(data, p)))

@@ -39,7 +39,10 @@ const read = (p) => fs.readFileSync(p, 'utf8').split(CR).join('');
 const C = require(path.join(ROOT, 'tests', 'chrome-audio.js'));
 
 let pass = 0, fail = 0, skip = 0;
+// One line per check: what a page under test said cannot start a line of its own.
+const oneLine = (s) => String(s).replace(/[\r\n]+/g, ' ');
 function yes(what, cond, why) {
+  what = oneLine(what); why = why ? oneLine(why) : why;
   if (cond) { pass++; console.log('PASS  ' + what); }
   else { fail++; console.log('FAIL  ' + what + (why ? '  (' + why + ')' : '')); }
 }

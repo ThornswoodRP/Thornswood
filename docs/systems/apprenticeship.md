@@ -161,8 +161,8 @@ on the mage page: a rank they earn somewhere else is 10 work in every
 school they hold.
 
 It does not put you in a party, and it does not change the party
-bonus. Work done while somebody from your party is in the same cell
-still banks 15% of a piece, including work on a taught half.
+bonus. Work done while somebody from your party is with you still
+banks 15% of a piece, including work on a taught half.
 
 ## Where this is
 

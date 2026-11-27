@@ -922,17 +922,14 @@
   }
 
   /*
-    THE REST OF THE JAIL RULES (#502). Patrick, 12 October: jails can be
-    claimed by the Jarl only, and the rest as written on the issue: no timer,
+    THE REST OF THE JAIL RULES (#502): no timer,
     release by that hold's guards, lockpicking allowed, the game's jail keys
     open nothing, /stuck does not move someone out of a locked cell, and
     dying in a cell wakes at a temple.
 
-    THE JARL ONLY. A jail building (JAIL_BUILDING, read out of the world with
-    the cells) is the Jarl of its hold's to claim, and nobody else's: claim()
-    refuses anybody else, the line under the crosshair offers nobody else the
-    claim, and a deed presented at its door by anybody else is paper. Read as
-    the Jarl of that jail's hold, because the office is of one hold.
+    A building containing cells is an ordinary claimable place (#7071).
+    Holding it grants no guard authority: its actual cell locks remain the
+    hold's guards' responsibility and are never overridden by a claim.
 
     THE GAME'S JAIL KEYS. Each cell door's lock names a key the game made
     (JAIL_KEY), and a key in somebody's pack opens that lock in their own
@@ -959,12 +956,6 @@
   function jailOfBuilding(building) {
     var b = String(building || '');
     return Object.prototype.hasOwnProperty.call(JAIL_BUILDING, b) ? JAIL_BUILDING[b] : null;
-  }
-
-  /** May this person hold this building: anybody, but a jail is its hold's Jarl's alone. */
-  function mayHold(actorId, profileId, building) {
-    var jh = jailOfBuilding(building);
-    return !jh || isJarlOf(profileId, jh);
   }
 
   /** The hold whose cell door a key the game made opens, or null, by the key's descriptor. */
@@ -1337,11 +1328,6 @@
     try { mine = Number(mp.get(actorId, 'profileId')) || 0; } catch (e) { mine = 0; }
     push(actorId, mine);
 
-    // The embassy is held by its office, not by a claim, so a deed presented
-    // at its door is paper (#1390, see the embassy and remnant block).
-    var accordHeld = globalThis.__thornswoodEmbassy;
-    if (accordHeld && accordHeld.holds(building)) { return; }
-
     var held = holderOf(building);
     try { mine = Number(mp.get(actorId, 'profileId')) || 0; } catch (e) { mine = 0; }
 
@@ -1377,14 +1363,7 @@
       word deed.delayMinutes later, or when they are next in the world, and
       names nobody. See word to the holder.
     */
-    /*
-      A JAIL'S DEED IS PAPER IN ANY HAND BUT ITS JARL'S (#502): the jail is
-      claimed by the Jarl of its hold alone, and presenting its deed is a
-      claim like any other. The deed still opens the door it names, as a
-      deed does (mayPass).
-    */
-    if (mine && held && held.by !== mine && holdsDeed(actorId, building) &&
-        mayHold(actorId, mine, building)) {
+    if (mine && held && held.by !== mine && holdsDeed(actorId, building)) {
       var was = held.name;
       var now2 = Date.now();
       var who2 = 'somebody';
@@ -1542,14 +1521,8 @@
       if (cid) { line.d.push((cid >>> 0).toString(16)); }
     } else if (building) {
       var held = holderOf(building);
-      // The embassy is held by its office, not by a claim, so its doors offer
-      // nothing to claim (#1390); claim() refuses the line if it comes anyway.
-      var accordLine = globalThis.__thornswoodEmbassy;
       if (!held) {
-        // A jail offers the claim to the Jarl of its hold alone (#502).
-        if (!(accordLine && accordLine.holds(building)) && mayHold(actorId, profileId, building)) {
-          line.x = 'claim';
-        }
+        line.x = 'claim';
       } else if ((profileId && held.by === profileId) || holdsDeed(actorId, building) ||
                  holdsMasterKey(actorId, building)) {
         line.x = held.locked ? 'unlock' : 'lock';
@@ -1659,19 +1632,6 @@
     if (!building) {
       toProfile(profileId, 'Open the door of the building you mean first. That is how ' +
                            'the server knows which one it is.');
-      return true;
-    }
-    // embassy.md: the embassy doors start held, so a claim is refused (#1390).
-    var accordClaim = globalThis.__thornswoodEmbassy;
-    if (accordClaim && accordClaim.holds(building)) {
-      toProfile(profileId, accordClaim.CLAIM_REFUSED);
-      return true;
-    }
-    // A jail is the Jarl of its hold's alone (#502). See jailOfBuilding.
-    if (!mayHold(actorId, profileId, building)) {
-      var jailTown = HOLD_TOWN[jailOfBuilding(building)];
-      toProfile(profileId, nameOf(building) + ' is ' + jailTown + '\'s jail. Only the Jarl of ' +
-                           jailTown + ' claims it.');
       return true;
     }
     var held = holderOf(building);
@@ -5977,22 +5937,6 @@
   // table files. game\data\woodworking-benches.json says what was measured at each spot.
   var WOODWORKING_BENCH_BASE = table('WOODWORKING_BENCH_BASE');
   var WOODWORKING_BENCHES = table('WOODWORKING_BENCHES');
-  /*
-    THE STATIONS THE SERVER STANDS (#6893). game\data\station-sites.json
-    measures where each station stands (scripts\dev\Build-StationSites.py),
-    and Thornswood-Content.esp places them, except in a cell of a plugin that
-    is not one of its masters, where it cannot: North Keep's inn has no
-    cooking station, and North Keep.esp's room is such a cell. Those rows say
-    standBy server, and the server stands them here, the way it stands the
-    benches: once, at start, with no timer, next to the room's own furniture
-    the row names (beside), which the server loads, since MoveTo takes a
-    reference into a cell only next to one already there. Skyrim's own
-    cooking pot is the base, the pot every inn's cook uses, so the bench
-    table (BENCH_BY_BASE) already knows it as a cookpot. The ids are kept
-    beside the benches' in benches.json. Build-WoodworkingBenches.py writes
-    the table and holds each row's furniture to the load order.
-  */
-  var STATIONS_THE_SERVER_STANDS = table('STATIONS_THE_SERVER_STANDS');
 
   function benchBookPath() {
     var path = require('path');
@@ -6003,13 +5947,10 @@
     var out = {};
     var raw = benchRead.doc;
     if (!raw || typeof raw !== 'object') { return out; }
-    var tables = [WOODWORKING_BENCHES, STATIONS_THE_SERVER_STANDS];
-    for (var t = 0; t < tables.length; t++) {
-      for (var site in tables[t]) {
-        if (!Object.prototype.hasOwnProperty.call(tables[t], site)) { continue; }
-        var id = Number(raw[site]) >>> 0;
-        if (id) { out[site] = id; }
-      }
+    for (var site in WOODWORKING_BENCHES) {
+      if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
+      var id = Number(raw[site]) >>> 0;
+      if (id) { out[site] = id; }
     }
     return out;
   }
@@ -6059,49 +6000,11 @@
     return true;
   }
 
-  /* Stand this station where STATIONS_THE_SERVER_STANDS says. Answers whether it stands. */
-  function standStation(site) {
-    var s = STATIONS_THE_SERVER_STANDS[site];
-    if (!s) { return false; }
-    var nextTo = 0;
-    try { nextTo = mp.getIdFromDesc(s.beside) >>> 0; } catch (e) { nextTo = 0; }
-    var at = '';
-    try { at = nextTo ? String(mp.get(nextTo, 'worldOrCellDesc') || '') : ''; } catch (e2) { at = ''; }
-    if (!nextTo || at !== s.cell) {
-      plog('stations: nothing to stand', site + '\'s', s.kind, 'next to:', 'the furniture', s.beside,
-           'is not in', s.cell, '(the server has it in', (at || 'no cell') + ')');
-      return false;
-    }
-    var id = benchRefs[site] || 0;
-    if (refAt(id, s.base, s.cell, s.pos, s.angle)) { return true; }
-    try {
-      if (!refStands(id, s.base, '')) {
-        var base = placedBase(s.base);
-        if (!base) { plog('stations: the', s.kind, 'record', s.base, 'is not in the load order'); return false; }
-        id = mp.place(base);
-      }
-      refCall('SetAngle', id, [0, 0, s.angle]);
-      moveOnto(id, nextTo, s.pos);
-    } catch (e3) {
-      plog('stations: could not stand', site + '\'s', s.kind + ':', e3);
-      return false;
-    }
-    benchRefs[site] = id;
-    saveBenchRefs();
-    plog('stations: stood', site + '\'s', s.kind, Number(id).toString(16), 'in', s.cell, 'at',
-         s.pos.join(','), 'turned', s.angle, 'beside', s.beside);
-    return true;
-  }
-
-  /* Every woodworking bench, and every station the server stands, where it should be, once, at start. */
+  /* Every woodworking bench stood where it should be, once, when the server starts. */
   function standBenches() {
     for (var site in WOODWORKING_BENCHES) {
       if (!Object.prototype.hasOwnProperty.call(WOODWORKING_BENCHES, site)) { continue; }
       standBench(site);
-    }
-    for (var station in STATIONS_THE_SERVER_STANDS) {
-      if (!Object.prototype.hasOwnProperty.call(STATIONS_THE_SERVER_STANDS, station)) { continue; }
-      standStation(station);
     }
   }
 
@@ -9051,16 +8954,6 @@
     }
     var held = holderOf(building);
     if (!held) {
-      /*
-        embassy.md: "A steward of Haafingar does not evict the Accord" (#1390).
-        A claim somebody made before the embassy held this door is still that
-        person's claim, and ending it below is still the steward's to do.
-      */
-      var accordEvict = globalThis.__thornswoodEmbassy;
-      if (accordEvict && accordEvict.holds(building)) {
-        toProfile(profileId, accordEvict.EVICT_REFUSED);
-        return true;
-      }
       toProfile(profileId, 'Nobody holds ' + nameOf(building) + '.');
       return true;
     }
@@ -9282,45 +9175,6 @@
   }
 
   /*
-    THE JAIL RULE, APPLIED TO THE CLAIMS MADE BEFORE IT, ONCE (#502).
-
-    Patrick, 12 October evening: jail claims made before the jail rule end
-    once, and then the rule holds. Before #2497 anybody could claim a jail
-    building; since, only the Jarl of its hold may, and since #2551 the Jarl
-    is whoever holds that hold's Jarl role. So at the first server start with
-    the rule, every claim on a jail building whose holder is not that hold's
-    Jarl ends, each logged by building, holder and profile, and
-    steps.jailRule records that it ran, in the same save. With no such claim
-    nothing ends and the mark is still written. It runs here, after every
-    part of the register is read, because save() writes all of them, and it
-    never runs again: a claim after this is made under the rule.
-
-    The holder is read on record (__thornswoodOfficesOnRecord): at server
-    start nobody has sent a pass, and this is about a claim the server
-    already holds, not a press arriving now.
-  */
-  function endPreRuleJailClaims() {
-    if (steps.jailRule) { return 0; }
-    var ended = 0;
-    for (var b in claims) {
-      if (!Object.prototype.hasOwnProperty.call(claims, b)) { continue; }
-      var hold = jailOfBuilding(b);
-      if (!hold) { continue; }
-      // The character that holds the hold's Jarl office (#2551), read on record.
-      if (officesOfProfile(claims[b].by, true).jarl.indexOf(hold) !== -1) { continue; }
-      plog('law: the jail rule ends', claims[b].name + '\'s claim (profile ' + claims[b].by + ') on',
-           nameOf(b) + ', made before only the Jarl of', hold, 'could hold it');
-      keepOwed(b, claims[b], Date.now());
-      delete claims[b];
-      ended++;
-    }
-    steps.jailRule = Date.now();
-    save();
-    plog('law: the jail rule was applied to the claims made before it once:', ended, 'claim(s) ended');
-    return ended;
-  }
-
-  /*
     WHAT A DELETED CHARACTER HELD, LET GO (#2351, Patrick's A of 16 October:
     "Delete-Person.ps1 writes a list, and the gamemode releases those entries
     at its next start"). Asked once, as this block loads and before
@@ -9353,6 +9207,12 @@
                   they held, ends
       owing       gold or goods owed into their pack and not yet in it
                   (#4258) go
+      the word    the holders' word (#2680, wordBook): a word to them goes,
+                  sent or not, as there is nobody to tell; a word whose pick
+                  or presented deed they were among keeps its count and
+                  times for its holder, with their profile out of it and its
+                  looks cleared, since a look is not kept by whose it was and
+                  theirs is their race and sex (#4786)
 
     THE BOOKS STAY BALANCED BECAUSE NO COIN MOVES. Not a hold's ledger
     (funds), not the box, not a pack. A release only changes who a coin is
@@ -9374,7 +9234,7 @@
     var mine = function (pid) { var n = Number(pid) || 0; return n > 0 && who.profile(n); };
     var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
     var c = { claims: 0, masterKeys: 0, offices: 0, posts: 0, handedBack: 0, owed: 0, lines: 0,
-              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0 };
+              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0, words: 0 };
     var reg = false, lawChanged = false, beds = false;
     var b;
     for (b in claims) {
@@ -9467,6 +9327,15 @@
     for (var op in owing) {
       if (has(owing, op) && mine(op)) { c.owing += owing[op].length; delete owing[op]; reg = true; }
     }
+    var words = [];
+    for (var wi = 0; wi < wordBook.list.length; wi++) {
+      var wd = wordBook.list[wi];
+      if (mine(wd.holder)) { c.words++; reg = true; continue; }
+      var others = wd.by.filter(function (p) { return !mine(p); });
+      if (others.length !== wd.by.length) { wd.by = others; wd.looks = []; c.words++; reg = true; }
+      words.push(wd);
+    }
+    wordBook.list = words;
     var saved = true;
     if (reg && !save()) { saved = false; }
     if (lawChanged && !saveLaw()) { saved = false; }
@@ -9477,7 +9346,6 @@
 
   if (typeof g.__thornswoodRelease === 'function') { g.__thornswoodRelease('property', release); }
   rolesRead();
-  endPreRuleJailClaims();
 
   ready();
   g.__thornswoodProperty = {
@@ -9512,12 +9380,12 @@
     isJarl: isJarl, isJarlOf: isJarlOf, jarlHoldsOf: jarlHoldsOf, isCourtOf: isCourtOf,
     rolesRead: rolesRead, held: function () { return JSON.parse(JSON.stringify(law.held)); },
     isSteward: isSteward, isStewardOf: isStewardOf, stewardHoldsOf: stewardHoldsOf,
-    endPreRuleJailClaims: endPreRuleJailClaims, steps: function () { return Object.assign({}, steps); },
+    steps: function () { return Object.assign({}, steps); },
     // What a deleted character held, let go at server start (#2351).
     release: release,
     isGuard: isGuard, guardHoldsOf: guardHoldsOf, jailHoldOf: jailHoldOf, cellLocked: cellLocked,
     mayPassCell: mayPassCell, lockCell: lockCell,
-    jailOfBuilding: jailOfBuilding, mayHold: mayHold, jailKeyHold: jailKeyHold, lockedJailHere: lockedJailHere,
+    jailOfBuilding: jailOfBuilding, jailKeyHold: jailKeyHold, lockedJailHere: lockedJailHere,
     JAIL_KEY: JAIL_KEY,
     dropboxCmd: dropboxCmd, boxView: boxView, boxFare: boxFare, boxShipped: boxShipped, boxOfficer: boxOfficer, boxKeep: boxKeep,
     dropbox: function () { return dropbox; },
@@ -9538,8 +9406,6 @@
     standBench: standBench, standBenches: standBenches,
     benchRefs: function () { return Object.assign({}, benchRefs); },
     WOODWORKING_BENCHES: WOODWORKING_BENCHES,
-    STATIONS_THE_SERVER_STANDS: STATIONS_THE_SERVER_STANDS,
-    standStation: standStation,
     boardsView: boardsView, lettersCarried: lettersCarried,
     // An item's name the way the box names it, for the trade ships' dock (#2700).
     itemName: itemName, baseItemName: baseItemName

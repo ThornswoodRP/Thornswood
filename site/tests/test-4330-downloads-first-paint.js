@@ -222,7 +222,7 @@ async function pageChecks(apiHtml) {
   yes('B3   and its button gets its click, and the focus', typeof gate.els.ageYes.listeners.click === 'function' &&
       gate.els.ageYes.focused === true);
   gate.els.ageYes.listeners.click();
-  yes('B4   and a press keeps the statement, as on /join', /tw-age-18/.test(Object.keys(gate.store).join()));
+  yes('B4   and a press keeps the statement', /tw-age-18/.test(Object.keys(gate.store).join()));
 
   const stored = runPage('gate', 'store', apiHtml);
   await tick();
@@ -230,7 +230,8 @@ async function pageChecks(apiHtml) {
       stored.fetched.indexOf('/api/downloads') >= 0 && stored.shown.length === 1 && stored.shown[0] === apiHtml);
   yes('B6 home.js no longer builds the Downloads page itself',
       HOME_JS.indexOf('Download the installer') < 0 && HOME_JS.indexOf('then five steps') < 0);
-  yes('B7 and its own gate is for /join alone', /var AGE_PATHS = \{ '\/join': 1 \};/.test(HOME_JS));
+  yes('B7 and draws no gate of its own: the site sends it on /join too (#5624)',
+      HOME_JS.indexOf('function showAgeGate') < 0 && HOME_JS.indexOf('AGE_PATHS') < 0);
 }
 
 (async function main() {
