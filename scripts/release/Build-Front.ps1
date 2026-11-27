@@ -26,7 +26,11 @@
        Needs node and the npm registry; nothing else on the machine.
     3. Reads which npm packages webpack put in build.js, and each one's
        licence text from the folder it came from (Front.ps1, #3751).
-    4. Compares what it built, and those packages and texts, with
+       And every name Skyrim Platform offers the game plugins at the same
+       commit (scripts\dev\Build-PlatformCalls.js, #7090), as platformCalls:
+       the record that is redone with every pin move (engine-pin.yml takes
+       no other path), so the plugin check moves with the pin.
+    4. Compares what it built, those packages and texts, and those names with
        records\front-build.json. The same: it writes
        local\thornswood-front.zip, one fixed time on every entry, so the zip
        is the same on every machine. Different: it writes nothing and says
@@ -128,6 +132,12 @@ try {
     Say ("  built {0} files" -f $files.Count)
     $packages = Get-ThornswoodFrontPackages $dist $front
     Say ("  build.js holds {0} npm packages: {1}" -f $packages.Count, (@($packages.Values | ForEach-Object { $_.package + ' ' + $_.version }) -join ', '))
+    # What Skyrim Platform offers the plugins at this commit (#7090), read
+    # from the same commit; tests\test-7090-platform-calls.js holds every
+    # plugin call to it.
+    $platformJson = (Invoke-Native 'Build-PlatformCalls.js' { & node (Join-Path $repo 'scripts/dev/Build-PlatformCalls.js') $Fork $full }) -join "`n"
+    $platformCalls = $platformJson | ConvertFrom-Json
+    Say ("  Skyrim Platform offers {0} names to call" -f @($platformCalls.names).Count)
 
     if ($Record) {
         $rec = [ordered]@{
@@ -136,6 +146,7 @@ try {
             builtWith  = ('node ' + "$(& node --version)".Trim() + ', ' + $yarn)
             files      = $files
             packages   = [ordered]@{}
+            platformCalls = $platformCalls
         }
         $texts = [IO.Path]::GetFullPath($ThornswoodFrontLicencesDir)
         if (Test-Path -LiteralPath $texts) { Remove-Item -LiteralPath $texts -Recurse -Force }
@@ -151,6 +162,9 @@ try {
         $recorded = Read-ThornswoodFrontRecord
         if ($recorded.forkCommit -ne $full) { throw "records\front-build.json is the build of $($recorded.forkCommit), not $full. After a pin move run this with -Record and commit the record with the pin. Nothing was written." }
         $bad = @(Get-ThornswoodFrontProblems $files $recorded) + @(Get-ThornswoodFrontPackageProblems $packages $recorded)
+        if (($recorded.platformCalls | ConvertTo-Json -Depth 5 -Compress) -ne ($platformCalls | ConvertTo-Json -Depth 5 -Compress)) {
+            $bad += 'platformCalls is not what Skyrim Platform offers at this commit (scripts\dev\Build-PlatformCalls.js)'
+        }
         if ($bad.Count) {
             foreach ($b in $bad) { Say "  STOP  $b" 'Red' }
             throw 'this build is not records\front-build.json''s, so the zip was not written.'

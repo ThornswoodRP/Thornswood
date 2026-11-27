@@ -119,12 +119,11 @@ sp.on('buttonEvent', guard('mark', (e) => {
   try { name = cell.getName() || ''; } catch (e2) { name = ''; }
   try { id = cell.getFormID() || 0; } catch (e2) { id = 0; }
 
-  // The editor id is what the content table names cells by, and getName gives
-  // the one people see. Both go in: the id is what actually resolves, the name
-  // is what makes the file readable when you come back to it.
-  let editorId = '';
-  try { editorId = sp.Utility.getFormEditorID ? sp.Utility.getFormEditorID(id) : ''; } catch (e2) { editorId = ''; }
-  const label = (editorId || name || ('cell_' + id.toString(16))).replace(/\s+/g, '');
+  // The form id is what the content table resolves (Mark-Spot.ps1 makes it
+  // the arrival's desc). The label only makes the file readable when you come
+  // back to it: the name people see, or the form id when the cell has none.
+  // Skyrim Platform has no call that reads a form's editor id (#7090).
+  const label = (name || ('cell_' + id.toString(16))).replace(/\s+/g, '');
 
   let x = 0, y = 0, z = 0, rot = 0;
   try {
