@@ -218,7 +218,16 @@ public sealed class Agent(Config cfg, GitHub gh, IVerifier verify, Dictionary<st
                             {
                                 return new Outcome("error", $"the Release commit's {ServerOrder.Record} could not be read: " + e.Message);
                             }
-                            order = ServerOrder.Stage(srv.Env.Root, want, record, cfg.CollectionStore, Path.Combine(f.Dir, "order-stage"), [ServerPlugins.Content, ServerPlugins.Last], logf);
+                            // What the record's revision takes out (#4069): no file is no drop.
+                            byte[]? droppedDoc = null;
+                            try { droppedDoc = await gh.FileAt(ServerOrder.DroppedRecord, m.Commit, ct); }
+                            catch (GitHubException e) when (e.Status == 404) { }
+                            catch (Exception e) when (e is GitHubException or HttpRequestException or TaskCanceledException)
+                            {
+                                return new Outcome("error", $"the Release commit's {ServerOrder.DroppedRecord} could not be read: " + e.Message);
+                            }
+                            var mayDrop = ServerOrder.MayDrop(droppedDoc, record);
+                            order = ServerOrder.Stage(srv.Env.Root, want, record, cfg.CollectionStore, Path.Combine(f.Dir, "order-stage"), [ServerPlugins.Content, ServerPlugins.Last], logf, mayDrop);
                             logf("load order: " + (order.Added.Count > 0 ? $"{string.Join(", ", order.Added)} added, " : "") + $"{order.Entries.Count} plugins, collection {record.Slug} revision {record.Revision}");
                             plugins ??= new Dictionary<string, string>(StringComparer.Ordinal);
                             foreach (var (at, path) in order.Files) plugins[at] = path;

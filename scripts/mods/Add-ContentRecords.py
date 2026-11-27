@@ -1309,12 +1309,18 @@ MOLD_BOUNDS = (-12, -12, 0, 12, 12, 24)
 # the kiln's ladder, what each grade takes and makes, and that the grades are
 # how hot a forge burns (smith.md). An item has no gold price here, so each
 # grade is worth and weighs what Skyrim's own charcoal does.
+# The Charcoal grade's recipe makes Skyrim's own Charcoal (Patrick's B on
+# #6726): the forge's recipes name it, so the charcoal found in the world is
+# the same thing the Charburner makes. Its record of this plugin stays, so a
+# stack made before then is still a thing in a pack, and nothing makes more.
+SKYRIM_CHARCOAL = 0x00033760
 CHARCOAL_GRADES = (
-    # item, recipe, item editor id, recipe editor id, name, firewood in
-    (0x5015481, 0x5015480, 'ThornswoodCharcoalTier1', 'ThornswoodRecipeCharcoalTier1', 'Poor Charcoal', 2),
-    (0x5015482, 0x5015486, 'ThornswoodCharcoalTier2', 'ThornswoodRecipeCharcoalTier2', 'Charcoal', 4),
-    (0x5015484, 0x5015487, 'ThornswoodCharcoalTier3', 'ThornswoodRecipeCharcoalTier3', 'Charcoal Briquette', 7),
-    (0x5015485, 0x5015488, 'ThornswoodCharcoalTier4', 'ThornswoodRecipeCharcoalTier4', 'Coke', 12),
+    # item, recipe, item editor id, recipe editor id, name, firewood in, what the recipe makes
+    (0x5015481, 0x5015480, 'ThornswoodCharcoalTier1', 'ThornswoodRecipeCharcoalTier1', 'Poor Charcoal', 2, 0x5015481),
+    (0x5015482, 0x5015486, 'ThornswoodCharcoalTier2', 'ThornswoodRecipeCharcoalTier2', 'Charcoal', 4, SKYRIM_CHARCOAL),
+    (0x5015484, 0x5015487, 'ThornswoodCharcoalTier3', 'ThornswoodRecipeCharcoalTier3', 'Charcoal Briquette', 7,
+     0x5015484),
+    (0x5015485, 0x5015488, 'ThornswoodCharcoalTier4', 'ThornswoodRecipeCharcoalTier4', 'Coke', 12, 0x5015485),
 )
 
 # The two tools a smith makes (smith/edgewright.md): an iron ingot and a
@@ -1935,11 +1941,11 @@ def thornswood_records(clam, scrap):
               (FURNITURE_FORCE_3RD, FURNITURE_SPECIAL, RACE_TO_SCALE, IS_BLACKSMITH_WORKBENCH,
                WOODWORKING_KEYWORD), flags=WOODWORKING_FLAGS),
     ]
-    for item, recipe, item_id, recipe_id, name, logs in CHARCOAL_GRADES:
+    for item, recipe, item_id, recipe_id, name, logs, makes in CHARCOAL_GRADES:
         out.append(misc(item, item_id, name, CHARCOAL_MODEL, CHARCOAL_BOUNDS,
                         CHARCOAL_VALUE, CHARCOAL_WEIGHT))
-    for item, recipe, item_id, recipe_id, name, logs in CHARCOAL_GRADES:
-        out.append(cobj(recipe, recipe_id, [(FIREWOOD, logs)], item, KILN_KEYWORD))
+    for item, recipe, item_id, recipe_id, name, logs, makes in CHARCOAL_GRADES:
+        out.append(cobj(recipe, recipe_id, [(FIREWOOD, logs)], makes, KILN_KEYWORD))
 
     def stick(fid, edid, name, value, weight):
         return misc(fid, edid, name, CHARCOAL_MODEL, CHARCOAL_BOUNDS, value, weight)

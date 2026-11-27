@@ -77,6 +77,16 @@ THE RULE, every number of it a knob below
   and accepts a craft of that output at that bench with exactly the new
   counts. No record of the plugin is copied anywhere.
 
+  THE CHARCOAL AND THE HANDLE ON THEM TOO (#6726, Patrick's B). Every forge,
+  skyforge and smelter recipe burns a charcoal and a hafted one takes a Tool
+  Handle (game/data/fuel-by-recipe.json, Build-FuelTable.js), as inputs on
+  its record. Thornswood-Last.esp writes them into every recipe it copies;
+  one of a plugin it never copies from is in RECIPES_SET_IN_GAME with them
+  on top of its counts, re-costed or not: one it already asks for asks that
+  many more, and one it does not name comes after its inputs with 0 for the
+  count it had, which each game adds to its own copy of the record.
+  Build-LastPlugin.py stops when one it cannot copy is not here so.
+
 WHY IT IS STABLE
 
   Build-RecipeTable.ps1 reads this file back and gives each row here the new
@@ -111,6 +121,7 @@ import gamemode_tables  # noqa: E402
 RECIPES = os.path.join(ROOT, 'game', 'data', 'recipes.json')
 OUT = os.path.join(ROOT, 'game', 'data', 'recost.json')
 POLICY = os.path.join(ROOT, 'game', 'data', 'last-plugin-policy.json')
+FUEL = os.path.join(ROOT, 'game', 'data', 'fuel-by-recipe.json')
 
 OWNER = 'Smith'
 BENCHES = ('CraftingSmithingForge', 'CraftingSmithingSkyforge')
@@ -201,6 +212,20 @@ def never_copied(policy):
             {c.lower() for r in rows for c in r.get('carried', [])})
 
 
+def not_copied(desc, row, blocked, carried):
+    """True for a recipe Thornswood-Last.esp never copies: its own file, or
+    the plugin that wins it (wonBy in recipes.json), is one the policy never
+    copies from, and the policy does not carry it. The same test as the
+    plugin's own (Build-LastPlugin.py, fuel_entries and step 6), so a recipe
+    one plugin owns and a never-copied one overrides is held here as it is
+    there: da0c03:Update.esm, won by Hothtrooper44_ArmorCompilation.esp,
+    stopped every content build after #7072 because only its owner was read
+    here (#6726)."""
+    origin = desc.split(':', 1)[1]
+    won = (row or {}).get('wonBy') or origin
+    return (origin.lower() in blocked or won.lower() in blocked) and ('COBJ ' + desc).lower() not in carried
+
+
 def build(recipes, previous, policy=None):
     metal = metals(recipes)
     kept = {r['recipe']: r for r in (previous or {}).get('recipes', [])}
@@ -251,11 +276,17 @@ def build(recipes, previous, policy=None):
     # 2026, #2454: Immersive Armors is used as-is and nothing built from it
     # is handed on). It is still a peer, because the game still asks it.
     blocked, carried = never_copied(policy)
-    held = [r for r in recost if r['recipe'].split(':', 1)[1].lower() in blocked
-            and ('COBJ ' + r['recipe']).lower() not in carried]
+    held = [r for r in recost if not_copied(r['recipe'], recipes['recipes'].get(r['recipe']), blocked, carried)]
     for r in held:
-        r['whyNot'] = ('%s is a plugin last-plugin-policy.json never copies from (notCopiedFrom), so its '
-                       'recipe is not overridden' % r['recipe'].split(':', 1)[1])
+        row = recipes['recipes'].get(r['recipe']) or {}
+        origin = r['recipe'].split(':', 1)[1]
+        won = row.get('wonBy') or origin
+        if origin.lower() in blocked:
+            r['whyNot'] = ('%s is a plugin last-plugin-policy.json never copies from (notCopiedFrom), so its '
+                           'recipe is not overridden' % origin)
+        else:
+            r['whyNot'] = ('%s wins it, a plugin last-plugin-policy.json never copies from (notCopiedFrom), so '
+                           'the recipe is not overridden' % won)
     recost = [r for r in recost if r not in held]
     coins = sum(1 for r in recost if 'coins' in r['why'])
     return {
@@ -291,15 +322,47 @@ def dump(data):
     return json.dumps(data, indent=1, ensure_ascii=False) + '\n'
 
 
-def in_game_table(data, recipes):
-    """The RECIPES_SET_IN_GAME table as JSON text: every notCopied row, by
-    recipe, with its output, its bench keyword and its inputs as [item, had,
-    asks]. What it means is written over its table() line in the gamemode."""
+def fuel_adds(fuel, desc):
+    """What a recipe takes on top for its charcoal and handle (#6726), as
+    [(item, count)], from game/data/fuel-by-recipe.json; [] for one that
+    burns nothing."""
+    row = (fuel or {}).get('recipes', {}).get(desc)
+    if not row:
+        return []
+    grade, _, _, handle = row
+    return [(fuel['grades'][grade], 1)] + ([(fuel['handle'], 1)] if handle else [])
+
+
+def in_game_table(data, recipes, fuel=None, policy=None):
+    """The RECIPES_SET_IN_GAME table as JSON text: every notCopied row, and
+    every recipe of a never-copied plugin that takes a charcoal or a handle,
+    by recipe, with its output, its bench keyword and its inputs as [item,
+    had, asks], an input its record does not name last with 0 for had. What
+    it means is written over its table() line in the gamemode."""
     rows = {}
     for r in data['notCopied']:
         row = recipes['recipes'][r['recipe']]
         rows[r['recipe']] = {'name': r['name'], 'out': row['out'], 'bench': row['bench'],
                              'inputs': [[i['item'], i['count'], i['to']] for i in r['inputs']]}
+    blocked, carried = never_copied(policy)
+    for desc in sorted((fuel or {}).get('recipes', {})):
+        if not not_copied(desc, recipes['recipes'].get(desc) or recipes.get('unowned', {}).get(desc),
+                          blocked, carried):
+            continue
+        if desc not in rows:
+            row = recipes['recipes'].get(desc)
+            if not row or not row.get('bench'):
+                raise SystemExit('STOP. fuel-by-recipe.json burns charcoal for %s, which recipes.json gives no '
+                                 'bench. Nothing was written.' % desc)
+            rows[desc] = {'name': row.get('name', ''), 'out': row['out'], 'bench': row['bench'],
+                          'inputs': [[i['item'], i['count'], i['count']] for i in row.get('inputItems', [])]}
+        inputs = rows[desc]['inputs']
+        for item, n in fuel_adds(fuel, desc):
+            at = next((i for i in inputs if i[0] == item), None)
+            if at is None:
+                inputs.append([item, 0, n])
+            else:
+                at[2] += n
     return json.dumps(rows, sort_keys=True, ensure_ascii=False)
 
 
@@ -309,9 +372,10 @@ def main():
     args = ap.parse_args()
     recipes = json.load(io.open(RECIPES, encoding='utf-8'))
     previous = json.load(io.open(OUT, encoding='utf-8')) if os.path.isfile(OUT) else None
-    data = build(recipes, previous, json.load(io.open(POLICY, encoding='utf-8')))
+    policy = json.load(io.open(POLICY, encoding='utf-8'))
+    data = build(recipes, previous, policy)
     text = dump(data)
-    table = in_game_table(data, recipes)
+    table = in_game_table(data, recipes, json.load(io.open(FUEL, encoding='utf-8')), policy)
     table_file = gamemode_tables.table_file('RECIPES_SET_IN_GAME')
     have_table = io.open(table_file, encoding='utf-8', newline='').read() if os.path.isfile(table_file) else ''
     c = data['counts']
@@ -330,8 +394,8 @@ def main():
     with io.open(OUT, 'w', encoding='utf-8', newline='\n') as fh:
         fh.write(text)
     gamemode_tables.write('RECIPES_SET_IN_GAME', table)
-    print('wrote ' + os.path.relpath(OUT, ROOT) + ' and ' + os.path.relpath(table_file, ROOT) + ', %d recipe(s)'
-          % len(data['notCopied']))
+    print('wrote ' + os.path.relpath(OUT, ROOT) + ' and ' + os.path.relpath(table_file, ROOT) + ', %d recipe(s) '
+          're-costed and %d set in each game' % (len(data['notCopied']), len(json.loads(table))))
     return 0
 
 
