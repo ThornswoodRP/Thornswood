@@ -26,6 +26,10 @@
   days come down, and -Match keeps only the lines holding one of its words,
   so a pull fits under what the gate sends back.
 
+  And the folder after a pull (#4477): a copy an earlier pull left of a log
+  this one did not write (not on the box now, a read that failed, outside
+  the window) is taken out and said, so every log left is this pull's.
+
   No ssh and no VPS.
 #>
 [CmdletBinding()]
@@ -157,6 +161,17 @@ New-Item -ItemType Directory -Path (Join-Path $global:standInBox 'Thornswood-Doc
 # Here, from an earlier pull: an older voice.log.1, which the empty one on
 # the box must replace.
 Set-Content -LiteralPath (Join-Path $pulled 'voice.log.1') -Value 'an older voice.log.1' -Encoding UTF8
+# And earlier copies this pull will not write (#4477): site.log, which the
+# box does not have now; server.log.2, whose read fails; server.log.3,
+# outside the window; and the log of a Deployment the box has since
+# dropped. Beside them, files that are not these logs, which must stay.
+foreach ($n in 'site.log', 'server.log.2', 'server.log.3', 'deploy-1111111111.log') {
+    Set-Content -LiteralPath (Join-Path $pulled $n) -Value ('an earlier ' + $n) -Encoding UTF8
+}
+Set-Content -LiteralPath (Join-Path $pulled 'load.csv') -Value 'time,cores' -Encoding UTF8
+Set-Content -LiteralPath (Join-Path $pulled 'server.log.bak') -Value 'kept by hand' -Encoding UTF8
+New-Item -ItemType Directory -Path (Join-Path $pulled 'dev') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $pulled 'dev\site.log') -Value 'a dev pull' -Encoding UTF8
 
 # The stand-in ssh. It takes the question the script would send the box,
 # moves its C: paths into the stand-in box, and runs it in a PowerShell of
@@ -262,6 +277,20 @@ try {
     Yes 'and the file beside it that is not a log does not' (-not (Test-Path -LiteralPath (Pulled 'deploy-7808834094.after.json')))
     Yes 'a generation last written before the window is not named or read: server.log.3, ten days old (#7060)' (
         -not (Test-Path -LiteralPath (Pulled 'server.log.3')) -and -not ($global:standInListed | Where-Object { $_ -match 'server\.log\.3$' }))
+
+    # ---- nothing from an earlier pull is left beside this one (#4477) ----
+    foreach ($n in 'site.log', 'server.log.2', 'server.log.3', 'deploy-1111111111.log') {
+        Yes ("an earlier pull's $n, not written by this one, is taken out of the folder") (-not (Test-Path -LiteralPath (Pulled $n)))
+        Yes ('and the pull says so') ($words -match ('(?m)^\s*' + [regex]::Escape($n) + "\s+taken out of .*an earlier pull's copy, not read this time"))
+    }
+    $left = @(Get-ChildItem -LiteralPath $pulled -File | ForEach-Object { $_.Name } | Sort-Object)
+    $fresh = @('bot.log', 'deploy-7808834094.log', 'door.log', 'health.json', 'server.log', 'server.log.1', 'thornswood.log', 'voice.log', 'voice.log.1')
+    $other = @('load.csv', 'server.log.bak')
+    Yes ('every log left is one this pull wrote, beside the files that are not these logs (' + ($left -join ', ') + ')') (
+        (($left -join ',') -eq ((@($fresh + $other) | Sort-Object) -join ',')))
+    Yes 'the files that are not these logs are left as they were' (
+        (Get-Content -LiteralPath (Pulled 'load.csv') -Raw).Trim() -eq 'time,cores' -and (Get-Content -LiteralPath (Pulled 'server.log.bak') -Raw).Trim() -eq 'kept by hand')
+    Yes 'and a dev pull''s folder inside it is not touched' ((Get-Content -LiteralPath (Join-Path $pulled 'dev\site.log') -Raw).Trim() -eq 'a dev pull')
 
     # ---- a window of 0 days, and only the lines asked for (#7060) ----
     $picked = Join-Path $work 'picked'

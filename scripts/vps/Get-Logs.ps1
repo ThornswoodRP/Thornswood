@@ -47,6 +47,13 @@
   (up to 90 days of them).
   door.log does not roll, so only the current file is fetched.
 
+  What is in the folder afterwards is this pull and nothing older (#4477).
+  A copy of one of these logs that this pull did not write, because the
+  box does not have it now, a read failed, or it is outside the window, is
+  taken out of the folder and said, so an earlier pull's file never sits
+  under the same name beside fresh ones. Only these logs' own names are
+  touched: anything else in the folder, and logs\dev from a dev pull, stay.
+
   Nothing on the VPS is changed. Everything here is a read.
 #>
 [CmdletBinding()]
@@ -253,6 +260,10 @@ Head 'Pulling'
 Say ("  {0}{1}" -f $(if ($window) { "the rolled generations written in the last $window day(s)" } else { 'every rolled generation the box keeps' }),
      $(if ($words.Count) { ', only the lines holding ' + ($words -join ' or ') } else { '' })) 'DarkGray'
 
+# Every log file this pull writes, by its name here, so what it did not
+# write can be taken out of the folder at the end (#4477).
+$wrote = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+
 $box = Read-Box $listing
 if ($box.Code -ne 0) {
     $why = if ($box.Stderr.Count) { $box.Stderr -join ' | ' } else { 'nothing on stderr' }
@@ -346,9 +357,37 @@ if ($box.Code -ne 0) {
             #>
             $got = $read.Answer
             Set-Content -LiteralPath $dest -Value $got -Encoding UTF8
+            [void]$wrote.Add($f.Name)
             $size = (Get-Item -LiteralPath $dest).Length
             Say ("  {0,-14} {1,7:n0} lines  {2,9:n0} bytes   {3}" -f $f.Name, $got.Count, $size, $f.What) 'Gray'
         }
+    }
+}
+
+<#
+  AN EARLIER PULL'S COPIES (#4477).
+
+  A log this pull did not write keeps no file here: not one the box does
+  not have now, not one whose read failed, not a rolled generation the box
+  has since dropped or that is outside the window. Each is the name of one
+  of the logs above, one of its rolled generations, or a deploy agent's
+  log, and was left by an earlier pull, so beside this pull's files it
+  would read as current. It is taken out and said. A copy that will not go
+  is said too, as still being the earlier pull's.
+#>
+$ours = @(foreach ($base in $logs) {
+    '^' + [regex]::Escape($base.Name) + $(if ($base.ContainsKey('Rolls') -and $base.Rolls) { '(\.\d{1,18})?$' } else { '$' })
+}) + @($deployLeaf)
+$stale = @(Get-ChildItem -LiteralPath $Out -File -Force | Where-Object {
+    $n = $_.Name
+    -not $wrote.Contains($n) -and @($ours | Where-Object { $n -match $_ }).Count
+} | Sort-Object Name)
+foreach ($old in $stale) {
+    try {
+        Remove-Item -LiteralPath $old.FullName -Force -ErrorAction Stop
+        Say ("  {0,-14} taken out of {1}: an earlier pull's copy, not read this time" -f $old.Name, $Out) 'Yellow'
+    } catch {
+        Say ("  {0,-14} is an earlier pull's copy, not read this time, and could not be taken out: {1}" -f $old.Name, $_.Exception.Message) 'Red'
     }
 }
 
