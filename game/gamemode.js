@@ -11663,6 +11663,47 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
 
 mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {
   /*
+    THE PIECE AN ENCHANTMENT GOES ON KEEPS ITS NAME (#4608). A piece's
+    condition is on its name, "Iron Sword (85%)", and so is a crude or
+    masterwork piece's make (the durability block), so the engine takes such a
+    piece off its named stack and says so in onCraft's seventh argument. The
+    engine gives the enchanted piece back with no name of its own, which would
+    be a free repair, so a named input was refused (inputRefusal in the
+    spoilage block) and a worn or masterwork piece could not be enchanted.
+
+    An enchantment is the craft with no recipe whose effects the engine named
+    and whose output is a piece under the runtime line (a brew's output is a
+    bottle above it). The piece is the one input of the output's own record.
+    When it came off a named stack, it is let past inputRefusal and the
+    enchanted piece is given that name (craftOutput), so its condition and its
+    make go with it, and the durability block goes on wearing it from there.
+    A plain piece is not named, so it comes back as it always did.
+  */
+  function enchantedPiece(craftedItemBaseId, recipeId, effects, inputs) {
+    var base = Number(craftedItemBaseId) || 0;
+    if (recipeId || !Array.isArray(effects) || !Array.isArray(inputs) || base <= 0 || base >= 0xff000000) {
+      return null;
+    }
+    for (var i = 0; i < inputs.length; i++) {
+      var input = inputs[i];
+      if (input && typeof input.name === 'string' && input.name &&
+          Number(input.baseId) === base && Number(input.count) === 1) {
+        return input;
+      }
+    }
+    return null;
+  }
+
+  function keepPieceName(actorId, piece) {
+    try {
+      mp.set(actorId, 'craftOutput', { name: piece.name });
+      log(actorId.toString(16), 'enchanted', piece.name, 'and it keeps that name');
+    } catch (e) {
+      log('could not keep the name', piece.name, 'on the piece', actorId.toString(16), 'enchanted:', e);
+    }
+  }
+
+  /*
     TOO SICK, TOO HURT OR TOO TIRED TO MAKE ANYTHING (#1383, #1676), asked
     before anything else, brews, enchanting and tempering included. The gate
     every way of making something asks (unfitToMake, #1733) answers the
@@ -11685,7 +11726,8 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     that spent one would hand back a plain piece. See the spoilage block.
   */
   const spoilage = globalThis.__thornswoodSpoilage;
-  const namedNo = spoilage && spoilage.inputRefusal ? spoilage.inputRefusal(arguments[6]) : '';
+  const piece = enchantedPiece(craftedItemBaseId, recipeId, effects, arguments[6]);
+  const namedNo = spoilage && spoilage.inputRefusal ? spoilage.inputRefusal(arguments[6], piece) : '';
   if (namedNo) {
     notify(actorId, namedNo);
     say(actorId, namedNo);
@@ -11753,7 +11795,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
       The inputs go on to the brew as a fifth argument (#3134): what this
       character has eaten is asked of every ingredient in it.
     */
-    return recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects, inputs);
+    const made = recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects, inputs);
+    if (made !== false && piece) { keepPieceName(actorId, piece); }
+    return made;
   }
 
   /*
@@ -50872,8 +50916,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           keeps the condition and nothing here watches drops any more.
     a craft. CraftEvent::OnFireSuccess takes away plain entries and adds a
           plain one. A temper is refused (recipelessCraft), so it is not a
-          way round this. Enchanting a piece that is not at 100% fails in
-          the engine, because the plain piece it asks to take is not there.
+          way round this. An enchantment takes the piece by its name and
+          the bench names the enchanted piece the same (#4608,
+          enchantedPiece in the bench block), so its condition goes with it.
   A trade was a third, and it was this file's: moveById in the trade block
   wrote a base and a count and nothing else. It moves a piece with its name
   now, and leaves every other stack's alone (#1594).
@@ -52120,7 +52165,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   and mp.onCraft's seventh argument names an input that came off a named
   stack; inputRefusal below refuses any named input that is not food
   carrying its days, so a worn sword (85%), a house's mold or a woven
-  garment is still never spent by a craft, as it never could be.
+  garment is still never spent by a craft, as it never could be. The one
+  exception is the piece an enchantment goes on, which comes back with the
+  same name (#4608).
 
   WHICH FOOD SPOILS AND HOW FAST is FOOD_GROUPS.spoil
   (game/data/food-groups.json): days by group (raw meat and fish, and the
@@ -52554,12 +52601,17 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       piece's condition, a house's mold, a woven garment's mark and a dye
       each sit on a name too, and a craft that took one would give back a
       plain piece (a free repair) or lose what the name said.
+
+      except is the one input that is let through by name (#4608): the piece
+      an enchantment goes on, which the bench gives back carrying the same
+      name (enchantedPiece in the bench block), so nothing the name said is
+      lost and nothing is repaired.
     */
-    function inputRefusal(inputs) {
+    function inputRefusal(inputs, except) {
       if (!Array.isArray(inputs)) { return ''; }
       for (var i = 0; i < inputs.length; i++) {
         var input = inputs[i];
-        if (!input || !input.name) { continue; }
+        if (!input || !input.name || input === except) { continue; }
         var entry = { baseId: Number(input.baseId) || 0, name: String(input.name) };
         if (ownName(entry)) { continue; }
         return 'Your ' + entry.name + ' cannot go into that. Keep it, or use a plain one.';

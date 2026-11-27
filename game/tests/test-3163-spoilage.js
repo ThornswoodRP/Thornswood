@@ -333,6 +333,11 @@ function names(entries) { return (entries || []).map(function (x) { return x.bas
       w.rot.inputRefusal([{ baseId: SWORD, count: 1, name: 'Iron Sword (85%)' }]) ===
       'Your Iron Sword (85%) cannot go into that. Keep it, or use a plain one.');
   yes('G3 nor food somebody else named', w.rot.inputRefusal([{ baseId: VENISON, count: 1, name: 'Grandma\'s Venison' }]) !== '');
+  const worn = { baseId: SWORD, count: 1, name: 'Iron Sword (85%)' };
+  yes('G4 the piece an enchantment goes on is let through by name, and nothing else is (#4608)',
+      w.rot.inputRefusal([worn, { baseId: SWORD - 1, count: 1 }], worn) === '' &&
+      w.rot.inputRefusal([worn, { baseId: VENISON, count: 1, name: 'Grandma\'s Venison' }], worn) !== '' &&
+      w.rot.inputRefusal([{ baseId: SWORD, count: 1, name: 'Iron Sword (85%)' }], worn) !== '');
 })();
 
 // ------------------------------------------------ H. preserving --
@@ -410,8 +415,37 @@ yes('I1 every press on a container is handed to the spoilage block before the en
     !!activate && /rot\.pressed\(casterRefrId, refrId, baseDesc, Date\.now\(\)\)/.test(activate));
 const craft = slice(gm, 'mp.onCraft = guard(\'onCraft\'', '\n});');
 yes('I2 a craft with a named input that is not food is refused before anything else is done',
-    !!craft && /inputRefusal\(arguments\[6\]\)/.test(craft) && /if \(namedNo\) \{[\s\S]{0,400}return false;/.test(craft) &&
-    craft.indexOf('inputRefusal(arguments[6])') < craft.indexOf('recipeSetInGame('));
+    !!craft && /inputRefusal\(arguments\[6\], piece\)/.test(craft) && /if \(namedNo\) \{[\s\S]{0,400}return false;/.test(craft) &&
+    craft.indexOf('inputRefusal(arguments[6], piece)') < craft.indexOf('recipeSetInGame('));
+/*
+  #4608. The piece an enchantment goes on is the one input of the output's
+  own record, off a named stack, in a craft with no recipe whose effects
+  the engine named and whose output is under the runtime line. It keeps its
+  name through craftOutput once the bench allowed the enchantment.
+*/
+const pieceSrc = slice(gm, 'function enchantedPiece(', '\n  }\n');
+const keepSrc = slice(gm, 'function keepPieceName(', '\n  }\n');
+const set = [];
+const box = { mp: { set: function (id, prop, value) { set.push([id, prop, value]); } }, log: function () {} };
+vm.createContext(box);
+vm.runInContext(pieceSrc + '\n' + keepSrc + '\nthis.enchantedPiece = enchantedPiece; this.keepPieceName = keepPieceName;', box);
+const GEM = 0x2e4e3;
+const ench = [{ baseId: GEM, count: 1 }, { baseId: SWORD, count: 1, name: 'Iron Sword (Masterwork) (85%)' }];
+yes('I8 an enchantment finds its piece by the output\'s record when it came off a named stack (#4608)',
+    !!pieceSrc && box.enchantedPiece(SWORD, 0, [0x4605a], ench) === ench[1]);
+yes('I8 and finds none for a plain piece, a recipe, a brew, or a craft with no effects named',
+    box.enchantedPiece(SWORD, 0, [0x4605a], [{ baseId: GEM, count: 1 }, { baseId: SWORD, count: 1 }]) === null &&
+    box.enchantedPiece(SWORD, 0x1234, [0x4605a], ench) === null &&
+    box.enchantedPiece(0xff800010, 0, [0x3eb15], [{ baseId: 0xff800010, count: 1, name: 'x' }]) === null &&
+    box.enchantedPiece(SWORD, 0, null, ench) === null);
+box.keepPieceName(0x14, ench[1]);
+yes('I8 the enchanted piece is given the name the piece had, through craftOutput',
+    !!keepSrc && set.length === 1 && set[0][0] === 0x14 && set[0][1] === 'craftOutput' &&
+    JSON.stringify(set[0][2]) === JSON.stringify({ name: 'Iron Sword (Masterwork) (85%)' }));
+yes('I8 onCraft asks for the piece before the named input gate, and names it only when the recipeless gate allowed it',
+    !!craft && craft.indexOf('const piece = enchantedPiece(craftedItemBaseId, recipeId, effects, arguments[6]);') >= 0 &&
+    craft.indexOf('const piece = enchantedPiece(') < craft.indexOf('inputRefusal(arguments[6], piece)') &&
+    /const made = recipelessCraft\(actorId, craftedItemBaseId, workbenchId, effects, inputs\);\s*if \(made !== false && piece\) \{ keepPieceName\(actorId, piece\); \}\s*return made;/.test(craft));
 yes('I3 a dish is named after cookedOutput, qualityOutput and wovenOutput have had their say',
     !!craft && /cookedOutput\(actorId, row\);\s*qualityOutput\(actorId, row, margin\);\s*wovenOutput\(actorId, row\);\s*spoilingOutput\(actorId\);/.test(craft));
 const spoilingFn = slice(gm, 'function spoilingOutput(actorId) {', '\n}');
