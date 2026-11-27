@@ -41,7 +41,8 @@
   var boardFieldError = null;
   var submissionDrafts = {
     letter: { revision: 0, values: { to: '', letter: '' } },
-    haul: { revision: 0, values: { pay: '', dest: '', haul: '' } }
+    haul: { revision: 0, values: { pay: '', dest: '', haul: '' } },
+    parcel: { revision: 0, values: { 'p-to': '', 'p-item': '', 'p-count': '', 'p-letter': '', 'p-pay': '' } }
   };
   var submissions = [], submissionOwner = null, submissionHold = null, submissionContext = 0;
   var submissionSaid = '', olderUnconfirmed = false;
@@ -206,7 +207,7 @@
   // and edit-back; direct DOM changes are read before sends and owner pushes.
   function rememberSubmissions(edited) {
     if (!root) return;
-    ['letter', 'haul'].forEach(function (kind) {
+    ['letter', 'haul', 'parcel'].forEach(function (kind) {
       var draft = submissionDrafts[kind], changed = false;
       Object.keys(draft.values).forEach(function (id) {
         var box = root.querySelector('#' + ID + '-' + id);
@@ -244,9 +245,9 @@
     if (hold !== submissionHold) { submissionContext++; submissionHold = hold; }
     var results = value && value.boardSubmissions && value.boardSubmissions.results;
     if (!owner || !Array.isArray(results) || results.length > 32) return;
-    var accepted = 0, kept = { letter: false, haul: false }, reset = { letter: false, haul: false };
+    var accepted = 0, kept = { letter: false, haul: false, parcel: false }, reset = { letter: false, haul: false, parcel: false };
     results.forEach(function (result) {
-      if (!result || result.status !== 'posted' || (result.kind !== 'letter' && result.kind !== 'haul') ||
+      if (!result || result.status !== 'posted' || (result.kind !== 'letter' && result.kind !== 'haul' && result.kind !== 'parcel') ||
           typeof result.id !== 'string' || !/^[0-9a-f]{32}$/.test(result.id) || typeof result.hold !== 'string') return;
       var at = -1;
       for (var i = 0; i < submissions.length; i++) {
@@ -274,7 +275,7 @@
       });
     });
     if (accepted) submissionSaid = (accepted === 1 ? 'The post was saved.' : 'The posts were saved.') +
-      (kept.letter || kept.haul ? ' Your newer draft is kept.' : '');
+      (kept.letter || kept.haul || kept.parcel ? ' Your newer draft is kept.' : '');
     showSubmissionStatus();
   }
 
@@ -461,7 +462,7 @@
       }
       var who = row.taken ? ', taken by ' + esc(row.taken) : '';
       if (!plain(row)) {
-        var kind = row.letter ? 'Letter' : 'Haul';
+        var kind = row.parcel ? 'Parcel' : row.letter ? 'Letter' : 'Haul';
         if (row.job && !row.taken && !row.mine) {
           tools = '<button class="go" data-do="take" data-n="' + esc(row.n) + '">Take</button>' + tools;
         }
@@ -503,7 +504,7 @@
     if (!jobs.length) { out += '<div class="none">You have taken none.</div>'; }
     for (var j = 0; j < jobs.length; j++) {
       var mine = jobs[j];
-      var what = mine.letter ? 'Letter' : (mine.haul ? 'Haul' : (mine.wanted ? 'Wanted' : 'Job'));
+      var what = mine.parcel ? 'Parcel' : mine.letter ? 'Letter' : (mine.haul ? 'Haul' : (mine.wanted ? 'Wanted' : 'Job'));
       var jkey = 'j' + mine.hold + ':' + mine.n;
       var jopen = !!opened[jkey];
       var line = plain(mine)
@@ -539,6 +540,34 @@
     out += '<div class="note">35 gold: 20 for the board, and 15 held for whoever carries it, paid to them ' +
       'when they hand it over. Up to 300 characters. Only the person it is for reads it. ' +
       'Taken down before then, the 15 comes back to you.</div>';
+    /*
+      A PARCEL (#4560, docs/systems/noticeboards.md): a letter with one
+      stack from your pack in it, and a courier pay you name, at least the
+      server's parcelPayMin. The pack list is the server's; it checks the
+      stack, the count and the pay again when the parcel arrives.
+    */
+    var pack = b.pack || [];
+    var payMin = Number(b.parcelPayMin) || 15;
+    out += '<h3>Send a parcel</h3>';
+    if (!pack.length) {
+      out += '<div class="none">Nothing in your pack that can go in a parcel.</div>';
+    } else {
+      out += '<div class="line"><input id="' + ID + '-p-to" aria-label="Parcel recipient" maxlength="60" placeholder="who it is for"></div>';
+      out += '<div class="line"><select id="' + ID + '-p-item" aria-label="What goes in the parcel">';
+      for (var q = 0; q < pack.length; q++) {
+        out += '<option value="' + esc(pack[q].slot + ':' + pack[q].baseId) + '">' + esc(pack[q].what) +
+          (Number(pack[q].count) > 1 ? ' (' + esc(String(pack[q].count)) + ')' : '') + '</option>';
+      }
+      out += '</select><input class="pay" id="' + ID + '-p-count" aria-label="How many go in the parcel" placeholder="how many"></div>';
+      out += '<div class="line"><input id="' + ID + '-p-letter" aria-label="Parcel letter" maxlength="300" placeholder="a letter to go with it"></div>';
+      out += '<div class="line"><input class="pay" id="' + ID + '-p-pay" aria-label="Parcel courier pay in gold" placeholder="pay">' +
+        '<button class="go" data-do="parcel">Send the parcel</button></div>';
+      out += '<div class="said" id="' + ID + '-parcel-reason" role="status" aria-live="polite" style="display:none"></div>';
+      out += '<div class="note">20 gold for the board, and a courier pay you name, ' + esc(String(payMin)) +
+        ' or more, held for whoever carries it. What you pick leaves your pack with the gold and goes into ' +
+        'the pack of the person it is for when the courier hands it over. Only they read the letter. ' +
+        'Taken down before then, the pay comes back to you and what was in it waits in this hold\'s drop box for you.</div>';
+    }
     /*
       A HAUL (#1393, docs/systems/trading-company.md): a job with a pay and a
       town it goes to. The towns are every board but this one, from the
@@ -595,6 +624,14 @@
     var letterBox = document.getElementById(ID + '-letter');
     if (toBox) toBox.value = submissionDrafts.letter.values.to;
     if (letterBox) letterBox.value = submissionDrafts.letter.values.letter;
+    Object.keys(submissionDrafts.parcel.values).forEach(function (id) {
+      var box = document.getElementById(ID + '-' + id);
+      if (!box) return;
+      if (id !== 'p-item' || submissionDrafts.parcel.values[id]) box.value = submissionDrafts.parcel.values[id];
+      // An item no longer in the pack leaves the first one picked, and the draft says so.
+      if (id === 'p-item' && box.selectedIndex < 0 && box.options.length) box.selectedIndex = 0;
+      submissionDrafts.parcel.values[id] = String(box.value || '');
+    });
     wire(body);
   }
 
@@ -754,6 +791,23 @@
           !needBoardField('dest', dest, 'Choose the haul destination.', 'haul-reason') ||
           !needBoardField('haul', what, 'Say what the haul carries.', 'haul-reason')) return;
       sendSubmission('haul', [pay, dest, what]);
+      return;
+    }
+    if (verb === 'parcel') {
+      if (!shown || !root.contains(this)) return;
+      clearBoardFieldError();
+      var pto = document.getElementById(ID + '-p-to').value;
+      var pwords = document.getElementById(ID + '-p-letter').value;
+      var item = field(ID + '-p-item').split(':');
+      var pcount = field(ID + '-p-count').replace(/[^0-9]/g, '') || '1';
+      var ppay = field(ID + '-p-pay').replace(/[^0-9]/g, '');
+      if (!needBoardField('p-to', pto.trim(), 'Say who the parcel is for.', 'parcel-reason') ||
+          !needBoardField('p-item', item.length === 2 ? item[0] : '', 'Pick what goes in the parcel.', 'parcel-reason') ||
+          !needBoardField('p-letter', pwords.trim(), 'Write a letter to go with it.', 'parcel-reason') ||
+          !needBoardField('p-pay', ppay, 'Enter the courier pay in gold.', 'parcel-reason')) return;
+      try { encodeURIComponent(pto); encodeURIComponent(pwords); }
+      catch (eParcel) { showBoardReason('parcel-reason', 'That parcel contains invalid text. Nothing was sent; keep your draft.'); return; }
+      sendSubmission('parcel', [pto, pwords, ppay, item[0], item[1], pcount]);
       return;
     }
     if (verb === 'done' && n) {

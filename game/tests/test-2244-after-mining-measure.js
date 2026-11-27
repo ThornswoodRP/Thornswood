@@ -25,6 +25,11 @@ const code = block.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
 yes('it starts on a pickaxe idle and reads at the end of the spell, 0.5 s and 3 s later',
     /MINE_START\.test\(name\)/.test(code) && /idlechairexitstart/i.test(code) && /now \+ 500/.test(code) && /now \+ 3000/.test(code));
+yes('#4549: it also reads as the idle is asked for and 0.5 s into it, which says whether it was taken',
+    /afterAsked\.push\(\['as ' \+ name \+ ' was asked for', now\], \['0\.5 s into ' \+ name, now \+ 500\]\)/.test(code));
+yes('#4549: and writes the events of the 3 s before the idle in one line, newest kept, at most 12',
+    /AFTER_BEFORE_MS = 3000/.test(code) && /say\('after mining: before ' \+ name \+ ': '/.test(code) &&
+    /afterRecent\.push\(\[name, now\]\);\s*if \(afterRecent\.length > 12\) \{ afterRecent\.shift\(\); \}/.test(code));
 yes('and again after the next equip and unequip, which is what frees them',
     /sp\.on\('equip'/.test(code) && /sp\.on\('unequip'/.test(code));
 yes('only the character\'s own equip and unequip count, not an NPC\'s near the camera',
