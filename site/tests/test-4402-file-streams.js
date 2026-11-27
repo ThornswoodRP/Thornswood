@@ -180,7 +180,8 @@ function ask(port, method, where, headers, body) {
     for (let i = 0; i < n; i++) makers.push(path.basename(f));
   }
   yes('one read stream is made in the site, in lib/http.js (' + makers.join(', ') + ')', makers.length === 1 && makers[0] === 'http.js');
-  const httpText = fs.existsSync(path.join(LIB, 'http.js')) ? fs.readFileSync(path.join(LIB, 'http.js'), 'utf8') : '';
+  // Windows checks the repository out with CRLF line ends.
+  const httpText = fs.existsSync(path.join(LIB, 'http.js')) ? fs.readFileSync(path.join(LIB, 'http.js'), 'utf8').split('\r\n').join('\n') : '';
   const fn = /function streamFile\([\s\S]*?\n}\n/.exec(httpText);
   yes('and it is streamFile\'s, which opens the file before it writes a header and reads it through pipeline', !!fn &&
       fn[0].indexOf('fs.openSync(') >= 0 && fn[0].indexOf('fs.openSync(') < fn[0].indexOf('res.writeHead(') &&
