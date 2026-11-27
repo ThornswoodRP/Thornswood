@@ -694,18 +694,10 @@ if (!haveFork) {
 
 // ---------------------------------------------------------------- the LGPL
 //
-// #1332. Two of the libraries the fork's build links are not permissive:
-// antigo (LGPL-3.0) and frida-gum (the wxWindows Library Licence 3.1). The
-// issue said antigo goes to every client inside MpClientPlugin.dll and asked
-// for the LGPL text and a notice to go with it. Measured on 5 October: the
-// build links antigo into MpClientPlugin.dll, but nothing in the client calls
-// it, so its code is only in scam_native.node, which nobody receives, and the
-// LGPL asks nothing of what ships. frida-gum is in SkyrimPlatformImpl.dll;
-// gum's own licence has an exception for binaries, and the libraries its
-// devkit carries are held below (#3099, #3287). THIRD-PARTY.md says
-// so, and this holds it there: the day a client file calls antigo, the fork
-// files that use it stop being the three server ones and this fails, because
-// then its notice and the LGPL text have to go with that file.
+// #1332. Keep declared licence/source facts and measured file associations
+// separate. A new link layout can include antigo in the client measurement
+// without adding a new source file that calls it. Every measured association
+// still needs its notice and exact table row, as the checks below require.
 function cl0() {
   try { return JSON.parse(read(path.join(REPO, 'records', 'client-licences.json')).replace(/^\uFEFF/, '')); } catch (e) { return null; }
 }
@@ -713,25 +705,29 @@ const libRows = N.split('\n').filter(function (l) { return l.charAt(0) === '|'; 
 const antigoRow = libRows.filter(function (l) { return /^\| antigo, https:\/\/github\.com\/nic11\/antigo /.test(l); })[0] || '';
 const fridaRow = libRows.filter(function (l) { return /^\| frida-gum \d/.test(l); })[0] || '';
 const antigoAt = (/`([0-9a-f]{40})`/.exec(antigoRow) || [])[1] || '';
-// The fork's build measures it since #3099: the record names no antigo in any client file.
-if (cl0()) {
-  const withAntigo = Object.keys(cl0().files || {}).filter(function (f) { return (cl0().files[f] || []).indexOf('antigo') >= 0; });
-  yes('records\\client-licences.json names antigo in no client file' + (withAntigo.length ? ', but: ' + withAntigo.join(', ') : ''), withAntigo.length === 0);
-}
+const antigoMeasurement = cl0();
+const withAntigo = Object.keys(antigoMeasurement && antigoMeasurement.files || {}).filter(function (f) {
+  return (antigoMeasurement.files[f] || []).indexOf('antigo') >= 0;
+}).sort();
+const antigoPort = antigoMeasurement && antigoMeasurement.ports && antigoMeasurement.ports.antigo;
+yes('antigo file associations agree in the measured files and port record',
+    JSON.stringify(withAntigo) === JSON.stringify((antigoPort && antigoPort.in || []).slice().sort()) &&
+    withAntigo.every(function (f) { return !!(cb && cb.files && cb.files[f]); }));
 const fridaAt = (/`([0-9a-f]{40})`/.exec(fridaRow) || [])[1] || '';
 const fridaVer = (/^\| frida-gum (\d+\.\d+\.\d+)/.exec(fridaRow) || [])[1] || '';
 yes('THIRD-PARTY.md has a row for antigo naming its commit (' + (antigoAt.slice(0, 8) || 'none') + ')', antigoAt.length === 40);
 yes('the antigo row gives LGPL-3.0', /\| LGPL-3\.0\b/.test(antigoRow));
-yes('the antigo row says its code is only in scam_native.node', /\| Only in `scam_native\.node`/.test(antigoRow));
+yes('the antigo row names the server and refers client associations to the measured table',
+    antigoRow.indexOf('`scam_native.node`') >= 0 && antigoRow.indexOf('measured library table') >= 0);
 yes('THIRD-PARTY.md has a row for frida-gum naming its version and commit (' + (fridaVer || 'none') + ')',
     fridaVer.length > 0 && fridaAt.length === 40);
 yes('the frida-gum row gives gum\'s wxWindows Library Licence 3.1 and SkyrimPlatformImpl.dll',
     fridaRow.indexOf('wxWindows Library Licence 3.1') >= 0 && fridaRow.indexOf('`SkyrimPlatformImpl.dll`') >= 0);
-yes('THIRD-PARTY.md no longer says this repository has an LGPL-3.0.txt to ship',
-    !fs.existsSync(path.join(ROOT, 'LGPL-3.0.txt')) && /It has none, and none is owed/.test(flat(N)));
+yes('a measured client antigo association has its declared licence and notice',
+    withAntigo.length === 0 || !!(antigoPort && antigoPort.licence === 'LGPL-3.0' &&
+      /GNU LESSER GENERAL PUBLIC LICENSE/.test(read(path.join(REPO, 'records', 'client-licences', 'antigo.txt')) || '')));
 // The fork files that use antigo, other than its port and the build files
-// that link it. MpClientPlugin.dll takes server_guest_lib for Inventory.cpp
-// only, so these three put nothing of antigo into it.
+// that link it. Keep this source-use guard even when the link layout changes.
 const ANTIGO_USERS = [
   'skymp5-server/cpp/addon/ScampServer.cpp',
   'skymp5-server/cpp/server_guest_lib/MpObjectReference.cpp',
@@ -743,8 +739,7 @@ const ANTIGO_LINKS = ['vcpkg.json', 'skymp5-server/cpp/CMakeLists.txt'];
 // names so the addon compiles without it; THIRD-PARTY.md says so.
 const ANTIGO_TESTS = 'misc/tests/';
 // The fork's Thornswood build scripts go into no file anybody receives either.
-// Write-ClientLicences.ps1 (#3099) names antigo as the library its measurement
-// finds linked into MpClientPlugin.dll with no code kept.
+// Write-ClientLicences.ps1 (#3099) measures the recorded client files.
 const ANTIGO_TOOLS = 'misc/thornswood/';
 if (!haveFork) {
   skip('no fork here, so the antigo and frida-gum ports and antigo\'s users were not read');
@@ -782,8 +777,9 @@ if (!haveFork) {
 }
 // The recorded client files themselves, where the game folder holds them. A
 // string of antigo's own (from its ResolvedContext.cpp at that commit) is in
-// its library and in the recorded scam_native.node, and must not be in the
-// recorded MpClientPlugin.dll. GumInterceptor is frida-gum's.
+// its library and in the recorded scam_native.node. If one is in a recorded
+// client file, its measured inventory must declare antigo. Their absence
+// cannot prove absence of every other function. GumInterceptor is frida-gum's.
 const GAME = process.env.THORNSWOOD_GAME || 'C:\\Thornswood\\Game';
 function recordedCopy(rel) {
   const p = path.join(GAME, rel);
@@ -798,8 +794,8 @@ if (!mpc) {
   skip('no recorded MpClientPlugin.dll in ' + GAME + ', so it was not read for antigo');
 } else {
   ANTIGO_SAYS.forEach(function (s) {
-    yes('the recorded MpClientPlugin.dll carries none of antigo\'s code ("' + s.trim() + '" is not in it)',
-        mpc.indexOf(Buffer.from(s, 'latin1')) < 0);
+    yes('the recorded MpClientPlugin.dll declares antigo if it contains "' + s.trim() + '"',
+        mpc.indexOf(Buffer.from(s, 'latin1')) < 0 || withAntigo.indexOf('Data\\SKSE\\Plugins\\MpClientPlugin.dll') >= 0);
   });
 }
 const lib = path.join(FORK, 'build', 'vcpkg_installed', 'x64-windows-sp', 'lib', 'antigo.lib');
@@ -831,6 +827,19 @@ try { cl = JSON.parse(read(path.join(REPO, 'records', 'client-licences.json')).r
 yes('records\\client-licences.json reads', !!(cl && cl.forkCommit && cl.files && cl.ports));
 if (cl) {
   yes('records\\client-licences.json is of the client record\'s commit (' + cl.forkCommit + ')', !!cb && String(cl.forkCommit) === String(cb.forkCommit));
+  const associationErrors = [];
+  Object.keys(cl.files).forEach(function (f) {
+    if (!(cb && cb.files && cb.files[f]) || !Array.isArray(cl.files[f])) { associationErrors.push(f); return; }
+    cl.files[f].forEach(function (n) {
+      if (!cl.ports[n] || !Array.isArray(cl.ports[n].in) || cl.ports[n].in.indexOf(f) < 0) associationErrors.push(n);
+    });
+  });
+  Object.keys(cl.ports).forEach(function (n) {
+    const declared = cl.ports[n].in;
+    const measured = Object.keys(cl.files).filter(function (f) { return Array.isArray(cl.files[f]) && cl.files[f].indexOf(n) >= 0; }).sort();
+    if (!Array.isArray(declared) || !declared.length || JSON.stringify(declared.slice().sort()) !== JSON.stringify(measured)) associationErrors.push(n);
+  });
+  yes('every measured port and recorded client file have matching associations', associationErrors.length === 0);
   const HEAD = '| Library | Version | Licence, as its port declares it | In |';
   const lines = N.split('\n');
   const at = lines.indexOf(HEAD);

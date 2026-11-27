@@ -510,6 +510,7 @@ beside the note, which lists each one with the files it is in; Setup puts the
 folder in the install folder. `tests\test-third-party.js` holds this table to
 the record.
 
+<!-- engine-pin:ports -->
 | Library | Version | Licence, as its port declares it | In |
 |---|---|---|---|
 | asio | 1.32.0 | BSL-1.0 | `SkyrimPlatformImpl.dll` |
@@ -535,6 +536,7 @@ the record.
 | slikenet | 2021-06-07 | not declared; its text is in `slikenet.txt` | `MpClientPlugin.dll` |
 | spdlog | 1.17.0 | MIT | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
 | zlib | 1.3.1 | Zlib | `SkyrimPlatformImpl.dll` |
+<!-- /engine-pin:ports -->
 
 A port that declares no licence still has its text, and the text is what
 goes out: cef-prebuilt's is the Chromium Embedded Framework's BSD licence,
@@ -550,33 +552,25 @@ file or it is not there at all.
 
 | Library | Licence | Where its code is |
 |---|---|---|
-| antigo, https://github.com/nic11/antigo at `da15297955935da32e455fc1ca2a12faf564caae` (`overlay_ports\antigo`) | LGPL-3.0, by its `LICENSE` and the port's `vcpkg.json` | Only in `scam_native.node`, the game server's module |
+| antigo, https://github.com/nic11/antigo at `da15297955935da32e455fc1ca2a12faf564caae` (`overlay_ports\antigo`) | LGPL-3.0, by its `LICENSE` and the port's `vcpkg.json` | The game server, `scam_native.node`; current client associations are in the measured library table above |
 | frida-gum 16.0.19 (`overlay_ports\frida-gum`), Frida's own built devkit, from https://github.com/frida/frida-gum at `698b356fef0ecfc3ac2818f0b387be90e93deeda`, the commit Frida 16.0.19 names for it | wxWindows Library Licence 3.1 for gum itself. The devkit's `frida-gum.lib` also holds glib, gobject, gnulib and libcharset (LGPL-2.1-or-later), proxy-libintl (LGPL-2.0-or-later), pcre2 and capstone (BSD-3-Clause) and libffi (MIT), below | In `SkyrimPlatformImpl.dll` |
 
-antigo is a trace logging library. The build links it into
-`MpClientPlugin.dll` as well (`skymp5-server\cpp\CMakeLists.txt` adds it to
-every target in `VCPKG_DEPENDENT`), but nothing in the client calls it, so the
-linker leaves it out. The only fork files that use it are the server's
-`addon\ScampServer.cpp` and `server_guest_lib\MpObjectReference.cpp` and
-`WorldState.cpp`. One more fork file names it and uses none of it:
-`misc\tests\node\test_save_completion_addon.cpp`, a test fixture (fork #77)
-that writes stand-ins of its own for antigo's names so the server's addon
-code compiles without it, and that only the fork's own node test builds.
-Nothing under `misc\tests` goes into a file anybody receives, and nor do
-the fork's build scripts under `misc\thornswood`. Since #3099 the fork's
-build measures it: `records\client-licences.json`, read from each client
-file's program database, names antigo in none of them.
-`MpClientPlugin.dll` takes `server_guest_lib` for its
-inventory code only, and none of the messages in those two files is in the
-recorded `MpClientPlugin.dll`. Nor is any of antigo's own (`resolved context
-with`, `stringstream error!`), while the recorded `scam_native.node` has every
-one of them. So no file anybody receives carries antigo. The LGPL asks for its
-notice, its text and a way to relink only where a copy is handed to somebody,
-and running the server hands nobody a copy: it asks nothing of Thornswood
-today. #1332 said this repository holds an `LGPL-3.0.txt`. It has none, and
-none is owed. The day a client file calls antigo, the LGPL's notice and text
-have to go with that file, and `tests\test-third-party.js` fails when a fork
-file outside those three and the fork's tests starts using it.
+antigo is a trace logging library. Its source files in the fork are
+`skymp5-server\cpp\addon\ScampServer.cpp`,
+`skymp5-server\cpp\server_guest_lib\MpObjectReference.cpp` and
+`skymp5-server\cpp\server_guest_lib\WorldState.cpp`. The fork's
+`misc\tests\node\test_save_completion_addon.cpp` writes stand-ins for its names.
+Nothing under `misc\tests` goes into a file anybody receives.
+
+The current client associations are measured from each recorded file's own
+program database and kept in `records\client-licences.json`. They can change
+when a build changes which objects are linked, even if those source files
+have not changed. The generated table above names every measured port and
+its client files. When antigo is listed there, its declared licence is
+LGPL-3.0 and its notice text is `records\client-licences\antigo.txt`, held to
+the record's byte count and SHA256. The two historical diagnostic strings
+are an additional byte check, not a replacement for that measured inventory.
+The source directions remain under "Where the source is" below.
 
 frida-gum is Skyrim Platform's function hooking (`FridaHooks.cpp`,
 `FridaHookHandler.cpp`), and `GumInterceptor` is in the recorded
@@ -618,12 +612,14 @@ texts. The Tilted text is the four Tilted sections of `THIRD_PARTY_LICENSES`
 as they stand, which is all the notice there is; the others are their own
 licence files, byte for byte.
 
+<!-- engine-pin:libraries -->
 | Library | Version | Licence, as its folder or package gives it | In |
 |---|---|---|---|
 | npm-eventemitter3-5.0.1 | 5.0.1 | MIT | `skymp5-client.js` |
 | papyrus-vm | the fork's | MIT | `SkyrimPlatformImpl.dll` |
 | tilted | the fork's | not declared; its text is in `tilted.txt` | `SkyrimPlatformCEF.exe.hidden`, `SkyrimPlatformImpl.dll` |
 | viet | the fork's | MIT | `MpClientPlugin.dll`, `SkyrimPlatformImpl.dll` |
+<!-- /engine-pin:libraries -->
 
 Measured on 27 October by fork #124's own Windows build (its head
 `08a110a8`, on `ac2193e5`): the program databases show code from
@@ -1523,7 +1519,7 @@ rewrite takes it out (#3684).
   feed's client files (a dev Ship) first.
   Section 13 of the AGPL asks that everybody who connects to a modified server
   over a network be offered its source. The next section is that offer.
-  `scam_native.node` is also the one file that carries antigo, under the
+  `scam_native.node` also uses antigo, under the
   LGPL-3.0 (above). The fork at that commit names antigo's source by commit
   and SHA512 in `overlay_ports\antigo\portfile.cmake`.
 
