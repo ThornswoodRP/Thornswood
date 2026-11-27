@@ -869,6 +869,9 @@ def main():
     door_fields = ('gatesUnlocked', 'riftwealdUnlocked', 'claimableDoorsUnlocked',
                    'authoredDoorsUnlocked', 'authoredDoorsDirectActivation')
     door_edits = {ref for key in door_fields for ref in (lo_doc.get(key) or [])}
+    passage = lo_doc.get('cisternPassage') or {}
+    door_edits.update(passage.get('enabled') or [])
+    door_edits.update(passage.get('disabled') or [])
     floor_off = int((lo_doc.get('floorItems') or {}).get('off') or 0) + len((lo_doc.get('holdOnly') or {}).get('off') or [])
     for n in OURS_AFTER:
         # Made in the Data folder from its recipe since #2791 (own_plugins.py).

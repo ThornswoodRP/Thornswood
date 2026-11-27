@@ -17,7 +17,9 @@
 //      Orders copied, an issue already on the board put right through the
 //      add that gives back its card (REST's add answers 422 for one, #5185),
 //      a dry run that writes nothing, a type somebody set left alone, an
-//      issue that fails named and the run red, a board without its Status
+//      issue that fails named and the run red, a deleted issue or a number
+//      that is no issue in a pull request's text said and the run green
+//      (#7313), a board without its Status
 //      options refused, and nothing run without its settings;
 //   3. the wiring: board.yml runs on issue events for the labels it reads,
 //      on pr-events.yml's completion and by hand, on main, in the board
@@ -145,6 +147,7 @@ function github(o) {
     if ((m = /^repos\/ThornswoodRP\/Thornswood\/issues\/(\d+)\/timeline\?per_page=100$/.exec(p))) { return answer(200, (o.timelines || {})[m[1]] || []); }
     if ((m = /^repos\/ThornswoodRP\/Thornswood\/issues\/(\d+)$/.exec(p))) {
       const i = (o.issues || {})[m[1]];
+      if ((o.deleted || []).indexOf(Number(m[1])) >= 0) { return answer(410, { message: 'This issue was deleted' }); }
       if (!i || o.broken === Number(m[1])) { return answer(o.broken === Number(m[1]) ? 502 : 404, { message: 'Not Found' }); }
       return answer(200, Object.assign({ node_id: 'I_' + m[1] }, i));
     }
@@ -223,6 +226,22 @@ const cardAdd = (w, n) => w.find(x => x.method === 'POST' && x.path === 'graphql
     issues: { 10: issue(10) }, timelines: { 10: [xref(56)] },
   });
   yes('a merged pull request with its test task: Merged', fieldWrite(r.writes, 10).body.fields[0].value === 's2');
+
+  // #7313: PR #7009 named #2351, a deleted issue, and its board run went red.
+  r = await go(['--pull', '57'], {
+    pulls: { 57: { number: 57, state: 'open', merged_at: null, title: 'x', body: 'Refs #10, #2351 and #64274' } },
+    issues: { 10: issue(10) }, timelines: { 10: [] }, deleted: [2351],
+  });
+  yes('a pull request naming a deleted issue and a number that is no issue: said, the rest set, and green: ' + r.lines.slice(1, 3).join(' / '),
+      r.code === 0 && fieldWrite(r.writes, 10) && /#2351 was deleted, so it has no card/.test(r.out) && /#64274 is no issue of ThornswoodRP\/Thornswood, so it has no card/.test(r.out) && !/not put right/.test(r.out));
+  r = await go(['--pull', '57'], {
+    pulls: { 57: { number: 57, state: 'open', merged_at: null, title: 'x', body: 'Refs #10, #11 and #2351' } },
+    issues: { 10: issue(10), 11: issue(11) }, timelines: { 10: [], 11: [] }, deleted: [2351], broken: 11,
+  });
+  yes('  but one that GitHub fails to answer for it still turns it red',
+      r.code === 1 && /#11: not put right: GET repos\/ThornswoodRP\/Thornswood\/issues\/11 answered 502/.test(r.out) && /not put right: #11$/.test(r.lines[r.lines.length - 1]) && fieldWrite(r.writes, 10));
+  r = await go(['--issues', '2351'], { deleted: [2351] });
+  yes('  and a deleted number given by hand is still a failure', r.code === 1 && /#2351: not put right: .* answered 410/.test(r.out));
 
   r = await go(['--all'], { open: [issue(1), issue(2, { pull_request: {} }), issue(3), issue(4), issue(5)], issues: { 1: issue(1), 3: issue(3), 4: issue(4), 5: issue(5, { state: 'closed' }) } });
   yes('every open issue, across pages, never a pull request: ' + r.lines[0], r.code === 0 && /^4 open issues$/.test(r.lines[0]) &&

@@ -77,7 +77,7 @@ else { Say "  no JK's Skyrim patch found, drivers may stand in odd places" 'Yell
 $7z = Find-SevenZip
 if (-not $7z) { Die '7-Zip is not installed.' }
 
-$work = Join-Path $env:TEMP 'CFTO-install'
+$work = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') 'CFTO-install'
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 $null = New-Item -ItemType Directory -Force -Path "$work\main", "$work\jk"
 

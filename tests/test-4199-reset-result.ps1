@@ -84,7 +84,12 @@ $bodyAssign = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.La
 $useLocal = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.IfStatementAst] -and "$($n.Clauses[0].Item1)" -eq '$UseLocal' }, $true))
 Yes 'the reset''s body and its -UseLocal branch are found' ($bodyAssign.Count -eq 1 -and $useLocal.Count -eq 1)
 function Run-UseLocal([string]$root) {
-    $f = Join-Path $T ('uselocal-' + [Guid]::NewGuid().ToString('N') + '.ps1')
+    # The branch takes its scratch folder from scripts\release\Get-ScratchDir.ps1
+    # beside its own folder (#4264), so the lifted copy sits in the same layout.
+    $ops = New-Item -ItemType Directory -Force -Path (Join-Path $T 'ops')
+    $rel = New-Item -ItemType Directory -Force -Path (Join-Path $T 'release')
+    Copy-Item -LiteralPath (Join-Path $Repo 'scripts\release\Get-ScratchDir.ps1') -Destination $rel.FullName -Force
+    $f = Join-Path $ops.FullName ('uselocal-' + [Guid]::NewGuid().ToString('N') + '.ps1')
     $text = @"
 `$ErrorActionPreference = 'Stop'
 . '$ListPs'

@@ -124,7 +124,42 @@ try {
     $text = $fn[0].Extent.Text.Replace('$Root', $Root).Replace('$TaskName', $TaskName)
     $box = [scriptblock]::Create($text + "`nRemoveStrayTasks")
     $taskStage = 'remove-strays'
-    $said = @(& $box | ForEach-Object { "$_" })
+    # Observe the existing query, not a second snapshot that might disagree.
+    # The child scope shadows only this invocation; named result reads below
+    # still use the original command. Keep its error action and output intact.
+    $taskQuery = Get-Command Get-ScheduledTask -ErrorAction Stop
+    $said = @(& {
+        param($taskQuery, $box, $fixtureNames, $fixtureRoot)
+        function Get-ScheduledTask {
+            [CmdletBinding()]param()
+            $queryErrors = @()
+            $queried = @(& $taskQuery @PSBoundParameters -ErrorVariable queryErrors)
+            $observed = foreach ($alias in $fixtureNames.Keys) {
+                $owned = @($queried | Where-Object { $_.TaskName -eq $fixtureNames[$alias] })
+                [ordered]@{
+                    alias = $alias; count = $owned.Count
+                    actions = @($owned | ForEach-Object {
+                        foreach ($action in @($_.Actions)) {
+                            [ordered]@{
+                                execute = [string]$action.Execute
+                                arguments = [string]$action.Arguments
+                                workingDirectory = [string]$action.WorkingDirectory
+                            }
+                        }
+                    })
+                }
+            }
+            # No unrelated identities, actions, principals or error messages.
+            # Information output never enters $said or the installer's rows.
+            Write-Host ('VOICE_TASK_ENUMERATION ' + ([ordered]@{
+                event = 'voice_task_enumeration'; root = $fixtureRoot
+                tasks = @($observed)
+                errorIds = @($queryErrors | ForEach-Object { [string]$_.FullyQualifiedErrorId })
+            } | ConvertTo-Json -Depth 8 -Compress))
+            $queried
+        }
+        & $box
+    } $taskQuery $box $names $Root | ForEach-Object { "$_" })
     $said | ForEach-Object { Write-Host ('      ' + $_) }
     $left = @{}
     $taskStage = 'read-results'

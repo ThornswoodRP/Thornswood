@@ -386,7 +386,7 @@ if (P && listsSrc && parts.every(function (p) { return !!p; })) {
   const code = gm.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
   yes('onCraft hands the effects to the gate',
       /mp\.onCraft = guard\('onCraft', function \(actorId, craftedItemBaseId, count, recipeId, workbenchId, effects\)/.test(code) &&
-      /return recipelessCraft\(actorId, craftedItemBaseId, workbenchId, effects, inputs\);/.test(code));
+      /const made = recipelessCraft\(actorId, craftedItemBaseId, workbenchId, effects, inputs\);[\s\S]{0,120}return made;/.test(code));
   const character = slice(gm, '// ==== thornswood character ====', '// ==== end thornswood character ====') || '';
   const writeState = slice(character, 'function writeState(', '\n  }\n') || '';
   const grantKnown = slice(character, 'function grantKnown(actorId) {', '\n  }\n') || '';

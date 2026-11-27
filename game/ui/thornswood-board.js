@@ -114,13 +114,13 @@
     '  box-shadow:0 24px 80px rgba(0,0,0,.7);overflow:hidden}',
     '#' + ID + ' h2{margin:0;padding:18px 24px 14px;font-size:26px;font-weight:normal;line-height:1.1;',
     '  color:#f6e9c8;border-bottom:1px solid rgba(198,170,109,.22);display:flex;align-items:baseline;gap:14px}',
-    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.6);font-style:italic}',
+    '#' + ID + ' h2 .sub{font-size:14px;color:rgba(217,207,180,.7);font-style:italic}',
     '#' + ID + ' .body{overflow:auto;padding:16px 24px;display:block;',
     '  font-size:16px}',
     '#' + ID + ' .foot{padding:12px 24px;border-top:1px solid rgba(198,170,109,.22);',
     '  display:flex;gap:10px;align-items:center;justify-content:flex-end}',
     '#' + ID + ' .foot .make{margin-right:auto}',
-    '#' + ID + ' h3{margin:16px 0 8px;padding-bottom:6px;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;',
+    '#' + ID + ' h3{margin:16px 0 8px;padding-bottom:6px;font-size:12px;letter-spacing:.24em;text-transform:uppercase;',
     '  color:rgba(198,170,109,.85);font-weight:normal;border-bottom:1px solid rgba(198,170,109,.22)}',
     '#' + ID + ' h3:first-child{margin-top:0}',
     '#' + ID + ' .row{display:flex;align-items:center;gap:10px;padding:10px 12px;flex-wrap:wrap;',
@@ -138,7 +138,7 @@
     '#' + ID + ' button[data-confirm]{max-width:100%;white-space:normal;overflow-wrap:anywhere}',
     '#' + ID + ' .action-status{flex:1;min-width:0;overflow-wrap:anywhere;color:#e9d19b}',
     '#' + ID + ' button.go{background:#c6aa6d;border-color:#e9d19b;color:#1b1205}',
-    '#' + ID + ' .none{color:rgba(217,207,180,.6);font-style:italic;padding:6px 2px}',
+    '#' + ID + ' .none{color:rgba(217,207,180,.7);font-style:italic;padding:6px 2px}',
     '#' + ID + ' .note{color:rgba(217,207,180,.7);font-size:12.5px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' .said{color:#e9d19b;font-size:14px;line-height:1.5;margin-top:8px}',
     '#' + ID + ' .line{display:flex;gap:8px;align-items:center;margin-bottom:8px}',
@@ -577,7 +577,7 @@
     if (dests.length) {
       out += '<h3>Send a haul</h3>';
       out += '<div class="line"><input class="pay" id="' + ID + '-pay" aria-label="Haul pay in gold" placeholder="pay">' +
-        '<select id="' + ID + '-dest">';
+        '<select id="' + ID + '-dest" aria-label="Where the haul goes">';
       for (var d = 0; d < dests.length; d++) {
         out += '<option value="' + esc(dests[d].hold) + '">' + esc(dests[d].where) + '</option>';
       }

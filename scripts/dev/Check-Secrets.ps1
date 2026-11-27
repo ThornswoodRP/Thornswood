@@ -89,8 +89,11 @@ $ContentRules = @(
     # The bot's own token (bot.env.json on the VPS).
     @{ Name = 'discord-bot-token'; Rx = '(?<![A-Za-z0-9_-])[MNO][A-Za-z0-9_-]{23,28}\.[A-Za-z0-9_-]{6,7}\.[A-Za-z0-9_-]{27,40}(?![A-Za-z0-9_-])' },
     # The update token is a fine-grained personal access token; any other
-    # GitHub token has one of these prefixes.
-    @{ Name = 'github-token';      Rx = '(?<![A-Za-z0-9_])(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})' },
+    # GitHub token has one of these prefixes. Since GitHub's rollout ended on
+    # 2 Oct 2026 an App's installation token is ghs_, the App's id, an
+    # underscore and a JWT, about 520 characters (#6188), and the id's
+    # underscore ends the older shape's run after a few digits.
+    @{ Name = 'github-token';      Rx = '(?<![A-Za-z0-9_])(?:gh[pousr]_[A-Za-z0-9]{36,}|ghs_[0-9]{1,12}_[A-Za-z0-9_.-]{100,}|github_pat_[A-Za-z0-9_]{50,})' },
     # The key that signs in to the VPS, or any other private key.
     @{ Name = 'private-key';       Rx = '-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----' },
     # A voice join token, the shape signToken in voice\voice-server.js

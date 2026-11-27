@@ -4,6 +4,10 @@ Bows, arrows, instruments, and the long weapons that are wood as much
 as metal. Spears, pikes and halberds are this half when the table
 files them here.
 
+The instruments are made at the woodworking bench: the flute, the lute,
+the drum and the war horn. The horn is a horker tusk and a leather strip,
+and the emote wheel's Horn needs one in the pack (#7167).
+
 The [Woodwright recipe list](../../lists/woodworker-woodwright.md)
 gives the counts by rank and shows each recipe's bench, race and whether
 it reaches the server.

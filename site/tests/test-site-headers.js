@@ -177,6 +177,33 @@ function stop(run) {
         // only for that must not go out on plain HTTP.
         yes('no Strict-Transport-Security on a plain HTTP answer, as before',
             !page.headers['strict-transport-security']);
+
+        // Over the certificate (#4586): Caddy says so with X-Forwarded-Proto
+        // https, and every answer then carries the header once, with the
+        // value the door sets too (test-2762-door-headers holds the two the
+        // same). A year, with the subdomains.
+        const HSTS = 'max-age=31536000; includeSubDomains';
+        const https = { 'x-forwarded-proto': 'https' };
+        const overTls = [
+          ['a public page', await ask(run.port, '/rules', https)],
+          ['an API answer', await ask(run.port, '/api/public', https)],
+          ['a redirect', await ask(run.port, '/download', https)],
+          ['a 404 page', await ask(run.port, '/no-such-address', Object.assign({ accept: 'text/html' }, https))],
+          ['a static file', await ask(run.port, '/fixture.txt', https)],
+          ['a byte range', await ask(run.port, '/fixture.txt', Object.assign({ range: 'bytes=0-3' }, https))],
+          ['the 400 for a bad address', await ask(run.port, '/%zz', https)]
+        ];
+        overTls.forEach(function (pair) {
+          const r = pair[1];
+          let seen = 0;
+          for (let i = 0; i < r.raw.length; i += 2) { if (String(r.raw[i]).toLowerCase() === 'strict-transport-security') { seen++; } }
+          yes(pair[0] + ' over HTTPS carries Strict-Transport-Security once, as ' + HSTS +
+              ' (' + (r.headers['strict-transport-security'] || 'none') + ', ' + seen + ')',
+              r.headers['strict-transport-security'] === HSTS && seen === 1);
+        });
+        const plainSaid = await ask(run.port, '/rules', { 'x-forwarded-proto': 'http' });
+        yes('and none when the door says the request came over plain HTTP',
+            plainSaid.status === 200 && !plainSaid.headers['strict-transport-security']);
       }
     }
   } catch (e) {
