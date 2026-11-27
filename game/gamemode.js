@@ -18623,13 +18623,16 @@ log('gamemode loaded:',
       '    var id = Number(v.id) || 0;',
       '    var st = ctx.state;',
       '    if (!st) { return; }',
-      '    if (st.thornswoodSkyId === id) { return; }',
-      // An id is applied only when its native operation completes. A form
-      // unavailable during loading must not suppress later owner updates.
+      // The owner state survives a native load in the same client. A freshly
+      // decoded property must apply again even when its sky hasn't changed.
+      '    if (st.thornswoodSkyId === id && st.thornswoodSkyPayload === v) { return; }',
+      // Cache the payload only after the native operation completes. Loading
+      // can temporarily make the native weather form unavailable.
       '    if (!id) {',
       '      if (!ctx.sp.Weather.releaseOverride) { return; }',
       '      ctx.sp.Weather.releaseOverride();',
       '      st.thornswoodSkyId = id;',
+      '      st.thornswoodSkyPayload = v;',
       '      return;',
       '    }',
       '    var form = ctx.sp.Game.getFormEx(id);',
@@ -18638,6 +18641,7 @@ log('gamemode loaded:',
       '    if (weather && weather.forceActive) {',
       '      weather.forceActive(true);',
       '      st.thornswoodSkyId = id;',
+      '      st.thornswoodSkyPayload = v;',
       '    }',
       '  } catch (e) { }',
       '})();'
