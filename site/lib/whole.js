@@ -21,6 +21,7 @@ const path = require('path');
    it in place refused it, and on Linux a rename would replace it. */
 function writeWhole(p, body) {
   if (fs.existsSync(p)) fs.accessSync(p, fs.constants.W_OK);
+  // TEMP's name; one a run leaves goes at the next start (clearLeftWrites).
   const tmp = path.join(path.dirname(p), '.' + path.basename(p) + '.' + process.pid + '.tmp');
   try {
     fs.writeFileSync(tmp, body, typeof body === 'string' ? 'utf8' : undefined);
@@ -35,4 +36,67 @@ function writeWhole(p, body) {
   }
 }
 
-module.exports = { writeWhole };
+/* The name of the temp file writeWhole puts beside <name>: a dot, the name,
+   the writer's process id, .tmp. */
+const TEMP = /^\.(.+)\.(\d+)\.tmp$/;
+
+// Whether a process of that id is running now (EPERM: running, not ours).
+function running(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (e) { return e.code === 'EPERM'; }
+}
+
+/* LEFT BY AN EARLIER RUN (#7437). A site killed or a box restarted part way
+   through writeWhole leaves the target whole and the temp file beside it,
+   up to a whole copy of the file (config.json's holds the Discord secret,
+   the bot token, botKey and the cookie secret), and no later write is ever
+   given that name again, since the next run has its own process id. So the
+   site clears them on the way up, before it writes anything: every temp
+   file of writeWhole's name under root, in every folder but node_modules
+   and folders whose name starts with a dot (uploads' .part, which
+   clearPartUploads owns). One whose writer is still running is another
+   process part way through its own write, and is left and said; on Windows
+   a later process can have that id, so it goes at a later start. Each one
+   removed is said, and each that will not go, with its code. Returns
+   { removed, left, failed }, each a list of paths under root. */
+function clearLeftWrites(root) {
+  const out = { removed: [], left: [], failed: [] };
+  const rel = (p) => path.relative(root, p);
+  const walk = (dir) => {
+    let names;
+    try { names = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch (e) {
+      if (e.code === 'ENOENT') return;
+      out.failed.push(rel(dir) || '.');
+      console.error('[thornswood-docs] could not look for left temp files in ' + (rel(dir) || root) + ' (' + (e.code || e.message) + ')');
+      return;
+    }
+    for (const d of names) {
+      const p = path.join(dir, d.name);
+      if (d.isDirectory()) {
+        if (d.name !== 'node_modules' && d.name[0] !== '.') walk(p);
+        continue;
+      }
+      const m = d.isFile() ? TEMP.exec(d.name) : null;
+      if (!m) continue;
+      const pid = Number(m[2]);
+      if (pid === process.pid || running(pid)) {
+        out.left.push(rel(p));
+        console.log('[thornswood-docs] left ' + rel(p) + ': process ' + pid + ' is running and may be writing it');
+        continue;
+      }
+      try {
+        fs.unlinkSync(p);
+        out.removed.push(rel(p));
+        console.log('[thornswood-docs] removed ' + rel(p) + ', left by a write cut off when the site last stopped');
+      } catch (e) {
+        out.failed.push(rel(p));
+        console.error('[thornswood-docs] could not remove ' + rel(p) + ', left by a write cut off when the site last stopped (' + (e.code || e.message) + ')');
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
+module.exports = { clearLeftWrites, writeWhole };

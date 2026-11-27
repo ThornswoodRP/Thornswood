@@ -48,9 +48,12 @@ if (process.argv[2] === '--strip-metadata') {
    files and node, with no install step. */
 const http   = require('http');
 const tls    = require('tls');
-const { BIND, DATA, EXPOSED, FILES, LEFT_OUT, PORT, UP } = require('./lib/base');
-require('./lib/whole');
+const { BIND, DATA, EXPOSED, FILES, LEFT_OUT, PORT, ROOT, UP } = require('./lib/base');
+const { clearLeftWrites } = require('./lib/whole');
 const { siteLog } = require('./lib/log');
+// Whole writes cut off when the site last stopped (#7437), said on the log,
+// before config.js, which can write config.json as it loads.
+clearLeftWrites(ROOT);
 const { cfg } = require('./lib/config');
 require('./lib/pages');
 require('./lib/feed');
