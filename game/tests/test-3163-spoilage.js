@@ -133,7 +133,7 @@ const COOK = 0xff000001, STRANGER = 0xff000002, CHEST = 0x10a001, COLD_CHEST = 0
 function world() {
   const w = {
     inv: {}, packClock: {}, chestClock: {}, said: [], shown: [], lines: {}, writes: 0,
-    failWrite: false, fire: false, cooks: {}, coldIds: {}, winter: function () { return false; }
+    failWrite: false, failClock: 0, failClockAfter: 0, logged: [], fire: false, cooks: {}, coldIds: {}, winter: function () { return false; }
   };
   w.api = {
     table: S,
@@ -149,9 +149,9 @@ function world() {
       return true;
     },
     packClock: function (id) { return w.packClock[id] || null; },
-    setPackClock: function (id, c) { w.packClock[id] = c; },
+    setPackClock: function (id, c) { if (w.failClockAfter > 0) { w.failClockAfter--; } else if (w.failClock > 0) { w.failClock--; throw new Error('refused'); } w.packClock[id] = c; },
     chestClock: function (id) { return w.chestClock[id] || null; },
-    setChestClock: function (id, c) { w.chestClock[id] = c; },
+    setChestClock: function (id, c) { if (w.failClockAfter > 0) { w.failClockAfter--; } else if (w.failClock > 0) { w.failClock--; throw new Error('refused'); } w.chestClock[id] = c; },
     cold: function (id) { return !!w.coldIds[id]; },
     winterAt: function (t) { return w.winter(t); },
     isContainer: function (desc) { return desc === 'chest'; },
@@ -161,7 +161,7 @@ function world() {
     setLine: function (id, on) { w.lines[id] = on; },
     show: function (id, v) { w.shown.push({ id: id, v: v }); },
     say: function (id, line) { w.said.push({ id: id, line: line }); },
-    log: function () {}
+    log: function () { w.logged.push(Array.prototype.join.call(arguments, ' ')); }
   };
   w.rot = create(w.api);
   return w;
@@ -251,7 +251,32 @@ function names(entries) { return (entries || []).map(function (x) { return x.bas
   w.rot.pass(COOK, t + 60000);
   yes('E6 a write that fails moves no clock, so the day is taken on the next look',
       w.packClock[COOK].ms === DAY - 1 && w.packClock[COOK].at === t);
+  yes('E6 and it is logged (#5284)', w.logged.some(function (l) { return /the goods of ff000001 were refused; the pack clock is as it was/.test(l); }));
   w.failWrite = false;
+  // A clock that is refused (#5284): before, the food was aged and the
+  // clock stayed, so the next look took the same day again.
+  w.logged = [];
+  w.failClock = 1;
+  const writesBefore = w.writes;
+  w.rot.pass(COOK, t + 60000);
+  yes('E6 a pack clock that is refused leaves the food as it was, and is logged (#5284)',
+      w.inv[COOK][0].name === 'Venison (3 days left)' && w.writes === writesBefore &&
+      w.packClock[COOK].ms === DAY - 1 && w.packClock[COOK].at === t &&
+      w.logged.some(function (l) { return /could not move the pack clock of ff000001/.test(l); }));
+  w.rot.pass(COOK, t + 60000);
+  w.rot.pass(COOK, t + 60000);
+  yes('E6 so the next look takes that day once, and only once (#5284)', w.inv[COOK][0].name === 'Venison (2 days left)');
+  w.inv[COOK] = [e(VENISON, 1, 'Venison (3 days left)')];
+  w.packClock[COOK] = { at: t, ms: DAY - 1 };
+  w.logged = [];
+  w.failWrite = true;
+  w.failClockAfter = 1;
+  w.failClock = 1;
+  w.rot.pass(COOK, t + 60000);
+  w.failWrite = false;
+  yes('E6 goods refused and the clock refused going back is logged as days not taken (#5284)',
+      w.inv[COOK][0].name === 'Venison (3 days left)' &&
+      w.logged.some(function (l) { return /could not put back the pack clock of ff000001/.test(l); }));
   const before = w.writes;
   w.inv[COOK] = [e(ALE, 1)];
   w.rot.pass(COOK, t + 120000);
@@ -268,6 +293,17 @@ function names(entries) { return (entries || []).map(function (x) { return x.bas
       r0.turned === 0 && w.chestClock[CHEST].at === t0 && w.chestClock[CHEST].days === 0 &&
       w.inv[CHEST].filter(function (x) { return x.name === 'Venison (6 days left)'; }).length === 1);
   yes('F1 and names plain food in it', w.inv[CHEST].filter(function (x) { return x.baseId === SALMON && / \(7 days left\)$/.test(x.name); }).length === 1);
+  // A chest clock that is refused (#5284) leaves the chest as it was.
+  w.failClock = 1;
+  w.rot.opened(CHEST, COOK, t0 + 3 * DAY + 5);
+  yes('F2 a chest clock that is refused takes nothing off, and is logged (#5284)',
+      w.inv[CHEST].filter(function (x) { return x.name === 'Venison (6 days left)'; }).length === 1 && w.chestClock[CHEST].days === 0 &&
+      w.logged.some(function (l) { return /could not move the chest clock of 10a001/.test(l); }));
+  w.failWrite = true;
+  w.rot.opened(CHEST, COOK, t0 + 3 * DAY + 5);
+  w.failWrite = false;
+  yes('F2 a chest whose goods are refused keeps its clock as it was (#5284)',
+      w.chestClock[CHEST].at === t0 && w.chestClock[CHEST].days === 0);
   w.rot.opened(CHEST, COOK, t0 + 3 * DAY + 5);
   yes('F2 three real days later three come off, offline or not',
       w.inv[CHEST].filter(function (x) { return x.name === 'Venison (3 days left)'; }).length === 1 && w.chestClock[CHEST].days === 3);
