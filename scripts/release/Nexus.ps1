@@ -56,6 +56,8 @@
       Invoke-NexusApi GET|POST|PATCH path [body]
                                           one request to the v3 API
       Invoke-NexusGraph query [variables] one request to the v2 GraphQL API
+      Set-NexusCollectionCategory id n    a collection's category, which a
+                                          publish needs
       Get-NexusArchiveFacts path          size and md5 of a local archive
       Send-NexusUpload facts              the whole upload: create, send,
                                           finalise, wait until it is available
@@ -279,6 +281,19 @@ function Invoke-NexusGraph([string]$Query, $Variables = $null, [string]$What = '
   $errs = @(@(Get-NexusField $j 'errors') | Where-Object { $_ })
   if ($errs.Count) { throw ($What + ' was refused: ' + ((@($errs | ForEach-Object { Get-NexusField $_ 'message' })) -join '; ')) }
   return (Get-NexusField $j 'data')
+}
+
+# Nexus publishes no revision of a collection that has no category: the
+# Dev collection's first publish on 27 Nov 2026 was refused with
+# "CollectionRevision cannot be published without a category" (#7193). A
+# collection made with POST /v3/collections has none. This gives it one with
+# PATCH /v3/collections/<id> {"category_id": n}, editCollection in the v3
+# OpenAPI, which answers 204.
+function Set-NexusCollectionCategory([string]$CollectionId, [int]$CategoryId, [string]$What = '') {
+  if ($CollectionId -notmatch '^[0-9]+$') { throw ('"' + $CollectionId + '" is not a collection id.') }
+  if ($CategoryId -lt 1) { throw ('' + $CategoryId + ' is not a collection category id.') }
+  if (-not $What) { $What = 'Giving collection ' + $CollectionId + ' category ' + $CategoryId }
+  [void](Invoke-NexusApi 'PATCH' ('/v3/collections/' + $CollectionId) ('{"category_id":' + $CategoryId + '}') $What)
 }
 
 # ------------------------------------------------------------ the archive ---

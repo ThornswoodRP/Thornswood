@@ -90,8 +90,23 @@ const files = {
     { id: 'ver-2222', game_scoped_id: '2222', name: 'Hashed', version: '2.0', category: 'main', uploaded_at: '2026-01-01T00:00:00Z', is_primary: true, position: '1' }] },
 };
 let nextFileId = 812345;
-const collection = { id: 515846, slug: '7essxf', name: 'Thornswood', latest: 2, draft: null,
+const collection = { id: 515846, slug: '7essxf', name: 'Thornswood', category: { id: 1, name: 'Total Overhaul' }, latest: 2, draft: null,
   revisions: { 2: { id: '801014', status: 'published', upload: null } } };
+// Collections made with POST /v3/collections (Copy-NexusRevision.ps1 -New,
+// #7193), and the one the harness adds, beside 7essxf.
+const others = [];
+function every() { return [collection].concat(others); }
+function bySlug(slug) { return every().find(c => c.slug === slug) || null; }
+function byId(id) { return every().find(c => String(c.id) === String(id)) || null; }
+function revisionById(id) {
+  for (const c of every()) { const n = Object.keys(c.revisions).find(k => c.revisions[k].id === String(id)); if (n) return { c: c, n: n }; }
+  return null;
+}
+function payloadOk(d) {
+  const mf = d && d.collection_manifest;
+  return !!(d && typeof d.adult_content === 'boolean' && typeof d.collection_schema_id === 'number' && mf && mf.info && mf.info.author && mf.info.name && mf.info.domain_name && Array.isArray(mf.mods) &&
+    mf.mods.every(x => x.name && typeof x.version === 'string' && typeof x.optional === 'boolean' && x.domain_name && x.source && x.source.type));
+}
 const uploads = {};
 const changelogs = [];
 
@@ -157,9 +172,10 @@ function api(req, res, url, body, json) {
       expires_at: '2100-01-01T00:00:00Z' } });
   }
   if (req.method === 'GET' && (m = p.match(/^\/v2\/collections\/(\d+)\/revisions\/(\d+)\/download_link$/))) {
-    if (Number(m[1]) !== collection.id) return problem(res, 404, 'No collection');
-    const n = Object.keys(collection.revisions).find(k => collection.revisions[k].id === m[2]);
-    if (!n || !collection.revisions[n].archive) return problem(res, 404, 'No revision ' + m[2]);
+    const col = byId(m[1]);
+    if (!col) return problem(res, 404, 'No collection');
+    const n = Object.keys(col.revisions).find(k => col.revisions[k].id === m[2]);
+    if (!n || !(col.revisions[n].archive || col.revisions[n].upload)) return problem(res, 404, 'No revision ' + m[2]);
     const base = 'http://127.0.0.1:' + server.address().port;
     return send(res, 200, { download_links: [{ name: 'Nexus CDN', short_name: 'Nexus CDN', URI: base + '/cdn/collection/' + m[2] + '?md5=z&expires=4102444800' }] });
   }
@@ -239,19 +255,38 @@ function api(req, res, url, body, json) {
     res.writeHead(204); return res.end();
   }
   if (req.method === 'POST' && (m = p.match(/^\/v3\/collections\/(\d+)\/revisions$/))) {
-    if (Number(m[1]) !== collection.id) return problem(res, 404, 'No collection');
+    const col = byId(m[1]);
+    if (!col) return problem(res, 404, 'No collection');
     const u = uploads[json && json.upload_id];
     if (!u || u.state !== 'available' || u.claimed) return problem(res, 422, 'upload_id is not an available upload');
     const d = json.collection_data;
-    const mf = d && d.collection_manifest;
-    const ok = d && typeof d.adult_content === 'boolean' && typeof d.collection_schema_id === 'number' && mf && mf.info && mf.info.author && mf.info.name && mf.info.domain_name && Array.isArray(mf.mods) &&
-      mf.mods.every(x => x.name && typeof x.version === 'string' && typeof x.optional === 'boolean' && x.domain_name && x.source && x.source.type);
-    if (!ok) return problem(res, 422, 'collection_data does not match CollectionPayload');
+    if (!payloadOk(d)) return problem(res, 422, 'collection_data does not match CollectionPayload');
     u.claimed = true;
-    const n = Math.max(collection.latest, collection.draft || 0) + 1;
-    collection.revisions[n] = { id: String(900000 + n), status: 'draft', upload: u.id, data: d };
-    collection.draft = n;
-    return send(res, 200, { data: { id: String(900000 + n), collection_id: String(collection.id), revision_number: n, revision_status: 'draft' } });
+    const n = Math.max(col.latest, col.draft || 0) + 1;
+    const rid = String((col === collection ? 900000 : col.id * 10) + n);
+    col.revisions[n] = { id: rid, status: 'draft', upload: u.id, data: d };
+    col.draft = n;
+    return send(res, 200, { data: { id: rid, collection_id: String(col.id), revision_number: n, revision_status: 'draft' } });
+  }
+  // editCollection: a collection's category, which a publish needs (#7193).
+  if (req.method === 'PATCH' && (m = p.match(/^\/v3\/collections\/(\d+)$/))) {
+    const col = byId(m[1]);
+    if (!col) return problem(res, 404, 'No collection');
+    if (!json || !Number.isInteger(json.category_id) || json.category_id < 1) return problem(res, 422, 'category_id');
+    col.category = { id: json.category_id, name: json.category_id === 1 ? 'Total Overhaul' : 'Category ' + json.category_id };
+    res.writeHead(204); return res.end();
+  }
+  if (req.method === 'POST' && p === '/v3/collections') {
+    const u = uploads[json && json.upload_id];
+    if (!u || u.state !== 'available' || u.claimed) return problem(res, 422, 'upload_id is not an available upload');
+    const d = json.collection_data;
+    if (!payloadOk(d)) return problem(res, 422, 'collection_data does not match CollectionPayload');
+    u.claimed = true;
+    const id = 600001 + others.length;
+    const col = { id: id, slug: 'dv' + id.toString(36), name: d.collection_manifest.info.name, category: null, latest: 0, draft: 1, revisions: {} };
+    col.revisions[1] = { id: String(id * 10 + 1), status: 'draft', upload: u.id, data: d };
+    others.push(col);
+    return send(res, 200, { data: { id: String(id), slug: col.slug, revision_id: String(id * 10 + 1), revision_number: 1, revision_status: 'draft' } });
   }
   return problem(res, 404, 'The stand-in has no ' + req.method + ' ' + p);
 }
@@ -261,9 +296,12 @@ function graph(req, res, json) {
   let m;
   if (/mutation/.test(q) && /publishRevision/.test(q)) {
     const id = String(json.variables && json.variables.revisionId);
-    const n = Object.keys(collection.revisions).find(k => collection.revisions[k].id === id);
-    if (!n || collection.revisions[n].status !== 'draft') return send(res, 200, { errors: [{ message: 'No draft revision ' + id }] });
-    collection.revisions[n].status = 'published'; collection.latest = Number(n); collection.draft = null;
+    const hit = revisionById(id);
+    if (!hit || hit.c.revisions[hit.n].status !== 'draft') return send(res, 200, { errors: [{ message: 'No draft revision ' + id }] });
+    if (control.refusePublish) return send(res, 200, { data: { publishRevision: { success: false } } });
+    // As Nexus answered the Dev collection's first publish on 27 Nov (#7193).
+    if (!hit.c.category) return send(res, 200, { errors: [{ message: 'CollectionRevision cannot be published without a category' }] });
+    hit.c.revisions[hit.n].status = 'published'; hit.c.latest = Number(hit.n); hit.c.draft = null;
     return send(res, 200, { data: { publishRevision: { success: true } } });
   }
   if (/mutation/.test(q) && /discardRevision/.test(q)) {
@@ -284,16 +322,17 @@ function graph(req, res, json) {
     if (!mod) return send(res, 200, { data: { mod: null }, errors: [{ message: 'Mod not found' }] });
     return send(res, 200, { data: { mod: { modId: Number(m[1]), name: mod.name, description: mod.description } } });
   }
-  if ((m = q.match(/collectionRevision\(slug: "7essxf", revision: (\d+)/))) {
-    const r = collection.revisions[m[1]];
+  if ((m = q.match(/collectionRevision\(slug: "([A-Za-z0-9]+)", revision: (\d+)/))) {
+    const col = bySlug(m[1]);
+    const r = col && col.revisions[m[2]];
     if (!r) return send(res, 200, { errors: [{ message: 'Revision not found' }] });
-    return send(res, 200, { data: { collectionRevision: { id: r.id, revisionNumber: Number(m[1]), status: r.status, downloadLink: '/v2/collections/' + collection.id + '/revisions/' + r.id + '/download_link' } } });
+    return send(res, 200, { data: { collectionRevision: { id: r.id, revisionNumber: Number(m[2]), status: r.status, downloadLink: '/v2/collections/' + col.id + '/revisions/' + r.id + '/download_link' } } });
   }
-  if (/collection\(slug: "(?!7essxf")[A-Za-z0-9]+", domainName: "skyrimspecialedition"\)/.test(q)) {
-    return send(res, 200, { data: { collection: null }, errors: [{ message: 'Collection not found' }] });
-  }
-  if (/collection\(slug: "7essxf", domainName: "skyrimspecialedition"\)/.test(q)) {
-    return send(res, 200, { data: { collection: { id: collection.id, name: collection.name, latestPublishedRevision: { id: Number(collection.revisions[collection.latest].id), revisionNumber: collection.latest }, draftRevisionNumber: collection.draft } } });
+  if ((m = q.match(/collection\(slug: "([A-Za-z0-9]+)", domainName: "skyrimspecialedition"\)/))) {
+    const col = bySlug(m[1]);
+    if (!col) return send(res, 200, { data: { collection: null }, errors: [{ message: 'Collection not found' }] });
+    const lp = col.latest ? { id: Number(col.revisions[col.latest].id), revisionNumber: col.latest } : null;
+    return send(res, 200, { data: { collection: { id: col.id, name: col.name, category: col.category || null, latestPublishedRevision: lp, draftRevisionNumber: col.draft } } });
   }
   return send(res, 200, { errors: [{ message: 'The stand-in does not know this query' }] });
 }
@@ -360,8 +399,10 @@ function cdn(req, res, url) {
   if (req.headers.apikey !== undefined) { violations.push('the key went to the CDN: ' + req.method + ' ' + p); return problem(res, 400, 'apikey sent to the CDN'); }
   if (req.method === 'GET' && (m = p.match(/^\/cdn\/file\/(\d+)$/))) item = control.serve[m[1]] ? Object.assign({ id: m[1] }, control.serve[m[1]]) : (uploadedFile(m[1]) ? Object.assign({ id: m[1] }, uploadedFile(m[1])) : null);
   else if (req.method === 'GET' && (m = p.match(/^\/cdn\/collection\/(\d+)$/))) {
-    const n = Object.keys(collection.revisions).find(k => collection.revisions[k].id === m[1]);
-    if (n && collection.revisions[n].archive) item = { path: collection.revisions[n].archive, name: path.basename(collection.revisions[n].archive) };
+    const hit = revisionById(m[1]);
+    const r = hit && hit.c.revisions[hit.n];
+    if (r && r.archive) item = { path: r.archive, name: path.basename(r.archive) };
+    else if (r && r.upload && uploads[r.upload] && uploads[r.upload].bytes) item = { bytes: uploads[r.upload].bytes, name: uploads[r.upload].filename };
   }
   if (!item) return problem(res, 404, 'Nothing at ' + p);
   let bytes = item.bytes ? Buffer.from(item.bytes) : fs.readFileSync(item.path);
@@ -379,13 +420,25 @@ const server = http.createServer((req, res) => {
     let json = null;
     const isJson = /json/.test(req.headers['content-type'] || '');
     if (isJson && body.length) { try { json = JSON.parse(body.toString('utf8')); } catch (e) { return problem(res, 400, 'not JSON'); } }
-    if (url.pathname === '/_requests') return send(res, 200, { requests, violations, changelogs, uploads: Object.values(uploads).map(u => ({ id: u.id, multipart: u.multipart, md5: u.md5, crc: u.crc, size: u.size, filename: u.filename, claimed: u.claimed })), collection, mods, files });
+    if (url.pathname === '/_requests') return send(res, 200, { requests, violations, changelogs, uploads: Object.values(uploads).map(u => ({ id: u.id, multipart: u.multipart, md5: u.md5, crc: u.crc, size: u.size, filename: u.filename, claimed: u.claimed })), collection, others, mods, files });
     if (url.pathname === '/_control') {
       const c = Object.assign({}, json || {});
       // A description put straight into the stored form, to give the scripts one they cannot read back.
       if (c.setStored) { mods[c.setStored.mod].description = c.setStored.stored; mods[c.setStored.mod].cached = undefined; delete c.setStored; }
       // A revision whose download is a local collection archive.
-      if (c.addRevision) { collection.revisions[c.addRevision.n] = { id: String(c.addRevision.id), status: c.addRevision.status || 'published', upload: null, archive: c.addRevision.archive }; if (c.addRevision.status === 'draft') collection.draft = c.addRevision.n; delete c.addRevision; }
+      // A collection beside 7essxf, with no revision yet (#7193).
+      if (c.addCollection) { others.push({ id: c.addCollection.id, slug: c.addCollection.slug, name: c.addCollection.name, category: c.addCollection.category || null, latest: 0, draft: null, revisions: {} }); delete c.addCollection; }
+      if (c.addRevision) {
+        const col = bySlug(c.addRevision.slug || '7essxf');
+        // A revision number, never a name the request picks: a key such as
+        // __proto__ would write onto the object itself.
+        const n = Number(c.addRevision.n);
+        if (!col || !Number.isInteger(n) || n < 1) return problem(res, 400, 'addRevision needs a known slug and a whole revision number');
+        col.revisions[String(n)] = { id: String(c.addRevision.id), status: c.addRevision.status || 'published', upload: null, archive: c.addRevision.archive };
+        if (c.addRevision.status === 'draft') col.draft = n;
+        else if (c.addRevision.slug && n > col.latest) col.latest = n;
+        delete c.addRevision;
+      }
       // Which published revision is the newest, as publishing one on the website would leave it.
       if (c.setLatest) { if (collection.revisions[c.setLatest]) collection.latest = Number(c.setLatest); delete c.setLatest; }
       Object.assign(control, c);

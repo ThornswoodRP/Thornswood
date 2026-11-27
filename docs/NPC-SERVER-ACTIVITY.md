@@ -149,7 +149,11 @@ and staff, Djinn's choice on 17 Oct) or `'staff'`.
 
 Native inherited aggression, confidence, and current faction membership inform
 target selection. Common membership and ally or friend reactions suppress
-spontaneous hostility. Accepted damage can provoke temporary retaliation.
+spontaneous hostility. An NPC whose AI data has the aggro radius on also
+fights a person inside the larger of its warn or attack and attack radius,
+whatever its aggression, as the game itself does (#6493): an Aggressive
+skeever has no Enemy faction toward people, and it attacks them through its
+radius (1,500 units). The warn radius alone starts no fight. Accepted damage can provoke temporary retaliation.
 Confidence zero flees along safe local navigation. Targets are read again before
 an attack; disconnected human identities and profiles are protected immediately.
 Melee uses owned equipped weapons, or unarmed damage, with the existing native

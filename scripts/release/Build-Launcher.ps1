@@ -172,7 +172,7 @@ Head 'Publishing the launcher'
 # as it was. --disable-build-servers (#3169): otherwise the build servers stay
 # up after the build, holding files under out\obj, and a runner names them
 # as left behind.
-$pubDir = Join-Path ([IO.Path]::GetTempPath()) ('ThornswoodLauncherPublish-' + [guid]::NewGuid().ToString('N'))
+$pubDir = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('ThornswoodLauncherPublish-' + [guid]::NewGuid().ToString('N'))
 $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 # Every line is shown as dotnet says it and kept, for the check below.
 $said = New-Object System.Collections.Generic.List[string]

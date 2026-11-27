@@ -33,8 +33,10 @@
                                       newer than its .psc, otherwise the
                                       committed skymp5-scripts\pex (#1220)
     launch_server.bat                 the one the fork's configure wrote
-    scam_native.node                  built from the clone, newer than its sources
-  Anything else stops it and nothing is written.
+    scam_native.node                  built from the clone
+  Anything else stops it and nothing is written. A C++ source under
+  skymp5-server\cpp newer than scam_native.node does not stop it: that only
+  warns, and the record is still written (below).
 
   Read only except for the one file it writes. It never starts anything and never
   talks to the VPS.
@@ -186,8 +188,9 @@ if ($dirty) {
 }
 
 # Whether the binary is at least newer than every server source. This is weak
-# evidence on its own, which is the whole reason this file exists, but a binary
-# OLDER than its sources is a definite problem worth stopping for.
+# evidence on its own, which is the whole reason this file exists, so a binary
+# older than its sources is warned about, not stopped: the record is still
+# written, and the warning says to rebuild before recording.
 #
 # Only cpp\, never the whole of skymp5-server: node_modules holds 7,300 of that
 # folder's 7,746 files and walking it turned a one second check into minutes.
