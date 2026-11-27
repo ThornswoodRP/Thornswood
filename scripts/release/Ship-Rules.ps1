@@ -119,6 +119,8 @@ $ShipMachineFiles = @(
     'Data\Platform\thornswood-forget.txt',
     # Whether this person turned the scroll in front of the choice off.
     'Data\Platform\thornswood-intro.txt',
+    # SkyUI's favourite groups, every character this machine played (#4511).
+    'Data\Platform\thornswood-favourite-groups.json',
     # The same list as a script beside the page (Chars.WriteCharacters), so
     # the choice draws before any plugin runs. Every profile id the install
     # owns, so never in a pack.

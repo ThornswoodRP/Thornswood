@@ -11739,6 +11739,222 @@
     }
   }
 
+  // ---------------------------------------------- SkyUI's favourite groups (#4511)
+  /*
+    SKYUI'S FAVOURITE GROUPS ARE KEPT, PER CHARACTER, ON THIS MACHINE.
+
+    SkyUI keeps its eight favourite groups only in SKI_FavoritesManager's
+    arrays (each group's 32 items and their item ids, in _items1 and
+    _itemIds1 for groups 1 to 4 and the "2" arrays for 5 to 8, and each
+    group's main hand, off hand and icon), and those live in the save. There
+    is no save here, so OnInit made them empty at every session's start and
+    every group was gone. Only the Favorites menu's own events fill them, and
+    no function of the script takes a whole group from outside. Measured
+    26 Nov 2026 from SKI_FavoritesManager.pex in SkyUI_SE.bsa.
+
+    SO WHEN THE FAVORITES MENU CLOSES, where groups are made, the arrays are
+    read (getScriptVariable, engine fork, Thornswood #4511) and written to
+    Data\Platform\thornswood-favourite-groups.json under this server and
+    character. At the next start, once OnInit has made the arrays and the
+    version update has made _itemInvalidFlags2, they are filled back
+    (setScriptVariable), and the menu sends them to its page when it opens,
+    as it does after a load. A character with nothing kept gets them empty,
+    which is also what a pick of another character at the choice puts back.
+
+    An item is kept as its plugin and the id inside it, so a change in the
+    load order does not point it at another record. Its item id is SKSE's,
+    the one the menu gave and EquipItemById takes, kept as it was given, as
+    a save keeps it. A form the game made this session (an 0xFF id) cannot
+    be found again and is left out with its id.
+
+    The launcher keeps the file with the person's settings on thornswood.net
+    (YourSettings.cs). The site refuses a file over 64 KB, so the characters
+    kept longest ago are left out first when the file would pass FAV_MOST.
+  */
+  const FAV_PLUGIN = 'SkyUI_SE.esp';
+  const FAV_QUEST = 0x82a;          // SKI_FavoritesManagerInstance
+  const FAV_SCRIPT = 'SKI_FavoritesManager';
+  const FAV_MENU = 'FavoritesMenu';
+  const FAV_FILE = 'Data/Platform/thornswood-favourite-groups.json';
+  const FAV_MOST = 48 * 1024;
+  const FAV_HALF = 128;
+  // Each group's own form and item id: main hand, off hand, icon.
+  const FAV_HANDS = [['main', '_groupMainHandItems', '_groupMainHandItemIds'],
+                     ['off', '_groupOffHandItems', '_groupOffHandItemIds'],
+                     ['icon', '_groupIconItems', '_groupIconItemIds']];
+  let favQuestId = 0;
+  let favFor = '';              // whose groups the script holds now
+  let favPutOk = false;         // and whether they were put back whole
+  let favWaitLogged = false;
+
+  function favQuest() {
+    if (favQuestId) { return favQuestId; }
+    try {
+      const form = sp.Game.getFormFromFile(FAV_QUEST, FAV_PLUGIN);
+      favQuestId = form ? form.getFormID() : 0;
+    } catch (e) { favQuestId = 0; }
+    return favQuestId;
+  }
+
+  function favKey() { return PROFILE ? HOST + '/' + PROFILE : ''; }
+
+  // A form as "<plugin>|<id inside it, hex>", or '' when it has none to keep.
+  function favFormKey(raw) {
+    if (!raw) { return ''; }
+    const form = sp.Form.from(raw);
+    const id = form ? form.getFormID() >>> 0 : 0;
+    if (!id) { return ''; }
+    const hi = id >>> 24;
+    if (hi === 0xff) { return ''; }
+    const file = hi === 0xfe ? sp.Game.getLightModName((id >>> 12) & 0xfff) : sp.Game.getModName(hi);
+    const local = hi === 0xfe ? (id & 0xfff) : (id & 0xffffff);
+    return file ? file + '|' + local.toString(16) : '';
+  }
+
+  function favForm(key) {
+    const bar = typeof key === 'string' ? key.lastIndexOf('|') : -1;
+    if (bar <= 0) { return null; }
+    const local = parseInt(key.slice(bar + 1), 16);
+    if (!(local > 0)) { return null; }
+    return sp.Game.getFormFromFile(local, key.slice(0, bar)) || null;
+  }
+
+  function favRead() {
+    try { return JSON.parse(require('fs').readFileSync(FAV_FILE, 'utf8')); } catch (e) { return null; }
+  }
+
+  // The arrays as they are now, or null while the script has not made them.
+  function favArrays(quest) {
+    const names = ['_items1', '_itemIds1', '_items2', '_itemIds2', '_itemInvalidFlags2'];
+    FAV_HANDS.forEach((h) => { names.push(h[1], h[2]); });
+    const out = {};
+    for (const n of names) {
+      const v = sp.getScriptVariable(quest, FAV_SCRIPT, n);
+      if (!Array.isArray(v)) { return null; }
+      out[n] = v;
+    }
+    return out;
+  }
+
+  // What is kept of one character: each filled slot, 0 to 255 over both
+  // halves, and each group's hands and icon, as [form, item id].
+  function favTake(a) {
+    const slots = {};
+    for (let i = 0; i < 2 * FAV_HALF; i++) {
+      const half = i < FAV_HALF ? '1' : '2';
+      const j = i % FAV_HALF;
+      const itemId = Number(a['_itemIds' + half][j]) | 0;
+      const form = itemId ? favFormKey(a['_items' + half][j]) : '';
+      if (itemId && form) { slots[i] = [form, itemId]; }
+    }
+    const kept = { saved: Date.now(), slots: slots };
+    FAV_HANDS.forEach((h) => {
+      const by = {};
+      for (let g = 0; g < 8; g++) {
+        const itemId = Number(a[h[2]][g]) | 0;
+        const form = itemId ? favFormKey(a[h[1]][g]) : '';
+        if (itemId && form) { by[g] = [form, itemId]; }
+      }
+      kept[h[0]] = by;
+    });
+    return kept;
+  }
+
+  function favSave() {
+    const key = favKey();
+    const quest = favQuest();
+    // Never before this character's groups were put back: the empty arrays
+    // of a fresh start would be written over what was kept.
+    if (!key || !quest || favFor !== key || !favPutOk) { return; }
+    const a = favArrays(quest);
+    if (!a) { log('favourite groups: the menu closed before SkyUI made its arrays, so nothing was kept'); return; }
+    const all = favRead() || {};
+    const chars = (all.characters && typeof all.characters === 'object') ? all.characters : {};
+    chars[key] = favTake(a);
+    // Newest first, and only as many as fit.
+    const order = Object.keys(chars).sort((x, y) => (Number(chars[y].saved) || 0) - (Number(chars[x].saved) || 0));
+    const out = { version: 1, characters: {} };
+    for (const k of order) {
+      out.characters[k] = chars[k];
+      if (JSON.stringify(out).length > FAV_MOST) { delete out.characters[k]; log('favourite groups: left out ' + k + ', kept longest ago, to stay under ' + FAV_MOST + ' bytes'); }
+    }
+    const fs = require('fs');
+    fs.writeFileSync(FAV_FILE + '.tmp', JSON.stringify(out));
+    fs.renameSync(FAV_FILE + '.tmp', FAV_FILE);
+    log('favourite groups: kept ' + Object.keys(chars[key].slots).length + ' items for ' + key);
+  }
+
+  // Puts this character's groups in the script's arrays, every value checked
+  // by setScriptVariable before any is written.
+  function favPut(quest, a, kept) {
+    const next = {};
+    ['1', '2'].forEach((half) => {
+      next['_items' + half] = a['_items' + half].map(() => null);
+      next['_itemIds' + half] = a['_itemIds' + half].map(() => 0);
+    });
+    let put = 0, lost = 0;
+    const slots = (kept && kept.slots) || {};
+    for (const s of Object.keys(slots)) {
+      const i = Number(s);
+      if (!(i >= 0 && i < 2 * FAV_HALF) || !Array.isArray(slots[s])) { continue; }
+      const form = favForm(slots[s][0]);
+      const itemId = Number(slots[s][1]) | 0;
+      if (!form || !itemId) { lost++; continue; }
+      const half = i < FAV_HALF ? '1' : '2';
+      next['_items' + half][i % FAV_HALF] = form;
+      next['_itemIds' + half][i % FAV_HALF] = itemId;
+      put++;
+    }
+    FAV_HANDS.forEach((h) => {
+      next[h[1]] = a[h[1]].map(() => null);
+      next[h[2]] = a[h[2]].map(() => 0);
+      const by = (kept && kept[h[0]]) || {};
+      for (let g = 0; g < 8; g++) {
+        if (!Array.isArray(by[g])) { continue; }
+        const form = favForm(by[g][0]);
+        const itemId = Number(by[g][1]) | 0;
+        if (form && itemId) { next[h[1]][g] = form; next[h[2]][g] = itemId; }
+      }
+    });
+    for (const n of Object.keys(next)) {
+      if (!sp.setScriptVariable(quest, FAV_SCRIPT, n, next[n])) { throw new Error('SkyUI has no ' + n); }
+    }
+    return { put: put, lost: lost };
+  }
+
+  // Once the script has made its arrays, and again after a pick of another
+  // character, its groups are this character's.
+  let favLook = 0;
+  sp.on('update', guard('favourite groups', () => {
+    const key = favKey();
+    if (!key || key === favFor || ++favLook % 30) { return; }
+    const quest = favQuest();
+    if (!quest) { return; }
+    const a = favArrays(quest);
+    if (!a) {
+      if (!favWaitLogged) { favWaitLogged = true; log('favourite groups: waiting for SkyUI to make its arrays'); }
+      return;
+    }
+    const all = favRead();
+    const kept = all && all.characters ? all.characters[key] : null;
+    // Looked at once for each character. One that could not be put back is
+    // never saved this session, so what was kept is not written over.
+    favFor = key;
+    favPutOk = false;
+    try {
+      const got = favPut(quest, a, kept);
+      favPutOk = true;
+      log('favourite groups: put back ' + got.put + ' items for ' + key + (got.lost ? ', ' + got.lost + ' whose record is not loaded left out' : ''));
+    } catch (err) {
+      log('favourite groups: could not put them back for ' + key + ', so none are kept this session: ' + (err && err.message ? err.message : err));
+    }
+  }));
+
+  sp.on('menuClose', guard('favourite groups close', (e) => {
+    if (e && e.name === FAV_MENU) { favSave(); }
+  }));
+  // ---------------------------------------------- end SkyUI's favourite groups
+
   /*
     Write the game's real load order to disk, once, on the first update.
 
