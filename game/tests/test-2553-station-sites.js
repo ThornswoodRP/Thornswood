@@ -181,27 +181,16 @@ function placements(b) {
   })(24 + b.readUInt32LE(4), b.length);
   return n;
 }
-// Thornswood-Last.esp places nothing new: its only placed references are the
-// three town gates it overrides where they stand, without their lock (#2484),
-// the doors it unlocks the same way (Riftweald Manor's door and its three
-// bolts, switched off, #6995; four claimable doors, #7032), and the floor
-// items it switches off (#3077, each one initially disabled:
-// tests/test-3077-floor-items.js P1). None is a station, so the table need
-// not read them. No repository holds the plugin since #2791 step 3, so this
-// reads it made from its recipe out of the game's plugins
-// (tests/last-plugin-made.js), and prints SKIP without the game.
-const lastMade = require('../../tests/last-plugin-made.js').made();
-const lastCounts = JSON.parse(fs.readFileSync(LAST, 'utf8')).counts || {};
-const lastGates = lastCounts.gatesUnlocked;
+// The builder separately checks each allowed reference by identity.
+const { made, doorReferenceOverrides } = require('../../tests/last-plugin-made.js');
+const lastMade = made();
+const last = JSON.parse(fs.readFileSync(LAST, 'utf8'));
 if (lastMade.buf) {
-  // And the hold-only plants and ores it switches off outside their hold (#3150).
-  const lastDoc = JSON.parse(fs.readFileSync(LAST, 'utf8'));
-  const holdOff = ((lastDoc.holdOnly || {}).off || []).length;
-  const doors = (lastDoc.riftwealdUnlocked || []).length + (lastDoc.claimableDoorsUnlocked || []).length;
-  yes('B3 Thornswood-Last.esp places only the town gates it unlocks (' + lastGates + '), the doors it unlocks (' + doors +
-      '), the floor items it switches off (' + lastCounts.floorItemsOff + ') and the hold-only plants and ores it switches off (' +
-      holdOff + '), so the table need not read it',
-      lastGates === 3 && placements(lastMade.buf) === lastGates + doors + (lastCounts.floorItemsOff || 0) + holdOff);
+  const doorEdits = doorReferenceOverrides(last);
+  const floorOff = last.counts.floorItemsOff || 0;
+  const holdOff = (last.holdOnly?.off || []).length;
+  yes('B3 Last changes only recorded door access, floor items and hold-only resources',
+      last.counts.gatesUnlocked === 3 && placements(lastMade.buf) === doorEdits.size + floorOff + holdOff);
 } else {
   console.log('SKIP  B3: ' + lastMade.why);
 }

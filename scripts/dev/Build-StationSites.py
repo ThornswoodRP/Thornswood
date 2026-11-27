@@ -106,7 +106,7 @@ WHAT HOLDS A SPOT CLEAR, the same measure as the woodworking benches:
 WHAT IT READS. The collection's plugins in game\\data\\last-plugin.json's load
 order, from --data, and from the repository's Thornswood-Content.esp only the
 four station records: their bounds are the stations' outlines. It does not
-read Thornswood-Last.esp, and it checks that it places nothing new: only the town gates it unlocks,
+read Thornswood-Last.esp into its measurements. It confirms the plugin changes only in-place door access,
 the floor items it switches off and the hold-only plants and ores it switches off outside their
 hold (#3150), where they stand. It reads the benches' spots out of
 game\\data\\woodworking-benches.json and the boards' out of game\\gamemode.js.
@@ -862,25 +862,13 @@ def main():
     if stop:
         print(stop)
         return 2
-    # Thornswood's two plugins after the content plugin place nothing new, so
-    # they are not read: measured here, not assumed. Thornswood-Last.esp's
-    # placed references are of two kinds, and neither is a station or moves:
-    # the town gates Bethesda ships locked (#2484), each a master's own
-    # reference left where it stands without its lock or script, which
-    # last-plugin.json names; and since #3077 the floor items it switches off,
-    # each a master's or a mod's own reference left where it stands, initially
-    # disabled, as many as last-plugin.json's floorItems.off, and since #3150
-    # the hold-only plants and ores it switches off outside their hold the
-    # same way, the ones its holdOnly.off lists. A switched-off item still
-    # counts here as something in the way, as it did before, so no spot
-    # changes. Since #6995 and #7032 the doors it unlocks the same way as the
-    # gates are a third kind, each a master's own reference left where it
-    # stands: Riftweald Manor's door, with its three bolts switched off
-    # (riftwealdUnlocked), and four claimable doors without their lock
-    # (claimableDoorsUnlocked), both lists last-plugin.json names. Anything
-    # else it placed would stop this.
-    gates = (set(lo_doc.get('gatesUnlocked') or []) | set(lo_doc.get('riftwealdUnlocked') or [])
-             | set(lo_doc.get('claimableDoorsUnlocked') or []))
+    # Last's verified door edits retain the placement and may disable an old
+    # bar. Measure the world as if the original obstacles were still present.
+    # Floor items and hold-only resources switched off by Last are counted
+    # separately. Any unaccounted placement stops the measurement.
+    door_fields = ('gatesUnlocked', 'riftwealdUnlocked', 'claimableDoorsUnlocked',
+                   'authoredDoorsUnlocked', 'authoredDoorsDirectActivation')
+    door_edits = {ref for key in door_fields for ref in (lo_doc.get(key) or [])}
     floor_off = int((lo_doc.get('floorItems') or {}).get('off') or 0) + len((lo_doc.get('holdOnly') or {}).get('off') or [])
     for n in OURS_AFTER:
         # Made in the Data folder from its recipe since #2791 (own_plugins.py).
@@ -888,19 +876,24 @@ def main():
         placed = []
         pl.walk(lambda tag, p, size, flags, fid, w, c: placed.append((fid, flags)) if tag == b'REFR' else None,
                 tops={b'WRLD', b'CELL'})
-        named, off = [], 0
+        named, off, seen_doors = [], 0, set()
         for fid, flags in placed:
             i = fid >> 24
             desc = '%x:%s' % (fid & 0xFFFFFF, pl.masters[i]) if i < len(pl.masters) else None
-            if n == 'Thornswood-Last.esp' and desc in gates:
+            if n == 'Thornswood-Last.esp' and desc in door_edits and not flags & DELETED:
+                seen_doors.add(desc)
                 continue
             if n == 'Thornswood-Last.esp' and desc and flags & DISABLED and not flags & DELETED:
                 off += 1
                 continue
             named.append(desc or '%08X (its own)' % fid)
         if named:
-            print('STOP. %s places %d reference(s) that are neither the doors and gates it unlocks nor floor items it '
-                  'switches off (%s); this table would have to read it.' % (n, len(named), ', '.join(named[:6])))
+            print('STOP. %s has %d unaccounted placed reference(s) (%s); this table would have to read it.'
+                  % (n, len(named), ', '.join(named[:6])))
+            return 1
+        if n == 'Thornswood-Last.esp' and seen_doors != door_edits:
+            print('STOP. %s is missing door edits recorded in last-plugin.json (%s); rebuild it first.'
+                  % (n, ', '.join(sorted(door_edits - seen_doors)[:6])))
             return 1
         if n == 'Thornswood-Last.esp' and off != floor_off:
             print('STOP. %s switches off %d floor item(s) or hold-only plant(s) and ore(s), and last-plugin.json '

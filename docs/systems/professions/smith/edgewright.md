@@ -36,6 +36,10 @@ own, an iron ingot on a handle:
 | Pickaxe | Novice | 1 iron ingot, 1 tool handle | 1 |
 | Woodcutter's Axe | Novice | 1 iron ingot, 1 tool handle | 1 |
 
+Lockpicks are forge work too. One iron ingot makes 5 of Skyrim's own
+lockpicks, the same pick dungeon and body loot hands out, so a pick no
+longer comes only from loot (#4646).
+
 ## What you are handed
 
 The half places 1 in Precision (+2 critical chance). The game may

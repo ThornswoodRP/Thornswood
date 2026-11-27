@@ -492,14 +492,12 @@ blockquote.chron cite{display:block;margin-top:14px;font:400 12px/1 var(--sans);
 
 /* Home gallery slideshow of approved public shots. */
 .gal-show{position:relative;margin-top:34px;border:1px solid var(--edge);
-  background:var(--stone);border-radius:2px;overflow:hidden;
-  aspect-ratio:16/9;width:100%;margin-inline:auto}
-.gal-show img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  background:var(--stone);border-radius:2px;overflow:hidden;width:100%;margin-inline:auto}
+.gal-frames{position:relative;aspect-ratio:16/9;width:100%;background:var(--night)}
+.gal-show img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
   opacity:0;transition:opacity .7s ease}
 .gal-show img.on{opacity:1}
-.gal-show .gal-cap{position:absolute;left:0;right:0;bottom:0;padding:18px 22px;
-  background:linear-gradient(180deg,transparent,rgba(11,14,10,.88));
-  color:var(--page);font:400 15px/1.4 var(--serif);z-index:2}
+.gal-show .gal-cap{padding:12px 22px;color:var(--page);font:400 15px/1.4 var(--serif)}
 .gal-show .gal-nav{position:absolute;top:50%;transform:translateY(-50%);
   z-index:3;width:44px;height:44px;padding:0;border-radius:2px;
   border:1px solid var(--gold);background:rgba(11,14,10,.82);
