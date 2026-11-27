@@ -153,8 +153,9 @@ if (-not $file) { Die 'This machine has no %LOCALAPPDATA%, so there is no place 
 Say '  Paste the Personal API Key from https://www.nexusmods.com/settings/api-keys.' 'DarkGray'
 Say '  It is not shown while you paste it.' 'DarkGray'
 Write-Host ''
-$secure = Read-Host '  Nexus API key' -AsSecureString
-$key = ([string](New-Object Net.NetworkCredential('', $secure)).Password).Trim()
+# Read-ThornswoodSecret, which also takes the value piped in with no keyboard (#4346).
+. (Join-Path $Here '..\vps\Send-Secret.ps1')
+$key = ([string](Read-ThornswoodSecret '  Nexus API key')).Trim()
 if (-not $key) { Die 'Nothing was pasted, so nothing was written.' }
 if ($key -match '\s') { Die 'What was pasted has a space or a line break inside it, so it is not one key. Nothing was written.' }
 

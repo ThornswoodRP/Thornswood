@@ -130,12 +130,8 @@ Get-ThornswoodBotTokenState -BotEnv '$envFile' -SiteConfig '$cfgFile'
 Head 'The new bot token'
 Say '  Discord developer portal, the Thornswood application, Bot, Reset Token, Copy.' 'DarkGray'
 Say '  It is hidden while you paste it and never shown afterwards.' 'DarkGray'
-$ss = Read-Host '  Paste it' -AsSecureString
-if (-not $ss -or $ss.Length -eq 0) { Die 'Nothing pasted, nothing sent.' }
-$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
-try { $token = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr).Trim() }
-finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-$ss = $null
+$token = (Read-ThornswoodSecret '  Paste it').Trim()
+if (-not $token) { Die 'Nothing pasted, nothing sent.' }
 
 $app = Get-ThornswoodTokenApp $token
 if (-not $app) {

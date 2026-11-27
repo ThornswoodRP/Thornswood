@@ -59,6 +59,8 @@ $Here = $PSScriptRoot
 if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $ErrorActionPreference = 'Stop'   # before any file loads, so one that is missing stops here (#3006)
 . (Join-Path $Here 'Vps.ps1')
+# Read-ThornswoodSecret, which also takes the value piped in with no keyboard (#4346).
+. (Join-Path $Here 'Send-Secret.ps1')
 if (-not $VpsUser) { $VpsUser = Get-ThornswoodVpsUser }
 if (-not $VpsHost) { $VpsHost = Get-ThornswoodVpsAddress }
 function Say($m, $c = 'Gray') { Write-Host $m -ForegroundColor $c }
@@ -236,9 +238,7 @@ if (Test-Path -LiteralPath $tokenPath) {
     SayPublicLine 'Patrick puts it on the box with Grant-BoxAccess.ps1 and sends you a token for this PC.'
     Write-Host ''
     # Read where nothing shows it, so it is in no history and on no screen.
-    $sec = Read-Host -AsSecureString '  Paste the token he sent (Enter alone if it has not come yet)'
-    $p = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
-    try { $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($p).Trim() } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($p) }
+    $token = (Read-ThornswoodSecret '  Paste the token he sent (Enter alone if it has not come yet)').Trim()
     if (-not $token) { Say '  No token yet. Run this again once it comes; the steps above are kept.' 'Yellow'; Done 0 }
     if (-not (Test-ThornswoodBridgeToken $token)) { Die 'That is not a whole token: it is one run of 43 letters, digits, - and _. Paste it again; nothing was kept.' }
     Write-ThornswoodPrivateFile -Path $tokenPath -Text $token

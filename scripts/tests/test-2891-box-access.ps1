@@ -296,7 +296,7 @@ try {
     Yes 'the token is never printed' (-not ($grant -match '(?m)^\s*(Say|Write-Host)[^\r\n]*\$token\b') -and -not ($setup -match '(?m)^\s*(Say|Write-Host)[^\r\n]*\$token\b'))
     Yes 'the change is kept only after a new login gets in' ($grant.IndexOf('$w = Test-Login') -gt 0 -and $grant.IndexOf('$w = Test-Login') -lt $grant.IndexOf('-Script (Get-BoxKeepScript)'))
     Yes '  and puts the config and token file back when its proof fails' ($grant -match '(?s)if \(-not \$w\.Ok\) \{.*WriteAllText\(\(Join-Path \(Join-Path \$HOME ''\.ssh''\) ''config''\), \$cfgBefore')
-    Yes 'Setup-SshKey.ps1 reads the token where nothing shows it, and keeps it readable by its owner only' ($setup -match 'Read-Host -AsSecureString' -and $setup -match 'Write-ThornswoodPrivateFile -Path \$tokenPath')
+    Yes 'Setup-SshKey.ps1 reads the token where nothing shows it, and keeps it readable by its owner only' ($setup -match "Read-ThornswoodSecret '" -and $setup -notmatch '-AsSecureString' -and $setup -match 'Write-ThornswoodPrivateFile -Path \$tokenPath')
     Yes 'the token file''s folder comes from Get-ScratchDir.ps1, and no script names the temps path' ($grant.Contains("'Get-ScratchDir.ps1') 'box-access'") -and
         -not $grant.Contains('ThornswoodTemps') -and -not $setup.Contains('ThornswoodTemps'))
     Yes 'Setup-SshKey.ps1 never turns host key checking down' ($setup -notmatch '(?i)StrictHostKeyChecking\s*[= ]\s*"?(no|off|accept-new|ask)\b')

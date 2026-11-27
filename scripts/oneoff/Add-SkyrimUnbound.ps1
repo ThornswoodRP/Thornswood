@@ -212,13 +212,9 @@ Say "  $($plugLines.Count) lines in plugins.txt, $($loLines.Count) in loadorder.
 # config.json, so setting it before shipping is what gets it to everyone.
 if ($Password) {
     Head 'Server password'
-    $ss = Read-Host '  Server password (it is not shown; nothing clears it)' -AsSecureString
-    $newPassword = ''
-    if ($ss -and $ss.Length -gt 0) {
-        $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($ss)
-        try { $newPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) }
-        finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
-    }
+    # Read-ThornswoodSecret, which also takes the value piped in with no keyboard (#4346).
+    . (Join-Path $PSScriptRoot '..\vps\Send-Secret.ps1')
+    $newPassword = Read-ThornswoodSecret '  Server password (it is not shown; nothing clears it)'
     $cfgPath = Join-Path $Root 'config.json'
     if (-not (Test-Path $cfgPath)) { Die "No config.json at $cfgPath." }
 

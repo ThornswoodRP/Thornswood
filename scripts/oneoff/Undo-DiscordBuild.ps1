@@ -35,8 +35,9 @@ $ErrorActionPreference = 'Stop'
 $api = 'https://discord.com/api/v10'
 function Say([string]$t, [string]$c = 'Gray') { Write-Host $t -ForegroundColor $c }
 
-$sec = Read-Host 'Bot token (paste it, it will not be shown)' -AsSecureString
-$token = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+# Read-ThornswoodSecret, which also takes the value piped in with no keyboard (#4346).
+. (Join-Path $PSScriptRoot '..\vps\Send-Secret.ps1')
+$token = Read-ThornswoodSecret 'Bot token (paste it, it will not be shown)'
 $headers = @{ Authorization = "Bot $token"; 'X-Audit-Log-Reason' = 'Undo of the Setup-Discord run of 25 September' }
 
 function Api([string]$method, [string]$path, $body) {
