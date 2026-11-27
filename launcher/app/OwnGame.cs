@@ -397,14 +397,10 @@ namespace Thornswood
             try { WriteRecord(FixAfterMakeFile, new string[] { DateTime.Now.ToString("o") }); } catch (Exception ex) { Swallow.Note("OwnGame.NoteFixAfterMake, write", ex); }
         }
 
-        /// <summary>True while the note is there: the Fix after the make has not finished.</summary>
+        /// <summary>True while the note is there: the Fix after the make has not finished. File.Exists answers false for a path it cannot read, and never throws.</summary>
         public static bool FixAfterMakeWaiting
         {
-            get
-            {
-                try { return File.Exists(FixAfterMakeFile); }
-                catch (Exception ex) { Swallow.Note("OwnGame.FixAfterMakeWaiting", ex); return false; }
-            }
+            get { return File.Exists(FixAfterMakeFile); }
         }
 
         /// <summary>
