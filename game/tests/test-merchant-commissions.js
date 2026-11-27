@@ -28,11 +28,16 @@ for(const defect of ['missing','empty','hash','substitution','definition','grand
 }
 for(const row of raw)assert.equal(row.sourceHash,crypto.createHash('sha256').update(JSON.stringify(source.find(q=>q.id===row.id))).digest('hex'));
 const ids=new Map();function id(desc){if(!ids.has(desc))ids.set(desc,1000+ids.size);return ids.get(desc);}
+const retiredArmour=new Set(raw.filter(row=>row.accepting===false&&
+ ['q-solitude-enchanter-advanced-parcel','q-riften-smith-advanced-parcel'].includes(row.id))
+ .flatMap(row=>row.goods.map(good=>good.item)).filter(desc=>['56a9e:Skyrim.esm','18388:Skyrim.esm'].includes(desc)));
 const allRows=prepareCommissions(raw,catalog,{
  resolveMerchant(reference,base){assert.equal(require('../../game/data/merchant-roster.json').merchants.find(q=>q.reference===reference).base,base);return id(reference);},
- resolveItem(desc,type){assert.equal(tables.records[desc].type,type);return id(desc);}
+ resolveItem(desc,type){const record=tables.records[desc];
+  assert.ok(record||retiredArmour.has(desc),'missing role metadata must be one of the two retained retired armour items');
+  assert.equal(record?record.type:'ARMO',type);return id(desc);}
 });
-const rows=allRows.filter(row=>row.deliveryVersion!==2),ranked=allRows.filter(row=>row.deliveryVersion===2);
+const rows=allRows.filter(row=>row.deliveryVersion!==2),ranked=allRows.filter(row=>row.deliveryVersion===2&&row.accepting!==false);
 const roles=Object.fromEntries(Object.entries(tables.tables).map(([name,table])=>[name,
  Object.fromEntries(Object.entries(table).map(([direction,descs])=>[direction,descs.map(id)]))]));
 const itemNames=new Map(allRows.flatMap(row=>(row.goods||[row]).map(good=>[good.itemId,'Goods '+good.itemId])));
@@ -190,7 +195,7 @@ for(const row of [rows[0],ranked[0]]) {
  assert.ok(reads>=2);assert.equal(w.purses.read(row.merchantId).commissions,undefined,
   'native replacement during the final eligibility callback cannot reserve a promise');
 }
-console.log('PASS231 ranked compiled parcel jobs: actual gates, complete delivery, original multi-item quote, exact cadence and stale-panel refusal');
+console.log('PASS '+ranked.length+' accepting ranked compiled parcel jobs: actual gates, complete delivery, original multi-item quote, exact cadence and stale-panel refusal');
 {
  const row=ranked[ranked.length-1],w=world(1),quote=w.quote(row);
  assert.ok(quote.gold>1);assert.equal(quote.canTake,true,'a poor trader still gives out work: the pay is new gold (#6180)');

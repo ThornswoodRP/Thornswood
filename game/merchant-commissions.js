@@ -4,12 +4,9 @@ const INVENTORY=typeof MERCHANT_SETTLEMENT!=='undefined'?MERCHANT_SETTLEMENT:req
 const copy=value=>JSON.parse(JSON.stringify(value));
 const hash=value=>require('node:crypto').createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Published jobs remain routable while their accepted promises exist.
-// A published job whose goods nothing makes any more is retired by taking it
-// off this list, and given a new id when it comes back with other goods: the
-// four woodworker parcels that asked for Thornswood's Charcoal went when the
-// kiln began making Skyrim's own (#6726), and came back as the four
-// *-charcoal-parcel ids. A retired job is not finished for anybody who had
-// accepted it.
+// Intake can stop without removing an accepted job's immutable terms.
+// The generated accepting:false metadata retires new offers, while existing
+// promises remain routable for return or abandon.
 const publication=Object.freeze({
  'q-whiterun-smith-straps':'8f03bdc903aaf1e37727f54a3e49bfdea5a2b817bc7534ba0111c88d25502734',
  'q-rift-woodworker-hunt-arrows':'84b31663cd265c9b26068ff7343622f04b332ddce394e58b52a55b0b6cbb3a89',
@@ -257,8 +254,8 @@ function prepareCommissions(author,catalog,native) {
  if(!Array.isArray(author)||author.length!==Object.keys(publication).length)throw Error('Invalid published commission catalogue.');
  author=copy(author);catalog=copy(catalog);
  if(new Set(author.map(row=>row&&row.id)).size!==author.length||author.some(row=>{
-   if(!row||publication[row.id]!==row.sourceHash)return true;
-   const {sourceHash,itemType,itemTypes,...definition}=row;return hash(definition)!==sourceHash;
+   if(!row||publication[row.id]!==row.sourceHash||row.accepting!==undefined&&row.accepting!==false)return true;
+   const {sourceHash,itemType,itemTypes,accepting,...definition}=row;return hash(definition)!==sourceHash;
   }))
   throw Error('Published commission definitions must remain available.');
  const ids=new Set();
@@ -275,7 +272,7 @@ function prepareCommissions(author,catalog,native) {
   return {id:row.id,name:row.name,text:row.text,tier:row.tier,gate:row.gate,
    who:[row.gate.classKey||row.gate.profession,row.gate.half||row.gate.school,row.gate.rank].filter(Boolean).join(', '),
    merchantId:native.resolveMerchant(merchant.reference,merchant.base),merchantRef:merchant.reference,
-   role:merchant.role,hold:merchant.hold,bookHold:merchant.bookHold,
+   role:merchant.role,hold:merchant.hold,bookHold:merchant.bookHold,...(row.accepting===false?{accepting:false}:{}),
    ...(bundle?{deliveryVersion:2,hours:row.cooldownHours,goods:row.goods.map(part=>({
      itemId:native.resolveItem(part.item,row.itemTypes[part.item]),itemDesc:part.item,count:part.count}))}:
      {itemId:native.resolveItem(good.item,row.itemType),itemDesc:good.item,count:good.count}),sourceHash:row.sourceHash};
@@ -291,7 +288,8 @@ function createCommissions(deps) {
     goods.some(good=>!Number.isInteger(good.itemId)||good.itemId<=0||good.itemId===15||
       !Number.isSafeInteger(good.count)||good.count<1||good.count>100000)||
     row.deliveryVersion===2&&![6,12,24,48].includes(row.hours)||
-    typeof row.sourceHash!=='string'||!/^[0-9a-f]{64}$/.test(row.sourceHash)||typeof row.role!=='string'||!row.role)
+    typeof row.sourceHash!=='string'||!/^[0-9a-f]{64}$/.test(row.sourceHash)||typeof row.role!=='string'||!row.role||
+    row.accepting!==undefined&&row.accepting!==false)
    throw Error('Published commission authority cannot be verified.');
   rows.set(row.id,row);
  }
@@ -349,7 +347,9 @@ function createCommissions(deps) {
    const pending=state.pending&&state.pending.kind==='commission'&&state.pending.human&&
      STATE.owner(state.pending.human)===STATE.owner(human)&&state.pending.previous.commissions&&
      state.pending.previous.commissions.held[key];
-   const original=held||pending,quote=original?{goods:original.goods||[{item:original.item,count:original.count,unit:original.unit}],gold:original.gold}:quoted(row);
+   const original=held||pending;
+   if(row.accepting===false&&!original)continue;
+   const quote=original?{goods:original.goods||[{item:original.item,count:original.count,unit:original.unit}],gold:original.gold}:quoted(row);
    const requirement=original?{ok:true}:eligibility(actor,row),gate=requirement.ok===true,waiting=!!state.pending;
    const cooldown=last&&at-STATE.cooldownAt(last)<STATE.cooldownWait(last);
    const inventory=original?INVENTORY.inventory(transfer.inventory(actor)):null;
@@ -379,6 +379,7 @@ function createCommissions(deps) {
   const row=rows.get(id),ctx=context(actor,merchant,row);
   if(!ctx||!guards||typeof guards.current!=='function'||typeof guards.alive!=='function')return {ok:false,why:'session'};
   const {state,human,key,jobs}=ctx;
+  if(verb==='take'&&row.accepting===false)return {ok:false,why:'retired'};
   if(state.pending||!deps.settlement.available()||!deps.settlement.canInventoryMutation(actor))return {ok:false,why:'waiting'};
   if(typeof argument!=='string')return {ok:false,why:'session'};
   const number=/^@(0|[1-9][0-9]*)$/.test(argument)?Number(argument.slice(1)):NaN;
@@ -386,6 +387,7 @@ function createCommissions(deps) {
   function current(fresh,quote) {
    if(!guards.current()||STATE.owner(transfer.identity(actor))!==STATE.owner(human))return false;
    if(fresh) {
+    if(row.accepting===false)return false;
     const again=quoted(row);
     if(!again||again.argument!==quote.argument||eligibility(actor,row).ok!==true)return false;
    }

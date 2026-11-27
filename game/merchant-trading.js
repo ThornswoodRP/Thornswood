@@ -620,7 +620,7 @@ function createMerchantTrading(deps) {
         cooldown:'This work is still resting.',open:'You already hold this work.',gem:'Choose a gem first.',
         short:'You have not drawn enough to turn this work in.',none:'You do not hold this work.',
         unbound:'This work has no appointed place yet.',unwritten:'The work could not be committed just now.',
-        unavailable:'Quest work is unavailable.',role:'This trader does not handle that work.',
+        unavailable:'Quest work is unavailable.',role:'This trader does not handle that work.',retired:'That work is no longer offered.',
         allowance:'Your new scene work has reached its shared daily gold allowance.',
         price:'The reward price changed or is missing. Choose the work again.',
         capacity:'This trader cannot accept more work yet.',
