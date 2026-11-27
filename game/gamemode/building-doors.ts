@@ -45,24 +45,27 @@ const WAY_OUT = table('WAY_OUT');
   Whiterun gate and saying /claim then fell through to farming, which answered
   "Only a farmer can bring a crop in."
 
-  These four leaves are the town gates (Thornswood-Last.esp loads the outer ones
+  These leaves are the town gates (Thornswood-Last.esp loads the outer ones
   unlocked since #2484). The inside
   Whiterun leaf is a way out so a lock never shuts people inside the city.
-  Riften's two listed leaves are both the locked outer ones from the same
-  measurement that put them in GATES in scripts/mods/Build-LastPlugin.py.
+  Riften's two outer leaves are from the measurement that put them in GATES
+  in scripts/mods/Build-LastPlugin.py. Their reciprocal inside leaves belong
+  to that same property and remain ways out, like Whiterun's (#7071).
 */
 (function addTownGateProperties() {
   var doors = {
     '1b1f1:Skyrim.esm': 'gate:whiterun-main',
     '1b1f3:Skyrim.esm': 'gate:whiterun-main',
+    '42283:Skyrim.esm': 'gate:riften-main',
     '42284:Skyrim.esm': 'gate:riften-main',
+    '42285:Skyrim.esm': 'gate:riften-main',
     '42286:Skyrim.esm': 'gate:riften-main'
   };
   var names = {
     'gate:whiterun-main': 'Whiterun Main Gate',
     'gate:riften-main': 'Riften Main Gate'
   };
-  var outs = { '1b1f3:Skyrim.esm': 1 };
+  var outs = { '1b1f3:Skyrim.esm': 1, '42283:Skyrim.esm': 1, '42285:Skyrim.esm': 1 };
   for (var d in doors) {
     if (Object.prototype.hasOwnProperty.call(doors, d)) { BUILDING_BY_DOOR[d] = doors[d]; }
   }

@@ -1,5 +1,10 @@
 # The test harnesses
 
+Run `node game/tests/test-7071-riften-gate-claim.js` for claiming Riften's
+existing gates from either side, the normal deed and holder flow, safe inside
+egress, and the ten jail and embassy claim refusals. It executes the actual
+door-map and property sources against an isolated engine and storage fixture.
+
 Run `python tests/claimable-door-unlocks-cases.py` for the four individually
 reviewed authored-lock records. These controls use synthetic plugin fixtures,
 the actual door-table builder, record reader/writer and recipe reconstruction.
