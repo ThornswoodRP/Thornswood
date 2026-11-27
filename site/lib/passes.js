@@ -164,7 +164,16 @@ function wantsHtml(req) {
   return String((req && req.headers && req.headers.accept) || '').indexOf('text/html') >= 0;
 }
 
-function plainPage(title, lines) {
+/*
+  THE ONE DOCUMENT EVERY PAGE THE SITE WRITES ITSELF GOES OUT IN (#4367).
+  The language, the viewport and the main landmark are here once: without
+  lang a screen reader may read the page in the wrong voice, and without the
+  viewport a phone draws it at desktop width and shrinks it. The Not allowed
+  in page used to write its own document with none of the three, so on a
+  phone the reason and the account id were too small to read. inner is the
+  page's own markup, already escaped by whoever wrote it.
+*/
+function doorPage(title, inner) {
   const esc = (t) => String(t == null ? '' : t).replace(/[<>&]/g, '');
   return '<!doctype html><html lang="en"><head><meta charset=utf-8><title>' + esc(title) + ' | Thornswood</title>' +
     '<meta name="description" content="Find your way back to Thornswood, the Skyrim roleplay community.">' +
@@ -172,11 +181,15 @@ function plainPage(title, lines) {
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<link rel="stylesheet" href="/door.css">' +
     '</head><body class="door">' +
-    '<main class="door-box">' +
+    '<main class="door-box">' + inner + '</main></body></html>';
+}
+
+function plainPage(title, lines) {
+  const esc = (t) => String(t == null ? '' : t).replace(/[<>&]/g, '');
+  return doorPage(title,
     '<h1>' + esc(title) + '</h1>' +
     lines.map((t) => '<p>' + esc(t) + '</p>').join('') +
-    '<p><a href="/">Back to Thornswood</a> · <a href="/help">Get help</a></p>' +
-    '</main></body></html>';
+    '<p><a href="/">Back to Thornswood</a> · <a href="/help">Get help</a></p>');
 }
 
 function notFoundPage() {
@@ -234,14 +247,12 @@ function notAllowedPage(me, st) {
           (st.roles && st.roles.length ? '<b>' + st.roles.map(esc).join(', ') + '</b>' : 'none') +
           '.<br>It needs one of: <b>' + (cfg.access.play || []).map(esc).join(', ') + '</b>.</p>';
   }
-  return '<!doctype html><meta charset=utf-8><title>Not allowed in</title>' +
-    '<link rel="stylesheet" href="/door.css">' +
-    '<body class="door">' +
-    '<div class="door-box"><h1>Not allowed in</h1>' +
+  return doorPage('Not allowed in',
+    '<h1>Not allowed in</h1>' +
     why +
     '<p class="door-note">Signed in to Discord as <b>' + nm +
     '</b>, id <code>' + id + '</code>. Quote that id if you ask about it.</p>' +
-    '<p><a href="/">Back to the site</a></p></div></body>';
+    '<p><a href="/">Back to the site</a></p>');
 }
 
 Object.assign(module.exports, { PASS_MS });
