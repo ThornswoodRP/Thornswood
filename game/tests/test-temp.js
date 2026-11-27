@@ -208,7 +208,8 @@ if (block) {
     yes('the place block is findable in the plugin', !!where);
     // The words are what placeKind answers (#4653).
     const kindAt = where.indexOf('function placeKind(');
-    const kindBody = kindAt >= 0 ? where.slice(kindAt, where.indexOf('\n  }\n', kindAt)) : '';
+    const kindEnd = where.slice(kindAt).search(/\r?\n  \}\r?\n/);
+    const kindBody = kindAt >= 0 && kindEnd >= 0 ? where.slice(kindAt, kindAt + kindEnd) : '';
     const sends = (kindBody.match(/return '([a-z]+)'/g) || [])
       .map(function (s) { return /'([a-z]+)'/.exec(s)[1]; });
     yes('the client reports a place at all', sends.length >= 5);

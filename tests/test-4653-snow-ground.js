@@ -23,7 +23,8 @@ function yes(what, cond) {
   else { fail++; console.log('FAIL  ' + what); }
 }
 
-const front = fs.readFileSync(path.join(ROOT, 'game', 'plugins', 'thornswood-front.js'), 'utf8');
+// A Windows checkout ends lines with CR LF; the slices below are cut at LF.
+const front = fs.readFileSync(path.join(ROOT, 'game', 'plugins', 'thornswood-front.js'), 'utf8').replace(/\r\n/g, '\n');
 const from = front.indexOf('const SNOW_GROUND');
 const to = front.indexOf('\n  }\n', front.indexOf('function placeKind(')) + 4;
 let make = null;
