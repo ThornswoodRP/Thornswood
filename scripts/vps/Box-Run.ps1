@@ -153,7 +153,9 @@ if ($OnTheBox) {
                 }
                 elseif ($l -match '^@REFUSED (.*)$') { $r.Refused = $Matches[1]; [IO.File]::AppendAllText($out, 'gate: REFUSED ' + $Matches[1] + "`n", $utf8) }
                 elseif ($l -match '^@END (-?[0-9]+)$') { $r.Code = [int]$Matches[1] }
-                elseif ($l -and $l -notmatch 'post-quantum|store now, decrypt later|openssh\.com/pq\.html') { [IO.File]::AppendAllText($out, 'ssh: ' + $l + "`n", $utf8) }
+                # Anything else ssh said goes in the output as it is, a warning
+                # it prints included, so one that starts is seen (#1043, #4385).
+                elseif ($l) { [IO.File]::AppendAllText($out, 'ssh: ' + $l + "`n", $utf8) }
             }
             $sshCode = $LASTEXITCODE
             $ErrorActionPreference = $old
