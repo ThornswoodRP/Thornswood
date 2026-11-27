@@ -231,7 +231,7 @@ VoiceIce.cs 1
 # fails after the work is done, or where a dev Ship fails open on purpose, is
 # said (releases.txt, the pending note, the icon cache, Explorer, what main
 # and dev have published). 82 are left.
-scripts\dev\Check-Outside.ps1 6
+scripts\dev\Check-Outside.ps1 5
 scripts\dev\Close-Launcher.ps1 8
 scripts\dev\Fix-Icons.ps1 1
 scripts\dev\Start-Thornswood.ps1 3
