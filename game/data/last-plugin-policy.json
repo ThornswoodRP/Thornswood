@@ -132,6 +132,13 @@
     "measured": "249 of 854 placed plants stand in Winterhold (29%); the rest: Haafingar 192, the Pale 152, the Rift 62, the Reach 56, Eastmarch 41, Falkreath 33, Solstheim 25, Whiterun 20, no hold 15, Hjaalmarch 9. Measured 26 Oct 2026 on the dev server's plugins (scripts/dev/Measure-HoldResources.py)."}
   ]
  },
+ "authoredDoorDefaults": {
+  "protectedCells": {"19bad4:Skyrim Unbound.esp": "Thornswood's Creation Hall"},
+  "protectedDoors": {
+   "8097cf:Skyrim Unbound.esp": "The Creation Hall door",
+   "8097db:Skyrim Unbound.esp": "The Creation Hall door"
+  }
+ },
  "claimableDoorsUnlocked": {
   "why": "Remove only four reviewed ordinary authored keyless locks. Preserve every cell owner, native field, base and paired exit. Source or dependency changes require review.",
   "doors": ["5a7ea:Skyrim.esm", "501a7:Skyrim.esm", "cb8b9:Skyrim.esm", "24201:JKs Skyrim.esp"],
