@@ -734,6 +734,22 @@ sp.on('buttonEvent', guard('keys', (e) => {
     return;
   }
 
+  // A game menu that takes keys is open (#4799): the name box in the race
+  // menu, the console, the inventory, the map. The game is sent its key downs
+  // there, so they reach this handler too, and an O in a name locked the
+  // microphone open and a B stepped the voice mode. The lock and the mode are
+  // for the world, so they stand down in a menu. Push to talk does not: V
+  // held over the map is somebody talking. The front names the menu
+  // (Thornswood.keyboardMenu), so it is the same list its own keys go by.
+  if ((e.code === LOCK_KEY || e.code === MODE_KEY) && e.isDown && !e.isUp) {
+    let menu = '';
+    try { menu = (T && typeof T.keyboardMenu === 'function') ? String(T.keyboardMenu() || '') : ''; } catch (err) { menu = ''; }
+    if (menu) {
+      once('menu-' + e.code, 'key ' + e.code + ' ignored while ' + menu + ' is open');
+      return;
+    }
+  }
+
   // Whisper, local, yell. On the way down only: a key that cycled on press and
   // again on release would land back where it started.
   if (e.code === MODE_KEY) {
