@@ -7,6 +7,7 @@
       "script": "scripts/release/Set-NexusKey.ps1",
       "reads": [
         "scripts/release/Build-Launcher.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/Nexus.ps1",
         "scripts/release/Read-JsonFile.ps1",
@@ -23,6 +24,7 @@
       "script": "scripts/release/Send-NexusFile.ps1",
       "reads": [
         "scripts/release/Build-Launcher.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
         "scripts/release/LauncherVersion.ps1",
         "scripts/release/Nexus.ps1",
         "scripts/release/Read-JsonFile.ps1",

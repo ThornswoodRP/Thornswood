@@ -1045,6 +1045,7 @@
         "scripts/mods/Run-OnBox.ps1",
         "scripts/mods/last_recipe.py",
         "scripts/release/Get-ContentBuild.ps1",
+        "scripts/release/Get-ScratchDir.ps1",
         "scripts/release/MergeRelease.ps1",
         "scripts/release/Read-JsonFile.ps1",
         "scripts/release/RecordShape.ps1",
