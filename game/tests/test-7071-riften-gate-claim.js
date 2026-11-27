@@ -56,6 +56,9 @@ function world() {
     tables.JAIL_NAME[hold] = hold + ' jail';
     tables.JAIL_SHUT[door] = 1;
   }
+  files.set(key(path.join('private', 'law.json')), JSON.stringify({
+    cells: Object.fromEntries(jails.map(row => [row[2], true])), held: {}
+  }));
   const ids = new Map(), descs = new Map(), refs = new Map();
   let nextId = 0x05000000;
   const idOf = desc => {
@@ -139,12 +142,15 @@ for (const [label, setup, desc] of [
   const w = world(), a = w.players[0]; setup(w); w.look(a, desc); w.command(a, '/claim');
   yes(label + ' does not create a gate claim', !w.property.holderOf(RIFT) && !w.refs.get(a).thornswoodDoorLine);
 }
-for (const [label, desc, building] of [
-  ...jails.map(([hold, building, door]) => [hold + ' staff jail', door, building]),
-  ['reserved embassy', EMBASSY_DOOR, EMBASSY]
-]) {
-  const w = world(), a = w.players[0]; w.look(a, desc); w.command(a, '/claim');
-  yes(label + ' keeps its existing claim refusal', !w.property.holderOf(building) && w.refs.get(a).thornswoodDoorLine?.x === '');
+for (const [hold, building, door] of jails) {
+  const w = world(), a = w.players[0]; w.look(a, outside[0]); w.command(a, '/claim');
+  yes(hold + ': active guard cell control stays separate from the gate claim',
+    w.property.buildingOf(door) === building && w.property.jailHoldOf(door) === hold &&
+    w.property.cellLocked(door) && !w.property.mayPassCell(a, 501, door));
+}
+{
+  const w = world();
+  yes('the unrelated embassy door keeps its original property mapping', w.property.buildingOf(EMBASSY_DOOR) === EMBASSY);
 }
 console.log(`${passed} passed, ${failed} failed`);
 process.exitCode = failed ? 1 : 0;
