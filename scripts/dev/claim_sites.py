@@ -6,6 +6,7 @@ Until the catalogue proves an inside/outside boundary these new leaves remain
 passable, using the existing WAY_OUT contract rather than inventing a side.
 """
 import hashlib
+import re
 
 # Compatibility with the already released runtime town-gate overlay. These are
 # property identities and proved inside leaves, not default-lock exclusions.
@@ -22,12 +23,25 @@ def site_name(name, site):
     # A key or mold uses the name as its identity. The code must not change
     # if another gate with the same name is added to the collection.
     code = hashlib.sha256(site.casefold().encode('utf-8')).hexdigest()[:10].upper()
-    return '%s, site %s' % (name, code)
+    suffix = ', site ' + code
+    return name if name.endswith(suffix) else name + suffix
 
 
 def expand(cells, placed, buildings, by_door, names, way_out, policy, markers=()):
     """Return complete tables and explicit site metadata; never touch claims."""
     rules = policy.get('authoredDoorDefaults') or {}
+    historic = rules.get('historicPropertySites', [])
+    if not isinstance(historic, list):
+        raise ValueError('historicPropertySites must be a list of issued site identities')
+    issued = set()
+    for site in historic:
+        if not isinstance(site, str) or (site not in TOWNS and not re.fullmatch(
+                r'[0-9a-fA-F]{1,8}:[^:\r\n]+\.(?:esm|esp|esl)', site, re.IGNORECASE)):
+            raise ValueError('invalid historic property site: %r' % site)
+        identity = site.casefold()
+        if identity in issued:
+            raise ValueError('duplicate historic property site: %s' % site)
+        issued.add(identity)
     protected_refs = set(rules.get('protectedDoors', {}))
     protected_cells = set(rules.get('protectedCells', {}))
     markers = set(markers)
@@ -39,7 +53,6 @@ def expand(cells, placed, buildings, by_door, names, way_out, policy, markers=()
     by_door = {ref: site for ref, site in by_door.items() if ref not in ignored}
     names, way_out = dict(names), {ref: 1 for ref in way_out if ref not in ignored}
     sites = {}
-    new_names = set()
 
     for site, (label, refs, outs) in TOWNS.items():
         actual = [ref for ref in refs if ref in placed and ref not in ignored]
@@ -81,10 +94,7 @@ def expand(cells, placed, buildings, by_door, names, way_out, policy, markers=()
             else:
                 labels = sorted({c['name'] for c in (cell, far_cell) if c and c.get('name')})
                 label = 'Gate at ' + ' / '.join(labels) if labels else 'A gate'
-            names[site] = site_name(label, site)
-            if names[site] in new_names:
-                raise ValueError('new claim site label is not unique: %s' % names[site])
-            new_names.add(names[site])
+            names[site] = label
         sites.setdefault(site, {'kind': kind, 'name': names[site], 'passageOnly': True})
         # All existing meaningful ingress locks retain their old WAY_OUT value.
         # Newly admitted leaves must not acquire a trapping lock by accident.
@@ -102,6 +112,16 @@ def expand(cells, placed, buildings, by_door, names, way_out, policy, markers=()
             scopes[site] = []
         if site not in buildings and ref not in scopes[site]:
             scopes[site].append(ref)
+    new_names = set()
     for site in served:
+        # Pairing can promote a newly admitted CELL into the builder's initial
+        # name table. Its issued identity, not that incidental route, decides
+        # whether the site code is needed.
+        if site.casefold() not in issued and site not in TOWNS:
+            names[site] = site_name(names[site], site)
+            if names[site] in new_names:
+                raise ValueError('new claim site label is not unique: %s' % names[site])
+            new_names.add(names[site])
         sites.setdefault(site, {'kind': 'interior', 'name': names[site]})
+        sites[site]['name'] = names[site]
     return by_door, names, way_out, scopes, sites, added

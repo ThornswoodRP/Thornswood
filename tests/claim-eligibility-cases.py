@@ -16,12 +16,15 @@ spec.loader.exec_module(F)
 PACK = lambda value: struct.pack('<I', value)
 
 
-def source():
+def source(pair_unlinked_room=False):
     groups = [F.group(b'DOOR', 0, F.record(b'DOOR', 0x500, [(b'EDID', b'OrdinaryDoor\0')]))]
     rows = [(0x100, False, [(0x101, 0x201), (0x102, 0x202), (0x103, None), (0x104, 0x301), (0x701, 0x702), (0x901, 0xa01)]),
             (0x200, False, [(0x201, 0x101), (0x202, 0x102), (0xa01, 0x901)]),
             (0x300, True, [(0x301, 0x104), (0x302, None), (0x702, 0x701)]),
             (0x400, True, [(0x401, None)]), (0x600, True, [(0x601, None)])]
+    if pair_unlinked_room:
+        rows[0][2].append((0x105, 0x601))
+        rows[-1][2][:] = [(0x601, 0x105)]
     children = []
     for cell, interior, refs in rows:
         records = b''
@@ -50,7 +53,8 @@ class Eligibility(unittest.TestCase):
         (cls.path / 'plugins.txt').write_text('*Thornswood-Last.esp\n')
         (cls.path / 'last-plugin.json').write_text(json.dumps({'authoredDoorsUnlocked': []}))
         (cls.path / 'policy.json').write_text(json.dumps({'gatesUnlocked': {'gates': []},
-            'authoredDoorDefaults': {'protectedCells': {'400:Skyrim.esm': 'Creation Hall'},
+            'authoredDoorDefaults': {'historicPropertySites': ['300:Skyrim.esm'],
+                                    'protectedCells': {'400:Skyrim.esm': 'Creation Hall'},
                                     'protectedDoors': {'401:Skyrim.esm': 'Creation Hall',
                                                        '901:Skyrim.esm': 'Thornswood quest door'}}}))
         cls.run_builder()
@@ -89,6 +93,42 @@ class Eligibility(unittest.TestCase):
     def test_new_interior_without_teleport_ingress_is_claimable(self):
         self.assertEqual(self.mapped().get('601:Skyrim.esm'), '600:Skyrim.esm')
         self.assertRegex(self.tables['BUILDING_NAME']['600:Skyrim.esm'], r'^Room 600, site [0-9A-F]{10}$')
+
+    def test_new_interior_label_survives_later_paired_ingress(self):
+        label = self.tables['BUILDING_NAME']['600:Skyrim.esm']
+        plugin = self.path / 'Skyrim.esm'
+        before = plugin.read_bytes()
+        try:
+            plugin.write_bytes(source(pair_unlinked_room=True))
+            self.run_builder()
+            self.assertEqual(self.mapped()['105:Skyrim.esm'], '600:Skyrim.esm')
+            self.assertEqual(self.mapped()['601:Skyrim.esm'], '600:Skyrim.esm')
+            self.assertEqual(self.tables['BUILDING_NAME']['600:Skyrim.esm'], label)
+            self.assertEqual(self.tables['BUILDING_NAME']['300:Skyrim.esm'], 'Room 300')
+        finally:
+            plugin.write_bytes(before)
+            self.run_builder()
+
+    def test_recorded_issued_identities_are_the_fixed_published_set(self):
+        policy = json.loads((ROOT / 'game/data/last-plugin-policy.json').read_text())
+        sites = policy['authoredDoorDefaults']['historicPropertySites']
+        self.assertEqual(len(sites), 852)
+        folded = sorted(site.casefold() for site in sites)
+        self.assertEqual(len(set(folded)), len(folded))
+        self.assertEqual(hashlib.sha256('\n'.join(folded).encode()).hexdigest(),
+                         '741587bb995bdaf46f160e82f80bc8a74061f40c84146e3ed743f822f0b9b8a6')
+
+    def test_history_validation_and_existing_code_are_not_order_dependent(self):
+        spec = importlib.util.spec_from_file_location('claim_site_history', ROOT / 'scripts/dev/claim_sites.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for invalid in ('300:Skyrim.esm', [None], ['not-an-identity'],
+                        ['300:Skyrim.esm', '300:skyrim.esm']):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                module.expand({}, {}, {}, {}, {}, {}, {'authoredDoorDefaults': {'historicPropertySites': invalid}})
+        name = module.site_name('Room 600', '600:Skyrim.esm')
+        self.assertEqual(module.site_name(name, '600:Skyrim.esm'), name)
+        self.assertEqual(module.site_name('Room 600', '600:skyrim.esm'), name)
 
     def test_existing_home_identity_and_egress_are_preserved(self):
         m, out = self.mapped(), self.tables['WAY_OUT']
