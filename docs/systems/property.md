@@ -39,6 +39,18 @@ If nobody holds it, it is yours. A building you hold offers Lock or
 Unlock instead. A building somebody else holds offers nothing, and the
 key does not take it off them.
 
+A character claims one property of their own (Patrick, 26 Nov, #6894).
+While you hold a building you claimed, Claim at another door is refused,
+and the line says which one you hold and that the hold's steward can
+grant you this one instead. More than one comes from a steward, at the
+door (see Stewards and rent). A building a steward granted you is not
+the one you claimed, so it does not stop you claiming one of your own,
+and your own one does not stop a steward granting more. A jail is held
+by its Jarl's office and does not count. A deed carried through the
+door is not a claim either: whoever presents it holds the place, and
+the place counts as their own. Buildings somebody held before the rule
+stay theirs until the claim lapses or a steward evicts.
+
 The claim lapses 14 real days after the last time the holder opened one
 of its doors. Living there keeps it. When it lapses, the register drops
 the claim and the doors unlock. What is in the chests stays in the
@@ -59,6 +71,12 @@ ground is written on the house's claim when it is claimed, and a field
 within the farm's claim radius of that door answers to the house while
 it is held, so nobody claims it in the field. Ground with no building
 on it is a farm claim of its own.
+
+So a farm on a property is part of the one claim and not a claim of
+its own, and the limit counts properties only. The holder works every
+plot on the ground outside its door, a granted building's included,
+and claiming one there adds no claim. A plot on ground somebody else
+holds is refused, and says whose it is.
 
 ## The deed
 
@@ -183,6 +201,16 @@ staff log, the one the staff commands write, which the bot says in the
 staff channel: who pressed, whose claim, the building and its hold, the
 rent set, and when. Staff who are the Steward or Jarl of a building's
 hold settle it as its steward, like anybody who keeps it.
+
+A steward grants a building at its door, in their own hold, and staff
+grant at any door (#6894). At the door of a building nobody holds, the
+Office page of K lists who is in the world, with Grant beside each name
+but the steward's own. Pressing it twice gives the building to that
+person as their own claim would: a new deed number, the deed and the
+master key in their pack, the ground outside the door, and the same 14
+day lapse. Both are told. A building somebody holds offers no Grant; end
+that claim first. A staff grant is a line in the staff log, like an
+eviction.
 
 Eviction ends the claim. It does not empty the house. It does not
 take a key back, so a tenant who kept one can still walk in. That is a
