@@ -59,6 +59,7 @@ test('ordinary test runs never read camera state or emit a trace', () => {
 test('opt-in world wait observes its first ready update before passing or requesting a wheel', () => {
   const f = fixture(true, { steps: [
     { do: 'wait', for: 'world', timeout: 300000, cameraTrace: true },
+    { do: 'shot', name: 'in-world' },
     { do: 'wheel', delta: 120, cameraTrace: true }, { do: 'end' }
   ] });
   f.fire('menuOpen', { name: 'Loading Menu' });
@@ -74,11 +75,16 @@ test('opt-in world wait observes its first ready update before passing or reques
   assert.ok(lines.findIndex(r => r.t === 'camera-trace' && r.i === 0) <
     lines.findIndex(r => r.t === 'step' && r.i === 0 && r.ok));
   f.frame();
+  assert.ok(f.lines().some(r => r.t === 'ask' && r.do === 'shot' && r.arg === 'in-world'));
+  assert.ok(!f.lines().some(r => r.t === 'ask' && r.do === 'wheel'));
+  f.frame();
+  assert.ok(!f.lines().some(r => r.t === 'ask' && r.do === 'wheel'));
+  f.ack(); f.frame(300); f.frame();
   const before = f.receipts().find(r => r.phase === 'wheel-request-before');
-  assert.ok(before); assert.equal(before.i, 1);
+  assert.ok(before); assert.equal(before.i, 2);
   assert.ok(f.lines().some(r => r.t === 'ask' && r.do === 'wheel'));
   f.ack(); f.frame(300); f.frame(); f.frame(300);
-  assert.ok(f.lines().some(r => r.t === 'step' && r.i === 1 && r.ok));
+  assert.ok(f.lines().some(r => r.t === 'step' && r.i === 2 && r.ok));
 });
 
 test('normal world wait stays unobserved and a traced world timeout does not sample an unready world', () => {
@@ -207,7 +213,9 @@ test('smoke list reuses exact owned-character entry and opts into exactly two bo
   assert.deepEqual(smoke.slice(0, world), normal.slice(0, world));
   assert.deepEqual(smoke[world], { ...normal[world], cameraTrace: true });
   const end = world + 1;
-  assert.deepEqual(smoke.slice(end).map(s => s.do), ['wheel', 'wait', 'wheel', 'wait', 'shot', 'end']);
+  assert.deepEqual(smoke[end], normal[end]);
+  assert.deepEqual(smoke[end], { do: 'shot', name: 'in-world' });
+  assert.deepEqual(smoke.slice(end).map(s => s.do), ['shot', 'wheel', 'wait', 'wheel', 'wait', 'shot', 'end']);
   assert.deepEqual(smoke.slice(end).filter(s => s.do === 'wheel').map(s => s.delta), [120, -120]);
   assert.ok(smoke.slice(end).filter(s => s.do === 'wheel').every(s => s.cameraTrace === true));
   assert.ok(smoke.slice(end).filter(s => s.do === 'wait').every(s => s.ms === 500 && s.cameraTrace === true));
