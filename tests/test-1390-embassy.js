@@ -294,14 +294,16 @@ if (block && RECIPES && ADMIN_ITEMS) {
     const touchedSrc = slice(gm, '  function noteDoor(actorId, doorDesc) {', '\n  }\n') +
                        slice(gm, '  function openedDoor(actorId, doorDesc) {', '\n  }\n');
     const lineSrc = slice(gm, '  function doorLine(actorId, profileId) {', '\n  }\n');
+    // A claim first asks whether the character holds a place of their own already (#6894).
+    const ownSrc = slice(gm, '  function ownClaimOf(profileId) {', '\n  }\n');
     yes('B2 claim, evict, the door press and the line at the door are in the property block',
-        !!claimSrc && !!evictSrc && !!touchedSrc && !!lineSrc);
+        !!claimSrc && !!evictSrc && !!touchedSrc && !!lineSrc && !!ownSrc);
     function claimAt(building) {
       const told = [];
       const claims = {};
       const fn = new Function('globalThis', 'here', 'holderOf', 'nameOf', 'mp', 'groundHere', 'claims', 'save', 'pushAll',
         'giveDeed', 'plog', 'lapseDays', 'mayHold', 'jailOfBuilding', 'HOLD_TOWN', 'issueMaster', 'masterHandedLine',
-        'var deedCut = 0;\n' + claimSrc + '\nreturn claim;');
+        'var deedCut = 0;\n' + ownSrc + '\n' + claimSrc + '\nreturn claim;');
       const claim = fn({ __thornswoodEmbassy: E }, function () { return building; }, function () { return null; },
         function (b) { return b; }, { get: function () { return { name: 'Bjorn' }; } }, function () { return null; },
         claims, function () { return true; }, function () { }, function () { return true; }, function () { }, function () { return 14; },

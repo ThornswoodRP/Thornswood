@@ -213,7 +213,7 @@ exit 0
     $ri = if ($ki -ge 0) { $inr.IndexOf('Remove-Unpacked $e $u', $ki) } else { -1 }
     Yes 'it keeps a copy of each plugin before the unpacked mod goes' ($ki -gt 0 -and $ri -gt $ki -and ($ri - $ki) -lt 2000)
     Yes 'the copy kept is the one that wins the plugin''s place, held to files.txt''s sha256' ($inr -match '\$src = \$script:Kept\[\$x\.Full\]' -and $inr -match 'if \(\$got -ne \$x\.Sha256\)')
-    Yes 'a -Record folder may hold its plugins and menus folders, its modlist (#6244) and its slider sets (#5888), and nothing else besides' ($inr -match "'loadorder\.txt', 'slidersets\.json', 'plugins', 'menus', 'thornswood\.wabbajack'\) -notcontains")
+    Yes 'a -Record folder may hold its plugins and menus folders, its modlist (#6244), its slider sets (#5888) and its scripts.json (#7000), and nothing else besides' ($inr -match "'loadorder\.txt', 'slidersets\.json', 'scripts\.json', 'plugins', 'menus', 'thornswood\.wabbajack'\) -notcontains")
     $km = $inr.IndexOf('$script:KeptMenus[$s.Full] = $kf')
     $rm = if ($km -ge 0) { $inr.IndexOf('Remove-Unpacked $e $u', $km) } else { -1 }
     Yes 'it keeps what SkyUI''s menu check reads before the unpacked mod goes' ($km -gt 0 -and $rm -gt $km -and ($rm - $km) -lt 400)

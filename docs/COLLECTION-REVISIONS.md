@@ -1,6 +1,6 @@
 # Collection revisions
 
-The collection is on revision 12 of 7essxf on Nexus Mods, as
+The collection is on revision 13 of 7essxf on Nexus Mods, as
 `records/collection-plugins.json` records it, every plugin with its size and
 sha256. `tests/test-4533-collection-revision-docs.js` holds this page and
 every other page to that record, so a page that names an older revision as the
@@ -36,9 +36,25 @@ says how. From Nexus to a release it goes like this:
    revision. Main follows from the feed only when Patrick says so for that
    build.
 
-For revision 12, steps 1 and 2 are done. Its collection plugins and their
-load order are unchanged from revision 11. The merge builds the content again
-on the box before its release.
+For revision 13, steps 1 and 2 are done. It takes out one plugin,
+McmRecorder.esp, and leaves the order of every other plugin as revision 12
+had it. The merge builds the content again on the box before its release,
+the Last plugin with it.
+
+## Revision 13
+
+Published 27 November 2026 by [the collection record run](https://github.com/ThornswoodRP/Thornswood/actions/runs/45928907205).
+
+MCM Recorder (61719) is taken out, as Patrick chose on #4511 (option A, 26
+November). Its menu needs JContainers, which the collection does not carry,
+and its loose SKI_ConfigBase.pex and SKI_ConfigManager.pex replaced SkyUI's
+own, so every mod menu ran on a base that called into it. Those two scripts
+go with it, and every SkyUI and MCM Helper menu runs on SkyUI's own base
+again. Its plugin added only its menu and one item kept in a cell nobody can
+reach, so the servers drop it (`records/collection-dropped.json`). No other
+archive, plugin or order changed. Its entry listed no files, and the run
+before this one stopped on that; the run now reads the files from the
+archive (#4511).
 
 ## Revision 12
 

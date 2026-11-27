@@ -37,6 +37,8 @@ sys.path.insert(0, HERE)
 import _pyguard  # noqa: F401  (first after the path: Python 3.11 or newer, #2276)
 import contextlib
 import io
+import json
+import tempfile
 
 os.environ.setdefault('DISCORD_TOKEN', 'not-a-real-token')
 os.environ.pop('GITHUB_TOKEN', None)
@@ -313,6 +315,98 @@ finally:
     pr_tasks._get = real_get
     for k in ('GITHUB_TOKEN', 'GITHUB_REPOSITORY', 'PR_NUMBER', 'HEAD_REF', 'PR_BODY'):
         os.environ.pop(k, None)
+
+# Queue refs identify the request, not its actual source branch. Exemption
+# context must come from that same PR, never a caller's claimed HEAD_REF.
+context_env = ('GITHUB_TOKEN', 'GITHUB_REPOSITORY', 'PR_NUMBER', 'HEAD_REF',
+               'PR_BODY', 'GITHUB_EVENT_NAME', 'GITHUB_RUN_ATTEMPT',
+               'PR_EVENT_BODY', 'GITHUB_EVENT_PATH')
+saved_context_env = {k: os.environ.get(k) for k in context_env}
+context_calls = []
+context_pr = {'number': 8, 'body': 'Refs #202\n',
+              'base': {'repo': {'full_name': 'o/r'}},
+              'head': {'ref': 'engine-pin/next', 'repo': {'full_name': 'o/r'}}}
+
+
+def context_get(token, path):
+    context_calls.append(path)
+    if path == 'repos/o/r/pulls/8':
+        return context_pr
+    if path.startswith('repos/o/r/issues/'):
+        return ISSUES.get(int(path.rsplit('/', 1)[1]))
+    raise AssertionError('unexpected context read: ' + path)
+
+
+pr_tasks._get = context_get
+try:
+    os.environ.update({'GITHUB_TOKEN': 'fixture-token', 'GITHUB_REPOSITORY': 'o/r',
+                       'PR_NUMBER': '8', 'HEAD_REF': 'gh-readonly-queue/main/pr-8-' + 'a' * 40,
+                       'GITHUB_EVENT_NAME': 'merge_group', 'GITHUB_RUN_ATTEMPT': '1'})
+    os.environ.pop('PR_EVENT_BODY', None)
+    code, out = run_env()
+    yes('merge queue uses the requested PR actual verified engine-pin head',
+        code == 0 and 'Known issues:' not in out and context_calls.count('repos/o/r/pulls/8') == 1)
+
+    context_pr['body'] = 'Refs #202\nKnown issue for #202: ' + 'x' * 50 + '\n'
+    code, out = run_env()
+    yes('verified engine pins still validate explicitly supplied known-issue blocks',
+        code == 1 and 'Format' in out)
+    context_pr['body'] = 'Refs #202\n'
+    context_pr['head']['ref'] = 'ordinary/change'
+    os.environ['HEAD_REF'] = 'engine-pin/claimed-by-caller'
+    code, out = run_env()
+    yes('a caller-supplied engine-pin prefix cannot exempt an ordinary PR',
+        code == 1 and 'Known issues:' in out)
+    context_pr['head']['ref'] = 'engine-pin/next'
+    context_pr['head']['repo']['full_name'] = 'someone/fork'
+    code, out = run_env()
+    yes('a foreign fork engine-pin branch cannot claim the repository automation exemption',
+        code == 1 and 'Known issues:' in out)
+    context_pr['head']['repo']['full_name'] = 'o/r'
+    context_pr['base']['repo']['full_name'] = 'other/repo'
+    code, out = run_env()
+    yes('a mismatched base repository cannot supply engine-pin exemption context',
+        code == 1 and 'Known issues:' in out)
+    context_pr['base']['repo']['full_name'] = 'o/r'
+    context_pr['number'] = 9
+    code, out = run_env()
+    yes('metadata for a different PR cannot exempt the requested number', code == 1)
+    context_pr['number'] = 8
+
+    with tempfile.TemporaryDirectory(prefix='tw-pr-head-context-') as owned:
+        event_path = os.path.join(owned, 'event.json')
+        os.environ.update({'GITHUB_EVENT_NAME': 'pull_request', 'PR_EVENT_BODY': context_pr['body'],
+                           'GITHUB_EVENT_PATH': event_path, 'HEAD_REF': '8/merge'})
+        with open(event_path, 'w', encoding='utf-8') as f:
+            json.dump({'number': 8, 'pull_request': context_pr}, f)
+        context_calls.clear()
+        code, out = run_env()
+        yes('first event uses matching event PR metadata without re-reading its body from GitHub',
+            code == 0 and 'reading the body the pull_request event carries' in out
+            and 'repos/o/r/pulls/8' not in context_calls)
+        os.environ['PR_EVENT_BODY'] = 'Refs #201\n'
+        code, out = run_env()
+        yes('an event payload for another body cannot exempt caller body text',
+            code == 1 and 'Known issues:' in out)
+        os.environ['PR_EVENT_BODY'] = context_pr['body']
+        os.environ['GITHUB_EVENT_PATH'] = os.path.join(owned, 'absent.json')
+        os.environ['HEAD_REF'] = 'engine-pin/claimed-by-caller'
+        code, out = run_env()
+        yes('missing event provenance cannot turn a caller prefix into an exemption',
+            code == 1 and 'Known issues:' in out)
+        os.environ['GITHUB_EVENT_PATH'] = event_path
+        os.environ['GITHUB_RUN_ATTEMPT'] = '2'
+        context_pr['head']['ref'] = 'ordinary/change'
+        code, out = run_env()
+        yes('reruns use current API PR metadata instead of an old event engine-pin head',
+            code == 1 and 'Known issues:' in out and 'repos/o/r/pulls/8' in context_calls)
+finally:
+    pr_tasks._get = real_get
+    for key, value in saved_context_env.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
 
 print()
 if FAIL:

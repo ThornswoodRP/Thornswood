@@ -3557,28 +3557,32 @@ function blockIsOff(refrId) {
 
 function chopWood(actorId, refrId, fromSwing) {
   /*
-    #842: Skyrim starts the chopping FURN on the client the moment E is
-    pressed. mp.onActivate returning false only stops the server's
-    ProcessActivateNormal; the axe loop is already running locally. A
-    refused press (wrong half, no axe, off-limits block, or no firewood
-    form) must kick that loop the same way a mining spell ends:
-    IdleChairExitStart then IdleForceDefaultState via swingEnd.
+    A REFUSED PRESS STARTS NOTHING (#4598). Skyrim used to start the chopping
+    FURN on the presser's machine the moment E was pressed, so a refusal had
+    to undo the axe loop afterwards with swingEnd (#842). The client now
+    leaves every chopping block to the server before it acts (the
+    serverFirstBases packet, scripted-activators.ts), so a refused press sat
+    nobody down and there is nothing to undo.
+
+    A swing is different. fromSwing is a fall of the axe in a session the
+    server allowed, and the loop is running: a refusal there (the axe broke,
+    the block went off) ends that session with swingEnd, as before.
   */
   // Before the class and the axe, because this block is not work for anybody
   // and telling a woodworker they lack a tool at one would be a lie.
   const off = blockIsOff(refrId);
   if (off) {
-    swingEnd(actorId);
-    return fromSwing ? '' : 'Nobody works this block. There are others in ' + off + '.';
+    if (fromSwing) { swingEnd(actorId); return ''; }
+    return 'Nobody works this block. There are others in ' + off + '.';
   }
 
   const half = halfGate(actorId, 'woodwright', 'novice',
     'A chopping block is a woodworker\'s. Only a woodworker who took Woodwright can ' +
     'work one, and a charburner gets the novice yield. Ask one.');
-  if (half) { swingEnd(actorId); return half; }
+  if (half) { if (fromSwing) { swingEnd(actorId); } return half; }
 
   const tool = toolGate(actorId, 'woodworker');
-  if (tool) { swingEnd(actorId); return tool; }
+  if (tool) { if (fromSwing) { swingEnd(actorId); } return tool; }
 
   /*
     NO WAIT BETWEEN SWINGS, because a swing is the unit now.
@@ -3615,9 +3619,9 @@ function chopWood(actorId, refrId, fromSwing) {
   */
   const yielded = 2;
   if (!addItem(actorId, ITEMS.firewood, yielded)) {
-    swingEnd(actorId);
+    if (fromSwing) { swingEnd(actorId); }
     return 'The block gives up firewood and there is nothing in this load order to ' +
-           'put in your hands. Say so in #bugs.';
+           'put in your hands. Post it in #test-findings in the Discord.';
   }
   /*
     The press is what starts a session, and the block is a FURN so Skyrim's own
@@ -7337,10 +7341,73 @@ function poleTooWeak(actorId, waterRank) {
   return null;
 }
 
+/*
+  FISH TRAPS (#4655). docs/systems/classes/fisher.md, "Between casts": set
+  in water you are allowed to fish, up to FISH_TRAP_MAX at once, the wait is
+  that water's rank, collecting it is a catch of that water, and setting it
+  and collecting it are each one piece of work.
+
+  Until this, a woodwright made the trap and nothing let anybody set one:
+  placeFishTrap and collectFishTrap had no caller, and collecting gave work
+  and no catch.
+
+  A trap is kept on the fisher (TRAP_PROPERTY): which water (its reference
+  and its base), when it went in and the wait it went in with. The wait is
+  the trap's own, not the water's shared stock, so a trap in a water does
+  not fish it out for somebody casting a pole there, and a pole cast there
+  does not empty the trap. The trap itself comes back with the catch.
+
+  THE BUTTON is the lock key's line at the water (thornswoodWaterLine),
+  written for whoever just pressed E on it and again after each set or
+  collect, the way a door's line is written for the door just opened. The
+  front draws it while that water stays under the crosshair, and the lock
+  key sends /trap and the water's id (teleport.ts routes it here). The
+  server checks everything again: the water, the reach, the class, the rank
+  and the trap in the pack.
+
+  Not in a pearl bed or the longfin water: what comes out of those is a
+  quest's count.
+*/
+const WATER_LINE_PROPERTY = 'thornswoodWaterLine';
+const LONGFIN_WATER = '154a5:Thornswood-Content.esp';
+let waterLineStamp = 0;
+
+try {
+  // The server's own record: nobody's client reads it.
+  mp.makeProperty(TRAP_PROPERTY, {
+    isVisibleByOwner: false, isVisibleByNeighbors: false,
+    updateOwner: '', updateNeighbor: ''
+  });
+} catch (e) { log('fish traps: the trap record was made by an earlier load:', String(e)); }
+try {
+  mp.makeProperty(WATER_LINE_PROPERTY, {
+    isVisibleByOwner: true, isVisibleByNeighbors: false,
+    updateOwner: [
+      '(function(){',
+      '  try {',
+      '    var v = ctx.value;',
+      '    if (!v || typeof v !== "object") { return; }',
+      '    var was = globalThis.thornswoodWaterLine;',
+      '    if (was && was.stamp === v.at) { return; }',
+      '    globalThis.thornswoodWaterLine = { stamp: v.at, seen: Date.now(),',
+      '      hex: String(v.hex || ""), x: String(v.x || ""), w: String(v.w || ""),',
+      '      t: String(v.t || "") };',
+      '  } catch (e) { /* the client keeps the last line; the next press writes it again */ }',
+      '})();'
+    ].join('\n'),
+    updateNeighbor: ''
+  });
+} catch (e) {
+  // Made by an earlier load; a changed script needs a restart, which a deploy is.
+  log('fish traps: the water line was made by an earlier load:', String(e));
+}
+
 function fishTrapsOf(actorId) {
   let v = null;
   try { v = mp.get(actorId, TRAP_PROPERTY); } catch (e) { v = null; }
-  return Array.isArray(v) ? v.filter(function (t) { return t && typeof t === 'object'; }) : [];
+  return Array.isArray(v) ? v.filter(function (t) {
+    return t && typeof t === 'object' && typeof t.hex === 'string' && typeof t.base === 'string';
+  }) : [];
 }
 
 function holdsDesc(actorId, desc) {
@@ -7356,20 +7423,56 @@ function holdsDesc(actorId, desc) {
   return false;
 }
 
-function placeFishTrap(actorId, waterRank) {
+function waterHex(refrId) { return (Number(refrId) >>> 0).toString(16); }
+
+/** The fish row a trap may go in at this water, or null for one it may not. */
+function trapWater(refrId, baseDesc) {
+  if (!isFish(baseDesc) || baseDesc === LONGFIN_WATER) { return null; }
+  const quest = globalThis.__thornswoodQuestFishingRefs;
+  if (quest && quest[refrId]) { return null; }
+  return FISH_BY_BASE[baseDesc];
+}
+
+/* The water's wait, as fish() reads it: a rank nobody knows waits longest. */
+function trapWaitMs(rank) {
+  return Object.prototype.hasOwnProperty.call(FISH_TUNING.cooldownMs, rank)
+    ? FISH_TUNING.cooldownMs[rank] : FISH_TUNING.cooldownMs.master;
+}
+
+/* The fisher and their rank against this water, as fish() asks them. */
+function trapRefusal(actorId, caught) {
   const refusal = classGate(actorId, 'fish');
+  if (refusal) { return refusal; }
+  const named = RANK_LADDER.indexOf(caught.rank);
+  const want = named < 0 ? RANK_LADDER.length - 1 : named;
+  if (want > 0 && rankStep(actorId, 'fisher') < want) {
+    return 'This ' + caught.from + ' takes ' + rankWord(RANK_LADDER[want]) +
+           ' Fisher. Fish what you can until you are one.';
+  }
+  return null;
+}
+
+function placeFishTrap(actorId, refrId, baseDesc) {
+  const caught = trapWater(refrId, baseDesc);
+  if (!caught) { return { ok: false, line: 'A fish trap does not go in this water.' }; }
+  const refusal = trapRefusal(actorId, caught);
   if (refusal) { return { ok: false, line: refusal }; }
   if (!holdsDesc(actorId, FISH_TRAP_DESC)) {
     return { ok: false, line: 'You need a fish trap in your pack. A woodwright makes them. A trap is not a pole.' };
   }
+  const hex = waterHex(refrId);
   const set = fishTrapsOf(actorId);
+  if (set.some(function (t) { return t.hex === hex; })) {
+    return { ok: false, line: 'Your fish trap is already in this water.' };
+  }
   if (set.length >= FISH_TRAP_MAX) {
     return { ok: false, line: 'You already have ' + FISH_TRAP_MAX + ' fish traps set. Collect one before you set another.' };
   }
   if (!takeItem(actorId, FISH_TRAP_DESC, 1)) {
     return { ok: false, line: 'The trap did not leave your pack, so it was not set.' };
   }
-  set.push({ at: Date.now(), rank: String(waterRank || '') });
+  const waitMs = trapWaitMs(caught.rank);
+  set.push({ at: Date.now(), hex: hex, base: baseDesc, waitMs: waitMs });
   try { mp.set(actorId, TRAP_PROPERTY, set); }
   catch (e) {
     addItem(actorId, ITEMS.fishTrap, 1);
@@ -7380,30 +7483,105 @@ function placeFishTrap(actorId, waterRank) {
   return {
     ok: true,
     count: set.length,
-    line: 'You set a fish trap. ' + set.length + ' of ' + FISH_TRAP_MAX + ' are out.' +
-          (raised ? ' ' + raised : '')
+    line: 'You set a fish trap in the ' + caught.from + '. It is ready in ' + waitWord(waitMs / 1000) +
+          '. ' + set.length + ' of ' + FISH_TRAP_MAX + ' are out.' + (raised ? ' ' + raised : '')
   };
 }
 
-function setFishTrap(actorId, waterRank) {
-  return placeFishTrap(actorId, waterRank);
-}
-
-function collectFishTrap(actorId) {
+function collectFishTrap(actorId, refrId) {
+  const hex = waterHex(refrId);
   const set = fishTrapsOf(actorId);
-  if (!set.length) { return { ok: false, line: 'You have no fish trap set.' }; }
-  const trap = set.shift();
+  let i = -1;
+  for (let k = 0; k < set.length; k++) { if (set[k].hex === hex) { i = k; break; } }
+  if (i < 0) { return { ok: false, line: 'You have no fish trap in this water.' }; }
+  const trap = set[i];
+  const left = (Number(trap.at) || 0) + (Number(trap.waitMs) || 0) - Date.now();
+  if (left > 0) { return { ok: false, line: 'Your fish trap here is ready in ' + waitWord(left / 1000) + '.' }; }
+  const caught = isFish(trap.base) ? FISH_BY_BASE[trap.base] : null;
+  const refusal = classGate(actorId, 'fish');
+  if (refusal) { return { ok: false, line: refusal }; }
+
+  // The catch is the fisher's rank's pair for this water, with the season's
+  // share (#3144), as a cast at it is.
+  const step = rankStep(actorId, 'fisher');
+  const pair = FISH_TUNING.yieldByStep[step] || FISH_TUNING.yieldByStep[0];
+  let got = caught ? randInt(pair[0], pair[1]) : 0;
+  const season = globalThis.__thornswoodSeason;
+  if (got > 0 && season && season.seasonYield) { got = season.seasonYield(got); }
+  const goods = [{ item: FISH_TRAP_DESC, count: 1 }];
+  if (got > 0) { goods.push({ item: caught.produce, count: got }); }
+
+  // Written down before anything is handed over, so a failure leaves the
+  // trap set rather than handing out a catch twice.
+  set.splice(i, 1);
   try { mp.set(actorId, TRAP_PROPERTY, set); }
   catch (e) { return { ok: false, line: 'The trap is still set. It could not be collected.' }; }
+  let given = false;
+  try { given = addItemsAtomic(actorId, goods); } catch (e3) { given = false; }
+  if (!given) {
+    set.splice(i, 0, trap);
+    try { mp.set(actorId, TRAP_PROPERTY, set); }
+    catch (e4) { log('fish traps: a trap could not be put back for', actorId.toString(16) + ':', String(e4)); }
+    return { ok: false, line: 'Nothing from the trap would go in your pack, so it is still set. Say so in the dev channel.' };
+  }
+  if (got > 0) { economyGathered(actorId, caught.produce, got); }
   let raised = null;
   try { raised = creditWork(actorId, 'fish'); } catch (e2) { raised = null; }
+  const word = season && season.yieldWord ? season.yieldWord() : '';
   return {
     ok: true,
     count: set.length,
-    rank: trap && trap.rank,
-    line: 'You collect a fish trap.' + (raised ? ' ' + raised : '')
+    line: (got > 0 ? 'You take up your fish trap with ' + got + ' ' + caught.name + ' in it.'
+                   : 'You take up your fish trap. Nothing is in it this time.') +
+          (word ? ' ' + word : '') + (raised ? ' ' + raised : '')
   };
 }
+
+/*
+  The lock key's line at this water for this person: take up their trap when
+  it is ready, how long is left while it is not, or set one when they may.
+  Written every time, an empty line included, so a line for another water or
+  an old answer never stays up.
+*/
+function waterLine(actorId, refrId, baseDesc) {
+  const hex = waterHex(refrId);
+  waterLineStamp = Math.max(waterLineStamp + 1, Date.now());
+  const line = { at: waterLineStamp, hex: hex, x: '', w: '', t: '' };
+  const caught = trapWater(refrId, baseDesc);
+  if (caught && !classGate(actorId, 'fish')) {
+    const set = fishTrapsOf(actorId);
+    let mine = null;
+    for (let k = 0; k < set.length; k++) { if (set[k].hex === hex) { mine = set[k]; break; } }
+    if (mine) {
+      const left = (Number(mine.at) || 0) + (Number(mine.waitMs) || 0) - Date.now();
+      if (left > 0) { line.t = 'Your fish trap here is ready in ' + waitWord(left / 1000) + '.'; }
+      else { line.x = 'trap'; line.w = 'Take up your fish trap'; }
+    } else if (set.length < FISH_TRAP_MAX && holdsDesc(actorId, FISH_TRAP_DESC) &&
+               !trapRefusal(actorId, caught)) {
+      line.x = 'trap';
+      line.w = 'Set a fish trap here (' + set.length + ' of ' + FISH_TRAP_MAX + ' out)';
+    }
+  }
+  try { mp.set(actorId, WATER_LINE_PROPERTY, line); }
+  catch (e) { log('fish traps: the water line could not be written for', actorId.toString(16) + ':', String(e)); }
+}
+
+/* /trap and a water's id: what the lock key sends at the line above. */
+function trapCommand(parts, actorId) {
+  const hex = String((parts && parts[1]) || '').toLowerCase();
+  if (!/^[0-9a-f]{1,8}$/.test(hex)) { return 'That is not a water you can set a trap in.'; }
+  const refrId = parseInt(hex, 16);
+  let baseDesc = '';
+  try { baseDesc = mp.get(refrId, 'baseDesc'); } catch (e) { baseDesc = ''; }
+  if (!isFish(baseDesc)) { return 'That is not a water you can set a trap in.'; }
+  if (!withinResourceReach(actorId, refrId)) { return 'Come closer to this water.'; }
+  const hasOne = fishTrapsOf(actorId).some(function (t) { return t.hex === hex; });
+  const said = hasOne ? collectFishTrap(actorId, refrId) : placeFishTrap(actorId, refrId, baseDesc);
+  waterLine(actorId, refrId, baseDesc);
+  return said.line;
+}
+
+globalThis.__thornswoodTraps = { command: trapCommand, waterLine: waterLine };
 
 function fish(actorId, refrId, baseDesc) {
   if (!isFish(baseDesc)) return null;
@@ -8647,7 +8825,11 @@ mp.onActivate = guard('onActivate', function (refrId, casterRefrId) {
   // salmon as a flower for a gatherer. plantAt() refuses a fish base on its own
   // account as well, so neither half of that depends on this line staying where
   // it is. Same arrangement as the crops two lines up, same reason.
-  else if (isFish(baseDesc)) message = fish(casterRefrId, refrId, baseDesc);
+  else if (isFish(baseDesc)) {
+    message = fish(casterRefrId, refrId, baseDesc);
+    // The lock key's line for a fish trap here (#4655), after the cast.
+    waterLine(casterRefrId, refrId, baseDesc);
+  }
   // Hanging game before the plants, for the same reason. All seven bases were
   // rows in the plant table until the food rule of 21 September took them out,
   // so on a gamemode built before that ran a plants-first order would answer a
@@ -8786,6 +8968,83 @@ function showsPick(refrId) {
     if (before && packGrew(before, packCounts(casterRefrId))) { showPicked(casterRefrId, refrId); }
     return result;
   };
+})();
+
+/*
+  THE BASES WHOSE PRESS WAITS FOR THE SERVER (#4598).
+
+  The client blocks a press by record type: containers, items, actors, doors,
+  plants, trees and benches wait for the server's answer. A chopping block is
+  furniture that is no bench, and an ore vein is an activator, so neither
+  waited. The presser's own Skyrim sat them at the block, or ran the vein's
+  MineOreScript, before the server had said whether they may, and chopWood
+  could only end the swing after it had started.
+
+  Since skymp#166 the client takes the bases the server names, as the custom
+  packet { customPacketType: 'serverFirstBases', bases: [runtime form ids] },
+  and blocks every reference of them the way it blocks a bench. A refused
+  press then changes nothing on that machine, and an allowed one comes back
+  as the server's own activation. The client forgets the list with each
+  connection (resetServerFirstActivation in networkingService.ts), so it is
+  sent once to every connection: a character's connection is its GUID, the
+  same identity join-pass.ts reads, and a new one is told again.
+
+  CHOPPING_BLOCKS and ORES_BY_BASE are the whole of it. Benches, doors,
+  plants and trees already wait by their type.
+*/
+(function serverFirstBases() {
+  const ids = [];
+  const seen = {};
+  function add(desc) {
+    const id = idOf(desc);
+    // 0 is a plugin that is not loaded: nothing of it can be pressed.
+    if (id && !seen[id]) { seen[id] = true; ids.push(id); }
+  }
+  for (let i = 0; i < CHOPPING_BLOCKS.length; i++) { add(CHOPPING_BLOCKS[i]); }
+  for (const veinBase in ORES_BY_BASE) {
+    if (Object.prototype.hasOwnProperty.call(ORES_BY_BASE, veinBase)) { add(veinBase); }
+  }
+  const packet = JSON.stringify({ customPacketType: 'serverFirstBases', bases: ids });
+  // actorId to the connection it was last sent on.
+  const told = {};
+
+  function connection(userId) {
+    if (typeof mp.getUserGuid !== 'function') { return 'user ' + userId; }
+    let guid = '';
+    try { guid = String(mp.getUserGuid(userId) || ''); } catch (e) { guid = ''; }
+    return guid ? 'guid ' + guid : '';
+  }
+
+  function tell() {
+    let online = [];
+    try { online = mp.get(0, 'onlinePlayers') || []; } catch (e) { online = []; }
+    const here = {};
+    for (let i = 0; i < online.length; i++) {
+      const actorId = online[i];
+      let userId = -1;
+      try { userId = mp.getUserByActor(actorId); } catch (e) { userId = -1; }
+      if (userId === undefined || userId === null || userId < 0) { continue; }
+      const conn = connection(userId);
+      if (!conn) { continue; }
+      here[actorId] = true;
+      if (told[actorId] === conn) { continue; }
+      told[actorId] = conn;
+      try {
+        mp.sendCustomPacket(userId, packet);
+      } catch (e) {
+        log('could not tell', Number(actorId).toString(16), 'which bases wait for the server:', e);
+      }
+    }
+    for (const k in told) {
+      if (Object.prototype.hasOwnProperty.call(told, k) && !here[k]) { delete told[k]; }
+    }
+  }
+
+  const g = globalThis;
+  if (g.__thornswoodServerFirstTimer) { clearInterval(g.__thornswoodServerFirstTimer); }
+  g.__thornswoodServerFirstTimer = setInterval(guard('serverFirstBases', tell), 1000);
+  g.__thornswoodServerFirst = { bases: ids, tell: tell };
+  log(ids.length, 'bases wait for the server before the client acts on them');
 })();
 
 /*
@@ -18753,13 +19012,16 @@ log('gamemode loaded:',
       '    var id = Number(v.id) || 0;',
       '    var st = ctx.state;',
       '    if (!st) { return; }',
-      '    if (st.thornswoodSkyId === id) { return; }',
-      // An id is applied only when its native operation completes. A form
-      // unavailable during loading must not suppress later owner updates.
+      // The owner state survives a native load in the same client. A freshly
+      // decoded property must apply again even when its sky hasn't changed.
+      '    if (st.thornswoodSkyId === id && st.thornswoodSkyPayload === v) { return; }',
+      // Cache the payload only after the native operation completes. Loading
+      // can temporarily make the native weather form unavailable.
       '    if (!id) {',
       '      if (!ctx.sp.Weather.releaseOverride) { return; }',
       '      ctx.sp.Weather.releaseOverride();',
       '      st.thornswoodSkyId = id;',
+      '      st.thornswoodSkyPayload = v;',
       '      return;',
       '    }',
       '    var form = ctx.sp.Game.getFormEx(id);',
@@ -18768,6 +19030,7 @@ log('gamemode loaded:',
       '    if (weather && weather.forceActive) {',
       '      weather.forceActive(true);',
       '      st.thornswoodSkyId = id;',
+      '      st.thornswoodSkyPayload = v;',
       '    }',
       '  } catch (e) { }',
       '})();'
@@ -45971,6 +46234,9 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
                // /stall open, and the panel's buttons send the rest. Never
                // typed, so not in PLAYER_WORDS.
                '/stall',
+               // The lock key at a water whose line offers a fish trap
+               // (#4655). Never typed, so not in PLAYER_WORDS.
+               '/trap',
                // The trade carts' panel, at a cart stop's crate, from Raid
                // cart on P, or on the Office page for staff (#3158). Never typed.
                '/cart',
@@ -47327,6 +47593,17 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
       var stallSaid = stallsApi.command(parts, actorId, profileId, cmd);
       if (stallSaid) { toProfile(profileId, stallSaid); }
+      return true;
+    }
+
+    // The lock key at a water whose line offers a fish trap (#4655): set one
+    // or take it up. Never typed. The scripted activators block answers it.
+    if (word === '/trap') {
+      var trapsApi = (typeof globalThis !== 'undefined' ? globalThis : this).__thornswoodTraps;
+      if (!trapsApi || !trapsApi.command) { toProfile(profileId, 'Fish traps are not running on this server.'); return true; }
+      if (!actorId) { toProfile(profileId, 'You are not in the world yet.'); return true; }
+      var trapSaid = trapsApi.command(parts, actorId);
+      if (trapSaid) { toProfile(profileId, trapSaid); }
       return true;
     }
 
@@ -50210,8 +50487,10 @@ mp.onDropItem = guard('onDropItem', function (actorId, baseId, count) {
   on unless it is false (Patrick, 28 September: existing characters are reset
   to the default body shape, height and weight stay adjustable). Each
   character is looked at once when it comes online and its stored appearance
-  is put through the same check. The person's own machine clears any body
-  slider it still holds on its own (thornswood-front.js, "body shape").
+  is put through the same check. On the person's own machine the creation
+  menu offers no body slider but Height (the launcher's edit of RaceMenu's
+  menu, #7087), and nothing of RaceMenu's is kept from one time playing to the
+  next, so there is nothing there to clear.
 */
 const BODY_APPEARANCE_FIELDS = ['isFemale', 'raceId', 'weight', 'skinColor', 'hairColor',
   'headpartIds', 'headTextureSetId', 'options', 'presets', 'tints', 'name'];
@@ -57751,7 +58030,11 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   steepSeconds by the fire the inputs are taken and the dye is in the pack,
   one entry on the list's item with the dye's name, the way a deed is named.
   Walking away from the fire before then loses the steep and takes nothing:
-  the boil's rule. One steep at a time. A relog loses a steep the same way.
+  the boil's rule. One steep at a time. A relog keeps a steep, as it keeps
+  a boil (#5047): it is the character's, by actor id, and nothing here
+  hears a leave, so back by the fire once its time is up it is done, and
+  back away from the fire it is lost. It is kept in this block's memory
+  only, so a server restart loses it, and nothing was taken yet.
 
   THE BOTTLE OF WATER A DYE TAKES IS SPENT FROM THE WATER LEDGER. The game
   cannot mark where a bottle's water came from, so the needs block counts
@@ -69378,6 +69661,30 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
     }
   }
+  // How far above the navmesh each walking NPC is held (#6474). An NPC keeps
+  // the height its placement had over its navmesh triangle (lift) wherever
+  // it walks, and each game moves it there with translateTo, which neither
+  // falls nor collides, so a positive lift is how far it floats above the
+  // navmesh. Said when it changes, with the largest, to measure the reports
+  // of NPCs floating.
+  let heightsLine='';
+  function heightsReport() {
+    let walking=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
+    for(const a of actors.values()) {
+      if(!a.state || a.state.swims) continue;
+      walking++;
+      if(a.lift>16) above16++;
+      if(a.lift>32) above32++;
+      if(a.lift>64) above64++;
+      if(a.lift<-16) below16++;
+      largest.push(a);
+    }
+    largest.sort((x,y)=>Math.abs(y.lift)-Math.abs(x.lift));
+    const line='NPC heights over their navmesh: '+walking+' walking; above 16 units '+above16+', above 32 '+above32+
+      ', above 64 '+above64+', below -16 '+below16+'; largest '+
+      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.lift)+' in '+a.cell.toString(16)).join(', ');
+    if(line!==heightsLine) {report(line);heightsLine=line;}
+  }
   function backgroundTick() {
     const begin=now();let taken=0,moves=0;
     while(due.length && taken<256 && moves<64) {
@@ -69401,6 +69708,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(merchantStatus) report('NPC merchant purses: '+merchantStatus.verified+'/'+merchantStatus.catalogue+
         ' verified; '+merchantStatus.initialized+' first-time purses; '+((globalThis.__thornswoodMerchantTrade&&globalThis.__thornswoodMerchantTrade.nativeReady())?'native transfer present':'native transfer absent'));
       moved=0;background=0;attacks=0;lastReport=now();
+      heightsReport();
     }
     schedule(backgroundTick,20);
   }
