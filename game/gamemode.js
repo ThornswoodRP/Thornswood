@@ -69459,6 +69459,30 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
     }
   }
+  // How far above the navmesh each walking NPC is held (#6474). An NPC keeps
+  // the height its placement had over its navmesh triangle (lift) wherever
+  // it walks, and each game moves it there with translateTo, which neither
+  // falls nor collides, so a positive lift is how far it floats above the
+  // navmesh. Said when it changes, with the largest, to measure the reports
+  // of NPCs floating.
+  let heightsLine='';
+  function heightsReport() {
+    let walking=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
+    for(const a of actors.values()) {
+      if(!a.state || a.state.swims) continue;
+      walking++;
+      if(a.lift>16) above16++;
+      if(a.lift>32) above32++;
+      if(a.lift>64) above64++;
+      if(a.lift<-16) below16++;
+      largest.push(a);
+    }
+    largest.sort((x,y)=>Math.abs(y.lift)-Math.abs(x.lift));
+    const line='NPC heights over their navmesh: '+walking+' walking; above 16 units '+above16+', above 32 '+above32+
+      ', above 64 '+above64+', below -16 '+below16+'; largest '+
+      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.lift)+' in '+a.cell.toString(16)).join(', ');
+    if(line!==heightsLine) {report(line);heightsLine=line;}
+  }
   function backgroundTick() {
     const begin=now();let taken=0,moves=0;
     while(due.length && taken<256 && moves<64) {
@@ -69482,6 +69506,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(merchantStatus) report('NPC merchant purses: '+merchantStatus.verified+'/'+merchantStatus.catalogue+
         ' verified; '+merchantStatus.initialized+' first-time purses; '+((globalThis.__thornswoodMerchantTrade&&globalThis.__thornswoodMerchantTrade.nativeReady())?'native transfer present':'native transfer absent'));
       moved=0;background=0;attacks=0;lastReport=now();
+      heightsReport();
     }
     schedule(backgroundTick,20);
   }
