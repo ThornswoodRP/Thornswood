@@ -58,6 +58,7 @@
   var at = 0;
   var sent = false;
   var asking = 0;        // the profile id a delete is being confirmed for, or 0
+  var askedAt = 0;       // when the confirm strip went up
 
   function tell(what) {
     try { window.skyrimPlatform.sendMessage('thornswood-front', 'select:' + what); } catch (e) { }
@@ -709,7 +710,7 @@
         bin.title = 'Forget this character';
         bin.innerHTML = BIN;
         bin.onmousedown = function (ev) { downOn = 'bin'; downSlot = i; if (ev.stopPropagation) ev.stopPropagation(); };
-        bin.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); ask(i, e.id); };
+        bin.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); ask(i, e.id, 'the bin'); };
         card.appendChild(bin);
         if (asking === e.id) {
           var strip = el('div', 'confirm');
@@ -719,10 +720,10 @@
           var b = el('div', 'b');
           var yes = el('div', 'btn2 danger', 'Forget');
           yes.onmousedown = function (ev) { downOn = 'confirm'; downSlot = i; if (ev.stopPropagation) ev.stopPropagation(); };
-          yes.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); forget(e.id); };
+          yes.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); answered('confirmed by the Forget button'); forget(e.id); };
           var no2 = el('div', 'btn2', 'Keep');
           no2.onmousedown = function (ev) { downOn = 'confirm'; downSlot = i; if (ev.stopPropagation) ev.stopPropagation(); };
-          no2.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); asking = 0; draw(); };
+          no2.onclick = function (ev) { if (ev.stopPropagation) ev.stopPropagation(); answered('kept, by the Keep button'); asking = 0; draw(); };
           b.appendChild(yes); b.appendChild(no2);
           strip.appendChild(b);
           strip.onmousedown = function (ev) { downOn = 'confirm'; downSlot = i; if (ev.stopPropagation) ev.stopPropagation(); };
@@ -745,7 +746,7 @@
         var was = downOn, wasSlot = downSlot;
         downOn = ''; downSlot = -1;
         if (was === 'confirm') { return; }
-        if (was === 'bin') { ask(wasSlot < 0 ? i : wasSlot, null); return; }
+        if (was === 'bin') { ask(wasSlot < 0 ? i : wasSlot, null, 'the bin, the click landing on the card'); return; }
         at = i; asking = 0; draw(); play();
       };
       elList.appendChild(card);
@@ -754,14 +755,35 @@
   }
 
   /* Put the confirm strip up on a slot, by index, and by id when it is known. */
-  function ask(i, id) {
+  function ask(i, id, how) {
     var list = slots();
     if (i < 0 || i >= list.length) return;
     var e = list[i];
     if (!e || !e.c) return;
     at = i;
     asking = id === null || id === undefined ? Number(e.c.profileId) || 0 : id;
+    askedHow(how);
     draw();
+  }
+
+  /*
+    HOW A FORGET WAS ASKED AND ANSWERED (#7099). A main session's front log
+    had "forgetting character" and, two seconds later, a pick of a new one,
+    and nothing said which key or click put the confirm strip up or which
+    answered it. Enter plays the lit slot and also answers the strip, so a
+    Delete or a bin press nobody meant, and an Enter meant for playing, is
+    one way it could go; a deliberate forget is another. These two lines go
+    to the front log ("choice page: asked to forget, by ..." and "choice
+    page: the ask to forget was ...") with the time between them, so the
+    next one says which. Neither starts "forget ", which is the forget itself.
+  */
+  function askedHow(how) {
+    askedAt = Date.now();
+    tell('asked to forget, by ' + how);
+  }
+  function answered(how) {
+    tell('the ask to forget was ' + how + ', ' + (askedAt ? (Date.now() - askedAt) + ' ms after it was asked' : 'with no ask seen'));
+    askedAt = 0;
   }
 
   function forget(id) {
@@ -1136,8 +1158,8 @@
     var list = slots();
     var n = list.length;
     if (asking) {
-      if (key === 'Escape') { asking = 0; draw(); return true; }
-      if (key === 'Enter') { forget(asking); return true; }
+      if (key === 'Escape') { answered('kept, by Escape'); asking = 0; draw(); return true; }
+      if (key === 'Enter') { answered('confirmed by Enter'); forget(asking); return true; }
       return false;
     }
     if (key === 'ArrowDown') { at = n ? (at + 1) % n : 0; draw(); return true; }
@@ -1145,7 +1167,7 @@
     if (key === 'Enter') { play(); return true; }
     if (key === 'Delete') {
       var e = list[at];
-      if (e && e.c) { asking = e.id; draw(); }
+      if (e && e.c) { asking = e.id; askedHow('the Delete key'); draw(); }
       return true;
     }
     if (/^[1-9]$/.test(key)) {
