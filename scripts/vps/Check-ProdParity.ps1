@@ -83,9 +83,12 @@ function Row([string]$Area, [string]$Item, [string]$Expected, [string]$Actual, [
     $rows.Add([pscustomobject]@{ area = $Area; item = $Item; expected = $Expected; actual = $Actual; class = $cls; why = $why })
 }
 
+# public is the any-address form; address is one of the box's own addresses,
+# which is just as reachable from outside unless it is loopback (#4246).
 function Get-BindKind([string]$a) {
-    if ($a -in '127.0.0.1', '::1') { return 'loopback' }
     if ($a -in '0.0.0.0', '::') { return 'public' }
+    $ip = $null
+    if ([Net.IPAddress]::TryParse($a, [ref]$ip) -and [Net.IPAddress]::IsLoopback($ip)) { return 'loopback' }
     return 'address'
 }
 
@@ -100,11 +103,13 @@ foreach ($e in $r.listeners) {
     $procOk = ($e.process -eq '*') -or ($procs -contains $e.process)
     Row 'listener' $item "$($e.bind) $($e.process)" (($kinds -join '+') + ' ' + ($procs -join '+')) ($bindOk -and $procOk)
 }
-# Anything public the record does not name is a door nobody wrote down.
+# Anything reachable from outside that the record does not name is a door
+# nobody wrote down: the any-address form or one of the box's own addresses.
 $named = @($r.listeners | ForEach-Object { "$($_.proto) $($_.port)" })
-$f.listeners | Where-Object { (Get-BindKind $_.address) -eq 'public' -and "$($_.proto) $($_.port)" -notin $named -and [int]$_.port -lt 49152 } |
+$f.listeners | Where-Object { (Get-BindKind $_.address) -ne 'loopback' -and "$($_.proto) $($_.port)" -notin $named -and [int]$_.port -lt 49152 } |
     Group-Object { "$($_.proto) $($_.port)" } | ForEach-Object {
-        Row 'listener' $_.Name 'not listed in the record' ('public ' + (@($_.Group.process | Sort-Object -Unique) -join '+')) $false
+        $kinds = @($_.Group | ForEach-Object { Get-BindKind $_.address } | Sort-Object -Unique) -join '+'
+        Row 'listener' $_.Name 'not listed in the record' ($kinds + ' ' + (@($_.Group.process | Sort-Object -Unique) -join '+')) $false
     }
 
 # ---- tasks -----------------------------------------------------------------
