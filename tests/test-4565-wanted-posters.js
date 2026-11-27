@@ -71,10 +71,11 @@ const GUARD = { a: 0xff000101, pid: 101, name: 'Hrongar', gold: 0 };            
 const GUARD2 = { a: 0xff000102, pid: 102, name: 'Irileth', gold: 0 };             // another guard of Whiterun
 const JARL = { a: 0xff000111, pid: 111, name: 'Balgruuf', gold: 0 };              // the Jarl of Whiterun
 const POOR = { a: 0xff000606, pid: 606, name: 'Poor', gold: 40 };
-const PEOPLE = [ALICE, BOB, GUARD, GUARD2, JARL, POOR];
+const GUARD3 = { a: 0xff000103, pid: 103, name: 'Lydia', gold: 500 };            // a guard of Whiterun who puts a poster up
+const PEOPLE = [ALICE, BOB, GUARD, GUARD2, JARL, POOR, GUARD3];
 const byA = {};
 PEOPLE.forEach(function (p) { byA[p.a] = p; });
-const OFFICES = { 101: { guard: ['whiterun'] }, 102: { guard: ['whiterun'] }, 111: { jarl: ['whiterun'] } };
+const OFFICES = { 101: { guard: ['whiterun'] }, 102: { guard: ['whiterun'] }, 103: { guard: ['whiterun'] }, 111: { jarl: ['whiterun'] } };
 
 /* One server's engine. It outlives a restart; a restart puts every pack back to what was saved. */
 function engine() {
@@ -149,7 +150,7 @@ function folder() {
   fs.mkdirSync(path.join(dir, 'private'));
   // An office is one character's (#2551): the law register names who holds each.
   fs.writeFileSync(path.join(dir, 'private', 'law.json'), JSON.stringify({ cells: {}, held: {
-    'guard:whiterun': { 'p:101': { pid: 101, name: 'Hrongar' }, 'p:102': { pid: 102, name: 'Irileth' } },
+    'guard:whiterun': { 'p:101': { pid: 101, name: 'Hrongar' }, 'p:102': { pid: 102, name: 'Irileth' }, 'p:103': { pid: 103, name: 'Lydia' } },
     'jarl:whiterun': { 'p:111': { pid: 111, name: 'Balgruuf' } }
   } }));
   fs.writeFileSync(path.join(dir, 'private', 'property.json'), JSON.stringify({
@@ -337,6 +338,20 @@ try {
     command(dir, W, GUARD, '/job done 1');
     payOut(dir, W, e, GUARD2);
     yes('C8 another guard confirms it, and the guard who earned it is paid', e.gold(GUARD2) === 60);
+  }
+  {
+    const dir = folder(), e = engine();
+    const W = boot(dir, e);
+    postWanted(dir, W, GUARD3, 60);
+    e.savePack(GUARD3.a);
+    settle(dir, W);
+    command(dir, W, BOB, '/take 1');
+    const own = command(dir, W, GUARD3, '/job done 1');
+    yes('C8b a guard who put the poster up cannot confirm its bounty ("' + own.slice(0, 60) + '")',
+        /You put that poster up yourself/.test(own) && !posters(register(dir))[0].down && posters(register(dir))[0].pay === 60);
+    command(dir, W, GUARD, '/job done 1');
+    payOut(dir, W, e, BOB);
+    yes('C8c another guard of the hold confirms it, and the taker is paid', e.gold(BOB) === 70);
   }
   {
     const dir = folder();

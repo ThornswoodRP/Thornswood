@@ -29139,6 +29139,11 @@ module.exports = {
       toProfile(profileId, 'You took that bounty yourself. Another guard of ' + hold + ' confirms it.');
       return true;
     }
+    // Its poster never confirms it (decided 22 Oct), a guard who put it up included.
+    if (wanted && Number(n.by) === Number(profileId)) {
+      toProfile(profileId, 'You put that poster up yourself. Another guard of ' + hold + ' confirms it.');
+      return true;
+    }
     if (!wanted && Number(n.by) !== Number(profileId)) {
       toProfile(profileId, 'Only the person who posted a job says it is done.');
       return true;
