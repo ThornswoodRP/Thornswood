@@ -75,20 +75,20 @@ function Get-EnginePinFacts([string]$Repo) {
     $files = @($f.files.PSObject.Properties)
     $bytes = [long]0
     foreach ($p in $files) { $bytes += [long]$p.Value.bytes }
-    # build.js by its own size and sha256, which the front's section gave by
-    # hand until a pin brought a change to the front (#6882) and the hand
-    # line no longer matched the record, so the pin stopped (#4511).
-    $js = $f.files.PSObject.Properties['build.js']
+    # build.js changes whenever the fork's skymp5-front does (#6200: fork pull
+    # request 192 changed main.scss and the pin stopped on the old hash typed
+    # beside the block), so its size and hash are written from the record too.
+    $js = $f.files.'build.js'
     if (-not $js) { throw 'records\front-build.json holds no build.js' }
-    $jsSha = ([string]$js.Value.sha256).ToLowerInvariant()
-    if ($jsSha -notmatch '^[0-9a-f]{64}$') { throw 'records\front-build.json gives no sha256 of build.js' }
+    $jsSha = ([string]$js.sha256).ToLowerInvariant()
+    if ($jsSha -notmatch '^[0-9a-f]{64}$') { throw 'records\front-build.json gives no SHA256 of build.js' }
     return [pscustomobject]@{
         Commit = $commit; Short = $commit.Substring(0, 8)
         Base = $base; BaseShort = $base.Substring(0, 8)
         ServerSha256 = $sha; ServerBuilt = [string]$built
         Fork = $repoUrl; Branch = [string]$s.source.branch
         FrontFiles = $files.Count; FrontBytes = $bytes
-        FrontJsBytes = [long]$js.Value.bytes; FrontJsSha256 = $jsSha
+        FrontJsBytes = [long]$js.bytes; FrontJsSha256 = $jsSha
     }
 }
 
@@ -122,10 +122,10 @@ function Get-EnginePinBlocks($Facts, [string]$Main) {
             "$compare.")
         front = @(
             ('{0} files, {1} bytes, from commit' -f $Facts.FrontFiles, $Facts.FrontBytes.ToString('N0', [Globalization.CultureInfo]::InvariantCulture)),
-            "``$S``, the commit the client record names. Its build.js is",
-            ('{0} bytes, sha256' -f $Facts.FrontJsBytes.ToString('N0', [Globalization.CultureInfo]::InvariantCulture)),
-            "``$($Facts.FrontJsSha256)``, and every",
-            'font in it is one the record names.')
+            "``$S``, the commit the client record names.",
+            ('Its build.js is {0}' -f $Facts.FrontJsBytes.ToString('N0', [Globalization.CultureInfo]::InvariantCulture)),
+            'bytes, sha256',
+            "``$($Facts.FrontJsSha256)``, and every")
         servers = @(
             '- The game server''s native module, `scam_native.node`, recorded in',
             '  `records\server-build.json`, is AGPL-3.0. That record and the client record',

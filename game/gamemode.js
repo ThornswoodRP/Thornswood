@@ -25644,6 +25644,12 @@ module.exports = {
   var LETTER_FEE = 20;
   var LETTER_PAY = 15;
   var LETTER_CHARS = 300;
+  /*
+    A PARCEL, #4560 (Patrick, 12 Nov): the board's LETTER_FEE and a courier
+    pay the sender names, never less than PARCEL_PAY_MIN, held on the ledger
+    like a haul's pay. See postParcel.
+  */
+  var PARCEL_PAY_MIN = 15;
   var LETTER_REACH = 700;
 
   function loadPart(key, fallback) {
@@ -27670,7 +27676,8 @@ module.exports = {
         taken: n.taken ? (n.takenName || 'somebody') : '',
         mine: Number(n.by) === Number(profileId),
         held: !!(n.job && Number(n.taken) === Number(profileId)),
-        haul: !!n.haul
+        haul: !!n.haul,
+        parcel: !!n.parcel
       });
     }
     return { rows: rows, older: up - rows.length };
@@ -27695,7 +27702,7 @@ module.exports = {
         if (!Array.isArray(list)) continue;
         for (var i = list.length - 1, first = Math.max(0, list.length - 32); i >= first; i--) {
           var n = list[i], meta = n && n.boardSubmission;
-          var kind = n && n.letter && !n.haul ? 'letter' : n && n.haul && !n.letter ? 'haul' : '';
+          var kind = n && n.haul && !n.letter ? 'haul' : n && n.letter && !n.haul ? (n.parcel ? 'parcel' : 'letter') : '';
           if (!meta || meta.version !== 1 || typeof meta.id !== 'string' || !/^[0-9a-f]{32}$/.test(meta.id) ||
               meta.kind !== kind || !kind ||
               meta.actorDesc !== desc || n.by !== profileId || typeof n.at !== 'number' || !Number.isFinite(n.at)) continue;
@@ -27703,7 +27710,7 @@ module.exports = {
         }
       }
       found.sort(function (a, b) { return b.at - a.at || b.index - a.index || a.hold.localeCompare(b.hold); });
-      var counts = { letter: 0, haul: 0 };
+      var counts = { letter: 0, haul: 0, parcel: 0 };
       var results = found.filter(function (r) { return counts[r.kind]++ < 16; }).map(function (r) {
         return { id: r.id, kind: r.kind, hold: r.hold, status: r.status };
       });
@@ -27767,7 +27774,20 @@ module.exports = {
       }
     }
     var submit = [];
+    var pack = [];
     if (here) {
+      // What Send a parcel offers (#4560): the pack's stacks, not gold and not
+      // worn, the way the drop box's Leave it offers them. postParcel checks
+      // the slot and its base again when the parcel arrives.
+      var inv = null;
+      try { inv = mp.get(actorId, 'inventory'); }
+      catch (e3) { plog('could not read the pack for the board panel of', Number(actorId).toString(16) + ':', e3); }
+      var entries = (inv && inv.entries) || [];
+      for (var p = 0; p < entries.length; p++) {
+        var e = entries[p];
+        if (!e || Number(e.baseId) === GOLD_ID || e.worn || e.wornLeft) { continue; }
+        pack.push({ slot: p, baseId: Number(e.baseId) >>> 0, what: itemName(e), count: Number(e.count) || 0 });
+      }
       try {
         var books = g.__thornswoodBooks;
         var view = books && books.view ? books.view(profileId, {}) : null;
@@ -27790,7 +27810,9 @@ module.exports = {
       steward: steward,
       guard: guard,
       dests: dests,
-      arrivals: arrivals
+      arrivals: arrivals,
+      pack: pack,
+      parcelPayMin: PARCEL_PAY_MIN
     };
   }
 
@@ -28522,6 +28544,8 @@ module.exports = {
     'post': landPost,
     'letter': landLetter,
     'haul': landHaul,
+    'parcel': landParcel,
+    'parcel-hand': landParcelHand,
     'owed': landOwed
   }, tellPerson, 'thornswoodPropertyDebit', commitPackDebit, newId, admitPackDebit);
 
@@ -28673,7 +28697,7 @@ module.exports = {
 
   /* What anybody but the person it is for reads of a letter: who it is for. */
   function sealed(n) {
-    return 'A sealed letter for ' + (n.to || 'somebody');
+    return 'A sealed ' + (n.parcel ? 'parcel' : 'letter') + ' for ' + (n.to || 'somebody');
   }
 
   /*
@@ -29131,7 +29155,7 @@ module.exports = {
                      title: plain ? String(n.title || '') : '',
                      reward: plain ? (Math.floor(Number(n.pay)) || 0) : 0,
                      text: n.letter ? sealed(n) : (n.haul ? haulText(n) : (n.text || '')),
-                     letter: !!n.letter, haul: !!n.haul });
+                     letter: !!n.letter, haul: !!n.haul, parcel: !!n.parcel });
         }
       }
     }
@@ -29154,6 +29178,10 @@ module.exports = {
     var n = list[at];
     if (!n.job || n.taken !== profileId || n.down) {
       toProfile(profileId, 'That is not one of yours.');
+      return true;
+    }
+    if (n.parcel && parcelBusy(hold, at, n)) {
+      toProfile(profileId, 'That parcel is on its way into somebody\'s pack. Wait a moment.');
       return true;
     }
     /*
@@ -29239,6 +29267,10 @@ module.exports = {
       toProfile(profileId, 'That one is already down.');
       return true;
     }
+    if (n.parcel && parcelBusy(hold, at, n)) {
+      toProfile(profileId, 'That parcel is on its way into somebody\'s pack. Wait a moment.');
+      return true;
+    }
     /*
       A STEWARD CANCELS A HAUL, #1393, open or taken, at the board it was
       posted on. The pay goes back to the poster and the fee stays, the same
@@ -29276,11 +29308,15 @@ module.exports = {
       toProfile(profileId, 'That did not work. The ' + (n.letter ? 'letter' : 'job') + ' is still up.');
       return true;
     }
+    // A parcel's stack goes into this hold's drop box for its sender, in takedown's save (#4560).
+    var boxed = n.parcel ? parcelToBox(hold, n) : 0;
     takedown(hold, at, profileId);
     if (n.letter) {
-      plog(n.name, 'took down a letter for', n.to, 'in', hold, 'and had', back, 'back');
-      toProfile(profileId, 'You take the letter down. The ' + back + ' gold for the courier comes back ' +
-                'to you. The fee stays with ' + hold + '.');
+      var what = n.parcel ? 'parcel' : 'letter';
+      plog(n.name, 'took down a', what, 'for', n.to, 'in', hold, 'and had', back, 'back');
+      toProfile(profileId, 'You take the ' + what + ' down. The ' + back + ' gold for the courier comes back ' +
+                'to you. ' + (boxed ? 'What was in it is in this hold\'s drop box for you. ' : '') +
+                'The fee stays with ' + hold + '.');
       refreshPanel(actorId);
       return true;
     }
@@ -29318,7 +29354,7 @@ module.exports = {
         var r = handHaul(hold, n, Number(n.by), pay,
                          (n.letter ? 'a letter for ' + (n.to || 'somebody') : 'job ' + (at + 1)) +
                          ' taken down by ' + byWhom + ', the pay back to ' + (n.name || 'its poster'),
-                         n.letter ? 'letter' : 'job');
+                         n.letter ? (n.parcel ? 'parcel' : 'letter') : 'job');
         if (r.why) {
           toProfile(profileId, 'That did not work: ' + r.why + ' The ' + (n.letter ? 'letter' : 'job') +
                     ' is still up.');
@@ -29328,9 +29364,10 @@ module.exports = {
         owed = r.owed;
       }
     }
+    var boxed = n.parcel ? parcelToBox(hold, n) : 0;
     takedown(hold, at, profileId);
-    var kind = n.letter ? 'letter' : (n.job ? 'job' : 'notice');
-    var fee = 'The fee stays with ' + hold + '.';
+    var kind = n.parcel ? 'parcel' : n.letter ? 'letter' : (n.job ? 'job' : 'notice');
+    var fee = (boxed ? 'What was in it is in this hold\'s drop box for its sender. ' : '') + 'The fee stays with ' + hold + '.';
     var held = n.letter ? 'gold for the courier' : 'gold reward';
     // A letter's words are sealed, and the log does not record them either.
     plog('law:', how === 'guard' ? 'a guard of' : 'the Jarl of', hold, '(' + personName(actorId) + ', profile ' + profileId + ') took down',
@@ -29422,12 +29459,12 @@ module.exports = {
   // it is not authorization or an exactly-once/retry key. Legacy routes stay.
   function submitBoard(payload, actorId, profileId, toProfile) {
     var kind = payload && payload[0];
-    if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul') ||
-        payload.length !== (kind === 'letter' ? 6 : 7) ||
+    if (!Array.isArray(payload) || (kind !== 'letter' && kind !== 'haul' && kind !== 'parcel') ||
+        payload.length !== (kind === 'letter' ? 6 : kind === 'parcel' ? 10 : 7) ||
         typeof payload[1] !== 'string' || !/^[0-9a-f]{32}$/.test(payload[1]) ||
         typeof payload[2] !== 'string' || LEDGER_HOLDS.indexOf(payload[2]) < 0 ||
         payload.slice(4).some(function (field) { return typeof field !== 'string'; }) ||
-        (kind === 'letter' && !validLetterText(payload[4], payload[5]))) {
+        ((kind === 'letter' || kind === 'parcel') && !validLetterText(payload[4], payload[5]))) {
       toProfile(profileId, 'That board submission is invalid. Nothing was posted or taken.'); return true;
     }
     if (!boardOwnerMatches(actorId, profileId, payload[3])) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
@@ -29443,6 +29480,9 @@ module.exports = {
     var expectedOwner = payload[3].slice();
     if (kind === 'letter') return postLetter([], actorId, profileId, toProfile,
       { to: payload[4], words: payload[5], hold: payload[2], submission: meta, expectedOwner: expectedOwner });
+    if (kind === 'parcel') return postParcel(actorId, profileId, toProfile,
+      { to: payload[4], words: payload[5], pay: payload[6], slot: payload[7], baseId: payload[8], count: payload[9],
+        hold: payload[2], submission: meta, expectedOwner: expectedOwner });
     // Match the old /haul word boundary, including its whitespace joining.
     var parts = ['/haul', payload[4], payload[5]].concat(payload[6].trim().split(/\s+/));
     return postHaul(parts, actorId, profileId, toProfile, { hold: payload[2], submission: meta, expectedOwner: expectedOwner });
@@ -29522,6 +29562,213 @@ module.exports = {
   }
 
   /*
+    ------------------------------------------------------------- a parcel
+
+    #4560. A parcel is a letter with one real stack in it. Patrick, 12 Nov:
+    it costs the board's LETTER_FEE and a courier pay the sender names, at
+    least PARCEL_PAY_MIN, held like a haul's pay. The board panel's Send a
+    parcel sends it through the private submission (submitBoard), with the
+    stack the sender picked from their pack: its slot, its base and how many.
+
+    ONE STACK, IN EXACTLY ONE PLACE. The gold and the stack leave the pack in
+    one write with a receipt (packFirst, #4901), and the parcel goes on the
+    board only once that pack is saved (landParcel), the stack held on its
+    notice on the hold's ledger the way its pay is. The courier takes it like
+    a letter and hands it over face to face, with the same key: the stack goes
+    into the recipient's pack through the same kind of write, and the parcel
+    comes off the board only once that pack is saved (landParcelHand). A
+    server that stops between the pack's write and the register's comes back
+    with the stack in the pack or on the board, never both and never neither.
+
+    Taken down before it is carried, by its sender or by a guard or the Jarl,
+    the pay goes back as a letter's does and the stack goes into this hold's
+    drop box under the sender's own name (parcelToBox), so they take it back
+    there as anything they put in.
+  */
+  function postParcel(actorId, profileId, toProfile, written) {
+    if (!boardOwnerMatches(actorId, profileId, written.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
+    var hold = boardHere(actorId);
+    if (!boardOwnerMatches(actorId, profileId, written.expectedOwner)) { toProfile(profileId, BOARD_OWNER_CHANGED); return true; }
+    if (!hold) {
+      toProfile(profileId, 'Stand at a hold\'s notice board to send a parcel from there.');
+      return true;
+    }
+    if (written.hold !== hold) {
+      toProfile(profileId, 'You are at a different notice board. Nothing was posted or taken.'); return true;
+    }
+    var pay = /^\d+$/.test(written.pay) ? Number(written.pay) : 0;
+    if (!Number.isSafeInteger(pay) || pay < PARCEL_PAY_MIN) {
+      toProfile(profileId, 'A parcel\'s courier pay is a whole number of gold, ' + PARCEL_PAY_MIN +
+                ' or more. Nothing was taken.');
+      return true;
+    }
+    var slot = /^\d+$/.test(written.slot) ? Number(written.slot) : -1;
+    var base = /^\d+$/.test(written.baseId) ? Number(written.baseId) : 0;
+    var count = /^\d+$/.test(written.count) ? Number(written.count) : 0;
+    if (!Number.isSafeInteger(slot) || slot < 0 || !Number.isSafeInteger(base) || !(base > 0) || base === GOLD_ID ||
+        !Number.isSafeInteger(count) || count < 1) {
+      toProfile(profileId, 'Pick what goes in the parcel from your pack. Nothing was taken.');
+      return true;
+    }
+    var cost = LETTER_FEE + pay;
+    var short = 'A parcel costs ' + cost + ' gold, ' + LETTER_FEE + ' for the board and the ' + pay +
+                ' courier pay, and you do not have it. Nothing was taken.';
+    if (!Number.isSafeInteger(cost)) {
+      toProfile(profileId, short);
+      return true;
+    }
+    var made = { by: profileId, name: characterName(actorId), text: written.words, at: Date.now(),
+                 job: true, letter: true, parcel: true, to: written.to, pay: pay, taken: 0 };
+    if (written.submission) made.boardSubmission = written.submission;
+    var payFor = goldCut(cost, short);
+    // On the board only once the pack's take is saved (#4901): landParcel.
+    var r = packs.begin(actorId, boardSubmissionCut(actorId, profileId, written, function (entries) {
+      var it = entries[slot];
+      if (!it || (Number(it.baseId) >>> 0) !== base || it.worn || it.wornLeft || count > (Number(it.count) || 0)) {
+        return 'Your pack changed. Nothing was taken.';
+      }
+      var kept = JSON.parse(JSON.stringify(it));
+      delete kept.worn; delete kept.wornLeft;
+      kept.count = count;
+      it.count = (Number(it.count) || 0) - count;
+      if (it.count <= 0) { entries.splice(slot, 1); }
+      var paid = payFor(entries);
+      if (typeof paid === 'string') { return paid; }
+      return { entries: paid.entries, taken: [paid.taken[0], kept] };
+    }), 'parcel', { hold: hold, made: made, cost: cost, pay: pay });
+    toProfile(profileId, r.why || r.line ||
+      ('Your parcel for ' + written.to + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+    if (r.line) { refreshPanel(actorId); }
+    return true;
+  }
+
+  /* A parcel onto its board, once its gold and its stack are saved out of the pack (#4560). */
+  function landParcel(row, landed) {
+    var hold = row.data.hold, made = row.data.made, cost = row.data.cost, pay = row.data.pay;
+    var kept = JSON.parse(JSON.stringify(row.taken[1] || {}));
+    var count = Number(kept.count) || 0;
+    delete kept.count;
+    var what = itemName(kept);
+    if (!landed) {
+      return 'Your pack was not saved with the ' + cost + ' gold and ' + what + ' out of it, so they are still ' +
+             'yours and the parcel for ' + made.to + ' is not on the board.';
+    }
+    made.at = Date.now();
+    made.parcel = { entry: kept, count: count, what: what };
+    if (!notices[hold]) { notices[hold] = []; }
+    notices[hold].push(made);
+    funds[hold] = (Number(funds[hold]) || 0) + cost;
+    plog(made.name, 'posted a parcel for', made.to, 'in', hold, 'for', cost, 'gold, holding', count, what);
+    return 'Your parcel for ' + made.to + ' is on the board in ' + hold + ', with ' +
+           (count > 1 ? count + ' ' : '') + what + ' in it. That cost ' + cost + ' gold: ' + LETTER_FEE +
+           ' for the board, and ' + pay + ' held for whoever carries it.';
+  }
+
+  /* Whether this parcel is on its way into somebody's pack right now: a hand over waiting on that pack's save. */
+  function parcelBusy(hold, at, n) {
+    for (var i = 0; i < debits.length; i++) {
+      var d = debits[i];
+      if (d && d.kind === 'parcel-hand' && d.data && d.data.hold === hold && d.data.at === at &&
+          Number(d.data.stamp) === Number(n && n.at)) { return true; }
+    }
+    return false;
+  }
+
+  /*
+    A parcel taken down before it is carried: its stack into this hold's drop
+    box, under its sender's own name, as if they had left it there (#4560).
+    The caller's save writes it with the take down.
+  */
+  function parcelToBox(hold, n) {
+    var p = n && n.parcel;
+    if (!p || typeof p !== 'object' || !p.entry || p.boxed) { return 0; }
+    var d = dropboxOf(hold);
+    var by = Number(n.by) || 0;
+    var name = n.name || 'somebody';
+    var item = { n: d.next++, by: by, name: name, kind: 'left', baseId: Number(p.entry.baseId),
+                 count: Number(p.count) || 0, what: p.what || itemName(p.entry),
+                 entry: JSON.parse(JSON.stringify(p.entry)), forName: name, at: Date.now() };
+    d.items.push(item);
+    boxLog(hold, { act: 'in', n: item.n, who: by, whoName: name, by: by, byName: name,
+                   what: item.what, count: item.count, forName: name, note: 'a parcel taken down off the board' });
+    p.boxed = item.n;
+    return item.n;
+  }
+
+  /*
+    THE HAND OVER (#4560). deliver has checked the courier, the reach and the
+    name. The first parcel they carry for this person that is not already on
+    its way goes into that person's pack through packFirst, with nothing taken
+    out: the stack is the one its notice holds, which landParcel took off the
+    sender's pack. Answers the courier's line.
+  */
+  function handParcel(parcels, actorId, profileId, toProfile, them, theirName, theirPid, courier) {
+    var c = null;
+    for (var i = 0; i < parcels.length && !c; i++) {
+      if (!parcelBusy(parcels[i].hold, parcels[i].at, parcels[i].n)) { c = parcels[i]; }
+    }
+    if (!c) { return 'The parcel is already on its way into ' + theirName + '\'s pack.'; }
+    var p = c.n.parcel;
+    if (!p || typeof p !== 'object' || !p.entry || !(Number(p.count) > 0)) {
+      plog('a parcel in', c.hold, (c.at + 1), 'holds nothing to hand over');
+      return 'That parcel holds nothing the server can hand over. Say so in the dev channel.';
+    }
+    var give = JSON.parse(JSON.stringify(p.entry));
+    give.count = Number(p.count);
+    var r = packs.begin(them, function (entries) {
+      entries.push(give);
+      return { entries: entries, taken: [] };
+    }, 'parcel-hand', { hold: c.hold, at: c.at, stamp: c.n.at, courier: profileId, courierName: courier,
+                       toPid: theirPid, toName: theirName });
+    if (r.why) {
+      plog('a parcel from', c.n.name, 'could not go into', theirName + '\'s pack:', r.why);
+      return 'The parcel could not go into ' + theirName + '\'s pack just now. You still have it.';
+    }
+    if (r.line) { toProfile(theirPid, r.line); }
+    return 'You hand ' + theirName + ' the parcel from ' + c.n.name + '. Your ' + (Math.floor(Number(c.n.pay)) || 0) +
+           ' gold comes once it is in their pack' + (r.line ? '.' : ', in a moment.') +
+           (parcels.length > 1 ? ' You carry more for them: hand over again.' : '');
+  }
+
+  /*
+    A parcel into its recipient's pack, once that pack is saved with it
+    (#4560). Landed, the parcel comes off the board as delivered in the same
+    register write, and its pay is owed to the courier, who haulTick pays out
+    of the ledger it was held on. Not landed, nothing changed: the stack is
+    still on the board, and the courier still has the parcel. Answers the line
+    for the recipient.
+  */
+  function landParcelHand(row, landed) {
+    var d = row.data;
+    var n = (notices[d.hold] || [])[d.at];
+    var right = !!n && !!n.parcel && typeof n.parcel === 'object' && Number(n.at) === Number(d.stamp);
+    if (!landed) {
+      return 'The parcel ' + (right ? 'from ' + n.name + ' ' : '') + 'did not go into your pack. ' +
+             d.courierName + ' still has it.';
+    }
+    if (!right || n.delivered) {
+      plog('a parcel went into', d.toName + '\'s pack and its notice is not on', d.hold + '\'s board as it was:', d.at + 1);
+      return 'A parcel is in your pack.';
+    }
+    var pay = Math.floor(Number(n.pay)) || 0;
+    var count = Number(n.parcel.count) || 0;
+    var what = n.parcel.what || itemName(n.parcel.entry);
+    n.delivered = Date.now();
+    n.deliveredTo = d.toPid;
+    n.down = n.delivered;
+    n.downBy = d.courier;
+    n.pay = 0;
+    if (pay > 0) {
+      n.owed = pay;
+      n.owedTo = d.courier;
+      n.owedFor = 'carried';
+    }
+    plog(d.courierName, 'handed', d.toName, 'a parcel from', n.name, 'off the board in', d.hold + ':', count, what);
+    return 'A parcel from ' + n.name + ', handed to you by ' + d.courierName + '. ' +
+           (count > 1 ? count + ' ' : '') + what + ' is in your pack.' + (n.text ? ' With it:\n' + n.text : '');
+  }
+
+  /*
         /deliver ff000103    the form id the crosshair gives, as /trade takes
 
     NOBODY TYPES THIS (#1595). The look prompt shows Hand over the letter
@@ -29595,8 +29842,11 @@ module.exports = {
     var courier = soc.nameOfPerson(actorId);
     var paid = 0;
     var handed = 0;
+    var parcels = [];
     for (var m = 0; m < mine.length; m++) {
       var c = mine[m];
+      // A parcel goes into their pack, saved before it comes down (#4560): handParcel.
+      if (c.n.parcel) { parcels.push(c); continue; }
       var got = payHeld(c.hold, c.n, actorId);
       if (got < 0) {
         toProfile(profileId, 'That did not work. You still have the letter for ' + c.n.to + '.');
@@ -29614,6 +29864,11 @@ module.exports = {
     if (handed) {
       toProfile(profileId, 'You hand ' + theirName + (handed === 1 ? ' the letter. ' : ' ' + handed +
                 ' letters. ') + paid + ' gold is yours.');
+    }
+    if (parcels.length) {
+      toProfile(profileId, handParcel(parcels, actorId, profileId, toProfile, them, theirName, theirPid, courier));
+    }
+    if (handed || parcels.length) {
       refreshPanel(actorId);
       refreshPanel(them);
     }
@@ -30001,7 +30256,14 @@ module.exports = {
           }
           continue;
         }
-        var line = n.owedFor === 'letter'
+        var line = n.owedFor === 'carried'
+          ? 'You handed over the parcel for ' + (n.to || 'somebody') + ' from ' + hold + '. The ' + owed +
+            ' gold for carrying it is in your pack.'
+          : n.owedFor === 'parcel'
+          ? 'While you were away, a guard took your parcel for ' + (n.to || 'somebody') + ' in ' + hold +
+            ' down. The ' + owed + ' gold for the courier is back in your pack, and what was in it is in ' + hold +
+            '\'s drop box for you. The fee stays with ' + hold + '.'
+          : n.owedFor === 'letter'
           ? 'While you were away, a guard took your letter for ' + (n.to || 'somebody') + ' in ' + hold +
             ' down. The ' + owed + ' gold for the courier is back in your pack. The fee stays with ' + hold + '.'
           : n.owedFor === 'job'
@@ -31122,7 +31384,9 @@ module.exports = {
                   name and words taken off; a job, letter or haul of somebody
                   else's that they had taken goes back on the board untaken,
                   as a job handed back does; gold owed to them stops being
-                  held for them
+                  held for them; what a parcel of theirs held goes into the
+                  drop box with no name on it (#4560), unless it is going
+                  into somebody's pack, which then lands as it would
       drop box    what they put in stays in the box with their name off it, so
                   the hold's officers may take it; the box's record keeps every
                   line with their name off it
@@ -31185,11 +31449,16 @@ module.exports = {
         if (!n || typeof n !== 'object') { continue; }
         var touched = false;
         if (mine(n.by)) {
-          if (!n.down) { n.down = at; n.downBy = 0; c.posts++; }
+          // A parcel of theirs still going into somebody's pack stays up until that lands (#4560).
+          var going = !!n.parcel && !n.down && parcelBusy(h, i, n);
+          if (!n.down && !going) { n.down = at; n.downBy = 0; c.posts++; }
           n.by = 0;
           n.name = 'somebody';
           delete n.title; delete n.text; delete n.to;
           delete n.boardSubmission;
+          // What a parcel of theirs held goes into the box with no name on it, for the
+          // hold's officers, as what they put in the box does (#4560).
+          if (!going && !n.delivered && parcelToBox(h, n)) { c.box++; }
           touched = true;
         }
         if (mine(n.taken)) {
@@ -33422,6 +33691,15 @@ module.exports = {
     on that life until somebody searches it or the actor stands back up.
     A camp enemy carries a little. Anything good on any other body is rare.
     A person is not searched. A hunter carcass stays on the hunter path.
+
+    NO BODY IS EVER EMPTY (#6715). Patrick, 26 Nov 2026, after a tester
+    searched two bandits in Embershard Mine and was told both times that
+    there was nothing on the body: "nothing should ever drop nothing atleast
+    something small or common or whatever". The wild odds left about seven
+    bodies in ten with nothing at all, so a roll that comes up with no coin
+    and no item takes one common supply (the tier 1 list: a lockpick, salt,
+    bone meal, a strip of leather, bread and the like). The odds of anything
+    better are as they were.
   */
   var BODY_CAMP = { gold: 0.80, goldN: 6, minor: 0.65, decent: 0.08, good: 0.015, rare: 0.002 };
   var BODY_WILD = { gold: 0.20, goldN: 4, minor: 0.12, decent: 0.02, good: 0.005, rare: 0.0005 };
@@ -33533,6 +33811,7 @@ module.exports = {
     if (rng() < odds.decent) pushPick(items, pickWeighted(supplyExact(2), rng));
     if (rng() < odds.good) pushPick(items, pickWeighted(gearOrNovice(), rng));
     if (rng() < odds.rare) pushPick(items, pickWeighted(rarePile(), rng));
+    if (!gold && !items.length) pushPick(items, pickWeighted(supplyExact(1), rng));
     return { gold: gold, items: mergeItems(items), camp: !!camp };
   }
 
@@ -53360,9 +53639,12 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
                  takes twenty to notice is not a fire.
 
       IT CANNOT RUN AWAY WITH ITSELF. Somebody who catches it becomes a source
-      in their own right, which is what "spread" means, but the burn is on a
-      clock and the radius is small, so a crowd standing shoulder to shoulder
-      in a bonfire is the worst it gets and that is a decision they made.
+      in their own right, which is what "spread" means, but a fire is never
+      caught back by anybody it already came through (burnFrom, #6722). The
+      clock alone did not stop it: each catch started a new one, so two
+      people at a fire handed it back and forth until both were dead. Now a
+      fire goes out once it has been through everybody standing there, and
+      only somebody still in the coals keeps setting their neighbours alight.
     */
     burn: { spread: 220, catches: 5000, every: 2000 },
 
@@ -56878,6 +57160,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   var burning = {};        // actorId -> when they last said they were alight
   var burnIdentities = {}; // actorId -> profile, current runtime and life
   var burnStarts = {};     // actual start, independent of whether needs saved
+  /*
+    WHO A FIRE HAS ALREADY BEEN THROUGH (#6722). Each person alight carries
+    the list of people their fire came through: empty for a fire of their own
+    (the coals), the giver's list and the giver for one caught from somebody.
+    A fire is never caught by anybody on its own list. Before this a fire
+    caught from a neighbour was caught back by them once their own had gone
+    out, and back again, so two or three people standing together at a fire
+    kept setting each other alight, 7 health a second, until they died. The
+    list only grows along a chain, so every chain ends, and walking into the
+    coals again is a new fire with an empty list.
+  */
+  var burnFrom = {};       // actorId -> the ids this person's fire came through
+  var burnCaught = {};     // actorId -> { from: list, at } of a catch not yet reported
 
   function burnIdentity(actorId, savedOnly) {
     try {
@@ -56914,6 +57209,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       delete burning[actorId];
       delete burnIdentities[actorId];
       delete burnStarts[actorId];
+      delete burnFrom[actorId];
       publishBurnVisual(actorId, false);
     }
     if (bankHeat) { pushEffects(actorId); }
@@ -56927,7 +57223,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       // A new fire cannot warm the time before the report. A heartbeat also
       // banks the old interval before extending its deadline.
       settle(actorId);
-      if (!wasBurning) { burnStarts[actorId] = Date.now(); }
+      if (!wasBurning) {
+        burnStarts[actorId] = Date.now();
+        // Caught from somebody, the report after the catch: that fire's
+        // list. Anything else is a fire of their own.
+        var got = burnCaught[actorId];
+        burnFrom[actorId] = (got && Date.now() - got.at <= NEEDS.burn.every * 3) ? got.from : [];
+      }
+      delete burnCaught[actorId];
       burning[actorId] = Date.now();
       burnIdentities[actorId] = identity;
       publishBurnVisual(actorId, true);
@@ -56936,7 +57239,8 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   }
 
   /** Tell one person's client to catch fire for a while. */
-  function catchFire(actorId, ms, why) {
+  function catchFire(actorId, ms, why, from) {
+    if (from) { burnCaught[actorId] = { from: from, at: Date.now() }; }
     try {
       mp.set(actorId, BURN_PROPERTY, {
         ms: Number(ms) || NEEDS.burn.catches,
@@ -56973,11 +57277,14 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
         hereCell = String(mp.get(who, 'worldOrCellDesc') || '');
       } catch (e) { continue; }
       if (!herePos) { continue; }
+      var came = burnFrom[who] || [];
       for (var j = 0; j < online.length; j++) {
         var them = online[j];
         if (them === who) { continue; }
         // Already alight, so there is nothing to catch.
         if (burning[them]) { continue; }
+        // This fire already came through them (#6722).
+        if (came.indexOf(them) !== -1) { continue; }
         try {
           if (String(mp.get(them, 'worldOrCellDesc') || '') !== hereCell) { continue; }
           var p = mp.get(them, 'pos');
@@ -56985,7 +57292,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           var dx = p[0] - herePos[0], dy = p[1] - herePos[1], dz = p[2] - herePos[2];
           if ((dx * dx + dy * dy + dz * dz) > reach) { continue; }
         } catch (e) { continue; }
-        catchFire(them, NEEDS.burn.catches, 'caught');
+        catchFire(them, NEEDS.burn.catches, 'caught', came.concat([who]));
         nlog('fire spread from', who.toString(16), 'to', them.toString(16));
       }
     }

@@ -3754,6 +3754,20 @@
   let afterEnded = 0;            // when the last mining spell ended, 0 for none
   let afterWaitEquip = false;    // a line is still owed for the next equip
   let afterEvents = {};          // event names written since the last end, once each
+  /*
+    THE START OF A SPELL TOO (#4549). The session logs of 23 Nov 2026 have
+    a spell that ended with the character sitting nowhere (sit 0) and the
+    weapon out, where every other spell ended in the mining state (sit 3):
+    IdlePickaxeEnter was asked for and not taken, and that spell is the one
+    a Main tester reported, with the pickaxe drawn, the pickaxe gone, the ore
+    with no swing, and no normal movement until the pickaxe came off. So the
+    same line is written as the idle is asked for and half a second into it,
+    which says whether it was taken and what the character was in when it
+    was asked for, and the events of the three seconds before it are written
+    in one line, which shows the sheathe the gamemode asks for first.
+  */
+  const AFTER_BEFORE_MS = 3000;
+  let afterRecent = [];          // [name, when] of the last events, newest last
 
   /*
     ONLY THE CHARACTER'S OWN EQUIP COUNTS. The game sends equip and unequip
@@ -3797,7 +3811,17 @@
           const name = String(ctx.animEventName || '');
           if (!name) { return; }
           const now = Date.now();
-          if (MINE_START.test(name)) { afterPick = true; return; }
+          if (MINE_START.test(name)) {
+            afterPick = true;
+            const before = afterRecent.filter((r) => now - r[1] <= AFTER_BEFORE_MS)
+              .map((r) => r[0] + ' ' + (r[1] - now) + 'ms').join(', ');
+            say('after mining: before ' + name + ': ' + (before || 'no events in the last ' + AFTER_BEFORE_MS + 'ms'));
+            afterRecent = [];
+            afterAsked.push(['as ' + name + ' was asked for', now], ['0.5 s into ' + name, now + 500]);
+            return;
+          }
+          afterRecent.push([name, now]);
+          if (afterRecent.length > 12) { afterRecent.shift(); }
           if (/^idlechairexitstart$/i.test(name) && afterPick) {
             afterPick = false;
             afterEnded = now;
@@ -5245,21 +5269,37 @@
       and it never set anybody on fire. getFurnitureReference is the engine's
       own answer for which station you are at.
     */
+    /*
+      AND NOBODY THE GAME HAS SEATED IS STANDING IN THE COALS (#6722). A
+      cooking spit or pot stands over its own campfire: in Skyrim.esm 87 of
+      the 203 cooking stations near a lit fire are within FIRE_INSIDE of it,
+      12 to 90 units from the fire's centre, so starting to cook moved the
+      cook into the catch and set them alight, 7 health a second for as long
+      as they cooked. A person at a station, on a bench or on a chair is
+      where the furniture put them, not where they walked; they are warmed
+      as before and never caught. Standing up and walking into the fire
+      still catches.
+    */
     fireFlame = -1;
+    let seated = false;
+    let warmest = -1;
     try {
       const furn = pc.getFurnitureReference ? pc.getFurnitureReference() : null;
       if (furn) {
+        seated = true;
         const b = furn.getBaseObject();
         const id = b ? b.getFormID() : 0;
         if (id) {
           const ids = fireIdList();
           for (let f = 0; f < ids.length; f++) {
-            if (ids[f] === id) { return fireNearest(px, py, pz, fireSpotsHere(pc), 0); }
+            if (ids[f] === id) { warmest = 0; break; }
           }
         }
       }
     } catch (e) { }
-    return fireNearest(px, py, pz, fireSpotsHere(pc), -1);
+    const best = fireNearest(px, py, pz, fireSpotsHere(pc), warmest);
+    if (seated) { fireFlame = -1; }
+    return best;
   }
 
   sp.on('update', guard('race read', raceReadTick));

@@ -130,6 +130,55 @@
     },
     {
       "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 6408,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 6408
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 6408,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "key",
       "code": 16,
       "task": 6408,
       "why": "Q, the favourites"
@@ -171,6 +220,55 @@
     {
       "do": "key",
       "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 5122,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 5122
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 5122,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "key",
+      "code": 1,
       "task": 5122,
       "why": "Escape"
     },
@@ -208,6 +306,55 @@
       "open": false,
       "timeout": 10000,
       "task": 5122
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 6428,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 6428
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 6428,
+      "why": "and our journal shut, if a step before left it open"
     },
     {
       "do": "key",
@@ -278,6 +425,55 @@
       "task": 6428
     },
     {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 6476,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 6476
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 6476,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
       "do": "page",
       "js": "(function(){if(window.__tsDice){return 'sent';}var n=window.thornswoodNet;if(!n||!n.typed||!n.state().joined){return '';}['/roll 1d20','/roll 3d6','/roll 6x3','/roll 101d6','/roll 1d1001','/roll 1d20x3'].forEach(function(l){n.typed(l);});window.__tsDice=1;return 'sent';})()",
       "timeout": 30000,
@@ -295,6 +491,55 @@
       "do": "shot",
       "name": "dice",
       "task": 6476
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 2135,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 2135
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 2135,
+      "why": "and our journal shut, if a step before left it open"
     },
     {
       "do": "page",
@@ -366,6 +611,55 @@
       "do": "shot",
       "name": "journal-new-twice",
       "task": 2135
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 5429,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 5429
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 5429,
+      "why": "and our journal shut, if a step before left it open"
     },
     {
       "do": "page",
@@ -449,6 +743,55 @@
       "timeout": 15000,
       "task": 5429,
       "why": "Save once more, and the page still starts with its first word"
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 2563,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 2563
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 2563,
+      "why": "and our journal shut, if a step before left it open"
     },
     {
       "do": "page",

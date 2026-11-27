@@ -48,6 +48,15 @@ for (const s of ['Fix-QuickLoot.ps1', 'Enable-MCM.ps1', 'Add-McmShortcut.ps1']) 
   const at = lines.filter((l) => l.indexOf(s) >= 0);
   yes('S ' + s + ' is named as retired', at.length > 0 && at.every((l) => /retired/i.test(l)));
 }
+// #6419: #5892 moved the three to scripts/oneoff, so no part of the page that
+// names one may send a reader to scripts/mods for it.
+const sections = text.split(/\r?\n(?=## )/);
+for (const s of ['Fix-QuickLoot.ps1', 'Enable-MCM.ps1', 'Add-McmShortcut.ps1']) {
+  const where = sections.filter((x) => x.indexOf(s) >= 0);
+  yes('S no section naming ' + s + ' places it under scripts/mods', where.every((x) => !/scripts\/mods\b/.test(x)));
+}
+const retiredLine = text.replace(/\r?\n {2}/g, ' ').split(/\r?\n/).find((l) => /Add-McmShortcut\.ps1/.test(l) && /retired/i.test(l)) || '';
+yes('S the page says where the three are now, scripts/oneoff', /`scripts\/oneoff`/.test(retiredLine));
 
 const fw = lines.filter((l) => l.indexOf('Firewall.cs') >= 0);
 yes('F Firewall.cs is named only as gone', fw.every((l) => /no longer|gone/i.test(l)));

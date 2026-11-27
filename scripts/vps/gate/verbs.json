@@ -38,7 +38,9 @@
       "params": {
         "Lines": "^[0-9]{1,6}$",
         "All": "switch",
-        "Dev": "switch"
+        "Dev": "switch",
+        "Days": "^[0-9]{1,3}$",
+        "Match": "^[A-Za-z0-9][A-Za-z0-9 .,:_()#=-]{0,159}$"
       }
     },
     "Deploy-DevGamemode": {
