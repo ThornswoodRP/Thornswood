@@ -56,6 +56,7 @@ const recipes = JSON.parse(fs.readFileSync(path.join(REPO, 'game', 'data', 'reci
 const BLOCK = take('var RECIPES_SET_IN_GAME = ', ';\n');
 const FLOOR = take('var HELD_BY_SERVER = ', ';\n');
 const PARTS = [
+  take('function recipesSetInGame() {'),
   take('function recipeCountsScript() {'),
   take('function handRecipeCounts(actorId) {'),
   take('function recipeSetInGame(craftedItemBaseId, workbenchId, inputs) {'),
@@ -130,7 +131,9 @@ function server() {
   };
   vm.createContext(ctx);
   vm.runInContext(BLOCK + '\n' + FLOOR + '\nvar RECIPE_COUNTS_PROPERTY = ' + JSON.stringify(PROPERTY) +
-                  ';\nvar RECIPE_COUNTS_AT = 1234;\n' + PARTS.join('\n') +
+                  ';\nvar RECIPE_COUNTS_AT = 1234;\n' +
+                  // The fueled recipes (#6726) are game/tests/test-6726-fuel-in-records.js's.
+                  'var RECIPES_FUELED_IN_GAME = {};\n' + PARTS.join('\n') + '\nvar SET_IN_GAME = recipesSetInGame();' +
                   '\nthis.api = { recipeCountsScript: recipeCountsScript, handRecipeCounts: handRecipeCounts, ' +
                   'recipeSetInGame: recipeSetInGame, holdNeverCopiedOff: holdNeverCopiedOff };', ctx);
   return { mp: mp, store: store, sets: sets, api: ctx.api };
@@ -222,7 +225,7 @@ yes('W1 onCraft names a craft with no recipe id from the table first, and goes o
     /if \(!recipeId && typeof recipeSetInGame === 'function'\) \{\s*desc = recipeSetInGame\(craftedItemBaseId, workbenchId, arguments\[6\]\);/.test(onCraft) &&
     /if \(!recipeId && !desc\) \{/.test(onCraft) && /const row = craftRow\(desc\);/.test(onCraft));
 yes('W2 and refuses a recipe of the table at the mod\'s own counts, before anything is taken',
-    /typeof RECIPES_SET_IN_GAME === 'object' && Object\.prototype\.hasOwnProperty\.call\(RECIPES_SET_IN_GAME, desc\)\) \{[\s\S]*?takes different materials/.test(take('function recipeMetadataRefusal(desc) {')) &&
+    /typeof SET_IN_GAME === 'object' && SET_IN_GAME && Object\.prototype\.hasOwnProperty\.call\(SET_IN_GAME, desc\)\) \{[\s\S]*?takes different materials/.test(take('function recipeMetadataRefusal(desc) {')) &&
     /const no = recipeMetadataRefusal\(desc\);\s*if \(no\) \{[\s\S]*?return false;/.test(onCraft) &&
     onCraft.indexOf('recipeMetadataRefusal(desc)') < onCraft.indexOf('const row = craftRow(desc);'));
 yes('W3 the counts are handed at spawn, beside the recipes the menu leaves out',
@@ -251,7 +254,7 @@ yes('F3 Thornswood-Last.esp has a never-copied plugin as a master only for the p
 {
   const fs2 = server();
   const ctx = { F: ['7ad7:Hothtrooper44_ArmorCompilation.esp', '7ad8:Hothtrooper44_ArmorCompilation.esp'] };
-  const fn = new Function('mp', 'idOf', 'log', 'HELD_BY_SERVER', PARTS[3] + '\nreturn holdNeverCopiedOff();');
+  const fn = new Function('mp', 'idOf', 'log', 'HELD_BY_SERVER', PARTS[4] + '\nreturn holdNeverCopiedOff();');
   const took = fn(fs2.mp, idOf, function () { }, ctx.F);
   const again = fn(fs2.mp, idOf, function () { }, ctx.F);
   yes('F4 holdNeverCopiedOff holds each disabled on the server, and once held, leaves it',

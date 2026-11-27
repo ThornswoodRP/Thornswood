@@ -1,7 +1,8 @@
 ﻿// test-smith-charcoal.js
 //
-// #613: forge crafts burn charcoal. Same shape as the wooden-handle rule:
-// not a CNTO on the COBJ, taken in onCraft when the craft is allowed.
+// #613: forge crafts burn charcoal. Since #6726 (Patrick's B) it is a CNTO
+// on the COBJ, written by Thornswood-Last.esp from FUEL_BY_RECIPE, and the
+// server takes none of its own.
 //
 // Read only.
 const fs = require('fs');
@@ -16,27 +17,13 @@ function yes(what, cond) {
 }
 
 // #1398 replaced the bench read (no installed row carried a bench, so it never
-// fired) with FUEL_BY_RECIPE, a grade per recipe. game/tests/test-1398-fuel.js drives
-// the grades, the refusals and the takes; this keeps the shape.
-yes('fuelFor is in the gamemode', src.indexOf('function fuelFor(recipeDesc)') >= 0);
-yes('charcoalHeld is in the gamemode', src.indexOf('function charcoalHeld(actorId, grade)') >= 0);
-yes('onCraft asks for charcoal before the handle', (() => {
-  const a = src.indexOf('const fuel = fuelFor(desc);');
-  const b = src.indexOf('const hafted = wantsAHandle(row);');
-  return a >= 0 && b >= 0 && a < b;
-})());
-yes('the four grades are the kiln tiers, and Skyrim\'s own Charcoal is the Charcoal grade', (() => {
-  const i = src.indexOf('const CHARCOAL_GRADES = [');
-  if (i < 0) return false;
-  const block = src.slice(i, src.indexOf('];', i) + 2);
-  return /name: 'Poor Charcoal', descs: \[ITEMS\.charcoalT1\]/.test(block) &&
-    /name: 'Charcoal', descs: \[ITEMS\.charcoalT2, ITEMS\.charcoal\]/.test(block) &&
-    /name: 'Charcoal Briquette', descs: \[ITEMS\.charcoalT3\]/.test(block) &&
-    /name: 'Coke', descs: \[ITEMS\.charcoalT4\]/.test(block);
-})());
+// fired) with FUEL_BY_RECIPE, a grade per recipe. game/tests/test-1398-fuel.js holds
+// the grades and the handles, and test-6726-fuel-in-records.py the plugin's half.
+yes('the server takes no charcoal and no handle of its own',
+  src.indexOf('function fuelFor(') < 0 && src.indexOf('function charcoalHeld(') < 0 &&
+  src.indexOf('function wantsAHandle(') < 0 && src.indexOf('const CHARCOAL_GRADES = [') < 0);
 
-const fuelLine = /^const FUEL_BY_RECIPE = (\{.*\});$/m.exec(src);
-const FUEL = fuelLine ? JSON.parse(fuelLine[1]) : {};
+const FUEL = require('../../tests/gamemode-tables.js').table('FUEL_BY_RECIPE');
 const benches = {};
 Object.keys(FUEL).forEach(k => { benches[FUEL[k][2]] = true; });
 yes('a forge recipe wants charcoal', !!benches.forge);

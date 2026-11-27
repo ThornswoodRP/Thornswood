@@ -345,6 +345,15 @@ MANIFEST = os.path.join(ROOT, 'game', 'data', 'last-plugin.json')
 RECOST = os.path.join(ROOT, 'game', 'data', 'recost.json')
 RECIPES = os.path.join(ROOT, 'game', 'data', 'recipes.json')
 FOOD_GROUPS = os.path.join(ROOT, 'game', 'data', 'food-groups.json')
+# The charcoal and the handle each forge, skyforge and smelter recipe takes
+# (#1398, #6726): FUEL_BY_RECIPE, recipe desc -> [grade, metal, bench, 1 when
+# it takes a handle], written by scripts/dev/Build-FuelTable.js out of
+# recipes.json. The item each grade is, and the handle, are that script's
+# GRADE_ITEMS and HANDLE; game/tests/test-1398-fuel.js holds the two the same.
+FUEL_TABLE = 'FUEL_BY_RECIPE'
+GRADE_ITEMS = (None, '15481:Thornswood-Content.esp', '33760:Skyrim.esm',
+               '15484:Thornswood-Content.esp', '15485:Thornswood-Content.esp')
+HANDLE = '15490:Thornswood-Content.esp'
 OWN_DIR = os.path.join(ROOT, 'game', 'content')
 RECIPE = os.path.join(ROOT, 'game', 'data', 'last-plugin.recipe')
 
@@ -1485,7 +1494,7 @@ def ref_holds(plugins, win, planned=None, rooms=None):
     return place
 
 
-def build(data_dir):
+def build(data_dir, tables_dir=None):
     catalogue = json.load(open(CATALOGUE, encoding='utf-8'))
     policy = json.load(open(POLICY, encoding='utf-8'))
     order, canon, plugins = load(data_dir, catalogue)
@@ -1843,6 +1852,15 @@ def build(data_dir):
     moves, moved_in_game = move_entries(json.load(open(RECIPES, encoding='utf-8')), plugins, win, canon,
                                         blocked, carries)
 
+    # 8b. The charcoal and the handle (#1398, #6726): every forge, skyforge
+    # and smelter recipe takes the charcoal its grade asks for, and a hafted
+    # one the Tool Handle, in its record, so the game's own list shows them
+    # and takes them (Patrick's B on #6726). One a never-copied plugin has,
+    # or wins, takes them in each person's game instead.
+    fuels, fueled_in_game = fuel_entries(gamemode_tables.read(FUEL_TABLE, tables_dir),
+                                         json.load(open(RECIPES, encoding='utf-8'))['recipes'],
+                                         plugins, win, canon, blocked, carries, moved_in_game)
+
     # 9. The recipes freed of Skyrim's perks (#4826).
     perk_recipes, perk_stats = perk_entries(plugins, win, canon, blocked, perks_off)
 
@@ -1994,18 +2012,20 @@ def build(data_dir):
             pairs = set_properties(copy_record(src, e, rn, strings, what), row, what)
             out['qust'].append((rn.one(src, e.fid, what), e.flags & ~COMPRESSED,
                                 pack_subrecords(pairs), e))
-        # A recipe re-costed, moved, freed of its perks and hidden is one
-        # record carrying all four.
+        # A recipe re-costed, moved, freed of its perks, hidden and given its
+        # charcoal and handle is one record carrying all five.
         cobjs = collections.OrderedDict()
         for e, row in recipes:
-            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False])[1] = row
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False, None])[1] = row
         for e, kw, row in moves:
-            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False])[2] = kw
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False, None])[2] = kw
         for e in perk_recipes:
-            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False])[3] = True
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False, None])[3] = True
         for e, row in hidden:
-            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False])[4] = True
-        for e, cost, kw, perks, hide in cobjs.values():
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False, None])[4] = True
+        for e, add, desc in fuels:
+            cobjs.setdefault((e.pi, e.fid), [e, None, None, False, False, None])[5] = add
+        for e, cost, kw, perks, hide, add in cobjs.values():
             src = plugins[e.pi]
             what = '%s COBJ 0x%08X' % (src.name, e.fid)
             pairs = copy_record(src, e, rn, strings, what)
@@ -2017,6 +2037,8 @@ def build(data_dir):
                 pairs = without_perks(pairs, what)
             if hide:
                 pairs = hide_recipe(pairs, what)
+            if add is not None:
+                pairs = add_inputs(pairs, [(rn.gid(ref_key(item)), n) for item, n in add], what)
             out['cobj'].append((rn.one(src, e.fid, what), e.flags & ~COMPRESSED,
                                 pack_subrecords(pairs), e))
         for row in seasoned:
@@ -2083,7 +2105,8 @@ def build(data_dir):
                    'placeLocations': len(made['lctn']), 'placeRooms': len(hold_cells),
                    'recipesRecosted': len(recipes), 'recipesMoved': len(moves),
                    'recipesMovedInGame': len(moved_in_game), 'questScriptProperties': len(qprops),
-                   'recipesPerksOff': len(perk_recipes)},
+                   'recipesPerksOff': len(perk_recipes), 'recipesFueled': len(fuels),
+                   'recipesFueledInGame': len(fueled_in_game)},
         'refs': {k: sorted(v, key=ref_key) for k, v in refs.items()},
         'gatesUnlocked': [desc_of(g, canon) for g in GATES],
         'riftwealdUnlocked': list(riftweald.policy_refs(policy)),
@@ -2108,6 +2131,11 @@ def build(data_dir):
         'benchMoves': [{'recipe': row['recipe'], 'editorId': row['editorId'], 'from': row['movedFrom'],
                         'to': row['bench']} for _, _, row in moves],
         'benchMovesInGame': moved_in_game,
+        # The charcoal and the handle (#6726): each recipe given them here,
+        # with what it takes on top, and each a never-copied plugin's game
+        # gives them instead (RECIPES_FUELED_IN_GAME).
+        'fuel': [{'recipe': desc, 'add': [[item, n] for item, n in add]} for _, add, desc in fuels],
+        'fuelInGame': fueled_in_game,
         # The recipes freed of Skyrim's perks (#4826), counted rather than
         # listed (there are thousands): how many recipes and conditions, by
         # the plugin whose record each copy is, which perks were tested and
@@ -2361,6 +2389,78 @@ def move_entries(table, plugins, win, canon, blocked, carries):
         else:
             here.append((e, kw, row))
     return here, in_game
+
+
+def fuel_entries(table, catalogue, plugins, win, canon, blocked, carries, moved_in_game):
+    """The charcoal and the handle on every recipe FUEL_BY_RECIPE names
+    (#1398, #6726): (winning entry, [(item key, count)] to add, desc) for
+    every one copied here, and for every one a never-copied plugin has or
+    wins, what each person's game is handed (RECIPES_FUELED_IN_GAME): its
+    name, output and bench, its inputs as [item, count] as the record asks
+    them, and what to add."""
+    moved_to = {r['recipe']: r['to'] for r in moved_in_game}
+    here, in_game = [], []
+    for desc in sorted(table, key=ref_key):
+        grade, _, _, handle = table[desc]
+        if grade not in (1, 2, 3, 4) or handle not in (0, 1):
+            raise SystemExit('STOP. FUEL_BY_RECIPE gives %s grade %r and handle %r. Rebuild it with '
+                             'scripts/dev/Build-FuelTable.js. Nothing was written.' % (desc, grade, handle))
+        add = [(GRADE_ITEMS[grade], 1)] + ([(HANDLE, 1)] if handle else [])
+        e = win.get((b'COBJ', ref_key(desc)))
+        if e is None:
+            raise SystemExit('STOP. FUEL_BY_RECIPE burns charcoal for %s and no plugin has it. Rebuild '
+                             'recipes.json, then scripts/dev/Build-FuelTable.js. Nothing was written.' % desc)
+        src = plugins[e.pi]
+        g = src.gid(e.fid)
+        if (src.name.lower() in blocked or desc.split(':', 1)[1].lower() in blocked) and not carries(b'COBJ', g):
+            pairs = subrecords(src.data(e))
+            got = dict(pairs)
+            bnam = got.get(b'BNAM')
+            if not bnam or b'CNAM' not in got:
+                raise SystemExit('STOP. %s in %s has no bench or no output. Nothing was written.' % (desc, src.name))
+            in_game.append({'recipe': desc, 'name': (catalogue.get(desc) or {}).get('name', ''),
+                            'out': desc_of(src.gid(struct.unpack_from('<I', got[b'CNAM'], 0)[0]), canon),
+                            'bench': moved_to.get(desc) or desc_of(src.gid(struct.unpack_from('<I', bnam, 0)[0]), canon),
+                            'inputs': [[desc_of(src.gid(struct.unpack_from('<I', b, 0)[0]), canon),
+                                        struct.unpack_from('<i', b, 4)[0]] for t, b in pairs if t == b'CNTO'],
+                            'add': [[item, n] for item, n in add]})
+        else:
+            here.append((e, add, desc))
+    return here, in_game
+
+
+def add_inputs(pairs, add, what):
+    """The recipe with each (form id, count) of add taken on top: an item it
+    already asks for asks that many more, the first time it is named, and a
+    new one is a CNTO after its last input. COCT says how many there are."""
+    out = list(pairs)
+    if [t for t, _ in out].count(b'COCT') != 1:
+        raise SystemExit('STOP. %s does not carry exactly one COCT. Nothing was written.' % what)
+    for fid, n in add:
+        at = next((i for i, (t, b) in enumerate(out)
+                   if t == b'CNTO' and struct.unpack_from('<I', b, 0)[0] == fid), None)
+        if at is not None:
+            b = out[at][1]
+            out[at] = (b'CNTO', b[:4] + struct.pack('<i', struct.unpack_from('<i', b, 4)[0] + n) + b[8:])
+            continue
+        after = max((i for i, (t, _) in enumerate(out) if t in (b'CNTO', b'COED')),
+                    default=[t for t, _ in out].index(b'COCT'))
+        out.insert(after + 1, (b'CNTO', struct.pack('<Ii', fid, n)))
+    count = sum(1 for t, _ in out if t == b'CNTO')
+    return [(t, struct.pack('<I', count) if t == b'COCT' else b) for t, b in out]
+
+
+def with_adds(inputs, add):
+    """add_inputs on a list of (item, count): what a recipe asks once add is
+    taken on top, in the same order."""
+    out = [list(i) for i in inputs]
+    for item, n in add:
+        at = next((i for i, row in enumerate(out) if row[0] == item), None)
+        if at is None:
+            out.append([item, n])
+        else:
+            out[at][1] += n
+    return [tuple(row) for row in out]
 
 
 def rebench(pairs, bnam, what):
@@ -2706,14 +2806,30 @@ def verify(data_dir, plugin_bytes, manifest):
         _, effects = food_effects(last, e, row['food'])
         if [gid for gid, _ in effects] != [ref_key(food_policy['keep'])]:
             fails.append('food %s does not keep only frost resistance' % row['food'])
-    # Every re-costed recipe (#613) wins here, asking the counts the manifest says.
+    # Every re-costed recipe (#613) wins here, asking the counts the manifest
+    # says, and the charcoal and handle on top of them when it takes those.
+    added = {row['recipe']: [(ref_key(i), n) for i, n in row['add']] for row in manifest.get('fuel', [])}
+
+    def inputs_of(e):
+        return [(plugins[e.pi].gid(struct.unpack_from('<I', b, 0)[0]), struct.unpack_from('<i', b, 4)[0])
+                for t, b in subrecords(plugins[e.pi].data(e)) if t == b'CNTO']
+    recosted = set()
     for row in manifest.get('recost', []):
+        recosted.add(row['recipe'])
         e = win.get((b'COBJ', ref_key(row['recipe'])))
-        pairs = subrecords(plugins[e.pi].data(e)) if e else []
-        have = [(plugins[e.pi].gid(struct.unpack_from('<I', b, 0)[0]), struct.unpack_from('<i', b, 4)[0])
-                for t, b in pairs if t == b'CNTO'] if e else []
-        if e is None or e.pi != last.index or have != [(ref_key(i[0]), i[2]) for i in row['inputs'] if i[2]]:
+        have = inputs_of(e) if e else []
+        want = with_adds([(ref_key(i[0]), i[2]) for i in row['inputs'] if i[2]], added.get(row['recipe'], []))
+        if e is None or e.pi != last.index or have != want:
             fails.append('recipe %s %s does not ask the re-costed counts' % (row['recipe'], row['editorId']))
+    # Every forge, skyforge and smelter recipe given its charcoal and handle
+    # here (#6726) wins here, asking what its record asks and those on top.
+    for desc, add in added.items():
+        if desc in recosted:
+            continue
+        e = win.get((b'COBJ', ref_key(desc)))
+        was = source_win.get((b'COBJ', ref_key(desc)))
+        if e is None or was is None or e.pi != last.index or inputs_of(e) != with_adds(inputs_of(was), add):
+            fails.append('recipe %s does not take its charcoal and handle' % desc)
     # Every recipe moved to its trade's bench (#3120) wins here, at that bench.
     for row in manifest.get('benchMoves', []):
         e = win.get((b'COBJ', ref_key(row['recipe'])))
@@ -2903,6 +3019,7 @@ def main():
               % (c.get('placeLocations', 0), c.get('placeRooms', 0)))
         print('  ok    %d smith recipes ask the counts recost.json gives' % c.get('recipesRecosted', 0))
         print('  ok    %d recipes are at their trade\'s bench (recipes.json, #3120)' % c.get('recipesMoved', 0))
+        print('  ok    %d recipes take their charcoal and handle (#6726)' % c.get('recipesFueled', 0))
         print('  ok    %d floor items are off and nothing can switch them on' % c.get('floorItemsOff', 0))
         print('  ok    %d hold-only plants and ores are off outside their hold, and none in it'
               % c.get('holdOnlyOff', 0))
@@ -2912,7 +3029,7 @@ def main():
 
     committed = {m.lower() for m in json.load(open(MANIFEST, encoding='utf-8'))['masters']} \
         if os.path.isfile(MANIFEST) else set()
-    plugin, manifest, recipe = build(args.data)
+    plugin, manifest, recipe = build(args.data, args.tables)
     c = manifest['counts']
     print('Built %s: %s bytes, %d masters' % (PLUGIN, format(len(plugin), ','), len(manifest['masters'])))
     print('  %d cut actors off, in %d cells and %d worldspaces' % (c['actorsOff'], c['cells'], c['worlds']))
@@ -2929,6 +3046,8 @@ def main():
     print('  %d smith recipes re-costed (recost.json, #613)' % c['recipesRecosted'])
     print('  %d recipes moved to their trade\'s bench here, %d in each person\'s game (recipes.json, #3120)'
           % (c['recipesMoved'], c['recipesMovedInGame']))
+    print('  %d forge, skyforge and smelter recipes take their charcoal and handle here, %d in each person\'s '
+          'game (FUEL_BY_RECIPE, #6726)' % (c['recipesFueled'], c['recipesFueledInGame']))
     for row in manifest['questScriptProperties']:
         print('  %s (%s, from %s): %s' % (row['quest'], row['edid'], row['winner'],
                                          ', '.join('%s %s' % (k, json.dumps(v)) for k, v in row['set'].items())))
@@ -2985,7 +3104,10 @@ def main():
         d = gamemode_tables.is_current('RECIPES_MOVED_IN_GAME', moved_table(manifest), args.tables)
         print('  %s the RECIPES_MOVED_IN_GAME table %s' % (('ok   ', 'is what this builds') if d else
                                                                  ('DIFFERS', 'is not what this builds')))
-        return 0 if a and b and c and d else 1
+        f = gamemode_tables.is_current('RECIPES_FUELED_IN_GAME', fueled_table(manifest), args.tables)
+        print('  %s the RECIPES_FUELED_IN_GAME table %s' % (('ok   ', 'is what this builds') if f else
+                                                                  ('DIFFERS', 'is not what this builds')))
+        return 0 if a and b and c and d and f else 1
     with open(out + '.making', 'wb') as f:
         f.write(plugin)
     os.replace(out + '.making', out)
@@ -2995,10 +3117,12 @@ def main():
         f.write(manifest_bytes(manifest))
     gamemode_tables.write('HELD_BY_SERVER', held_table(manifest), args.tables)
     gamemode_tables.write('RECIPES_MOVED_IN_GAME', moved_table(manifest), args.tables)
-    print('Wrote %s, game/data/%s, game/data/last-plugin.json, the HELD_BY_SERVER table (%d) and the '
-          'RECIPES_MOVED_IN_GAME table (%d)'
+    gamemode_tables.write('RECIPES_FUELED_IN_GAME', fueled_table(manifest), args.tables)
+    print('Wrote %s, game/data/%s, game/data/last-plugin.json, the HELD_BY_SERVER table (%d), the '
+          'RECIPES_MOVED_IN_GAME table (%d) and the RECIPES_FUELED_IN_GAME table (%d)'
           % (out, os.path.basename(RECIPE), len(manifest['floorItems']['heldByServer']) + len(manifest['refs']['heldByServer']) +
-             len((manifest.get('holdOnly') or {}).get('heldByServer', [])), len(manifest['benchMovesInGame'])))
+             len((manifest.get('holdOnly') or {}).get('heldByServer', [])), len(manifest['benchMovesInGame']),
+             len(manifest['fuelInGame'])))
     return 0
 
 
@@ -3021,6 +3145,19 @@ def moved_table(manifest):
     [item, count] as the record asks them."""
     rows = {r['recipe']: {'name': r['name'], 'out': r['out'], 'from': r['from'], 'to': r['to'],
                           'inputs': r['inputs']} for r in manifest['benchMovesInGame']}
+    return json.dumps(rows, sort_keys=True, ensure_ascii=False)
+
+
+
+def fueled_table(manifest):
+    """The RECIPES_FUELED_IN_GAME table, as JSON text: the forge, skyforge
+    and smelter recipes (#6726) Thornswood-Last.esp cannot give their
+    charcoal and handle without copying a plugin it never copies from, which
+    each person's game gives them instead: the name, the output, the bench
+    keyword it is made at, its inputs as [item, count] as the record asks
+    them, and what it takes on top as [item, count]."""
+    rows = {r['recipe']: {'name': r['name'], 'out': r['out'], 'bench': r['bench'], 'inputs': r['inputs'],
+                          'add': r['add']} for r in manifest['fuelInGame']}
     return json.dumps(rows, sort_keys=True, ensure_ascii=False)
 
 

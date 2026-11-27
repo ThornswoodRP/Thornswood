@@ -35,6 +35,18 @@
 // smelts nobody owns that make one of the table's ingots (the dwarven smelt
 // KEPT_SMELT keeps is one). A row that is not in this table burns nothing.
 //
+// THE HANDLE, ON THE SAME ROW (#1398, #6726). smith.md: a war axe, a
+// battleaxe, a warhammer and a mace are a metal head on a wooden haft, and
+// each takes 1 Tool Handle on top of its ingots. A recipe whose record
+// already names the handle (the three tools) does not take a second one.
+//
+// WHERE THE TABLE GOES (#6726). The forge's list is the game's own menu, and
+// it shows and takes what each record names, so the charcoal and the handle
+// are written into the records: scripts/mods/Build-LastPlugin.py adds the
+// grade's item (GRADE_ITEMS) and the handle to every recipe here it copies,
+// and a recipe of a plugin it never copies gets them in each game. The
+// server takes nothing of its own for either any more.
+//
 // Run it after Build-RecipeTable.ps1 rebuilds recipes.json. game\tests\test-1398-fuel.js
 // fails while the table and this script disagree.
 //
@@ -65,6 +77,17 @@ const METALS = {
   'stalhrim': 4
 };
 
+// The item each grade is, by grade (Add-ContentRecords.py CHARCOAL_GRADES).
+// The Charcoal grade is Skyrim's own Charcoal, which the Charburner's kiln
+// makes (Patrick's B on #6726), so the charcoal found in the world is the
+// same thing.
+const GRADE_ITEMS = [null, '15481:Thornswood-Content.esp', '33760:Skyrim.esm',
+  '15484:Thornswood-Content.esp', '15485:Thornswood-Content.esp'];
+
+// The Tool Handle, and the four families fitted to one.
+const HANDLE = '15490:Thornswood-Content.esp';
+const HAFTED_FAMILIES = ['War axes', 'Battleaxes', 'Warhammers', 'Maces'];
+
 // Each metal's ingot, by the name the records give it.
 const INGOTS = {
   'iron ingot': 'iron',
@@ -88,7 +111,17 @@ function metalsInName(name) {
   return out;
 }
 
-/** [grade, metal, bench] for one row, or null when it is at no fuel bench. */
+/** 1 when a row is fitted to a handle its record does not name, else 0. */
+function handleOf(row) {
+  if (HAFTED_FAMILIES.indexOf(String((row && row.family) || '')) === -1) { return 0; }
+  for (const input of (row.inputItems || [])) {
+    if (input && input.item === HANDLE) { return 0; }
+  }
+  return 1;
+}
+
+/** [grade, metal, bench, handle] for one row, or null when it is at no fuel
+ *  bench. */
 function fuelOf(row) {
   const bench = BENCHES[String((row && row.benchName) || '')];
   if (!bench) { return null; }
@@ -105,7 +138,7 @@ function fuelOf(row) {
     if (METALS[m] > grade || (METALS[m] === grade && !metal)) { grade = METALS[m]; metal = m; }
   }
   if (bench === 'skyforge') { grade = Math.max(1, grade - 1); }
-  return [grade, metal, bench];
+  return [grade, metal, bench, handleOf(row)];
 }
 
 /** Every row the table carries, by recipe. */
@@ -130,13 +163,14 @@ function fuelTable(data) {
 }
 
 /** The table as JSON text, recipe desc -> [grade 1 to 4, the metal that asks
- *  for it or nothing, the bench], in desc order. */
+ *  for it or nothing, the bench, 1 when it takes a handle], in desc order. */
 function tableJson(table) {
   const keys = Object.keys(table).sort();
   return '{' + keys.map(function (k) { return JSON.stringify(k) + ':' + JSON.stringify(table[k]); }).join(',') + '}';
 }
 
-module.exports = { METALS: METALS, INGOTS: INGOTS, fuelOf: fuelOf, fuelTable: fuelTable, tableJson: tableJson };
+module.exports = { METALS: METALS, INGOTS: INGOTS, GRADE_ITEMS: GRADE_ITEMS, HANDLE: HANDLE, HAFTED_FAMILIES: HAFTED_FAMILIES,
+  fuelOf: fuelOf, handleOf: handleOf, fuelTable: fuelTable, tableJson: tableJson };
 
 if (require.main === module) {
   const code = cli();
@@ -160,9 +194,10 @@ function cli() {
     return 0;
   }
   const per = [0, 0, 0, 0, 0];
-  Object.keys(table).forEach(function (k) { per[table[k][0]]++; });
+  let handles = 0;
+  Object.keys(table).forEach(function (k) { per[table[k][0]]++; handles += table[k][3]; });
   const changed = TABLES.write('FUEL_BY_RECIPE', tableJson(table), DIR);
   console.log('FUEL_BY_RECIPE: ' + Object.keys(table).length + ' recipes at a forge, a skyforge or a smelter, out of ' +
     Object.keys(data.recipes || {}).length + '; ' + per[1] + ' burn Poor Charcoal, ' + per[2] + ' Charcoal, ' + per[3] +
-    ' Charcoal Briquette and ' + per[4] + ' Coke' + (changed ? '; written' : '; already current'));
+    ' Charcoal Briquette and ' + per[4] + ' Coke; ' + handles + ' take a handle' + (changed ? '; written' : '; already current'));
 }
