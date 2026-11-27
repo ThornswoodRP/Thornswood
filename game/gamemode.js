@@ -7484,10 +7484,6 @@ function placeFishTrap(actorId, refrId, baseDesc) {
   };
 }
 
-function setFishTrap(actorId, refrId, baseDesc) {
-  return placeFishTrap(actorId, refrId, baseDesc);
-}
-
 function collectFishTrap(actorId, refrId) {
   const hex = waterHex(refrId);
   const set = fishTrapsOf(actorId);

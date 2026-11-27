@@ -157,7 +157,8 @@ if (a >= 0 && b > a) {
   // Up to three at once, one to a water.
   t.command(['/trap', WATER.toString(16)], ME);
   said = t.command(['/trap', WATER.toString(16)], ME);
-  yes('a second press at a water with your trap in it does not set another', t.traps(ME).length === 1);
+  yes('a second press at a water with your trap in it does not set another: ' + said,
+      t.traps(ME).length === 1 && /^Your fish trap here is ready in 10 minutes\.$/.test(said));
   const fakeTraps = t.traps(ME).concat([{ at: w.st.now, hex: 'aa', base: SALMON, waitMs: 600000 },
                                        { at: w.st.now, hex: 'bb', base: SALMON, waitMs: 600000 }]);
   w.props[ME + ':' + t.TRAP_PROPERTY] = fakeTraps;
