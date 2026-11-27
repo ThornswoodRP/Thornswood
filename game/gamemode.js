@@ -1615,7 +1615,8 @@ function creditWork(actorId, key, n) {
     the plot, the river and the hunt all call it, and anything added later
     gets the same treatment for nothing.
 
-    No catch around it (#4955). A needs block that is not loaded yet, or a
+    No catch that goes on without it (#4955); the one below only names whose
+    work it was before it goes up (#6071). A needs block that is not loaded yet, or a
     hot reload mid-tick, is the check below: the work is still counted and
     there is nothing to charge it to. Everything worked() reaches either
     catches its own engine call or is arithmetic, and notify and say catch
@@ -1632,7 +1633,9 @@ function creditWork(actorId, key, n) {
       swing before that says nothing, which is the same rule the seam and
       the chopping block already follow.
     */
-    const tiredLine = needs.worked(actorId, key);
+    let tiredLine;
+    try { tiredLine = needs.worked(actorId, key); }
+    catch (e) { throw workStepThrew('the tiredness of', actorId, key, e); }
     if (tiredLine) {
       notify(actorId, tiredLine);
       say(actorId, tiredLine);
@@ -1659,17 +1662,26 @@ function creditWork(actorId, key, n) {
     listed together is a checkbox everybody ticks once and never thinks about
     again.
   */
+  /*
+    No empty catch around it (#6071), for the reason the tiredness above has
+    none (#4955): workBonus reaches partyNear, which catches each of its own
+    engine reads, and the rest is our own lookups and arithmetic. Until 27 Nov
+    2026 a throw here was swallowed, and that piece of work paid no party
+    bonus with nothing in the log. Now it goes up to the event's guard with
+    who and what work it was.
+  */
   let extra = 0;
-  try {
-    const soc = globalThis.__thornswoodSocial;
-    if (soc && soc.workBonus) {
-      const over = soc.workBonus(actorId) - 1;
-      if (over > 0) {
-        PARTY_BANK[actorId] = (PARTY_BANK[actorId] || 0) + over * pieces;
-        while (PARTY_BANK[actorId] >= 1) { PARTY_BANK[actorId] -= 1; extra++; }
-      }
+  const soc = globalThis.__thornswoodSocial;
+  if (soc && soc.workBonus) {
+    let bonus;
+    try { bonus = soc.workBonus(actorId); }
+    catch (e) { throw workStepThrew('the party bonus of', actorId, key, e); }
+    const over = bonus - 1;
+    if (over > 0) {
+      PARTY_BANK[actorId] = (PARTY_BANK[actorId] || 0) + over * pieces;
+      while (PARTY_BANK[actorId] >= 1) { PARTY_BANK[actorId] -= 1; extra++; }
     }
-  } catch (e) { }
+  }
 
   /*
     And an apprentice's work beside their master counts 1.5 times (#4562,
@@ -1705,6 +1717,14 @@ function creditWork(actorId, key, n) {
     log('could not count', key, 'work for', actorId.toString(16) + ':', e);
     return null;
   }
+}
+
+/* A throw from a step of creditWork, named for the person and the work
+   (#6071), so the event guard's log line says whose work it was. The
+   original stack is kept in the message. */
+function workStepThrew(step, actorId, key, e) {
+  return new Error(step + ' ' + Number(actorId).toString(16) + "'s " + key +
+    ' work threw: ' + (e && e.stack ? e.stack : String(e)));
 }
 
 /* What each character is owed of the party bonus, in fractions of a piece.
@@ -3739,7 +3759,8 @@ function chopWood(actorId, refrId, fromSwing) {
   that build is told so when the block streams in, and it stays gone without
   the loop. The disabled flag is on the reference's change form, so it
   survives a restart; setting it again at every start costs one read each.
-  The plugin's loop stays for launchers from before that client.
+  The plugin's loop went with #5052: the plugin and the client come in one
+  pack, so every client running it has the fork's fix (#2328).
 */
 const BLOCKS_OFF_REFS = ['d6ae9:Skyrim.esm', 'a9ee1:Skyrim.esm', 'abf83:Skyrim.esm'];
 
@@ -6162,8 +6183,9 @@ mp.onDeath = guard('onDeath', function (actorId, killerId) {
   if (!(pid > 0)) { return; }
 
   /*
-    THE WOUNDS COME WITH YOU (#1383, death.md): the record stays as it was,
-    and only the bleed stops, in the injury and disease block's died().
+    THE TEMPLE CLEANS THE CUTS (#6616, death.md): the injury and disease
+    block's died() clears the cuts, bites and burns and keeps the breaks,
+    the crooked heals and every disease.
   */
   try {
     const hurt = globalThis.__thornswoodHurt;
@@ -11663,6 +11685,47 @@ mp.onCraftWork = guard('onCraftWork', function (actorId, craftedItemBaseId, coun
 
 mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recipeId, workbenchId, effects) {
   /*
+    THE PIECE AN ENCHANTMENT GOES ON KEEPS ITS NAME (#4608). A piece's
+    condition is on its name, "Iron Sword (85%)", and so is a crude or
+    masterwork piece's make (the durability block), so the engine takes such a
+    piece off its named stack and says so in onCraft's seventh argument. The
+    engine gives the enchanted piece back with no name of its own, which would
+    be a free repair, so a named input was refused (inputRefusal in the
+    spoilage block) and a worn or masterwork piece could not be enchanted.
+
+    An enchantment is the craft with no recipe whose effects the engine named
+    and whose output is a piece under the runtime line (a brew's output is a
+    bottle above it). The piece is the one input of the output's own record.
+    When it came off a named stack, it is let past inputRefusal and the
+    enchanted piece is given that name (craftOutput), so its condition and its
+    make go with it, and the durability block goes on wearing it from there.
+    A plain piece is not named, so it comes back as it always did.
+  */
+  function enchantedPiece(craftedItemBaseId, recipeId, effects, inputs) {
+    var base = Number(craftedItemBaseId) || 0;
+    if (recipeId || !Array.isArray(effects) || !Array.isArray(inputs) || base <= 0 || base >= 0xff000000) {
+      return null;
+    }
+    for (var i = 0; i < inputs.length; i++) {
+      var input = inputs[i];
+      if (input && typeof input.name === 'string' && input.name &&
+          Number(input.baseId) === base && Number(input.count) === 1) {
+        return input;
+      }
+    }
+    return null;
+  }
+
+  function keepPieceName(actorId, piece) {
+    try {
+      mp.set(actorId, 'craftOutput', { name: piece.name });
+      log(actorId.toString(16), 'enchanted', piece.name, 'and it keeps that name');
+    } catch (e) {
+      log('could not keep the name', piece.name, 'on the piece', actorId.toString(16), 'enchanted:', e);
+    }
+  }
+
+  /*
     TOO SICK, TOO HURT OR TOO TIRED TO MAKE ANYTHING (#1383, #1676), asked
     before anything else, brews, enchanting and tempering included. The gate
     every way of making something asks (unfitToMake, #1733) answers the
@@ -11685,7 +11748,8 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
     that spent one would hand back a plain piece. See the spoilage block.
   */
   const spoilage = globalThis.__thornswoodSpoilage;
-  const namedNo = spoilage && spoilage.inputRefusal ? spoilage.inputRefusal(arguments[6]) : '';
+  const piece = enchantedPiece(craftedItemBaseId, recipeId, effects, arguments[6]);
+  const namedNo = spoilage && spoilage.inputRefusal ? spoilage.inputRefusal(arguments[6], piece) : '';
   if (namedNo) {
     notify(actorId, namedNo);
     say(actorId, namedNo);
@@ -11753,7 +11817,9 @@ mp.onCraft = guard('onCraft', function (actorId, craftedItemBaseId, count, recip
       The inputs go on to the brew as a fifth argument (#3134): what this
       character has eaten is asked of every ingredient in it.
     */
-    return recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects, inputs);
+    const made = recipelessCraft(actorId, craftedItemBaseId, workbenchId, effects, inputs);
+    if (made !== false && piece) { keepPieceName(actorId, piece); }
+    return made;
   }
 
   /*
@@ -31772,6 +31838,12 @@ module.exports = {
                   they held, ends
       owing       gold or goods owed into their pack and not yet in it
                   (#4258) go
+      the word    the holders' word (#2680, wordBook): a word to them goes,
+                  sent or not, as there is nobody to tell; a word whose pick
+                  or presented deed they were among keeps its count and
+                  times for its holder, with their profile out of it and its
+                  looks cleared, since a look is not kept by whose it was and
+                  theirs is their race and sex (#4786)
 
     THE BOOKS STAY BALANCED BECAUSE NO COIN MOVES. Not a hold's ledger
     (funds), not the box, not a pack. A release only changes who a coin is
@@ -31793,7 +31865,7 @@ module.exports = {
     var mine = function (pid) { var n = Number(pid) || 0; return n > 0 && who.profile(n); };
     var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
     var c = { claims: 0, masterKeys: 0, offices: 0, posts: 0, handedBack: 0, owed: 0, lines: 0,
-              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0 };
+              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0, words: 0 };
     var reg = false, lawChanged = false, beds = false;
     var b;
     for (b in claims) {
@@ -31886,6 +31958,15 @@ module.exports = {
     for (var op in owing) {
       if (has(owing, op) && mine(op)) { c.owing += owing[op].length; delete owing[op]; reg = true; }
     }
+    var words = [];
+    for (var wi = 0; wi < wordBook.list.length; wi++) {
+      var wd = wordBook.list[wi];
+      if (mine(wd.holder)) { c.words++; reg = true; continue; }
+      var others = wd.by.filter(function (p) { return !mine(p); });
+      if (others.length !== wd.by.length) { wd.by = others; wd.looks = []; c.words++; reg = true; }
+      words.push(wd);
+    }
+    wordBook.list = words;
     var saved = true;
     if (reg && !save()) { saved = false; }
     if (lawChanged && !saveLaw()) { saved = false; }
@@ -40665,7 +40746,10 @@ return module.exports;
                        reads it) raised by the tree's Clarity, as the client
                        raises it.
     Overcharge         Every fifth spell of yours that takes health takes as
-                       much again. And every fifth spell of yours that holds
+                       much again, counted by the cast (THE CASTS THAT TAKE
+                       HEALTH, below): every hit of that cast, on everybody
+                       it catches and for as long as it is held, is double,
+                       and no hit of the four before it is (#4788). And every fifth spell of yours that holds
                        (one you cast and let go, with an effect that lasts a
                        time and none that takes health: a ward of flesh, a
                        light, a fear) holds twice as long. A spell's effects
@@ -40878,7 +40962,8 @@ return module.exports;
       font   actor -> { until }            a Font of Magic that is running
       troll  actor -> { at, said }         Troll's Blood's second, and its fight
       ley    actor -> when Leyline Attunement last gave
-      spells actor -> how many spells of theirs have landed towards Overcharge
+      spells actor -> how many casts of theirs that take health, towards Overcharge
+      charged actor -> { spell: true } the spells whose last cast was the fifth
       holding actor -> how many casts of theirs that hold, towards Overcharge
       sb     'target:caster:spell' -> when a concentration spell last gave
       blow   actor -> { by, at }           whose blow, when this block's write killed
@@ -40886,9 +40971,10 @@ return module.exports;
   var ST = g.__thornswoodPerkState;
   if (!ST || typeof ST !== 'object') {
     ST = g.__thornswoodPerkState = { held: {}, last: {}, fight: {}, font: {}, troll: {}, ley: {},
-                                     spells: {}, holding: {}, sb: {}, blow: {} };
+                                     spells: {}, holding: {}, charged: {}, sb: {}, blow: {} };
   }
   if (!ST.holding || typeof ST.holding !== 'object') { ST.holding = {}; }
+  if (!ST.charged || typeof ST.charged !== 'object') { ST.charged = {}; }
 
   function heldOf(id, t) {
     var c = ST.held[id];
@@ -41123,6 +41209,53 @@ return module.exports;
   }
 
   /*
+    THE CASTS THAT TAKE HEALTH (Overcharge's first half, #4788). A spell (SPIT
+    type 0) with an effect that takes health, by the same test as above. It
+    counts once a cast, from mp.onSpellCast: a stream like Flames sends its
+    cast once when it starts and lands a hit every moment it is held, and a
+    spell with an area lands one hit on each person it catches, so counting
+    hits doubled those far more often than one spell in five.
+  */
+  var hurtsCache = {};
+  function takesHealth(id) {
+    if (!id) { return false; }
+    if (has(hurtsCache, id)) { return hurtsCache[id]; }
+    var r = lookup(id);
+    var spit = typeOf(r) === 'SPEL' ? fieldOf(r, 'SPIT') : null;
+    var hurts = false;
+    var fields = (spit && u32(spit, 8) === 0 && r.record.fields) || [];
+    for (var i = 0; i < fields.length && !hurts; i++) {
+      var f = fields[i];
+      if (!f || String(f.type) !== 'EFID') { continue; }
+      var data = fieldOf(lookup(globalOf(r, u32(f.data, 0))), 'DATA');
+      if (((u32(data, 0) || 0) & DETRIMENTAL) && u32(data, 0x44) === HEALTH) { hurts = true; }
+    }
+    hurtsCache[id] = hurts;
+    return hurts;
+  }
+
+  /*
+    A cast that takes health. Each one is a new cast of that spell, so what
+    the last one of it was is let go first, whoever casts it. Then, for
+    somebody who holds Overcharge, it counts, and the fifth is charged: every
+    hit of that spell by them lands double until they cast it again.
+  */
+  function castHurts(by, id) {
+    if (ST.charged[by]) { delete ST.charged[by][id]; }
+    if (!heldOf(by, now()).overcharge) { return; }
+    var n = (ST.spells[by] || 0) + 1;
+    if (n >= PERKS.overcharge.inEvery) {
+      n = 0;
+      if (!ST.charged[by]) { ST.charged[by] = {}; }
+      ST.charged[by][id] = true;
+      fired(by, 'overcharge', '(' + hex(id) + ' lands double)');
+      tell(by, 'Overcharge: that spell lands double.');
+    }
+    ST.spells[by] = n;
+  }
+  function charged(by, id) { return !!(ST.charged[by] && ST.charged[by][id]); }
+
+  /*
     A cast, from mp.onSpellCast, before the engine sends it to anybody near.
     asked is how many times its usual time the caster's own machine gave its
     effects; the answer is what everybody else's machine gives them. Every
@@ -41137,7 +41270,9 @@ return module.exports;
   function cast(casterId, spellId, asked) {
     var by = Number(casterId) || 0;
     var id = Number(spellId) || 0;
-    if (!by || !id || !personOf(by) || !heldOf(by, now()).overcharge || !holdsLonger(id)) { return 1; }
+    if (!by || !id || !personOf(by)) { return 1; }
+    if (takesHealth(id)) { castHurts(by, id); return 1; }
+    if (!heldOf(by, now()).overcharge || !holdsLonger(id)) { return 1; }
     var longer = PERKS.overcharge.longer;
     var n = (ST.holding[by] || 0) + 1;
     if (n >= PERKS.overcharge.inEvery) {
@@ -41258,7 +41393,7 @@ return module.exports;
     var mine = heldOf(by, t);
     var e = { before: -1, after: null, by: by, identity: identity, more: 0, overcharge: false, aim: false };
     if (kind === 'melee' && power && !bash && mine.devastatingblow) { e.more = PERKS.devastatingblow.more; }
-    if (kind === 'spell' && mine.overcharge) { e.overcharge = true; }
+    if (kind === 'spell' && mine.overcharge && charged(by, idOfForm(source))) { e.overcharge = true; }
     if (kind === 'bow' && mine.lethalaim) { e.aim = true; }
     if (!e.more && !e.overcharge && !e.aim) { return; }
     e.target = targetLife(target);
@@ -41346,15 +41481,8 @@ return module.exports;
           }
         }
         if (e.overcharge) {
-          var n = (ST.spells[e.by] || 0) + 1;
-          if (n >= PERKS.overcharge.inEvery) {
-            n = 0;
-            change -= took * PERKS.overcharge.more;
-            killer = e;
-            fired(e.by, 'overcharge');
-            tell(e.by, 'Overcharge: that spell lands double.');
-          }
-          ST.spells[e.by] = n;
+          change -= took * PERKS.overcharge.more;
+          killer = e;
         }
       }
       if (h > 0 && change !== 0) { setHealth(target, h, change, killer); }
@@ -41606,7 +41734,7 @@ return module.exports;
     PERKS: PERKS, ORDER: ORDER, PROPERTY: PERK_PROPERTY, CRIT_LINE: CRIT_LINE, FIGHT_MS: FIGHT_MS,
     holds: holds, cheatDeath: cheatDeath, hit: hit, flush: flush, killerOf: killerOf, tick: tick,
     use: use, clocks: clocks, spendLine: spendLine, effects: effects, armourOf: armourOf,
-    lethalExtra: lethalExtra, readyAt: readyAt, fired: fired, cast: cast, holdsLonger: holdsLonger, state: ST
+    lethalExtra: lethalExtra, readyAt: readyAt, fired: fired, cast: cast, holdsLonger: holdsLonger, takesHealth: takesHealth, state: ST
   };
   console.log('[thornswood perks] ready: ' + ORDER.length + ' perks');
 })();
@@ -42584,10 +42712,15 @@ mp['onPapyrusEvent:OnHit'] = guard('onPapyrusEvent:OnHit', function (targetId, a
   if (college && college.hit) {
     try { college.hit(targetId, aggressor, source); } catch (e) { log('college: the hit threw:', e); }
   }
+  // The maneuvers (#1386), on their own like the three above: before #4789
+  // this was the one call left bare, so a throw here took the two injury
+  // calls below with it, and the guard logged the whole hit as failed.
   var mv = globalThis.__thornswoodManeuvers;
-  if (mv && mv.hit) { mv.hit(targetId, aggressor, source, power, blocked); }
+  if (mv && mv.hit) {
+    try { mv.hit(targetId, aggressor, source, power, blocked); } catch (e) { log('maneuvers: the hit threw:', e); }
+  }
   // A healing spell landing on somebody's wounds (#1383), in the injury and
-  // disease block. On its own, so the two above cannot stop it.
+  // disease block. On its own, so none of the calls above can stop it.
   var hurt = globalThis.__thornswoodHurt;
   if (hurt && hurt.hit) {
     try { hurt.hit(targetId, aggressor, source); } catch (e) { log('injury: the hit threw:', e); }
@@ -45923,7 +46056,7 @@ function thornswoodBooks(env) {
   server answers' would make that list wrong in the one place somebody would go
   to check.
 */
-const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc', '/o',
+const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1',
                // A dev's and a tester's tool: the cell, the position and the
                // angle you stand at. Answered for them alone, the way /tp is,
                // and not in PLAYER_WORDS (#1633).
@@ -46144,8 +46277,8 @@ const WORDS = ['/journal-write-v1', '/board-post-v1', '/board-unpin-v1', '/ooc',
   /ooc, with /roll (#1639), and /needs, the needs bars as a line of text
   for somebody who hid them (Patrick, 11 October, #2267). Everything else
   anybody does is a key, a prompt or a panel, and the help panel names
-  those. /me, /do, /w, /s and /y are said by the voice service and never
-  reach this server, so they are named here and are not in WORDS. /need is
+  those. /me, /do, /w, /s, /y and /ooc are said by the voice service and
+  never reach this server (#4238), so they are named here and are not in WORDS. /need is
   /needs and is not named twice. docs/systems/commands.md has the same list.
 */
 // Not /plot, /plant or /claim: a farm is worked and claimed at the plot, and
@@ -46219,9 +46352,10 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
   }
 
   /** A line in the chat, to one person. */
-  // How far out of character talk carries. About the length of a longhouse,
-  // which is roughly the group a scene has in it.
-  var OOC_RANGE = 4000;
+  // How far a /roll carries: 4000 units, about the length of a longhouse,
+  // which is roughly the group a scene has in it. The same reach as /ooc,
+  // which the voice service says (SPEECH in voice/headlines.js, #4238).
+  var ROLL_RANGE = 4000;
 
   /*
     The dice, and their limits.
@@ -48056,8 +48190,9 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       person (#412). The staff block at the end of this file does the work
       and says whether it took the line; it reuses /give's, /spawn's and
       /tp's lookups, handed over here. A /give, /spawn, /tp or /goto that
-      names no person goes on to the branches below, and /ooc or /roll from
-      somebody staff silenced stops here.
+      names no person goes on to the branches below, and /roll from somebody
+      staff silenced stops here. Their /ooc never arrives: the voice service
+      says it, and holds it back from them itself (#4238).
     */
     var commandTools = g.__thornswoodCommandTools;
     if (commandTools && commandTools.command(cmd, word, parts, profileId, actorId)) { return; }
@@ -48324,76 +48459,6 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       return;
     }
 
-    // ------------------------------------------------------------- ooc ---
-    //
-    // Brackets worked, but only if everybody remembered them, and a line of
-    // out of character talk typed without them lands in the middle of a scene
-    // as though somebody's character said it.
-    //
-    // This is deliberately LOCAL. Out of character talk belongs to the scene
-    // it interrupts, not to everybody in Skyrim, and a server wide one would
-    // be a second general chat inside the game.
-    // The chat box handles both aliases in voice/headlines.js (#4238).
-    // Direct game-server calls still use this handler.
-    if (word === '/ooc' || word === '/o') {
-      var said = parts.slice(1).join(' ').trim();
-      if (!said) {
-        toProfile(profileId, 'Say /ooc and then whatever you meant to say.');
-        return;
-      }
-      // Needs a character: who hears it is worked out from where that
-      // character is standing.
-      if (!needCharacter()) { return; }
-      if (said.length > 300) { said = said.slice(0, 300); }
-
-      var myPos = [0, 0, 0], myCell = '';
-      try {
-        myPos = mp.get(actorId, 'pos') || [0, 0, 0];
-        myCell = String(mp.get(actorId, 'worldOrCellDesc') || '');
-      } catch (e) { }
-
-      var who = '';
-      try {
-        var ap = mp.get(actorId, 'appearance');
-        who = String((ap && ap.name) || '');
-      } catch (e) { }
-      if (!who) { who = 'Somebody'; }
-
-      var line = '(( ' + who + ': ' + said + ' ))';
-
-      var near = [];
-      try { near = mp.get(0, 'onlinePlayers') || []; } catch (e) { near = []; }
-
-      var heard = 0;
-      for (var oi = 0; oi < near.length; oi++) {
-        var oid = near[oi], opid = 0;
-        try { opid = Number(mp.get(oid, 'profileId')) || 0; } catch (e) { continue; }
-        if (!opid) { continue; }
-
-        if (oid !== actorId) {
-          var oCell = '', oPos = [0, 0, 0];
-          try {
-            oCell = String(mp.get(oid, 'worldOrCellDesc') || '');
-            oPos = mp.get(oid, 'pos') || [0, 0, 0];
-          } catch (e) { continue; }
-          // Same room first. Two people at the same coordinates in different
-          // cells are not in earshot of each other.
-          if (oCell !== myCell) { continue; }
-          var dx = oPos[0] - myPos[0], dy = oPos[1] - myPos[1], dz = oPos[2] - myPos[2];
-          if ((dx * dx + dy * dy + dz * dz) > (OOC_RANGE * OOC_RANGE)) { continue; }
-        }
-
-        toProfile(opid, line);
-        heard++;
-      }
-
-      if (heard <= 1) {
-        toProfile(profileId, 'Nobody near enough to hear that.');
-      }
-      log('command: /ooc', actorId.toString(16), 'heard by', heard);
-      return;
-    }
-
     /*
       ------------------------------------------------------------- the dice
 
@@ -48417,7 +48482,10 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       such as 3d6, names the same dice (#6476).
 
       HEARD BY THE SAME PEOPLE /ooc IS, and for the same reason: a roll is
-      part of a conversation and belongs in the room it happened in.
+      part of a conversation and belongs in the room it happened in. /ooc is
+      said by the voice service and never reaches this server (#4238), so the
+      same cell and ROLL_RANGE here are its reach written twice: a change to
+      one is a change to voice/headlines.js too.
     */
     if (word === '/roll' || word === '/r') {
       if (!needCharacter()) { return; }
@@ -48481,7 +48549,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
           } catch (e) { continue; }
           if (rc !== rCell) { continue; }
           var rdx = rp[0] - rPos[0], rdy = rp[1] - rPos[1], rdz = rp[2] - rPos[2];
-          if ((rdx * rdx + rdy * rdy + rdz * rdz) > (OOC_RANGE * OOC_RANGE)) { continue; }
+          if ((rdx * rdx + rdy * rdy + rdz * rdz) > (ROLL_RANGE * ROLL_RANGE)) { continue; }
         }
         toProfile(rpid, rline);
         rHeard++;
@@ -50775,8 +50843,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
           keeps the condition and nothing here watches drops any more.
     a craft. CraftEvent::OnFireSuccess takes away plain entries and adds a
           plain one. A temper is refused (recipelessCraft), so it is not a
-          way round this. Enchanting a piece that is not at 100% fails in
-          the engine, because the plain piece it asks to take is not there.
+          way round this. An enchantment takes the piece by its name and
+          the bench names the enchanted piece the same (#4608,
+          enchantedPiece in the bench block), so its condition goes with it.
   A trade was a third, and it was this file's: moveById in the trade block
   wrote a base and a count and nothing else. It moves a piece with its name
   now, and leaves every other stack's alone (#1594).
@@ -52023,7 +52092,9 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   and mp.onCraft's seventh argument names an input that came off a named
   stack; inputRefusal below refuses any named input that is not food
   carrying its days, so a worn sword (85%), a house's mold or a woven
-  garment is still never spent by a craft, as it never could be.
+  garment is still never spent by a craft, as it never could be. The one
+  exception is the piece an enchantment goes on, which comes back with the
+  same name (#4608).
 
   WHICH FOOD SPOILS AND HOW FAST is FOOD_GROUPS.spoil
   (game/data/food-groups.json): days by group (raw meat and fish, and the
@@ -52457,12 +52528,17 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
       piece's condition, a house's mold, a woven garment's mark and a dye
       each sit on a name too, and a craft that took one would give back a
       plain piece (a free repair) or lose what the name said.
+
+      except is the one input that is let through by name (#4608): the piece
+      an enchantment goes on, which the bench gives back carrying the same
+      name (enchantedPiece in the bench block), so nothing the name said is
+      lost and nothing is repaired.
     */
-    function inputRefusal(inputs) {
+    function inputRefusal(inputs, except) {
       if (!Array.isArray(inputs)) { return ''; }
       for (var i = 0; i < inputs.length; i++) {
         var input = inputs[i];
-        if (!input || !input.name) { continue; }
+        if (!input || !input.name || input === except) { continue; }
         var entry = { baseId: Number(input.baseId) || 0, name: String(input.name) };
         if (ownName(entry)) { continue; }
         return 'Your ' + entry.name + ' cannot go into that. Keep it, or use a plain one.';
@@ -56202,7 +56278,7 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     A bard playing where this person is resting.
 
     Grim's idea and Patrick's yes. Somebody counts as a bard for this when the
-    server has seen them playing, they are in the same cell, and it saw them
+    server has seen them playing, they are together (social's together(), #5046), and it saw them
     in the last few minutes. There is no bard profession in the rulebook to
     read, and inventing one here would be settling a design question that is
     Patrick's.
@@ -56265,19 +56341,19 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
     }
   }
 
+  /* Within earshot means together, as the party bonus counts it (#5046):
+     the same interior, or outdoors within the Near you reach. The same cell
+     description alone was the whole worldspace outdoors. */
   function bardNear(actorId, savedOnly) {
-    var myCell = null;
-    try { myCell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return false; }
-    if (!myCell) { return false; }
+    var soc = g.__thornswoodSocial;
+    if (!soc || !soc.together) { return false; }
     var now = Date.now();
     for (var id in BARDS) {
       if (!Object.prototype.hasOwnProperty.call(BARDS, id)) { continue; }
       if (now - BARDS[id] > BARD_FOR) { if (!savedOnly) { delete BARDS[id]; } continue; }
       var who = Number(id);
       if (who === actorId) { continue; }
-      var theirs = null;
-      try { theirs = String(mp.get(who, 'worldOrCellDesc') || ''); } catch (e) { continue; }
-      if (theirs && theirs === myCell) { return true; }
+      if (soc.together(actorId, who)) { return true; }
     }
     return false;
   }
@@ -57982,7 +58058,10 @@ mp.onUpdateAppearanceAttempt = guard('onUpdateAppearanceAttempt', function (acto
   to the person and everybody near them, and one log line says who, whose
   hair, which dye, and the colour before and after. The first dye on somebody
   stores the colour they were made with, which a wash goes back towards. The
-  person's own game redraws the hair in the front plugin ("hair colour").
+  person's own game redraws the hair at once in the engine fork's client,
+  which calls the game's UpdateHairColor when an appearance is applied
+  (skymp5-client/src/sync/appearance.ts, #2867); nothing here or in the front
+  plugin draws it.
 
   A DYE IS NOT A PLAIN ITEM. Each dye is registered with mintedEntry, so
   addItem, takeItem, the merchants and anything else that reads the record
@@ -58676,7 +58755,7 @@ module.exports = {
   somebody else, a healing spell landing on them, or a healing potion
   stands them up at a quarter of their health (standUp). Nobody does in
   DOWN.minutes, and the tick lets the death through (wake): the ordinary
-  wake at the temple, with the wounds they had. Staff seeing who is down,
+  wake at the temple, with the breaks and diseases they had. Staff seeing who is down,
   confirming the outcome and changing the minutes is #6409; a potion brewed
   at a lab standing somebody up is #6407.
   ============================================================================
@@ -59127,7 +59206,24 @@ module.exports = {
       if (stage === 'caught') { continue; }
       out.push(WORDS[rec.ills[k].k] + (stage === 'bad' ? ', bad' : ''));
     }
-    return out;
+    return once(out);
+  }
+
+  /*
+    ONE LINE FOR ONE KIND (#6616). Every wound is a line, so three bites in a
+    fight with skeevers were three "Open bite" lines down the edge of the
+    screen, and a tester read them as the same line drawn again and again.
+    Lines that read the same are one line now, with how many after it, in
+    the order the first of them came: "Open bite (3)".
+  */
+  function once(list) {
+    var order = [], count = {};
+    for (var i = 0; i < list.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(count, list[i])) { count[list[i]]++; continue; }
+      count[list[i]] = 1;
+      order.push(list[i]);
+    }
+    return order.map(function (l) { return count[l] > 1 ? l + ' (' + count[l] + ')' : l; });
   }
 
   function tell(actorId, line) {
@@ -59894,21 +59990,25 @@ module.exports = {
   }
 
   /*
-    A DEATH. The temple stopped the death and did not wash the cuts
-    (death.md), so every wound and disease stays on the record. The bleed
-    stops: the wake is the death being stopped, and a cut still bleeding in
-    the temple would kill again before anybody could reach it (Patrick's
-    answer on #1383, 4 October). The fire goes out with the body.
+    A DEATH. The temple's wake clears the cuts, bites and burns, and keeps
+    the breaks, the crooked heals and every disease (Patrick's answer B on
+    #6616, 27 November; death.md). Before it the record kept every wound,
+    and somebody woke with the same row of open cuts each time they died.
+    Nothing left bleeds: the cuts and bites are gone, and a cut still
+    bleeding in the temple would kill again before anybody could reach it
+    (Patrick's answer on #1383, 4 October). The fire goes out with the body.
   */
   function died(actorId) {
     delete fires[actorId];
     var needs = g.__thornswoodNeeds;
     if (needs && needs.clearBurning) { needs.clearBurning(actorId); }
     var rec = read(actorId);
-    var any = false;
+    var kept = [];
     for (var i = 0; i < rec.wounds.length; i++) {
-      if (rec.wounds[i].bleed) { rec.wounds[i].bleed = false; any = true; }
+      if (rec.wounds[i].k === 'break') { rec.wounds[i].bleed = false; kept.push(rec.wounds[i]); }
     }
+    var any = kept.length !== rec.wounds.length;
+    rec.wounds = kept;
     // Down ends with the death (#4607): the wake is the temple's. Their machine
     // is told by what it was last sent, because the wake's own death has
     // already taken the down off the record (wake, below).
@@ -60011,7 +60111,7 @@ module.exports = {
     THE CLOCK RAN OUT with nobody standing them up: the death goes through.
     wake tells goDown to let the next one go, and health written to nothing
     is that death, through the engine's own onDying and onDeath, so the wake
-    is the temple's with the wounds they had (died, above). A write the
+    is the temple's with the breaks and diseases they had (died, above). A write the
     engine refuses puts the down back, so the record never says less than
     the truth.
   */
@@ -61684,19 +61784,38 @@ module.exports = {
     var pid = profileOf(actorId);
     var p = partyOf(pid);
     if (!p || p.members.length < 2) { return 0; }
-    var cell = '';
-    try { cell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return 0; }
-    if (!cell) { return 0; }
     var n = 0;
     for (var i = 0; i < p.members.length; i++) {
       if (p.members[i] === pid) { continue; }
       var them = actorForProfile(p.members[i]);
-      if (!them) { continue; }
-      try {
-        if (String(mp.get(them, 'worldOrCellDesc') || '') === cell) { n++; }
-      } catch (e) { }
+      if (them && together(actorId, them)) { n++; }
     }
     return n;
+  }
+
+  /*
+    Are these two people together (#5046): in the same interior, or outdoors
+    in the same worldspace and within nearReach of each other, the reach the
+    Near you list already uses for "near you". Until 27 Nov 2026 this was the
+    same cell description alone, and outdoors that is the whole worldspace:
+    two people a hold apart in Tamriel counted as together for the party's
+    work share, the party panel and a bard's rest bonus (needs block,
+    bardNear, which asks this).
+  */
+  function whereIs(actorId) {
+    return memo('w' + actorId, function () {
+      try {
+        return { cell: String(mp.get(actorId, 'worldOrCellDesc') || ''), pos: mp.get(actorId, 'pos') };
+      } catch (e) { return { cell: '', pos: null }; }
+    });
+  }
+  function together(a, b) {
+    var x = whereIs(a), y = whereIs(b);
+    if (!x.cell || x.cell !== y.cell) { return false; }
+    if (!WORLDSPACES.has(x.cell)) { return true; }
+    if (!x.pos || !y.pos) { return false; }
+    var dx = x.pos[0] - y.pos[0], dy = x.pos[1] - y.pos[1], dz = x.pos[2] - y.pos[2];
+    return dx * dx + dy * dy + dz * dz <= SOCIAL.nearReach * SOCIAL.nearReach;
   }
 
   /** The multiplier work credit is paid at, for somebody with their party. */
@@ -62219,7 +62338,7 @@ module.exports = {
     partyMember: partyMember, kickParty: kickParty, leadParty: leadParty,
     disbandParty: disbandParty,
     confirmPartyAction: confirmPartyAction,
-    partyNear: partyNear, workBonus: workBonus, parties: parties, inParty: inParty,
+    partyNear: partyNear, together: together, workBonus: workBonus, parties: parties, inParty: inParty,
     newJournal: newJournal, writePage: writePage, writePageExact: writePageExact, pushJournalSave: pushJournalSave, dropJournal: dropJournal,
     share: share, resolveShare: resolveShare, sharedWithMe: sharedWithMe, findJournal: findJournal,
     view: view, push: push, tick: tick, nearTick: nearTick,
@@ -65271,8 +65390,9 @@ module.exports = {
   var SPAWN_AWAY = 150;             // units from the person, so it is beside them
   var REFUSED = 'That one is not yours to run.';
   // What a silenced person cannot say through the game server. Plain lines,
-  // /me, /do, /w, /s and /ooc are held back by the voice service itself.
-  var SILENCED_WORDS = ['/ooc', '/o', '/roll', '/r'];
+  // /me, /do, /w, /s and /ooc are said by the voice service, which holds
+  // them back itself, and never reach this server (#4238).
+  var SILENCED_WORDS = ['/roll', '/r'];
   var KICK_AFTER_MS = 4000;         // long enough to read the line first
   var FREEZE_EVERY_MS = 1000;
   var FREEZE_SLACK = 64;            // units, a little under a metre
@@ -69225,7 +69345,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
   function emerge(h) {
     const {id,state,saved,bank,near}=h;
     const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node:near.node,
-      lift:near.pos[2]-npcSurface(near.node,near.pos),bank,approach:near.pos.slice(),
+      lift:liftOf(state,near.node,near.pos),bank,approach:near.pos.slice(),
       path:[],dwell:0,last:now(),sequence:saved && Number.isInteger(saved.sequence) ? saved.sequence : id%997,
       mode:'ambient',savedMode:'ambient',target:0,policy:policies.get(id)};
     actors.set(id,a);queue(a,now());indexActor(a);
@@ -69295,8 +69415,7 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
         // Set down beyond its leash at an earlier start (#2067).
         const policy=policies.get(id);
         if(outsideHome(policy,state.cellOrWorld,state.pos) && settleHome(id,bank,policy,state)) continue;
-        const surface=npcSurface(node,state.pos),lift=state.pos[2]-surface;
-        const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node,lift,bank,
+        const a={id,cell:state.cellOrWorld,pos:state.pos.slice(),state,node,lift:liftOf(state,node,state.pos),bank,
           path:[],dwell:0,last:now(),sequence:saved && Number.isInteger(saved.sequence) ? saved.sequence : id%997,
           mode:'ambient',savedMode:'ambient',target:0,policy:policies.get(id)};
         actors.set(id,a);queue(a,now());indexActor(a);
@@ -69329,6 +69448,29 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       }
     } catch(e) {report('NPC identity refresh failed: '+e);}
     schedule(discover,5000);
+  }
+  // A walker stands on its navmesh (#6474). The game puts an actor down on
+  // the floor under it, but each game moves a server's NPC with translateTo,
+  // which neither falls nor collides, so the height the server sends is the
+  // height it is seen at. Until 27 Nov 2026 a walker kept the height its
+  // placement had over its triangle wherever it walked, and the first Dev
+  // reading had 573 of 4,729 walkers more than 16 units above the navmesh
+  // and 51 more than 64 above, floating wherever they went. A swimmer keeps
+  // its height over the bed, which is where it swims.
+  function liftOf(s,node,pos) {
+    return s.swims ? pos[2]-npcSurface(node,pos) : 0;
+  }
+  // A walker found off its navmesh (placed above or below it, or moved there)
+  // is put down onto it where it stands, as the game drops a placed actor
+  // onto the floor. found keeps how far off it was, for the heights line.
+  function setDown(a,s) {
+    if(s.swims) return;
+    const floor=npcSurface(a.node,a.pos);
+    if(floor===null || Math.abs(a.pos[2]-floor)<=1) return;
+    const pos=[a.pos[0],a.pos[1],floor];
+    a.found=a.pos[2]-floor;
+    nativeCall('updateNpcMovement',a.id,pos,s.rot,0);
+    a.pos=pos;a.path=[];
   }
   // Where an actor stands over a navmesh point: its lift above the floor, and
   // a swimmer no higher than its depth. Home checks use this point, the one a
@@ -69461,8 +69603,9 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       const node=bank.ready && locate(bank,s.pos,s);
       if(!node) throw new Error('Displaced outside prepared local navigation');
       a.cell=s.cellOrWorld;a.bank=bank;a.node=node;a.pos=s.pos.slice();
-      a.lift=s.pos[2]-npcSurface(node,s.pos);a.path=[];a.target=0;indexActor(a);
+      a.lift=liftOf(s,node,s.pos);a.path=[];a.target=0;indexActor(a);
     }
+    setDown(a,s);
     // A swimmer aims at each point no higher than its depth (#2067).
     const aim=p=>s.swims ? [p[0],p[1],Math.min(p[2],s.swimTop)] : p;
     let target=0,targetState=null,retaliation=false;
@@ -69592,28 +69735,28 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
     }
   }
-  // How far above the navmesh each walking NPC is held (#6474). An NPC keeps
-  // the height its placement had over its navmesh triangle (lift) wherever
-  // it walks, and each game moves it there with translateTo, which neither
-  // falls nor collides, so a positive lift is how far it floats above the
-  // navmesh. Said when it changes, with the largest, to measure the reports
-  // of NPCs floating.
+  // How far off the navmesh each walking NPC was found before it was set
+  // down on it (#6474), and how many stand off it now, which is none once
+  // each has had its first step. Said when it changes, with the largest.
   let heightsLine='';
   function heightsReport() {
-    let walking=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
+    let walking=0,off=0,above16=0,above32=0,above64=0,below16=0;const largest=[];
     for(const a of actors.values()) {
       if(!a.state || a.state.swims) continue;
       walking++;
-      if(a.lift>16) above16++;
-      if(a.lift>32) above32++;
-      if(a.lift>64) above64++;
-      if(a.lift<-16) below16++;
-      largest.push(a);
+      const floor=npcSurface(a.node,a.pos);
+      if(floor!==null && Math.abs(a.pos[2]-floor)>1) off++;
+      const found=a.found || 0;
+      if(found>16) above16++;
+      if(found>32) above32++;
+      if(found>64) above64++;
+      if(found<-16) below16++;
+      if(found) largest.push(a);
     }
-    largest.sort((x,y)=>Math.abs(y.lift)-Math.abs(x.lift));
-    const line='NPC heights over their navmesh: '+walking+' walking; above 16 units '+above16+', above 32 '+above32+
-      ', above 64 '+above64+', below -16 '+below16+'; largest '+
-      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.lift)+' in '+a.cell.toString(16)).join(', ');
+    largest.sort((x,y)=>Math.abs(y.found)-Math.abs(x.found));
+    const line='NPC heights over their navmesh: '+walking+' walking, '+off+' off it now; set down from above 16 units '+above16+
+      ', above 32 '+above32+', above 64 '+above64+', below -16 '+below16+'; largest '+
+      largest.slice(0,12).map(a=>a.id.toString(16)+' '+Math.round(a.found)+' in '+a.cell.toString(16)).join(', ');
     if(line!==heightsLine) {report(line);heightsLine=line;}
   }
   function backgroundTick() {
@@ -69660,7 +69803,9 @@ function startSharedNpcServerRuntime(api, timers, now, report, population, optio
     const again=id=>{if(!preparing.includes(id)) preparing.push(id);};
     for(const [id,a] of actors) {
       const node=navigation.nodeAt(a.node);
-      if(node) {a.node=node;continue;}
+      // A walker carried from a load that kept its placement's height walks
+      // on the navmesh from its next step, as one taken on now does (#6474).
+      if(node) {a.node=node;if(a.state) a.lift=liftOf(a.state,node,a.pos);continue;}
       actors.delete(id);
       if(a.tile && npcTiles.has(a.tile)) npcTiles.get(a.tile).delete(id);
       again(id);

@@ -87,7 +87,7 @@ function world() {
     return new Function(
       'require', 'globalThis', 'mp', 'Date', 'console', 'setInterval', 'clearInterval',
       'guard', 'say', 'notify', 'Math', 'Number', 'String', 'Object', 'Array',
-      'JSON', 'isFinite', 'parseInt',
+      'JSON', 'isFinite', 'parseInt', 'WORLDSPACES',
       require('../../tests/fixtures/ordinary-quest-items') + block)(
       require, g, mp, { now: function () { return clock.now; } },
       { log: function () { } },
@@ -96,7 +96,7 @@ function world() {
       function (n, f) { return f; },
       function (id, line) { said.push({ to: id, line: line }); },
       function (id, line) { said.push({ to: id, line: line }); },
-      Math, Number, String, Object, Array, JSON, isFinite, parseInt);
+      Math, Number, String, Object, Array, JSON, isFinite, parseInt, new Set(['3c:Skyrim.esm']));
   }
 
   run(social);

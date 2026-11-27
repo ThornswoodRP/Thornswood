@@ -2355,7 +2355,7 @@
     A bard playing where this person is resting.
 
     Grim's idea and Patrick's yes. Somebody counts as a bard for this when the
-    server has seen them playing, they are in the same cell, and it saw them
+    server has seen them playing, they are together (social's together(), #5046), and it saw them
     in the last few minutes. There is no bard profession in the rulebook to
     read, and inventing one here would be settling a design question that is
     Patrick's.
@@ -2418,19 +2418,19 @@
     }
   }
 
+  /* Within earshot means together, as the party bonus counts it (#5046):
+     the same interior, or outdoors within the Near you reach. The same cell
+     description alone was the whole worldspace outdoors. */
   function bardNear(actorId, savedOnly) {
-    var myCell = null;
-    try { myCell = String(mp.get(actorId, 'worldOrCellDesc') || ''); } catch (e) { return false; }
-    if (!myCell) { return false; }
+    var soc = g.__thornswoodSocial;
+    if (!soc || !soc.together) { return false; }
     var now = Date.now();
     for (var id in BARDS) {
       if (!Object.prototype.hasOwnProperty.call(BARDS, id)) { continue; }
       if (now - BARDS[id] > BARD_FOR) { if (!savedOnly) { delete BARDS[id]; } continue; }
       var who = Number(id);
       if (who === actorId) { continue; }
-      var theirs = null;
-      try { theirs = String(mp.get(who, 'worldOrCellDesc') || ''); } catch (e) { continue; }
-      if (theirs && theirs === myCell) { return true; }
+      if (soc.together(actorId, who)) { return true; }
     }
     return false;
   }

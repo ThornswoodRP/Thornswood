@@ -5,6 +5,7 @@
   "collection": "7essxf",
   "game": "skyrimspecialedition",
   "revision": 13,
+  "dev": { "collection": "tyfwjk", "offset": 12 },
   "mods": [
     { "modId": 198, "fileId": 489053, "name": "Caliente's Beautiful Bodies Enhancer CBBE - v2.0.3", "plugins": ["CBBE.esp", "RaceMenuMorphsCBBE.esp"] },
     { "modId": 201, "fileId": 767958, "name": "BodySlide and Outfit Studio - v5.8.2", "plugins": [] },

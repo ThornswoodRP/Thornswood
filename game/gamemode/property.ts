@@ -9207,6 +9207,12 @@
                   they held, ends
       owing       gold or goods owed into their pack and not yet in it
                   (#4258) go
+      the word    the holders' word (#2680, wordBook): a word to them goes,
+                  sent or not, as there is nobody to tell; a word whose pick
+                  or presented deed they were among keeps its count and
+                  times for its holder, with their profile out of it and its
+                  looks cleared, since a look is not kept by whose it was and
+                  theirs is their race and sex (#4786)
 
     THE BOOKS STAY BALANCED BECAUSE NO COIN MOVES. Not a hold's ledger
     (funds), not the box, not a pack. A release only changes who a coin is
@@ -9228,7 +9234,7 @@
     var mine = function (pid) { var n = Number(pid) || 0; return n > 0 && who.profile(n); };
     var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
     var c = { claims: 0, masterKeys: 0, offices: 0, posts: 0, handedBack: 0, owed: 0, lines: 0,
-              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0 };
+              box: 0, boxRecord: 0, guests: 0, owing: 0, arrears: 0, words: 0 };
     var reg = false, lawChanged = false, beds = false;
     var b;
     for (b in claims) {
@@ -9321,6 +9327,15 @@
     for (var op in owing) {
       if (has(owing, op) && mine(op)) { c.owing += owing[op].length; delete owing[op]; reg = true; }
     }
+    var words = [];
+    for (var wi = 0; wi < wordBook.list.length; wi++) {
+      var wd = wordBook.list[wi];
+      if (mine(wd.holder)) { c.words++; reg = true; continue; }
+      var others = wd.by.filter(function (p) { return !mine(p); });
+      if (others.length !== wd.by.length) { wd.by = others; wd.looks = []; c.words++; reg = true; }
+      words.push(wd);
+    }
+    wordBook.list = words;
     var saved = true;
     if (reg && !save()) { saved = false; }
     if (lawChanged && !saveLaw()) { saved = false; }
