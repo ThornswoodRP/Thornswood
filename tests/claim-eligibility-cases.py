@@ -1,5 +1,6 @@
 """Claim map expansion through the real compiler, with synthetic plugin bytes."""
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import struct
@@ -71,7 +72,9 @@ class Eligibility(unittest.TestCase):
 
     def test_standalone_exterior_gate_is_claimable(self):
         self.assertIn('103:Skyrim.esm', self.mapped())
-        self.assertEqual(self.tables['BUILDING_NAME'][self.mapped()['103:Skyrim.esm']], 'Gate at Room 100')
+        name = self.tables['BUILDING_NAME'][self.mapped()['103:Skyrim.esm']]
+        code = hashlib.sha256(b'103:skyrim.esm').hexdigest()[:10].upper()
+        self.assertEqual(name, 'Gate at Room 100, site ' + code)
 
     def test_exterior_pairs_share_one_site_each_without_claiming_public_cell(self):
         m = self.mapped()
@@ -79,10 +82,13 @@ class Eligibility(unittest.TestCase):
         self.assertEqual(m.get('102:Skyrim.esm'), m.get('202:Skyrim.esm'))
         self.assertIsNotNone(m.get('101:Skyrim.esm'))
         self.assertNotEqual(m.get('101:Skyrim.esm'), m.get('102:Skyrim.esm'))
+        names = self.tables['BUILDING_NAME']
+        self.assertNotEqual(names[m['101:Skyrim.esm']], names[m['102:Skyrim.esm']])
         self.assertNotIn('100:Skyrim.esm', (m.get('101:Skyrim.esm'), m.get('103:Skyrim.esm')))
 
     def test_new_interior_without_teleport_ingress_is_claimable(self):
         self.assertEqual(self.mapped().get('601:Skyrim.esm'), '600:Skyrim.esm')
+        self.assertRegex(self.tables['BUILDING_NAME']['600:Skyrim.esm'], r'^Room 600, site [0-9A-F]{10}$')
 
     def test_existing_home_identity_and_egress_are_preserved(self):
         m, out = self.mapped(), self.tables['WAY_OUT']
@@ -90,6 +96,7 @@ class Eligibility(unittest.TestCase):
         self.assertNotIn('104:Skyrim.esm', out)
         self.assertIn('301:Skyrim.esm', out)
         self.assertIn('302:Skyrim.esm', out)
+        self.assertEqual(self.tables['BUILDING_NAME']['300:Skyrim.esm'], 'Room 300')
 
     def test_new_ambiguous_routes_never_shut_someone_in(self):
         for fid in ('101', '102', '103', '201', '202', '601'):

@@ -5,6 +5,7 @@ share a stable placed-reference identity; a standalone gate owns only itself.
 Until the catalogue proves an inside/outside boundary these new leaves remain
 passable, using the existing WAY_OUT contract rather than inventing a side.
 """
+import hashlib
 
 # Compatibility with the already released runtime town-gate overlay. These are
 # property identities and proved inside leaves, not default-lock exclusions.
@@ -15,6 +16,13 @@ TOWNS = {
                                              '42285:Skyrim.esm', '42286:Skyrim.esm'),
                          ('42283:Skyrim.esm', '42285:Skyrim.esm')),
 }
+
+
+def site_name(name, site):
+    # A key or mold uses the name as its identity. The code must not change
+    # if another gate with the same name is added to the collection.
+    code = hashlib.sha256(site.casefold().encode('utf-8')).hexdigest()[:10].upper()
+    return '%s, site %s' % (name, code)
 
 
 def expand(cells, placed, buildings, by_door, names, way_out, policy, markers=()):
@@ -31,6 +39,7 @@ def expand(cells, placed, buildings, by_door, names, way_out, policy, markers=()
     by_door = {ref: site for ref, site in by_door.items() if ref not in ignored}
     names, way_out = dict(names), {ref: 1 for ref in way_out if ref not in ignored}
     sites = {}
+    new_names = set()
 
     for site, (label, refs, outs) in TOWNS.items():
         actual = [ref for ref in refs if ref in placed and ref not in ignored]
@@ -65,12 +74,17 @@ def expand(cells, placed, buildings, by_door, names, way_out, policy, markers=()
             raise ValueError('new claim site collides with an established gateway')
         by_door[ref] = site
         added[ref] = kind
-        if kind == 'interior':
-            c = cells[site]
-            names.setdefault(site, c.get('name') or c.get('edid') or 'A room')
-        else:
-            labels = sorted({c['name'] for c in (cell, far_cell) if c and c.get('name')})
-            names.setdefault(site, 'Gate at ' + ' / '.join(labels) if labels else 'A gate')
+        if site not in names:
+            if kind == 'interior':
+                c = cells[site]
+                label = c.get('name') or c.get('edid') or 'A room'
+            else:
+                labels = sorted({c['name'] for c in (cell, far_cell) if c and c.get('name')})
+                label = 'Gate at ' + ' / '.join(labels) if labels else 'A gate'
+            names[site] = site_name(label, site)
+            if names[site] in new_names:
+                raise ValueError('new claim site label is not unique: %s' % names[site])
+            new_names.add(names[site])
         sites.setdefault(site, {'kind': kind, 'name': names[site], 'passageOnly': True})
         # All existing meaningful ingress locks retain their old WAY_OUT value.
         # Newly admitted leaves must not acquire a trapping lock by accident.

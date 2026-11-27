@@ -35,6 +35,7 @@ const REPO_DIR = require('path').join(__dirname, '..');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { Readable } = require('node:stream');
 const vm = require('vm');
 const siteFiles = require('./site-files');
 const CR = String.fromCharCode(13);
@@ -348,10 +349,11 @@ function siteWith(opts) {
     const post = async function (route, headers, text) {
       let sent = null;
       const asked = [];
-      const f = new Function('route', 'req', 'cfg', 'sameSecret', 'sendJson', 'body', 'changeOffice', 'res',
+      const f = new Function('route', 'req', 'cfg', 'sameSecret', 'sendJson', 'bodyObject', 'changeOffice', 'res',
         'return (async function () {\n' + office + '\n})();');
-      await f(route, { method: 'POST', headers: headers }, { botKey: 'k' }, function (a, b) { return a === b; },
-        function (r, c, b) { sent = { code: c, body: b }; }, async function () { return text; },
+      const req = Object.assign(Readable.from([Buffer.from(text)]), { method: 'POST', headers: headers });
+      await f(route, req, { botKey: 'k' }, function (a, b) { return a === b; },
+        function (r, c, b) { sent = { code: c, body: b }; }, require('../site/lib/http').bodyObject,
         async function (o, server) { asked.push([o, server]); return { ok: true, said: 'done' }; }, {});
       return { sent: sent, asked: asked };
     };
