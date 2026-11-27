@@ -377,7 +377,7 @@
     .\scripts\dev\Build-RecipeTable.ps1
     .\scripts\dev\Build-RecipeTable.ps1 -Data 'C:\Thornswood\Game\Data'
     .\scripts\dev\Build-RecipeTable.ps1 -NoInstall
-    .\scripts\dev\Build-RecipeTable.ps1 -JsOut "$env:TEMP\recipes.js"
+    .\scripts\dev\Build-RecipeTable.ps1 -JsOut .\temp\recipes.js
 
   Exit code 1 if a recipe's output does not resolve to a real record, if an
   owner is not one of the professions in classes.md, if a half is not one of

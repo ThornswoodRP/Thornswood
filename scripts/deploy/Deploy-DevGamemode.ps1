@@ -435,12 +435,19 @@ if ($At) {
 # server build the deploy agent put on dev, else this checkout's, which the
 # server build check below holds the box's to.
 . (Join-Path $Here 'ServerOrder.ps1')
+# This run's own scratch (#4264), in the repository's temp folder under a
+# name no other run shares, so a deploy from another checkout cannot write
+# over a file of this one's before it is sent. It goes when the run ends,
+# however it ends: an exit inside the try still runs the finally.
+$runScratch = & (Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'release') 'Get-ScratchDir.ps1') ('deploy-dev-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+$null = New-Item -ItemType Directory -Force -Path $runScratch
+try {
 $devLightRecord = Join-Path $Here '..\..\records\server-build.json'
 if ($At -and $headAt -ne $At) {
   $atRecord = @(& git -C $atRepo show "${At}:records/server-build.json" 2>$null) -join "`n"
   if ($LASTEXITCODE -ne 0 -or -not $atRecord.Trim()) { throw "records/server-build.json could not be read at $At, so whether the engine dev runs loads light plugins is not known and the start point cannot be placed. Nothing was sent." }
   $global:LASTEXITCODE = 0
-  $devLightRecord = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-server-build-' + $At + '.json')
+  $devLightRecord = Join-Path $runScratch ('thornswood-server-build-' + $At + '.json')
   [IO.File]::WriteAllText($devLightRecord, $atRecord, (New-Object Text.UTF8Encoding $false))
 }
 $devRecordLight = [bool](Test-ThornswoodEngineLoadsLight $devLightRecord)
@@ -603,7 +610,7 @@ $rootWin = $Root.Replace('/', '\')
 # BuildStamp.ps1. -RepoDir is this script's own repo, which is the branch being
 # tried, and the dev feed is where the four part number lives.
 . (Join-Path $Here '..\release\BuildStamp.ps1')
-$stampFile = Join-Path ([IO.Path]::GetTempPath()) 'thornswood-dev-build.json'
+$stampFile = Join-Path $runScratch 'thornswood-dev-build.json'
 # The stamp names the gamemode beside it, which -OrderOnly leaves as it is.
 if (-not $OrderOnly) {
 $buildStamp = Save-ThornswoodBuildStamp -Gamemode $Gamemode -Channel dev -RepoDir (Split-Path -Parent (Split-Path -Parent $Here)) -Path $stampFile -Artifact $artifact
@@ -1642,3 +1649,4 @@ elseif ($deployed -and -not $PutBack) {
     exit 1
   }
 }
+} finally { Remove-Item -LiteralPath $runScratch -Recurse -Force -ErrorAction SilentlyContinue }
