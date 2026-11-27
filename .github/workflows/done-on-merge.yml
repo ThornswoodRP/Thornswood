@@ -45,6 +45,18 @@
 # issue or a pull request number is said and passed over. It checks out
 # nothing and runs no action.
 #
+# A KNOWN ISSUE IN THE PULL REQUEST (#7080). A line "Known issue for #N:
+# <title>" starts a block of the same grammar, which also ends at the next
+# block of either kind. For each one naming an open issue, the merge writes
+# "Known issue: <title>" and the lines under it on the issue as they are, with
+# no fence and no footer, so the bot posts them in #known-issues in place of
+# the words before. "Known issue for #N: unchanged" with nothing under it
+# writes nothing. test-tasks.yml asks every pull request that names an open
+# finding with no test task for one (bot/pr_tasks.py, known_problems), so what
+# a change does to a problem testers still meet is said with the change. On
+# 26 Nov 2026 five of the sixteen open findings had no post at all and three
+# said what was true two weeks before.
+#
 # THE TOKEN. The run's own, for the reads and the comment. It has no secret
 # and no environment since #5185.
 #
@@ -138,15 +150,36 @@ jobs:
             $p = $prs[$num]
             $lines = @((([string]$p.body) -replace "`r`n", "`n") -split "`n")
             $tasks = New-Object System.Collections.Generic.List[object]
+            $known = New-Object System.Collections.Generic.List[object]
             $cur = $null
             foreach ($l in $lines) {
               $m = [regex]::Match($l, '^\s*Test task for #(\d+)\s*:\s*(.+?)\s*$')
-              if ($m.Success) {
-                $cur = [ordered]@{ issue = [int]$m.Groups[1].Value; title = $m.Groups[2].Value; rest = New-Object System.Collections.Generic.List[string] }
-                $tasks.Add($cur); continue
+              $k = [regex]::Match($l, '^\s*Known issue for #(\d+)\s*:\s*(.+?)\s*$')
+              if ($m.Success -or $k.Success) {
+                $g = if ($m.Success) { $m } else { $k }
+                $cur = [ordered]@{ issue = [int]$g.Groups[1].Value; title = $g.Groups[2].Value; rest = New-Object System.Collections.Generic.List[string] }
+                if ($m.Success) { $tasks.Add($cur) } else { $known.Add($cur) }
+                continue
               }
               if ($cur -and ($l -match '^\s*#{1,6}\s' -or $l -match '^\s*---\s*$' -or $l -match '^\s*[\uD800-\uDBFF]')) { $cur = $null; continue }
               if ($cur) { $cur.rest.Add($l) }
+            }
+            # Each known issue, as the bot reads it (header, A KNOWN ISSUE).
+            foreach ($t in $known) {
+              $text = (($t.rest -join "`n").Trim())
+              if ($t.title -match '^\s*unchanged\b' -and -not $text) { Write-Host ("#{0} leaves the known issue of #{1} as it is" -f $num, $t.issue); continue }
+              $i = Invoke-RestMethod -Method Get -Uri ("$api/issues/" + $t.issue) -Headers $h
+              if ((Has $i 'pull_request') -or [string]$i.state -ne 'open') { Write-Host ("#{0} names #{1} for a known issue, which is no open issue; passed over" -f $num, $t.issue); continue }
+              $kbody = 'Known issue: ' + $t.title + "`n" + $text
+              $said = $false
+              for ($pg = 1; -not $said; $pg++) {
+                $page = @(Invoke-RestMethod -Method Get -Uri ("$api/issues/" + $t.issue + "/comments?per_page=100&page=$pg") -Headers $h | ForEach-Object { $_ })
+                foreach ($c in $page) { if ((Has $c 'user') -and [string]$c.user.login -eq 'github-actions[bot]' -and ([string]$c.body -replace "`r`n", "`n") -eq $kbody) { $said = $true } }
+                if ($page.Count -lt 100) { break }
+              }
+              if ($said) { Write-Host ("#{0}: the known issue of #{1} already says this; passed over" -f $num, $t.issue); continue }
+              Invoke-RestMethod -Method Post -Uri ("$api/issues/" + $t.issue + '/comments') -Headers $h -Body (@{ body = $kbody } | ConvertTo-Json -Compress) -ContentType 'application/json' | Out-Null
+              Write-Host ("#{0} updates the known issue of #{1}" -f $num, $t.issue)
             }
             if ($tasks.Count -eq 0) { Write-Host ("#{0}: no test task in the body, nothing to move" -f $num); continue }
             foreach ($t in $tasks) {
