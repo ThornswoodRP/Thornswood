@@ -1,4 +1,4 @@
-"""
+r"""
 The Thornswood bot. This one stays running, unlike Apply-Discord.py which sets
 the server up once and exits.
 
