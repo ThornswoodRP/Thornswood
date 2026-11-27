@@ -110,12 +110,19 @@ namespace Thornswood
         readonly InstallChoice choice;
         readonly Action<string> say;
         readonly Action<double> progress;
+        readonly Func<string, bool> askYesNo;
 
-        public InstallSteps(InstallChoice choice, Action<string> say, Action<double> progress)
+        /// <summary>
+        /// <paramref name="askYesNo"/> puts a question in a Yes or No box and
+        /// says whether the answer was Yes. The steps ask it before they move
+        /// anything of the person's that the setup did not make (#4705).
+        /// </summary>
+        public InstallSteps(InstallChoice choice, Action<string> say, Action<double> progress, Func<string, bool> askYesNo)
         {
             this.choice = choice;
             this.say = say;
             this.progress = progress;
+            this.askYesNo = askYesNo;
         }
 
         /// <summary>How many checks at the end failed, and how many come from the collection next.</summary>
@@ -148,6 +155,21 @@ namespace Thornswood
         }
 
         static InstallStop Die(string m) { return new InstallStop(m); }
+
+        /// <summary>
+        /// The question before an old Game folder is moved: where it is,
+        /// where it goes, why, and what each answer does.
+        /// </summary>
+        public static string MoveOldGameQuestion(string from, string to)
+        {
+            return "There is an old Game folder from a previous install:\n" + from + "\n\n" +
+                   "The launcher would read it instead of your Steam copy of Skyrim, so it has to move " +
+                   "out of the way before Thornswood can be installed.\n\n" +
+                   "Move it now?\n\n" +
+                   "Yes moves it, with everything in it, to:\n" + to + "\n" +
+                   "Nothing in it is deleted, and you can delete it yourself once Thornswood starts properly.\n" +
+                   "No stops the install and leaves the folder where it is.";
+        }
 
         /// <summary>
         /// The size of SkyrimSE.exe at 1.6.1170, the build the server runs,
@@ -268,6 +290,11 @@ namespace Thornswood
             // Not a folder the launcher made. That one has
             // Profile\OwnGame\files.txt and madeOwn above leaves it where it
             // is (#1233).
+            //
+            // And never without asking (#4705). It is the person's folder, not
+            // the setup's, so the move is named in a Yes or No box first: No
+            // stops the install with the folder where it is, and Yes moves it
+            // whole, nothing in it changed.
             if (!madeOwn && Directory.Exists(ownGame))
             {
                 string parked = Path.Combine(Root, "Game-old-" + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture));
@@ -275,6 +302,12 @@ namespace Thornswood
                 Say("  There is an old Game folder here from a previous install.");
                 Say("  The launcher reads that one instead of your Steam copy, so it has to");
                 Say("  move out of the way. Nothing is deleted.");
+                if (!askYesNo(MoveOldGameQuestion(ownGame, parked)))
+                {
+                    Say("  Left where it is.");
+                    throw Die("The old Game folder was left where it is, so nothing was installed. " +
+                              "Move or delete " + ownGame + " yourself, or run this again and answer Yes.");
+                }
                 try
                 {
                     Directory.Move(ownGame, parked);

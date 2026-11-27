@@ -860,7 +860,7 @@ Root\Game is made with hard links that cannot cross a drive (InstallPlace.cs);
 Thornswood's own folder; and the boxes that lock Install, with the record
 Acceptance reads (InstallAgreements.cs). InstallSteps runs the steps on a
 thread of its own, every line in the window and in `Profile\setup-log.txt`:
-no Skyrim left running (InstallSkyrim.cs, which asks before it ends one),
+no Skyrim left running (InstallSkyrim.cs, which asks before it sends the game anything, #4705),
 then Thornswood's game files from the package into `Profile\Payload` or the
 Steam copy (#1226), Profile with the licence texts beside `SOURCE CODE.txt`,
 `config.json`, a shortcut in Root (InstallShortcut.cs, through the shell's
