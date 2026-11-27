@@ -13,7 +13,7 @@
       right things" and its two lines twice: at 9:45 AM by
       Deploy-DevGamemode -Note, and at 9:50 AM by the dev Ship that carried
       the same change to the launcher, with the same note. The run notes in
-      the ops repo's ops\claude-queue had asked for exactly that (one $note for both).
+      the ops repo had asked for exactly that (one $note for both).
     - The dev feed's 7:08 AM "A new launcher" said again two lines of the
       6:32 AM "Clearer launcher messages and a visible axe" (the Ready card,
       the Open Steam button), because the launcher those lines describe went
