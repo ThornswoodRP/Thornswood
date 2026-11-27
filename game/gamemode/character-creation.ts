@@ -1581,6 +1581,14 @@ function chargenTick() {
         delete state.faceOpenAt;
         delete state.faceSeenAt;
         delete state.faceHeld;
+        // So did its close (#6724). A session ended with the race menu up
+        // (refused at the door, Change character, the idle check) closes it
+        // on the way to the main menu, and the plugin says /face done. Kept,
+        // that close was this session's too: raceMenuIsUp said no menu while
+        // the new one was open, the race menu was asked for again over it
+        // every NUDGE_MS, and "closed but no appearance is stored" was logged
+        // every tick until the face came (24 Nov 2026, main, about 40 s).
+        delete state.faceDone;
         // Long enough for the arrival to settle before a baseline is taken,
         // the same grace a fresh arrival gets.
         state.askAt = now + 4000;

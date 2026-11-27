@@ -383,14 +383,15 @@
   function isUp(b) {
     if (!pending) { return false; }
     if (pending.hold !== b.hold || draft.title !== pending.title || draft.body !== pending.body ||
-        draft.kind !== pending.kind || (pending.kind === 'job' && Number(draft.reward) !== pending.reward)) return false;
+        draft.kind !== pending.kind || (pending.kind !== 'notice' && Number(draft.reward) !== pending.reward)) return false;
     var wall = (b && b.wall) || [];
     for (var i = 0; i < wall.length; i++) {
       var r = wall[i];
       // Match the complete published text, not merely a newer same-title row.
       // An older accepted post must not erase what is being written now.
       if (r.mine && !r.letter && !r.haul && r.title === pending.title && r.text === pending.body &&
-          !!r.job === (pending.kind === 'job') && (!r.job || Number(r.reward) === pending.reward) &&
+          !!r.job === (pending.kind !== 'notice') && !!r.wanted === (pending.kind === 'wanted') &&
+          (!r.job || Number(r.reward) === pending.reward) &&
           Number(r.n) > pending.top) { return true; }
     }
     return false;
@@ -440,12 +441,19 @@
       /*
         Take down stays on the row, for the poster and for a guard of this
         hold, who takes down any post on its board (#502). Pay the reward is
-        the poster's, once somebody has taken the job (#2554).
+        the poster's, once somebody has taken the job (#2554). A wanted
+        poster (#4565) is the law's: a guard of this hold confirms its
+        bounty, once somebody has taken it and that guard is not who took
+        it, and only a guard or the Jarl takes it down.
       */
-      if (plain(row) && row.job && row.mine && row.taken) {
+      if (plain(row) && row.job && !row.wanted && row.mine && row.taken) {
         tools += '<button class="go" data-do="paid" data-n="' + esc(row.n) + '">Pay the reward</button>';
       }
-      if ((row.mine && !(row.job && row.taken)) || (row.haul && b.steward) || b.guard) {
+      if (plain(row) && row.wanted && row.taken && !row.held && b.bountyGuard) {
+        tools += '<button class="go" data-do="paid" data-n="' + esc(row.n) + '">Confirm the bounty</button>';
+      }
+      if (row.wanted ? b.guard
+          : ((row.mine && !(row.job && row.taken)) || (row.haul && b.steward) || b.guard)) {
         tools += '<button data-do="unpin" data-n="' + esc(row.n) + '">Take down</button>';
       }
       if (row.held) {
@@ -465,7 +473,8 @@
       }
       var key = 'w' + row.n;
       var isOpen = !!opened[key];
-      var meta = (row.job ? 'Job, ' + esc(String(Number(row.reward) || 0)) + ' gold reward' : 'Notice') +
+      var meta = (row.wanted ? 'Wanted, ' + esc(String(Number(row.reward) || 0)) + ' gold bounty'
+        : row.job ? 'Job, ' + esc(String(Number(row.reward) || 0)) + ' gold reward' : 'Notice') +
         ', ' + esc(row.name) + (row.at ? ', ' + esc(when(row.at)) : '') + who;
       out += '<div class="row"><span class="nm open" data-do="open" data-key="' + key + '"><b>' + esc(row.n) +
         '.</b> ' + esc(row.title) + '<br><span class="meta">' + meta + '</span></span><span class="tools">' +
@@ -495,7 +504,7 @@
     if (!jobs.length) { out += '<div class="none">You have taken none.</div>'; }
     for (var j = 0; j < jobs.length; j++) {
       var mine = jobs[j];
-      var what = mine.parcel ? 'Parcel' : mine.letter ? 'Letter' : (mine.haul ? 'Haul' : 'Job');
+      var what = mine.parcel ? 'Parcel' : mine.letter ? 'Letter' : (mine.haul ? 'Haul' : (mine.wanted ? 'Wanted' : 'Job'));
       var jkey = 'j' + mine.hold + ':' + mine.n;
       var jopen = !!opened[jkey];
       var line = plain(mine)
@@ -639,6 +648,11 @@
 
   /* What a post costs, said under the form for the kind picked. */
   function costLine() {
+    if (draft.kind === 'wanted') {
+      return 'A wanted poster is 30 gold for the board, and the bounty. The bounty is held until a guard of this ' +
+        'hold confirms it was earned, and then it goes to whoever took it. Only a guard or the Jarl takes a ' +
+        'wanted poster down, and then the bounty comes back to you. The 30 stays with the hold.';
+    }
     return draft.kind === 'job'
       ? 'A job is 30 gold for the board, and the reward. The reward is held until you say the job is done, ' +
         'with Pay the reward on it, and then it goes to whoever took it. Taken down before anybody takes ' +
@@ -657,7 +671,8 @@
     body.innerHTML =
       '<h3>Make a post</h3>' +
       '<div class="line"><button data-do="kind" data-kind="notice" id="' + ID + '-k-notice">Notice</button>' +
-      '<button data-do="kind" data-kind="job" id="' + ID + '-k-job">Job</button></div>' +
+      '<button data-do="kind" data-kind="job" id="' + ID + '-k-job">Job</button>' +
+      '<button data-do="kind" data-kind="wanted" id="' + ID + '-k-wanted">Wanted</button></div>' +
       '<div class="line"><input id="' + ID + '-title" aria-label="Post title" maxlength="' + TITLE_CHARS + '" placeholder="the title"></div>' +
       '<div class="line"><textarea id="' + ID + '-text" aria-label="Post text" maxlength="' + BODY_CHARS +
       '" placeholder="what it says"></textarea></div>' +
@@ -686,12 +701,15 @@
 
   function showKind() {
     var isJob = draft.kind === 'job';
+    var isWanted = draft.kind === 'wanted';
     var n = document.getElementById(ID + '-k-notice');
     var j = document.getElementById(ID + '-k-job');
-    if (n) { n.className = isJob ? '' : 'go'; }
+    var w = document.getElementById(ID + '-k-wanted');
+    if (n) { n.className = (isJob || isWanted) ? '' : 'go'; }
     if (j) { j.className = isJob ? 'go' : ''; }
+    if (w) { w.className = isWanted ? 'go' : ''; }
     var line = document.getElementById(ID + '-rewardline');
-    if (line) { line.style.display = isJob ? '' : 'none'; }
+    if (line) { line.style.display = (isJob || isWanted) ? '' : 'none'; }
     var cost = document.getElementById(ID + '-cost');
     if (cost) { cost.textContent = costLine(); }
     var told = document.getElementById(ID + '-said');
@@ -718,10 +736,11 @@
     if (!text.trim()) { say('Write what it says.'); return; }
     if (text.length > BODY_CHARS) { say('What it says is up to ' + BODY_CHARS + ' characters.'); return; }
     var rewardValue = 0;
-    if (draft.kind === 'job') {
+    if (draft.kind === 'job' || draft.kind === 'wanted') {
       var reward = draft.reward.trim();
       if (!/^\d+$/.test(reward) || !(Number(reward) > 0)) {
-        say('A job\'s reward is a whole number of gold, above nothing.');
+        say(draft.kind === 'wanted' ? 'A bounty is a whole number of gold, above nothing.'
+                                    : 'A job\'s reward is a whole number of gold, above nothing.');
         return;
       }
       rewardValue = Number(reward);
@@ -739,7 +758,8 @@
     if (verb === 'close') { close(); return; }
     if (verb === 'back') { composing = false; pending = null; said = ''; draw(); return; }
     if (verb === 'kind') {
-      draft.kind = this.getAttribute('data-kind') === 'job' ? 'job' : 'notice';
+      var picked = this.getAttribute('data-kind');
+      draft.kind = picked === 'job' || picked === 'wanted' ? picked : 'notice';
       showKind();
       return;
     }

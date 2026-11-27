@@ -1,5 +1,5 @@
 {
-  "about": "Test tasks one character can check by itself on the dev server (#5197). The steps up to the world are dev-release.json's; after them each step carries its test task's issue, and a failing step fails only its own task. The tidy steps at the end throw away the scratch journals the journal tasks made. Run it with Run-RealClient.ps1 -Steps tests\\real-client\\test-tasks.json.",
+  "about": "Test tasks one character can check by itself on the dev server (#5197). The steps up to the world are dev-release.json's; after them each step carries its test task's issue, and a failing step fails only its own task. The mining task (#4549) goes to the Iron-Breaker Mine and leaves the character there. The tidy steps at the end throw away the scratch journals the journal tasks made. Run it with Run-RealClient.ps1 -Steps tests\\real-client\\test-tasks.json.",
   "steps": [
     {
       "do": "page",
@@ -881,6 +881,280 @@
       "name": "journal-page-full",
       "task": 2563,
       "why": "the full box and the foot"
+    },
+    {
+      "do": "key",
+      "code": 1,
+      "ifMenu": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "task": 4549,
+      "why": "Escape, only if a step before this task left one of the game's menus open"
+    },
+    {
+      "do": "wait",
+      "for": "shut",
+      "menus": [
+        "InventoryMenu",
+        "TweenMenu",
+        "FavoritesMenu",
+        "Journal Menu",
+        "Sleep/Wait Menu",
+        "MessageBoxMenu",
+        "MapMenu",
+        "StatsMenu",
+        "MagicMenu",
+        "ContainerMenu",
+        "Book Menu",
+        "Dialogue Menu",
+        "Console"
+      ],
+      "timeout": 10000,
+      "task": 4549
+    },
+    {
+      "do": "page",
+      "js": "(function(){var J=window.thornswoodJournal;if(J&&J.isOpen()){J.close();}return J&&J.isOpen()?'':'shut';})()",
+      "timeout": 5000,
+      "task": 4549,
+      "why": "and our journal shut, if a step before left it open"
+    },
+    {
+      "do": "page",
+      "task": 4549,
+      "timeout": 30000,
+      "why": "a Miner at Novice (the seam asks for the class), then to the Iron-Breaker Mine in Dawnstar, a working town mine with no one hostile; each line said once",
+      "js": "(function(){if(window.__tsMineTp){return 'sent';}var n=window.thornswoodNet;if(!n||!n.say){return '';}n.say('/setclass miner',{quiet:true});n.say('/tp Iron-Breaker Mine',{quiet:true});window.__tsMineTp=1;return 'sent';})()"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 30000,
+      "task": 4549,
+      "why": "the trip"
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "task": 4549
+    },
+    {
+      "do": "wait",
+      "for": "cell",
+      "name": "Iron-Breaker",
+      "in": false,
+      "timeout": 3000,
+      "skip": 4,
+      "task": 4549,
+      "why": "/tp prefers a building's street door; if it put the character inside, the door's four steps are skipped"
+    },
+    {
+      "do": "face",
+      "what": "door",
+      "task": 4549,
+      "why": "the mine's door, the nearest one to where /tp put the character"
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E, through the door"
+    },
+    {
+      "do": "wait",
+      "for": "menu",
+      "menu": "Loading Menu",
+      "open": true,
+      "timeout": 30000,
+      "task": 4549
+    },
+    {
+      "do": "wait",
+      "for": "world",
+      "timeout": 120000,
+      "task": 4549
+    },
+    {
+      "do": "wait",
+      "for": "cell",
+      "name": "Iron-Breaker",
+      "timeout": 30000,
+      "task": 4549,
+      "why": "inside the mine"
+    },
+    {
+      "do": "equip",
+      "form": "0E3C16",
+      "give": "/give pickaxe",
+      "draw": true,
+      "timeout": 30000,
+      "task": 4549,
+      "why": "the pickaxe from the pack, given once if there is none, equipped and drawn: the 23 Nov failure began with it drawn"
+    },
+    {
+      "do": "face",
+      "what": "vein",
+      "task": 4549,
+      "why": "the nearest ore seam, the crosshair on it"
+    },
+    {
+      "do": "shot",
+      "name": "mine-seam-drawn",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E on the seam with the pickaxe drawn: the spell starts"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 6000,
+      "task": 4549,
+      "why": "a few swings"
+    },
+    {
+      "do": "shot",
+      "name": "mining-drawn",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E again puts the pick down, as the gamemode has it"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 2000,
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 57,
+      "task": 4549,
+      "why": "Space, a jump"
+    },
+    {
+      "do": "watch",
+      "what": "jump",
+      "ms": 1500,
+      "label": "after mining from drawn",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 56,
+      "task": 4549,
+      "hold": 2000,
+      "why": "Alt held with W for two seconds, a sprint",
+      "with": [
+        17
+      ]
+    },
+    {
+      "do": "watch",
+      "what": "sprint",
+      "ms": 300,
+      "label": "after mining from drawn",
+      "task": 4549
+    },
+    {
+      "do": "shot",
+      "name": "after-mining-drawn",
+      "task": 4549
+    },
+    {
+      "do": "sheathe",
+      "timeout": 10000,
+      "task": 4549,
+      "why": "the pickaxe put away, for the comparison"
+    },
+    {
+      "do": "face",
+      "what": "vein",
+      "task": 4549,
+      "why": "the seam again"
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E on the seam with the pickaxe sheathed"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 6000,
+      "task": 4549
+    },
+    {
+      "do": "shot",
+      "name": "mining-sheathed",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 18,
+      "task": 4549,
+      "why": "E puts the pick down"
+    },
+    {
+      "do": "wait",
+      "for": "time",
+      "ms": 2000,
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 57,
+      "task": 4549
+    },
+    {
+      "do": "watch",
+      "what": "jump",
+      "ms": 1500,
+      "label": "after mining from sheathed",
+      "task": 4549
+    },
+    {
+      "do": "key",
+      "code": 56,
+      "task": 4549,
+      "hold": 2000,
+      "with": [
+        17
+      ]
+    },
+    {
+      "do": "watch",
+      "what": "sprint",
+      "ms": 300,
+      "label": "after mining from sheathed",
+      "task": 4549
+    },
+    {
+      "do": "shot",
+      "name": "after-mining-sheathed",
+      "task": 4549
     },
     {
       "do": "page",

@@ -5324,6 +5324,14 @@ function chargenTick() {
         delete state.faceOpenAt;
         delete state.faceSeenAt;
         delete state.faceHeld;
+        // So did its close (#6724). A session ended with the race menu up
+        // (refused at the door, Change character, the idle check) closes it
+        // on the way to the main menu, and the plugin says /face done. Kept,
+        // that close was this session's too: raceMenuIsUp said no menu while
+        // the new one was open, the race menu was asked for again over it
+        // every NUDGE_MS, and "closed but no appearance is stored" was logged
+        // every tick until the face came (24 Nov 2026, main, about 40 s).
+        delete state.faceDone;
         // Long enough for the arrival to settle before a baseline is taken,
         // the same grace a fresh arrival gets.
         state.askAt = now + 4000;
@@ -9098,24 +9106,27 @@ const WAY_OUT = table('WAY_OUT');
   Whiterun gate and saying /claim then fell through to farming, which answered
   "Only a farmer can bring a crop in."
 
-  These four leaves are the town gates (Thornswood-Last.esp loads the outer ones
+  These leaves are the town gates (Thornswood-Last.esp loads the outer ones
   unlocked since #2484). The inside
   Whiterun leaf is a way out so a lock never shuts people inside the city.
-  Riften's two listed leaves are both the locked outer ones from the same
-  measurement that put them in GATES in scripts/mods/Build-LastPlugin.py.
+  Riften's two outer leaves are from the measurement that put them in GATES
+  in scripts/mods/Build-LastPlugin.py. Their reciprocal inside leaves belong
+  to that same property and remain ways out, like Whiterun's (#7071).
 */
 (function addTownGateProperties() {
   var doors = {
     '1b1f1:Skyrim.esm': 'gate:whiterun-main',
     '1b1f3:Skyrim.esm': 'gate:whiterun-main',
+    '42283:Skyrim.esm': 'gate:riften-main',
     '42284:Skyrim.esm': 'gate:riften-main',
+    '42285:Skyrim.esm': 'gate:riften-main',
     '42286:Skyrim.esm': 'gate:riften-main'
   };
   var names = {
     'gate:whiterun-main': 'Whiterun Main Gate',
     'gate:riften-main': 'Riften Main Gate'
   };
-  var outs = { '1b1f3:Skyrim.esm': 1 };
+  var outs = { '1b1f3:Skyrim.esm': 1, '42283:Skyrim.esm': 1, '42285:Skyrim.esm': 1 };
   for (var d in doors) {
     if (Object.prototype.hasOwnProperty.call(doors, d)) { BUILDING_BY_DOOR[d] = doors[d]; }
   }
@@ -27691,7 +27702,9 @@ module.exports = {
         mine: Number(n.by) === Number(profileId),
         held: !!(n.job && Number(n.taken) === Number(profileId)),
         haul: !!n.haul,
-        parcel: !!n.parcel
+        parcel: !!n.parcel,
+        // A wanted poster (#4565): a job whose reward a guard of the hold pays out.
+        wanted: !!(n.wanted && n.job && plain)
       });
     }
     return { rows: rows, older: up - rows.length };
@@ -27764,6 +27777,9 @@ module.exports = {
     // A guard of this board's hold takes down any post on it (#502), and so
     // does its Jarl (#2551, Patrick, 15 Oct: that hold's Guard or Jarl).
     var guard = here && (isGuard(profileId, hold) || isJarlOf(profileId, hold));
+    // A guard of this board's hold, and only a guard, confirms a wanted
+    // poster's bounty was earned (#4565, decided 22 Oct).
+    var bountyGuard = here && isGuard(profileId, hold);
     var dests = [];
     var arrivals = [];
     if (here) {
@@ -27823,6 +27839,7 @@ module.exports = {
       submit: submit,
       steward: steward,
       guard: guard,
+      bountyGuard: bountyGuard,
       dests: dests,
       arrivals: arrivals,
       pack: pack,
@@ -28764,15 +28781,16 @@ module.exports = {
   }
 
   function postExact(kind, reward, title, body, expectedHold, actorId, profileId, toProfile) {
-    if ((kind !== 'notice' && kind !== 'job') || !Number.isSafeInteger(reward) || reward < 0 ||
+    if ((kind !== 'notice' && kind !== 'job' && kind !== 'wanted') || !Number.isSafeInteger(reward) || reward < 0 ||
         (kind === 'notice' && reward !== 0) || typeof title !== 'string' || typeof body !== 'string') {
       toProfile(profileId, 'That post request is invalid. Nothing was posted or taken.');
       return true;
     }
     // Same authoritative location, size, fee, reward and pack-first landing.
-    // Only the legacy command boundary unescapes or normalizes text.
-    return post([kind === 'job' ? '/job' : '/notice', String(reward)], actorId, profileId, toProfile,
-                kind === 'job', {title:title,body:body,hold:expectedHold});
+    // Only the legacy command boundary unescapes or normalizes text. A wanted
+    // poster (#4565) is a job: the same fee and a reward held the same way.
+    return post([kind === 'notice' ? '/notice' : '/job', String(reward)], actorId, profileId, toProfile,
+                kind !== 'notice', {title:title,body:body,hold:expectedHold,wanted:kind === 'wanted'});
   }
 
   function post(parts, actorId, profileId, toProfile, isJob, exactWords) {
@@ -28804,13 +28822,15 @@ module.exports = {
       var first = String((parts && parts[1]) || '').trim();
       reward = /^\d+$/.test(first) ? Number(first) : 0;
       if (!(reward > 0) || !Number.isSafeInteger(reward)) {
-        toProfile(profileId, 'A job\'s reward is a whole number of gold, above nothing. Nothing was taken.');
+        toProfile(profileId, (exactWords && exactWords.wanted ? 'A bounty' : 'A job\'s reward') +
+                  ' is a whole number of gold, above nothing. Nothing was taken.');
         return true;
       }
       from = 2;
     }
     var words = exactWords || postWords((parts && parts.length > from) ? parts.slice(from).join(' ') : '');
-    var what = isJob ? 'the job' : 'the notice';
+    var wanted = !!(isJob && exactWords && exactWords.wanted);
+    var what = wanted ? 'the wanted poster' : (isJob ? 'the job' : 'the notice');
     if (!words.title.trim()) {
       toProfile(profileId, 'Give ' + what + ' a title. Nothing was taken.');
       return true;
@@ -28821,8 +28841,9 @@ module.exports = {
       return true;
     }
     if (!words.body.trim()) {
-      toProfile(profileId, isJob ? 'Say what the job is. Nothing was taken.'
-                                 : 'Say what the notice says. Nothing was taken.');
+      toProfile(profileId, wanted ? 'Say who is wanted, and for what. Nothing was taken.'
+                                  : (isJob ? 'Say what the job is. Nothing was taken.'
+                                           : 'Say what the notice says. Nothing was taken.'));
       return true;
     }
     if (words.body.length > POST_BODY_CHARS) {
@@ -28850,11 +28871,20 @@ module.exports = {
     // The reward is held on the ledger in pay, the way a letter's 15 and a
     // haul's pay are (noticeHolds), until the poster says it is done.
     if (isJob) { made.pay = reward; }
+    /*
+      A WANTED POSTER (#4565). Decided 22 Oct: written by a person, nothing
+      in the game detects a crime and Skyrim's own bounty stays out of it.
+      Its reward is put up front and held like any job's, and paid out only
+      when a guard of this hold confirms it was earned (jobDone). Only the
+      hold's guards and its Jarl take one down (unpin).
+    */
+    if (wanted) { made.wanted = true; }
     // On the board only once the pack's take is saved (#4901): landPost.
     var r = packs.begin(actorId, goldCut(cost, short),
       'post', { hold: hold, made: made, cost: cost, fee: fee, reward: reward });
     toProfile(profileId, r.why || r.line ||
-      ('Your ' + (isJob ? 'job' : 'notice') + ' goes on the board in ' + hold + ' once your pack is saved, in a moment.'));
+      ('Your ' + (wanted ? 'wanted poster' : (isJob ? 'job' : 'notice')) + ' goes on the board in ' + hold +
+       ' once your pack is saved, in a moment.'));
     if (r.line) { refreshPanel(actorId); }
     return true;
   }
@@ -28863,15 +28893,21 @@ module.exports = {
   function landPost(row, landed) {
     var hold = row.data.hold, made = row.data.made, cost = row.data.cost, fee = row.data.fee, reward = row.data.reward;
     var isJob = !!made.job;
+    var kind = made.wanted ? 'wanted poster' : (isJob ? 'job' : 'notice');
     if (!landed) {
       return 'Your pack was not saved with the ' + cost + ' gold out of it, so it is still yours and the ' +
-             (isJob ? 'job' : 'notice') + ' is not on the board.';
+             kind + ' is not on the board.';
     }
     made.at = Date.now();
     if (!notices[hold]) { notices[hold] = []; }
     notices[hold].push(made);
     funds[hold] = (Number(funds[hold]) || 0) + cost;
-    plog(made.name, isJob ? 'posted a job in' : 'posted a notice in', hold, 'for', cost, 'gold:', made.title);
+    plog(made.name, 'posted a ' + kind + ' in', hold, 'for', cost, 'gold:', made.title);
+    if (made.wanted) {
+      return 'Your wanted poster is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
+        ' for the board, and the ' + reward + ' reward, held until a guard of ' + hold +
+        ' confirms it was earned. Then it goes to whoever took it.';
+    }
     return isJob
       ? 'Your job is on the board in ' + hold + '. That cost ' + cost + ' gold: ' + fee +
         ' for the board, and the ' + reward + ' reward, held until you say the job is done. ' +
@@ -29111,7 +29147,29 @@ module.exports = {
       toProfile(profileId, 'That is not a job with a reward.');
       return true;
     }
-    if (Number(n.by) !== Number(profileId)) {
+    /*
+      A WANTED POSTER'S BOUNTY (#4565). Decided 22 Oct: the reward is held
+      "until a guard confirms". So a guard of this hold confirms it, at this
+      board, and nobody else does, the poster included. A guard who took the
+      poster themselves cannot confirm their own bounty. The pay out is the
+      same as a job's: handHaul, out of the ledger it was held on, owed to
+      the taker and paid into their pack once it is saved.
+    */
+    var wanted = !!n.wanted;
+    if (wanted && !isGuard(profileId, hold)) {
+      toProfile(profileId, 'Only a guard of ' + hold + ' confirms a wanted poster\'s bounty was earned.');
+      return true;
+    }
+    if (wanted && n.taken && Number(n.taken) === Number(profileId)) {
+      toProfile(profileId, 'You took that bounty yourself. Another guard of ' + hold + ' confirms it.');
+      return true;
+    }
+    // Its poster never confirms it (decided 22 Oct), a guard who put it up included.
+    if (wanted && Number(n.by) === Number(profileId)) {
+      toProfile(profileId, 'You put that poster up yourself. Another guard of ' + hold + ' confirms it.');
+      return true;
+    }
+    if (!wanted && Number(n.by) !== Number(profileId)) {
       toProfile(profileId, 'Only the person who posted a job says it is done.');
       return true;
     }
@@ -29122,7 +29180,8 @@ module.exports = {
     var reward = Math.floor(Number(n.pay)) || 0;
     var taker = n.takenName || 'Whoever took it';
     var r = handHaul(hold, n, Number(n.taken), reward,
-                     'job ' + (at + 1) + ' done, the reward to ' + taker, 'reward');
+                     (wanted ? 'wanted poster ' + (at + 1) + ' confirmed by a guard, the bounty to '
+                             : 'job ' + (at + 1) + ' done, the reward to ') + taker, wanted ? 'bounty' : 'reward');
     if (r.why) {
       plog('the reward of job', at + 1, 'in', hold, 'could not be paid:', r.why);
       toProfile(profileId, 'That did not work: ' + r.why + ' Nothing was paid.');
@@ -29132,6 +29191,25 @@ module.exports = {
     n.done = Date.now();
     n.doneBy = profileId;
     takedown(hold, at, profileId);
+    if (wanted) {
+      plog('law: a guard of', hold, '(' + personName(actorId) + ', profile ' + profileId + ') confirmed',
+           (n.name || 'somebody') + '\'s wanted poster', at + 1, 'earned by', taker + ':', n.title,
+           r.owed ? '(owed while away)' : '(paid)');
+      toProfile(profileId, 'Confirmed: ' + n.title + '. ' + taker +
+                (r.owed ? ' is away, so the ' + reward + ' gold bounty is held for them until they are next in the world.'
+                        : ' is paid the ' + reward + ' gold bounty.'));
+      if (!r.owed) {
+        toProfile(n.taken, 'A guard of ' + hold + ' confirms you earned the bounty: ' + n.title + '. The ' + reward +
+                  ' gold is in your pack.');
+      }
+      if (onlineActorOf(Number(n.by))) {
+        toProfile(n.by, 'A guard of ' + hold + ' confirmed your wanted poster was earned: ' + n.title + '. ' +
+                  taker + ' has the ' + reward + ' gold.');
+      }
+      refreshPanel(actorId);
+      if (r.to) { refreshPanel(r.to); }
+      return true;
+    }
     if (r.owed) {
       plog(taker, 'is owed', reward, 'for job', at + 1, 'in', hold + ':', n.title);
       toProfile(profileId, 'Done: ' + n.title + '. ' + taker + ' is away, so the ' + reward +
@@ -29169,7 +29247,7 @@ module.exports = {
                      title: plain ? String(n.title || '') : '',
                      reward: plain ? (Math.floor(Number(n.pay)) || 0) : 0,
                      text: n.letter ? sealed(n) : (n.haul ? haulText(n) : (n.text || '')),
-                     letter: !!n.letter, haul: !!n.haul, parcel: !!n.parcel });
+                     letter: !!n.letter, haul: !!n.haul, parcel: !!n.parcel, wanted: !!(n.wanted && plain) });
         }
       }
     }
@@ -29286,6 +29364,19 @@ module.exports = {
       return true;
     }
     /*
+      A WANTED POSTER COMES DOWN BY THE LAW (#4565). Decided 22 Oct: the
+      hold's Jarl and guards take one down, and nobody else, the person who
+      put it up included. Its held reward goes back to whoever put it up,
+      held for them while they are away (guardTakedown). The fee stays.
+    */
+    if (n.wanted) {
+      if (isGuard(profileId, hold) || isJarlOf(profileId, hold)) {
+        return guardTakedown(hold, at, n, actorId, profileId, toProfile);
+      }
+      toProfile(profileId, 'Only a guard of ' + hold + ' or its Jarl takes a wanted poster down.');
+      return true;
+    }
+    /*
       A STEWARD CANCELS A HAUL, #1393, open or taken, at the board it was
       posted on. The pay goes back to the poster and the fee stays, the same
       as the poster's own /unpin before anybody has taken it.
@@ -29366,12 +29457,13 @@ module.exports = {
       var pay = Math.floor(Number(n.pay)) || 0;
       if (pay > 0) {
         var r = handHaul(hold, n, Number(n.by), pay,
-                         (n.letter ? 'a letter for ' + (n.to || 'somebody') : 'job ' + (at + 1)) +
+                         (n.letter ? 'a letter for ' + (n.to || 'somebody')
+                                   : (n.wanted ? 'wanted poster ' : 'job ') + (at + 1)) +
                          ' taken down by ' + byWhom + ', the pay back to ' + (n.name || 'its poster'),
-                         n.letter ? (n.parcel ? 'parcel' : 'letter') : 'job');
+                         n.letter ? (n.parcel ? 'parcel' : 'letter') : (n.wanted ? 'wanted' : 'job'));
         if (r.why) {
-          toProfile(profileId, 'That did not work: ' + r.why + ' The ' + (n.letter ? 'letter' : 'job') +
-                    ' is still up.');
+          toProfile(profileId, 'That did not work: ' + r.why + ' The ' +
+                    (n.letter ? 'letter' : (n.wanted ? 'wanted poster' : 'job')) + ' is still up.');
           return true;
         }
         back = pay;
@@ -29380,7 +29472,7 @@ module.exports = {
     }
     var boxed = n.parcel ? parcelToBox(hold, n) : 0;
     takedown(hold, at, profileId);
-    var kind = n.parcel ? 'parcel' : n.letter ? 'letter' : (n.job ? 'job' : 'notice');
+    var kind = n.parcel ? 'parcel' : n.letter ? 'letter' : (n.wanted ? 'wanted poster' : (n.job ? 'job' : 'notice'));
     var fee = (boxed ? 'What was in it is in this hold\'s drop box for its sender. ' : '') + 'The fee stays with ' + hold + '.';
     var held = n.letter ? 'gold for the courier' : 'gold reward';
     // A letter's words are sealed, and the log does not record them either.
@@ -30286,6 +30378,13 @@ module.exports = {
           : n.owedFor === 'reward'
           ? 'While you were away, ' + (n.name || 'the person who posted it') + ' said the job you took in ' + hold +
             ' is done: ' + (n.title || '') + '. The ' + owed + ' gold reward is in your pack.'
+          // A wanted poster (#4565): its bounty confirmed, or the poster taken down.
+          : n.owedFor === 'bounty'
+          ? 'While you were away, a guard of ' + hold + ' confirmed you earned the bounty: ' + (n.title || '') +
+            '. The ' + owed + ' gold is in your pack.'
+          : n.owedFor === 'wanted'
+          ? 'While you were away, your wanted poster in ' + hold + ' was taken down: ' + (n.title || '') + '. The ' +
+            owed + ' gold reward is back in your pack. The fee stays with ' + hold + '.'
           : n.owedFor === 'hauled'
           ? 'While you were away, your haul to ' + n.dest + ' was confirmed. ' + owed + ' gold is in your pack.' +
             ((Number(n.kept) || 0) ? ' The company kept ' + n.kept + '.' : '')
@@ -46876,7 +46975,7 @@ const PLAYER_WORDS = ['/stuck', '/helpme', '/report',
       if (!needCharacter()) return;
       var postPayload = savedTextPayload(cmd.text, word, 8200, 5);
       var propertyPosts = g.__thornswoodProperty;
-      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job') ||
+      if (!postPayload || (postPayload[0] !== 'notice' && postPayload[0] !== 'job' && postPayload[0] !== 'wanted') ||
           !Number.isSafeInteger(postPayload[1]) || postPayload[1] < 0 ||
           (postPayload[0] === 'notice' && postPayload[1] !== 0) ||
           typeof postPayload[2] !== 'string' || typeof postPayload[3] !== 'string' ||

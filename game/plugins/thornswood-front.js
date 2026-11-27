@@ -3321,8 +3321,11 @@
   // loaded: a cell that has just finished loading, whose things are all there
   // now, so a held one is gone through again for any that were not yet.
   function settleOwnCells(loaded) {
+    // The character's own record, the one a bought house is set to. Skyrim
+    // Platform has no getActorBase: Papyrus writes it as a script function
+    // over GetBaseObject, and only natives reach plugins (#7089).
     const pc = sp.Game.getPlayer();
-    const me = pc ? pc.getActorBase() : null;
+    const me = pc ? sp.ActorBase.from(pc.getBaseObject()) : null;
     if (!me) { return; }
     for (const key in ownKept) {
       if (Object.prototype.hasOwnProperty.call(ownKept, key) && ownWanted.indexOf(Number(key)) < 0) {
@@ -4052,8 +4055,10 @@
     let pc = null;
     try { pc = sp.Game.getPlayer(); } catch (e) { return 0; }
     if (!pc) { return 0; }
-    let female = false;
-    try { const b = pc.getActorBase(); female = !!b && b.getSex() === 1; } catch (e) { female = false; }
+    // Not caught: a quiet catch here hid that the read was wrong and asked as
+    // a man for everybody (#7089). The guard says a failure.
+    const base = sp.ActorBase.from(pc.getBaseObject());
+    const female = !!base && base.getSex() === 1;
     let undone = 0;
     try {
       const names = niOverride('GetMorphNames', pc);
