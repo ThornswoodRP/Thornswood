@@ -3202,9 +3202,13 @@ Ok ("{0} seasoned recipes take their exact source inputs and conditions before L
 # Build-Recost.py changes it, the chain runs this again (#4087). A row whose
 # inputs are no longer the ones recost.json measured is left as its mod has
 # it, and Build-Recost.py measures it again from that. A row of a plugin the
-# Last plugin never copies from is under notCopied and is not read here: each
-# person's game sets its counts (RECIPES_SET_IN_GAME), and its record stays
-# as its mod has it.
+# Last plugin never copies from is under notCopied: its record stays as its
+# mod has it, and each person's game sets its counts on its own copy
+# (RECIPES_SET_IN_GAME), so the bench lists and takes them. It is read here
+# the same way, since this table is the recipe as the game asks it, as the
+# guides, the item sources and the ranks read it (#4625: the Eyepatch, an
+# Immersive Armors recipe, was listed with the gold coin no game asks for).
+# Build-Recost.py keeps the inputs it first measured for those rows too.
 function Use-RecostCounts($recipes, $rows) {
     # Each row of recost.json's recipes onto its recipe: every input's count
     # becomes its 'to', and an input taken to 0 (the coins) comes off, as
@@ -3240,11 +3244,18 @@ Write-Host 'the re-costed counts' -ForegroundColor Cyan
 if (-not (Test-Path -LiteralPath $RECOST_FILE)) {
     Note ("there is no {0} yet, so every recipe keeps its mod's counts; Build-Recost.py writes it, and the chain runs this again" -f $RECOST_FILE)
 } else {
-    $recostRows = @(([IO.File]::ReadAllText($RECOST_FILE) | ConvertFrom-Json).recipes)
+    $recostDoc = [IO.File]::ReadAllText($RECOST_FILE) | ConvertFrom-Json
+    $recostRows = @($recostDoc.recipes)
     $recostGot = Use-RecostCounts $recipes $recostRows
     Ok ("{0} of {1} recipe(s) take the counts recost.json gives them, as Thornswood-Last.esp carries them" -f $recostGot.Applied.Count, $recostRows.Count)
     if ($recostGot.Stale.Count) {
         Note ("{0} row(s) of recost.json name inputs their recipe no longer has, and keep their mod's counts until Build-Recost.py measures them again: {1}" -f $recostGot.Stale.Count, (($recostGot.Stale | Select-Object -First 6) -join ', '))
+    }
+    $heldRows = @($recostDoc.notCopied)
+    $heldGot = Use-RecostCounts $recipes $heldRows
+    Ok ("{0} of {1} recipe(s) of a never-copied plugin take the counts each game sets on them (RECIPES_SET_IN_GAME)" -f $heldGot.Applied.Count, $heldRows.Count)
+    if ($heldGot.Stale.Count) {
+        Note ("{0} never-copied row(s) of recost.json name inputs their recipe no longer has, and keep their mod's counts until Build-Recost.py measures them again: {1}" -f $heldGot.Stale.Count, (($heldGot.Stale | Select-Object -First 6) -join ', '))
     }
 }
 

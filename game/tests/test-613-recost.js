@@ -95,9 +95,12 @@ yes('T6 no gold worth is read: the item has no gold price here (docs/systems/pro
 
 // A recipe is measured at the bench its mod put it at, as Build-Recost.py's
 // put_at does, so one #3120 moved to its trade's bench is still a forge recipe
-// here. Its inputs in recipes.json are the winning record's: the mod's while it
-// still charges coins, or, once Thornswood-Last.esp carries the change, the
-// counts this table set, with the coins gone.
+// here. Its inputs in recipes.json are the recipe as the game asks it: the
+// mod's while it still charges coins, or, once Thornswood-Last.esp carries the
+// change, the counts this table set, with the coins gone. A never-copied
+// plugin's row is listed at the counts each game sets on it (RECIPES_SET_IN_GAME),
+// coins gone too, since Build-RecipeTable.ps1 reads notCopied as it reads
+// recipes (#4625).
 const putAt = (row) => row.movedFromName || row.benchName;
 const charges = (row) => row.inputItems.some((i) => i.item === 'f:Skyrim.esm');
 const carried = (r, row) => row.inputItems.map((i) => i.item + 'x' + i.count).join() ===
@@ -106,15 +109,17 @@ const coinRows = Object.keys(recipes).filter((k) => rule.benches.indexOf(putAt(r
 const coinTable = table.recipes.filter((r) => r.inputs.some((i) => i.item === 'f:Skyrim.esm'));
 const coinHeld = (table.notCopied || []).filter((r) => r.inputs.some((i) => i.item === 'f:Skyrim.esm'));
 const coinCarried = coinTable.filter((r) => recipes[r.recipe] && !charges(recipes[r.recipe]) && carried(r, recipes[r.recipe]));
+const coinHeldSet = coinHeld.filter((r) => recipes[r.recipe] && !charges(recipes[r.recipe]) && carried(r, recipes[r.recipe]));
 const coinListed = new Set(coinTable.concat(coinHeld).map((r) => r.recipe));
 yes('T7 every forge recipe that charges gold coins has them taken out, and nothing else of it changes unless ' +
     'its peers say so (q-3115 B; ' + coinTable.length + ' taken out, ' + coinCarried.length +
-    ' of them already by Thornswood-Last.esp, ' + coinHeld.length + ' a never-copied plugin\'s, ' +
+    ' of them already by Thornswood-Last.esp, ' + coinHeld.length + ' a never-copied plugin\'s (' +
+    coinHeldSet.length + ' listed at the counts each game sets), ' +
     coinRows.length + ' still charging)',
     (rule.notMaterial || []).join() === 'f:Skyrim.esm' && coinRows.length + coinCarried.length > 0 &&
     coinRows.every((k) => coinListed.has(k)) &&
-    coinRows.length + coinCarried.length === coinTable.length + coinHeld.length &&
-    coinHeld.every((r) => recipes[r.recipe] && charges(recipes[r.recipe])) &&
+    coinRows.length + coinCarried.length + coinHeldSet.length === coinTable.length + coinHeld.length &&
+    coinHeld.every((r) => recipes[r.recipe] && (charges(recipes[r.recipe]) || carried(r, recipes[r.recipe]))) &&
     table.counts.coinsTakenOut === coinTable.length &&
     coinTable.every((r) => r.why.indexOf('coins') >= 0 && r.inputs.every((i) => i.item === 'f:Skyrim.esm' ? i.to === 0
       : (r.why.indexOf('peers') >= 0 || i.to === i.count))));
