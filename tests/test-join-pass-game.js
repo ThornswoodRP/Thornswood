@@ -437,7 +437,7 @@ door(null);
   yes('and the log says it was challenged', r.logged.some(function (s) { return /login of profile 700 on user 7 challenged/.test(s); }));
 
   const good = { userId: 7, profileId: 700, nonce: N1, proof: { pass: p, mac: macOf(ownKey(p), N1) } };
-  yes('a good proof waits for nothing more: the character was handed over at the login', hook(good) === -1);
+  yes('a matching proof returns its profile so the native login can finish a deferred spawn', hook(good) === 700);
   yes('and is logged as good', r.logged.some(function (s) { return /login proof from profile 700 on user 7: good \(watching/.test(s); }));
   yes('loginProof says good, for the pass\'s profile', r.jp.loginProof(good, now).ok === true && r.jp.loginProof(good, now).p === 700);
 

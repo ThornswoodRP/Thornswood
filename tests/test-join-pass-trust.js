@@ -391,7 +391,8 @@ section(function () {
   yes('voice: a connection that cannot prove itself is refused at the handshake, with no setting and no switch in the way',
       /const pass = [^;]*spendToken\(/.test(upgrade) &&
       /if \(!pass\.profileId \|\| pass\.why\) \{[\s\S]*?refuseUpgrade\(socket, pass\.why\);\s*return;\s*\}/.test(upgrade) &&
-      /function onJoin\(ws, msg, profileId\)/.test(onJoin) && !/AUTH|gameRequiresPass/.test(upgrade + onJoin));
+      /function onJoin\(ws, msg, profileId, account\)/.test(onJoin) &&
+      /onJoin\(ws, msg, proven, pass\.account\)/.test(code) && !/AUTH|gameRequiresPass/.test(upgrade + onJoin));
   yes('voice: nothing reads the switch off /positions any more, and nothing is left to close',
       !/gameRequiresPass|closeUnproven|doc\.requirePass ===/.test(code));
   // peerName, run.

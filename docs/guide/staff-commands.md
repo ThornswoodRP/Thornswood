@@ -159,9 +159,48 @@ Staff.
 | `/unfreeze <person>` | Lets them go |
 | `/silence <person> [length] [why]` | Stops their voice, what they type, the words above their head and the speaking mark. Takes minutes or the same length forms as `/ban`, such as `30m`, `2h` or `1d`, capped at one day. Defaults to 30 minutes when no length is given; invalid or permanent lengths are refused. Their name stays |
 | `/unsilence <person>` | Lets them speak again |
+| `/freezeaccount <person> [why]` | When account mode is ready, holds this online character at its own position and refuses alternate characters on the same verified account |
+| `/unfreezeaccount <person>` | Lifts only the account freeze; a separate character freeze remains |
+| `/silenceaccount <person> [length] [why]` | When account mode is ready, applies the same timed speech restraint to the verified account across character changes and reconnects |
+| `/unsilenceaccount <person>` | Lifts only the account silence; a separate character silence remains |
 | `/kick <person> [why]` | Tells them, then ends their session four seconds later |
 
 Freezes and timed silences are saved before a command reports success. A restart does not renew a silence: its original deadline still applies. A profile number works for `/unfreeze` and `/unsilence` while that person is offline; you cannot release your own restraint.
+
+The original four commands affect only the named character. Account commands
+require verified account identity and refuse changes to your own account,
+including through an alternate character. Account freeze never moves an alternate
+to the original character's anchor. Account silence combines with character
+silence until the later deadline. An unknown identity cannot bypass active
+account controls; a different verified account keeps its ordinary access.
+Clear-only recovery accepts `/unfreezeaccount account:<Discord ID>` and
+`/unsilenceaccount account:<Discord ID>` when the original profile is unlinked.
+Account identifiers stay out of public replies and client frames.
+
+Account mode is **disabled by default**. The `thornswoodAccountRestraints`
+setting must remain absent or false until the game admission hook, voice
+protocol and deployment rollback fences have been accepted together. These
+commands also refuse new controls without a current compatible voice
+acknowledgement and verified online identities. The rollback fences are a
+separate prerequisite; this change does not enable the setting on either server.
+Clearing a saved account control remains possible if readiness is lost. A voice
+change whose acknowledgement fails says that it is saved with confirmation
+pending, rather than reporting completion or inviting a repeat.
+
+Account controls use version 2 of the private restraint book. Character deletion
+does not erase account punishment; an explicit world wipe clears account freeze
+anchors and keeps timed silences. The book returns to version 1 only after all
+account controls are cleared. Voice retains a revision-fenced derived silence
+cache in its existing private writable chat directory across restart. Neither
+that cache nor the moderation log replaces the restraint book authority. Do not
+roll back either component while account controls remain active.
+
+Initially disabled mode with no account controls keeps the existing
+character-only voice traffic and book format. After a nonempty account silence
+list is cleared, a pending-clear receipt in the same book survives restart
+until voice acknowledges that exact empty replacement. Off-mode character
+updates return to the legacy route after that receipt is saved as cleared.
+An identical already-persisted account revision needs no further cache write.
 
 Moving a frozen character with `/bring` or `/tp` saves the new frozen position. If a move or its save cannot be confirmed, staff are told it may already have happened. Only that character's session is ended and its next login is refused until staff repair the storage problem and explicitly `/unfreeze <profile>`. The server does not retry the move or return them to the old position.
 

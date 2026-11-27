@@ -325,6 +325,49 @@ function lineClosed(me) {
   process only: the gamemode sends the whole list again every thirty seconds.
 */
 const silenced = new Map();
+// Private derived moderation cache, never an ownership authority or a served
+// asset. It keeps an already-applied account silence through a voice restart.
+const ACCOUNT_RESTRAINT_PROTOCOL = 1;
+const CHAT_DIR = process.env.THORNSWOOD_CHAT_DIR || path.join(HERE, 'chat');
+const ACCOUNT_SILENCE_FILE = path.join(CHAT_DIR, '.account-silences.json');
+let accountSilenceRevision = -1;
+let accountSilences = new Map();
+function accountSilenceList(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw Error('invalid account silence list');
+  const result = new Map();
+  for (const [account, until] of Object.entries(raw)) {
+    if (!/^[0-9]{1,32}$/.test(account) || !Number.isSafeInteger(until) || until <= 0) throw Error('invalid account silence');
+    result.set(account, until);
+  }
+  return result;
+}
+let silenceCacheFd;
+try {
+  silenceCacheFd = fs.openSync(ACCOUNT_SILENCE_FILE, 'r');
+  const bytes = Buffer.alloc(20001);
+  let size = 0;
+  while (size < bytes.length) {
+    const read = fs.readSync(silenceCacheFd, bytes, size, bytes.length - size, null);
+    if (!read) break;
+    size += read;
+  }
+  if (size > 20000) throw Error('oversized cache');
+  const cached = JSON.parse(bytes.subarray(0, size).toString('utf8'));
+  if (cached.version !== 1 || !Number.isSafeInteger(cached.revision) || cached.revision < 0) throw Error('invalid revision');
+  accountSilences = accountSilenceList(cached.accounts);
+  accountSilenceRevision = cached.revision;
+} catch (e) {
+  if (!e || e.code !== 'ENOENT') throw Error('The private account silence cache needs repair before voice can start.');
+} finally {
+  if (silenceCacheFd !== undefined) fs.closeSync(silenceCacheFd);
+}
+function accountSilencedLeft(peer, now) {
+  // A future/legacy unbound peer retains command transport, but cannot evade
+  // active account moderation by using an unsupported identity format.
+  let until = peer.account ? accountSilences.get(peer.account) || 0 : 0;
+  if (!peer.account) for (const deadline of accountSilences.values()) until = Math.max(until, deadline);
+  return Math.max(0, until - now);
+}
 /* Personal text mutes: listener profile -> set of speaker profiles. The
    whole map arrives from the gamemode (POST /textmute). A listener who has
    turned somebody's text off does not get that person's lines. */
@@ -335,11 +378,13 @@ function textBlocked(listener, speaker) {
   return !!(speaker && set && set.has(Number(speaker)));
 }
 const SILENCED_TOLD_EVERY_MS = 10000;
-function silencedLeft(profileId, now) {
+function silencedLeft(profileId, now, peer) {
   const pid = Number(profileId) || 0;
-  const until = silenced.get(pid);
-  if (!until || now >= until) return 0;
-  return until - now;
+  const character = Math.max(0, (silenced.get(pid) || 0) - now);
+  if (peer) return Math.max(character, accountSilencedLeft(peer, now));
+  const sessions = [...peers.values()].filter(p => p.profileId === pid);
+  const all = sessions.length ? Math.min(...sessions.map(p => accountSilencedLeft(p, now))) : 0;
+  return Math.max(character, all);
 }
 
 /* Staff silence is a moderation tool, so every connection is told, including
@@ -348,18 +393,38 @@ function silencedLeft(profileId, now) {
    Sock.send does not throw: a write that fails closes that connection, and
    whoever reconnects is told their own hush at join (onJoin), so nobody is
    left unhushed by a failed send. */
+const announcedHush = new Map();
 function tellHush(profileId, on) {
   const msg = { t: 'hush', profileId: Number(profileId) || 0, on: !!on };
   if (!msg.profileId) return;
+  announcedHush.set(msg.profileId, !!on);
   for (const [, p] of peers) p.ws.send(msg);
+}
+function refreshSilence(profileId, now, clearHead = false) {
+  const on = !!silencedLeft(profileId, now);
+  // A never-muted join needs no reliable unmute frame. Sending one would
+  // flush an older held roster instead of letting the next join replace it.
+  const changed = (announcedHush.has(profileId) || on) && announcedHush.get(profileId) !== on;
+  if (clearHead && on) for (const [, p] of peers) p.ws.send({ t: 'headclear', profileId });
+  if (changed) tellHush(profileId, on);
+  for (const [, p] of peers) {
+    if (p.profileId !== profileId) continue;
+    const own = !!silencedLeft(profileId, now, p);
+    if (changed || (p.hushOn !== own && (own || p.hushOn !== undefined))) p.ws.send({ t: 'hush', profileId, on: own });
+    p.hushOn = own;
+  }
 }
 
 function sweepSilenced(now) {
   for (const [pid, until] of Array.from(silenced.entries())) {
     if (now >= until) {
       silenced.delete(pid);
-      tellHush(pid, false);
     }
+  }
+  const onlineProfiles = new Set([...peers.values()].map(p => p.profileId));
+  for (const pid of new Set([...announcedHush.keys(), ...onlineProfiles])) {
+    refreshSilence(pid, now);
+    if (!onlineProfiles.has(pid) && !silenced.has(pid)) announcedHush.delete(pid);
   }
 }
 
@@ -392,7 +457,6 @@ function sweepSilenced(now) {
  * pressed them, and they were most of every day's file (#2723, see
  * pluginReport below).
  */
-const CHAT_DIR = process.env.THORNSWOOD_CHAT_DIR || path.join(HERE, 'chat');
 
 /* HOW MANY DAYS CHAT IS KEPT, AND NEVER FEWER THAN 365 (#4410).
 
@@ -824,7 +888,7 @@ function relayCaption(me, raw, now) {
   if (!me) return 'nobody';
   const pid = Number(me.profileId) || 0;
   if (!captionPrefsOf(pid).share) return 'not shared';
-  if (silencedLeft(pid, now)) return 'silenced';
+  if (silencedLeft(pid, now, me)) return 'silenced';
   if (!speakingNow(pid, now)) return 'not talking';
   const text = headlines.captionHead(raw);
   if (!text) return 'empty';
@@ -1709,7 +1773,7 @@ function cleanName(v) {
   here. A token in the message is not read, and the profileId in it is only
   compared, so a page that says one thing and proved another is written down.
 */
-function onJoin(ws, msg, profileId) {
+function onJoin(ws, msg, profileId, account) {
   const claimed = pageNumber(msg.profileId) || 0;
   if (claimed && claimed !== profileId) {
     console.log('[voice] join claimed profile ' + claimed + ' on a connection whose token is for ' +
@@ -1720,14 +1784,12 @@ function onJoin(ws, msg, profileId) {
   ws.peer = id;
   const name = cleanName(msg.name);
   // voice is false only when the join says so (#1925, over roster).
-  peers.set(id, { ws, profileId, name, mode: cleanMode(msg.mode), proven: true,
+  peers.set(id, { ws, profileId, account, name, mode: cleanMode(msg.mode), proven: true,
                   voice: msg.voice !== false,
                   chatTokens: CHAT_BURST, chatAt: Date.now(), chatSlowed: false });
 
   ws.send({ t: 'welcome', peer: id, profileId: profileId });
-  if (profileId && silencedLeft(profileId, Date.now())) {
-    ws.send({ t: 'hush', profileId: profileId, on: true });
-  }
+  if (profileId) refreshSilence(profileId, Date.now());
   // A profile already in the world takes its voice place (#3570): this
   // socket joins the room, and the roster naming it goes out this turn.
   if (voiced.has(profileId)) announce();
@@ -1751,7 +1813,7 @@ function voiceOf(profileId) {
   const pid = Number(profileId) || 0;
   for (const [, p] of peers) {
     if (Number(p.profileId) !== pid) continue;
-    if (p.talking) talk = true;
+    if (p.talking && !silencedLeft(pid, Date.now(), p)) talk = true;
     if (p.mode) mode = p.mode;
   }
   if (silencedLeft(pid, Date.now())) talk = false;
@@ -2329,10 +2391,22 @@ function signToken(profileId, minted, nonce) {
   return body + '.' + mac;
 }
 
-function mintToken(profileId) {
+// This identity is read only AFTER the trusted Site approves this exact
+// captured ticket. Unsupported approved formats remain profile-only sessions.
+function approvedTicketAccount(ticket) {
+  const parts = String(ticket).split('.');
+  if (parts.length !== 3 || parts[0] !== 'tk1' || !/^[A-Za-z0-9_-]{1,4096}$/.test(parts[1])) return '';
+  let body;
+  try { body = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')); } catch (e) { return ''; }
+  return body && typeof body.d === 'string' && /^[0-9]{1,32}$/.test(body.d) ? body.d : '';
+}
+const nonceAccounts = new Map();
+function mintToken(profileId, account) {
   const minted = Date.now();
   const nonce = crypto.randomBytes(16).toString('base64')
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  for (const [key, value] of nonceAccounts) if (minted > value.until) nonceAccounts.delete(key);
+  if (account) nonceAccounts.set(nonce, { profileId, minted, until: minted + TOKEN_LIFETIME_MS, account });
   return { token: signToken(profileId, minted, nonce), until: minted + TOKEN_LIFETIME_MS };
 }
 
@@ -2383,7 +2457,10 @@ function spendToken(raw, now) {
   // When it was first used is for the log, not for whoever presented it now.
   if (was) return { why: 'a token that was already used', profileId: tok.profileId, copiedAt: was.at };
   spent.set(tok.nonce, { until: tok.minted + TOKEN_LIFETIME_MS, profileId: tok.profileId, at: now });
-  return { profileId: tok.profileId };
+  const binding = nonceAccounts.get(tok.nonce);
+  nonceAccounts.delete(tok.nonce);
+  return binding && binding.profileId === tok.profileId && binding.minted === tok.minted && now <= binding.until
+    ? { profileId: tok.profileId, account: binding.account } : { profileId: tok.profileId };
 }
 
 /*
@@ -2614,7 +2691,7 @@ const server = http.createServer((req, res) => {
           res.writeHead(503, { 'content-type': 'text/plain' }).end('nobody could check this profile, so no token');
           return;
         }
-        const t = mintToken(pid);
+        const t = mintToken(pid, approvedTicketAccount(ticket));
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ token: t.token, until: t.until, profileId: pid }));
       });
@@ -2673,23 +2750,39 @@ const server = http.createServer((req, res) => {
     readBody(req, res, 20000, (doc) => {
       const list = (doc.profiles && typeof doc.profiles === 'object') ? doc.profiles : {};
       const now = Date.now();
-      const before = new Set(silenced.keys());
+      const ids = new Set([...silenced.keys(), ...[...peers.values()].map(p => p.profileId)]);
+      if (doc.accountProtocol !== undefined) {
+        try {
+          if (doc.accountProtocol !== ACCOUNT_RESTRAINT_PROTOCOL || !Number.isSafeInteger(doc.accountRevision) ||
+              doc.accountRevision < 0 || doc.accountRevision < accountSilenceRevision) throw Error('incompatible account snapshot');
+          const next = accountSilenceList(doc.accounts);
+          const canonical = value => JSON.stringify(Object.fromEntries([...value].sort(([a], [b]) => a.localeCompare(b))));
+          if (doc.accountRevision === accountSilenceRevision && canonical(next) !== canonical(accountSilences)) throw Error('conflicting account snapshot');
+          if (doc.accountRevision !== accountSilenceRevision) {
+            const encoded = JSON.stringify({ version: 1, revision: doc.accountRevision, accounts: Object.fromEntries(next) });
+            fs.mkdirSync(CHAT_DIR, { recursive: true });
+            fs.writeFileSync(ACCOUNT_SILENCE_FILE + '.tmp', encoded, { mode: 0o600 });
+            fs.renameSync(ACCOUNT_SILENCE_FILE + '.tmp', ACCOUNT_SILENCE_FILE);
+            accountSilences = next;
+            accountSilenceRevision = doc.accountRevision;
+          }
+        } catch (e) {
+          res.writeHead(409, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'account silence snapshot was not applied' }));
+          return;
+        }
+      }
       silenced.clear();
       for (const k of Object.keys(list)) {
         const pid = Number(k) || 0;
         const until = Number(list[k]) || 0;
         if (pid && until > now) silenced.set(pid, until);
       }
-      for (const pid of silenced.keys()) {
-        const clear = { t: 'headclear', profileId: pid };
-        const hush = { t: 'hush', profileId: Number(pid), on: true };
-        for (const [, p] of peers) { p.ws.send(clear); p.ws.send(hush); }   // see tellHush
-      }
-      for (const pid of before) {
-        if (!silenced.has(pid)) tellHush(pid, false);
-      }
+      for (const pid of new Set([...silenced.keys(), ...ids, ...announcedHush.keys()])) refreshSilence(pid, now, true);
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ silenced: silenced.size }));
+      res.end(JSON.stringify(Object.assign({ silenced: silenced.size }, doc.accountProtocol === ACCOUNT_RESTRAINT_PROTOCOL
+        ? { accountProtocol: ACCOUNT_RESTRAINT_PROTOCOL, accountRevision: accountSilenceRevision,
+            accountReady: [...peers.values()].every(peer => !!peer.account) } : {})));
     });
     return;
   }
@@ -3012,7 +3105,7 @@ server.on('upgrade', (req, socket, head) => {
   ws.onmessage = (msg) => {
     // One join per connection, as the profile its token proved. A second
     // join on the same socket was a second peer for the one connection.
-    if (msg.t === 'join') { if (!myId) { myId = onJoin(ws, msg, proven); } return; }
+    if (msg.t === 'join') { if (!myId) { myId = onJoin(ws, msg, proven, pass.account); } return; }
     if (!myId) return;
 
     /*
@@ -3139,7 +3232,7 @@ server.on('upgrade', (req, socket, head) => {
       const me = peers.get(myId);
       const name = headlines.emoteHead(msg.name);
       if (!name) return;
-      const hush = me ? silencedLeft(me.profileId, Date.now()) : 0;
+      const hush = me ? silencedLeft(me.profileId, Date.now(), me) : 0;
       if (hush) {
         if (me && (!me.hushTold || Date.now() - me.hushTold >= SILENCED_TOLD_EVERY_MS)) {
           me.hushTold = Date.now();
@@ -3235,7 +3328,7 @@ server.on('upgrade', (req, socket, head) => {
         return;
       }
       if (floated && floated.local) {
-        const hush = me ? silencedLeft(me.profileId, Date.now()) : 0;
+        const hush = me ? silencedLeft(me.profileId, Date.now(), me) : 0;
         if (hush) {
           chatWrite('silenced', myId, me, text);
           if (!me.hushTold || Date.now() - me.hushTold >= SILENCED_TOLD_EVERY_MS) {
@@ -3327,7 +3420,7 @@ server.on('upgrade', (req, socket, head) => {
       }
 
       // Silenced by staff: said to nobody, and they are told why (#412).
-      const hush = me ? silencedLeft(me.profileId, Date.now()) : 0;
+      const hush = me ? silencedLeft(me.profileId, Date.now(), me) : 0;
       if (hush) {
         chatWrite('silenced', myId, me, text);
         if (!me.hushTold || Date.now() - me.hushTold >= SILENCED_TOLD_EVERY_MS) {

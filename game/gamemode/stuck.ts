@@ -509,7 +509,8 @@
       return;
     }
     var frozen = g.__thornswoodStaffState && g.__thornswoodStaffState.frozen;
-    if (frozen && frozen[pid]) {
+    var staff = g.__thornswoodStaff;
+    if (staff && staff.frozenFor ? staff.frozenFor(pid) : frozen && frozen[pid]) {
       tell(pid, 'Staff have you frozen in place, so /stuck cannot move you. Wait here and ' +
                 'somebody will talk to you.');
       slog('profile ' + pid + ' refused: frozen by staff');

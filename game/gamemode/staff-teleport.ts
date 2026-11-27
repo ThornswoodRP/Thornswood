@@ -22,7 +22,7 @@
       }
       var from=place(actor),to=place(person.actorId);
       if(!staff.state||!staff.state.frozen){throw new Error('Staff restraint state is unavailable.');}
-      if(staff.state.frozen[pid]){staff.tell(pid,'Staff have frozen you in place.');return true;}
+      if(staff.frozenFor?staff.frozenFor(pid):staff.state.frozen[pid]){staff.tell(pid,'Staff have frozen you in place.');return true;}
       var cuffs=g.__thornswoodCuffs,property=g.__thornswoodProperty,stuck=g.__thornswoodStuck;
       if(!cuffs||!cuffs.cuffedBy||!property||!property.lockedJailHere||!stuck||!stuck.teleported){
         throw new Error('Movement safeguards are unavailable.');

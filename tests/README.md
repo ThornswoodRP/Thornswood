@@ -1,5 +1,13 @@
 # The test harnesses
 
+Run `node tests/test-4640-voice-account-binding.js` for real loopback HTTP and
+WebSocket account binding, silence, restart, expiry and privacy controls. It
+uses an owned child and a synthetic Site, without a real account or server.
+Run `node tests/test-4488-restraints-persist.js` for the actual private book,
+staff account commands, signed alternate-admission fence and character-only
+compatibility. Account mode remains disabled pending the separate deployment
+and rollback acceptance described in the Staff commands guide.
+
 Run `node game/tests/test-7071-riften-gate-claim.js` for claiming Riften's
 existing gates from either side, the normal deed and holder flow, safe inside
 egress, active guard cell controls and unrelated door mappings. It executes the actual
