@@ -51,7 +51,8 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const ROOT = path.join(__dirname, '..');
-const made = require('./last-plugin-made.js').made();
+const { made: makeLast, doorReferenceOverrides } = require('./last-plugin-made.js');
+const made = makeLast();
 const CONTENT = path.join(ROOT, 'game', 'content', 'Thornswood-Content.esp');
 const MANIFEST = path.join(ROOT, 'game', 'data', 'last-plugin.json');
 const HARVESTS = path.join(ROOT, 'game', 'data', 'harvests.json');
@@ -147,15 +148,16 @@ yes('M4 the cells copied only for them are counted by the plugin that wins each'
 const last = made.buf ? readPlugin(made.path, 'Thornswood-Last.esp') : { recs: [], masters: [], desc: () => '' };
 if (!made.buf) { console.log('SKIP  P, N2, N3, N5: ' + made.why); }
 const gates = new Set(manifest.gatesUnlocked || []);
+const doorEdits = doorReferenceOverrides(manifest);
 // The hold-only plants and ores switched off outside their hold (#3150) are
 // game/tests/test-3150-hold-builder.js's and the builder's --verify.
 const holdOff = new Set((manifest.holdOnly && manifest.holdOnly.off) || []);
-const refs = last.recs.filter((r) => r.tag === 'REFR' && !gates.has(r.desc) && !holdOff.has(r.desc));
+const refs = last.recs.filter((r) => r.tag === 'REFR' && !doorEdits.has(r.desc) && !holdOff.has(r.desc));
 const bad = refs.filter((r) => {
   const tags = r.subs.map((s) => s.t).join(',');
   return !(r.flags & DISABLED) || (r.flags & DELETED) || (tags !== 'NAME,DATA' && tags !== 'EDID,NAME,DATA');
 });
-yesR('P1 every placed reference but the ' + gates.size + ' town gates and the hold-only plants and ores is ' +
+yesR('P1 every placed reference outside the recorded door edits and hold-only resources is ' +
     'switched off: initially disabled, ' +
     'keeping only its base and place, with no enable parent, script or link' +
     (bad.length ? ' (not: ' + bad.slice(0, 5).map((r) => r.desc).join(', ') + ')' : ''),
