@@ -2,9 +2,15 @@
   ServerReadyWait.ps1
 
   How long a started game server has to answer on its ports before a deploy
-  puts the old files back. Dot-sourced by Swap.ps1 (so Deploy-Server.ps1 and
-  Deploy-DevGamemode.ps1 take it), by Publish-Server.ps1, and by
-  Install-ThornswoodServer.ps1 on the box, from beside it.
+  puts the old files back. Who takes it:
+    - dot-sourced by Swap.ps1, so Deploy-Server.ps1 and Deploy-DevGamemode.ps1
+      take it, and by Publish-Server.ps1, which also copies it to the box;
+    - dot-sourced by Install-ThornswoodServer.ps1 on the box, from beside it;
+    - read as text and joined into the script that runs on the box by
+      Reset-Character.ps1, Reset-Npcs.ps1 and Move-World.ps1, which take
+      their wait from Get-ThornswoodServerReadyWait there and have no -Wait
+      of their own.
+  tests\test-4570-ready-wait-callers.ps1 holds this list to the scripts.
 
   WHAT IT WAITS FOR. Both ports, from the box itself. UDP is the game port.
   TCP is the resources port (3000 when the game port is 7777, otherwise the
@@ -20,9 +26,11 @@
   so a healthy Deploy-Server was rolled back. Dev has taken 113 s. The
   ceiling is half again the worst of those measured starts: a start at the
   recorded times is kept, and a start that never answers still rolls back
-  when the ceiling is reached. -Wait on each script overrides it for one run.
+  when the ceiling is reached. -Wait on the deploy scripts and the installer
+  overrides it for one run.
 
-  Keep it ASCII. The installer loads it on the box, in PowerShell 7.
+  Keep it ASCII. The installer loads it on the box, in PowerShell 7, and the
+  three scripts above send its text to the box inside theirs.
 #>
 
 # Seconds from start until both ports answered, as measured on the VPS.
