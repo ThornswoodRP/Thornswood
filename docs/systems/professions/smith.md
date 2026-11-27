@@ -71,11 +71,14 @@ half places one more.
 
 ## Where this is
 
-The recipe gates, the skyforge's advanced line, the charcoal, and
-the taking of one handle are in the server. The forge, the skyforge,
-and the smelter burn the grade the table above names, and nothing is
-taken when the grade or the handle is missing. The ingredient column
-on the recipe pages still omits the handle, because the plugin record
-does. The grindstone and the armour table do not open, and a temper that
+The recipe gates and the skyforge's advanced line are in the server.
+The charcoal and the handle are ingredients of each recipe (#6726): the
+forge, the skyforge and the smelter list the grade the table above
+names, and a hafted weapon lists its handle, beside the rest, and take
+them as they take the rest. Thornswood-Last.esp writes them into the
+records, and a recipe of a plugin it never copies is given them in each
+game. Without the grade or the handle the piece cannot be made. The
+ingredient column on the recipe pages lists the record's own
+ingredients, without the charcoal and the handle. The grindstone and the armour table do not open, and a temper that
 reaches the server anyway is refused and not counted as work. The kits are records in the plugin, and
 the 120% repair at Master is in the server (#3442).

@@ -1120,6 +1120,86 @@ foreach ($scan in @(1,23,36)) {
   const jShut = dev.findIndex(function (x, i) { return i > cut && x.do === 'page' && /isOpen\(\)\?'shut'/.test(x.js || ''); });
   yes('  and J shutting our journal is checked, not only the game\'s', jShut > cut && dev[jShut - 1].code === 36);
 }
+// Mining (#4549): equip gives the pickaxe once when the pack has none, then
+// equips and draws it; a held key goes as { code, hold, with }; the watches
+// write what the character did, and sheathe puts the weapon away.
+{
+  const g = game({ steps: [
+    { do: 'equip', form: '0E3C16', give: '/give pickaxe', draw: true, timeout: 5000, task: 4549 },
+    { do: 'key', code: 57, task: 4549 },
+    { do: 'watch', what: 'jump', ms: 1000, label: 'drawn', task: 4549 },
+    { do: 'key', code: 56, hold: 2000, with: [17], task: 4549 },
+    { do: 'watch', what: 'sprint', ms: 300, label: 'drawn', task: 4549 },
+    { do: 'sheathe', timeout: 5000, task: 4549 },
+    { do: 'end' }
+  ] });
+  const pick = { id: 0x0E3C16 };
+  const pc = { count: 0, drawn: false, z: 0, sprint: false, equipped: null, gives: 0,
+    getParentCell: function () { return g.world.cell; }, getPositionX: function () { return 0; }, getPositionY: function () { return 0; },
+    getPositionZ: function () { return this.z; }, isSprinting: function () { return this.sprint; }, isWeaponDrawn: function () { return this.drawn; },
+    getItemCount: function (f) { return f === pick ? this.count : 0; }, equipItem: function (f) { this.equipped = f; },
+    drawWeapon: function () { this.drawn = true; }, sheatheWeapon: function () { this.drawn = false; } };
+  g.world.cell = { getName: function () { return 'Iron-Breaker Mine'; } };
+  g.world.pc = pc;
+  g.box.skyrimPlatform.Game.getFormEx = function (id) { return id === 0x0E3C16 ? pick : null; };
+  for (let i = 0; i < 5; i++) { g.frame(100); }
+  const gives = g.pageRuns.filter(function (src) { return /\/give pickaxe/.test(src); });
+  yes('equip says /give once while the pack has no pickaxe, and waits', gives.length === 1 && pc.equipped === null);
+  pc.count = 1;
+  for (let i = 0; i < 10; i++) { g.frame(100); }
+  let st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('  then equips and draws it', st.length >= 1 && st[0].ok && pc.equipped === pick && pc.drawn && /drawn after/.test(st[0].note) && /given by \/give pickaxe/.test(st[0].note));
+  // The jump: the key, then the character rises 60 units and comes down.
+  g.ack({}); g.frame(16);
+  [20, 45, 60, 40, 0].forEach(function (z) { pc.z = z; g.frame(100); });
+  for (let i = 0; i < 8; i++) { g.frame(100); }
+  const keyAsk = g.lines().filter(function (l) { return l.t === 'ask' && l.do === 'key'; });
+  // The held sprint key: asked as one object.
+  for (let i = 0; i < 3; i++) { g.frame(100); }
+  const held = g.lines().filter(function (l) { return l.t === 'ask' && l.do === 'key'; });
+  yes('a held key is asked as { code, hold, with }', held.length === 2 && held[1].arg && held[1].arg.code === 56 && held[1].arg.hold === 2000 && JSON.stringify(held[1].arg.with) === '[17]' && keyAsk[0].arg === 57);
+  pc.sprint = true;
+  g.frame(100); g.frame(100);
+  g.ack({}); pc.sprint = true; g.frame(100); pc.sprint = false;
+  for (let i = 0; i < 6; i++) { g.frame(100); }
+  const watches = g.lines().filter(function (l) { return l.t === 'watch'; });
+  yes('the jump watch writes that the character jumped, and how high', watches.length >= 1 && watches[0].what === 'jump' && watches[0].did === true && watches[0].value === 60 && watches[0].drawn === true && watches[0].label === 'drawn');
+  yes('  and the sprint watch that it sprinted', watches.length >= 2 && watches[1].what === 'sprint' && watches[1].did === true);
+  for (let i = 0; i < 4; i++) { g.frame(100); }
+  st = g.lines().filter(function (l) { return l.t === 'step'; });
+  const sh = st.filter(function (l) { return l.do === 'sheathe'; })[0];
+  yes('  and sheathe puts the weapon away', !!sh && sh.ok && pc.drawn === false);
+}
+{
+  const g = game({ steps: [{ do: 'equip', form: '0E3C16', draw: true, timeout: 500, task: 1 }, { do: 'end' }] });
+  g.world.cell = {};
+  g.world.pc = { getParentCell: function () { return g.world.cell; }, getPositionZ: function () { return 0; }, isSprinting: function () { return false; },
+    isWeaponDrawn: function () { return false; }, getItemCount: function () { return 0; } };
+  g.box.skyrimPlatform.Game.getFormEx = function () { return { id: 1 }; };
+  for (let i = 0; i < 10; i++) { g.frame(100); }
+  const st = g.lines().filter(function (l) { return l.t === 'step'; });
+  yes('equip with nothing to give fails, naming what is not in the pack', st.length && st[0].ok === false && /no 0E3C16 in the pack/.test(st[0].note));
+}
+// The mining task in the list: a Miner at the Iron-Breaker Mine, the
+// pickaxe drawn before the first press, jump and sprint after each spell,
+// and the second spell from sheathed.
+{
+  const tt = JSON.parse(read(path.join('tests', 'real-client', 'test-tasks.json'))).steps;
+  const m = tt.filter(function (x) { return x.task === 4549; });
+  const iEquip = m.findIndex(function (x) { return x.do === 'equip'; });
+  const iSheathe = m.findIndex(function (x) { return x.do === 'sheathe'; });
+  const presses = m.map(function (x, i) { return x.do === 'key' && x.code === 18 ? i : -1; }).filter(function (i) { return i >= 0; });
+  const watches = m.filter(function (x) { return x.do === 'watch'; });
+  yes('the mining task makes the character a Miner and goes to the Iron-Breaker Mine', m.some(function (x) { return x.do === 'page' && /\/setclass miner/.test(x.js) && /\/tp Iron-Breaker Mine/.test(x.js); }));
+  yes('  draws the pickaxe before the first press on the seam, and sheathes before the second spell',
+      iEquip > 0 && m[iEquip].draw === true && m[iEquip].form === '0E3C16' && m[iEquip].give === '/give pickaxe' &&
+      presses.filter(function (i) { return i > iEquip && i < iSheathe; }).length === 2 && presses.filter(function (i) { return i > iSheathe; }).length === 2);
+  yes('  and watches a jump and a sprint after each spell', watches.length === 4 && watches.filter(function (x) { return x.what === 'jump'; }).length === 2 &&
+      m.filter(function (x) { return x.do === 'key' && x.code === 56 && x.hold >= 1000 && JSON.stringify(x.with) === '[17]'; }).length === 2);
+  const pg = read(path.join('game', 'gamemode', 'staff-progression.ts'));
+  const tp = read(path.join('game', 'gamemode', 'teleport.ts'));
+  yes('  with lines the server takes: /setclass for oneself, /give by name', /word: '\/setclass', role: 'playtester'/.test(pg) && /word === '\/give' \|\| word === '\/spawn'/.test(tp));
+}
 // The test-task list starts as the dev-release run does, up to the world,
 // and every step after that belongs to a test task.
 {

@@ -81,6 +81,7 @@ for (const row of cases) {
 }
 const {actor,bench,craft} = normal;
 const beforePack = pack(actor), beforeCharacter = character(actor), beforeCoal = w.count(actor,COAL);
+const beforeInputs = craft.inputs.map(x => w.count(actor,x.baseId));
 let preflightUnchanged = false;
 const begin = w.now(), beforeCompletion = completed();
 const allowed = w.craft(actor,bench,craft,() => {
@@ -89,9 +90,12 @@ const allowed = w.craft(actor,bench,craft,() => {
 yes('allowed work keeps its five-second delay and performs no preflight spending or credit',
   preflightUnchanged && allowed.started && allowed.made && allowed.workMs === 5000
   && w.now() === begin+5000 && completed() === beforeCompletion+1);
-yes('allowed completion spends the original inputs and one charcoal, and makes one output',
-  w.count(actor,COAL) === beforeCoal-1 && w.count(actor,craft.output) === craft.count
-  && craft.inputs.every(x => w.count(actor,x.baseId) === x.count*2));
+// Since #6726 the charcoal is an input on the record, so the server takes
+// none on top of the inputs the craft names.
+yes('allowed completion spends the original inputs and nothing more, and makes one output',
+  w.count(actor,craft.output) === craft.count
+  && craft.inputs.every((x,i) => w.count(actor,x.baseId) === beforeInputs[i]-x.count)
+  && (craft.inputs.some(x => x.baseId === COAL) || w.count(actor,COAL) === beforeCoal));
 const unknown = {recipe:w.idOf('abcdef:Skyrim.esm'),output:w.idOf('abcdee:Skyrim.esm'),inputs:[]};
 const unclassified = w.craft(actor,bench,unknown);
 yes('a recipe with no known row retains its existing allowance and default time',
