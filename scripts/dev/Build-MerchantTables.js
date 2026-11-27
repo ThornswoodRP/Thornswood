@@ -60,15 +60,20 @@ if(!Array.isArray(activation.commissions)||activation.commissions.length!==Objec
     activation.commissions.some(pin=>!pin||publishedCommissions[pin.id]!==pin.sha256)||
     new Set(activation.commissions.map(row=>row.id)).size!==activation.commissions.length)
   throw new Error('Invalid commission activation manifest');
+const commissionSources=quests.quests.concat(ranked);
 const commissionRows=activation.commissions.map(pin=>{
-  const matches=quests.quests.concat(ranked.map(({itemTypes,...row})=>row)).filter(row=>row.id===pin.id),row=matches[0];
-  if(matches.length!==1||row.kind!=='commission'||
+  const matches=commissionSources.filter(row=>row.id===pin.id);
+  if(matches.length!==1||matches[0].kind!=='commission')
+    throw new Error('An activated commission changed. Preserve published definitions and use a new ID.');
+  const {itemTypes,accepting,...row}=matches[0];
+  if((row.deliveryVersion!==2&&(itemTypes!==undefined||accepting!==undefined))||
     require('node:crypto').createHash('sha256').update(JSON.stringify(row)).digest('hex')!==pin.sha256)
     throw new Error('An activated commission changed. Preserve published definitions and use a new ID.');
-  const type=roles.records[row.goods[0].item]&&roles.records[row.goods[0].item].type;
+  const firstItem=row.goods[0].item;
+  const type=row.deliveryVersion===2?itemTypes?.[firstItem]:roles.records[firstItem]?.type;
   if(!type)throw new Error('Commission item has no verified source record.');
   return Object.assign({},row,{sourceHash:pin.sha256,itemType:type,
-    ...(row.deliveryVersion===2?{itemTypes:ranked.find(source=>source.id===row.id).itemTypes}:{})});
+    ...(row.deliveryVersion===2?{itemTypes}:{}),...(accepting===false?{accepting:false}:{})});
 });
 // THE GUILD'S STARTING REWARD PRICES (#6180, Patrick's answer on the page,
 // 15 Nov 2026, q-6180-guild-prices: "Guild work should be set by staff, give
