@@ -15,7 +15,10 @@ let key='one';
    100ms made the concurrent same-name check flake on a loaded VPS: one stream's
    close could land after the mocked deadline and return 408 (Refs #2541). */
 let compressDeadlineMs=null;
-const box={fs,path,crypto,Buffer,Map,Date,UP:work,reportFrom:()=>key,
+/* The disk's free floor (#4404) is left at nothing here: what this checks is
+   the guard's other refusals, and site/tests/test-4404-upload-room.js checks
+   the floor with the free space stood in for. */
+const box={fs,path,crypto,Buffer,Map,Date,UP:work,UPLOAD_FREE_FLOOR:0,reportFrom:()=>key,
   setTimeout:(fn,ms)=>setTimeout(fn, compressDeadlineMs==null ? ms : Math.min(ms,compressDeadlineMs)),clearTimeout,
   send:(res,status,payload,type,headers)=>res.finish({status,payload,headers}),
   sendJson:(res,status,payload)=>res.finish({status,payload})};
