@@ -35,7 +35,7 @@ const FE = "  // ---------------------------------------------- end SkyUI's favo
 const a = front.indexOf(FS);
 const b = a < 0 ? -1 : front.indexOf(FE, a);
 yes('thornswood-front.js has its favourite groups block', a >= 0 && b > a);
-if (a < 0 || b <= a) { process.exit(1); }
+if (a < 0 || b <= a) { throw new Error('the block is not in ' + FRONT); }
 const block = front.slice(a, b);
 
 const QUEST = 0xfe000a2a;
@@ -239,4 +239,4 @@ yes('the engine calls it needs are declared by the fork', (function () {
 })());
 
 console.log(failed ? failed + ' failed' : 'all passed');
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;
