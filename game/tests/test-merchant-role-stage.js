@@ -90,6 +90,17 @@ for(const merchant of roster.merchants.filter(row=>row.bookHold==='whiterun')) {
     records.set(reference,{id:reference,type:'ACHR',flags:0,fields:[{type:'NAME',data}]});
   }
   for(const [desc,type] of Object.entries(stage.types)){const value=id(desc);records.set(value,{id:value,type,flags:0,fields:[]});}
+  // Retired promises still resolve their original goods, even after those
+  // goods leave every live role table. Supply only the two measured cut
+  // armour records; do not turn arbitrary missing role evidence into a native record.
+  const retainedArmour=new Map([['56a9e:Skyrim.esm','q-solitude-enchanter-advanced-parcel'],
+    ['18388:Skyrim.esm','q-riften-smith-advanced-parcel']]),retainedIds=[];
+  for(const row of bundleContext.bundle.commissionRows()) if(row.accepting===false) for(const good of row.goods) {
+    const value=id(good.item);if(records.has(value))continue;
+    assert.equal(retainedArmour.get(good.item),row.id,'only the exact retired burial promises add missing fixture records');
+    assert.equal(row.itemTypes[good.item],'ARMO','retained burial goods keep their compiled native type');
+    records.set(value,{id:value,type:row.itemTypes[good.item],flags:0,fields:[]});retainedIds.push(value);
+  }
   const box=fixtureContext.worldOf({on:true}),merchantId=id(merchant.reference);
   box.actors[character]=box.actors[10];delete box.actors[10];
   const native={getIdFromDesc:id,getDescFromId:value=>value===character?characterDesc:descs.get(value) || value.toString(16)+':Skyrim.esm',
@@ -100,6 +111,14 @@ for(const merchant of roster.merchants.filter(row=>row.bookHold==='whiterun')) {
     getInventoryReceipt:value=>box.transfer.receipt(value),getSavedInventoryReceipt:value=>box.transfer.saved(value),
     compareAndSetInventory:(...args)=>box.transfer.cas(...args)};
   const prepared=bundleContext.bundle.prepareRoles(currentPopulation,native);
+  for(const value of retainedIds) {
+    assert.throws(()=>bundleContext.bundle.prepareRoles(currentPopulation,{...native,
+      lookupEspmRecordById:raw=>raw===value?{}:native.lookupEspmRecordById(raw)}),/Native merchant ledger evidence/,
+      'a retained promise still requires a real winning native record');
+    assert.throws(()=>bundleContext.bundle.prepareRoles(currentPopulation,{...native,
+      lookupEspmRecordById:raw=>raw===value?{record:{...records.get(raw),type:'MISC'},toGlobalRecordId:id=>id}:native.lookupEspmRecordById(raw)}),
+      /Native merchant ledger evidence/,'a retained promise still requires its exact native record type');
+  }
   const allowed=tables[merchant.role].supply[0],forbidden=Object.values(tables).flatMap(row=>row.buy)
     .find(desc=>!tables[merchant.role].buy.includes(desc));
   const goods=[allowed,forbidden],names=new Map(goods.map((desc,i)=>[desc,'Test Good '+i]));

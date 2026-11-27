@@ -6,7 +6,7 @@
 // half warmth, the cures (a potion of cure disease, the temple shrine, rest
 // and warmth for a chill, the healing spells by rank), the costs the needs
 // block now reads, the bench refused while a disease is bad or an arm is
-// broken, the wound kept through a death, and /hurt for staff.
+// broken, the temple wake clearing soft wounds, and /hurt for staff.
 //
 // It drives the REAL injury and disease block and the REAL needs block out of
 // gamemode.js over one fake mp and one fake clock, the way test-temp.js does.
@@ -376,7 +376,8 @@ if (NEEDS_SRC && HURT_SRC && P) {
     yes('a body does not bleed', r.damage.length === 0);
     r.set(me, 'dead', false);
     r.H.died(me);
-    yes('a death stops the bleed and keeps the cut', r.H.bleedRate(r.rec(me)) === 0 && !!woundOf(r, me, 'cut'));
+    yes('a death clears the cut and stops the bleed (#6616)', r.H.bleedRate(r.rec(me)) === 0 && !woundOf(r, me, 'cut') &&
+      r.rec(me).show.indexOf('Open cut') === -1);
 
     // The fever roll, in a rig of its own so nobody else's wound takes the dice.
     const r2 = rig();

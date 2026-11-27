@@ -95,8 +95,15 @@ if (RECIPES && KEPT) {
   yes('a nordic bow and a glass bow, made at the woodworking bench, burn nothing',
       ['Nordic Bow', 'Glass Bow'].every(function (n) { return !!byName(n) && grade(n) === 0; }));
   yes('a stalhrim sword burns Coke', grade('Stalhrim Sword') === 4);
-  yes('ancient nord at the skyforge takes Poor Charcoal, which does not get poorer',
-      FUEL[byName('Ancient Nord Armor')] && FUEL[byName('Ancient Nord Armor')].join() === '1,ancient nord,skyforge,0');
+  // #4676 cuts the burial armour's four recipes (#7346). Keep its metal rule
+  // on the archived row, and exercise the minimum on a live skyforge recipe.
+  const burial = 'f46cc:Skyrim.esm';
+  yes('the cut Ancient Nord armour stays refused and has no fuel entry, while its skyforge fuel rule stays Poor Charcoal',
+      RECIPES_JSON.recipes[burial].book === 'cut' && !!RECIPES[burial].nobody && !FUEL[burial] &&
+      Fuel.fuelOf(RECIPES_JSON.recipes[burial]).join() === '1,ancient nord,skyforge,0');
+  const wolfShield = '214aa:Hothtrooper44_ArmorCompilation.esp';
+  yes('the live Wolf Shield at the skyforge takes Poor Charcoal, which does not get poorer',
+      byName('Wolf Shield') === wolfShield && FUEL[wolfShield] && FUEL[wolfShield].join() === '1,steel,skyforge,0');
   yes('stalhrim at the skyforge takes briquette (the rule, on a row the table has no skyforge copy of)',
       Fuel.fuelOf({ name: 'Stalhrim Sword', benchName: 'CraftingSmithingSkyforge', inputItems: [] }).join() === '3,stalhrim,skyforge,0');
   yes('ebony at the skyforge takes Charcoal',

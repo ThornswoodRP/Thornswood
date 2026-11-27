@@ -34,6 +34,16 @@ const beginnerClasses = new Map([
   ['1aa61:Skyrim.esm', 'gatherer']
 ]);
 
+// Older published evidence omitted the false CTDA OR flag. The compiler now
+// writes it explicitly; true OR and every other condition field remain exact.
+function needsEvidence(needs) {
+  return needs.map(need => {
+    const proof = {...need};
+    if (proof.or === false) delete proof.or;
+    return proof;
+  });
+}
+
 function validate(catalogue, source = {recipes, tables, harvests}) {
   assert.deepEqual(Object.keys(catalogue).sort(), ['active', 'complete', 'quests', 'version']);
   assert.equal(catalogue.version, 1);
@@ -122,8 +132,12 @@ function validate(catalogue, source = {recipes, tables, harvests}) {
           // changed: a published row's needs may still name those tests.
           if (field === 'needs' && enabled.has(row.id) &&
               Array.isArray(good.recipe.needs) && good.recipe.needs.some(n => n && n.function === 448)) {
-            assert.deepEqual(good.recipe.needs.filter(n => !(n && n.function === 448)), recipe.needs,
+            assert.deepEqual(needsEvidence(good.recipe.needs.filter(n => !(n && n.function === 448))), needsEvidence(recipe.needs),
               'Recipe evidence/needs, less the perk tests #4826 took off');
+            continue;
+          }
+          if (field === 'needs') {
+            assert.deepEqual(needsEvidence(good.recipe.needs), needsEvidence(recipe.needs), 'Recipe evidence/needs');
             continue;
           }
           assert.deepEqual(good.recipe[field], recipe[field], 'Recipe evidence/' + field);
@@ -186,6 +200,19 @@ const commission = {id: 'q-whiterun-smith-straps', name: 'Straps for the forge',
 const one = row => ({version: 1, active: false, complete: false, quests: [row]});
 assert.doesNotThrow(() => validate(one(commission)), 'A source-bound inactive commission needs its own exact validation');
 const clone = value => JSON.parse(JSON.stringify(value));
+assert.ok(commission.goods[0].recipe.needs.length > 0 && commission.goods[0].recipe.needs.every(n => n.or === false),
+  'The ordinary recipe fixture has explicit false OR flags');
+const legacy = clone(commission);
+for (const need of legacy.goods[0].recipe.needs) delete need.or;
+assert.doesNotThrow(() => validate(one(legacy)), 'Omitted OR and explicit false describe the same condition');
+const legacySource = clone(recipes['1033de:Skyrim.esm']);
+for (const need of legacySource.needs) delete need.or;
+assert.doesNotThrow(() => validate(one(commission), {recipes: {...recipes, '1033de:Skyrim.esm': legacySource}, tables}),
+  'Explicit false evidence also matches a legacy source');
+const trueOr = clone(commission), trueOrSource = clone(recipes['1033de:Skyrim.esm']);
+trueOr.goods[0].recipe.needs[0].or = true; trueOrSource.needs[0].or = true;
+assert.doesNotThrow(() => validate(one(trueOr), {recipes: {...recipes, '1033de:Skyrim.esm': trueOrSource}, tables}),
+  'Matching true OR is retained rather than stripped');
 let refusals = 0;
 function rejects(edit, expected) {
   const row = clone(commission); edit(row);
@@ -196,6 +223,12 @@ rejects(row => {row.id += '\n';});
 rejects(row => {row.gate.half = 'edgewright';});
 rejects(row => {row.goods[0].item = '5ace4:Skyrim.esm';});
 rejects(row => {row.goods[0].recipe.needs = [];}, /Recipe evidence\/needs/);
+for (const or of [true, null, 0, 'false']) {
+  rejects(row => {row.goods[0].recipe.needs[0].or = or;}, /Recipe evidence\/needs/);
+}
+rejects(row => {row.goods[0].recipe.needs[0].asks += ' changed';}, /Recipe evidence\/needs/);
+rejects(row => {row.goods[0].recipe.needs[0].function++;}, /Recipe evidence\/needs/);
+rejects(row => {row.goods[0].recipe.needs[0].of = 'OtherItem';}, /Recipe evidence\/needs/);
 rejects(row => {row.goods[0].count = 0;}, /Commission quantity/);
 rejects(row => {row.goods[0].count = 256;}, /Commission quantity/);
 rejects(row => {row.goods[0].count = 1.5;}, /Commission quantity/);
