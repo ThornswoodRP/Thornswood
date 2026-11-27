@@ -81,7 +81,7 @@ const fsCounted = new Proxy(fs, {
 // The site's own functions, run with the counted fs.
 const lifted = ['slogFile', 'slogTrim', 'putSessionLogs', 'retentionSay', 'pruneSessionLogs', 'sessionKey',
                 'readSlogSet', 'dropKeptChat'];
-for (const n of ['writeSlogSet']) if (has(n)) lifted.push(n);
+for (const n of ['writeWhole', 'writeSlogSet']) if (has(n)) lifted.push(n);
 // eslint-disable-next-line no-new-func
 const make = new Function('fs', 'path', 'crypto', 'SLOGS', 'SLOG_ONE', 'SLOG_ALL', 'SLOG_DAYS', 'SLOG_NAMES',
   'sessionRows', 'isObjectLike',

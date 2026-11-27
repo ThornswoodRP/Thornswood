@@ -16,6 +16,7 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 const { DATA, FILES, FOR_BOT, FROM_BOT, PUBLIC, ROOT, UP } = require('./base');
+const { writeWhole } = require('./whole');
 
 const CFGFILE = path.join(ROOT, 'config.json');
 const DEFAULTS = {
@@ -113,11 +114,13 @@ try {
 }
 /* Saves the keys made into config.json as onDisk holds it, and nothing else
    of cfg. onDisk takes them only once the file has them, so a key that could
-   not be kept is not written later by the next one. Throws as writeFileSync
-   does, for the caller to say. */
+   not be kept is not written later by the next one. Written whole (#5890),
+   as it holds the Discord secret, the bot token, botKey and the cookie
+   secret: a config.json cut short is never used or written over again.
+   Throws as writeWhole does, for the caller to say. */
 function keep(made) {
   const next = Object.assign({}, onDisk, made);
-  fs.writeFileSync(CFGFILE, JSON.stringify(next, null, 2), 'utf8');
+  writeWhole(CFGFILE, JSON.stringify(next, null, 2));
   onDisk = next;
 }
 cfg.discord = Object.assign({ clientId:'', clientSecret:'', botToken:'', guildId:'', invite:'' },
@@ -263,8 +266,9 @@ for (const n of ['trouble.json', 'inbox.json', 'moderation.log']) {
       console.log('[thornswood-docs] ' + n + ' is in data and in data\\for-bot; the one in for-bot is used, the other is left for a look');
       continue;
     }
-    fs.copyFileSync(from, to);
-    fs.unlinkSync(from);
+    // Renamed, not copied and deleted (#5890): a copy cut short would be the
+    // one in for-bot, used from then on, with the whole one left behind.
+    fs.renameSync(from, to);
     console.log('[thornswood-docs] moved ' + n + ' into data\\for-bot, where the bot reads it');
   } catch (e) { console.log('[thornswood-docs] could not move ' + n + ' into data\\for-bot: ' + e.message); }
 }

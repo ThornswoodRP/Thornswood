@@ -70,7 +70,7 @@ let ROWS = [];
 function sessionRows() { return ROWS; }
 
 eval([
-  grab('slogFile'), grab('writeSlogSet'), grab('slogTrim'), grab('putSessionLogs'),
+  grab('writeWhole'), grab('slogFile'), grab('writeSlogSet'), grab('slogTrim'), grab('putSessionLogs'),
   grab('retentionSay'), grab('pruneSessionLogs'), grab('serverLogGenerations'), grab('serverLogSlice')
 ].join('\n'));
 
@@ -685,7 +685,7 @@ yes('a second note for the same session is not added twice', again.length === 1)
     const notAFolder = path.join(TMP, 'not-a-folder');
     fs.writeFileSync(notAFolder, 'a file where the session-logs folder should be');
     const putInto = new Function('fs', 'path', 'crypto', 'SLOGS', 'SLOG_ONE', 'SLOG_ALL', 'SLOG_NAMES',
-      grab('slogFile') + '\n' + grab('writeSlogSet') + '\n' + grab('slogTrim') + '\n' + grab('putSessionLogs') + '\nreturn putSessionLogs;')(
+      grab('writeWhole') + '\n' + grab('slogFile') + '\n' + grab('writeSlogSet') + '\n' + grab('slogTrim') + '\n' + grab('putSessionLogs') + '\nreturn putSessionLogs;')(
       fs, path, crypto, notAFolder, SLOG_ONE, SLOG_ALL, SLOG_NAMES);
     const got = putInto('fail2736fail2736', '111', { 'launcher.log': 'a crash worth keeping\n' });
     yes('a set the folder will not take answers failed, not nothing', got === 'failed');
