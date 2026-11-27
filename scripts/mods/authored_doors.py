@@ -1,4 +1,4 @@
-"""Remove the authored lock from every placed door outside the access policy."""
+"""Remove authored lock and parent-only activation restrictions on ordinary doors."""
 import re
 import struct
 
@@ -6,7 +6,9 @@ import struct
 DELETED = 0x20
 COMPRESSED = 0x40000
 DESC = re.compile(r'[1-9a-f][0-9a-f]{0,5}:[^:\\/]+\.(?:esm|esp|esl)', re.I)
-PLAIN = {b'EDID': None, b'DATA': (24,), b'XSCL': (4,), b'XAPD': (1,)}
+# xEdit's wbActionFlag defines XACT as uint32 action bits, never a form ID.
+PLAIN = {b'EDID': None, b'DATA': (24,), b'XSCL': (4,), b'XAPD': (1,), b'XACT': (4,),
+         b'ONAM': (0,)}  # REFR Open by Default is an empty marker, retained in place.
 WITH_FORM = {
     b'NAME': ((4,), (0,)),
     b'XOWN': ((4,), (0,)),
@@ -42,6 +44,13 @@ def references(rules):
     return keys('protectedCells'), keys('protectedDoors')
 
 
+def parent_only(fields):
+    values = [data for tag, data in fields if tag == b'XAPD']
+    if len(values) > 1 or any(data not in (b'\0', b'\1') for data in values):
+        stop('unknown XAPD activation layout or value')
+    return values == [b'\1']
+
+
 def entries(plugins, winners, rules, subrecords, *, handled=(), protected=None):
     cells, doors = references(rules)
     bases = {gid for (tag, gid), row in winners.items() if tag == b'DOOR' and not row.flags & DELETED}
@@ -54,7 +63,7 @@ def entries(plugins, winners, rules, subrecords, *, handled=(), protected=None):
         plugin = plugins[row.pi]
         fields = subrecords(plugin.data(row))
         locks = [data for name, data in fields if name == b'XLOC']
-        if not locks:
+        if not locks and not any(name == b'XAPD' for name, _ in fields):
             continue
         raw_base = next((data for name, data in fields if name == b'NAME'), b'')
         if len(raw_base) != 4 or plugin.gid(struct.unpack('<I', raw_base)[0]) not in bases:
@@ -66,20 +75,30 @@ def entries(plugins, winners, rules, subrecords, *, handled=(), protected=None):
             if protected is not None:
                 protected.append(gid)
             continue
+        restricted = parent_only(fields)
         if gid in handled:
+            # The independently checked gate/Riftweald copies do not accept
+            # XAPD today. Never let a future changed source evade this pass.
+            if restricted:
+                stop('an existing override targets a parent-only activation door')
             continue
-        if cell is None or len(locks) != 1 or len(locks[0]) not in (12, 16, 20):
+        if not locks and not restricted:
+            continue
+        if cell is None or len(locks) > 1 or any(len(lock) not in (12, 16, 20) for lock in locks):
             stop('unknown placement or lock layout at %s 0x%08X' % (plugin.name, row.fid))
         out.append(row)
     return out
 
 
 def copy_pairs(plugin, fields, numbers):
-    """Drop XLOC and remap every retained field that stores form IDs."""
+    """Drop XLOC, clear XAPD in place and remap retained form IDs."""
+    parent_only(fields)  # Validate even when called independently of entries.
     cooked = []
     for tag, data in fields:
         if tag == b'XLOC':
             continue
+        if tag == b'XAPD':
+            data = b'\0'
         what = '%s %s on authored door' % (plugin.name, tag.decode())
         if tag in WITH_FORM or tag == b'XLRT':
             if tag == b'XLRT':
@@ -105,6 +124,19 @@ def copy_pairs(plugin, fields, numbers):
     return cooked
 
 
+def summary(plugins, rows, subrecords, describe):
+    unlocked, direct = [], []
+    for row in rows:
+        src = plugins[row.pi]
+        fields = subrecords(src.data(row))
+        desc = describe(src.gid(row.fid))
+        if any(tag == b'XLOC' for tag, _ in fields):
+            unlocked.append(desc)
+        if parent_only(fields):
+            direct.append(desc)
+    return {'authoredDoorsUnlocked': unlocked, 'authoredDoorsDirectActivation': direct}
+
+
 def verify(plugins, source_winners, final_winners, last, rules, subrecords, numbers, *, handled=()):
     failures = []
     protected = []
@@ -122,7 +154,8 @@ def verify(plugins, source_winners, final_winners, last, rules, subrecords, numb
                 actual.ctx is None or actual.ctx[1] is None or last.gid(actual.ctx[1]) != src.gid(row.ctx[1]) or
                 actual.ctx[2] != row.ctx[2] or (last.gid(actual.ctx[0]) if actual.ctx[0] else None) !=
                 (src.gid(row.ctx[0]) if row.ctx[0] else None) or subrecords(last.data(actual)) != expected):
-            failures.append('%s 0x%08X has no exact XLOC-only override' % (src.name, row.fid))
+            failures.append('%s 0x%08X has no exact door-default override' % (src.name, row.fid))
     for row in entries(plugins, final_winners, rules, subrecords):
-        failures.append('door %s 0x%08X remains default-locked outside the exceptions' % (plugins[row.pi].name, row.fid))
+        failures.append('door %s 0x%08X retains an authored lock or parent-only activation outside the exceptions'
+                        % (plugins[row.pi].name, row.fid))
     return failures
