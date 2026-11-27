@@ -122,7 +122,7 @@ function boot(w, prior) {
       getUserGuid: id => id === 2 ? w.guid : 'staff-connection',
       getActorRuntimeIdentity: id => { assert.equal(id, B); return w.runtime; },
       getNpcAIState: id => { assert.equal(id, B); return { profileId: w.targetProfile, lifeGeneration: w.life, isHuman: true, isConnected: true }; },
-      kick: id => { r.kicked.push(id); r.sessionEvents.push(['kick', id]); }
+      kick: id => { if (w.kickFault) throw new Error('injected connection termination failure'); r.kicked.push(id); r.sessionEvents.push(['kick', id]); }
     }
   };
   if (!prior) vm.createContext(box);
@@ -720,6 +720,17 @@ try {
     three.command('/silence ' + TARGET + ' 10m');
     assert.deepEqual(Object.keys(three.posts.at(-1)), ['profiles']);
     assert.equal(three.posts.at(-1).profiles[TARGET], w.now + 10 * 60000);
+  });
+  test('failed account-freeze connection termination is visible and keeps admission held', () => {
+    const { w, r } = accountWorld(); r.command('/freezeaccount ' + TARGET);
+    w.targetProfile = ALT; w.kickFault = true;
+    const before = r.logs.length;
+    assert.doesNotThrow(() => r.box.__thornswoodStaff.freezeTick());
+    assert.ok(r.logs.slice(before).includes('staff restraints: account-freeze connection termination failed'));
+    assert.equal(r.box.__thornswoodStaff.restraintAdmission(ALT, ACCOUNT), false);
+    assert.ok(JSON.parse(fs.readFileSync(w.file)).accountFrozen[ACCOUNT]);
+    w.kickFault = false; r.box.__thornswoodStaff.freezeTick();
+    assert.deepEqual(r.kicked, [2], 'the existing periodic enforcement can succeed on its next tick');
   });
 } finally {
   const resolved = path.resolve(TEMP);

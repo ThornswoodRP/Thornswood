@@ -65743,7 +65743,7 @@ module.exports = {
         tell(k, sentence);
         if (!sameMovementIdentity(who)) continue;
         try { sessionEnds(k, sentence); } catch (e) { log('staff restraints: account-freeze session notice failed'); }
-        if (sameMovementIdentity(who)) { try { mp.kick(who.user); } catch (e) { } }
+        if (sameMovementIdentity(who)) { try { mp.kick(who.user); } catch (e) { log('staff restraints: account-freeze connection termination failed'); } }
         continue;
       }
       var f = frozenFor(k);
