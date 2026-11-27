@@ -46,7 +46,7 @@ const { ADMIN, ADMIN_DAYS, allowed, COOKIE, cookies, discordReady, endSignIn,
   personReportRefusal, PLAY_ANSWER_MS, PLAY_BODY_MS, sameSecret, sign,
   standCache, standingCached, standingLate, standingsForDoor, SUBMIT_DOORS,
   SUBMIT_WAIT_MS, who, within } = require('./auth');
-const { ATTEMPT, ATTEMPT_MS, attemptCookie, attemptsSpent, body, BodyFailed,
+const { ATTEMPT, ATTEMPT_MS, attemptCookie, attemptsSpent, body, BodyFailed, bodyObject,
   crossSite, cspFor, keyInAddress, origin, passBodyFailure,
   PERMISSIONS_POLICY, rangeReply, secureHere, send, sendJson, setCookie,
   TYPES } = require('./http');
@@ -332,7 +332,7 @@ async function handle(req, res) {
       return sendJson(res, 403, { error: 'Discord sign in only. The password is off.' });
     }
     let given = '';
-    try { given = (JSON.parse(await body(req, 4096)) || {}).password || ''; }
+    try { given = (await bodyObject(req, 4096)).password || ''; }
     catch (e) { passBodyFailure(e); }
     if (!cfg.password || !sameSecret(given, String(cfg.password))) {
       return sendJson(res, 401, { error: 'wrong password' });
@@ -770,7 +770,7 @@ async function handle(req, res) {
     const early = reportRefusal(sender, Date.now());
     if (early) return refuse(early);
     let o;
-    try { o = JSON.parse(await body(req, 20000)); }
+    try { o = await bodyObject(req, 20000); }
     catch (e) {
       passBodyFailure(e);
       return sendJson(res, 400, { error: REPORT_UNREAD });
@@ -863,7 +863,7 @@ async function handle(req, res) {
       return sendJson(res, 401, { error: 'no' });
     }
     let o;
-    try { o = JSON.parse(await body(req, 256 * 1024)) || {}; }
+    try { o = await bodyObject(req, 256 * 1024); }
     catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
     const srv = route.indexOf('/dev/') === 0 ? 'dev' : 'main';
     const turn = takeBackTurn(srv, o.done, Date.now());
@@ -887,7 +887,7 @@ async function handle(req, res) {
       return sendJson(res, 401, { error: 'no' });
     }
     let o;
-    try { o = JSON.parse(await body(req, 8000)) || {}; }
+    try { o = await bodyObject(req, 8000); }
     catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
     const dev = route.indexOf('/dev/') === 0;
     const kind = o.kind === 'report' ? 'report' : (o.kind === 'help' ? 'help' : (o.kind === 'problem' ? 'problem' : ''));
@@ -968,7 +968,7 @@ async function handle(req, res) {
       return sendJson(res, 401, { error: 'no' });
     }
     let o;
-    try { o = JSON.parse(await body(req, 8000)) || {}; }
+    try { o = await bodyObject(req, 8000); }
     catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
     const from = staffGame[1] ? 'the dev server' : 'the live server';
     const byPid = Number(o.byProfileId) || 0;
@@ -1062,7 +1062,7 @@ async function handle(req, res) {
   if (route === '/api/ticket' && req.method === 'POST') {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o;
-    try { o = JSON.parse(await body(req, 40000)); }
+    try { o = await bodyObject(req, 40000); }
     catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
     if (!sameSecret(o.key, String(cfg.botKey))) {
       return sendJson(res, 401, { error: 'no' });
@@ -1768,7 +1768,7 @@ async function handle(req, res) {
     const gs = await galleryStaff(url, w);
     if (!gs.ok) return sendJson(res, gs.code, gs.body);
     let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192); } catch (e) { passBodyFailure(e); }
     const name = String(o.name || '');
     if (!name) return sendJson(res, 400, { error: 'no name' });
     // A removed submission does not come back by its name (#2352).
@@ -1858,7 +1858,7 @@ async function handle(req, res) {
     const gs = await galleryStaff(url, w);
     if (!gs.ok) return sendJson(res, gs.code, gs.body);
     let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192); } catch (e) { passBodyFailure(e); }
     const name = String(o.name || '');
     if (!name) return sendJson(res, 400, { error: 'no name' });
 
@@ -1988,7 +1988,7 @@ async function handle(req, res) {
     const from = who.from, discordId = who.discordId;
 
     let o;
-    try { o = JSON.parse(await body(req, 8192)) || {}; }
+    try { o = await bodyObject(req, 8192); }
     catch (e) {
       passBodyFailure(e);
       return sendJson(res, 400, { ok: false, error: REPORT_UNREAD });
@@ -2048,7 +2048,7 @@ async function handle(req, res) {
     const gs = await galleryStaff(url, w);
     if (!gs.ok) return sendJson(res, gs.code, gs.body);
     let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192); } catch (e) { passBodyFailure(e); }
     const id = String(o.id || '');
     if (!id) return sendJson(res, 400, { error: 'no id' });
     const reports = jsonFile(GREPORTS, []);
@@ -2083,7 +2083,7 @@ async function handle(req, res) {
   if (p === '/api/play/join' && req.method === 'POST') {
     const by = Date.now() + PLAY_ANSWER_MS;
     let o = {};
-    try { o = JSON.parse(await body(req, 8192, PLAY_BODY_MS)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192, PLAY_BODY_MS); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 401, { ok:false, why:'link', message:
       'This copy is not linked to a Discord account yet.' });
@@ -2328,7 +2328,7 @@ async function handle(req, res) {
   if ((p === '/api/play/start' || p === '/api/play/end') && req.method === 'POST') {
     const ending = (p === '/api/play/end');
     let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 401, { ok: false, why: 'link' });
     const key = sessionKey(o.session);
@@ -2436,7 +2436,7 @@ async function handle(req, res) {
   */
   if (p === '/api/play/logs' && req.method === 'POST') {
     let o = {};
-    try { o = JSON.parse(await body(req, SLOG_ALL + 64 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, SLOG_ALL + 64 * 1024); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 401, { ok: false, why: 'link' });
     const key = sessionKey(o.session);
@@ -2542,7 +2542,7 @@ async function handle(req, res) {
   if ((route === '/api/roster' || route === '/dev/api/roster') && req.method === 'POST') {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
-    try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 4 * 1024 * 1024); } catch (e) { passBodyFailure(e); }
     if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const who = (o.who && typeof o.who === 'object') ? o.who : {};
     const store = jsonFile(ROSTER, { who: {} });
@@ -2633,7 +2633,7 @@ async function handle(req, res) {
   if ((route === '/api/economy' || route === '/dev/api/economy') && req.method === 'POST') {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
-    try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 4 * 1024 * 1024); } catch (e) { passBodyFailure(e); }
     if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const srv = (String(o.server || '') === 'dev' || route.indexOf('/dev/') === 0) ? 'dev' : 'main';
     const now = Date.now();
@@ -2657,7 +2657,7 @@ async function handle(req, res) {
   if ((route === '/api/ledger' || route === '/dev/api/ledger') && req.method === 'POST') {
     if (!cfg.botKey) return sendJson(res, 404, { error: 'not set up' });
     let o = {};
-    try { o = JSON.parse(await body(req, 4 * 1024 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 4 * 1024 * 1024); } catch (e) { passBodyFailure(e); }
     if (!sameSecret(o.key, String(cfg.botKey))) return sendJson(res, 401, { error: 'no' });
     const srv = (String(o.server || '') === 'dev' || route.indexOf('/dev/') === 0) ? 'dev' : 'main';
     const n = takeLedger(srv, o.rows, Date.now());
@@ -2667,7 +2667,7 @@ async function handle(req, res) {
 
   if (p === '/api/play/roster' && req.method === 'POST') {
     let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 401, { ok: false, why: 'link' });
     const linked = jsonFile(LINKED, {});
@@ -2914,7 +2914,7 @@ async function handle(req, res) {
       return sendJson(res, 401, { error: 'no' });
     }
     let o = {};
-    try { o = JSON.parse(await body(req, 4096)) || {}; } catch (e) {
+    try { o = await bodyObject(req, 4096); } catch (e) {
       return sendJson(res, 400, { ok: false, said: 'The site could not read that request.' });
     }
     return sendJson(res, 200, await changeOffice(o, route === '/dev/api/office' ? 'dev' : 'main'));
@@ -2946,7 +2946,7 @@ async function handle(req, res) {
   */
   if (p === '/api/play/owns' && req.method === 'POST') {
     let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 200, { ok: false, why: 'ticket' });
     const pid = Number(o.profileId) || 0;
@@ -3025,7 +3025,7 @@ async function handle(req, res) {
   if (p === '/api/play/pass' && req.method === 'POST') {
     const by = Date.now() + PLAY_ANSWER_MS;
     let o = {};
-    try { o = JSON.parse(await body(req, 8192, PLAY_BODY_MS)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192, PLAY_BODY_MS); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 401, { ok: false, why: 'link', message:
       'This copy is not linked to a Discord account yet.' });
@@ -3119,7 +3119,7 @@ async function handle(req, res) {
   if (p === '/api/play/who' && req.method === 'POST') {
     const by = Date.now() + PLAY_ANSWER_MS;
     let o = {};
-    try { o = JSON.parse(await body(req, 8192)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     if (!t) return sendJson(res, 401, { ok:false, why:'link' });
     const st = await within(standingCached(t.d), by - Date.now(), () => standingLate(t.d));
@@ -3154,7 +3154,7 @@ async function handle(req, res) {
   if (p === '/api/play/characters' && req.method === 'POST') {
     const by = Date.now() + PLAY_ANSWER_MS;
     let o = {};
-    try { o = JSON.parse(await body(req, 8192, PLAY_BODY_MS)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 8192, PLAY_BODY_MS); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     const d = t ? chars.accountKey(t.d) : '';
     if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
@@ -3202,7 +3202,7 @@ async function handle(req, res) {
   */
   if (p === '/api/play/settings' && req.method === 'POST') {
     let o = {};
-    try { o = JSON.parse(await body(req, 1536 * 1024)) || {}; } catch (e) { passBodyFailure(e); }
+    try { o = await bodyObject(req, 1536 * 1024); } catch (e) { passBodyFailure(e); }
     const t = readTicket(o.ticket);
     const d = t ? chars.accountKey(t.d) : '';
     if (!d) return sendJson(res, 401, { ok: false, why: 'link', message:
@@ -3293,7 +3293,7 @@ async function handle(req, res) {
          written over the file, so a mark somebody else made after the page
          opened was wiped by the next one. */
       let o;
-      try { o = JSON.parse(await body(req, 8192)); }
+      try { o = await bodyObject(req, 8192); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
       const id = o && typeof o.id === 'string' ? o.id : '';
       if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(id)) return sendJson(res, 400, { error: 'a mark names its test' });
@@ -3330,7 +3330,7 @@ async function handle(req, res) {
     if (p === '/api/staff/takeback' && req.method === 'POST') {
       if (!w.admin) return sendJson(res, 403, { error: 'admins only', message: 'Only an admin can take things back.' });
       let o;
-      try { o = JSON.parse(await body(req, 8000)) || {}; }
+      try { o = await bodyObject(req, 8000); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
       const ask = cleanTakeBackAsk(o);
       if (ask.error) return sendJson(res, 400, { error: ask.error });
@@ -3383,7 +3383,7 @@ async function handle(req, res) {
         return sendJson(res, 403, { error: 'admins only', message: 'Only an admin can undo a PK.' });
       }
       let o;
-      try { o = JSON.parse(await body(req, 8000)) || {}; }
+      try { o = await bodyObject(req, 8000); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
       const id = String(o.id || '').trim();
       const linked = jsonFile(LINKED, {});
@@ -3569,7 +3569,7 @@ async function handle(req, res) {
        rather than separate from it. */
     if (p === '/api/session-keep' && req.method === 'PUT') {
       let obj;
-      try { obj = JSON.parse(await body(req)); }
+      try { obj = await bodyObject(req); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
       const key = sessionKey(obj && obj.session);
       const rows = sessionRows();
@@ -3592,7 +3592,7 @@ async function handle(req, res) {
        who and when. */
     if (p === '/api/session-looked' && req.method === 'PUT') {
       let obj;
-      try { obj = JSON.parse(await body(req)); }
+      try { obj = await bodyObject(req); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
       const key = sessionKey(obj && obj.session);
       const rows = sessionRows();
@@ -3614,7 +3614,7 @@ async function handle(req, res) {
        somebody else's session. */
     if (p === '/api/session-note' && req.method === 'PUT') {
       let obj;
-      try { obj = JSON.parse(await body(req)); }
+      try { obj = await bodyObject(req); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
       const key = sessionKey(obj && obj.session);
       const rows = sessionRows();
@@ -3636,7 +3636,7 @@ async function handle(req, res) {
          out, deleted, or taken by a deletion request) is said, never made
          again. The answer carries the inbox as it now is. */
       let o;
-      try { o = JSON.parse(await body(req, 4096)); }
+      try { o = await bodyObject(req, 4096); }
       catch (e) { passBodyFailure(e); return sendJson(res, 400, { error: 'bad json' }); }
       const id = o && typeof o.id === 'string' ? o.id : '';
       const act = o && o.act;

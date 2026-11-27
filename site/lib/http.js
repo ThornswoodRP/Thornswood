@@ -9,7 +9,7 @@
 // Its functions, given before it loads any other module, so a module that
 // needs this one back finds them (a function is there from the top of its
 // file).
-module.exports = { body, crossSite, cspFor, passBodyFailure, rangeReply,
+module.exports = { body, bodyObject, crossSite, cspFor, passBodyFailure, rangeReply,
   send };
 
 const fs     = require('fs');
@@ -161,6 +161,22 @@ class BodyFailed extends Error {
   constructor(status, why, words) { super(why); this.status = status; this.why = why; this.words = words; }
 }
 function passBodyFailure(e) { if (e instanceof BodyFailed) throw e; }
+/*
+  A request body read as the JSON object every route then takes fields from
+  (#4382). JSON.parse also takes null, a number, a string or a list, and a
+  route that read o.title or o.key from null answered 500 and logged a
+  TypeError, before any sign in or key was asked for. So anything that is not
+  an object is refused here with the same SyntaxError a body that is not JSON
+  at all gets, and each route answers it the way it already answers that.
+  A BodyFailed (too big, too slow, gone) still goes through as it was.
+*/
+async function bodyObject(req, cap, waitMs) {
+  const v = JSON.parse(await body(req, cap, waitMs));
+  if (!v || typeof v !== 'object' || Array.isArray(v)) {
+    throw new SyntaxError('the body is JSON, but not an object');
+  }
+  return v;
+}
 function body(req, cap, waitMs) {
   const max = cap || 4000000;
   const wait = waitMs > 0 ? waitMs : 10000 + Math.ceil(max / 65536) * 1000;
