@@ -139,6 +139,12 @@ async function ask(o) {
   const env = {
     p: '/api/play/pass', req: { method: 'POST' }, res: {},
     body: async function () { return JSON.stringify(o.body); },
+    // The route reads its body as an object (lib/http.js, #4382).
+    bodyObject: async function () {
+      const v = JSON.parse(JSON.stringify(o.body));
+      if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+      return v;
+    },
     readTicket: function (s) { return s ? { d: String(s), n: 'name-' + s } : null; },
     standingCached: async function (d) {
       return Object.assign({ id: String(d), name: 'n', inGuild: true, banned: false, play: true,

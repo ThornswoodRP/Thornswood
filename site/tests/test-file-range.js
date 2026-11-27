@@ -103,6 +103,10 @@ function newestSetup() { return null; }
 const rangeSrc = grab('function rangeReply(');
 yes('server.js has one range function, rangeReply()', !!rangeSrc);
 if (rangeSrc) eval(rangeSrc);
+// rangeReply and the routes send a file through streamFile, and ask isFile
+// whether there is one to send (#4402).
+const { pipeline } = require('stream');
+eval(grab('function isFile(') + '\n' + grab('function streamFile('));
 
 const fileSrc = route('const dl = p.match(', "if (dl && req.method === 'GET')");
 const staticSrc = route("if (req.method === 'GET' && /^\\/[A-Za-z0-9._-]+$/.test(p))",

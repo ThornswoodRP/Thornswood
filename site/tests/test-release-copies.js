@@ -140,11 +140,12 @@ async function main() {
 
   // ---- 4. the routes ------------------------------------------------------
   const assetRoute = server.indexOf("const feedAsset = p.match(");
-  const assetEnd = server.indexOf('return fs.createReadStream(file).pipe(res);', assetRoute);
+  // The file goes out through streamFile (#4402).
+  const assetEnd = server.indexOf('return streamFile(res, file, 200, whole);', assetRoute);
   const assetBody = assetRoute >= 0 && assetEnd > assetRoute ? server.slice(assetRoute, assetEnd) : '';
   const redirectAt = assetBody.indexOf('releaseCopy(feedAsset[1], feedAsset[2], st.size)');
   yes('the feed asset route asks for the Release copy after it found its own file',
-      redirectAt > assetBody.indexOf('fs.existsSync(file)') && redirectAt > assetBody.indexOf('const st = fs.statSync(file)'));
+      redirectAt > assetBody.indexOf('isFile(file)') && redirectAt > assetBody.indexOf('const st = fs.statSync(file)'));
   yes('  and answers 302 to where GitHub keeps it, from the API\'s asset route, before any byte is sent',
       /const at = copy \? await assetLocation\(copy\) : null;\s*if \(at && at\.url\) \{\s*res\.writeHead\(302, \{ location: at\.url, 'cache-control': 'no-store'/.test(assetBody.slice(redirectAt)) &&
       redirectAt < assetBody.indexOf('rangeReply('));

@@ -2,7 +2,7 @@
   Nightly-PlainIssues.ps1
 
   Names every issue and issue comment made in the last day that is not
-  written plain. Run by .github/workflows/nightly.yml in its step "Issues
+  written plain. Pull requests and their comments are not read. Run by .github/workflows/nightly.yml in its step "Issues
   and comments written plain", with GH_TOKEN and REPO set:
 
       .\scripts\dev\Nightly-PlainIssues.ps1 -Run
@@ -117,7 +117,9 @@ function Test-Team {
 }
 
 # The issues and comments made since $Since (and never before $Floor) that
-# break a rule. Pull requests are left out: only an issue's text is re-filed.
+# break a rule. Pull requests are left out, and so are the comments on them:
+# only an issue's text is re-filed. GitHub's issues/comments lists both, and a
+# pull request's comment is the one whose page is /pull/<number> (#4310).
 function Find-NotPlain {
     param([DateTime]$Now = [DateTime]::UtcNow, [double]$Hours = 26)
     $since = $Now.AddHours(-$Hours)
@@ -125,7 +127,7 @@ function Find-NotPlain {
     $stamp = $since.ToString('yyyy-MM-ddTHH:mm:ssZ')
     $isNew = { param($i) ([DateTime]$i.created_at).ToUniversalTime() -ge $since }
     $issues = @(Get-PlainPages ('issues?state=all&since=' + $stamp) | Where-Object { -not $_.pull_request -and (& $isNew $_) })
-    $comments = @(Get-PlainPages ('issues/comments?since=' + $stamp) | Where-Object { & $isNew $_ })
+    $comments = @(Get-PlainPages ('issues/comments?since=' + $stamp) | Where-Object { ([string]$_.html_url) -notmatch '/pull/\d+#' -and (& $isNew $_) })
     $found = @()
     foreach ($i in $issues) {
         $b = @(Test-Plain -Text ([string]$i.title + "`n" + [string]$i.body) -Team $false)

@@ -194,6 +194,12 @@ const SITE_CFG = { botKey: 'door-key',
                    access: { dev: ['Owner', 'Dev'] } };
 
 async function runRoute(code, env) {
+  // The routes read their body with lib/http.js bodyObject (#4382): JSON, and an object.
+  if (env.body && !env.bodyObject) env.bodyObject = async function () {
+    const v = JSON.parse(await env.body.apply(null, arguments));
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+    return v;
+  };
   const names = Object.keys(env);
   const fn = new AsyncFunction(names.join(','), HELPERS + code + '\nreturn "fell through";');
   let sent = null;
@@ -314,6 +320,12 @@ async function checkIn(table, discordId, profileId, standingOver, world) {
       log: function (s) { state.logged.push(String(s)); },
       error: function (s) { state.logged.push(String(s)); }
     }
+  };
+  // The routes read their body with lib/http.js bodyObject (#4382): JSON, and an object.
+  if (env.body && !env.bodyObject) env.bodyObject = async function () {
+    const v = JSON.parse(await env.body.apply(null, arguments));
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SyntaxError('the body is JSON, but not an object');
+    return v;
   };
   const names = Object.keys(env);
   const run = new AsyncFunction(names.join(','), HELPERS + block + '\nreturn "fell through";');

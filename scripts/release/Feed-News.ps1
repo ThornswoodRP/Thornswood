@@ -94,7 +94,7 @@ function Get-FeedNewsList($doc, [string]$SiteDir, [string]$SiteUrl = 'https://th
     $ptr = Get-FeedNewsPointer $doc
     if ($null -ne $ptr) {
         $sha = ([string]$ptr.sha256).ToLowerInvariant()
-        $tmp = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-news-' + [Guid]::NewGuid().ToString('N') + '.json')
+        $tmp = & (Join-Path $PSScriptRoot 'Get-ScratchDir.ps1') ('thornswood-news-' + [Guid]::NewGuid().ToString('N') + '.json')
         try {
             [void](Get-FeedAssetFile ([string]$ptr.url) $sha $tmp $SiteDir $SiteUrl)
             $text = ([IO.File]::ReadAllText($tmp)).TrimStart([char]0xFEFF)

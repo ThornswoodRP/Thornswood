@@ -18,8 +18,10 @@
 # Any failure opens an issue on the board, or adds to the one already open,
 # and the first night everything passes closes it (Nightly-Issue.ps1),
 # with a link to the run; the last lines of each harness job name every
-# harness that failed and the ten slowest. Runs at 03:00 Mountain (09:00
-# UTC), when nobody is playing, and by hand from the Actions tab.
+# harness that failed and the ten slowest. Runs at 9:00 AM UTC, when nobody
+# is playing, and by hand from the Actions tab. GitHub's schedule is in UTC
+# and does not move with daylight saving, so in Mountain time that is 2:00 AM
+# in winter (MST) and 3:00 AM in summer (MDT) (#4290).
 #
 # Three jobs since #2357. On 12 Oct the one job that ran everything used 43
 # of its 45 minutes, nearly all of it the harnesses (692 of them, 2,587 s
@@ -348,14 +350,39 @@ jobs:
           # it. tests\test-4165-pin-tags.ps1 runs it against a stand-in GitHub.
           .\scripts\dev\Check-ActionPins.ps1 -Run
 
+  shares:
+    # How many harness shares the night runs, said once (#4298). The
+    # harnesses job's matrix, its -Of and its name, and the harness report's
+    # count of the reports it waits for all come from here. Until #4298 the
+    # matrix listed the shares while -Of, the job name and -Expect each typed
+    # 2 by hand, so a share dropped from the matrix left -Of 2 and the other
+    # share's harnesses never ran, on a green night. Another share is one
+    # more here and nothing else.
+    name: Count the harness shares
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      list: ${{ steps.count.outputs.list }}
+      count: ${{ steps.count.outputs.count }}
+    steps:
+      - name: Count the harness shares
+        id: count
+        shell: pwsh
+        run: |
+          $shares = 2
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('list=' + (ConvertTo-Json -Compress -InputObject @(1..$shares)))
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value ('count=' + $shares)
+
   harnesses:
-    # The test harnesses, in shares (#2357). One job for each entry under
-    # shard, each on a runner of its own with 45 minutes of its own; another
-    # share is not only one more number in shard, but the job name's "of 2"
-    # and -Of 2 have to change with the list (#4298). fail-fast off: one
-    # share failing must not cancel the other, whose list of what failed is
-    # half the night's answer.
-    name: Test harnesses (${{ matrix.shard }} of 2)
+    # The test harnesses, in shares (#2357). One job for each share the
+    # "shares" job lists, each on a runner of its own with 45 minutes of its
+    # own; -Of and the name take the count from the matrix itself
+    # (strategy.job-total), as the gate's shares do in build.yml (#4298).
+    # fail-fast off: one share failing must not cancel the other, whose list
+    # of what failed is half the night's answer.
+    name: Test harnesses (${{ matrix.shard }} of ${{ strategy.job-total }})
+    needs: shares
     # Each share is a build check's worth of harnesses, on a runner of its own.
     runs-on: windows-latest
     timeout-minutes: 45
@@ -366,7 +393,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: ${{ fromJSON(needs.shares.outputs.list) }}
     steps:
       # Every commit and tree, no old file contents (about a second more than
       # a shallow one, measured 1 Nov 2026): the harnesses run the release
@@ -418,8 +445,8 @@ jobs:
           # whole clock still fits, so the list of what failed is printed
           # before the job could be cancelled.
           # One report (#5295): each share keeps a test case for every check,
-          # and the job "Harness report" merges both shares' into one.
-          .\scripts\dev\Nightly-Harnesses.ps1 -Shard ${{ matrix.shard }} -Of 2 -BudgetSeconds 2400 -Report (Join-Path $env:RUNNER_TEMP 'harness-report\share.xml')
+          # and the job "Harness report" merges every share's into one.
+          .\scripts\dev\Nightly-Harnesses.ps1 -Shard ${{ matrix.shard }} -Of ${{ strategy.job-total }} -BudgetSeconds 2400 -Report (Join-Path $env:RUNNER_TEMP 'harness-report\share.xml')
 
       - name: Keep this share's report for the harness report
         if: ${{ !cancelled() }}
@@ -437,11 +464,12 @@ jobs:
           retention-days: 1
 
   harness-report:
-    # The night's checks in one report (#5295): both shares' merged, kept
+    # The night's checks in one report (#5295): every share's merged, kept
     # with the run, and every failing check named by harness on the run's
-    # page. A share that left no report is named and turns this red.
+    # page. A share that left no report is named and turns this red; how
+    # many it waits for is the "shares" job's count (#4298).
     name: Harness report
-    needs: harnesses
+    needs: [shares, harnesses]
     if: ${{ !cancelled() && needs.harnesses.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -464,11 +492,13 @@ jobs:
       - name: Merge the shares' reports into one
         id: merge
         shell: pwsh
+        env:
+          SHARES: ${{ needs.shares.outputs.count }}
         run: |
           $in = Join-Path $env:RUNNER_TEMP 'harness-reports'
           New-Item -ItemType Directory -Path $in -Force | Out-Null
           $failed = Join-Path $env:RUNNER_TEMP 'harness-failed.md'
-          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect 2 -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses' -Failed $failed
+          .\scripts\dev\Merge-HarnessReports.ps1 -Path $in -Expect ([int]$env:SHARES) -Out (Join-Path $env:RUNNER_TEMP 'harness-report.xml') -Title 'Nightly harnesses' -Failed $failed
           $code = $LASTEXITCODE
           # The list goes on as this job's output "failed" whether or not
           # every share's report came: a share that left none is named in

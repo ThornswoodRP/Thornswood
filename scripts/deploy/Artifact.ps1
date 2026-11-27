@@ -917,6 +917,13 @@ function New-ThornswoodDeployRecord($Artifact, [string]$Root) {
   the same record beside what it runs (-Beside, default <Root>/thornswood-
   deploy.json), and a line in history.log. Called once the new files are in
   place, never before.
+
+  When the box has not written all three it throws, saying the part runs the
+  new files and which record still names the old ones, and every deploy that
+  calls it stops there with exit 1 (#4221). Until 27 Nov 2026 it printed a
+  yellow line and returned, the box said RECORDED even when the copy beside
+  the part failed, and the seven deploys that call it went on to PASS while
+  the record beside the part named the build before.
 #>
 function Set-ThornswoodArtifactCurrent {
   param(
@@ -935,16 +942,22 @@ function Set-ThornswoodArtifactCurrent {
   $far = $store + '/current/' + $rec.part + '.json'
   Send-ThornswoodArtifactFile $local $Target $SshArgs $far
   $line = ($rec.deployedUtc + ' ' + $rec.part + ' ' + $rec.name + ' from ' + $rec.from).Replace("'", "''")
+  # RECORDED only once both are written: a copy that fails stops the rest, so
+  # history.log never has a line for a record that is not beside the part.
   $said = Invoke-ThornswoodArtifactRemote $Target $SshArgs @"
-Copy-Item -LiteralPath '$($far.Replace('/', '\'))' -Destination '$($Beside.Replace('/', '\').Replace("'", "''"))' -Force
-Add-Content -LiteralPath '$($store.Replace('/', '\'))\history.log' -Value '$line'
-'RECORDED'
+`$ErrorActionPreference = 'Stop'
+try {
+  Copy-Item -LiteralPath '$($far.Replace('/', '\'))' -Destination '$($Beside.Replace('/', '\').Replace("'", "''"))' -Force
+  Add-Content -LiteralPath '$($store.Replace('/', '\'))\history.log' -Value '$line'
+  'RECORDED'
+} catch { 'NOT RECORDED: ' + `$_.Exception.Message }
 "@
   if ($said -notcontains 'RECORDED') {
-    Write-Host ('  the record went to the store and not beside ' + $rec.part + ': ' + ($said -join ' ')) -ForegroundColor Yellow
-  } else {
-    Write-Host ('  the box records ' + $rec.part + ' as ' + $rec.name) -ForegroundColor DarkGray
+    $why = @($said | Where-Object { $_ -like 'NOT RECORDED: *' }) | Select-Object -First 1
+    if (-not $why) { $why = 'the box said ' + $(if (@($said).Count) { ($said -join ' ') } else { 'nothing' }) }
+    throw ($rec.part + ' runs ' + $rec.name + ' now, but the box has not recorded it (' + $why + '): current/' + $rec.part + '.json in the store names it, and ' + $Beside + ' does not name it. Run the deploy again once the box can write there.')
   }
+  Write-Host ('  the box records ' + $rec.part + ' as ' + $rec.name) -ForegroundColor DarkGray
   return $rec
 }
 

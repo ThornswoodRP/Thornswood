@@ -578,7 +578,7 @@ if (block !== null) {
   // One set in each game (#613) is named first and goes on as its recipe.
   yes('and a craft with no recipe goes to the gate',
       /if \(!recipeId && !desc\) \{/.test(code) &&
-      /return recipelessCraft\(actorId, craftedItemBaseId, workbenchId, effects, inputs\);/.test(code));
+      /const made = recipelessCraft\(actorId, craftedItemBaseId, workbenchId, effects, inputs\);[\s\S]{0,120}return made;/.test(code));
   yes('the runtime line is what splits made-from-nothing from tempering',
       /0xff000000/.test(code) && /madeFromNothing/.test(code));
   yes('and the output record type is no longer consulted',

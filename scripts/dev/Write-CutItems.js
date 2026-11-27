@@ -220,10 +220,20 @@ const GOODS_KEEP = new Set([
 const MOD_POLE = 'The fishing mod\'s pole. The fisher page plans Thornswood-Content.esp\'s three poles ' +
   'and says the fishing mod\'s rows are not the plan; only ours fish (TOOLS in the gamemode). ' +
   'Not found and not made (issue #1766).';
+// The Ancient Nord burial set is found in the barrows and never made
+// (Patrick, 26 October 2026, on #4676: it stays dungeon only, and is exempt
+// from everything having a recipe). Its weapons and amulet have no recipe;
+// the first pass kept its four Skyforge pieces as the set's one recipe each.
+const BURIAL_SET = 'The Ancient Nord burial set, found in the barrows and never made (Patrick, 26 October 2026, ' +
+  'issue #4676). Not made. The reference stays here so it can come back for an event.';
 const CUT_SINCE = {
   '1f24f:FishingInSkyrim.esp': MOD_POLE,
   '2180d:FishingInSkyrim.esp': MOD_POLE,
-  '1f252:FishingInSkyrim.esp': MOD_POLE + ' It also asked for dragon bone, which is cut.'
+  '1f252:FishingInSkyrim.esp': MOD_POLE + ' It also asked for dragon bone, which is cut.',
+  'f46cc:Skyrim.esm': BURIAL_SET,
+  'f46cd:Skyrim.esm': BURIAL_SET,
+  'f46cf:Skyrim.esm': BURIAL_SET,
+  'f46d0:Skyrim.esm': BURIAL_SET
 };
 
 function plainWeapon(name, family) {
