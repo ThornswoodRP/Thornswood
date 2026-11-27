@@ -922,6 +922,23 @@
       menuAgain = null;
       return;
     }
+    /*
+      Or the world loaded after the pick (#7098). skymp5-client loads the
+      world with a save of its own only once it has taken a pick
+      (remoteServer.ts, while __thornswoodInWorld is down), so a load after
+      the pick is the client having taken it. The world flag alone said so
+      only once no menu was open, and creation is all menus: on main on
+      24 Nov the pick was said again every 2 s through creation, and at 90 s
+      the log said the client never took it, with the character already in
+      the creation hall. loadedOutOfWorld is the loadGame handler's, beside
+      the update tick.
+    */
+    if (loadedOutOfWorld && loadedOutOfWorld >= menuChosenAt) {
+      log('menu: the world loaded for profile', menuChosenId, 'so the client took the choice');
+      menuChosenId = 0;
+      menuAgain = null;
+      return;
+    }
     if (now - menuChosenAt > MENU_SAY_FOR) {
       if (!menuGiveUpTold) {
         menuGiveUpTold = true;
@@ -2612,6 +2629,9 @@
 
   T.setTyping = wantTyping;
   T.isTyping = function () { return !!claims.chat; };
+  // The game menu that takes keys right now, by name, or '' (busyMenuOpen).
+  // The voice plugin's lock and mode keys stand down while one is up (#4799).
+  T.keyboardMenu = function () { return busyMenuOpen(); };
 
   // Said once, so a log with nothing in it can be told apart from a log that
   // never had anything to say. If this line is missing, the plugin is not being
@@ -3399,9 +3419,27 @@
     let id = 0;
     try { id = ref.getFormID(); } catch (err) { }
 
+    /*
+      WHAT THE DOOR WAS DOING (#7029, #6475). The same property doors come
+      back here as opened every few seconds with nobody near them, and a
+      doorway was seen standing half open. The door's open state (1 open,
+      2 opening, 3 closed, 4 closing), its lock level and whether property
+      holds it shut here say which: a lock that does not take, or a door the
+      lock script locks while it stands open.
+    */
+    let doing = '';
+    if (type === 29) {
+      let openState, level, held;
+      // A call that throws puts its error in the line in place of the value.
+      try { openState = String(ref.getOpenState()); } catch (err) { openState = '? (' + err + ')'; }
+      try { level = String(ref.getLockLevel()); } catch (err) { level = '? (' + err + ')'; }
+      try { const shut = globalThis.__thornswoodPropertyShut; held = shut ? (shut[id] ? 'yes' : 'no') : 'none'; } catch (err) { held = '? (' + err + ')'; }
+      doing = ' (open state ' + openState + ', lock level ' + level + ', held shut here ' + held + ')';
+    }
+
     try {
       ref.blockActivation(true);
-      say('lock opened on ' + id.toString(16) + ', handed it back to the server');
+      say('lock opened on ' + id.toString(16) + doing + ', handed it back to the server');
     } catch (err) {
       say('could not hand ' + id.toString(16) + ' back to the server: ' + err);
     }
@@ -3993,114 +4031,6 @@
       }
       log('the race menu closed, telling the server');
       tellServer('/face done');
-    }
-  }));
-
-  /*
-    ------------------------------------------------- body shape stays as made (#993)
-
-    Patrick, 28 September: "I don't want jiggle physics or the ability to
-    change boob/pussy/dick/ass/nipple related stuff during creation." For men
-    and women alike. Height and weight stay.
-
-    Where each of those controls comes from, and what takes it away:
-    - The body morph sliders (the women's body's, with its breast, nipple and
-      genital shapes, and the men's body's) and the genital sliders of the
-      skeleton: the launcher leaves their scripts out of the game folder
-      (OwnGame.BodyShapeFiles), so those pages of the menu never appear.
-    - RaceMenu's own Left and Right Breast, Breast Curve and Glute sliders sit
-      in RaceMenu's archive beside Height, which stays, so they cannot be left
-      out. This undoes them: twice a second while the menu is up, any scale,
-      move or turn on those bones is taken off, so the slider moves and the
-      body does not.
-    - And any body morph on the character is cleared, which is also what
-      takes a changed body off a character made before this: out of the menu
-      it looks every ten seconds.
-    Height is the scale on the root bone and weight is the game's own, and
-    neither is touched. Only the person's own character: SkyMP never sends
-    these to anybody else. The server's half is BODY SHAPE in gamemode.js.
-  */
-  const BODY_NODES = [
-    // RaceMenu's own and XPMSE's breast and seat bones.
-    'NPC L Breast', 'NPC R Breast', 'NPC L Breast01', 'NPC R Breast01',
-    'NPC L Breast P1', 'NPC R Breast P1', 'NPC L Breast P2', 'NPC R Breast P2',
-    'NPC L Breast P3', 'NPC R Breast P3', 'NPC L Breast01 P1', 'NPC R Breast01 P1',
-    'NPC L Breast01 P2', 'NPC R Breast01 P2', 'NPC L Breast01 P3', 'NPC R Breast01 P3',
-    'L Breast01', 'L Breast02', 'L Breast03', 'R Breast01', 'R Breast02', 'R Breast03',
-    'NPC L Butt', 'NPC R Butt',
-    // The skeleton's genital bones, and the women's body's.
-    'NPC GenitalsBase [GenBase]', 'NPC GenitalsScrotum [GenScrot]',
-    'NPC L GenitalsScrotum [LGenScrot]', 'NPC R GenitalsScrotum [RGenScrot]',
-    'NPC Genitals01 [Gen01]', 'NPC Genitals02 [Gen02]', 'NPC Genitals03 [Gen03]',
-    'NPC Genitals04 [Gen04]', 'NPC Genitals05 [Gen05]', 'NPC Genitals06 [Gen06]',
-    'CME GenitalsBase [GenBase]', 'CME GenitalsScrotum [GenScrot]',
-    'CME Genitals01 [Gen01]', 'CME Genitals02 [Gen02]', 'CME Genitals03 [Gen03]',
-    'CME Genitals04 [Gen04]', 'CME Genitals05 [Gen05]',
-    'NPC L Pussy02', 'NPC R Pussy02', 'VaginaB1', 'Clitoral1',
-  ];
-  const BODY_OPEN_MS = 500;
-  const BODY_SHUT_MS = 10000;
-  let bodyAt = 0;
-  let bodyWasOpen = false;
-  let bodyUndone = 0;
-  let bodyNoSkee = false;
-
-  function niOverride(fn) {
-    return sp.callNative.apply(null, ['NiOverride', fn, undefined].concat(Array.prototype.slice.call(arguments, 1)));
-  }
-
-  /** Takes body morphs and those bones' changes off the person's character. How many it took off. */
-  function bodyShapeReset() {
-    if (bodyNoSkee) { return 0; }
-    let pc = null;
-    try { pc = sp.Game.getPlayer(); } catch (e) { return 0; }
-    if (!pc) { return 0; }
-    // Not caught: a quiet catch here hid that the read was wrong and asked as
-    // a man for everybody (#7089). The guard says a failure.
-    const base = sp.ActorBase.from(pc.getBaseObject());
-    const female = !!base && base.getSex() === 1;
-    let undone = 0;
-    try {
-      const names = niOverride('GetMorphNames', pc);
-      if (names && names.length) {
-        niOverride('ClearMorphs', pc);
-        niOverride('UpdateModelWeight', pc);
-        undone += names.length;
-      }
-    } catch (e) {
-      // No RaceMenu in this game: nothing can have set any of it either.
-      bodyNoSkee = true;
-      log('body shape: NiOverride is not there, so there is nothing to undo:', e);
-      return 0;
-    }
-    for (const node of BODY_NODES) {
-      for (const firstPerson of [false, true]) {
-        let keys = null;
-        try { keys = niOverride('GetNodeTransformKeys', pc, firstPerson, female, node); } catch (e) { keys = null; }
-        if (!keys || !keys.length) { continue; }
-        for (const k of keys) {
-          niOverride('RemoveNodeTransformScale', pc, firstPerson, female, node, k);
-          niOverride('RemoveNodeTransformPosition', pc, firstPerson, female, node, k);
-          niOverride('RemoveNodeTransformRotation', pc, firstPerson, female, node, k);
-          undone++;
-        }
-        niOverride('UpdateNodeTransform', pc, firstPerson, female, node);
-      }
-    }
-    return undone;
-  }
-
-  sp.on('update', guard('body shape', () => {
-    const open = raceMenuOpen();
-    const now = Date.now();
-    if (open === bodyWasOpen && now - bodyAt < (open ? BODY_OPEN_MS : BODY_SHUT_MS)) { return; }
-    bodyWasOpen = open;
-    bodyAt = now;
-    bodyUndone += bodyShapeReset();
-    // Said once the menu is down, not twice a second while somebody drags.
-    if (bodyUndone && !open) {
-      log('body shape: took', bodyUndone, 'body change(s) back off the character; height and weight are left as made');
-      bodyUndone = 0;
     }
   }));
 
@@ -5315,6 +5245,7 @@
   sp.on('cellFullyLoaded', guard('fire cell loaded', fireCellLoaded));
 
   sp.on('update', guard('place', () => {
+    if (!globalThis.__thornswoodInWorld) { return; }
     const now = Date.now();
     // Fast only when a fire is close enough to be about to burn somebody.
     // Merely standing at one is 44 native calls a second for nothing.
@@ -6467,6 +6398,15 @@
     (game/ui/thornswood-stall.js).
   */
   let stallWorlds = null;  // null not resolved yet, else { stall id: runtime world or cell id }
+  /*
+    A FISH TRAP AT A WATER (#4655). Which water a trap may go in, and whether
+    this person has one there, is the server's, so the line is the one it
+    writes for the water somebody just pressed E on (thornswoodWaterLine,
+    waterLine in the scripted activators), the way a door's line is written
+    for the door just opened. It is drawn while that water stays under the
+    crosshair, and the lock key sends /trap with its id.
+  */
+  const WATER_LINE_MS = 60000;   // a water's line older than this is not drawn
   const PLOT_ASK_MS = 10000;     // asked again this often while one crop is looked at
   const PLOT_LINE_MS = 30000;    // an answer older than this is not drawn
   let lockAt = 0;
@@ -6551,6 +6491,16 @@
     return keyMoldId;
   }
 
+  /** The server's line for the water just pressed, while it is new enough and that water is under the crosshair. */
+  function waterLineNow(hex) {
+    let v = null;
+    try { v = globalThis.thornswoodWaterLine; } catch (e) { v = null; }
+    if (!v || typeof v !== 'object' || v.hex !== hex) { return null; }
+    if (Date.now() - (Number(v.seen) || 0) > WATER_LINE_MS) { return null; }
+    if (!v.w && !v.t) { return null; }
+    return v;
+  }
+
   /** The line the server wrote for the door just opened, while it still counts. */
   function doorLineNow() {
     let v = null;
@@ -6616,7 +6566,7 @@
     return lockKeyRef() || stallNow();
   }
 
-  /** What the lock key would do at what is under the crosshair: a door, a crop or a forge. */
+  /** What the lock key would do at what is under the crosshair: a door, a crop, a water or a forge. */
   function lockKeyRef() {
     let ref = null;
     try { ref = sp.Game.getCurrentCrosshairRef(); } catch (e) { ref = null; }
@@ -6640,6 +6590,11 @@
       const p = plotLineNow(hex);
       return { hex: hex, plot: true, verb: p && p.x ? 'claim' : '', words: p ? p.x : '',
                info: p ? p.t : '', e: p ? p.e : '' };
+    }
+    const water = waterLineNow(hex);
+    if (water) {
+      if (busyMenuOpenNow()) { return null; }
+      return { hex: hex, verb: water.x === 'trap' ? 'trap' : '', words: water.w, info: water.t };
     }
     if (!baseId || !forgeIdSet()[baseId]) { return null; }
     const mold = keyMoldNow();
@@ -9064,6 +9019,7 @@
     ['CFTO.esp', 0x14c6c], ['Dragonborn.esm', 0x182ae], ['Dragonborn.esm', 0x2582b]
   ];
   let rideDriverIds = null;
+  let rideDriverNoneSaid = false;
 
   /*
     THE RIDE PANEL WAITS FOR THE MOD'S CONVERSATION (#1635). The same E opens
@@ -9119,23 +9075,37 @@
     if (found) {
       rideDriverIds = out;
       say('carriage and ferry drivers: ' + found + ' of ' + RIDE_DRIVER_BASES.length + ' bases found');
+    } else if (!rideDriverNoneSaid) {
+      // A press on a person found none of them, so E on a driver is a
+      // press on nobody we know (#4581). Said once; asked again next press.
+      rideDriverNoneSaid = true;
+      say('carriage and ferry drivers: none of ' + RIDE_DRIVER_BASES.length + ' bases found');
     }
     return out;
   }
+
+  // Whether a reference is a carriage or ferry driver: a person whose base
+  // is one of the drivers'. 43 is kNPC.
+  function isRideDriverRef(ref) {
+    if (!ref) { return false; }
+    try {
+      const base = ref.getBaseObject();
+      if (!base || base.getType() !== 43) { return false; }
+      const baseId = base.getFormID() >>> 0;
+      return !!baseId && !!rideDriverIdSet()[baseId];
+    } catch (err) { return false; }
+  }
+  // The scripted real game run (thornswood-test.js) faces a driver and knows
+  // him by the same rule, so the driver it presses E on is one this press
+  // takes (#4581).
+  T.isRideDriverRef = isRideDriverRef;
 
   function driverPress(e) {
     if (!e || e.userEventName !== 'Activate') { return false; }
     if (claims.chat || busyMenuOpen()) { return false; }
     let ref = null;
     try { ref = sp.Game.getCurrentCrosshairRef(); } catch (err) { ref = null; }
-    if (!ref) { return false; }
-    let baseId = 0;
-    try {
-      const base = ref.getBaseObject();
-      if (!base || base.getType() !== 43) { return false; }
-      baseId = base.getFormID() >>> 0;
-    } catch (err) { return false; }
-    if (!baseId || !rideDriverIdSet()[baseId]) { return false; }
+    if (!ref || !isRideDriverRef(ref)) { return false; }
     let hex = '';
     let localId = 0;
     try {
@@ -9436,6 +9406,64 @@
   let lastToken = '';
   let tokenAt = 0;
 
+  /*
+    BACK IN THE WORLD AFTER LEAVING IT (#4615).
+
+    Every way out of the world (the idle check, the server ending the session,
+    a refused connection, Change character, the server going down) clears
+    __thornswoodInWorld and quits to the main menu. Only the first arrival
+    above set it again, so after a return the world was up and the flag still
+    said it was not: the idle check never started again, the choice went on
+    being said to the client for ninety seconds, and so did everything else
+    that asks whether the world is there.
+
+    What says a world came back is the load: skymp5-client loads the world
+    with a save of its own once it takes a pick (remoteServer.ts, while the
+    flag is down), so a load while the flag is down is an arrival like the
+    first. It is recorded on loadGame, and the flag goes up on the first
+    update after it with a character, no menu, and the game connected. Not
+    the main menu: update does not run there (the Papyrus VM's OnUpdate sends
+    it, and the main menu has none), which is why the menu code runs on tick.
+    The connection is asked because a leave's own last frames still have the
+    old world with a character and no menu, and arriving in them would tell
+    skymp5-client it is already in a game, so the pick would load no world
+    (alreadyInAGame). Every leave closes the connection before it quits, and
+    a pick opens it again (relogAs) before the world loads. The first cut of
+    this waited for the main menu in update and so never fired (#4615).
+
+    The page is not loaded again, unlike the first arrival: it outlived the
+    world on purpose, with its chat moved to whoever was picked (pickedAgain),
+    so only what the first arrival does for the world itself is done again.
+  */
+  let loadedOutOfWorld = 0;
+  sp.on('loadGame', guard('world load', () => {
+    let here = false;
+    try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+    if (!here) { loadedOutOfWorld = Date.now(); }
+  }));
+  function cameBack(now) {
+    if (!loadedOutOfWorld) { return false; }
+    let here = false;
+    try { here = !!globalThis.__thornswoodInWorld; } catch (e) { here = false; }
+    // The first arrival counted it.
+    if (here) { loadedOutOfWorld = 0; return false; }
+    let up = false;
+    try { up = !!sp.mpClientPlugin.isConnected(); } catch (e) { up = false; }
+    if (!up || gameMenuOpen()) { return false; }
+    let pc = null;
+    try { pc = sp.Game.getPlayer(); } catch (e) { pc = null; }
+    if (!pc) { return false; }
+    try { globalThis.__thornswoodInWorld = true; } catch (e) { /* a plain property of globalThis, which nothing here locks */ }
+    // The old connection's last report can match the first sample in this
+    // world. The server still needs the new session's place and fire.
+    placeSaid = '';
+    log('back in the world as profile', PROFILE, Math.round((now - loadedOutOfWorld) / 1000) + 's after it loaded');
+    loadedOutOfWorld = 0;
+    if (choiceUp()) { menuGone(); }
+    menuPhase = 9;
+    return true;
+  }
+
   sp.on('update', guard('tick', () => {
     const now = Date.now();
 
@@ -9483,6 +9511,9 @@
       }
       return;
     }
+
+    // Back in the world after leaving it (#4615).
+    if (cameBack(now)) { return; }
 
     /*
       The focus arbiter waits until our own overlays are in.

@@ -97,4 +97,9 @@ function made() {
   return cached;
 }
 
-module.exports = { NAME, made, want };
+function doorReferenceOverrides(manifest) {
+  return new Set(['gatesUnlocked', 'riftwealdUnlocked', 'claimableDoorsUnlocked',
+    'authoredDoorsUnlocked', 'authoredDoorsDirectActivation'].flatMap(key => manifest[key] || []));
+}
+
+module.exports = { NAME, made, want, doorReferenceOverrides };

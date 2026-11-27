@@ -1,6 +1,6 @@
 {
-  "forkCommit": "728a6191a7c15b9932182467303d2ff5fca58853",
-  "builtUtc": "2026-11-26T22:50:34Z",
+  "forkCommit": "cb66c4f2be8fa0395b594c3362d6afe2914f2efc",
+  "builtUtc": "2026-11-27T02:25:35Z",
   "builtWith": "node v22.23.5, yarn@1.22.22",
   "files": {
     "02687b2110d1a50a6b4e194282ab8deb.svg": {
@@ -188,8 +188,8 @@
       "bytes": 409
     },
     "build.js": {
-      "sha256": "a67a1a146f104891d879d360c06d40e7c9051aac859bd6fd4d207f432be4416f",
-      "bytes": 2444820
+      "sha256": "781bfbb02a2ccedd982092bbf770ffe1442df78098722344b04a8ca9357af7e4",
+      "bytes": 2445110
     },
     "c1aa44800eaab2708600c244af65efb4.mp3": {
       "sha256": "3b3dcbffd4803b38658b3f9015f79f9af75272d71ed8544e79cacd4a1819a090",

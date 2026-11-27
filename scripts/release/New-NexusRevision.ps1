@@ -160,6 +160,11 @@
   version, so it finds the new file. The first use is Thornswood Content 1.3,
   whose archive carries the repository's own plugin, so the patch revision 2
   made for 1.2's plugin is dropped (-DropPatch 192001:Thornswood-Content.esp).
+  A moved entry that lists the files it installs (THE FILES A PATCHED MOD
+  INSTALLS below) is given the new archive's list, by its installer run with
+  the answers -CollectionRecord gives the new file (none for a basic
+  installer), and the patches it keeps have to be in that list (#6908: since
+  #6888 every patched entry lists its files, and a move of one stopped).
 
   LIGHT FLAGS (#2979). -SetLight and -ClearLight name plugins whose ESL flag
   (0x200 in the TES4 header) the revision sets or clears, the way the
@@ -833,10 +838,36 @@ $baseJson = Join-Path $base 'collection.json'
 if (-not (Test-Path -LiteralPath $baseJson)) { Die ($From + ' has no collection.json at its top, so it is not a collection Vortex made.') }
 Say ('  ' + $basePaths.Count + ' files and folders in it')
 
+# The files an archive's installer puts in its mod folder, run with the
+# answers given ($null for a basic installer), each with the md5 of the
+# archive's own copy (THE FILES A PATCHED MOD INSTALLS): what -Replicate gives
+# an entry, and what a move gives a patched entry for its new archive (#6908).
+function Get-ArchiveFiles([string]$Arc, $Choices, [string]$Name, [string]$As, [string]$Key) {
+  $work = Join-Path $scratch ('files-' + $Key)
+  if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $work | Out-Null
+  $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $Arc -Work $work -Choices $Choices }
+  if ($mp.Plan.Stop) { Die ($Name + ' cannot be installed unattended ' + $As + ': ' + $mp.Plan.Stop + '.') }
+  if (@($mp.Plan.Warnings).Count) { Die ($Name + '''s installer did not run cleanly: ' + (@($mp.Plan.Warnings) -join '; ') + '.') }
+  $hashes = @($mp.Plan.Files.Values | Sort-Object { $_.Rel.ToLowerInvariant() } | ForEach-Object { [ordered]@{ path = [string]$_.Rel; md5 = (Get-FileHash -LiteralPath $_.Full -Algorithm MD5).Hash.ToLowerInvariant() } })
+  $installer = [string]$mp.Plan.Installer
+  [Thornswood.Layout.NexusLayout]::Forget($mp.Unpacked)
+  Remove-Item -LiteralPath $work -Recurse -Force
+  if (-not $hashes.Count) { Die ($Name + '''s installer puts no files in its folder.') }
+  return [pscustomobject]@{ Hashes = [object[]]$hashes; Installer = $installer }
+}
+
 # ------------------------------------------------------------- the swaps ---
 if ($Mod.Count) { Head 'The new files' }
 $swaps = New-Object System.Collections.Generic.List[object]
 $baseCol = Step { ConvertFrom-Json ([IO.File]::ReadAllText($baseJson)) }
+# The record a move of a patched entry takes its new file's answers from: the
+# one that follows the published revision this starts from (#6908).
+$moveRecord = $null
+if ($Mod.Count -and (Test-Path -LiteralPath $CollectionRecord)) {
+  $mr = Step { ConvertFrom-ThornswoodJson ([IO.File]::ReadAllText($CollectionRecord)) $CollectionRecord }
+  if ([string]$mr.collection -eq $Slug -and [int]$mr.revision -eq $start -and $startStatus -eq 'published') { $moveRecord = $mr }
+}
 $dropped = @()
 # An entry -Replicate names is not also moved, taken out or answered: its
 # list is of the files it installs as it is (THE FILES A PATCHED MOD INSTALLS).
@@ -887,6 +918,23 @@ for ($i = 0; $i -lt $Mod.Count; $i++) {
       $k = @($patched | Where-Object { $_ -ieq $d }) | Select-Object -First 1
       if ($k) { $dropped += ('patches\' + $entry.name + '\' + $k + '.diff') }
     }
+  }
+  # A patched entry lists the files its archive installs (#6888): the move
+  # gives the new archive's list, by its installer with the answers the
+  # record keeps for the new file, and nexus-collection.js holds the patches
+  # it keeps to that list (#6908).
+  if ($entry -and $entry.PSObject.Properties['hashes'] -and @($entry.hashes).Count) {
+    if ($null -eq $moveRecord) { Die ($entry.name + ' lists the files its archive installs, and ' + $CollectionRecord + ' does not follow revision ' + $start + ' of ' + $Slug + ', so the answers its new file is installed with are not known.') }
+    $re = @(@($moveRecord.mods) | Where-Object { $_ -and [string]$_.modId -eq $m -and [string]$_.fileId -eq $fid })
+    if ($re.Count -ne 1) { Die ($entry.name + ' lists the files its archive installs, and ' + $CollectionRecord + ' has ' + $re.Count + ' entries for mod ' + $m + ' file ' + $fid + ', so the answers its new file is installed with are not known.') }
+    $moveAnswers = if ($re[0].PSObject.Properties['choices'] -and $null -ne $re[0].choices) { $re[0].choices } else { $null }
+    if ($null -ne $moveAnswers) {
+      $bad = @(Get-NexusChoicesProblems $moveAnswers)
+      if ($bad.Count) { Die ('The choices ' + $CollectionRecord + ' gives mod ' + $m + ' file ' + $fid + ' are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
+    }
+    $af = Get-ArchiveFiles $Archive[$i] $moveAnswers $entry.name ('from file ' + $fid + $(if ($null -ne $moveAnswers) { ' with the answers the record gives it' } else { '' })) ('move-' + $fid)
+    $swap.hashes = [object[]]@($af.Hashes)
+    Say ('    it lists the files its archive installs: file ' + $fid + '''s ' + $af.Installer + ' installer puts ' + @($af.Hashes).Count + ' in its folder' + $(if ($null -ne $moveAnswers) { ', with the record''s answers' } else { '' })) 'DarkGray'
   }
   $swaps.Add($swap)
 }
@@ -985,19 +1033,9 @@ function Get-EntryFiles($e) {
     $bad = @(Get-NexusChoicesProblems $choices)
     if ($bad.Count) { Die ('The choices ' + $e.name + ' carries are not as Vortex writes them: ' + ($bad -join '; ') + '.') }
   }
-  $work = Join-Path $scratch ('files-' + $fid)
-  if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
-  New-Item -ItemType Directory -Force -Path $work | Out-Null
-  $mp = Step { Get-NexusModPlan -SevenZip $sz -Archive $got.Path -Work $work -Choices $choices }
-  if ($mp.Plan.Stop) { Die ($e.name + ' cannot be installed unattended as revision ' + $BaseRevision + ' gives it: ' + $mp.Plan.Stop + '.') }
-  if (@($mp.Plan.Warnings).Count) { Die ($e.name + '''s installer did not run cleanly: ' + (@($mp.Plan.Warnings) -join '; ') + '.') }
-  $hashes = @($mp.Plan.Files.Values | Sort-Object { $_.Rel.ToLowerInvariant() } | ForEach-Object { [ordered]@{ path = [string]$_.Rel; md5 = (Get-FileHash -LiteralPath $_.Full -Algorithm MD5).Hash.ToLowerInvariant() } })
-  $installer = [string]$mp.Plan.Installer
-  [Thornswood.Layout.NexusLayout]::Forget($mp.Unpacked)
-  Remove-Item -LiteralPath $work -Recurse -Force
+  $ef = Get-ArchiveFiles $got.Path $choices $e.name ('as revision ' + $BaseRevision + ' gives it') $fid
   [IO.File]::Delete($got.Path)
-  if (-not $hashes.Count) { Die ($e.name + '''s installer puts no files in its folder.') }
-  return [pscustomobject]@{ Hashes = [object[]]$hashes; Installer = $installer; Choices = $choices }
+  return [pscustomobject]@{ Hashes = [object[]]@($ef.Hashes); Installer = $ef.Installer; Choices = $choices }
 }
 
 # Each mod taken out, with its file name on Nexus (TAKING A MOD OUT). An entry

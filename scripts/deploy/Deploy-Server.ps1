@@ -166,9 +166,11 @@ param(
   [switch]$Now,
   [string]$Why     = 'a server update',
   # Where the plugin files the load order names are read from, for the ones the
-  # VPS turns out not to have yet. This is the live Steam game, the same place
-  # Deploy-Gamemode -Vortex built the list from.
-  [string]$Data    = 'C:\Program Files (x86)\Steam\steamapps\common\Skyrim Special Edition\Data',
+  # VPS turns out not to have yet. Left off, it is the Data folder the build's
+  # own server-settings.json names its plugins in, the game folder
+  # Deploy-Gamemode built the list from, in whichever Steam library that is
+  # (#4706). Given, it wins.
+  [string]$Data    = '',
   # How long the new server has to answer on its game port and its resources
   # port before the old files go back. Left off, the shared ceiling in
   # ServerReadyWait.ps1, derived from measured Live and Dev starts (#1938).
@@ -273,6 +275,37 @@ function Remote($script) {
   # Send-Script.ps1 (issue #1070): a long script goes by scp and its run takes
   # it off the box before it runs, and the far side's exit code comes back.
   return Invoke-ThornswoodRemote -Target "$User@$Vps" -SshArgs $ssh -Script $script
+}
+
+# WHICH DATA FOLDER THE PLUGINS GO UP FROM (#4706). Until then -Data defaulted
+# to Skyrim in Steam's own library on drive C, whatever game folder the build
+# was made from, so on a machine with Skyrim in another library a deploy
+# looked for every plugin in the wrong place, or sent an old copy's bytes from
+# a C: folder still there. Deploy-Gamemode writes each plugin of the build's
+# loadOrder at its full path in the Data folder it built from, so that folder
+# is the one: every entry has to agree on it, and a build whose entries do not
+# stops here, naming two of them. An explicit -Data wins.
+function Resolve-ThornswoodDeployData([string]$Given, [object[]]$LoadOrder, [string]$From) {
+  if ($Given) { return $Given }
+  $folder = ''
+  $first = ''
+  foreach ($entry in @($LoadOrder)) {
+    $p = ([string]$entry).Replace('\', '/')
+    $cut = $p.LastIndexOf('/')
+    if ($cut -le 0) {
+      throw ("$From names $entry in its loadOrder with no folder, so which game folder the build was made from is not known. " +
+             'Pass -Data with the Data folder it was built from.')
+    }
+    $dir = $p.Substring(0, $cut)
+    if (-not $folder) { $folder = $dir; $first = [string]$entry; continue }
+    if (-not $dir.Equals($folder, [StringComparison]::OrdinalIgnoreCase)) {
+      throw ("$From names its plugins in more than one folder ($first and $entry), so which game folder the build was made from is not known. " +
+             'Pass -Data with the Data folder it was built from.')
+    }
+  }
+  if (-not $folder) { throw "$From has no loadOrder, so which game folder the build was made from is not known. Pass -Data with the Data folder it was built from." }
+  if ($folder -match '^[A-Za-z]:') { return $folder.Replace('/', '\') }
+  return $folder
 }
 
 # The box's folders, worked out on this machine. .NET resolves a path by this
@@ -1044,6 +1077,9 @@ if (Test-Path -LiteralPath $rp) {
   $settingsSrc = Join-Path $Dist 'server-settings.json'
   $settings = ConvertFrom-ThornswoodJson (Get-Content -LiteralPath $settingsSrc -Raw) $settingsSrc
   if (-not $settings.loadOrder) { throw 'server-settings.json has no loadOrder' }
+  # Read before the paths are made the box's, below (#4706).
+  $Data = Resolve-ThornswoodDeployData $Data @($settings.loadOrder) $settingsSrc
+  Write-Host "  plugins the VPS does not have yet go up from $Data" -ForegroundColor DarkGray
   # Split on either separator: GetFileName off Windows takes \ as part of the name (#2989).
   $pluginNames = @($settings.loadOrder | ForEach-Object { @(([string]$_) -split '[\\/]')[-1] })
   $remotePlugins = ($Root -replace '\\', '/') + '/plugins'
@@ -1081,7 +1117,8 @@ if (Test-Path -LiteralPath $rp) {
 
   # OUR OWN PLUGIN COMES FROM THE REPO, NOT FROM A GAME FOLDER.
   #
-  # $Data is the Steam copy, which is right for the other 59: Vortex deploys them
+  # $Data is the game folder the build was made from (#4706), which is right for
+  # the other 59: Vortex deploys them
   # there and that is where they live. Thornswood-Content.esp is not one of those.
   # It is built by scripts in this repo and installed into a game folder by
   # Install-ThornswoodContent.ps1, whose default target is C:\Thornswood\Game and

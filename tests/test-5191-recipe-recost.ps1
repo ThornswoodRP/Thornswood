@@ -23,6 +23,10 @@
        order, are left alone and named.
     2. The script leaves Thornswood-Last.esp out of the order it reads and
        names it nowhere else as a plugin read.
+       Since #4625 it reads recost.json's notCopied rows as well: a
+       never-copied plugin's record keeps its mod's counts, but every game
+       sets the counts that row gives it (RECIPES_SET_IN_GAME), coins to 0,
+       and the table had kept listing the Eyepatch's gold coin.
     3. Run over the box's two builds of 16 Nov 2026 (the table without the
        Last plugin, and recost.json with it) when they are on this machine:
        the counts come out those of the table with it, row for row. Prints
@@ -72,6 +76,8 @@ if ($fn.Success) {
 Yes '2 the script leaves Thornswood-Last.esp out of the order it reads' (
     $table.Contains('$order.RemoveAll([Predicate[string]] { param($p) $p -ieq $LAST_PLUGIN })') -and -not $table.Contains('$pl -eq $LAST_PLUGIN'))
 Yes '2 and takes the re-costed counts from game\data\recost.json' ($table.Contains('$recostGot = Use-RecostCounts $recipes $recostRows'))
+Yes '2 its notCopied rows too, whose counts each game sets, so no row lists the coins every game takes out (#4625)' (
+    $table.Contains('$recostRows = @(@($recostData.recipes) + @($recostData.notCopied) | Where-Object { $_ })'))
 
 if ($fn.Success -and $Without -and $Recost -and $With -and (Test-Path -LiteralPath $Without) -and (Test-Path -LiteralPath $Recost) -and (Test-Path -LiteralPath $With)) {
     $wo = [IO.File]::ReadAllText($Without) | ConvertFrom-Json

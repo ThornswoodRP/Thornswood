@@ -737,7 +737,7 @@
                   <TextBlock Grid.Row="0" Text="From the world" Theme="{StaticResource Eyebrow}"/>
                   <Border Grid.Row="1" Theme="{StaticResource Slab}" Padding="0" ClipToBounds="True"
                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                    <Image x:Name="GalleryImage" Stretch="UniformToFill"
+                    <Image x:Name="GalleryImage" Stretch="Uniform"
                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                            RenderOptions.BitmapInterpolationMode="HighQuality"/>
                   </Border>

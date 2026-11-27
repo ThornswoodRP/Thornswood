@@ -216,7 +216,8 @@ they accept.
 
 If you are a Tailor, carry a bottle of water and what the dye needs, press
 **E** on the cooking spot, and stay by the fire until the dye is done. Walk
-away before then and nothing is made or used. The dye goes into your pack,
+away before then and nothing is made or used. Logging out does not lose it:
+come back by the fire once it is done and the dye is made. The dye goes into your pack,
 under its own name. Anyone who is not a Haberdasher or Liverywright and
 tries it is turned away and keeps everything they carry. They are told:
 "Steeping hair dye is work for a Haberdasher or Liverywright. Nothing was

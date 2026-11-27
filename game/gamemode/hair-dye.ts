@@ -15,7 +15,11 @@
   steepSeconds by the fire the inputs are taken and the dye is in the pack,
   one entry on the list's item with the dye's name, the way a deed is named.
   Walking away from the fire before then loses the steep and takes nothing:
-  the boil's rule. One steep at a time. A relog loses a steep the same way.
+  the boil's rule. One steep at a time. A relog keeps a steep, as it keeps
+  a boil (#5047): it is the character's, by actor id, and nothing here
+  hears a leave, so back by the fire once its time is up it is done, and
+  back away from the fire it is lost. It is kept in this block's memory
+  only, so a server restart loses it, and nothing was taken yet.
 
   THE BOTTLE OF WATER A DYE TAKES IS SPENT FROM THE WATER LEDGER. The game
   cannot mark where a bottle's water came from, so the needs block counts

@@ -444,6 +444,8 @@ namespace Thornswood
             // SkyUI's journal with no saving, loading, help or Creation Club (#3127).
             "Data\\Interface\\quest_journal.swf",
             "Data\\Interface\\inventorymenu.swf",
+            // RaceMenu's creation menu, one page of sliders (#7087).
+            "Data\\Interface\\racesex_menu.swf",
             // Made from the person's own plugins by the release's recipe (#2791).
             LastPlugin.File,
         };

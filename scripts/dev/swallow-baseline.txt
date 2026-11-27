@@ -164,7 +164,7 @@
 # below. Each is later work on its own path; converting one lowers its line.
 AutoJoin.cs 2
 Chars.cs 7
-Checks.cs 19
+Checks.cs 18
 ClientRuntime.cs 1
 CrashDump.cs 1
 Discord.cs 13

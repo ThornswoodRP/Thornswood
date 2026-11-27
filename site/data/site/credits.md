@@ -51,10 +51,10 @@ with no account.
 <!-- engine-pin:credits -->
 The server's engine recorded for the next release, `scam_native.node`, is
 built from one commit,
-[`728a6191`](https://github.com/ThornswoodRP/skymp/tree/728a6191a7c15b9932182467303d2ff5fca58853).
+[`cb66c4f2`](https://github.com/ThornswoodRP/skymp/tree/cb66c4f2be8fa0395b594c3362d6afe2914f2efc).
 That commit starts from
 [SkyMP](https://github.com/skyrim-multiplayer/skymp) at `2849e676`, and
-[every change Thornswood made](https://github.com/ThornswoodRP/skymp/compare/2849e676...728a6191)
+[every change Thornswood made](https://github.com/ThornswoodRP/skymp/compare/2849e676...cb66c4f2)
 is the difference between the two.
 <!-- /engine-pin:credits -->
 
@@ -230,10 +230,12 @@ value to weight** show no gold value on Thornswood, because an item here has
 no gold price. **SkyUI's journal** has no saving, loading, Skyrim help or
 Creation Club on its System page, because Thornswood keeps your character on
 the server and has its own help. **SkyUI's inventory** closes with its mapped
-key. These menus are the work of the SkyUI Team, the
-SkyHUD Team and Ahzaab, moreHUD's author. Thornswood ships none of those
-files: the launcher makes them on your computer from your own copy of each
-mod.
+key. **RaceMenu's character creation menu** has one page of sliders, with no
+tabs, no ALL list and no category that repeats another or changes only your
+own screen. These menus are the work of the SkyUI Team, the SkyHUD Team,
+Ahzaab, moreHUD's author, and expired6978, RaceMenu's author. Thornswood
+ships none of those files: the launcher makes them on your computer from your
+own copy of each mod.
 
 **Tavern**, the font Skyrim Platform draws its text in, is Typey McTypeface by
 Paul J. Miller and Dieter Steffmann, under the SIL Open Font License. It comes

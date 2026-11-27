@@ -45,6 +45,9 @@ namespace Thornswood
     /// and its copy under exported). SkyUI's journal (quest_journal.swf) is
     /// made the same way with the System page entries Thornswood does not use
     /// taken off (#3127). Its inventory uses the mapped key to close (#7008).
+    /// RaceMenu's creation menu (racesex_menu.swf) is made with one page of
+    /// sliders: no tabs, no ALL, COLORS, MAKEUP or paints, and Height alone of
+    /// the sliders Papyrus adds (#7087).
     /// Those are their authors' files, so they
     /// are not handed on either: the edits (MenuRecipe.Mods, FromGameModMenus.cs,
     /// written by scripts\mods\Build-ModMenus.py) are made here against the

@@ -33,6 +33,8 @@
 //   {"do":"key","code":36}                 a DirectInput scan code (J is 36)
 //   {"do":"face","what":"bed"}             stand before the nearest bed in the cell
 //   {"do":"wait","for":"crosshair","what":"bed"}
+//   {"do":"face","what":"driver","ref":"bbf6d:CFTO.esp"}  stand before that driver
+//   {"do":"wait","for":"crosshair","what":"driver"}
 //   {"do":"wait","for":"time","ms":1500}   a pause, so a shot catches a message
 //   {"do":"wait","for":"running","ms":10000}  the world kept running that long
 // Any step may carry "task": <issue>; a failing one ends that test task and
@@ -126,7 +128,9 @@ sp.on('menuClose', function (e) {
 // done here and left for the step to pick up.
 let inWorld = false;
 let crosshairBed = '';     // the bed under the crosshair now, or ''
+let crosshairDriver = '';  // the carriage or ferry driver under it, or ''
 let faceAsked = '';        // what a face step wants stood before
+let faceRef = '';          // the reference it names, "<id>:<plugin>", for a driver
 let faceDone = null;       // { ok, note } once the update has done it
 let faceTry = null;        // the bed and the spots beside it still to try
 let cellName = '';         // the name of the cell the character is in
@@ -234,6 +238,42 @@ function faceStep() {
   f.at = now;
   return null;
 }
+// Stand 100 units out from the driver the step names, on the side the
+// person is on, turned to him and looking level, as somebody walks up to
+// talk to him (#4581). He is named by his placed reference, because a
+// driver stands outside, where the nearest person in the cell is as likely
+// a guard. 62 is kCharacter.
+function isDriver(ref) {
+  const T = globalThis.Thornswood;
+  return !!(T && typeof T.isRideDriverRef === 'function' && T.isRideDriverRef(ref));
+}
+function faceDriver(desc) {
+  const pc = sp.Game.getPlayer();
+  if (!pc || !pc.getParentCell()) { return { ok: false, note: 'not in a cell' }; }
+  const T = globalThis.Thornswood;
+  if (!T || typeof T.isRideDriverRef !== 'function') { return { ok: false, note: 'thornswood-front.js shares no isRideDriverRef, so this build cannot tell a driver' }; }
+  const m = /^([0-9a-f]{1,6}):(\S+\.es[mpl])$/i.exec(String(desc || ''));
+  if (!m) { return { ok: false, note: 'a driver step names his reference as <id>:<plugin>, not ' + JSON.stringify(desc) }; }
+  const form = sp.Game.getFormFromFile(parseInt(m[1], 16), m[2]);
+  const ref = form ? sp.ObjectReference.from(form) : null;
+  if (!ref) { return { ok: false, note: 'no reference ' + desc + ' in this load order' }; }
+  // A form is a new object at every call, so they are told apart by id. An
+  // interior has no world space, and then the cell is the place.
+  const cell = ref.getParentCell();
+  if (!cell) { return { ok: false, note: 'driver ' + refName(ref) + ' is not loaded, so he is not near the character' }; }
+  const wsOf = function (r) { const w = r.getWorldSpace(); return w ? w.getFormID() >>> 0 : 0; };
+  if (wsOf(ref) !== wsOf(pc) || (!wsOf(pc) && (cell.getFormID() >>> 0) !== (pc.getParentCell().getFormID() >>> 0))) {
+    return { ok: false, note: 'driver ' + refName(ref) + ' is not where the character is' };
+  }
+  if (!isDriver(ref)) { return { ok: false, note: refName(ref) + ' is not a driver to thornswood-front.js, so E on him is not taken' }; }
+  const px = pc.getPositionX(), py = pc.getPositionY();
+  const bx = ref.getPositionX(), by = ref.getPositionY(), bz = ref.getPositionZ();
+  const dx = px - bx, dy = py - by, len = Math.hypot(dx, dy) || 1;
+  const sx = bx + dx / len * 100, sy = by + dy / len * 100;
+  pc.setPosition(sx, sy, bz);
+  pc.setAngle(0, 0, Math.atan2(bx - sx, by - sy) * 180 / Math.PI);
+  return { ok: true, note: 'before driver ' + refName(ref) + ', he was ' + Math.round(len) + ' units off' };
+}
 // Equip an item from the pack (and draw it), or sheathe, in update, where
 // the game takes calls. "give" is the line said in chat when the pack has
 // none, once, so a run never piles up copies (a heavy pack would stop the
@@ -278,10 +318,16 @@ sp.on('update', function () {
   inWorld = !!cell && !openMenus['Loading Menu'] && !openMenus['Main Menu'];
   try { cellName = cell ? String(cell.getName() || '') : ''; } catch (e) { cellName = ''; log('could not read the cell name:', e); }
   crosshairBed = '';
-  try { const r = sp.Game.getCurrentCrosshairRef(); if (r && isBed(r)) { crosshairBed = refName(r); } } catch (e) { log('could not read the crosshair:', e); }
+  crosshairDriver = '';
+  try {
+    const r = sp.Game.getCurrentCrosshairRef();
+    if (r && isBed(r)) { crosshairBed = refName(r); }
+    if (r && isDriver(r)) { crosshairDriver = refName(r); }
+  } catch (e) { log('could not read the crosshair:', e); }
   if (faceAsked && !faceDone) {
     try {
-      faceDone = faceTry ? faceStep() : faceStart(faceAsked);
+      if (faceAsked === 'driver') { faceDone = faceDriver(faceRef); }
+      else { faceDone = faceTry ? faceStep() : faceStart(faceAsked); }
     } catch (e) { faceTry = null; faceDone = { ok: false, note: 'facing threw: ' + e }; }
   }
   try {
@@ -337,7 +383,9 @@ let ackSeen = null;
 let ackReadAt = 0;
 function ask(what, arg) {
   askNo++;
-  write({ t: 'ask', n: askNo, do: what, arg: arg });
+  const row = { t: 'ask', n: askNo, do: what, arg: arg };
+  if (what === 'wheel') { row.i = at; }
+  write(row);
   return askNo;
 }
 function readAck(n) {
@@ -374,6 +422,132 @@ let passed = 0;
 // own "task" results line, passed or failed.
 const failedTasks = [];
 let inventoryKey = null;
+let cameraWheelStart = null;
+let cameraWheelRequest = null;
+
+// #6593: an explicitly opted-in timed wait observes the first wheel attempts.
+// No camera, position, input or control setter is called. Only local run receipts.
+// buttonEvent is delivered outside the update/Papyrus context, so its "before"
+// is the last update sample (with its age), not a synchronous camera read.
+if (steps.some(s => s && s.cameraTrace === true)) {
+  const seen = new Set();
+  const menus = ['Loading Menu', 'Main Menu', 'RaceSex Menu', 'InventoryMenu',
+    'TweenMenu', 'Console Native UI Menu', 'Dialogue Menu'];
+  let active = null;
+  let receipts = 0;
+  let wheelCount = 0;
+  let traceUntil = 0;
+  function safe(read) { try { return read(); } catch (e) { return null; } }
+  function number(value) { return typeof value === 'number' && Number.isFinite(value) ? value : null; }
+  function id(value) { return Number.isInteger(value) && value > 0 && value <= 0xffffffff ? value : null; }
+  function point(value) {
+    return Array.isArray(value) && value.length === 3 && value.every(v => number(v) !== null) ? value.slice() : null;
+  }
+  function flag(read) { const value = safe(read); return typeof value === 'boolean' ? value : null; }
+  function sample() {
+    const pc = safe(() => sp.Game.getPlayer());
+    const actorXYZ = point(safe(() => [pc.getPositionX(), pc.getPositionY(), pc.getPositionZ()]));
+    const cell = id(safe(() => pc.getParentCell().getFormID()));
+    const world = id(safe(() => pc.getWorldSpace().getFormID()));
+    let owner = null;
+    const text = safe(() => sp.storage.ownerOutfitDiagnostic);
+    if (typeof text === 'string' && text.length <= 32768) {
+      owner = safe(() => JSON.parse(text));
+    }
+    const targetXYZ = point(owner && owner.target && owner.target.pos);
+    const targetWorld = id(owner && owner.target && owner.target.worldOrCell);
+    const ownerEpoch = owner && Number.isSafeInteger(owner.epoch) && owner.epoch >= 0 ? owner.epoch : null;
+    const targetAt = number(owner && owner.at);
+    const targetAgeMs = targetAt !== null && targetAt <= Date.now() ? Date.now() - targetAt : null;
+    const targetLocationMatches = targetWorld !== null && (targetWorld === world || targetWorld === cell);
+    const camera = safe(() => sp.Game.getCameraState());
+    return { sampledAt: Date.now(), actorXYZ: actorXYZ, cell: cell, world: world,
+      actorScale: number(safe(() => pc.getScale())), loaded: flag(() => pc.is3DLoaded()),
+      targetXYZ: targetXYZ, targetWorld: targetWorld, targetAgeMs: targetAgeMs, ownerEpoch: ownerEpoch,
+      targetLocationMatches: targetLocationMatches,
+      actorTargetZ: actorXYZ && targetXYZ && targetLocationMatches ? actorXYZ[2] - targetXYZ[2] : null,
+      cameraState: Number.isInteger(camera) && camera >= 0 && camera <= 15 ? camera : null,
+      // The pinned public API has no camera world-position getter. Mode and
+      // actor height cannot be substituted for actual camera displacement.
+      cameraWorldAvailable: false, cameraWorldXYZ: null, cameraActorDistance: null,
+      browserFocus: flag(() => sp.browser.isFocused()),
+      cameraControls: flag(() => sp.Game.isCamSwitchControlsEnabled()),
+      lookingControls: flag(() => sp.Game.isLookingControlsEnabled()),
+      menus: menus.filter(name => !!openMenus[name]) };
+  }
+  function record(phase, value, wheel) {
+    if (receipts >= 64) { return; }
+    const row = { t: 'camera-trace', phase: phase, i: active.i, sample: value };
+    if (wheel) {
+      row.wheel = wheel.n;
+      row.direction = wheel.direction;
+      row.eventSource = wheel.platform ? 'platform-request' : 'game-buttonEvent';
+      row.wheelAt = wheel.at;
+      row.beforeSampleAgeMs = Math.max(0, wheel.at - wheel.before.sampledAt);
+      if (wheel.platform) {
+        row.requestedDelta = wheel.direction === 'up' ? 120 : -120;
+        row.platformAccepted = wheel.acknowledged ? wheel.acknowledged.ok : null;
+        row.platformAckAt = wheel.acknowledged ? wheel.acknowledged.at : null;
+      }
+      if (phase !== 'wheel-before' && phase !== 'wheel-request-before') {
+        const before = wheel.before;
+        row.sameOwnerEpoch = before.ownerEpoch !== null && before.ownerEpoch === value.ownerEpoch &&
+          before.targetWorld === value.targetWorld && before.cell === value.cell && before.world === value.world;
+        row.actorDeltaXYZ = before.actorXYZ && value.actorXYZ && before.cell === value.cell && before.world === value.world
+          ? value.actorXYZ.map((v, i) => v - before.actorXYZ[i]) : null;
+      }
+    }
+    receipts++;
+    write(row);
+  }
+  cameraWheelStart = function (delta) {
+    if (!active || active.i !== at || Date.now() >= active.until || wheelCount >= 8 || receipts >= 63) { return false; }
+    cameraWheelRequest = { n: ++wheelCount, direction: delta === 120 ? 'up' : 'down', at: Date.now(),
+      before: active.last, platform: true, acknowledged: null, after: false, done: false };
+    active.pending.push(cameraWheelRequest);
+    record('wheel-request-before', cameraWheelRequest.before, cameraWheelRequest);
+    return true;
+  };
+  sp.on('buttonEvent', function (e) {
+    if (!active || finished || failing || at !== active.i || Date.now() >= active.until || wheelCount >= 8 ||
+        !e || e.device !== 1 || (e.code !== 8 && e.code !== 9) || !e.isDown || e.isUp || e.isRepeating || e.isHeld) { return; }
+    // Native ButtonEventData exports the device-local mouse idCode (8/9),
+    // not the 256-offset DxScanCode enum (264/265).
+    const wheel = { n: ++wheelCount, direction: e.code === 8 ? 'up' : 'down', at: Date.now(), before: active.last, after: false };
+    active.pending.push(wheel);
+    record('wheel-before', wheel.before, wheel);
+  });
+  sp.on('update', function () {
+    const now = Date.now();
+    if (active && (finished || failing || at !== active.i || now >= active.until || receipts >= 63)) {
+      record('end', active.last);
+      active = null;
+    }
+    if (finished || failing) { return; }
+    const step = steps[at];
+    const timed = step && step.do === 'wait' && step.for === 'time' && Number.isFinite(step.ms) && step.ms > 0;
+    const wheelStep = step && step.do === 'wheel' && (step.delta === 120 || step.delta === -120);
+    if (!active && receipts < 63 && (!traceUntil || now < traceUntil) && !seen.has(at) && step && step.cameraTrace === true && (timed || wheelStep)) {
+      seen.add(at);
+      if (!traceUntil) { traceUntil = now + 30000; }
+      active = { i: at, until: timed ? Math.min(now + step.ms, traceUntil) : traceUntil, last: sample(), pending: [] };
+      record('start', active.last);
+    }
+    if (!active) { return; }
+    const due = active.pending.some(w => (!w.platform || w.acknowledged) && (!w.after || now - (w.acknowledged ? w.acknowledged.at : w.at) >= 250));
+    if (!due && now - active.last.sampledAt < 250) { return; }
+    const value = sample();
+    for (const wheel of active.pending) {
+      if (wheel.platform && !wheel.acknowledged) { continue; }
+      const since = wheel.acknowledged ? wheel.acknowledged.at : wheel.at;
+      if (!wheel.after) { record(wheel.platform ? 'wheel-ack-after' : 'wheel-after', value, wheel); wheel.after = true; }
+      else if (now - since >= 250) { record(wheel.platform ? 'wheel-ack-settled' : 'wheel-settled', value, wheel); wheel.done = true; }
+    }
+    active.pending = active.pending.filter(w => !w.done);
+    if (value.cameraState !== active.last.cameraState) { record('state', value); }
+    active.last = value;
+  });
+}
 
 // Windows acknowledging a press and Skyrim routing it are two observations.
 // Only explicitly traced script steps can log their own requested key.
@@ -445,6 +619,7 @@ function failTask() {
   waitingAsk = 0;
   pageId = '';
   faceAsked = '';
+  faceRef = '';
   faceDone = null;
   faceTry = null;
   gearAsk = null;
@@ -484,6 +659,30 @@ sp.on('tick', function () {
   const late = now - stepAt > limit;
 
   switch (s.do) {
+    case 'wheel': {
+      if (s.cameraTrace !== true || (s.delta !== 120 && s.delta !== -120)) {
+        fail('a wheel step needs cameraTrace and exactly one signed detent (120 or -120)'); return;
+      }
+      if (late) { fail('the bounded wheel request or its camera samples did not complete'); return; }
+      if (!waitingAsk) {
+        // The update handler must capture the before sample before Windows
+        // receives this request. No game API is called from this tick.
+        if (cameraWheelStart && cameraWheelStart(s.delta)) { waitingAsk = ask('wheel', s.delta); }
+        return;
+      }
+      const reply = readAck(waitingAsk);
+      if (reply && cameraWheelRequest) {
+        if (!cameraWheelRequest.acknowledged) {
+          cameraWheelRequest.acknowledged = { ok: reply.ok === true, at: now };
+          return;
+        }
+        if (cameraWheelRequest.done) {
+          if (cameraWheelRequest.acknowledged.ok) { pass('Windows accepted one wheel event; camera observations are separate evidence'); }
+          else { fail(String(reply.note || 'Windows did not accept the wheel request')); }
+        }
+      }
+      return;
+    }
     case 'wait': {
       if (s.for === 'menu') {
         // Open (or shut) now, or it opened (or closed) since the step before
@@ -508,6 +707,7 @@ sp.on('tick', function () {
         if (inWorld && here === want) { pass(cellName ? 'in ' + cellName : 'in an unnamed cell'); return; }
       } else if (s.for === 'crosshair') {
         if (s.what === 'bed' && crosshairBed) { pass('bed ' + crosshairBed); return; }
+        if (s.what === 'driver' && crosshairDriver) { pass('driver ' + crosshairDriver); return; }
       } else if (s.for === 'running') {
         // The world runs while a menu is up: update, which the game sends
         // only while it is not paused, kept coming for ms with no gap of a
@@ -596,7 +796,7 @@ sp.on('tick', function () {
       return;
     }
     case 'face': {
-      if (!faceAsked) { faceAsked = String(s.what || ''); faceDone = null; return; }
+      if (!faceAsked) { faceAsked = String(s.what || ''); faceRef = String(s.ref || ''); faceDone = null; return; }
       if (faceDone) {
         const done = faceDone;
         faceAsked = ''; faceDone = null;

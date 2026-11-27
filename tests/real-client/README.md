@@ -125,6 +125,8 @@ first step that fails, after a screenshot named `fail-<step>`.
 | `{"do":"wait","for":"cell","name":"Bannered Mare"}` | the character is in a cell whose name holds that; with `"in": false`, in one whose name does not. With `"skip"` it passes over the trip to a place the character is in already. |
 | `{"do":"wait","for":"shut","menus":["InventoryMenu"]}` | none of those menus is open. |
 | `{"do":"wait","for":"crosshair","what":"bed"}` | a bed is under the crosshair, so the game shows its prompt. |
+| `{"do":"face","what":"driver","ref":"bbf6d:CFTO.esp"}` | the character stands 100 units out from the carriage or ferry driver whose placed reference that is, on the side it was on, turned to him and looking level. He is named by his reference because a driver stands outside, where the nearest person is as likely a guard. A driver not loaded near the character, or one `thornswood-front.js` does not take for a driver (its `isRideDriverRef`, the rule E on a driver goes by), fails the step. |
+| `{"do":"wait","for":"crosshair","what":"driver"}` | a driver is under the crosshair. |
 | `{"do":"wait","for":"running","ms":10000}` | the game kept sending updates for that long with no gap of a second, so the world was not paused (a menu that should leave the world running, #6408). |
 | `{"do":"wait","for":"time","ms":1500}` | that long has gone by. Only before a shot of something the game shows for a moment and gives no event for, like its message when a bed refuses. |
 | `{"do":"end"}` | always; the runner closes the game. |
@@ -157,6 +159,15 @@ only, so a run says whether it lay down in a bed (#6712). The list goes to
 the Bannered Mare with `/tp bannered`, sent once from a page step, which the
 run's account may run because it is on the dev list.
 
+Last before the end, test task #4581 presses E on a carriage driver: `/tp
+whiterun` to the start spot outside the gate, Bjorlam at the stables by his
+reference, E, then the server's answer (`ride:wants`) and the panel
+(`ride:opened`), its screenshot `ride-panel`, and Escape to close it. No ride
+is taken and no fare paid. The task's results line says whether E on a driver
+opens his stops, and the game's `thornswood-front.log` beside it has the
+press's own lines ("carriage and ferry drivers: ...", "asked the server where
+driver ... goes").
+
 `tests\test-5197-real-client.js` runs the plugin against a fake game and
 checks every list here only uses these steps.
 
@@ -164,6 +175,64 @@ The two inventory key steps set `inventoryTrace` to record whether Skyrim
 reported the scripted keyboard down and up. The result records menu state
 and whether the game named the Inventory action. The Windows input receipt
 and the following inventory open or close check are reported separately.
+
+`camera-smoke.json` is a separate opt-in, local-only observation for the high
+view report (#6593). It is never part of the normal release run. Use matching
+runner/plugin bytes and an authorized test character. Run-RealClient selects
+Dev; this list adds no Main route or environment switch. It reuses the normal
+release run's entry steps and selects its existing named test character,
+Adventurer. Keep hands off the controls: after the in-world screenshot it
+requests one wheel detent forward and one backward, with a half-second pause
+between completed attempts. Each request must match its unused opted-in plan
+step. It never forces a camera or moves the actor.
+
+An opted-in timed wait or wheel step enables `camera-trace` result lines only
+while that step is active. Limits are thirty seconds from the first trace,
+eight wheel observations/requests and sixty-four receipts per run. Ordinary runs do not
+read camera state. `-Publish` is refused for any list with a camera trace:
+coordinates and screenshots remain local, with no GitHub upload. Do not attach
+these local results to a public issue. The existing dev permission and
+whose-game checks are preserved.
+
+The start sample includes actor XYZ, scale, cell/world, camera mode, browser
+focus, camera/looking controls, known menus and the last native owner target
+XYZ with its timestamp age and epoch. It copies no profile, name or inventory
+contents from the native diagnostic. Missing APIs or target data are `null`.
+`actorTargetZ` is reported only when the target location matches the actual
+world/cell; an old target is not a current walking destination. Read its age.
+
+A game mouse-wheel down records the preceding update sample, then the next
+update and a sample at least 250ms later. `beforeSampleAgeMs` makes the timing
+explicit: the first sample is not a synchronous pre-native-input measurement.
+`sameOwnerEpoch` compares process-local diagnostic epochs/location; it is not
+proof of persistent actor identity across client/controller recreation.
+`actorDeltaXYZ` is reported only within the same world/cell. Multiple attempts
+may overlap; their numbered receipts remain separate. A trace ending may
+truncate a late wheel's settled receipt. No game button event means no claim
+about whether a physical wheel was moved or swallowed before game input.
+
+The explicit `{"do":"wheel","delta":120,"cameraTrace":true}` step (or
+`delta:-120`) captures a before sample on update before asking Windows, then
+records the next update after its acknowledgment and another at least 250ms
+after the acknowledgment. These three `platform-request` receipts exist even
+when no game wheel event arrives. The Windows helper sends one wheel-only
+event after checking game focus, checks its insertion count and focus again,
+and never retries. A rejected acknowledgment fails the step after the after
+samples. An accepted acknowledgment passes delivery only; it does not prove
+Skyrim read it or changed view. A focus race between checks and insertion
+remains possible. Game wheel receipts and platform request receipts are
+separate observations and may describe the same physical input.
+`platformAckAt` is when the plugin consumed the runner's acknowledgment, not
+the exact Windows insertion time. Sampling and runner polling add latency.
+
+Stable actor XYZ while zoom changes the apparent height separates a view
+problem from actual actor movement. Changed actor Z must be investigated as
+movement. Camera mode alone cannot measure camera height: the pinned public
+API offers a screen projection and camera-state enum, but no camera world
+position getter, so camera XYZ/distance are explicitly unavailable. These
+receipts do not prove a camera displacement or a correction. Pair them with
+the local before/after screenshots and exact server/build/load route. A
+separately authorized Main observation is still needed for a Main report.
 
 The runner replies with the request number, `ok` and `note` in
 `thornswood-test-ack.txt`. Use the runner and plugin from the same checkout:

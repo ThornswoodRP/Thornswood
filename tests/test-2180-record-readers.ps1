@@ -136,7 +136,11 @@ try {
     Yes '  does not pass over a missing record' (-not $nn.Contains('if (Test-Path -LiteralPath $recordPath)') -and -not $nn.Contains('if (Test-Path -LiteralPath $PluginRecord)'))
     $j = $nn.IndexOf('-ne $BaseRevision', [Math]::Max($i, 0))
     Yes '  holds the record''s revision to the revision it starts from' ($i -gt 0 -and $j -gt $i -and $j - $i -lt 700)
-    Yes '  and both before any archive is downloaded for it' ($i -gt 0 -and $j -lt $nn.IndexOf('Get-NexusFileArchive $Game $fid'))
+    # The light-flag step's own download: the first after its record read.
+    # The -Replicate step downloads earlier in the script, so the first in the
+    # file is not this step's (#7127).
+    $dl = if ($i -gt 0) { $nn.IndexOf('Get-NexusFileArchive $Game $fid', $i) } else { -1 }
+    Yes '  and both before any archive is downloaded for it' ($i -gt 0 -and $dl -gt $j)
 
     # The builders: one shared helper in Python, the same checks.
     $wbSrc = Src 'scripts\dev\Build-WoodworkingBenches.py'
@@ -179,10 +183,14 @@ try {
         Yes 'the committed collection-plugins.json reads through own_plugins.read_collection_plugins' ($n -match '^\d+$' -and [int]$n -gt 50)
     }
 
-    # The header of CollectionPlugins.ps1 shows the record as it is now.
+    # The header of CollectionPlugins.ps1 shows the record's shape. Its
+    # revision is a placeholder, not a number: each published revision moves
+    # the record's, and a number written by hand went stale at every one
+    # (8 against 11, then 11 against $realRev, #6606).
     $cph = Src 'scripts\deploy\CollectionPlugins.ps1'
     $ex = [regex]::Match($cph, '"revision": (\d+)')
-    Yes "CollectionPlugins.ps1's example names revision $realRev, the one the record is on" ($ex.Success -and [int]$ex.Groups[1].Value -eq $realRev)
+    Yes "CollectionPlugins.ps1's example names no revision by number (the record is on $realRev)" (-not $ex.Success)
+    Yes '  it gives the revision as <n>, and says it is the one the record is on' ($cph.Contains('"revision": <n>') -and $cph -match '<n> is the revision')
 } finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }

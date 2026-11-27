@@ -110,7 +110,7 @@ namespace Thornswood
             PlayedFile  = Path.Combine(ProfileDir, "played.flag");
             AppliedFile = Path.Combine(ProfileDir, "applied.txt");
             PacksDir    = Path.Combine(ProfileDir, "Packs");
-            LogFile     = Path.Combine(ProfileDir, "launcher.log");
+            LogFile     = LogFileFor(Root);
             CfgFile     = Path.Combine(Root, "config.json");
 
             WinMyGames = Path.Combine(
@@ -126,6 +126,17 @@ namespace Thornswood
             // under Profile, which is what the junction points at.
             Live        = Collection ? WinLocalAD : LocalAD;
             LiveMyGames = Collection ? WinMyGames : MyGames;
+        }
+
+        /// <summary>
+        /// launcher.log of the install at root: Profile\launcher.log. Init sets
+        /// LogFile to it, and the first-run install sets it as soon as it has
+        /// made Profile (InstallWindow.Work, #4711), since that runs before
+        /// Init and every reason Failure notes would otherwise go nowhere.
+        /// </summary>
+        public static string LogFileFor(string root)
+        {
+            return Path.Combine(root, "Profile", "launcher.log");
         }
 
         /// <summary>

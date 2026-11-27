@@ -3,6 +3,8 @@
   "issue": 4069,
   "what": "The plugins a server may stop loading when it moves to this collection revision, because the revision takes them out. Deploy-DevGamemode.ps1 -LoadOrder -FromRecord lets the order of last-plugin.json leave out these and no other plugin the running server loads (Test-ThornswoodLoadOrderDrop, #2320), and only while revision is the one records/collection-plugins.json names. A row says why every form the plugin added can go from a world that keeps running.",
   "collection": "7essxf",
-  "revision": 12,
-  "dropped": []
+  "revision": 13,
+  "dropped": [
+    { "name": "McmRecorder.esp", "mod": 61719, "why": "Its forms are its menu (the McmRecorder quest and four messages) and one MISC, McmRecorder_MessageText, with a single persistent reference of it in WEMerchantChests, the game's storage cell nobody can reach, which Thornswood-Last.esp already carries initially disabled; nothing in a character's inventory or a server table is one of them. Its menu cannot run here, because it needs JContainers, which the collection does not carry (it came in only for SunHelm's first-run recording, and SunHelm left with #480). Its loose SKI_ConfigBase.pex and SKI_ConfigManager.pex go with it, so every SkyUI and MCM Helper menu runs on SkyUI's own base again instead of one that calls into JContainers. Patrick, 26 Nov 2026, option A on #4511, measured on One's game folder the same day." }
+  ]
 }

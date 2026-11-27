@@ -106,15 +106,20 @@ const coinRows = Object.keys(recipes).filter((k) => rule.benches.indexOf(putAt(r
 const coinTable = table.recipes.filter((r) => r.inputs.some((i) => i.item === 'f:Skyrim.esm'));
 const coinHeld = (table.notCopied || []).filter((r) => r.inputs.some((i) => i.item === 'f:Skyrim.esm'));
 const coinCarried = coinTable.filter((r) => recipes[r.recipe] && !charges(recipes[r.recipe]) && carried(r, recipes[r.recipe]));
+// A never-copied plugin's row is listed as each game asks it once the recipe
+// table reads notCopied too (#4625); a table built before that still lists
+// its coins.
+const heldCarried = coinHeld.filter((r) => recipes[r.recipe] && !charges(recipes[r.recipe]) && carried(r, recipes[r.recipe]));
 const coinListed = new Set(coinTable.concat(coinHeld).map((r) => r.recipe));
 yes('T7 every forge recipe that charges gold coins has them taken out, and nothing else of it changes unless ' +
     'its peers say so (q-3115 B; ' + coinTable.length + ' taken out, ' + coinCarried.length +
-    ' of them already by Thornswood-Last.esp, ' + coinHeld.length + ' a never-copied plugin\'s, ' +
+    ' of them already by Thornswood-Last.esp, ' + coinHeld.length + ' a never-copied plugin\'s (' +
+    heldCarried.length + ' listed as each game asks them), ' +
     coinRows.length + ' still charging)',
     (rule.notMaterial || []).join() === 'f:Skyrim.esm' && coinRows.length + coinCarried.length > 0 &&
     coinRows.every((k) => coinListed.has(k)) &&
-    coinRows.length + coinCarried.length === coinTable.length + coinHeld.length &&
-    coinHeld.every((r) => recipes[r.recipe] && charges(recipes[r.recipe])) &&
+    coinRows.length + coinCarried.length + heldCarried.length === coinTable.length + coinHeld.length &&
+    coinHeld.every((r) => recipes[r.recipe] && (charges(recipes[r.recipe]) || heldCarried.indexOf(r) >= 0)) &&
     table.counts.coinsTakenOut === coinTable.length &&
     coinTable.every((r) => r.why.indexOf('coins') >= 0 && r.inputs.every((i) => i.item === 'f:Skyrim.esm' ? i.to === 0
       : (r.why.indexOf('peers') >= 0 || i.to === i.count))));

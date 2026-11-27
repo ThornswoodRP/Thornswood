@@ -299,6 +299,26 @@ namespace Thornswood
         static bool restartAfterFirstFix;
 
         /// <summary>
+        /// Set while the Fix after a make runs (RunFix afterMake): its end
+        /// takes the make's note (MakeFixEnded, #6086).
+        /// </summary>
+        static bool makeFixRunning;
+
+        /// <summary>
+        /// The Fix after a make has ended, whatever it found: the make's note
+        /// is taken, so the next start does not run it again. Before the
+        /// first setup's one restart (FirstSetupRestart), so the start after
+        /// that runs no second Fix. A Fix that stops before it scans leaves
+        /// the note, and the next start runs it.
+        /// </summary>
+        static void MakeFixEnded()
+        {
+            if (!makeFixRunning) return;
+            makeFixRunning = false;
+            OwnGame.TakeFixAfterMake();
+        }
+
+        /// <summary>
         /// The end of the first setup (Patrick, 12 Nov): ask GitHub for the
         /// newest launcher now, so the answer is not left to a check that
         /// lands after the restart and restarts it a second time. A newer one
@@ -377,6 +397,7 @@ namespace Thornswood
             }
 
             fixing = true;
+            makeFixRunning = afterMake;
             btnFix.IsEnabled = false;
             btnScan.IsEnabled = false;
             triedByFix.Clear();
@@ -397,6 +418,7 @@ namespace Thornswood
             catch (Exception ex)
             {
                 fixing = false;
+                makeFixRunning = false;
                 Log("Fix could not scan first (" + Failure.Why("ShellScanFix, scanning before Fix", ex) + "), so nothing was changed.");
                 ShowVerify(Verify.LastIssues, false);
                 return;
@@ -409,6 +431,7 @@ namespace Thornswood
                     : afterMake ? "The scan after making the folder found nothing wrong."
                     : "Fix found nothing to put right.");
                 ShowVerify(plugins, false);
+                MakeFixEnded();
                 FirstSetupRestart();
                 return;
             }
@@ -490,6 +513,7 @@ namespace Thornswood
                 }
             }
             fixing = false;
+            MakeFixEnded();
             Report(plugins);
 
             // The first setup ends in its one restart (FirstSetupRestart),

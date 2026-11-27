@@ -145,8 +145,10 @@ namespace Thornswood
                 string refused = null;
                 // The first start in a folder just made runs Fix (#5937):
                 // what the install leaves to do all waits on the folder, and
-                // this is the first start that has it.
-                if (active) fixAfterMake = OwnGame.TakeFixAfterMake();
+                // this is the first start that has it. The note stays until
+                // that Fix ends (MakeFixEnded, #6086), so a launcher shut
+                // while it runs runs it again at the next start.
+                if (active) fixAfterMake = OwnGame.FixAfterMakeWaiting;
                 try
                 {
                     // Vortex deploying into a Thornswood folder is refused
@@ -568,13 +570,16 @@ namespace Thornswood
                             // launcher or restarts once at its end. An update
                             // already going in restarts the launcher itself
                             // once the folder is let go, and the note runs
-                            // Fix on the start after it instead.
+                            // Fix on the start after it instead. The note is
+                            // taken when this Fix ends (MakeFixEnded, #6086),
+                            // so the start after the one restart runs no
+                            // second Fix, and one after the launcher was shut
+                            // part way through runs it again.
                             if (updating)
                             {
                                 Log("The update going in restarts the launcher into the new folder, and Fix runs there.");
                                 return;
                             }
-                            OwnGame.TakeFixAfterMake();
                             restartAfterFirstFix = true;
                             RunFix(false, false, true);
                             return;

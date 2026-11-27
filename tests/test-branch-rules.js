@@ -95,7 +95,8 @@ yml.forEach(function (l) {
 // #5295: "report" builds nothing either; it merges the shares' reports.
 // #5310, #5360: "gate-linux" is the gate's shares that run on Linux, and
 // "checks" the tree checks that need no Windows; neither builds (#5386).
-const NOT_BUILDS = ['tested', 'pick', 'gate', 'gate-linux', 'report', 'checks'];
+// #5958, #7117: "bot" runs the bot harnesses in a venv and builds nothing.
+const NOT_BUILDS = ['tested', 'pick', 'gate', 'gate-linux', 'report', 'checks', 'bot'];
 const main = jobs.filter(function (j) { return NOT_BUILDS.indexOf(j.id) < 0; });
 yes('build.yml has exactly one build job beside its gate and checks (found ' + main.length + ': ' + main.map(function (j) { return j.id; }).join(', ') + ')', main.length === 1);
 // The required check of a pull request needs every job of build-pr.yml

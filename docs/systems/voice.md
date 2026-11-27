@@ -91,7 +91,9 @@ Gamemaster, Dev, Loremaster, Moderator.
 
 `/silence` and the name, then the minutes if not 30 (a day at most)
 and why. Their voice, their local text, the words above their head,
-and the speaking mark stop for everybody. They are told how long. They
+and the speaking mark stop for everybody. They are told how long, and
+the microphone at the bottom of their screen says SILENCED and stays
+still while it lasts, push to talk held or not (#4773). They
 cannot lift it. `/unsilence` and the name, from any staff member but the one silenced,
 lifts it, and it lifts by itself when the minutes run out.
 

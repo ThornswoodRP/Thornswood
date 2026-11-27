@@ -1101,10 +1101,67 @@ function uncorkAll() {
   for (const s of corked) s.uncork();
 }
 
+/*
+  WHAT A SOCKET HAS READ OF A FRAME, HELD AS THE READS IT CAME IN (#4317).
+
+  feed used to join each read onto everything already held with
+  Buffer.concat until the frame was whole, so a frame arriving in small reads
+  was copied again on every read: 1460 byte reads of a 999,000 byte frame
+  copied 343 MB and took 145 ms on the box, on the one thread that relays
+  chat, positions and signalling, and the cost grew with the square of the
+  frame. So the reads are kept as they came, and a frame's bytes are copied
+  once, when it is whole, and only when it spans more than one read. A frame
+  that lies inside one read is that read's own bytes, uncopied (#2390).
+*/
+class FrameInput {
+  constructor() {
+    this.parts = [];
+    this.head = 0;          // the first part still held
+    this.at = 0;            // how far into it has been taken
+    this.length = 0;        // every byte held, across the parts
+  }
+
+  push(bytes) {
+    if (!bytes.length) return;
+    this.parts.push(bytes);
+    this.length += bytes.length;
+  }
+
+  /* The first size bytes held, which the caller makes sure are there:
+     copied only when they span parts, and never taken. */
+  peek(size) {
+    const first = this.parts[this.head];
+    if (first.length - this.at >= size) return first.subarray(this.at, this.at + size);
+    const out = Buffer.allocUnsafe(size);
+    let got = 0;
+    for (let i = this.head, from = this.at; got < size; i++, from = 0) {
+      const part = this.parts[i];
+      got += part.copy(out, got, from, Math.min(part.length, from + size - got));
+    }
+    return out;
+  }
+
+  /* The first size bytes, taken. */
+  take(size) {
+    const out = this.peek(size);
+    this.length -= size;
+    while (size > 0) {
+      const left = this.parts[this.head].length - this.at;
+      if (size < left) { this.at += size; break; }
+      size -= left;
+      this.head++;
+      this.at = 0;
+    }
+    if (this.head === this.parts.length) { this.parts = []; this.head = 0; }
+    else if (this.head > 64) { this.parts = this.parts.slice(this.head); this.head = 0; }
+    return out;
+  }
+}
+
 class Sock {
   constructor(socket) {
     this.socket = socket;
-    this.buf = Buffer.alloc(0);
+    this.buf = new FrameInput();
     this.onmessage = null;
     this.onclose = null;
     this.closed = false;
@@ -1280,7 +1337,7 @@ class Sock {
 
   feed(chunk) {
     this.rxAt = performance.now(); this.rxBytes += chunk.length;
-    this.buf = this.buf.length ? Buffer.concat([this.buf, chunk]) : chunk;
+    this.buf.push(chunk);
     // A frame can arrive split across reads, and several can arrive in one, so
     // this loops until what is left is not a whole frame.
     for (;;) {
@@ -1296,7 +1353,8 @@ class Sock {
       */
       if (this.closed) return;
       if (this.buf.length < 2) return;
-      const b0 = this.buf[0], b1 = this.buf[1];
+      const head = this.buf.peek(2);
+      const b0 = head[0], b1 = head[1];
       const op = b0 & 0x0f;
       const masked = (b1 & 0x80) !== 0;
       /*
@@ -1326,26 +1384,24 @@ class Sock {
 
       if (len === 126) {
         if (this.buf.length < 4) return;
-        len = this.buf.readUInt16BE(2); off = 4;
+        len = this.buf.peek(4).readUInt16BE(2); off = 4;
       } else if (len === 127) {
         if (this.buf.length < 10) return;
-        const big = this.buf.readBigUInt64BE(2);
+        const big = this.buf.peek(10).readBigUInt64BE(2);
         if (big > 1000000n) { this.close('frame_limit'); return; }
         len = Number(big); off = 10;
       }
 
-      let mask = null;
-      if (masked) {
-        if (this.buf.length < off + 4) return;
-        mask = this.buf.slice(off, off + 4); off += 4;
-      }
-      if (this.buf.length < off + len) return;
+      // Every frame here is masked: one that is not has closed it above.
+      if (this.buf.length < off + 4 + len) return;
+      const whole = this.buf.take(off + 4 + len);
+      const mask = whole.subarray(off, off + 4);
 
-      // Unmasked where it lies: this.buf is this socket's own (a chunk the
-      // socket handed over, or a concat of them), so it needs no copy (#2390).
-      const body = this.buf.subarray(off, off + len);
-      if (mask) for (let i = 0; i < body.length; i++) body[i] ^= mask[i & 3];
-      this.buf = this.buf.subarray(off + len);
+      // Unmasked where it lies: whole is this socket's own (a read the socket
+      // handed over, or the one copy of a frame that spanned reads), so it
+      // needs no other copy (#2390).
+      const body = whole.subarray(off + 4);
+      for (let i = 0; i < body.length; i++) body[i] ^= mask[i & 3];
 
       /*
         A close is ANSWERED with a close, which RFC 6455 section 5.5.1 asks
